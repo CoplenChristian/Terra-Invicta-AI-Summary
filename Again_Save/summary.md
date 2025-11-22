@@ -74,6 +74,11 @@ Sections that only paraphrase tables without **named entities plus numeric refer
 > # Snippet pack (includes Space Sitrep + Habs by Faction + Resistance Research Summary + Tech Completion Matrix (By Faction) + Alien Hate by Faction)
 > Get-TISnippetPackMarkdown | Set-Content -Encoding UTF8 .\Again_Save\snippet_pack\snippet_pack_YYYYMMDD.md
 > ```
+> 
+> **Note for zsh/Mac users:** If running from zsh, use `pwsh -Command` to ensure the pipe is handled by PowerShell:
+> ```bash
+> pwsh -Command ". ./ti_data_tools.ps1; Get-TISnippetPackMarkdown | Set-Content -Encoding UTF8 ./Again_Save/snippet_pack/snippet_pack_YYYYMMDD.md"
+> ```
 > - Use the **Space Sitrep** and **Habs by Faction** sections in the snippet pack as the authoritative sources for **where** habs are, who owns them, and their high-level yields in Sections 2, 8, and 11.  
 > - Use `Again_Resistance_Habs.csv` as the authoritative source for **how many Resistance habs you have, their types (base/station), tier levels, and MCCost** when describing MC posture and upgrade priorities in Sections 8, 9, and 10.  
 > - Use `Again_HabSites.csv` and `Again_Faction_HabIncome.csv` when you need per-site yields or per-faction resource income beyond what the snippet pack already shows.  
