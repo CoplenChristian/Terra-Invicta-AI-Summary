@@ -19,27 +19,43 @@ If this conversation context is gone, this file plus `TI_DATA_TOOLS.md` and `ti_
 
 ### Main entry points
 
-- `TerraInvicta_again/ti_data_tools.ps1` — toolbox functions.
-- `TerraInvicta_again/TI_DATA_TOOLS.md` — user‑facing usage guide.
-- `TerraInvicta_again/TI_DATA_DEV.md` — this file (developer internals).
-- `TerraInvicta_again/summarize_boost_income.ps1` — standalone Boost income helper.
-- `TerraInvicta_again/Again_Save/summary.md` — template summary pointing at the toolbox and docs.
+- `Terra-Invicta-AI-Summary/ti_data_tools.ps1` — toolbox functions.
+- `Terra-Invicta-AI-Summary/TI_DATA_TOOLS.md` — user‑facing usage guide.
+- `Terra-Invicta-AI-Summary/TI_DATA_DEV.md` — this file (developer internals).
+- `Terra-Invicta-AI-Summary/summarize_boost_income.ps1` — standalone Boost income helper.
+- `Terra-Invicta-AI-Summary/Again_Save/summary.md` — template summary pointing at the toolbox and docs.
 
 ---
 
 ## 1. Configuration & Path Resolution
 
-Located near the top of `ti_data_tools.ps1`:
+Located near the top of `ti_data_tools.ps1` (now config-driven):
 
 ```powershell
+# Load configuration
+$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+$configPath = Join-Path $scriptPath "config.json"
+if (-not (Test-Path $configPath)) {
+    throw "Config file not found at $configPath"
+}
+$config = Get-Content $configPath -Raw | ConvertFrom-Json
+
+$WorkDir = $config.WorkDir
+if ($WorkDir -eq ".") { $WorkDir = $scriptPath }
+
 $script:TIConfig = [ordered]@{
-    RootPath        = "f:/Windsurf/TerraInvicta_again"
+    RootPath        = $WorkDir
 
     # Default export folder for latest CSVs
-    ExportFolder    = "csv"
+    ExportFolder    = $config.CsvSubDir
     BoostHelperPath = "summarize_boost_income.ps1"
 }
 ```
+
+`config.json` in the repo root is therefore the single source of truth for:
+
+- The campaign **root path** (`WorkDir` → `TIConfig.RootPath`).
+- The **CSV export subfolder** (`CsvSubDir` → `TIConfig.ExportFolder`).
 
 **Functions:**
 
@@ -60,8 +76,8 @@ $script:TIConfig = [ordered]@{
 
 **Developer notes:**
 
-- If you ever rename the CSV export folder (default `csv`), update the default in `TIConfig` and in `TI_DATA_TOOLS.md`.
-- Don’t embed absolute paths in individual functions; always go through `Get-TIExportPath` for CSVs and `Get-TIDataPath` for other files.
+- If you ever rename the CSV export folder (default from `config.json`’s `CsvSubDir`), update only `config.json`; `TIConfig` will pick it up automatically.
+- Don’t embed absolute paths in individual functions; always go through `Get-TIExportPath` for CSVs and `Get-TIDataPath` for other files so the config stays authoritative.
 
 ---
 
@@ -745,7 +761,7 @@ HabSiteCount, WaterPerDay, VolatilesPerDay, MetalsPerDay, NoblesPerDay, Fissiles
 
 ## 6. Boost Helper Script (`summarize_boost_income.ps1`)
 
-**Location:** `TerraInvicta_again/summarize_boost_income.ps1`
+**Location:** `Terra-Invicta-AI-Summary/summarize_boost_income.ps1`
 
 **Purpose:**
 
@@ -767,7 +783,7 @@ When modifying or extending `ti_data_tools.ps1`:
 1. **Refresh exports**  
 
    ```powershell
-   Set-Location f:/Windsurf/TerraInvicta_again
+   Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
    .\export_factions.ps1
    ```
 

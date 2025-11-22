@@ -8,38 +8,47 @@ The goal is to minimize manual data crunching so the agent can focus on interpre
 
 ## 1. File Locations & Prerequisites
 
+All core paths are driven by `config.json` in the campaign root and loaded into
+`$TIConfig` inside `ti_data_tools.ps1`.
+
+- **Config file**  
+  `config.json` (in the same folder as `ti_data_tools.ps1` and `export_factions.ps1`).
+
 - **Root campaign folder**  
-  `f:/Windsurf/TerraInvicta_again`
+  `TIConfig.RootPath` (from `config.WorkDir` in `config.json`).  
+  *Default in this repo:* `F:/Windsurf/Terra-Invicta-AI-Summary`.
 
 - **Latest export folder (CSV outputs)**  
-  `f:/Windsurf/TerraInvicta_again/csv`
+  `Get-TIExportPath -FileName <name>` uses `TIConfig.ExportFolder`  
+  (from `config.CsvSubDir` in `config.json`).  
+  *Default in this repo:* `csv` under the root.
 
 - **Toolbox script (this file’s companion)**  
-  `f:/Windsurf/TerraInvicta_again/ti_data_tools.ps1`
+  `ti_data_tools.ps1` in the root campaign folder (same folder as `config.json`).
 
 - **Boost helper script (optional)**  
-  `f:/Windsurf/TerraInvicta_again/summarize_boost_income.ps1`
+  `summarize_boost_income.ps1` located via `TIConfig.BoostHelperPath` relative to `TIConfig.RootPath`.
 
-- **Key CSVs expected by the toolbox (all under `csv/`)**
-  - `Again_Factions_Core.csv`
-  - `Again_Faction_EarthSummary.csv`
-  - `Again_Faction_HabIncome.csv`
-  - `Again_Faction_AlienHate.csv`
-  - `Again_Faction_HateMatrix.csv`
-  - `Again_Resistance_Nations.csv`
-  - `Again_Resistance_Councilors.csv`
-  - `Again_Councilor_Recruits.csv`
-  - `Again_HabSites.csv`
-  - `Again_Aliens_Habs.csv`
-  - `Again_Techs_Global.csv`
-  - Per‑faction habs and projects (emitted by `export_factions.ps1`):
-    - `Again_<Faction>_Habs.csv`
+- **Key CSVs expected by the toolbox (all under `csv/`)**  
+  - `Again_Factions_Core.csv`  
+  - `Again_Faction_EarthSummary.csv`  
+  - `Again_Faction_HabIncome.csv`  
+  - `Again_Faction_AlienHate.csv`  
+  - `Again_Faction_HateMatrix.csv`  
+  - `Again_Resistance_Nations.csv`  
+  - `Again_Resistance_Councilors.csv`  
+  - `Again_Councilor_Recruits.csv`  
+  - `Again_HabSites.csv`  
+  - `Again_Aliens_Habs.csv`  
+  - `Again_Techs_Global.csv`  
+  - Per‑faction habs and projects (emitted by `export_factions.ps1`):  
+    - `Again_<Faction>_Habs.csv`  
     - `Again_<Faction>_Projects.csv`
 
-**Always refresh exports before using the tools:**
+**Always refresh exports before using the tools:**  
 
 ```powershell
-Set-Location f:/Windsurf/TerraInvicta_again
+Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
 .\export_factions.ps1
 ```
 
@@ -49,14 +58,14 @@ Set-Location f:/Windsurf/TerraInvicta_again
 
 ## 2. Loading the Toolbox
 
-Dot‑source `ti_data_tools.ps1` once per PowerShell session so all functions are available:
+Dot‑source `ti_data_tools.ps1` once per PowerShell session so all functions are available:  
 
 ```powershell
-Set-Location f:/Windsurf/TerraInvicta_again
+Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
 . .\ti_data_tools.ps1
 ```
 
-After that, you can call functions directly:
+After that, you can call functions directly:  
 
 ```powershell
 Get-TIFactionOverview -Format Table
@@ -64,7 +73,7 @@ Get-TIResistanceNationsSnapshot -Format Markdown
 Invoke-TIDataMenu
 ```
 
-To change root or export folder (e.g., for a different campaign):
+To change root or export folder (e.g., for a different campaign):  
 
 ```powershell
 Set-TIDataConfig -RootPath "d:/OtherCampaign" -ExportFolder "Other_Save"
@@ -554,10 +563,14 @@ Get-TIFactionAlienHateTable -Format Table|Markdown|Json
 with a Markdown table of alien hate by faction each time you run:
 
 ```powershell
-Set-Location f:/Windsurf/TerraInvicta_again
+Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
 ./export_factions.ps1
 . ./ti_data_tools.ps1
-Get-TISnippetPackMarkdown | Set-Content -Encoding UTF8 ./Again_Save/snippet_pack/snippet_pack_YYYYMMDD.md
+# 1) Read the in-game date from Again_Metadata.csv (outside this one-liner, or interactively)
+#    GameDateYYYYMMDD will look like 20310316 for 2031-03-16.
+# 2) Then, use that literal date when writing the snippet pack. Do NOT try to
+#    compute or interpolate the date inside a complex one-liner.
+Get-TISnippetPackMarkdown | Set-Content -Encoding UTF8 ./Again_Save/snippet_pack/snippet_pack_20310316.md
 ```
 
 ---
@@ -794,13 +807,22 @@ Get-TISnippetPackMarkdown | Set-Clipboard
 or to write directly to a dated snippet pack file:
 
 ```powershell
-Set-Location f:/Windsurf/TerraInvicta_again
+Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
 ./export_factions.ps1
 . ./ti_data_tools.ps1
-Get-TISnippetPackMarkdown | Set-Content -Encoding UTF8 ./Again_Save/snippet_pack/snippet_pack_YYYYMMDD.md
+# IMPORTANT (especially for AI agents):
+# - First, read GameDateYYYYMMDD from csv/Again_Metadata.csv using a simple
+#   command or via your IDE tools.
+# - Then, plug that date in literally to the filename, e.g. snippet_pack_20310316.md.
+# - Do NOT attempt to build a fully generic one-liner that computes the date
+#   and interpolates it inside the Set-Content path; that is fragile and
+#   unnecessary for this workflow.
+Get-TISnippetPackMarkdown | Set-Content -Encoding UTF8 ./Again_Save/snippet_pack/snippet_pack_20310316.md
 ```
 
-Then paste or reference sections from `snippet_pack_YYYYMMDD.md` when writing `summary_YYYYMMDD.md`.
+Then paste or reference sections from `snippet_pack_YYYYMMDD.md` (for the
+specific date you exported, e.g. `snippet_pack_20310316.md`) when writing
+`summary_YYYYMMDD.md`.
 
 ---
 
@@ -808,14 +830,14 @@ Then paste or reference sections from `snippet_pack_YYYYMMDD.md` when writing `s
 
 Separate from the toolbox, this script:
 
-- Path: `f:/Windsurf/TerraInvicta_again/summarize_boost_income.ps1`
+- Path: `F:\Windsurf\Terra-Invicta-AI-Summary/summarize_boost_income.ps1`
 - Reads all `Again_<Faction>_Nations.csv` files.
 - Sums `BoostPerCP` per file to estimate Boost income per faction.
 
 Run from the campaign root:
 
 ```powershell
-Set-Location f:/Windsurf/TerraInvicta_again
+Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
 .\summarize_boost_income.ps1
 ```
 
@@ -828,7 +850,7 @@ This is mostly redundant with `Get-TIFactionBoostAndSpaceSummary`, but can be us
 1. **Export latest data**
 
    ```powershell
-   Set-Location f:/Windsurf/TerraInvicta_again
+   Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
    .\export_factions.ps1
    ```
 

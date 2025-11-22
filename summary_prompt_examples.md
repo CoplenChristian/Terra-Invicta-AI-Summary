@@ -12,10 +12,10 @@ Use this when you want to create a brand new `summary_YYYYMMDD.md` file based on
 You are generating a new dated Terra Invicta campaign summary for the Again run.
 
 Context:
-- Root: f:/Windsurf/TerraInvicta_again
-- Latest exports: Again_Save
-- Template: Again_Save/summary.md
-- Use ti_data_tools.ps1 and TI_DATA_TOOLS.md exactly as documented.
+- Root: `<RootPath>` from `config.json` (loaded into `TIConfig.RootPath` in `ti_data_tools.ps1`)
+- Latest exports: CSVs under `TIConfig.ExportFolder` (from `CsvSubDir` in `config.json`)
+- Template: `Again_Save/summary.md` under the root
+- Use `ti_data_tools.ps1` and `TI_DATA_TOOLS.md` exactly as documented.
 
 Steps you MUST follow:
 1. Run export_factions.ps1 if needed, then dot-source ti_data_tools.ps1.
@@ -37,7 +37,7 @@ Steps you MUST follow:
    - PLUS narrative: what it means, why it matters, and what to do.
 
 Target:
-- Produce a new file Again_Save/summary_YYYYMMDD.md modelled on the most recent dated summary file in Again_Save:
+- Produce a new file `Again_Save/summary/summary_YYYYMMDD.md` modelled on the most recent dated summary file in `Again_Save/summary/`:
   same 12-section structure, but with current data and heavy, opinionated strategy.
 ```
 
@@ -56,7 +56,7 @@ Use:
 - Again_Save/summary_jan012024.md as an example of the desired depth and style.
 
 Requirements:
-- Generate a new Again_Save/summary_YYYYMMDD.md.
+- Generate a new `Again_Save/summary/summary_YYYYMMDD.md`.
 - For each of the 12 sections:
   - Use toolbox outputs (snippet pack, space sitrep, boost summary, nations, councilors).
   - Follow the section's AI instruction block and the global "Specificity & Call-Out Requirements".

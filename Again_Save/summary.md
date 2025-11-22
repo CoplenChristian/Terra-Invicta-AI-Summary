@@ -24,7 +24,7 @@
 1. **Export latest data:** Run `export_factions.ps1`.
 2. **Populate sections:** Rebuild sections using current CSVs in `csv/` and `snippet_pack_YYYYMMDD.md`.
 3. **Data Sources:**
-   - **Snippet Pack:** Space Sitrep, Habs by Faction, Tech Matrix, Alien Hate.
+   - **Snippet Pack:** Space Sitrep, Habs by Faction, Tech Matrix, Human Faction Hate Matrix, Alien Hate.
    - **CSVs:** `Again_Factions_Core.csv` (Global), `Again_Resistance_Nations.csv` (Earth), `Again_Resistance_Habs.csv` (MC/Tiers), `Again_Faction_HabIncome.csv` (Mining).
 
 ### 🧠 Game Stage Determination (CRITICAL)
@@ -57,9 +57,10 @@
 ## 1. 🤝 Faction Power Table (Current Save) {#section-1}
 > **AI:** Rank all factions (Human+Alien).
 > *   **Columns:** CPs, GDP, Habs, Mining Income, Alien Hate.
+> *   **Tables (MANDATORY):** Embed the **Power Ranking (Weighted Earth/Space/Tech)**, **Human Faction Hate Matrix**, and **Alien Hate by Faction** tables (from the snippet pack) **directly into this section** so the rankings and tensions are visible at a glance. **Do not rely on narrative alone; the raw tables must appear here.**
 > *   **Narrative:** Explain rankings based on **Stage**.
 >     *   *Early:* Weigh Earth Power/Boost high.
->     *   *Mid/Late:* Weigh Space Economy/Tech/Fleets high.
+>     *   *Mid/Late:* Weigh Space Economy/Tech/Fleets high and make it explicit that the **Aliens remain the top overall power on Tech/Fleet potential even with zero Earth CPs**.
 
 ## 2. ⛏️ Space & Mining Tech Comparison {#section-2}
 > **AI:** Compare habs and mining income.
@@ -122,6 +123,6 @@
 > *   **Unclaimed:** Highlight top targets (use `Top Unclaimed Belt Sites`).
 
 ## 12. 📢 Biggest Changes Since Last Snapshot {#section-12}
-> **AI:** Compare current vs previous data.
-> *   **Highlight:** Shifts in Income, Fleets, Territory.
-> *   **Impact:** Why it matters for the current plan.
+> **AI:** If a previous dated summary exists (e.g., `summary_YYYYMMDD.md` in `Again_Save/summary/`), compare current vs previous data. If this is the **first** dated summary, instead highlight the most important current-state callouts and risks.
+> *   **With previous summary:** Emphasize shifts in Income, Fleets, Territory, Research, and Alien/Human hate.
+> *   **Without previous summary:** Emphasize the 5–10 most critical features of the present situation (major hab clusters, key Earth blocs, tech edge/gaps, alien posture) and why they define the campaign going forward.

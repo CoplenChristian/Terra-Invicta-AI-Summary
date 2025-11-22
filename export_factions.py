@@ -1,11 +1,19 @@
 import os
+import json
 import subprocess
 import tempfile
 from pathlib import Path
 
-SAVE_PATH = r"c:/Users/cople/Documents/My Games/TerraInvicta/Saves/Again.gz"
-WORK_DIR = Path(r"f:/Windsurf/TerraInvicta_again")
-OUTPUT_DIR = WORK_DIR / "Again_Save"
+
+ROOT = Path(__file__).resolve().parent
+CONFIG_PATH = ROOT / "config.json"
+
+with CONFIG_PATH.open("r", encoding="utf-8") as f:
+    _cfg = json.load(f)
+
+WORK_DIR = Path(_cfg.get("WorkDir", str(ROOT))).resolve()
+SAVE_PATH = _cfg.get("SavePath")
+OUTPUT_DIR = WORK_DIR / _cfg.get("AgainSaveSubDir", "Again_Save")
 
 FACTIONS = [
     ("ResistCouncil", "Resistance"),

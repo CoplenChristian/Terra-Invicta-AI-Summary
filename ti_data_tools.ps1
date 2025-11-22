@@ -9,8 +9,9 @@ This script provides reusable functions for:
   - Summarizing Resistance-controlled nations for the "Current Nation Control" section.
   - (Future) councilor, space sitrep, change-delta, and summary-scaffold helpers.
 
-It is designed to be dot-sourced once per session:
-  PS> Set-Location f:/Windsurf/TerraInvicta_again
+It is designed to be dot-sourced once per session from the configured RootPath
+in config.json (loaded via TIConfig):
+  PS> Set-Location <RootPath from config.json>
   PS> . .\ti_data_tools.ps1
   PS> Get-TIFactionOverview -Format Markdown
 
