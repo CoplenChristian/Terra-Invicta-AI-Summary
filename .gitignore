@@ -4,3 +4,4 @@ Again_Save/summary/*
 !Again_Save/summary/README.md
 csv/*.csv
 !csv/README.md
+config.json
