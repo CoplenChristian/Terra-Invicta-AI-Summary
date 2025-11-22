@@ -1,0 +1,116 @@
+param(
+    [string]$RootPath = (Split-Path -Parent $MyInvocation.MyCommand.Path)
+)
+
+$modulePath = Join-Path $RootPath "Ship_Info/raw_json/TIHabModuleTemplate.json"
+$outPath    = Join-Path $RootPath "Ship_Info/hab_module_tables.md"
+
+if (-not (Test-Path $modulePath)) {
+    throw "Missing TIHabModuleTemplate.json at $modulePath"
+}
+
+function ConvertTo-MarkdownTable {
+    param(
+        [object[]]$Rows,
+        [string[]]$Columns
+    )
+
+    if (-not $Rows -or $Rows.Count -eq 0) { return "# (no data)`n" }
+    if (-not $Columns -or $Columns.Count -eq 0) {
+        $Columns = $Rows[0].PSObject.Properties.Name
+    }
+
+    $header = "| " + ($Columns -join " | ") + " |"
+    $divider = "| " + (($Columns | ForEach-Object { "---" }) -join " | ") + " |"
+    $lines = @($header, $divider)
+
+    foreach ($row in $Rows) {
+        $cells = foreach ($c in $Columns) {
+            $val = $row.$c
+            if ($null -eq $val) { "" }
+            elseif ($val -is [bool]) { if ($val) { "Yes" } else { "No" } }
+            else { $val.ToString() }
+        }
+        $lines += "| " + ($cells -join " | ") + " |"
+    }
+
+    return ($lines -join [Environment]::NewLine)
+}
+
+function Get-HabModuleCategory {
+    param($Module)
+
+    if ($Module.coreModule) { return "Core" }
+    if ($Module.mine) { return "Mining" }
+    if ($Module.allowsShipConstruction) { return "Shipyard" }
+    if ($Module.incomeResearch_month -gt 0) { return "Research" }
+    if ($Module.missionControl -gt 0 -or $Module.controlPointCapacity -gt 0) { return "Administration" }
+    if ($Module.specialRules -and ($Module.specialRules -match "Defense|Weapons")) { return "Defense" }
+    if ($Module.allowsResupply) { return "Resupply" }
+    if ($Module.power -lt 0 -and -not $Module.mine) { return "Power/Utility" }
+    return "Utility"
+}
+
+$modules = Get-Content $modulePath -Raw | ConvertFrom-Json
+$groups = $modules | Group-Object { Get-HabModuleCategory $_ }
+
+$sb = New-Object System.Text.StringBuilder
+$sb.AppendLine("# Hab Modules (TIHabModuleTemplate)") | Out-Null
+$sb.AppendLine() | Out-Null
+$sb.AppendLine("Source: `Ship_Info/raw_json/TIHabModuleTemplate.json`") | Out-Null
+$sb.AppendLine()
+
+foreach ($group in ($groups | Sort-Object Name)) {
+    $rows = foreach ($m in ($group.Group | Sort-Object friendlyName)) {
+        $special = if ($m.specialRules) { ($m.specialRules -join ", ") } else { "" }
+        $costWater     = if ($m.weightedBuildMaterials) { $m.weightedBuildMaterials.water } else { $null }
+        $costVolatiles = if ($m.weightedBuildMaterials) { $m.weightedBuildMaterials.volatiles } else { $null }
+        $costMetals    = if ($m.weightedBuildMaterials) { $m.weightedBuildMaterials.metals } else { $null }
+        $costNobles    = if ($m.weightedBuildMaterials) { $m.weightedBuildMaterials.nobleMetals } else { $null }
+        $costFissiles  = if ($m.weightedBuildMaterials) { $m.weightedBuildMaterials.fissiles } else { $null }
+
+        [PSCustomObject]@{
+            Module             = $m.friendlyName
+            TemplateID         = $m.dataName
+            Tier               = $m.tier
+            HabType            = $m.habType
+            RequiredProject    = $m.requiredProjectName
+            Crew               = $m.crew
+            Power_MW           = $m.power
+            BuildDays          = $m.buildTime_Days
+            MissionControl     = $m.missionControl
+            ResearchPerMonth   = $m.incomeResearch_month
+            MoneyPerMonth      = $m.incomeMoney_month
+            VolatilesPerMonth  = $m.incomeVolatiles_month
+            MetalsPerMonth     = $m.incomeMetals_month
+            FissilesPerMonth   = $m.incomeFissiles_month
+            AllowsShipyard     = $m.allowsShipConstruction
+            Resupply           = $m.allowsResupply
+            MiningMultiplier   = $m.miningModifier
+            ControlPointCap    = $m.controlPointCapacity
+            CoreModule         = $m.coreModule
+            Automated          = $m.automated
+            CostWater          = $costWater
+            CostVolatiles      = $costVolatiles
+            CostMetals         = $costMetals
+            CostNobles         = $costNobles
+            CostFissiles       = $costFissiles
+            SpecialRules       = $special
+        }
+    }
+
+    $sb.AppendLine("## $($group.Name)") | Out-Null
+    $sb.AppendLine() | Out-Null
+    $columns = @(
+        "Module","TemplateID","Tier","HabType","RequiredProject","Crew","Power_MW","BuildDays",
+        "MissionControl","ResearchPerMonth","MoneyPerMonth","VolatilesPerMonth","MetalsPerMonth",
+        "FissilesPerMonth","AllowsShipyard","Resupply","MiningMultiplier","ControlPointCap",
+        "CoreModule","Automated","CostWater","CostVolatiles","CostMetals","CostNobles",
+        "CostFissiles","SpecialRules"
+    )
+    $sb.AppendLine((ConvertTo-MarkdownTable -Rows $rows -Columns $columns)) | Out-Null
+    $sb.AppendLine() | Out-Null
+}
+
+$sb.ToString() | Set-Content -Path $outPath -Encoding UTF8
+Write-Host "Wrote $outPath"
