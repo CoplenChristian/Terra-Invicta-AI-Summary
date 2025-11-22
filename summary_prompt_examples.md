@@ -83,10 +83,13 @@ The following four files contain rules, data, and formulas you MUST use for ever
 * `current_meta.md` 
 * `math.md` 
 * `ship_components_tables.md` 
-* `ship_design_guide.md` 
+* `ship_design_guide.md`
+* `utility_modules.md`
 
 These files are not optional. They define REQUIRED behavior.
 Treat them exactly like hard system instructions. Follow them completely and literally.
+
+> **Note**: `math.md` is comprehensive. For efficiency, read sections conditionally based on your specific task. See `ship_design_guide.md` §0 "Conditional Reading for math.md" for guidance on which sections are always required vs. task-specific.
 
 ---
 
@@ -100,9 +103,9 @@ The purpose of this ship is:
 
 ### 📚 Design obligations (MANDATORY)
 
-When producing a ship design, you must:
+When producing a ship design, you must use the following files **conditionally based on your specific task**:
 
-1. **Use the rules in `current_meta.md`**
+1. **Use the rules in `current_meta.md`** (ALWAYS)
 
    * Meta heuristics
    * Fuel fraction limits
@@ -110,17 +113,15 @@ When producing a ship design, you must:
    * Armor allocation meta
    * PD / weapon / hull meta
 
-2. **Use the equations in `math.md`**
+2. **Use the equations in `math.md`** (SELECTIVELY - see conditional reading guide)
 
-   * Wet mass
-   * Dry mass
-   * Fuel mass
-   * Fuel fraction
-   * Acceleration (cruise & combat)
-   * Delta-V
-   * Power interactions (power-limited thrust, etc.)
+   * **ALWAYS**: §1 Mass, §2 Acceleration, §4 Delta-V
+   * **IF weapons**: §5A Weapon Damage & Power
+   * **IF armor**: §1.2 Armor Mass calculations
+   * **IF heat/power optimization**: §3 Power Plant Interaction, §5 Heat & Radiators
+   * See `ship_design_guide.md` §0 for complete guidance
 
-3. **Use ONLY components listed in `ship_components_tables.md`**
+3. **Use ONLY components listed in `ship_components_tables.md`** OR the filtered CSV
 
    * Mass
    * Thrust
@@ -147,7 +148,12 @@ When producing a ship design, you must:
      * Power required vs provided
      * Any other key stats mentioned in the guide
 
-You are allowed to show your reasoning and describe what you’re doing step by step; however, the **final design section must still be complete and fully structured** as described.
+5. **Use `utility_modules.md`** (ONLY when selecting utility modules)
+
+   * Detailed stats for ECM, marines, drive enhancers, ISRU, kits, etc.
+   * Skip if ship has no utility slots or you already know what to use
+
+You are allowed to show your reasoning and describe what you're doing step by step; however, the **final design section must still be complete and fully structured** as described.
 
 ---
 

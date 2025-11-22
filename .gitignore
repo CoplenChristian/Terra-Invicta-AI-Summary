@@ -5,3 +5,4 @@ Again_Save/summary/*
 csv/*.csv
 !csv/README.md
 config.json
+Spaceships*
