@@ -9,6 +9,43 @@ It is also structured so an AI or script can use it as a source of formulas and 
 
 This section is a step-by-step procedure for an agent that wants to propose or evaluate a ship design.
 
+### Required Files
+
+You MUST use ALL of the following files when designing or evaluating ships:
+
+1. **`current_meta.md`** - Meta heuristics, fuel fractions, Δv/accel targets, armor meta, weapon/hull meta
+2. **`math.md`** - All ship performance formulas (mass, acceleration, Delta-V, power, etc.)
+3. **`ship_components_tables.md`** OR **`../csv/Again_Unlocked_Ship_Components.csv`** - Component stats
+4. **`ship_design_guide.md`** (this file) - Design procedures, constraints, and slot mappings
+5. **`utility_modules.md`** - Detailed reference for all utility modules (ECM, marines, drive enhancers, ISRU, kits, etc.)
+
+These files define REQUIRED behavior. Treat them as hard system instructions.
+
+#### Conditional Reading for math.md
+
+`math.md` is comprehensive but you can **read selectively** based on your task:
+
+**ALWAYS READ:**
+- §1 Mass Model - Dry/wet/fuel mass calculations
+- §2 Acceleration - Cruise and combat acceleration formulas
+- §4 Delta-V - Tsiolkovsky equation and fuel efficiency
+
+**READ IF designing weapons:**
+- §5A Weapon Damage & Power - All weapon damage formulas and power consumption
+
+**READ IF using armor:**
+- §1.2 Armor Mass - Complete armor volume and mass calculations
+
+**READ IF optimizing heat/power:**
+- §3 Power Plant Interaction - Power-limited thrust
+- §5 Heat & Radiators - Heat generation, crew heat, waste heat formulas
+
+**READ IF fine-tuning performance:**
+- §7 Turn Rate - Hull length and mass effects on maneuverability
+- §8 Strategic Implications - Δv and acceleration targets for different missions
+
+### Design Workflow
+
 Use this file for **mechanics, constraints, and formulas** and pair it with `current_meta.md` for **current community meta heuristics** (fuel fractions, accel/Δv targets, archetypes, and tech paths) when deciding what “good” looks like.
 
 1. **Collect inputs**
@@ -57,8 +94,8 @@ Use this file for **mechanics, constraints, and formulas** and pair it with `cur
      - Drive: drives only.
      - Power Plant: reactors only.
      - Radiator: radiators only.
-     - Battery: batteries only.
-     - Utility: **heat sinks and utility modules only** (e.g., ISRU, scoops, ECM, labs, drive enhancers).
+     - Battery: ONE primary battery (required).
+     - Utility: **additional batteries (same type), heat sinks, and utility modules** (e.g., ISRU, scoops, ECM, labs, drive enhancers, marines, kits).
    - From `ship_components_tables.md`:
      - Add weapon masses into DryMass.
      - Track weapon power draw, ammo/magazine volumes, and damage roles.
@@ -66,6 +103,7 @@ Use this file for **mechanics, constraints, and formulas** and pair it with `cur
 
 8. **Check batteries and burst fire**
    - Sum battery capacities to get total `BatteryEnergy_GJ` (from `ship_components_tables.md`).
+     - Include primary battery + any additional batteries in utility slots (must all be same type).
    - Compare peak weapon draw vs reactor surplus (per `math.md` §3) to estimate burst duration.
    - Confirm the ship can fire main weapons + PD for a reasonable combat window.
 
@@ -100,13 +138,17 @@ Use this mapping whenever you place components on a hull. Do **not** treat Utili
   - Accepts radiator components from `TIRadiatorTemplate.json` only.
 
 - **Battery slot**
-  - Accepts battery components from `TIBatteryTemplate.json` only.
+  - Accepts ONE primary battery from `TIBatteryTemplate.json`.
+  - REQUIRED: Every ship must have exactly one primary battery.
 
 - **Utility slot**
   - Accepts:
+    - ADDITIONAL batteries (same type as primary) from `TIBatteryTemplate.json`.
     - Heat sinks from `TIHeatSinkTemplate.json`.
-    - Utility modules from `TIUtilityModuleTemplate.json` (ISRU, scoops, ECM, labs, drive enhancers, etc.).
-  - DOES NOT accept radiators or batteries; those have their own dedicated slots.
+    - Utility modules from `TIUtilityModuleTemplate.json` (ISRU, scoops, ECM, labs, drive enhancers, marines, kits, etc.).
+  - DOES NOT accept radiators; those have their own dedicated slot.
+  - NOTE: All batteries (primary + utility slots) must be the same type to save a design.
+  - **For detailed utility module reference, see [`utility_modules.md`](utility_modules.md)**.
 
 - **Weapon hardpoints**
   - Nose hardpoints: fixed weapons (guns, lasers, particles, missiles) from the various weapon templates.
@@ -495,7 +537,39 @@ Roles affect **preferred engagement range and behavior**:
 - Propellant composition is drive‑specific (water, hydrogen, volatiles, metals, fissiles, etc.).
   - Some drives replace fissile cost with water if you own certain resource habs (e.g., He‑3 mines).
 
-### 3.2 Engineering Formulas (Pointer)
+### 3.2 Drive and Power Plant Compatibility
+
+**Critical Constraint**: Drives require specific power plant classes to function. The `ReqPowerPlant` field in the CSV database specifies this compatibility.
+
+| ReqPowerPlant Value | Compatible Power Plant Classes |
+|---------------------|-------------------------------|
+| `Any_General` | Any power plant (used by Chemical drives, basic drives) |
+| `Fuel_Cell` | Fuel Cell reactors only |
+| `Solid_Core_Fission` | Solid Core Fission reactors |
+| `Molten_Salt_Core_Fission` | Molten Salt Fission reactors |
+| `Liquid_Core_Fission` | Molten Core / Liquid Core Fission reactors |
+| `Gas_Core_Fission` | Vapor Core / Gas Core Fission reactors |
+| `Electrostatic_Confinement_Fusion` | Electrostatic Confinement Fusion reactors |
+| `Mirrored_Magnetic_Confinement_Fusion` | Mirror Cell Fusion reactors |
+| `Toroid_Magnetic_Confinement_Fusion` | Fusion Tokamak reactors |
+| `Hybrid_Confinement_Fusion` | Hybrid Confinement Fusion reactors |
+| `Z_Pinch_Fusion` | Z-Pinch Fusion reactors |
+| `Inertial_Confinement_Fusion` | Inertial Confinement Fusion reactors |
+| `Antimatter_Plasma_Core` | Antimatter Plasma Core reactors |
+| `Antimatter_Beam_Core` | Antimatter Beam Core reactors |
+
+**Critical Notes**:
+- If you select a drive requiring a specific power plant class, you **MUST** use a reactor from that class.
+- Within a compatible class, the reactor must also produce enough power (`maxOutput_GW`) for the drive's power requirement.
+- Check **both** the `ReqPowerPlant` field (from drive data) AND the `PowerPlantClass` field (from reactor data) when pairing components.
+- A low-tech power plant of the correct class may technically be compatible but practically underpowered for advanced drives.
+
+**Example**:
+- Drive: `Fission Torch Drive` with `ReqPowerPlant: Gas_Core_Fission`
+- Valid reactors: Gas Core Fission Reactor I through VI, or Vapor Core Fission Reactor I-III
+- Invalid: Solid Core Fission reactors (wrong class), even if they have enough power output
+
+### 3.3 Engineering Formulas (Pointer)
 
 For full math definitions of **Dry/Wet Mass**, **acceleration in g**, and **Δv** (Tsiolkovsky with TI’s EV), use `math.md`:
 
@@ -503,7 +577,7 @@ For full math definitions of **Dry/Wet Mass**, **acceleration in g**, and **Δv*
 - Acceleration: `math.md` §2 (cruise vs combat, caps, efficiency).
 - Delta‑V: `math.md` §4 (rocket equation using exhaust velocity).
 
-### 3.3 Drive Category Use‑Cases (Community Summary)
+### 3.4 Drive Category Use‑Cases (Community Summary)
 
 - **Early‑game chemical/electrothermal/electrostatic/electromagnetic**
   - Low thrust, low–mid EV.
@@ -541,6 +615,9 @@ Where `CombatMultiplier` defaults to `1.0` unless you define special rules (e.g.
 ---
 
 ## 4. Core Ship Systems (Practical Design Notes)
+
+> [!NOTE]
+> For detailed information on **utility modules** (ECM, marines, drive enhancers, ISRU, kits, etc.), see [`utility_modules.md`](utility_modules.md). This section covers armor, batteries, radiators, and weapons.
 
 ### 4.1 Armor
 
