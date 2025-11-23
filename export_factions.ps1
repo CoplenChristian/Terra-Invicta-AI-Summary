@@ -180,6 +180,55 @@ try {
     $fleetStates = $json.gamestates.'PavonisInteractive.TerraInvicta.TISpaceFleetState' |
         ForEach-Object { $_.Value }
 
+    $shipStates = $json.gamestates.'PavonisInteractive.TerraInvicta.TISpaceShipState' |
+        ForEach-Object { $_.Value }
+    
+    $shipById = @{}
+    if ($shipStates) {
+        foreach ($s in $shipStates) {
+            $shipById[$s.ID.value] = $s
+        }
+    }
+
+    # --- Ship Component Scoring Helper ---
+    function Get-ShipComponentScores {
+        param($JsonDir)
+        $scores = @{}
+        if (-not (Test-Path $JsonDir)) { return $scores }
+
+        $files = Get-ChildItem -Path $JsonDir -Filter "*.json"
+        foreach ($file in $files) {
+            try {
+                $jsonContent = Get-Content $file.FullName -Raw | ConvertFrom-Json
+                
+                # Determine multiplier based on component type
+                $multiplier = 1
+                if ($file.Name -match "Weapon" -or $file.Name -match "Gun" -or $file.Name -match "Missile" -or $file.Name -match "Laser" -or $file.Name -match "Plasma" -or $file.Name -match "Magnetic") { 
+                    $multiplier = 10 
+                } elseif ($file.Name -match "Drive") { 
+                    $multiplier = 5 
+                } elseif ($file.Name -match "PowerPlant") { 
+                    $multiplier = 2 
+                } elseif ($file.Name -match "Hull") { 
+                    $multiplier = 20 
+                }
+
+                foreach ($item in $jsonContent) {
+                    if ($item.dataName) {
+                        $val = if ($item.sort) { [int]$item.sort } else { 1 }
+                        $scores[$item.dataName] = $val * $multiplier
+                    }
+                }
+            } catch {
+                Write-Warning "Failed to load scoring from $($file.Name)"
+            }
+        }
+        return $scores
+    }
+
+    $shipInfoDir = Join-Path $WorkDir "Ship_Info/raw_json"
+    $componentScores = Get-ShipComponentScores -JsonDir $shipInfoDir
+
     $globalResearch = $json.gamestates.'PavonisInteractive.TerraInvicta.TIGlobalResearchState' |
         ForEach-Object { $_.Value }
 
@@ -358,6 +407,111 @@ try {
                 @{Name = 'BarycenterID'; Expression = { if ($_.barycenter) { $_.barycenter.value } else { $null } }} |
             Export-Csv -Path $alienFleetsOut -NoTypeInformation -Encoding UTF8
     }
+
+    # --- All Ships Export (with Power Score) ---
+    $shipsOut = Join-Path $outputDir "Again_Faction_Ships.csv"
+    $rowsShips = @()
+
+    # Cache for template scores
+    $templateScores = @{}
+
+    # Pass 1: Calculate scores for ships with defined components and populate cache
+    foreach ($fleet in $fleetStates) {
+        if (-not $fleet.ships) { continue }
+        foreach ($shipRef in $fleet.ships) {
+            $sid = $shipRef.value
+            if (-not $shipById.ContainsKey($sid)) { continue }
+            $ship = $shipById[$sid]
+
+            # Helper to check if list has valid components (not just refs)
+            $HasValidComponents = {
+                param($list)
+                if (-not $list) { return $false }
+                foreach ($c in $list) {
+                    # If it has a template name or data name directly, it's valid.
+                    # If it's just a ref (PSCustomObject with only $ref), it's not.
+                    if ($c.moduleTemplateName -or $c.dataName) { return $true }
+                }
+                return $false
+            }
+
+            $hasValid = (& $HasValidComponents -list $ship.noseWeapons) -or 
+                        (& $HasValidComponents -list $ship.hullWeapons) -or 
+                        (& $HasValidComponents -list $ship.utilityModules)
+
+            if ($hasValid) {
+                # Calculate Score
+                $score = 0
+                
+                # Helper to add score for a component list
+                $AddScore = {
+                    param($list)
+                    $s = 0
+                    if ($list) {
+                        foreach ($comp in $list) {
+                            $name = $null
+                            if ($comp.moduleTemplateName) { $name = $comp.moduleTemplateName }
+                            elseif ($comp.dataName) { $name = $comp.dataName }
+                            
+                            if ($name -and $componentScores.ContainsKey($name)) {
+                                $s += $componentScores[$name]
+                            }
+                        }
+                    }
+                    return $s
+                }
+
+                $score += & $AddScore -list $ship.noseWeapons
+                $score += & $AddScore -list $ship.hullWeapons
+                $score += & $AddScore -list $ship.utilityModules
+                
+                # Cache score for this template
+                if ($ship.templateName -and -not $templateScores.ContainsKey($ship.templateName)) {
+                    $templateScores[$ship.templateName] = $score
+                }
+                
+                # Store score on ship object temporarily for Pass 2
+                $ship | Add-Member -MemberType NoteProperty -Name "CalculatedScore" -Value $score -Force
+            }
+        }
+    }
+
+    # Pass 2: Export all ships, using cache for those missing scores
+    foreach ($fleet in $fleetStates) {
+        if (-not $fleet.ships) { continue }
+        
+        $fid = if ($fleet.faction) { $fleet.faction.value } else { $null }
+        $fState = if ($fid) { $factionStates | Where-Object { $_.ID.value -eq $fid } } else { $null }
+        $fName = if ($fState) { $fState.displayName } else { $null }
+
+        foreach ($shipRef in $fleet.ships) {
+            $sid = $shipRef.value
+            if (-not $shipById.ContainsKey($sid)) { continue }
+            $ship = $shipById[$sid]
+
+            $finalScore = 0
+            if ($ship.PSObject.Properties.Match("CalculatedScore").Count -gt 0) {
+                $finalScore = $ship.CalculatedScore
+            } elseif ($ship.templateName -and $templateScores.ContainsKey($ship.templateName)) {
+                $finalScore = $templateScores[$ship.templateName]
+            }
+            
+            $rowsShips += [PSCustomObject]@{
+                FactionID     = $fid
+                FactionName   = $fName
+                FleetID       = $fleet.ID.value
+                FleetName     = $fleet.displayName
+                ShipID        = $ship.ID.value
+                ShipName      = $ship.displayName
+                TemplateName  = $ship.templateName
+                CombatPower   = $finalScore
+            }
+        }
+    }
+
+    $rowsShips | 
+        Sort-Object FactionName, CombatPower -Descending |
+        Export-Csv -Path $shipsOut -NoTypeInformation -Encoding UTF8
 
     # --- All space bodies ---
     $spaceBodiesOut = Join-Path $outputDir "Again_SpaceBodies.csv"

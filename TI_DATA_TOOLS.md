@@ -777,6 +777,40 @@ Get-TIFactionPowerScores | Convert-TIToMarkdownTable -PropertyOrder FactionName,
 
 ---
 
+### 5.18 `Get-TIFactionShipSummary`
+
+**What it does**
+
+- Aggregates ship data from `Again_Faction_Ships.csv`.
+- Returns a table with:
+  - `FactionName`
+  - `ShipCount`
+  - `TotalPower` (sum of calculated combat power based on components).
+  - `AvgPower` (average power per ship).
+
+**Signature:**
+
+```powershell
+Get-TIFactionShipSummary -Format Table|Markdown|Json
+```
+
+**Data sources:**
+
+- `Again_Faction_Ships.csv` — exported by `export_factions.ps1` with calculated `CombatPower`.
+
+**When to use it**
+
+- To compare **naval strength** beyond just fleet count.
+- To see if the Aliens have a massive quality advantage (High AvgPower) vs human quantity.
+
+**Typical calls**
+
+```powershell
+Get-TIFactionShipSummary -Format Markdown | Set-Clipboard
+```
+
+---
+
 ### 5.17 `Get-TISnippetPackMarkdown`
 
 **What it does**
@@ -791,6 +825,7 @@ Get-TIFactionPowerScores | Convert-TIToMarkdownTable -PropertyOrder FactionName,
   7. Resistance research summary (finished + in‑progress techs).
   8. Tech completion matrix by faction (True/False for finished techs).
   9. Alien hate by faction.
+  10. Faction ship power summary (count + combat score).
 
 **Signature:**
 

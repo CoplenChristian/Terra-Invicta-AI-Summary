@@ -681,6 +681,50 @@ function Get-TIFactionOverview {
 
 #endregion Function: Get-TIFactionOverview
 
+#region Function: Get-TIFactionShips & Summary
+
+function Get-TIFactionShips {
+    return Get-TICsv -Name "FactionShips" -FileName "Again_Faction_Ships.csv"
+}
+
+function Get-TIFactionShipSummary {
+    <#
+    .SYNOPSIS
+    Aggregates ship counts and combat power per faction.
+    #>
+    param(
+        [TIOutputFormat]$Format = [TIOutputFormat]::Table
+    )
+    
+    $ships = Get-TIFactionShips
+    if (-not $ships) { return @() }
+    
+    $groups = $ships | Group-Object FactionName
+    $rows = @()
+    
+    foreach ($g in $groups) {
+        $factionName = $g.Name
+        $shipCount = $g.Count
+        $totalPower = ($g.Group | Measure-Object -Property CombatPower -Sum).Sum
+        $avgPower = if ($shipCount -gt 0) { $totalPower / $shipCount } else { 0 }
+        
+        $rows += [PSCustomObject]@{
+            FactionName = $factionName
+            ShipCount   = $shipCount
+            TotalPower  = [math]::Round($totalPower, 1)
+            AvgPower    = [math]::Round($avgPower, 1)
+        }
+    }
+    
+    switch ($Format) {
+        "Table"    { $rows | Sort-Object TotalPower -Descending | Format-Table -AutoSize }
+        "Markdown" { Convert-TIToMarkdownTable -Rows ($rows | Sort-Object TotalPower -Descending) -PropertyOrder "FactionName","ShipCount","TotalPower","AvgPower" }
+        "Json"     { $rows | Sort-Object TotalPower -Descending | ConvertTo-Json }
+    }
+}
+
+#endregion Function: Get-TIFactionShips & Summary
+
 function Get-TIFactionTechMatrix {
     <#
     .SYNOPSIS
@@ -1710,7 +1754,8 @@ function Test-TIExportContext {
         "Again_Councilor_Recruits.csv",
         "Again_HabSites.csv",
         "Again_Aliens_Habs.csv",
-        "Again_Techs_Global.csv"
+        "Again_Techs_Global.csv",
+        "Again_Faction_Ships.csv"
     )
 
     $optionalScripts = @(
@@ -1981,6 +2026,14 @@ function Get-TISnippetPackMarkdown {
     )
     [void]$sb.AppendLine()
 
+    # Ship Power Summary
+    [void]$sb.AppendLine("## Snippet: Faction Ship Power (Count & Combat Score)")
+    [void]$sb.AppendLine()
+    [void]$sb.AppendLine(
+        (Get-TIFactionShipSummary -Format Markdown)
+    )
+    [void]$sb.AppendLine()
+
     return $sb.ToString()
 }
 
@@ -2000,7 +2053,8 @@ function Invoke-TIDataMenu {
         [PSCustomObject]@{ Id = 4; Label = "Space sitrep (hab income + top Luna/Mars sites)"; Action = { Get-TISpaceSitrep -Format Markdown } },
         [PSCustomObject]@{ Id = 5; Label = "Boost + space summary (Earth CPs, Boost income, habs)"; Action = { Get-TIFactionBoostAndSpaceSummary -Format Table } },
         [PSCustomObject]@{ Id = 6; Label = "Validate export context (files + quick overview)"; Action = { Test-TIExportContext } },
-        [PSCustomObject]@{ Id = 7; Label = "Snippet pack (all main Markdown tables)"; Action = { Get-TISnippetPackMarkdown } }
+        [PSCustomObject]@{ Id = 7; Label = "Snippet pack (all main Markdown tables)"; Action = { Get-TISnippetPackMarkdown } },
+        [PSCustomObject]@{ Id = 8; Label = "Faction ship power summary"; Action = { Get-TIFactionShipSummary -Format Table } }
     )
 
     Write-Host "Terra Invicta Data Tools" -ForegroundColor Cyan

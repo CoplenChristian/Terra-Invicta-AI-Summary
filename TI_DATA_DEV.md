@@ -718,6 +718,28 @@ HabSiteCount, WaterPerDay, VolatilesPerDay, MetalsPerDay, NoblesPerDay, Fissiles
 
 - Used by the snippet pack to emit a **Power Ranking (Weighted Earth/Space/Tech)** table with component-weighted Tech pillars, consumed directly in the `Faction Power Table (Current Save)` section of `summary.md`.
 
+### 5.20 `Get-TIFactionShipSummary`
+
+**References:**
+
+- `Get-TIFactionShips()` → `Again_Faction_Ships.csv`
+
+**Core logic:**
+
+- Loads `Again_Faction_Ships.csv`.
+- Groups by `FactionName`.
+- Sums `CombatPower` (which is calculated in `export_factions.ps1` based on component weights).
+- Computes `AvgPower`.
+- Returns `FactionName`, `ShipCount`, `TotalPower`, `AvgPower`.
+
+**Usage:**
+
+- Provides the "Faction Ship Power" table in the snippet pack.
+
+**Developer notes:**
+
+- The scoring logic resides in `export_factions.ps1` (`Get-ShipComponentScores`). If you want to change how ships are scored (e.g. change weights for lasers vs drives), edit `export_factions.ps1`.
+
 ### 5.19 `Get-TISnippetPackMarkdown`
 
   **References:**
