@@ -57,7 +57,7 @@
 ## 1. 🤝 Faction Power Table (Current Save) {#section-1}
 > **AI:** Rank all factions (Human+Alien).
 > *   **Columns:** CPs, GDP, Habs, Mining Income, Alien Hate.
-> *   **Tables (MANDATORY):** Embed the **Power Ranking (Weighted Earth/Space/Tech)**, **Faction Ship Power (Count & Combat Score)**, **Human Faction Hate Matrix**, and **Alien Hate by Faction** tables (from the snippet pack) **directly into this section** so the rankings and tensions are visible at a glance. **Do not rely on narrative alone; the raw tables must appear here.**
+> *   **Tables (MANDATORY):** Embed the **Power Ranking (Weighted Earth/Space/Tech/Fleet)**, **Faction Ship Power (Count & Combat Score)**, **Human Faction Hate Matrix**, and **Alien Hate by Faction** tables (from the snippet pack) **directly into this section** so the rankings and tensions are visible at a glance. **Do not rely on narrative alone; the raw tables must appear here.**
 > *   **Narrative:** Explain rankings based on **Stage**.
 >     *   *Early:* Weigh Earth Power/Boost high.
 >     *   *Mid/Late:* Weigh Space Economy/Tech/Fleets high and make it explicit that the **Aliens remain the top overall power on Tech/Fleet potential even with zero Earth CPs**.

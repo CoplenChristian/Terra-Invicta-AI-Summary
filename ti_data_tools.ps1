@@ -863,6 +863,7 @@ function Get-TIFactionPowerScores {
     #>
 
     $overview   = Get-TIFactionOverview -Format Json | ConvertFrom-Json
+    $shipSummary = Get-TIFactionShipSummary -Format Json | ConvertFrom-Json
 
     if (-not $overview) { return @() }
 
@@ -875,6 +876,18 @@ function Get-TIFactionPowerScores {
         $componentScores[$short] = $score
         if ($score -gt $maxComponentScore) {
             $maxComponentScore = $score
+        }
+    }
+
+    # Fleet Power Map
+    $fleetScores = @{}
+    $maxFleetPower = 0.0
+    if ($shipSummary) {
+        foreach ($s in $shipSummary) {
+            $fleetScores[$s.FactionName] = [double]$s.TotalPower
+            if ([double]$s.TotalPower -gt $maxFleetPower) {
+                $maxFleetPower = [double]$s.TotalPower
+            }
         }
     }
 
@@ -909,19 +922,20 @@ function Get-TIFactionPowerScores {
             default { "Unknown" }
         }
 
+        # Weights: Earth 30%, Space 30%, Tech 20%, Fleet 20%
+        
         $earthScore =
-            (Normalize -value ([double]$o.TotalCPs)        -max ([double]$maxCPs)) * 0.25 +
-            (Normalize -value ([double]$o.TotalGDP)        -max ([double]$maxGDP)) * 0.10 +
-            (Normalize -value ([double]$o.TotalPopulation) -max ([double]$maxPop)) * 0.05
+            ((Normalize -value ([double]$o.TotalCPs)        -max ([double]$maxCPs)) * 0.20 +
+             (Normalize -value ([double]$o.TotalGDP)        -max ([double]$maxGDP)) * 0.05 +
+             (Normalize -value ([double]$o.TotalPopulation) -max ([double]$maxPop)) * 0.05)
 
         $spaceScore =
-            (Normalize -value ([double]$o.HabSiteCount)    -max ([double]$maxHabCount))    * 0.10 +
-            (Normalize -value ([double]$o.WaterPerDay)     -max ([double]$maxWaterPerDay)) * 0.05 +
-            (Normalize -value ([double]$o.MetalsPerDay)    -max ([double]$maxMetalsPerDay)) * 0.05 +
-            (Normalize -value ([double]$o.FissilesPerDay)  -max ([double]$maxFissPerDay))  * 0.05 +
-            (Normalize -value ([double]($o.WaterStockpile + $o.VolatilesStockpile)) -max ([double]($maxWaterStock + $maxVolStock))) * 0.05 +
-            (Normalize -value ([double]($o.MetalsStockpile + $o.NobleMetalsStockpile)) -max ([double]($maxMetalStock + $maxNobleStock))) * 0.05 +
-            (Normalize -value ([double]($o.FissilesStockpile + $o.ExoticsStockpile)) -max ([double]($maxFissStock + $maxExoticsStock))) * 0.05
+            ((Normalize -value ([double]$o.HabSiteCount)    -max ([double]$maxHabCount))    * 0.10 +
+             (Normalize -value ([double]$o.WaterPerDay)     -max ([double]$maxWaterPerDay)) * 0.05 +
+             (Normalize -value ([double]$o.MetalsPerDay)    -max ([double]$maxMetalsPerDay)) * 0.05 +
+             (Normalize -value ([double]$o.FissilesPerDay)  -max ([double]$maxFissPerDay))  * 0.05 +
+             (Normalize -value ([double]($o.WaterStockpile + $o.VolatilesStockpile)) -max ([double]($maxWaterStock + $maxVolStock))) * 0.025 +
+             (Normalize -value ([double]($o.MetalsStockpile + $o.NobleMetalsStockpile)) -max ([double]($maxMetalStock + $maxNobleStock))) * 0.025)
 
         $componentScore = if ($componentScores.ContainsKey($short)) { [double]$componentScores[$short] } else { 0.0 }
         $techScore = if ($maxComponentScore -gt 0) {
@@ -930,7 +944,14 @@ function Get-TIFactionPowerScores {
             0
         }
 
-        $powerScore = $earthScore + $spaceScore + $techScore
+        $rawFleet = if ($fleetScores.ContainsKey($o.FactionName)) { $fleetScores[$o.FactionName] } else { 0.0 }
+        $fleetScore = if ($maxFleetPower -gt 0) {
+            (Normalize -value $rawFleet -max $maxFleetPower) * 0.20
+        } else {
+            0
+        }
+
+        $powerScore = $earthScore + $spaceScore + $techScore + $fleetScore
 
         $rows += [PSCustomObject]@{
             FactionName = $o.FactionName
@@ -938,6 +959,7 @@ function Get-TIFactionPowerScores {
             EarthScore  = [Math]::Round($earthScore * 100, 1)
             SpaceScore  = [Math]::Round($spaceScore * 100, 1)
             TechScore   = [Math]::Round($techScore  * 100, 1)
+            FleetScore  = [Math]::Round($fleetScore * 100, 1)
             PowerScore  = [Math]::Round($powerScore * 100, 1)
         }
     }
@@ -1996,14 +2018,14 @@ function Get-TISnippetPackMarkdown {
     )
     [void]$sb.AppendLine()
 
-    # Weighted power ranking based on Earth/Space/Tech pillars
+    # Weighted power ranking based on Earth/Space/Tech/Fleet pillars
     [void]$sb.AppendLine("---")
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine("## Snippet: Power Ranking (Weighted Earth/Space/Tech)")
+    [void]$sb.AppendLine("## Snippet: Power Ranking (Weighted Earth/Space/Tech/Fleet)")
     [void]$sb.AppendLine()
     [void]$sb.AppendLine(
         (Convert-TIToMarkdownTable -Rows (Get-TIFactionPowerScores) -PropertyOrder @(
-            "FactionName","EarthScore","SpaceScore","TechScore","PowerScore"
+            "FactionName","EarthScore","SpaceScore","TechScore","FleetScore","PowerScore"
         ))
     )
     [void]$sb.AppendLine()

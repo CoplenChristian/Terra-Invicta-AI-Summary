@@ -215,7 +215,10 @@ try {
 
                 foreach ($item in $jsonContent) {
                     if ($item.dataName) {
-                        $val = if ($item.sort) { [int]$item.sort } else { 1 }
+                        $val = 1
+                        if ($item.sortOrder) { $val = [int]$item.sortOrder }
+                        elseif ($item.sort) { $val = [int]$item.sort }
+                        
                         $scores[$item.dataName] = $val * $multiplier
                     }
                 }
