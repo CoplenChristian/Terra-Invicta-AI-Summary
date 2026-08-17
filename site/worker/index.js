@@ -1,3 +1,5 @@
+import { staticAssets } from './static-assets.js';
+
 /**
  * Hosted Cloudflare / Edge Worker API
  *
@@ -7,13 +9,42 @@
  * Note: Raw, enhanced, or omniscient modes are strictly excluded.
  */
 
-const asset = (env, request, pathname) => {
+const mimeTypeFor = (pathname) => {
+  const lowerPath = pathname.toLowerCase();
+  if (lowerPath.endsWith('.html')) return 'text/html; charset=utf-8';
+  if (lowerPath.endsWith('.css')) return 'text/css; charset=utf-8';
+  if (lowerPath.endsWith('.js')) return 'text/javascript; charset=utf-8';
+  if (lowerPath.endsWith('.json')) return 'application/json; charset=utf-8';
+  return 'application/octet-stream';
+};
+
+const embeddedAsset = (pathname) => {
+  const key = pathname.replace(/^\/+/, '') || 'index.html';
+  const body = staticAssets[key];
+  if (body === undefined) return null;
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'content-type': mimeTypeFor(key),
+      'cache-control': key === 'index.html' ? 'no-cache' : 'public, max-age=300'
+    }
+  });
+};
+
+const asset = async (env, request, pathname) => {
   const url = new URL(request.url);
   url.pathname = pathname;
-  return env.ASSETS.fetch(new Request(url.toString(), {
-    method: 'GET',
-    headers: request.headers
-  }));
+
+  if (env?.ASSETS?.fetch) {
+    const response = await env.ASSETS.fetch(new Request(url.toString(), {
+      method: 'GET',
+      headers: request.headers
+    }));
+    if (response.status !== 404) return response;
+  }
+
+  return embeddedAsset(pathname) || new Response('Not found', { status: 404 });
 };
 
 const observerFile = (observerId, suffix) => {
@@ -175,7 +206,9 @@ export default {
       return jsonResponse({ success: true, saves: [], staticOnly: true });
     }
 
-    // Default: Static web assets
-    return env.ASSETS.fetch(request);
+    // Default: Static web assets. Sites normally supplies ASSETS, while the
+    // embedded fallback keeps the dashboard shell available for deployments
+    // where the static binding is not mounted.
+    return asset(env, request, url.pathname === '/' ? '/index.html' : url.pathname);
   }
 };

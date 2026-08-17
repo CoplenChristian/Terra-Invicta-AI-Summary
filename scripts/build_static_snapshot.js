@@ -62,6 +62,28 @@ writeJson('site-info.json', {
   note: 'Hosted build contains Player Intel snapshots only. Raw save files are not included.'
 });
 
+// Sites deployments may not mount the static asset binding for this
+// non-vinext worker. Embed the small dashboard shell and metadata assets in a
+// generated module so the worker can still serve the UI and effects endpoint.
+const embeddedAssetPaths = [
+  'index.html',
+  'css/main.css',
+  'css/components.css',
+  'js/api.js',
+  'js/app.js',
+  'data/effects.json'
+];
+const embeddedAssets = Object.fromEntries(
+  embeddedAssetPaths.map(relativePath => [
+    relativePath,
+    fs.readFileSync(path.join(distDir, relativePath), 'utf8')
+  ])
+);
+fs.writeFileSync(
+  path.join(distDir, 'server', 'static-assets.js'),
+  `export const staticAssets = ${JSON.stringify(embeddedAssets)};\n`
+);
+
 console.log(`Built hosted Player Intel snapshot from ${latestSave.name}`);
 console.log(`Campaign date: ${rawSnapshot.metadata.gameTimeString}`);
 console.log(`Observers packaged: ${observerFactions.length}`);
