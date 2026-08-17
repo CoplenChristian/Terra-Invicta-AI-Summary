@@ -106,7 +106,7 @@ async function fetchFromSupabase(env, observerId) {
   // Step 2: Query matching Player Intel snapshot row for requested observer
   const snapshots = await querySupabase(
     env,
-    `player_intel_snapshots?campaign_key=eq.${encodeURIComponent(campaignKey)}&save_last_modified=eq.${encodeURIComponent(campaign.current_save_last_modified)}&observer_faction_id=eq.${safeObserverId}&visibility=eq.player&select=snapshot,chatgpt_export,observer_faction_id,observer_faction_name,save_filename,save_last_modified,game_time`
+    `player_intel_snapshots?campaign_key=eq.${encodeURIComponent(campaignKey)}&save_last_modified=eq.${encodeURIComponent(campaign.current_save_last_modified)}&observer_faction_id=eq.${safeObserverId}&visibility=eq.player&select=snapshot,chatgpt_export,observer_faction_id,observer_faction_name,save_filename,save_last_modified,game_time,difficulty,campaign_start_year,visibility,generated_at`
   );
 
   if (!snapshots || snapshots.length === 0) {
@@ -133,6 +133,46 @@ async function fetchFromSupabase(env, observerId) {
   };
 }
 
+const snapshotEnvelope = (result, format = 'compact') => {
+  const row = result.row;
+  const exports = result.chatgptExport || {};
+  const markdown = format === 'full'
+    ? (exports.full || exports.compact || '')
+    : (exports.compact || exports.full || '');
+
+  return {
+    success: true,
+    source: 'supabase',
+    generatedAt: row.generated_at || null,
+    saveModifiedAt: row.save_last_modified,
+    saveFilename: row.save_filename,
+    campaignDate: row.game_time,
+    difficulty: row.difficulty,
+    campaignStartYear: row.campaign_start_year,
+    observerFaction: {
+      id: row.observer_faction_id,
+      name: row.observer_faction_name
+    },
+    // Hosted endpoints intentionally expose Player Intel only.
+    intelMode: 'player',
+    visibility: 'player',
+    snapshot: result.snapshot,
+    markdown
+  };
+};
+
+const markdownSnapshotResponse = (envelope) => new Response(
+  `${envelope.markdown}\n`,
+  {
+    status: 200,
+    headers: {
+      'content-type': 'text/markdown; charset=utf-8',
+      'access-control-allow-origin': '*',
+      'cache-control': 'public, max-age=60, s-maxage=60'
+    }
+  }
+);
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -154,6 +194,35 @@ export default {
       }
       // Fallback to static asset if Supabase not configured in this deployment
       return asset(env, request, observerFile(observerId, 'snapshot'));
+    }
+
+    // Read-only normalized endpoints for external analysis tools. These are
+    // always Player Intel, regardless of query-string values or dashboard mode.
+    if (
+      url.pathname === '/api/snapshot/compact' ||
+      url.pathname === '/api/snapshot/full' ||
+      url.pathname === '/latest-snapshot.json' ||
+      url.pathname === '/latest-snapshot.md'
+    ) {
+      if (!isSupabaseConfigured) {
+        return jsonResponse({ success: false, error: 'Hosted Supabase is not configured.' }, 503);
+      }
+
+      try {
+        const format = url.pathname.endsWith('/full') ? 'full' : 'compact';
+        const result = await fetchFromSupabase(env, observerId);
+        if (!result.found) {
+          return jsonResponse({ success: false, error: result.error }, result.status);
+        }
+
+        const envelope = snapshotEnvelope(result, format);
+        if (url.pathname === '/latest-snapshot.md') {
+          return markdownSnapshotResponse(envelope);
+        }
+        return jsonResponse(envelope);
+      } catch (err) {
+        return jsonResponse({ success: false, error: err.message }, 500);
+      }
     }
 
     // Handle export route
