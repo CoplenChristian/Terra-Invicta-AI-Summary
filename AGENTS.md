@@ -102,6 +102,7 @@ published Omniscient view. `observer=4712` is the Initiative observer.
 /api/intel/councilors?observer=4712&mode=omniscient&faction=4712
 /api/intel/habs?observer=4712&mode=omniscient&faction=4717
 /api/intel/hab-sites?observer=4712&mode=omniscient&faction=4717
+/api/intel/mining?observer=4712&mode=omniscient&body=Ceres
 /api/intel/fleets?observer=4712&mode=omniscient&faction=4717
 /api/intel/ships?observer=4712&mode=omniscient&faction=4717
 /api/intel/research?observer=4712&mode=omniscient

@@ -290,7 +290,39 @@ const habSiteResourceRow = (site) => ({
   metals: site.metals ?? 0,
   nobleMetals: site.nobleMetals ?? 0,
   fissiles: site.fissiles ?? 0,
-  resourceRateUnit: site.resourceRateUnit
+  resourceRateUnit: site.resourceRateUnit,
+  habName: site.habName,
+  habTier: site.habTier,
+  mineTier: site.mineTier,
+  mineModuleTemplate: site.mineModuleTemplate,
+  constructionStatus: site.constructionStatus,
+  constructionCompleted: site.constructionCompleted,
+  completionDate: site.completionDate,
+  startBuildDate: site.startBuildDate,
+  buildDurationDays: site.buildDurationDays,
+  daysRemaining: site.daysRemaining
+});
+
+const miningResourceRow = (site) => ({
+  site: site.displayName,
+  owner: site.factionName,
+  siteId: site.ID,
+  habId: site.habId,
+  hab: site.habName,
+  body: site.parentBodyName,
+  bodyId: site.parentBodyId,
+  water: site.water ?? 0,
+  volatiles: site.volatiles ?? 0,
+  metals: site.metals ?? 0,
+  nobles: site.nobleMetals ?? 0,
+  fissiles: site.fissiles ?? 0,
+  resourceRateUnit: site.resourceRateUnit,
+  mineTier: site.mineTier,
+  mineModule: site.mineModuleTemplate,
+  constructionStatus: site.constructionStatus,
+  daysRemaining: site.daysRemaining,
+  completionDate: site.completionDate,
+  buildDurationDays: site.buildDurationDays
 });
 
 const fleetResourceRow = (fleet) => ({
@@ -435,7 +467,7 @@ const intelResource = (pathName) => {
   const resource = grouped?.[1] || direct?.[1];
   const supported = new Set([
     'summary', 'factions', 'nations', 'councilors', 'habs', 'hab-sites',
-    'fleets', 'ships', 'research', 'capabilities', 'alien'
+    'mining', 'fleets', 'ships', 'research', 'capabilities', 'alien'
   ]);
   return supported.has(resource) ? resource : null;
 };
@@ -476,6 +508,11 @@ const buildIntelResource = (result, resource, url) => {
       items = asArray(snapshot.habSites)
         .filter(site => factionMatches(site, factionId) && bodyMatches(site, body))
         .map(habSiteResourceRow);
+      break;
+    case 'mining':
+      items = asArray(snapshot.habSites)
+        .filter(site => factionMatches(site, factionId) && bodyMatches(site, body))
+        .map(miningResourceRow);
       break;
     case 'fleets':
       items = asArray(snapshot.fleets)

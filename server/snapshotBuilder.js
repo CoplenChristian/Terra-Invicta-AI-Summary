@@ -19,6 +19,7 @@ class SnapshotBuilder {
     const rawOrgs = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIOrgState');
     const rawHabs = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIHabState');
     const rawHabModules = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIHabModuleState');
+    const rawHabSectors = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TISectorState');
     const rawHabSites = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIHabSiteState');
     const rawFleets = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TISpaceFleetState');
     const rawShips = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TISpaceShipState');
@@ -50,6 +51,16 @@ class SnapshotBuilder {
     const bodiesById = new Map();
     for (const b of rawSpaceBodies) {
       if (b.ID?.value) bodiesById.set(b.ID.value, b);
+    }
+
+    const habSectorsById = new Map();
+    for (const sector of rawHabSectors) {
+      if (sector.ID?.value) habSectorsById.set(sector.ID.value, sector);
+    }
+
+    const habModulesById = new Map();
+    for (const module of rawHabModules) {
+      if (module.ID?.value) habModulesById.set(module.ID.value, module);
     }
 
     const bodyDistanceAUById = new Map();
@@ -351,6 +362,56 @@ class SnapshotBuilder {
       const factionId = hab?.faction?.value || null;
       const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Unclaimed') : 'Unclaimed';
 
+      // Mining state lives on the hab's sector/module records. Resolve the
+      // active mining complex so the API can distinguish an operational mine
+      // from one still under construction and report its actual tier.
+      const miningModules = [];
+      for (const sectorRef of (Array.isArray(hab?.sectors) ? hab.sectors : [])) {
+        const sectorId = sectorRef?.value ?? sectorRef;
+        const sector = habSectorsById.get(sectorId);
+        for (const moduleRef of (Array.isArray(sector?.habModules) ? sector.habModules : [])) {
+          const moduleId = moduleRef?.value ?? moduleRef;
+          const module = habModulesById.get(moduleId);
+          if (!module) continue;
+
+          const moduleTemplate = module.templateName
+            ? templateLoader.templates.habModules.get(module.templateName)
+            : null;
+          const isMiningModule = moduleTemplate?.mine === true ||
+            /mining/i.test(module.templateName || module.displayName || '');
+          if (isMiningModule) {
+            miningModules.push({ module, moduleTemplate });
+          }
+        }
+      }
+
+      miningModules.sort((a, b) =>
+        (b.moduleTemplate?.tier || b.module.tier || 0) -
+        (a.moduleTemplate?.tier || a.module.tier || 0)
+      );
+      const miningModule = miningModules[0] || null;
+      const module = miningModule?.module;
+      const moduleTemplate = miningModule?.moduleTemplate;
+      const completionDate = module?.completionDate || null;
+      const gameDate = saveData.gameTimeString ? new Date(saveData.gameTimeString) : null;
+      const moduleCompletion = completionDate ? new Date(completionDate) : null;
+      const hasValidDates = gameDate && !Number.isNaN(gameDate.getTime()) &&
+        moduleCompletion && !Number.isNaN(moduleCompletion.getTime());
+
+      let constructionStatus = 'not-installed';
+      if (module) {
+        if (module.destroyed) constructionStatus = 'destroyed';
+        else if (module.decommissioning) constructionStatus = 'decommissioning';
+        else if (module.constructionCompleted) constructionStatus = 'operational';
+        else constructionStatus = 'building';
+      } else if (hs.pendingHab) {
+        constructionStatus = 'pending-hab';
+      }
+
+      const daysRemaining = constructionStatus === 'building' && hasValidDates
+        ? Math.max(0, Math.round(((moduleCompletion - gameDate) / 86400000) * 10) / 10)
+        : constructionStatus === 'operational' ? 0 : null;
+
       habSites.push({
         ID: siteId,
         displayName: hs.displayName,
@@ -359,6 +420,19 @@ class SnapshotBuilder {
         habId,
         factionId,
         factionName,
+        habName: hab?.displayName || null,
+        habTier: hab?.tier || null,
+        pendingHab: !!hs.pendingHab,
+        mineModuleId: module?.ID?.value || null,
+        mineModuleTemplate: module?.templateName || null,
+        mineModuleName: module?.displayName || null,
+        mineTier: moduleTemplate?.tier || module?.tier || null,
+        constructionStatus,
+        constructionCompleted: module?.constructionCompleted ?? null,
+        completionDate,
+        startBuildDate: module?.startBuildDate || null,
+        buildDurationDays: module?.baseBuildDuration_days ?? moduleTemplate?.buildTime_Days ?? null,
+        daysRemaining,
         // Current saves store production as *_day. Keep legacy aliases as
         // fallbacks for older save formats.
         water: this.firstNumeric(hs.water_day, hs.water, hs.waterDailyRate),
