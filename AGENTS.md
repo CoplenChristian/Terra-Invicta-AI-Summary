@@ -89,6 +89,30 @@ npm run push:supabase
 .\push_latest_to_supabase.ps1 -Save "F:\Documents\My Games\TerraInvicta\Saves\initiative.gz"
 ```
 
+### 2a. Hosted analysis endpoints
+
+The hosted worker exposes focused, shallow JSON endpoints for external analysis
+tools. They default to Player Intel; add `mode=omniscient` for the intentionally
+published Omniscient view. `observer=4712` is the Initiative observer.
+
+```text
+/api/intel/summary?observer=4712&mode=omniscient
+/api/intel/factions?observer=4712&mode=omniscient
+/api/intel/nations?observer=4712&mode=omniscient&faction=4712
+/api/intel/councilors?observer=4712&mode=omniscient&faction=4712
+/api/intel/habs?observer=4712&mode=omniscient&faction=4717
+/api/intel/hab-sites?observer=4712&mode=omniscient&faction=4717
+/api/intel/fleets?observer=4712&mode=omniscient&faction=4717
+/api/intel/ships?observer=4712&mode=omniscient&faction=4717
+/api/intel/research?observer=4712&mode=omniscient
+/api/intel/capabilities?observer=4712&mode=omniscient
+/api/intel/alien?observer=4712&mode=omniscient
+```
+
+Each resource response includes save metadata, `intelMode`, `visibility`, a
+`count`, and a focused `items` array (or focused top-level summary fields).
+Resource endpoints also accept `faction` / `factionId` and `body` filters.
+
 ### 3. Environment Variables & Security Rules
 
 | Variable | Scope | Safe for Hosted / Client? | Purpose |
