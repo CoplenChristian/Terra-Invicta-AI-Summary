@@ -52,3 +52,58 @@ Example latest-save queries:
 ```
 
 These standalone parsers read the selected save directly and do not require regenerating the broader CSV export set. Use `export_factions.ps1` only when a refreshed CSV export is specifically needed.
+
+---
+
+## Local Dashboard vs Hosted Supabase Backend
+
+### 1. Local Mode (Express / File-backed)
+- Local dashboard runs with `node server/index.js` or `.\start_dashboard.ps1`.
+- **Local mode does NOT depend on Supabase** and requires no Supabase environment variables.
+- It dynamically reads the newest save from the user's Terra Invicta saves folder and supports local switching between `Player Intel`, `Enhanced`, and `Omniscient` modes on `http://localhost:3000`.
+
+### 2. Publishing to Hosted Supabase
+To publish the newest save to Supabase so that the deployed ChatGPT Site / Worker can read the latest sanitized Player Intel data:
+
+**Dry run (test without network writes):**
+```powershell
+.\push_latest_to_supabase.ps1 -DryRun
+# Or with node:
+npm run push:dry-run
+```
+
+**Live publish (uploads to Supabase):**
+```powershell
+.\push_latest_to_supabase.ps1
+# Or with node:
+npm run push:supabase
+```
+
+**Publish an explicit historical save:**
+```powershell
+.\push_latest_to_supabase.ps1 -Save "F:\Documents\My Games\TerraInvicta\Saves\initiative.gz"
+```
+
+### 3. Environment Variables & Security Rules
+
+| Variable | Scope | Safe for Hosted / Client? | Purpose |
+| :--- | :--- | :--- | :--- |
+| `SUPABASE_URL` | Local & Hosted | **YES** | Supabase project endpoint URL. |
+| `SUPABASE_PUBLISHABLE_KEY` | Local & Hosted | **YES** | Public anon key for SELECT queries under RLS. |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Local ONLY** | ⚠️ **NO (NEVER COMMIT/DEPLOY)** | Admin key used by publisher to write snapshots. |
+| `SUPABASE_CAMPAIGN_KEY` | Local & Hosted | **YES** | Target campaign key (default: `initiative`). |
+
+> [!CAUTION]
+> **CRITICAL SECURITY RULE:**
+> - NEVER put `SUPABASE_SERVICE_ROLE_KEY` into `public/`, `dist/`, browser code, Cloudflare environment variables, worker source, or any git commit.
+> - The hosted worker and web dashboard MUST only use `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (anon key).
+> - Never commit real credentials, `.env` files, `.gz` save files, or raw unredacted save exports.
+
+### 4. Deploying the Hosted Site
+After running the publisher:
+1. Ensure your hosted deployment (Cloudflare Worker / Vercel) has `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_CAMPAIGN_KEY` configured in its environment settings.
+2. If static fallback assets are also desired:
+   ```bash
+   npm run build:site
+   ```
+3. Deploy the worker or static bundle. The hosted site will read the latest sanitized Player Intel snapshot directly from Supabase, strictly forbidding access to raw, enhanced, or omniscient data.
