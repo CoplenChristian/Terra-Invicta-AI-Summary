@@ -63,7 +63,12 @@ These standalone parsers read the selected save directly and do not require rege
 - It dynamically reads the newest save from the user's Terra Invicta saves folder and supports local switching between `Player Intel`, `Enhanced`, and `Omniscient` modes on `http://localhost:3000`.
 
 ### 2. Publishing to Hosted Supabase
-To publish the newest save to Supabase so that the deployed ChatGPT Site / Worker can read the latest sanitized Player Intel data:
+To publish the newest save to Supabase so that the deployed ChatGPT Site / Worker can read the latest published intelligence data:
+
+The hosted site serves Player Intel by default and also serves the explicitly
+enabled Omniscient mode when `mode=omniscient` is requested. The two modes are
+stored as separate rows per observer faction, and responses label the mode with
+`intelMode` / `visibility`. Raw save files are never uploaded.
 
 **Dry run (test without network writes):**
 ```powershell
@@ -98,6 +103,7 @@ npm run push:supabase
 > - NEVER put `SUPABASE_SERVICE_ROLE_KEY` into `public/`, `dist/`, browser code, Cloudflare environment variables, worker source, or any git commit.
 > - The hosted worker and web dashboard MUST only use `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (anon key).
 > - Never commit real credentials, `.env` files, `.gz` save files, or raw unredacted save exports.
+> - This campaign intentionally publishes both Player Intel and Omniscient snapshots because the user requested the game-state details to be available on the hosted site.
 
 ### 4. Deploying the Hosted Site
 After running the publisher:
@@ -106,4 +112,4 @@ After running the publisher:
    ```bash
    npm run build:site
    ```
-3. Deploy the worker or static bundle. The hosted site will read the latest sanitized Player Intel snapshot directly from Supabase, strictly forbidding access to raw, enhanced, or omniscient data.
+3. Deploy the worker or static bundle. The hosted site reads the latest published Player Intel snapshot by default, or the separately published Omniscient snapshot when `mode=omniscient` is explicitly selected. It never receives raw save files or the service-role key.

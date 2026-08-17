@@ -4,9 +4,10 @@
  * Verification Script for Supabase RLS Policies and Hosted Endpoints
  *
  * Tests:
- * 1. Anon/public client can SELECT public campaigns and player intel snapshots.
+ * 1. Anon/public client can SELECT public campaigns and published Player Intel
+ *    and explicitly enabled Omniscient snapshots.
  * 2. Anon/public client is REJECTED on INSERT, UPDATE, DELETE (RLS enforced).
- * 3. Anon/public client CANNOT access private campaigns or non-player visibility data.
+ * 3. Anon/public client CANNOT access private campaigns or unsupported visibility data.
  * 4. Stale-save protection prevents older saves from overriding campaign active pointer.
  */
 
@@ -52,6 +53,21 @@ async function testWithLiveSupabase(supabaseUrl, anonKey, serviceRoleKey, campai
     console.error(`  ✕ Public SELECT failed: ${pubSnapErr.message}`);
   } else {
     console.log(`  ✓ Public SELECT succeeded (found ${publicSnapshots?.length || 0} player intel snapshots).`);
+  }
+
+  // Test 2b: Public SELECT on explicitly enabled Omniscient snapshots
+  console.log('\n[Test 2b] Public SELECT on omniscient snapshots...');
+  const { data: publicOmniscient, error: pubOmniErr } = await publicClient
+    .from('player_intel_snapshots')
+    .select('id, observer_faction_id, observer_faction_name, visibility, save_filename')
+    .eq('campaign_key', campaignKey)
+    .eq('visibility', 'omniscient')
+    .limit(5);
+
+  if (pubOmniErr) {
+    console.error(`  ✕ Public Omniscient SELECT failed: ${pubOmniErr.message}`);
+  } else {
+    console.log(`  ✓ Public SELECT succeeded (found ${publicOmniscient?.length || 0} omniscient snapshots).`);
   }
 
   // Test 3: Public INSERT on campaigns (Must FAIL under RLS)

@@ -1,15 +1,16 @@
 # Supabase backend
 
-This directory contains the database migration for the hosted Player Intel backend.
+This directory contains the database migrations for the hosted intelligence backend.
 
 The migration creates:
 
 - `public.campaigns` for public campaign metadata and the current-save pointer.
-- `public.player_intel_snapshots` for sanitized, technology-gated Player Intel snapshots per observer faction.
+- `public.player_intel_snapshots` for published Player Intel and explicitly enabled Omniscient snapshots per observer faction.
 
 The public roles receive `SELECT` only. The local publisher is the only intended writer and must use
-`SUPABASE_SERVICE_ROLE_KEY` from a local environment variable. Raw saves, `rawSnapshot`, omniscient data,
-enhanced data, and unfiltered alien assets must never be uploaded.
+`SUPABASE_SERVICE_ROLE_KEY` from a local environment variable. Raw save files and credentials must never be
+uploaded. For this campaign, the publisher intentionally stores separate `player` and `omniscient` snapshot
+rows; the hosted worker defaults to `player` and accepts `mode=omniscient` when explicitly requested.
 
 ## Apply to a hosted project
 

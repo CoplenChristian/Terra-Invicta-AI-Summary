@@ -54,7 +54,7 @@ async function main() {
   const options = parseArgs();
 
   console.log('========================================================');
-  console.log('  TERRA INVICTA // SUPABASE PLAYER INTEL PUBLISHER      ');
+  console.log('  TERRA INVICTA // SUPABASE INTELLIGENCE PUBLISHER      ');
   console.log('========================================================');
 
   // 1. Resolve Save File
@@ -115,33 +115,38 @@ async function main() {
 
   console.log(`Discovered ${observerFactions.length} observer factions.`);
 
-  // 4. Generate Sanitized Player Intel Rows (Strictly Player Mode Only)
+  // 4. Generate published snapshots for each supported hosted mode.
+  // Omniscient is intentionally enabled for this campaign at the user's
+  // request; it remains clearly labeled in storage and every hosted response.
   const snapshotRows = [];
+  const publishedModes = ['player', 'omniscient'];
   for (const observer of observerFactions) {
-    const playerData = intelligenceFilter.applyFilter(rawSnapshot, 'player', observer.ID);
-    const compactMarkdown = exportGenerator.generateCompactSnapshot(playerData);
-    const fullMarkdown = exportGenerator.generateFullMarkdownReport(playerData);
+    for (const mode of publishedModes) {
+      const modeData = intelligenceFilter.applyFilter(rawSnapshot, mode, observer.ID);
+      const compactMarkdown = exportGenerator.generateCompactSnapshot(modeData);
+      const fullMarkdown = exportGenerator.generateFullMarkdownReport(modeData);
 
-    snapshotRows.push({
-      campaign_key: options.campaignKey,
-      save_filename: targetSave.name,
-      save_last_modified: saveMtimeIso,
-      game_time: gameTimeString,
-      difficulty: rawSnapshot.metadata.difficulty,
-      campaign_start_year: rawSnapshot.metadata.campaignStartYear,
-      observer_faction_id: observer.ID,
-      observer_faction_name: observer.displayName,
-      snapshot: playerData,
-      chatgpt_export: {
-        compact: compactMarkdown,
-        full: fullMarkdown
-      },
-      visibility: 'player',
-      generated_at: new Date().toISOString()
-    });
+      snapshotRows.push({
+        campaign_key: options.campaignKey,
+        save_filename: targetSave.name,
+        save_last_modified: saveMtimeIso,
+        game_time: gameTimeString,
+        difficulty: rawSnapshot.metadata.difficulty,
+        campaign_start_year: rawSnapshot.metadata.campaignStartYear,
+        observer_faction_id: observer.ID,
+        observer_faction_name: observer.displayName,
+        snapshot: modeData,
+        chatgpt_export: {
+          compact: compactMarkdown,
+          full: fullMarkdown
+        },
+        visibility: mode,
+        generated_at: new Date().toISOString()
+      });
+    }
   }
 
-  console.log(`Generated ${snapshotRows.length} sanitized Player Intel snapshot payloads.`);
+  console.log(`Generated ${snapshotRows.length} published snapshot payloads (${publishedModes.join(', ')}).`);
 
   // If Dry Run, output summary and exit
   if (options.dryRun) {
@@ -152,7 +157,7 @@ async function main() {
     console.log(`In-Game Date:       ${gameTimeString}`);
     console.log(`Snapshots Prepared: ${snapshotRows.length}`);
     for (const r of snapshotRows) {
-      console.log(` - Faction ${r.observer_faction_id} (${r.observer_faction_name}): Snapshot Size ~${(JSON.stringify(r.snapshot).length / 1024).toFixed(1)} KB, Export Size ~${r.chatgpt_export.compact.length} chars`);
+      console.log(` - ${r.visibility} / Faction ${r.observer_faction_id} (${r.observer_faction_name}): Snapshot Size ~${(JSON.stringify(r.snapshot).length / 1024).toFixed(1)} KB, Export Size ~${r.chatgpt_export.compact.length} chars`);
     }
     console.log('\n[Dry Run] Validation successful. No data written to Supabase.');
     return;
@@ -221,21 +226,34 @@ async function main() {
   }
   console.log(`✓ Campaign metadata upserted (${options.campaignKey}).`);
 
-  // 8. Upsert Player Intel Snapshot Rows
-  console.log(`Upserting ${snapshotRows.length} player intel snapshot rows...`);
-  const { data: upsertedRows, error: snapshotUpsertErr } = await supabase
-    .from('player_intel_snapshots')
-    .upsert(snapshotRows, {
-      onConflict: 'campaign_key,save_last_modified,observer_faction_id'
-    })
-    .select('id, observer_faction_id, observer_faction_name');
+  // 8. Upsert published snapshot rows
+  console.log(`Upserting ${snapshotRows.length} published snapshot rows...`);
+  // Keep each request comfortably below the hosted REST payload limit while
+  // retaining bulk upserts. This is deliberately a handful of requests, not
+  // one network call per snapshot row.
+  const snapshotBatchSize = 4;
+  let uploadedSnapshotCount = 0;
+  for (let offset = 0; offset < snapshotRows.length; offset += snapshotBatchSize) {
+    const batch = snapshotRows.slice(offset, offset + snapshotBatchSize);
+    const batchNumber = Math.floor(offset / snapshotBatchSize) + 1;
+    const batchCount = Math.ceil(snapshotRows.length / snapshotBatchSize);
+    console.log(`  Batch ${batchNumber}/${batchCount}: ${batch.length} rows...`);
 
-  if (snapshotUpsertErr) {
-    console.error(`[Error] Failed upserting player intel snapshots: ${snapshotUpsertErr.message}`);
-    process.exit(1);
+    const { error: snapshotUpsertErr } = await supabase
+      .from('player_intel_snapshots')
+      .upsert(batch, {
+        onConflict: 'campaign_key,save_last_modified,observer_faction_id,visibility'
+      });
+
+    if (snapshotUpsertErr) {
+      console.error(`[Error] Failed upserting published snapshot batch ${batchNumber}/${batchCount}: ${snapshotUpsertErr.message}`);
+      process.exit(1);
+    }
+
+    uploadedSnapshotCount += batch.length;
   }
 
-  console.log(`✓ Successfully uploaded ${snapshotRows.length} Player Intel snapshots to Supabase.`);
+  console.log(`✓ Successfully uploaded ${uploadedSnapshotCount} published snapshots to Supabase.`);
   console.log('========================================================');
   console.log('  PUBLISH COMPLETED SUCCESSFULLY                        ');
   console.log(`  Campaign:        ${options.campaignKey}`);
