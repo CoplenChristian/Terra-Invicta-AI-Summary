@@ -1,0 +1,15 @@
+{
+  "name": "terra-invicta-ai-summary",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server/index.js",
+    "build:site": "node scripts/build_static_snapshot.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server-sequential-thinking": "^2025.7.1",
+    "express": "^5.2.1",
+    "npx": "^10.2.2",
+    "playwright-mcp": "^0.0.13",
+    "puppeteer-mcp-server": "^0.7.2"
+  }
+}

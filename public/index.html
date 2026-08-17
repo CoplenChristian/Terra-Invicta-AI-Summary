@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terra Invicta // Strategic Intelligence & Command</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">⬢</div>
+      <div>
+        <div class="brand-title">Terra Invicta // Strategic Intelligence</div>
+        <div class="brand-subtitle">GLOBAL CAMPAIGN & INTELLIGENCE COMMAND</div>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <!-- Mode Switcher -->
+      <div class="mode-switcher">
+        <button class="mode-btn active" data-mode="player" title="Legitimately acquired faction intelligence only">Player Intel</button>
+        <button class="mode-btn" data-mode="enhanced" title="Player intel plus whitelisted raw metrics">Enhanced</button>
+        <button class="mode-btn" data-mode="omniscient" title="Raw unredacted campaign save state">Omniscient</button>
+      </div>
+
+      <!-- Observer Faction Select -->
+      <div class="observer-box">
+        <label for="observerSelect" style="color: var(--text-muted);">Observer:</label>
+        <select id="observerSelect" class="observer-select">
+          <option value="4712">the Initiative</option>
+          <option value="4710">the Resistance</option>
+          <option value="4711">Humanity First</option>
+          <option value="4715">the Academy</option>
+          <option value="4716">Project Exodus</option>
+          <option value="4714">the Protectorate</option>
+          <option value="4713">the Servants</option>
+          <option value="4717">the Aliens</option>
+        </select>
+      </div>
+
+      <!-- Refresh Latest Save -->
+      <button id="btnRefresh" class="btn-refresh" title="Reload newest save file from disk">
+        <span>⟳</span> Refresh Latest Save
+      </button>
+    </div>
+  </header>
+
+  <!-- Save Metadata Bar -->
+  <div class="save-meta-bar">
+    <div class="meta-item">
+      <span>Campaign Date:</span>
+      <span id="metaDate" class="meta-val">--</span>
+    </div>
+    <div class="meta-item">
+      <span>Active Save:</span>
+      <span id="metaSaveName" class="meta-val">--</span>
+    </div>
+    <div class="meta-item">
+      <span>Difficulty:</span>
+      <span id="metaDifficulty" class="meta-val">--</span>
+    </div>
+    <div class="meta-item">
+      <span>Last Modified:</span>
+      <span id="metaMtime" class="meta-val">--</span>
+    </div>
+  </div>
+
+  <!-- Omniscient Warning Banner -->
+  <div id="omniBanner" class="omniscient-banner hidden">
+    <span>⚠</span>
+    <span><strong>OMNISCIENT SAVE DATA ACTIVE:</strong> Information shown in this mode reveals raw game-state data not legitimately known to your faction in-game.</span>
+  </div>
+
+  <!-- Main Container -->
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar">
+      <a href="#overview" class="nav-item active" data-tab="overview">
+        <span class="nav-icon">📊</span>
+        <span>Strategic Balance</span>
+      </a>
+      <a href="#earth" class="nav-item" data-tab="earth">
+        <span class="nav-icon">🌍</span>
+        <span>Earth Operations</span>
+      </a>
+      <a href="#space" class="nav-item" data-tab="space">
+        <span class="nav-icon">🚀</span>
+        <span>Space & Mining</span>
+      </a>
+      <a href="#factions" class="nav-item" data-tab="factions">
+        <span class="nav-icon">🏛</span>
+        <span>Faction Intel</span>
+      </a>
+      <a href="#technology" class="nav-item" data-tab="technology">
+        <span class="nav-icon">🔬</span>
+        <span>Technology</span>
+      </a>
+      <a href="#intelligence" class="nav-item" data-tab="intelligence">
+        <span class="nav-icon">👁</span>
+        <span>Alien & Threats</span>
+      </a>
+      <a href="#export" class="nav-item" data-tab="export">
+        <span class="nav-icon">📋</span>
+        <span>AI Snapshot Export</span>
+      </a>
+    </nav>
+
+    <!-- Main Content Panels -->
+    <main class="main-content">
+      <!-- 1. Strategic Balance Overview -->
+      <section id="section-overview" class="content-section active">
+        <div class="section-header">
+          <div class="section-title">
+            <span>📊</span>
+            <span>Campaign Balance of Power</span>
+          </div>
+          <div id="overviewAlienHateBadge"></div>
+        </div>
+
+        <div id="strategicAlertsArea"></div>
+
+        <div class="section-title" style="font-size: 14px; margin-bottom: 12px; color: var(--text-muted);">
+          FACTION STRATEGIC CARDS
+        </div>
+        <div id="factionCardsGrid" class="grid-cards"></div>
+
+        <div class="section-title" style="font-size: 14px; margin: 24px 0 12px; color: var(--text-muted);">
+          ALL-FACTION STRATEGIC BALANCE MATRIX
+        </div>
+        <div class="table-container">
+          <table id="balanceMatrixTable" class="data-table">
+            <thead>
+              <tr>
+                <th>Faction</th>
+                <th>Power Score (dashboard estimate)</th>
+                <th>Nations</th>
+                <th>CPs</th>
+                <th>GDP</th>
+                <th>Research/mo</th>
+                <th>Habs</th>
+                <th>Ships</th>
+                <th>Fleet Power (save value)</th>
+                <th>Assessed Threat</th>
+              </tr>
+            </thead>
+            <tbody id="balanceMatrixBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 2. Earth Operations -->
+      <section id="section-earth" class="content-section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>🌍</span>
+            <span>Earth Operations & Geopolitics</span>
+          </div>
+        </div>
+
+        <!-- Sub-tabs: Nations / Councilors / Opportunity Finder -->
+        <div class="filter-bar">
+          <button class="filter-btn active" data-earth-view="nations">Controlled Nations</button>
+          <button class="filter-btn" data-earth-view="councilors">Council Intelligence</button>
+          <button class="filter-btn" data-earth-view="targets">Servant Priority Targets</button>
+        </div>
+
+        <div id="earthNationsView">
+          <div class="filter-bar">
+            <input type="text" id="nationSearch" class="search-input" placeholder="Search nations by name...">
+            <button class="filter-btn active" data-nation-filter="all">All</button>
+            <button class="filter-btn" data-nation-filter="major">Major Powers ($1T+)</button>
+            <button class="filter-btn" data-nation-filter="nuclear">Nuclear Powers</button>
+            <button class="filter-btn" data-nation-filter="servants">Servant Controlled</button>
+            <button class="filter-btn" data-nation-filter="aliens">Alien Activity</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Nation</th>
+                  <th>Executive</th>
+                  <th>CPs</th>
+                  <th>GDP</th>
+                  <th>MilTech</th>
+                  <th>Armies</th>
+                  <th>Nukes</th>
+                  <th>Unrest</th>
+                  <th>Cohesion</th>
+                  <th>Boost/mo</th>
+                  <th>MC</th>
+                </tr>
+              </thead>
+              <tbody id="nationsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="earthCouncilorsView" style="display: none;">
+          <div class="filter-bar">
+            <input type="text" id="councilorSearch" class="search-input" placeholder="Search councilors by name/org...">
+            <select id="councilorFactionFilter" class="observer-select" style="padding: 4px 8px;">
+              <option value="all">All Known Factions</option>
+            </select>
+          </div>
+          <div id="councilorsGrid" class="grid-cards"></div>
+        </div>
+
+        <div id="earthTargetsView" style="display: none;">
+          <div id="priorityTargetsHeading" class="section-title" style="font-size: 14px; margin-bottom: 12px; color: #e040fb;">
+            🎯 SERVANT HOLDINGS — PRIORITY CRACKDOWN / PURGE TARGETS
+          </div>
+          <div id="servantTargetsGrid" class="grid-cards"></div>
+        </div>
+      </section>
+
+      <!-- 3. Space & Mining -->
+      <section id="section-space" class="content-section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>🚀</span>
+            <span>Solar System Space Assets & Mining</span>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <button class="filter-btn active" data-space-view="mining">Mining & Resources</button>
+          <button class="filter-btn" data-space-view="habs">Habs & Stations</button>
+          <button class="filter-btn" data-space-view="fleets">Fleets & Ship Movements</button>
+        </div>
+
+        <div id="spaceMiningView">
+          <div class="section-title" style="font-size: 14px; margin-bottom: 12px; color: var(--text-muted);">
+            CELESTIAL MINING SITES & DEPOSITS
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Site Name</th>
+                  <th>Celestial Body</th>
+                  <th>Claimant</th>
+                  <th>Water/day</th>
+                  <th>Volatiles/day</th>
+                  <th>Metals/day</th>
+                  <th>Noble Metals/day</th>
+                  <th>Fissiles/day</th>
+                </tr>
+              </thead>
+              <tbody id="miningTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="spaceHabsView" style="display: none;">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Hab Name</th>
+                  <th>Faction</th>
+                  <th>Type</th>
+                  <th>Tier</th>
+                  <th>Location</th>
+                  <th>LEO?</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="habsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="spaceFleetsView" style="display: none;">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Fleet Name</th>
+                  <th>Faction</th>
+                  <th>Ships</th>
+                  <th>Combat Power</th>
+                  <th>Dominant Loadout</th>
+                  <th>Orbit / Body</th>
+                  <th>Current Mission</th>
+                  <th>Destination</th>
+                  <th>ETA / Arrival</th>
+                </tr>
+              </thead>
+              <tbody id="fleetsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Faction Intel Deep Dive -->
+      <section id="section-factions" class="content-section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>🏛</span>
+            <span>Faction Intelligence Dossier</span>
+          </div>
+          <select id="factionDossierSelect" class="observer-select">
+            <option value="4712">the Initiative</option>
+            <option value="4710">the Resistance</option>
+            <option value="4711">Humanity First</option>
+            <option value="4715">the Academy</option>
+            <option value="4716">Project Exodus</option>
+            <option value="4714">the Protectorate</option>
+            <option value="4713">the Servants</option>
+            <option value="4717">the Aliens</option>
+          </select>
+        </div>
+        <div id="factionDossierContent"></div>
+      </section>
+
+      <!-- 5. Technology -->
+      <section id="section-technology" class="content-section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>🔬</span>
+            <span>Technology & Global Research Tree</span>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <button class="filter-btn active" data-tech-view="global">Global Research Slots</button>
+          <button class="filter-btn" data-tech-view="matrix">All-Faction Tech Matrix</button>
+          <button class="filter-btn" data-tech-view="inspector">Intelligence Effects Inspector</button>
+        </div>
+
+        <div id="techGlobalView">
+          <div class="section-title" style="font-size: 14px; margin-bottom: 12px; color: var(--text-muted);">
+            ACTIVE GLOBAL RESEARCH SLOTS
+          </div>
+          <div id="globalTechSlotsGrid" class="grid-cards"></div>
+
+          <div class="section-title" style="font-size: 14px; margin: 24px 0 12px; color: var(--text-muted);">
+            COMPLETED GLOBAL TECHNOLOGIES
+          </div>
+          <div id="completedTechsContainer" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        </div>
+
+        <div id="techMatrixView" style="display: none;">
+          <div class="section-title" style="font-size: 14px; margin-bottom: 12px; color: var(--text-muted);">
+            STRATEGIC PROJECTS & TECHNOLOGICAL ARMS RACE MATRIX
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead id="techMatrixHeader"></thead>
+              <tbody id="techMatrixBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="techInspectorView" style="display: none;">
+          <div class="section-title" style="font-size: 14px; margin-bottom: 12px; color: var(--text-muted);">
+            TECHNOLOGY EFFECTS & CAPABILITY UNLOCK VALIDATION
+          </div>
+          <div id="techEffectsInspectorList"></div>
+        </div>
+      </section>
+
+      <!-- 6. Alien Intelligence & Threats -->
+      <section id="section-intelligence" class="content-section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>👁</span>
+            <span>Alien Intelligence & Threat Assessment</span>
+          </div>
+        </div>
+
+        <div class="section-title" style="font-size: 14px; margin-bottom: 12px; color: #00e676;">
+          EARTH ALIEN INTELLIGENCE PROGRESSION STAGES
+        </div>
+        <div id="alienStagesGrid" class="grid-cards"></div>
+
+        <div class="section-title" style="font-size: 14px; margin: 24px 0 12px; color: var(--text-muted);">
+          ACTIVE XENOFORMING & ALIEN MONITORED REGIONS
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Region</th>
+                <th>Xenoforming Activity Level</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="xenoformingTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 7. AI Snapshot Export -->
+      <section id="section-export" class="content-section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>📋</span>
+            <span>ChatGPT / AI Strategic Snapshot Export</span>
+          </div>
+          <div style="display: flex; gap: 12px;">
+            <button id="btnCopyCompactExport" class="btn-primary">📋 Copy Compact Snapshot</button>
+            <button id="btnCopyFullExport" class="filter-btn" style="padding: 8px 14px;">Copy Full Snapshot</button>
+          </div>
+        </div>
+
+        <div class="export-panel">
+          <div id="exportMarkdownPreview" class="markdown-preview">Generating export snapshot...</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">Action completed</div>
+
+  <!-- Scripts -->
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

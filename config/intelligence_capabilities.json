@@ -1,0 +1,88 @@
+{
+  "version": "1.0.0",
+  "description": "Dynamic Technology-Gated Intelligence Capabilities mapping for Terra Invicta",
+  "templatesPath": "F:/SteamLibrary/steamapps/common/Terra Invicta/TerraInvicta_Data/StreamingAssets/Templates",
+  "defaultObserverFaction": "the Initiative",
+  "effects": {
+    "Effect_DetectAbductions": {
+      "capability": "detectAlienAbductions",
+      "category": "alien",
+      "description": "Allows detection of alien abductions in investigated regions",
+      "defaultProject": "Project_TheirSignatures"
+    },
+    "Effect_DetectEnthralls": {
+      "capability": "detectAlienContacts",
+      "category": "alien",
+      "description": "Allows detection of alien contacts and enthrall activity",
+      "defaultProject": "Project_TheirMethods"
+    },
+    "Effect_DetectAllOperations": {
+      "capability": "detectAlienOperations",
+      "category": "alien",
+      "description": "Allows detection of broader alien operations worldwide",
+      "defaultProject": "Project_TheirOperations"
+    },
+    "Effect_UpdateAlienThreatMeter": {
+      "capability": "estimateAlienThreat",
+      "category": "alien",
+      "description": "Unlocks and updates the faction alien threat / hate estimation meter",
+      "defaultProject": "Project_TheirOperations"
+    },
+    "Effect_DetectAlienMovements": {
+      "capability": "detectAlienCouncilors",
+      "category": "alien",
+      "description": "Allows direct detection and tracking of alien operatives (Hydras)",
+      "defaultProject": "Project_TheirMovements"
+    },
+    "Effect_Skywatch": {
+      "capability": "trackInnerSpaceAssets",
+      "category": "space",
+      "description": "Track alien and hostile vessels/structures within Saturn's orbit",
+      "defaultTech": "Skywatch"
+    },
+    "Effect_DeepSkywatch": {
+      "capability": "trackSolarSystemSpaceAssets",
+      "category": "space",
+      "description": "Track alien and hostile vessels/structures throughout the Solar System",
+      "defaultTech": "DeepSystemSkywatch"
+    }
+  },
+  "strategicProjects": [
+    { "id": "Project_AlienAdministrationTransitionTeam", "name": "Alien Administration Transition Team", "risk": "Alien facility and nation handoff capability enabled" },
+    { "id": "Project_FleetCombatants", "name": "Fleet Combatants", "benefit": "Corvette, Frigate, and Destroyer hulls unlocked" },
+    { "id": "Project_ShipsoftheLine", "name": "Ships of the Line", "benefit": "Cruiser, Battleship, and Dreadnought hulls unlocked" },
+    { "id": "Project_TitanicSpacecraft", "name": "Titanic Spacecraft", "benefit": "Lancer and Titan hulls unlocked" },
+    { "id": "Project_CoilCannon", "name": "Coil Cannon", "benefit": "Mk1 Coil Weaponry unlocked" },
+    { "id": "Project_RailCannonMk2", "name": "Advanced Rail Cannon", "benefit": "Heavy Rail Weaponry unlocked" },
+    { "id": "Project_PointDefenseIonBattery", "name": "Point Defense Ion Battery", "benefit": "High-efficiency missile and kinetic interception" },
+    { "id": "Project_PhasedArrayLasers", "name": "Phased-Array Lasers", "benefit": "Long-range precision laser optics" },
+    { "id": "Project_BurnerDrive", "name": "Burner Drive", "benefit": "Early high-thrust interplanetary drive" },
+    { "id": "Project_ProtiumConverterTorch", "name": "Protium Converter Torch", "benefit": "Late-game high-efficiency fusion torch drive" }
+  ],
+  "powerScoreWeights": {
+    "earthEconomy": 0.20,
+    "earthPolitics": 0.15,
+    "researchPower": 0.20,
+    "spaceEconomy": 0.15,
+    "fleetPower": 0.20,
+    "militaryPower": 0.10
+  },
+  "intelligenceRules": {
+    "spaceAssets": {
+      "innerSystemDescription": "Skywatch reveals alien vessels and structures inside Saturn's orbit.",
+      "deepSystemDescription": "Deep System Skywatch reveals alien vessels and habitats throughout the Solar System within detection range.",
+      "deepSystemImmediateReveal": true,
+      "wikiSource": "https://wiki.hoodedhorse.com/Terra_Invicta/Deep_System_Skywatch"
+    },
+    "alienFacilities": {
+      "requiresRegionDiscovery": true,
+      "wikiSource": "https://wiki.hoodedhorse.com/Terra_Invicta/Aliens"
+    },
+    "xenoforming": {
+      "requiresMilestone": "DetectXenoforming",
+      "automaticVisibilityThreshold": 65,
+      "requiresRegionDiscovery": true,
+      "wikiSource": "https://wiki.hoodedhorse.com/Terra_Invicta/Aliens"
+    }
+  }
+}

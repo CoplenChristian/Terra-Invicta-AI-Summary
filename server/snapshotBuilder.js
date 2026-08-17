@@ -1,0 +1,813 @@
+const templateLoader = require('./templateLoader');
+const opportunityScorer = require('./opportunityScorer');
+
+class SnapshotBuilder {
+  constructor() {
+    templateLoader.load();
+  }
+
+  buildRawSnapshot(saveData) {
+    const gamestates = saveData.gamestates || {};
+
+    const metaList = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIMetadataState');
+    const meta = metaList[0] || {};
+
+    const rawFactions = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIFactionState');
+    const rawNations = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TINationState');
+    const rawControlPoints = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIControlPoint');
+    const rawCouncilors = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TICouncilorState');
+    const rawOrgs = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIOrgState');
+    const rawHabs = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIHabState');
+    const rawHabModules = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIHabModuleState');
+    const rawHabSites = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIHabSiteState');
+    const rawFleets = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TISpaceFleetState');
+    const rawShips = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TISpaceShipState');
+    const rawSpaceBodies = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TISpaceBodyState');
+    const rawOrbits = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIOrbitState');
+    const rawRegions = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIRegionState');
+    const rawAlienFacilities = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIRegionAlienFacilityState');
+    const rawXenoforming = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIRegionXenoformingState');
+    const rawGlobalResearch = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIGlobalResearchState');
+
+    const factionIntelligence = {};
+    for (const f of rawFactions) {
+      const factionId = f.ID?.value;
+      if (factionId) {
+        factionIntelligence[factionId] = this.normalizeFactionIntelligence(f);
+      }
+    }
+
+    // ID Maps
+    const factionsById = new Map();
+    const factionsByName = new Map();
+    for (const f of rawFactions) {
+      if (f.ID?.value) {
+        factionsById.set(f.ID.value, f);
+        factionsByName.set(f.displayName, f);
+      }
+    }
+
+    const bodiesById = new Map();
+    for (const b of rawSpaceBodies) {
+      if (b.ID?.value) bodiesById.set(b.ID.value, b);
+    }
+
+    const bodyDistanceAUById = new Map();
+    for (const b of rawSpaceBodies) {
+      if (!b.ID?.value || !b.globalPosition) continue;
+      const p = b.globalPosition;
+      const distanceMeters = Math.sqrt((p.x || 0) ** 2 + (p.y || 0) ** 2 + (p.z || 0) ** 2);
+      bodyDistanceAUById.set(b.ID.value, distanceMeters / 149597870700);
+    }
+    const saturnBody = rawSpaceBodies.find(b => b.displayName === 'Saturn');
+    const saturnOrbitDistanceAU = saturnBody?.ID?.value
+      ? bodyDistanceAUById.get(saturnBody.ID.value) || null
+      : null;
+
+    const orbitsById = new Map();
+    for (const o of rawOrbits) {
+      if (o.ID?.value) orbitsById.set(o.ID.value, o);
+    }
+
+    const regionsById = new Map();
+    for (const r of rawRegions) {
+      if (r.ID?.value) regionsById.set(r.ID.value, r);
+    }
+
+    const orgsById = new Map();
+    for (const org of rawOrgs) {
+      if (org.ID?.value) orgsById.set(org.ID.value, org);
+    }
+
+    const shipsById = new Map();
+    for (const s of rawShips) {
+      if (s.ID?.value) shipsById.set(s.ID.value, s);
+    }
+
+    // JSON.NET preserves shared ship modules through $id/$ref pairs. Build a
+    // local reference index before resolving each ship's weapon loadout.
+    const shipModuleRefs = new Map();
+    for (const ship of rawShips) {
+      this.registerShipModuleRefs(ship, shipModuleRefs);
+    }
+
+    const controlPointsById = new Map();
+    const controlPointsByNationId = new Map();
+    for (const cp of rawControlPoints) {
+      if (cp.ID?.value) {
+        const cpId = cp.ID.value;
+        const factionId = cp.faction?.value || null;
+        const nationId = cp.nation?.value || null;
+        const isExecutive = !!cp.executive || cp.controlPointType === 'Executive';
+
+        const cpData = {
+          id: cpId,
+          factionId,
+          factionName: factionId ? (factionsById.get(factionId)?.displayName || 'Unknown') : 'Neutral',
+          nationId,
+          isExecutive,
+          controlPointType: cp.controlPointType || 'Standard',
+          benefits: cp.benefits || null
+        };
+
+        controlPointsById.set(cpId, cpData);
+        if (nationId) {
+          if (!controlPointsByNationId.has(nationId)) {
+            controlPointsByNationId.set(nationId, []);
+          }
+          controlPointsByNationId.get(nationId).push(cpData);
+        }
+      }
+    }
+
+    // Process Nations
+    const nations = [];
+    for (const n of rawNations) {
+      const nationId = n.ID?.value;
+      if (!nationId) continue;
+
+      const cps = controlPointsByNationId.get(nationId) || [];
+      const execCp = cps.find(c => c.isExecutive);
+      const executiveFactionId = execCp?.factionId || null;
+      const executiveFactionName = executiveFactionId ? (factionsById.get(executiveFactionId)?.displayName || 'None') : 'None';
+
+      const gdp = n.GDP || n.gdp || 0;
+      const population = n.population || (n.historyPopulation?.length ? n.historyPopulation[n.historyPopulation.length - 1] : 0);
+      const boost = n.historyBoost?.length ? n.historyBoost[n.historyBoost.length - 1] : 0;
+      const research = n.historyResearch?.length ? n.historyResearch[n.historyResearch.length - 1] : 0;
+      const milTech = n.milTech || n.militaryTechLevel || 0;
+      const democracy = n.democracy || 0;
+      const cohesion = n.cohesion || 0;
+      const unrest = n.unrest || 0;
+      const nukes = n.nuclearWeapons || n.nukes || (n.historyNuclearWeapons?.length ? n.historyNuclearWeapons[n.historyNuclearWeapons.length - 1] : 0);
+      const armies = Array.isArray(n.armies) ? n.armies.length : 0;
+      const mc = n.missionControl || 0;
+
+      nations.push({
+        ID: nationId,
+        displayName: n.displayName,
+        templateName: n.templateName,
+        GDP: gdp,
+        population,
+        boost,
+        research,
+        milTech,
+        democracy,
+        cohesion,
+        unrest,
+        nukes,
+        armies,
+        missionControl: mc,
+        controlPoints: cps,
+        executiveFactionId,
+        executiveFactionName,
+        regionsCount: Array.isArray(n.regions) ? n.regions.length : 0
+      });
+    }
+
+    // Process Councilors
+    const councilors = [];
+    for (const c of rawCouncilors) {
+      const councilorId = c.ID?.value;
+      if (!councilorId) continue;
+
+      const factionId = c.faction?.value || null;
+      const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Independent') : 'Independent';
+      const isAlien = !!(c.typeTemplateName && c.typeTemplateName.toLowerCase().includes('alien')) || factionName === 'the Aliens';
+
+      const locationRegionId = c.location?.value || null;
+      const locationRegion = locationRegionId ? regionsById.get(locationRegionId) : null;
+      const locationName = locationRegion ? locationRegion.displayName : 'In Transit / Orbit';
+
+      const agentForFactionId = c.agentForFaction?.value || null;
+      const agentForFactionName = agentForFactionId ? (factionsById.get(agentForFactionId)?.displayName || null) : null;
+
+      const seenByFactionIds = Array.isArray(c.knowsIveBeenSeenBy) ? c.knowsIveBeenSeenBy.map(x => x.value || x) : [];
+
+      const assignedOrgs = [];
+      if (Array.isArray(c.orgs)) {
+        for (const orgRef of c.orgs) {
+          const orgId = orgRef.value || orgRef;
+          const orgObj = orgsById.get(orgId);
+          if (orgObj) {
+            assignedOrgs.push({
+              id: orgId,
+              displayName: orgObj.displayName,
+              templateName: orgObj.templateName,
+              stars: orgObj.tier || 1,
+              income: orgObj.income || null
+            });
+          }
+        }
+      }
+
+      councilors.push({
+        ID: councilorId,
+        displayName: c.displayName,
+        personalName: c.personalName || '',
+        familyName: c.familyName || '',
+        typeTemplateName: c.typeTemplateName || 'Unknown',
+        factionId,
+        factionName,
+        isAlien,
+        status: c.status || 'Active',
+        locationRegionId,
+        locationName,
+        attributes: {
+          Persuasion: c.attributes?.Persuasion ?? 0,
+          Investigation: c.attributes?.Investigation ?? 0,
+          Espionage: c.attributes?.Espionage ?? 0,
+          Command: c.attributes?.Command ?? 0,
+          Administration: c.attributes?.Administration ?? 0,
+          Science: c.attributes?.Science ?? 0,
+          Security: c.attributes?.Security ?? 0,
+          Loyalty: c.attributes?.Loyalty ?? 0,
+          ApparentLoyalty: c.attributes?.ApparentLoyalty ?? 0
+        },
+        traits: Array.isArray(c.traitTemplateNames) ? c.traitTemplateNames : [],
+        orgs: assignedOrgs,
+        priorMissionTemplateName: c.priorMissionTemplateName || null,
+        activeMission: c.activeMission?.value || null,
+        agentForFactionId,
+        agentForFactionName,
+        seenByFactionIds
+      });
+    }
+
+    // Process Space Fleets
+    const fleets = [];
+    for (const f of rawFleets) {
+      const fleetId = f.ID?.value;
+      if (!fleetId) continue;
+
+      const factionId = f.faction?.value || null;
+      const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Unknown') : 'Unknown';
+
+      const shipRefs = Array.isArray(f.ships) ? f.ships : [];
+      const shipList = [];
+      let totalCombatPower = 0;
+      let combatPowerAvailable = false;
+      const fleetWeaponCounts = new Map();
+
+      for (const sr of shipRefs) {
+        const sId = sr.value || sr;
+        const sObj = shipsById.get(sId);
+        if (sObj) {
+          const power = this.readShipCombatPower(sObj);
+          if (power !== null) {
+            totalCombatPower += power;
+            combatPowerAvailable = true;
+          }
+          const weaponLoadout = this.buildWeaponLoadout(sObj, shipModuleRefs);
+          for (const entry of weaponLoadout) {
+            fleetWeaponCounts.set(entry.role, (fleetWeaponCounts.get(entry.role) || 0) + entry.count);
+          }
+
+          shipList.push({
+            id: sId,
+            displayName: sObj.displayName,
+            hullName: sObj.hullTemplateName || sObj.templateName,
+            combatPower: power,
+            combatPowerSource: power === null ? 'not present in save' : 'save',
+            weaponLoadout,
+            dominantWeaponType: this.getDominantWeaponType(weaponLoadout)
+          });
+        }
+      }
+
+      const orbitBody = this.resolveOrbitBody(f, bodiesById, orbitsById);
+      const orbitBodyDistanceAU = this.resolveOrbitBodyDistanceAU(f, bodiesById, orbitsById, bodyDistanceAUById);
+      const trajectory = Array.isArray(f.currentTrajectory) && f.currentTrajectory.length > 0 ? f.currentTrajectory[0] : null;
+      const fleetWeaponBreakdown = this.summarizeWeaponCounts(fleetWeaponCounts);
+
+      fleets.push({
+        ID: fleetId,
+        displayName: f.displayName,
+        factionId,
+        factionName,
+        shipsCount: shipRefs.length,
+        ships: shipList,
+        combatPower: combatPowerAvailable ? Math.round(totalCombatPower) : null,
+        combatPowerAvailable,
+        combatPowerSource: combatPowerAvailable ? 'save' : 'not present in save',
+        weaponBreakdown: fleetWeaponBreakdown,
+        dominantWeaponType: this.getDominantWeaponType(fleetWeaponBreakdown),
+        weaponSummary: this.formatWeaponSummary(fleetWeaponBreakdown),
+        orbitBody,
+        orbitBodyDistanceAU,
+        insideSaturnOrbit: saturnOrbitDistanceAU !== null && orbitBodyDistanceAU !== null
+          ? orbitBodyDistanceAU <= saturnOrbitDistanceAU + 0.25
+          : null,
+        mission: trajectory?.GoalType || (f.inCombat ? 'Combat' : 'Stationary / Patrol'),
+        destination: trajectory?.GoalTarget ? 'In Transit' : orbitBody,
+        arrivalDate: trajectory?.Date || null,
+        inCombat: !!f.inCombat
+      });
+    }
+
+    // Process Habs
+    const habs = [];
+    for (const h of rawHabs) {
+      const habId = h.ID?.value;
+      if (!habId) continue;
+
+      const factionId = h.faction?.value || null;
+      const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Unknown') : 'Unknown';
+      const orbitBody = this.resolveOrbitBody(h, bodiesById, orbitsById);
+      const orbitBodyDistanceAU = this.resolveOrbitBodyDistanceAU(h, bodiesById, orbitsById, bodyDistanceAUById);
+
+      habs.push({
+        ID: habId,
+        displayName: h.displayName,
+        factionId,
+        factionName,
+        habType: h.habType || 'Station',
+        tier: h.tier || 1,
+        orbitBody,
+        orbitBodyDistanceAU,
+        insideSaturnOrbit: saturnOrbitDistanceAU !== null && orbitBodyDistanceAU !== null
+          ? orbitBodyDistanceAU <= saturnOrbitDistanceAU + 0.25
+          : null,
+        inEarthLEO: !!h.inEarthLEO,
+        templateName: h.templateName || h.habSchematicTemplateName,
+        inCombat: !!h.inCombat,
+        underAssault: !!h.underAssault,
+        underBombardment: !!h.underBombardment
+      });
+    }
+
+    // Process Hab Sites & Mining Deposits
+    const habSites = [];
+    for (const hs of rawHabSites) {
+      const siteId = hs.ID?.value;
+      if (!siteId) continue;
+
+      const parentBodyId = hs.parentBody?.value || null;
+      const parentBody = parentBodyId ? bodiesById.get(parentBodyId) : null;
+      const parentBodyName = parentBody ? parentBody.displayName : 'Unknown';
+
+      const habId = hs.hab?.value || null;
+      const hab = habId ? rawHabs.find(x => x.ID?.value === habId) : null;
+      const factionId = hab?.faction?.value || null;
+      const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Unclaimed') : 'Unclaimed';
+
+      habSites.push({
+        ID: siteId,
+        displayName: hs.displayName,
+        parentBodyId,
+        parentBodyName,
+        habId,
+        factionId,
+        factionName,
+        // Current saves store production as *_day. Keep legacy aliases as
+        // fallbacks for older save formats.
+        water: this.firstNumeric(hs.water_day, hs.water, hs.waterDailyRate),
+        volatiles: this.firstNumeric(hs.volatiles_day, hs.volatiles, hs.volatilesDailyRate),
+        metals: this.firstNumeric(hs.metals_day, hs.metals, hs.metalsDailyRate),
+        nobleMetals: this.firstNumeric(hs.nobles_day, hs.nobleMetals, hs.nobleMetalsDailyRate),
+        fissiles: this.firstNumeric(hs.fissiles_day, hs.fissiles, hs.fissilesDailyRate),
+        resourceRateUnit: 'per day'
+      });
+    }
+
+    // Process Global Research
+    const globalResearchObj = rawGlobalResearch[0] || {};
+    const finishedTechsNames = Array.isArray(globalResearchObj.finishedTechsNames) ? globalResearchObj.finishedTechsNames : [];
+    const techProgress = Array.isArray(globalResearchObj.techProgress) ? globalResearchObj.techProgress : [];
+
+    const activeGlobalSlots = techProgress.map((slot, index) => {
+      const techTemplate = templateLoader.getTech(slot.techTemplateName);
+      const totalCost = techTemplate?.researchCost || 10000;
+      const accumulated = slot.accumulatedResearch || 0;
+      const percent = Math.min(100, Math.round((accumulated / totalCost) * 1000) / 10);
+
+      const contributions = [];
+      let leadFactionId = null;
+      let maxContribution = -1;
+
+      if (Array.isArray(slot.factionContributions)) {
+        for (const fc of slot.factionContributions) {
+          const fid = fc.Key?.value || fc.Key;
+          const val = fc.Value || 0;
+          const fname = factionsById.get(fid)?.displayName || 'Unknown';
+          contributions.push({ factionId: fid, factionName: fname, contribution: Math.round(val) });
+          if (val > maxContribution) {
+            maxContribution = val;
+            leadFactionId = fid;
+          }
+        }
+      }
+
+      contributions.sort((a, b) => b.contribution - a.contribution);
+
+      return {
+        slotNumber: index + 1,
+        techId: slot.techTemplateName,
+        displayName: techTemplate?.friendlyName || slot.techTemplateName,
+        category: techTemplate?.techCategory || 'General',
+        accumulatedResearch: Math.round(accumulated),
+        totalCost,
+        percent,
+        contributions,
+        leadFactionId,
+        leadFactionName: leadFactionId ? (factionsById.get(leadFactionId)?.displayName || 'None') : 'None',
+        leadContribution: Math.round(maxContribution)
+      };
+    });
+
+    // Process Factions Summary & Power Scores
+    const factions = [];
+    const servantsFaction = rawFactions.find(f => f.displayName === 'the Servants');
+    const servantsFactionId = servantsFaction?.ID?.value || null;
+    const scoreWeights = templateLoader.config.powerScoreWeights || {
+      earthEconomy: 0.20,
+      earthPolitics: 0.15,
+      researchPower: 0.20,
+      spaceEconomy: 0.15,
+      fleetPower: 0.20,
+      militaryPower: 0.10
+    };
+
+    for (const f of rawFactions) {
+      const factionId = f.ID?.value;
+      if (!factionId) continue;
+
+      const fCouncilors = councilors.filter(c => c.factionId === factionId);
+      const fHabs = habs.filter(h => h.factionId === factionId);
+      const fFleets = fleets.filter(fl => fl.factionId === factionId);
+      const fShipsCount = fFleets.reduce((acc, fl) => acc + fl.shipsCount, 0);
+      const fCombatPower = fFleets.reduce((acc, fl) => acc + fl.combatPower, 0);
+
+      // Controlled CPs and Nations
+      const fCPs = Array.from(controlPointsById.values()).filter(cp => cp.factionId === factionId);
+      const fNationIds = new Set(fCPs.map(cp => cp.nationId).filter(Boolean));
+      const fNations = nations.filter(n => fNationIds.has(n.ID));
+      const totalGdp = fNations.reduce((acc, n) => acc + (n.GDP || 0), 0);
+      const totalPop = fNations.reduce((acc, n) => acc + (n.population || 0), 0);
+      const totalBoost = fNations.reduce((acc, n) => acc + (n.boost || 0), 0);
+      const totalResearch = fNations.reduce((acc, n) => acc + (n.research || 0), 0);
+
+      // Power Score Components (0-100 scales)
+      const earthEconomyScore = Math.min(100, Math.round((totalGdp / 40e12) * 100));
+      const earthPoliticsScore = Math.min(100, Math.round((fCPs.length / 50) * 100));
+      const researchPowerScore = Math.min(100, Math.round((totalResearch / 5000) * 100));
+      const spaceEconomyScore = Math.min(100, Math.round((fHabs.length / 20) * 100));
+      const fleetPowerScore = Math.min(100, Math.round((fCombatPower / 3000) * 100));
+      const militaryPowerScore = Math.min(100, Math.round((fNations.reduce((acc, n) => acc + (n.nukes || 0), 0) * 20)));
+
+      const overallPower = Math.round(
+        earthEconomyScore * (scoreWeights.earthEconomy ?? 0) +
+        earthPoliticsScore * (scoreWeights.earthPolitics ?? 0) +
+        researchPowerScore * (scoreWeights.researchPower ?? 0) +
+        spaceEconomyScore * (scoreWeights.spaceEconomy ?? 0) +
+        fleetPowerScore * (scoreWeights.fleetPower ?? 0) +
+        militaryPowerScore * (scoreWeights.militaryPower ?? 0)
+      );
+
+      const completedProjects = Array.isArray(f.finishedProjectNames) ? f.finishedProjectNames : [];
+      const availableProjects = Array.isArray(f.availableProjectNames) ? f.availableProjectNames : [];
+
+      const currentProjects = (Array.isArray(f.currentProjectProgress) ? f.currentProjectProgress : []).map(p => {
+        const projT = templateLoader.getProject(p.projectTemplateName);
+        const cost = projT?.researchCost || 5000;
+        const acc = p.accumulatedResearch || 0;
+        return {
+          projectId: p.projectTemplateName,
+          displayName: projT?.friendlyName || p.projectTemplateName,
+          accumulatedResearch: Math.round(acc),
+          totalCost: cost,
+          percent: Math.min(100, Math.round((acc / cost) * 1000) / 10)
+        };
+      });
+
+      factions.push({
+        ID: factionId,
+        displayName: f.displayName,
+        templateName: f.templateName,
+        color: this.getFactionColor(f.displayName),
+        resources: {
+          Money: Math.round(f.resources?.Money || 0),
+          Influence: Math.round(f.resources?.Influence || 0),
+          Operations: Math.round(f.resources?.Operations || 0),
+          Boost: Math.round((f.resources?.Boost || 0) * 10) / 10,
+          Water: Math.round(f.resources?.Water || 0),
+          Volatiles: Math.round(f.resources?.Volatiles || 0),
+          Metals: Math.round(f.resources?.Metals || 0),
+          NobleMetals: Math.round(f.resources?.NobleMetals || 0),
+          Fissiles: Math.round(f.resources?.Fissiles || 0),
+          Exotics: Math.round(f.resources?.Exotics || 0)
+        },
+        assessedAlienHateOfMe: f.assessedAlienHateOfMe ?? 0,
+        controlPointsCount: fCPs.length,
+        nationsCount: fNations.length,
+        totalGdp,
+        totalPopulation: totalPop,
+        totalBoost,
+        totalResearch,
+        habsCount: fHabs.length,
+        fleetsCount: fFleets.length,
+        shipsCount: fShipsCount,
+        combatPower: fCombatPower,
+        combatPowerAvailable: fFleets.some(fl => fl.combatPowerAvailable),
+        councilorsCount: fCouncilors.length,
+        powerScore: {
+          overall: overallPower,
+          earthEconomy: earthEconomyScore,
+          earthPolitics: earthPoliticsScore,
+          research: researchPowerScore,
+          spaceEconomy: spaceEconomyScore,
+          fleet: fleetPowerScore,
+          military: militaryPowerScore,
+          isEstimate: true,
+          weights: scoreWeights
+        },
+        completedProjects,
+        currentProjects,
+        availableProjectsCount: availableProjects.length
+      });
+    }
+
+    // Active Xenoforming and Alien Facilities
+    const activeXenoforming = [];
+    for (const x of rawXenoforming) {
+      if ((x.xenoformingLevel || 0) > 0) {
+        const regionId = x.region?.value;
+        const reg = regionId ? regionsById.get(regionId) : null;
+        activeXenoforming.push({
+          id: x.ID?.value,
+          regionId,
+          regionName: reg?.displayName || 'Unknown Region',
+          level: Math.round((x.xenoformingLevel || 0) * 10) / 10
+        });
+      }
+    }
+
+    const builtAlienFacilities = [];
+    for (const af of rawAlienFacilities) {
+      if (af.built || (af.currentHP || 0) > 0) {
+        const regionId = af.region?.value;
+        const reg = regionId ? regionsById.get(regionId) : null;
+        builtAlienFacilities.push({
+          id: af.ID?.value,
+          regionId,
+          regionName: reg?.displayName || 'Unknown Region',
+          currentHP: af.currentHP || 100
+        });
+      }
+    }
+
+    // Seed a default target list for consumers that do not have an observer
+    // context yet. The API filter recomputes this for the selected observer.
+    const defaultObserverName = templateLoader.config.defaultObserverFaction || 'the Initiative';
+    const defaultObserver = factions.find(f => f.displayName === defaultObserverName) || factions[0];
+    const defaultPriorityTarget = defaultObserver
+      ? opportunityScorer.selectPriorityTargetFaction(factions, nations, defaultObserver.ID)
+      : null;
+    const servantTargets = defaultObserver && defaultPriorityTarget
+      ? opportunityScorer.evaluateCampaignTargets(
+        nations,
+        controlPointsByNationId,
+        defaultObserver.ID,
+        defaultPriorityTarget.id,
+        defaultPriorityTarget.name
+      )
+      : [];
+
+    // Key Tech Matrix (Selected strategic projects across all factions)
+    const keyProjects = [
+      'Project_TheirSignatures',
+      'Project_TheirMethods',
+      'Project_TheirOperations',
+      'Project_TheirMovements',
+      'Project_AlienAdministrationTransitionTeam',
+      'Project_BurnerDrive',
+      'Project_FleetCombatants',
+      'Project_ShipsoftheLine',
+      'Project_TitanicSpacecraft',
+      'Project_CoilCannon',
+      'Project_RailCannonMk2',
+      'Project_PointDefenseIonBattery',
+      'Project_PhasedArrayLasers',
+      'Project_ProtiumConverterTorch'
+    ];
+
+    const techMatrix = keyProjects.map(projId => {
+      const projTemplate = templateLoader.getProject(projId);
+      const row = {
+        projectId: projId,
+        displayName: projTemplate?.friendlyName || projId,
+        category: projTemplate?.projectCategory || 'Special',
+        effects: projTemplate?.effects || [],
+        factions: {}
+      };
+
+      for (const f of factions) {
+        const rawF = rawFactions.find(rf => rf.ID?.value === f.ID);
+        const finished = (rawF?.finishedProjectNames || []).includes(projId);
+        const current = (rawF?.currentProjectProgress || []).some(cp => cp.projectTemplateName === projId);
+        const available = (rawF?.availableProjectNames || []).includes(projId);
+
+        let status = 'locked';
+        if (finished) status = 'completed';
+        else if (current) status = 'researching';
+        else if (available) status = 'available';
+
+        row.factions[f.ID] = {
+          factionName: f.displayName,
+          status
+        };
+      }
+      return row;
+    });
+
+    return {
+      metadata: {
+        fileName: saveData.fileName,
+        fileSizeBytes: saveData.fileSizeBytes,
+        lastModified: saveData.lastModified,
+        gameTimeString: saveData.gameTimeString,
+        difficulty: saveData.difficulty,
+        campaignStartYear: saveData.campaignStartYear
+      },
+      factions,
+      nations,
+      councilors,
+      fleets,
+      habs,
+      habSites,
+      globalResearch: {
+        finishedTechsNames,
+        activeSlots: activeGlobalSlots
+      },
+      factionIntelligence,
+      activeXenoforming,
+      builtAlienFacilities,
+      servantTargets,
+      priorityTargetFaction: defaultPriorityTarget,
+      spaceDetection: {
+        saturnOrbitDistanceAU,
+        skywatchRule: templateLoader.config.intelligenceRules?.spaceAssets?.innerSystemDescription || null,
+        deepSystemSkywatchRule: templateLoader.config.intelligenceRules?.spaceAssets?.deepSystemDescription || null
+      },
+      techMatrix
+    };
+  }
+
+  firstNumeric(...values) {
+    for (const value of values) {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+    }
+    return 0;
+  }
+
+  readShipCombatPower(ship) {
+    const candidates = [
+      ship.combatPower,
+      ship.strategicCombatValue,
+      ship.spaceCombatValue,
+      ship.combatValue
+    ];
+    const value = candidates.find(v => typeof v === 'number' && Number.isFinite(v));
+    return value === undefined ? null : value;
+  }
+
+  registerShipModuleRefs(ship, refs) {
+    const moduleArrays = ['noseWeapons', 'hullWeapons', 'utilityModules'];
+    for (const field of moduleArrays) {
+      for (const module of (Array.isArray(ship[field]) ? ship[field] : [])) {
+        if (module?.$id && module.moduleTemplateName) {
+          refs.set(String(module.$id), module);
+        }
+      }
+    }
+    for (const ammo of (Array.isArray(ship.ammo) ? ship.ammo : [])) {
+      const key = ammo?.Key;
+      if (key?.$id && key.moduleTemplateName) {
+        refs.set(String(key.$id), key);
+      }
+    }
+  }
+
+  resolveShipModule(module, refs) {
+    if (!module) return null;
+    if (module.moduleTemplateName) return module;
+    if (module.$ref) return refs.get(String(module.$ref)) || null;
+    return null;
+  }
+
+  buildWeaponLoadout(ship, refs) {
+    const counts = new Map();
+    for (const field of ['noseWeapons', 'hullWeapons']) {
+      for (const moduleRef of (Array.isArray(ship[field]) ? ship[field] : [])) {
+        const module = this.resolveShipModule(moduleRef, refs);
+        const moduleId = module?.moduleTemplateName;
+        const template = moduleId ? templateLoader.getWeaponModule(moduleId) : null;
+        if (!template) continue;
+
+        const current = counts.get(template.role) || {
+          role: template.role,
+          category: template.category,
+          count: 0,
+          systems: []
+        };
+        current.count++;
+        if (!current.systems.includes(template.displayName)) {
+          current.systems.push(template.displayName);
+        }
+        counts.set(template.role, current);
+      }
+    }
+    return Array.from(counts.values()).sort((a, b) => b.count - a.count || a.role.localeCompare(b.role));
+  }
+
+  summarizeWeaponCounts(counts) {
+    return Array.from(counts.entries())
+      .map(([role, count]) => ({ role, category: role, count, systems: [] }))
+      .sort((a, b) => b.count - a.count || a.role.localeCompare(b.role));
+  }
+
+  getDominantWeaponType(loadout) {
+    if (!Array.isArray(loadout) || loadout.length === 0) return 'Unarmed / Unknown';
+    const max = Math.max(...loadout.map(entry => entry.count));
+    const leaders = loadout.filter(entry => entry.count === max).map(entry => entry.role);
+    return leaders.length === 1 ? leaders[0] : 'Mixed';
+  }
+
+  formatWeaponSummary(loadout) {
+    if (!Array.isArray(loadout) || loadout.length === 0) return 'No recognized weapons';
+    return loadout.map(entry => `${entry.role} x${entry.count}`).join(' • ');
+  }
+
+  normalizeFactionIntelligence(faction) {
+    const normalizeEntries = (entries) => (Array.isArray(entries) ? entries : [])
+      .map(entry => ({
+        id: entry?.Key?.value ?? entry?.Key ?? null,
+        typeName: entry?.Key?.$type || null,
+        value: entry?.Value ?? null
+      }))
+      .filter(entry => entry.id !== null);
+
+    return {
+      milestones: Array.isArray(faction.milestones) ? faction.milestones : [],
+      objectiveNames: faction.objectiveNames && typeof faction.objectiveNames === 'object'
+        ? faction.objectiveNames
+        : {},
+      knownAlienSiteRegionIds: normalizeEntries(faction.knownAlienSites)
+        .filter(entry => !entry.typeName || entry.typeName.includes('TIRegionState'))
+        .map(entry => entry.id),
+      intel: normalizeEntries(faction.intel),
+      highestIntel: normalizeEntries(faction.highestIntel),
+      alienInvestigations: faction.alienInvestigations || []
+    };
+  }
+
+  resolveOrbitBodyId(asset, bodiesById, orbitsById) {
+    const barycenterRef = asset.barycenter?.value;
+    if (barycenterRef && bodiesById.has(barycenterRef)) {
+      return barycenterRef;
+    }
+    const orbitRef = asset.orbitState?.value;
+    if (orbitRef && orbitsById.has(orbitRef)) {
+      const orb = orbitsById.get(orbitRef);
+      const bRef = orb.barycenter?.value;
+      if (bRef && bodiesById.has(bRef)) {
+        return bRef;
+      }
+    }
+    return null;
+  }
+
+  resolveOrbitBody(asset, bodiesById, orbitsById) {
+    const bodyId = this.resolveOrbitBodyId(asset, bodiesById, orbitsById);
+    return bodyId && bodiesById.has(bodyId) ? bodiesById.get(bodyId).displayName : 'Earth Orbit';
+  }
+
+  resolveOrbitBodyDistanceAU(asset, bodiesById, orbitsById, bodyDistanceAUById) {
+    const bodyId = this.resolveOrbitBodyId(asset, bodiesById, orbitsById);
+    return bodyId ? (bodyDistanceAUById.get(bodyId) ?? null) : null;
+  }
+
+  getFactionColor(displayName) {
+    const map = {
+      'the Initiative': '#00e5ff',
+      'the Resistance': '#2979ff',
+      'Humanity First': '#ff1744',
+      'the Academy': '#ffd600',
+      'Project Exodus': '#ff9100',
+      'the Protectorate': '#78909c',
+      'the Servants': '#d500f9',
+      'the Aliens': '#00e676'
+    };
+    return map[displayName] || '#b0bec5';
+  }
+
+  getCollection(gamestates, className) {
+    const raw = gamestates[className];
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.map(i => (i && i.Value !== undefined ? i.Value : i));
+    if (typeof raw === 'object') return Object.values(raw).map(i => (i && i.Value !== undefined ? i.Value : i));
+    return [];
+  }
+}
+
+module.exports = new SnapshotBuilder();
