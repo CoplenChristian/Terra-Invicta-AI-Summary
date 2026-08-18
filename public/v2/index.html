@@ -32,13 +32,13 @@
       <div class="init-hud-pill">
         <span>OBSERVER:</span> <strong id="hudFaction">the Initiative</strong>
       </div>
-      <div class="init-hud-pill">
+      <div class="init-hud-pill init-hud-pill-score">
         <span>STRATEGIC SCORE (EST.):</span> <strong id="hudPower">-</strong>
       </div>
-      <div class="init-hud-pill">
+      <div class="init-hud-pill init-hud-pill-alert">
         <span>ALERT:</span> <strong id="hudDefcon">DEFCON 2</strong>
       </div>
-      <div class="init-hud-pill">
+      <div class="init-hud-pill init-hud-pill-snapshot">
         <span>SNAPSHOT:</span> <strong id="hudSnapshot">-</strong>
       </div>
     </div>
@@ -61,6 +61,12 @@
       <!-- Refresh -->
       <button id="initRefreshBtn" class="init-btn init-btn-cyan">
         Refresh save
+      </button>
+
+      <!-- Local/dev only: the runtime capability probe reveals this control. -->
+      <button id="initPublishBtn" class="init-btn init-btn-publish" type="button" hidden
+        title="Parse and publish the newest save to the hosted site">
+        Publish latest
       </button>
 
       <button id="openFactionIntelBtn" class="init-btn" type="button">
@@ -238,11 +244,11 @@
         </div>
       </div>
 
-      <!-- 2. Asset posture -->
+      <!-- 2. Alien force posture -->
       <div class="tech-card">
         <div class="tech-card-header">
-          <div class="tech-card-title">THEATER SITUATION</div>
-          <span>SPACE POSTURE</span>
+          <div class="tech-card-title">ALIEN FORCE POSTURE</div>
+          <span>LOCATION + FRAGMENTATION</span>
         </div>
         <div class="tech-card-body">
           <div id="dualAssetRings">

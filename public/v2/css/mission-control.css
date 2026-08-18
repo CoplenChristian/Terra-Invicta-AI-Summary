@@ -250,6 +250,39 @@ a:focus-visible {
   max-width: 270px;
 }
 
+@media (max-width: 1320px) and (min-width: 901px) {
+  .init-topbar-hud {
+    display: grid;
+    grid-template-columns: minmax(86px, 0.8fr) minmax(92px, 0.85fr) minmax(122px, 1fr) minmax(118px, 1fr);
+    gap: 6px 12px;
+    align-items: baseline;
+  }
+
+  .init-hud-pill {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .init-hud-pill span,
+  .init-hud-pill strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .init-hud-pill-alert {
+    grid-column: 1 / span 3;
+  }
+
+  .init-hud-pill-alert strong {
+    max-width: none;
+  }
+
+  .init-hud-pill-snapshot {
+    grid-column: 4;
+  }
+}
+
 .init-hud-pill.is-stale strong {
   color: var(--warning);
 }
@@ -319,6 +352,23 @@ a:focus-visible {
 .init-btn-cyan:hover {
   border-color: var(--accent-strong) !important;
   background: var(--accent-strong) !important;
+}
+
+.init-btn-publish {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(145, 189, 155, 0.1);
+}
+
+.init-btn-publish:hover {
+  border-color: var(--success);
+  color: var(--text);
+  background: rgba(145, 189, 155, 0.2);
+}
+
+.init-btn-publish:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 /* Page structure --------------------------------------------------------- */
@@ -1257,6 +1307,136 @@ a:focus-visible {
   color: var(--text);
   font-family: var(--mono);
   font-size: 10px;
+}
+
+.mc-space-force-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.mc-space-force-summary > div {
+  min-width: 0;
+  padding: 10px 9px;
+  background: var(--surface-inset);
+}
+
+.mc-space-force-summary strong,
+.mc-space-force-summary span {
+  display: block;
+}
+
+.mc-space-force-summary strong {
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 17px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-space-force-summary span {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.07em;
+  line-height: 1.3;
+}
+
+.mc-space-body-list {
+  margin: 12px 0;
+  padding: 0 10px 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-inset);
+}
+
+.mc-space-body-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.mc-space-body-row strong {
+  color: var(--text);
+}
+
+.mc-space-body-row span {
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.mc-fleet-breakdown {
+  margin: 14px 0;
+}
+
+.mc-fleet-roster-list {
+  display: grid;
+  margin-top: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface-inset);
+}
+
+.mc-fleet-roster-item {
+  border-top: 1px solid var(--line);
+}
+
+.mc-fleet-roster-item:first-child {
+  border-top: 0;
+}
+
+.mc-fleet-roster-item summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 9px;
+  list-style-position: inside;
+}
+
+.mc-fleet-roster-item summary:hover {
+  background: var(--surface-raised);
+}
+
+.mc-fleet-roster-item summary strong {
+  color: var(--text);
+}
+
+.mc-fleet-roster-item summary span {
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.mc-fleet-ship-list {
+  padding: 0 10px 8px 25px;
+}
+
+.mc-fleet-ship-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.35fr) minmax(0, 0.65fr);
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.mc-fleet-ship-row strong {
+  color: var(--text-soft);
 }
 
 /* Dynamic briefing and on-demand detail surfaces ------------------------ */
@@ -2270,6 +2450,73 @@ body.intelligence-library-open {
   font-size: 9px;
 }
 
+.mc-board-table--ledger {
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.mc-board-table--ledger th,
+.mc-board-table--ledger td {
+  white-space: normal;
+}
+
+.mc-board-table--ledger th:first-child {
+  width: 32%;
+}
+
+.mc-board-table--ledger th:nth-child(2) {
+  width: 10%;
+}
+
+.mc-board-table--ledger th:nth-child(3) {
+  width: 18%;
+}
+
+.mc-board-table--ledger th:nth-child(4) {
+  width: 18%;
+}
+
+.mc-board-table--ledger th:nth-child(5) {
+  width: 22%;
+}
+
+.mc-board-table--ledger .mc-status-chip {
+  max-width: 100%;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.mc-board-table--fleet {
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.mc-board-table--fleet th,
+.mc-board-table--fleet td {
+  white-space: normal;
+}
+
+.mc-board-table--fleet th:first-child {
+  width: 28%;
+}
+
+.mc-board-table--fleet th:nth-child(2) {
+  width: 15%;
+}
+
+.mc-board-table--fleet th:nth-child(3) {
+  width: 10%;
+}
+
+.mc-board-table--fleet th:nth-child(4) {
+  width: 14%;
+}
+
+.mc-board-table--fleet th:nth-child(5) {
+  width: 33%;
+}
+
 .mc-board-table th,
 .mc-board-table td {
   padding: 8px 9px;
@@ -2834,6 +3081,16 @@ body.intelligence-library-open {
   white-space: nowrap;
 }
 
+.faction-intel-metric-value--text {
+  overflow: visible;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .faction-intel-metric-note {
   color: var(--text-dim);
   font-family: var(--mono);
@@ -3197,6 +3454,10 @@ body.intelligence-library-open {
     display: block;
   }
 
+  .mc-space-force-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .intel-library-table-scroll-hint {
     display: block;
   }
@@ -3289,6 +3550,34 @@ body.intelligence-library-open {
 }
 
 @media (max-width: 520px) {
+  .mc-space-force-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mc-space-body-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mc-space-body-row span {
+    text-align: left;
+  }
+
+  .mc-fleet-roster-item summary {
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mc-fleet-roster-item summary span {
+    text-align: left;
+  }
+
+  .mc-fleet-ship-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
   .init-brand-name {
     font-size: 15px;
   }

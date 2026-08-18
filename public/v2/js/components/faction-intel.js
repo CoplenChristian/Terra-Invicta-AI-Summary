@@ -387,7 +387,11 @@
     metrics.forEach(function (metric) {
       var item = createElement(documentRef, 'div', 'faction-intel-metric');
       item.appendChild(createElement(documentRef, 'span', 'faction-intel-metric-label', metric.label));
-      item.appendChild(createElement(documentRef, 'strong', 'faction-intel-metric-value', metric.value));
+      var metricValue = String(metric.value === undefined || metric.value === null ? UNKNOWN_VALUE : metric.value);
+      var metricValueClass = metricValue.length > 10
+        ? 'faction-intel-metric-value faction-intel-metric-value--text'
+        : 'faction-intel-metric-value';
+      item.appendChild(createElement(documentRef, 'strong', metricValueClass, metricValue));
       if (metric.note) {
         item.appendChild(createElement(documentRef, 'span', 'faction-intel-metric-note', metric.note));
       }
@@ -523,11 +527,40 @@
   }
 
   function relationshipMetrics(relationship) {
+    var theirs = cleanRelationshipValue(relationship.theirs);
+    var ours = cleanRelationshipValue(relationship.ours);
+    var directionCount = [theirs, ours].filter(function (value) {
+      return value !== UNKNOWN_VALUE;
+    }).length;
     return [
-      { label: 'Hate of us', value: relationship.theirs || UNKNOWN_VALUE },
-      { label: 'Our hate', value: relationship.ours || UNKNOWN_VALUE },
-      { label: 'Summary', value: relationship.value || UNKNOWN_RELATIONSHIP }
+      { label: 'Hate of us', value: theirs },
+      { label: 'Our hate', value: ours },
+      {
+        label: 'Summary',
+        value: directionCount === 2
+          ? 'BOTH DIRECTIONS RECORDED'
+          : directionCount === 1
+            ? 'ONE DIRECTION RECORDED'
+            : relationship.value || UNKNOWN_RELATIONSHIP,
+        note: directionCount ? 'Directional hate values shown above.' : null
+      }
     ];
+  }
+
+  function cleanRelationshipValue(value) {
+    if (!hasMetricValue(value)) return UNKNOWN_VALUE;
+    var text = String(value).trim();
+    var cleaned = text.replace(/^(?:HATE\s+OF\s+US|OUR\s+HATE|HATE)\s*/i, '').trim();
+    return hasMetricValue(cleaned) ? cleaned : UNKNOWN_VALUE;
+  }
+
+  function summarizeRelationship(theirs, ours) {
+    var parts = [];
+    var cleanTheirs = cleanRelationshipValue(theirs);
+    var cleanOurs = cleanRelationshipValue(ours);
+    if (cleanTheirs !== UNKNOWN_VALUE) parts.push('Hate of us ' + cleanTheirs);
+    if (cleanOurs !== UNKNOWN_VALUE) parts.push('Our hate ' + cleanOurs);
+    return parts.join(' · ') || UNKNOWN_RELATIONSHIP;
   }
 
   function buildVisibilityTag(documentRef, label, visibility) {
@@ -852,7 +885,7 @@
 
     if (ours || theirs) {
       return {
-        value: [theirs, ours].filter(Boolean).join(' · '),
+        value: summarizeRelationship(theirs, ours),
         visibility: (inverse.visibility || relation.visibility || 'confirmed'),
         explicit: true,
         ours: ours,

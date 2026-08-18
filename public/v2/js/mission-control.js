@@ -91,6 +91,17 @@ function applyRuntimeCapabilities() {
     button.disabled = !available;
   });
 
+  const publishButton = document.getElementById('initPublishBtn');
+  if (publishButton) {
+    // Publishing is intentionally fail-closed: only the local/dev Express
+    // runtime has access to the service-role-backed publisher endpoint.
+    const canPublish = ['local', 'dev'].includes(state.runtime.environment)
+      && state.runtime.canPublish === true;
+    publishButton.hidden = !canPublish;
+    publishButton.disabled = !canPublish;
+    publishButton.setAttribute('aria-hidden', canPublish ? 'false' : 'true');
+  }
+
   if (!supported.includes(state.mode)) {
     state.mode = state.runtime.defaultMode || supported[0] || 'player';
   }
@@ -142,6 +153,56 @@ function initEventListeners() {
         showToast('Refresh failed: ' + err.message);
       } finally {
         refreshBtn.textContent = 'Refresh save';
+      }
+    });
+  }
+
+  // Local/dev only: publish the newest save through the existing server-side
+  // publisher, then refresh this file-backed view so it shows the same save.
+  const publishBtn = document.getElementById('initPublishBtn');
+  if (publishBtn) {
+    publishBtn.addEventListener('click', async () => {
+      if (publishBtn.disabled || publishBtn.hidden) return;
+
+      publishBtn.disabled = true;
+      publishBtn.textContent = 'Publishing…';
+      showToast('Publishing the newest save to the live site…');
+
+      try {
+        const publishResponse = await fetch('/api/publish', {
+          method: 'POST',
+          headers: { Accept: 'application/json' }
+        });
+        const publishPayload = await publishResponse.json().catch(() => ({}));
+        if (!publishResponse.ok || publishPayload.success === false) {
+          throw new Error(publishPayload.error || `Publish failed (${publishResponse.status})`);
+        }
+
+        try {
+          const refreshResponse = await fetch(`/api/refresh?mode=${state.mode}&observer=${state.observer}`, {
+            method: 'POST'
+          });
+          const refreshPayload = await refreshResponse.json().catch(() => ({}));
+          if (!refreshResponse.ok || refreshPayload.success === false) {
+            throw new Error(refreshPayload.error || `Local refresh failed (${refreshResponse.status})`);
+          }
+          await loadData();
+        } catch (refreshError) {
+          const saveLabel = publishPayload.saveFilename ? ` ${publishPayload.saveFilename}` : ' the newest save';
+          showToast(`Live site updated from${saveLabel}, but local refresh failed: ${refreshError.message}`);
+          return;
+        }
+
+        const details = [
+          publishPayload.saveFilename,
+          publishPayload.gameTime
+        ].filter(Boolean).join(' · ');
+        showToast(`Live site updated${details ? ` · ${details}` : ''}.`);
+      } catch (err) {
+        showToast('Publish failed: ' + err.message);
+      } finally {
+        publishBtn.disabled = false;
+        publishBtn.textContent = 'Publish latest';
       }
     });
   }

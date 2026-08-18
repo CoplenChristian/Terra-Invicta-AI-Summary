@@ -69,9 +69,10 @@
     return 'SCATTERED';
   }
 
-  function tableShell(headers, rows, emptyMessage) {
+  function tableShell(headers, rows, emptyMessage, tableClass) {
     if (!rows) return `<div class="mc-board-empty">${escapeHtml(emptyMessage || 'No records are available in this view.')}</div>`;
-    return `<div class="mc-board-table-wrap"><table class="mc-board-table"><thead><tr>${headers.map(header => `<th scope="col">${escapeHtml(header)}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${headers.length}">${escapeHtml(emptyMessage || 'No records are available in this view.')}</td></tr>`}</tbody></table></div><div class="mc-board-scroll-hint">SWIPE HORIZONTALLY TO VIEW ALL COLUMNS</div>`;
+    const className = tableClass ? ` mc-board-table--${escapeHtml(tableClass)}` : '';
+    return `<div class="mc-board-table-wrap"><table class="mc-board-table${className}"><thead><tr>${headers.map(header => `<th scope="col">${escapeHtml(header)}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${headers.length}">${escapeHtml(emptyMessage || 'No records are available in this view.')}</td></tr>`}</tbody></table></div><div class="mc-board-scroll-hint">SWIPE HORIZONTALLY TO VIEW ALL COLUMNS</div>`;
   }
 
   function renderFactionLedger(container, snapshot) {
@@ -87,9 +88,11 @@
       const gdpDelta = factionDelta(snapshot, faction.ID, 'GDP');
       const hate = faction.alienHate?.visibleEstimate ?? faction.assessedAlienHateOfMe;
       const observerClass = String(faction.ID) === String(snapshot.observerFactionId) ? ' class="is-observer"' : '';
-      return `<tr${observerClass} data-board-faction-id="${escapeHtml(faction.ID)}"><th scope="row">${escapeHtml(faction.displayName)}</th><td>${formatNumber(faction.controlPointsCount)}</td><td>${formatGdp(faction.totalGdp)}</td><td>${formatNumber(faction.totalResearch)}</td><td>${formatNumber(faction.habsCount)}</td><td>${formatNumber(faction.shipsCount)}</td><td>${hate === undefined || hate === null ? 'UNAVAILABLE' : formatNumber(hate, 1)}</td><td class="${shipDelta?.delta > 0 ? 'is-positive' : shipDelta?.delta < 0 ? 'is-negative' : ''}">${escapeHtml(formatDelta(shipDelta))}</td><td><span class="mc-status-chip">${escapeHtml(factionStatus(faction, factions))}</span><small class="mc-board-secondary">GDP Δ ${escapeHtml(formatDelta(gdpDelta))}</small></td></tr>`;
+      const hateLabel = hate === undefined || hate === null ? 'UNAVAILABLE' : formatNumber(hate, 1);
+      const shipDeltaClass = shipDelta?.delta > 0 ? 'is-positive' : shipDelta?.delta < 0 ? 'is-negative' : '';
+      return `<tr${observerClass} data-board-faction-id="${escapeHtml(faction.ID)}"><th scope="row">${escapeHtml(faction.displayName)}<small class="mc-board-secondary">R&amp;D ${escapeHtml(formatNumber(faction.totalResearch))} · HATE ${escapeHtml(hateLabel)}</small></th><td>${formatNumber(faction.controlPointsCount)}</td><td>${formatGdp(faction.totalGdp)}<small class="mc-board-secondary">GDP Δ ${escapeHtml(formatDelta(gdpDelta))}</small></td><td>${formatNumber(faction.habsCount)} / ${formatNumber(faction.shipsCount)}<small class="mc-board-secondary ${shipDeltaClass}">Δ ships ${escapeHtml(formatDelta(shipDelta))}</small></td><td><span class="mc-status-chip">${escapeHtml(factionStatus(faction, factions))}</span></td></tr>`;
     }).join('');
-    container.innerHTML = `<div class="mc-board-note"><strong>LEDGER / CURRENT STATE</strong><span>Composite combat power is omitted when the save does not expose it. Ship count is an asset count, not a combat estimate.</span></div>${tableShell(['Faction', 'CP', 'GDP', 'R&D', 'Habs', 'Ships', 'Alien hate', 'Δ ships', 'Strategic status'], rows, 'No faction records are available.')}`;
+    container.innerHTML = `<div class="mc-board-note"><strong>LEDGER / CURRENT STATE</strong><span>R&amp;D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate.</span></div>${tableShell(['Faction', 'CP', 'GDP', 'Habs / Ships', 'Strategic status'], rows, 'No faction records are available.', 'ledger')}`;
   }
 
   function renderLogisticsBoard(container, snapshot, strategic) {
@@ -203,12 +206,79 @@
       .reduce((total, entry) => total + (numberValue(entry.count) || 0), 0);
   }
 
+  function shipLoadoutText(ship) {
+    const loadout = Array.isArray(ship?.weaponLoadout) ? ship.weaponLoadout : [];
+    if (!loadout.length) return 'Loadout unavailable';
+    return loadout.map(entry => {
+      const count = numberValue(entry.count);
+      const systems = Array.isArray(entry.systems) && entry.systems.length
+        ? entry.systems.join(', ')
+        : entry.role || entry.category || 'Unknown system';
+      return `${count === null ? '' : `${formatNumber(count)} × `}${systems}`;
+    }).join(' · ');
+  }
+
+  function shipCountLabel(value) {
+    const count = numberValue(value);
+    return count === null ? 'UNAVAILABLE' : `${formatNumber(count)} ship${count === 1 ? '' : 's'}`;
+  }
+
+  function fleetRosterDetails(fleet) {
+    const ships = Array.isArray(fleet?.ships) ? fleet.ships : [];
+    if (!ships.length) return '<div class="mc-board-empty">Ship-level loadouts are unavailable for this fleet.</div>';
+    return ships.map(ship => `<div class="mc-fleet-ship-row"><strong>${escapeHtml(ship.displayName || 'Unnamed ship')}</strong><span>${escapeHtml(shipLoadoutText(ship))}</span></div>`).join('');
+  }
+
+  function renderOwnFleetBreakdown(snapshot, fleets) {
+    const observerId = snapshot?.observerFactionId;
+    const ownFleets = fleets
+      .filter(fleet => String(fleet.factionId) === String(observerId))
+      .slice()
+      .sort((a, b) => String(a.orbitBody || '').localeCompare(String(b.orbitBody || '')) || String(a.displayName || '').localeCompare(String(b.displayName || '')));
+    if (!ownFleets.length) return '<div class="mc-board-empty">No fleet composition is visible for the selected faction.</div>';
+
+    const rows = ownFleets.map(fleet => `<tr><th scope="row">${escapeHtml(fleet.displayName || 'Unnamed fleet')}</th><td>${escapeHtml(bodyLabel(fleet.orbitBody))}</td><td>${formatNumber(fleet.shipsCount)}</td><td><span class="mc-status-chip">${escapeHtml(fleet.dominantWeaponType || 'UNAVAILABLE')}</span></td><td>${escapeHtml(fleet.weaponSummary || 'Loadout unavailable')}</td></tr>`).join('');
+    const details = ownFleets.map(fleet => `<details class="mc-fleet-roster-item"><summary><strong>${escapeHtml(fleet.displayName || 'Unnamed fleet')}</strong><span>${escapeHtml(shipCountLabel(fleet.shipsCount))} · ${escapeHtml(bodyLabel(fleet.orbitBody))} · ${escapeHtml(fleet.dominantWeaponType || 'loadout unavailable')} · ${escapeHtml(fleet.mission || 'mission unavailable')}</span></summary><div class="mc-fleet-ship-list">${fleetRosterDetails(fleet)}</div></details>`).join('');
+    return `<div class="mc-fleet-breakdown"><div class="mc-board-subheading"><strong>${escapeHtml((factionName(snapshot, observerId) || 'SELECTED FACTION').toUpperCase())} FLEET BREAKDOWN</strong><span>Dominant role + equipped weapons</span></div>${tableShell(['Fleet', 'Orbit body', 'Ships', 'Dominant', 'Weapon composition'], rows, 'No fleet records are available.', 'fleet') }<div class="mc-fleet-roster-list">${details}</div></div>`;
+  }
+
+  function alienForceSummary(aliens) {
+    const solFleets = aliens.filter(fleet => bodyKey(fleet.orbitBody, fleet.spaceTheaterKey) === 'sol');
+    const totalShips = aliens.reduce((sum, fleet) => sum + (numberValue(fleet.shipsCount) || 0), 0);
+    const solShips = solFleets.reduce((sum, fleet) => sum + (numberValue(fleet.shipsCount) || 0), 0);
+    const averageSolFleet = solFleets.length ? solShips / solFleets.length : null;
+    const fragmentation = averageSolFleet === null
+      ? 'UNAVAILABLE'
+      : averageSolFleet <= 2 ? 'HIGH' : averageSolFleet <= 4 ? 'MODERATE' : 'LOW';
+    const bodyGroups = new Map();
+    aliens.forEach(fleet => {
+      const body = bodyLabel(fleet.orbitBody);
+      const group = bodyGroups.get(body) || { fleets: 0, ships: 0 };
+      group.fleets += 1;
+      group.ships += numberValue(fleet.shipsCount) || 0;
+      bodyGroups.set(body, group);
+    });
+    const bodies = [...bodyGroups.entries()]
+      .sort((a, b) => b[1].ships - a[1].ships || b[1].fleets - a[1].fleets)
+      .slice(0, 6);
+    return {
+      totalShips,
+      totalFleets: aliens.length,
+      solShips,
+      solFleets: solFleets.length,
+      averageSolFleet,
+      fragmentation,
+      bodies
+    };
+  }
+
   function renderTheaterBoard(container, snapshot, strategic) {
     if (!container) return;
     const theaters = (strategic?.spaceTheaters || []).filter(theater => theater.key !== 'unassigned' || theater.fleets || theater.habs || theater.miningSites);
     const posture = strategic?.spacePosture;
     const fleets = Array.isArray(snapshot?.fleets) ? snapshot.fleets : [];
     const aliens = fleets.filter(fleet => String(fleet.factionName || '').toLowerCase().includes('alien') || String(fleet.factionId) === '4717');
+    const force = alienForceSummary(aliens);
     const rows = theaters.map(theater => {
     const hostile = aliens.filter(fleet => bodyKey(fleet.orbitBody, fleet.spaceTheaterKey) === theater.key);
       const largest = hostile.slice().sort((a, b) => (numberValue(b.shipsCount) || 0) - (numberValue(a.shipsCount) || 0))[0];
@@ -218,7 +288,9 @@
     }).join('');
     const contacts = aliens.slice().sort((a, b) => (numberValue(b.shipsCount) || 0) - (numberValue(a.shipsCount) || 0)).slice(0, 8).map(fleet => `<tr><th scope="row">${escapeHtml(fleet.displayName)}</th><td>${formatNumber(fleet.shipsCount)}</td><td>${escapeHtml(bodyLabel(fleet.orbitBody))}</td><td>${formatNumber(weaponCount(fleet, 'point defense'))}</td><td>${formatNumber(weaponCount(fleet, 'missile'))}</td><td>${formatNumber(weaponCount(fleet, 'laser'))}</td><td>${formatNumber(weaponCount(fleet, 'kinetic'))}</td><td>${escapeHtml(fleet.mission || 'UNAVAILABLE')}</td><td>${escapeHtml(bodyLabel(fleet.destination || fleet.orbitBody))}</td><td>${escapeHtml(fleet.arrivalDate || '—')}</td></tr>`).join('');
     const scopeSummary = posture ? `<div class="mc-space-scope"><span><strong>${escapeHtml(posture.scope?.totalLabel || 'ALL TRACKED BODIES')}</strong><b>${formatNumber(posture.total?.fleets)} fleets / ${formatNumber(posture.total?.ships)} ships</b></span><span><strong>${escapeHtml(posture.scope?.solLabel || 'ORBIT BODY: SOL')}</strong><b>${formatNumber(posture.sol?.fleets)} fleets / ${formatNumber(posture.sol?.ships)} ships</b></span></div><div class="mc-board-scope-note">${escapeHtml(posture.scope?.note || 'Sol is a specific orbit-body value, not the whole system.')}</div>` : '';
-    container.innerHTML = `<div class="mc-board-note"><strong>SPACE / LOCATION FIRST</strong><span>Counts are visible in the selected intelligence mode. Contact loadouts are summarized from equipped ship weapons; arrival dates are shown only when present.</span></div>${scopeSummary}${tableShell(['Theater', 'Our ships / fleets', 'Hostile ships / fleets', 'Our habs', 'Mines', 'Largest hostile fleet', 'Inbound', 'Status'], rows, 'No theater posture is available.')}${contacts ? `<div class="mc-board-subheading"><strong>HOSTILE CONTACT BOARD</strong><span>Largest visible contacts by ship count</span></div>${tableShell(['Fleet', 'Ships', 'Body', 'PD', 'Missiles', 'Lasers', 'Kinetics', 'Mission', 'Destination', 'ETA'], contacts, 'No hostile contacts are visible.')}` : ''}`;
+    const forceSummary = `<div class="mc-space-force-summary"><div><strong>${formatNumber(force.totalShips)}</strong><span>ALIEN SHIPS / ALL TRACKED BODIES</span></div><div><strong>${formatNumber(force.totalFleets)}</strong><span>ALIEN FLEETS</span></div><div><strong>${formatNumber(force.solShips)} / ${formatNumber(force.solFleets)}</strong><span>SOL SHIPS / FLEETS</span></div><div><strong>${force.averageSolFleet === null ? 'UNAVAILABLE' : formatNumber(force.averageSolFleet, 1)}</strong><span>AVERAGE SOL FLEET</span></div><div><strong>${escapeHtml(force.fragmentation)}</strong><span>SOL FRAGMENTATION</span></div></div><div class="mc-space-body-list"><div class="mc-board-subheading"><strong>ALIEN FORCE BY ORBIT BODY</strong><span>Largest concentrations first</span></div>${force.bodies.length ? force.bodies.map(([body, group]) => `<div class="mc-space-body-row"><strong>${escapeHtml(body)}</strong><span>${formatNumber(group.ships)} ships / ${formatNumber(group.fleets)} fleets</span></div>`).join('') : '<div class="mc-board-empty">Alien force posture is unavailable in this intelligence mode.</div>'}</div>`;
+    const ownFleetBreakdown = renderOwnFleetBreakdown(snapshot, fleets);
+    container.innerHTML = `<div class="mc-board-note"><strong>SPACE / LOCATION FIRST</strong><span>Sol is one orbit-body, not a synonym for the whole solar system. Fragmentation is derived from visible Sol fleet size; contact loadouts are summarized from equipped ship weapons.</span></div>${scopeSummary}${forceSummary}${ownFleetBreakdown}${tableShell(['Theater', 'Our ships / fleets', 'Hostile ships / fleets', 'Our habs', 'Mines', 'Largest hostile fleet', 'Inbound', 'Status'], rows, 'No theater posture is available.')}${contacts ? `<div class="mc-board-subheading"><strong>HOSTILE CONTACT BOARD</strong><span>Largest visible contacts by ship count</span></div>${tableShell(['Fleet', 'Ships', 'Body', 'PD', 'Missiles', 'Lasers', 'Kinetics', 'Mission', 'Destination', 'ETA'], contacts, 'No hostile contacts are visible.')}` : ''}`;
   }
 
   function visibleSkill(councilor, skill) {
