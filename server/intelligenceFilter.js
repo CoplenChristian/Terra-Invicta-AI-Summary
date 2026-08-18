@@ -1,5 +1,6 @@
 const capabilityResolver = require('./capabilityResolver');
 const opportunityScorer = require('./opportunityScorer');
+const snapshotIdentity = require('./snapshotIdentity');
 
 class IntelligenceFilter {
   applyFilter(rawSnapshot, mode = 'player', observerFactionId = 4712) {
@@ -8,6 +9,7 @@ class IntelligenceFilter {
                      rawSnapshot.factions[0];
 
     const actualObserverId = observer ? observer.ID : observerFactionId;
+    const identity = snapshotIdentity.readSnapshotIdentity(rawSnapshot);
     const observerIntelligence = rawSnapshot.factionIntelligence?.[actualObserverId] || {};
     const isEnhanced = mode === 'enhanced';
 
@@ -29,6 +31,7 @@ class IntelligenceFilter {
 
     if (mode === 'omniscient') {
       return {
+        ...identity,
         mode: 'omniscient',
         observerFactionId: actualObserverId,
         observerFactionName: observer?.displayName || 'the Initiative',
@@ -37,9 +40,11 @@ class IntelligenceFilter {
         factions: rawSnapshot.factions.map(f => ({
           ...f,
           alienHate: {
-            actual: f.assessedAlienHateOfMe,
+            actual: typeof f.assessedAlienHateOfMe === 'number' ? f.assessedAlienHateOfMe : null,
             playerVisible: true,
-            visibleEstimate: f.assessedAlienHateOfMe.toFixed(2),
+            visibleEstimate: typeof f.assessedAlienHateOfMe === 'number'
+              ? f.assessedAlienHateOfMe.toFixed(2)
+              : 'UNKNOWN',
             visibility: 'raw_save_only'
           }
         })),
@@ -271,6 +276,7 @@ class IntelligenceFilter {
     );
 
     return {
+      ...identity,
       mode,
       observerFactionId: actualObserverId,
       observerFactionName: observer?.displayName || 'the Initiative',

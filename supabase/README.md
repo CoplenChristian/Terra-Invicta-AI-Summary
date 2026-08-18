@@ -5,12 +5,13 @@ This directory contains the database migrations for the hosted intelligence back
 The migration creates:
 
 - `public.campaigns` for public campaign metadata and the current-save pointer.
-- `public.player_intel_snapshots` for published Player Intel and explicitly enabled Omniscient snapshots per observer faction.
+- `public.player_intel_snapshots` for separately labeled Player Intel, Enhanced, and explicitly enabled Omniscient snapshots per observer faction.
 
 The public roles receive `SELECT` only. The local publisher is the only intended writer and must use
 `SUPABASE_SERVICE_ROLE_KEY` from a local environment variable. Raw save files and credentials must never be
-uploaded. For this campaign, the publisher intentionally stores separate `player` and `omniscient` snapshot
-rows; the hosted worker defaults to `player` and accepts `mode=omniscient` when explicitly requested.
+uploaded. For this campaign, the publisher intentionally stores separate `player`, `enhanced`, and
+`omniscient` snapshot rows; the hosted worker defaults to `player` and accepts the other modes when explicitly
+requested.
 
 ## Apply to a hosted project
 

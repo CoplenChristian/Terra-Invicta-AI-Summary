@@ -108,12 +108,13 @@ class ExportGenerator {
       for (const fl of flList) {
         if (!fMap.has(fl.factionName)) fMap.set(fl.factionName, { ships: 0, power: 0 });
         const obj = fMap.get(fl.factionName);
-        obj.ships += fl.shipsCount;
-        obj.power += fl.combatPower;
+         obj.ships += Number.isFinite(fl.shipsCount) ? fl.shipsCount : 0;
+         if (Number.isFinite(fl.combatPower)) obj.power += fl.combatPower;
       }
       for (const [fname, st] of fMap.entries()) {
         const loadouts = flList.filter(fl => fl.factionName === fname && fl.weaponSummary).map(fl => fl.weaponSummary);
-        summary.push(`${fname}: ${st.ships} ships (${st.power || 'unavailable'} power${loadouts.length ? `; ${loadouts.join(', ')}` : ''})`);
+         const powerLabel = st.power > 0 ? st.power : 'unavailable';
+         summary.push(`${fname}: ${st.ships} ships (${powerLabel} power${loadouts.length ? `; ${loadouts.join(', ')}` : ''})`);
       }
       lines.push(`- **${body}**: ${summary.join(' | ')}`);
     }

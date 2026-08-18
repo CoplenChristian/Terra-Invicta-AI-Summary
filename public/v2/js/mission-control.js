@@ -8,8 +8,18 @@ const state = {
   observer: 4712,
   briefing: null,
   rawSnapshot: null,
+  snapshotIdentity: null,
   activeSector: null,
   isLoading: false,
+  requestSequence: 0,
+  abortController: null,
+  libraryView: {
+    section: 'overview',
+    spaceTab: 'mining',
+    spaceTheater: null,
+    councilorFaction: '',
+    councilorSearch: ''
+  },
   runtime: {
     supportedModes: ['player', 'enhanced', 'omniscient'],
     defaultMode: 'player'
@@ -17,6 +27,29 @@ const state = {
 };
 
 let factionController = null;
+let factionModalTrigger = null;
+let libraryModalTrigger = null;
+
+function focusableModalNodes(dialog) {
+  return Array.from(dialog?.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])') || [])
+    .filter(node => !node.disabled && !node.hidden && node.offsetParent !== null);
+}
+
+function trapModalFocus(event, screen) {
+  if (event.key !== 'Tab' || !screen || screen.hidden) return;
+  const dialog = screen.querySelector('[role="dialog"]');
+  const nodes = focusableModalNodes(dialog);
+  if (!nodes.length) return;
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -66,7 +99,9 @@ function applyRuntimeCapabilities() {
 
 function syncModeButtons() {
   document.querySelectorAll('.init-mode-btn').forEach((button) => {
-    button.classList.toggle('init-btn-cyan', button.dataset.mode === state.mode);
+    const selected = button.dataset.mode === state.mode;
+    button.classList.toggle('init-btn-cyan', selected);
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
   });
 }
 
@@ -75,9 +110,8 @@ function initEventListeners() {
   document.querySelectorAll('.init-mode-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       if (btn.disabled || btn.hidden) return;
-      document.querySelectorAll('.init-mode-btn').forEach(b => b.classList.remove('init-btn-cyan'));
-      btn.classList.add('init-btn-cyan');
       state.mode = btn.dataset.mode;
+      syncModeButtons();
       loadData();
     });
   });
@@ -97,7 +131,11 @@ function initEventListeners() {
     refreshBtn.addEventListener('click', async () => {
       refreshBtn.textContent = 'Refreshing…';
       try {
-        await fetch(`/api/refresh?mode=${state.mode}&observer=${state.observer}`, { method: 'POST' });
+        const refreshResponse = await fetch(`/api/refresh?mode=${state.mode}&observer=${state.observer}`, { method: 'POST' });
+        const refreshPayload = await refreshResponse.json().catch(() => ({}));
+        if (!refreshResponse.ok || refreshPayload.success === false) {
+          throw new Error(refreshPayload.error || `Refresh failed (${refreshResponse.status})`);
+        }
         await loadData();
         showToast('Telemetry refreshed from the newest save.');
       } catch (err) {
@@ -113,9 +151,12 @@ function initEventListeners() {
   if (copyBtn) {
     copyBtn.addEventListener('click', () => {
       if (!state.briefing) return;
-      const text = `[THE INITIATIVE // STRATEGIC SITREP]\nDate: ${state.briefing.campaignDate}\nPower Index: ${state.briefing.powerScore}/100\nDEFCON: ${state.briefing.sitrep?.defcon}\n\n${state.briefing.sitrep?.summaryParagraphs?.join('\n\n')}`;
-      navigator.clipboard.writeText(text);
-      showToast('Executive SITREP copied to clipboard.');
+      const observerLabel = state.briefing.observerName || state.rawSnapshot?.observerFactionName || `Faction ${state.observer}`;
+      const modeLabel = String(state.mode || 'player').toUpperCase();
+      const text = `INTELLIGENCE MODE: ${modeLabel}\nOBSERVER: ${observerLabel}\n\n[${observerLabel.toUpperCase()} // STRATEGIC SITREP]\nDate: ${state.briefing.campaignDate}\nComposite score estimate: ${state.briefing.powerScore}/100\nDEFCON: ${state.briefing.sitrep?.defcon}\n\n${state.briefing.sitrep?.summaryParagraphs?.join('\n\n')}`;
+      copyText(text)
+        .then(() => showToast('Executive SITREP copied to clipboard.'))
+        .catch((error) => showToast('Copy failed: ' + error.message));
     });
   }
 
@@ -127,9 +168,12 @@ function initEventListeners() {
     if (!factionScreen) return;
     factionScreen.hidden = true;
     document.body.classList.remove('faction-intel-open');
+    if (factionModalTrigger && document.contains(factionModalTrigger)) factionModalTrigger.focus();
+    factionModalTrigger = null;
   };
   const openFactionScreen = (selectedFactionId) => {
     if (!factionScreen || !factionRoot || !state.rawSnapshot) return;
+    factionModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (window.FactionIntelScreen) {
       factionController = window.FactionIntelScreen.render(factionRoot, state.rawSnapshot, state.briefing, state.observer);
       if (selectedFactionId !== undefined && selectedFactionId !== null) {
@@ -157,21 +201,27 @@ function initEventListeners() {
     if (!libraryScreen) return;
     libraryScreen.hidden = true;
     document.body.classList.remove('intelligence-library-open');
+    if (libraryModalTrigger && document.contains(libraryModalTrigger)) libraryModalTrigger.focus();
+    libraryModalTrigger = null;
   };
-  const renderLibrary = (section) => {
+  const renderLibrary = (section, spaceTab, spaceTheater) => {
     if (!libraryRoot || !state.rawSnapshot || !window.IntelligenceLibrary) return;
-    window.IntelligenceLibrary.render(libraryRoot, state.rawSnapshot, state.briefing, state.observer, {
-      section: section || 'overview',
+    state.libraryView.section = section || state.libraryView.section || 'overview';
+    state.libraryView.spaceTab = spaceTab || state.libraryView.spaceTab || 'mining';
+    state.libraryView.spaceTheater = spaceTheater === undefined ? state.libraryView.spaceTheater : spaceTheater;
+    Object.assign(state.libraryView, {
       onOpenFaction: (factionId) => {
         closeLibraryScreen();
         openFactionScreen(factionId);
       },
       onCopyExport: copyLibraryExport
     });
+    window.IntelligenceLibrary.render(libraryRoot, state.rawSnapshot, state.briefing, state.observer, state.libraryView);
   };
   const openLibraryScreen = () => {
     if (!libraryScreen || !libraryRoot || !state.rawSnapshot) return;
-    renderLibrary('overview');
+    libraryModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    renderLibrary(state.libraryView.section || 'overview', state.libraryView.spaceTab, state.libraryView.spaceTheater);
     libraryScreen.hidden = false;
     document.body.classList.add('intelligence-library-open');
     closeLibraryBtn?.focus();
@@ -181,8 +231,20 @@ function initEventListeners() {
   libraryScreen?.addEventListener('click', (event) => {
     if (event.target.closest('[data-intelligence-library-close]')) closeLibraryScreen();
   });
+  document.addEventListener('click', (event) => {
+    const theaterLink = event.target.closest('[data-board-theater-link]');
+    if (!theaterLink || !libraryScreen || !libraryRoot || !state.rawSnapshot) return;
+    renderLibrary('space', 'fleets', theaterLink.dataset.boardTheaterLink);
+    libraryScreen.hidden = false;
+    document.body.classList.add('intelligence-library-open');
+    closeLibraryBtn?.focus();
+  });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && libraryScreen && !libraryScreen.hidden) closeLibraryScreen();
+  });
+  document.addEventListener('keydown', (event) => {
+    trapModalFocus(event, factionScreen);
+    trapModalFocus(event, libraryScreen);
   });
 
   const priorityCard = document.getElementById('priorityBriefCard');
@@ -214,13 +276,24 @@ function initEventListeners() {
 
 async function loadData() {
   state.isLoading = true;
+  const requestId = ++state.requestSequence;
+  state.abortController?.abort();
+  const controller = new AbortController();
+  state.abortController = controller;
   try {
-    const res = await fetch(`/api/v2/briefing?mode=${state.mode}&observer=${state.observer}`);
+    const res = await fetch(`/api/v2/briefing?mode=${state.mode}&observer=${state.observer}`, { signal: controller.signal });
     const json = await res.json();
-    if (!json.success) throw new Error(json.error || 'Failed to load telemetry');
+    if (!res.ok || !json.success) throw new Error(json.error || `Failed to load telemetry (${res.status})`);
+    if (requestId !== state.requestSequence) return;
+
+    const consistency = verifySnapshotConsistency(json);
+    if (!consistency.ok) {
+      throw new Error(consistency.message);
+    }
 
     state.briefing = json.briefing;
     state.rawSnapshot = json.data;
+    state.snapshotIdentity = consistency.identity;
     document.getElementById('initTelemetryBanner')?.remove();
 
     populateObserverSelect(state.rawSnapshot.factions || []);
@@ -233,8 +306,7 @@ async function loadData() {
     const libraryScreen = document.getElementById('intelligenceLibraryScreen');
     const libraryRoot = document.getElementById('intelligenceLibraryRoot');
     if (libraryScreen && !libraryScreen.hidden && libraryRoot && window.IntelligenceLibrary) {
-      window.IntelligenceLibrary.render(libraryRoot, state.rawSnapshot, state.briefing, state.observer, {
-        section: 'overview',
+      Object.assign(state.libraryView, {
         onOpenFaction: (factionId) => {
           libraryScreen.hidden = true;
           document.body.classList.remove('intelligence-library-open');
@@ -247,16 +319,59 @@ async function loadData() {
         },
         onCopyExport: copyLibraryExport
       });
+      window.IntelligenceLibrary.render(libraryRoot, state.rawSnapshot, state.briefing, state.observer, state.libraryView);
     }
   } catch (err) {
+    if (err.name === 'AbortError') return;
     console.error('[Mission Control] Error loading telemetry:', err);
     state.briefing = null;
     state.rawSnapshot = null;
+    state.snapshotIdentity = null;
     renderTelemetryUnavailable(err.message);
     showToast('Telemetry error: ' + err.message);
   } finally {
-    state.isLoading = false;
+    if (state.requestSequence === requestId) {
+      state.isLoading = false;
+    }
   }
+}
+
+function readIdentity(source) {
+  const value = source || {};
+  return {
+    snapshotId: value.snapshotId || value.snapshotIdentity?.snapshotId || value.metadata?.snapshotId || null,
+    saveHash: value.saveHash || value.snapshotIdentity?.saveHash || value.metadata?.saveHash || null,
+    saveModifiedAt: value.saveModifiedAt || value.snapshotIdentity?.saveModifiedAt || value.metadata?.saveModifiedAt || null,
+    generatedAt: value.generatedAt || value.snapshotIdentity?.generatedAt || value.metadata?.generatedAt || null
+  };
+}
+
+function verifySnapshotConsistency(response) {
+  const expected = readIdentity(response);
+  const datasets = [
+    { label: 'briefing', identity: readIdentity(response.briefing) },
+    { label: 'data', identity: readIdentity(response.data) }
+  ];
+  const required = ['snapshotId', 'saveHash', 'saveModifiedAt', 'generatedAt'];
+  const missing = required.filter((key) => !expected[key]);
+  if (missing.length) {
+    return {
+      ok: false,
+      message: `MIXED / STALE INTELLIGENCE — response is missing ${missing.join(', ')}. Refresh or republish the current save.`
+    };
+  }
+
+  for (const dataset of datasets) {
+    const mismatches = required.filter((key) => dataset.identity[key] !== expected[key]);
+    if (mismatches.length) {
+      return {
+        ok: false,
+        message: `MIXED / STALE INTELLIGENCE — Expected snapshot ${expected.snapshotId}; ${dataset.label} does not match (${mismatches.join(', ')}).`
+      };
+    }
+  }
+
+  return { ok: true, identity: expected };
 }
 
 function renderTelemetryUnavailable(message) {
@@ -294,17 +409,34 @@ function renderDashboard() {
   renderDualAssetRings();
   renderOperativeLeaderboard();
   renderHoldingsBubbleMatrix();
+  renderResearchWatchlist();
+  renderSinceLastSave();
   renderDirectivesStream();
 }
 
 function renderTopHUD() {
   const { campaignDate, observerName, powerScore, sitrep = {} } = state.briefing;
   const meta = state.rawSnapshot?.metadata || {};
+  const identity = state.snapshotIdentity || state.briefing || {};
 
   document.getElementById('hudDate').textContent = campaignDate;
-  document.getElementById('hudSave').textContent = meta.activeSaveFileName || 'Latest';
+  document.getElementById('hudSave').textContent = meta.fileName || meta.activeSaveFileName || 'Latest';
   document.getElementById('hudFaction').textContent = observerName;
   document.getElementById('hudPower').textContent = `${powerScore}/100`;
+  const snapshotHud = document.getElementById('hudSnapshot');
+  if (snapshotHud) {
+    const generatedDate = identity.generatedAt ? new Date(identity.generatedAt) : null;
+    const generatedAgeMinutes = generatedDate && Number.isFinite(generatedDate.getTime()) ? Math.max(0, (Date.now() - generatedDate.getTime()) / 60000) : null;
+    const saveDate = identity.saveModifiedAt ? new Date(identity.saveModifiedAt) : null;
+    const saveAgeMinutes = saveDate && Number.isFinite(saveDate.getTime()) ? Math.max(0, (Date.now() - saveDate.getTime()) / 60000) : null;
+    const ageLabel = generatedAgeMinutes === null ? 'UNAVAILABLE' : generatedAgeMinutes < 1 ? '<1m' : generatedAgeMinutes < 60 ? `${Math.round(generatedAgeMinutes)}m` : `${Math.floor(generatedAgeMinutes / 60)}h ${Math.round(generatedAgeMinutes % 60)}m`;
+    const saveAgeLabel = saveAgeMinutes === null ? 'UNAVAILABLE' : saveAgeMinutes < 1 ? '<1m' : saveAgeMinutes < 60 ? `${Math.round(saveAgeMinutes)}m` : `${Math.floor(saveAgeMinutes / 60)}h ${Math.round(saveAgeMinutes % 60)}m`;
+    snapshotHud.textContent = generatedDate && Number.isFinite(generatedDate.getTime()) ? `${generatedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} / ${ageLabel}` : 'UNAVAILABLE';
+    snapshotHud.title = `Generated ${generatedDate && Number.isFinite(generatedDate.getTime()) ? generatedDate.toLocaleString() : 'unavailable'} · save age ${saveAgeLabel}`;
+    const snapshotPill = snapshotHud.closest('.init-hud-pill');
+    snapshotPill?.classList.toggle('is-stale', generatedAgeMinutes !== null && generatedAgeMinutes >= 15);
+    snapshotPill?.classList.toggle('is-critical', generatedAgeMinutes !== null && generatedAgeMinutes >= 60);
+  }
 
   const defcon = document.getElementById('hudDefcon');
   if (defcon) {
@@ -342,8 +474,8 @@ function renderHeroKPIs() {
   // Power Score
   document.getElementById('kpiPower').textContent = powerScore === null ? 'UNAVAILABLE' : `${powerScore}/100`;
   document.getElementById('kpiPowerSub').textContent = state.briefing.observerRank
-    ? `Rank #${state.briefing.observerRank} of Global Factions`
-    : 'Rank unavailable';
+    ? `Composite estimate · Rank #${state.briefing.observerRank}`
+    : 'Composite estimate · rank unavailable';
 }
 
 function renderHolographicCore() {
@@ -433,6 +565,10 @@ function showTheaterDetail(theater) {
 
 function renderFactionDonut() {
   const container = document.getElementById('factionDonutContainer');
+  if (window.MissionControlBoards?.renderFactionLedger) {
+    window.MissionControlBoards.renderFactionLedger(container, state.rawSnapshot);
+    return;
+  }
   if (!container || !Array.isArray(state.rawSnapshot.factions)) return;
 
   const factions = state.rawSnapshot.factions;
@@ -478,12 +614,12 @@ function renderFactionDonut() {
     }).join('');
 
   container.innerHTML = `
-    <div class="donut-wrapper">
+    <div class="donut-wrapper" role="img" aria-label="Faction power estimates: ${escapeHtml(knownFactions.map((f) => `${f.displayName} ${getPower(f)}`).join(', ') || 'No faction power estimates available')}" tabindex="0">
       <div class="donut-svg-box">
         <svg viewBox="0 0 110 110" style="width: 100%; height: 100%;">
           ${paths}
           <circle cx="55" cy="55" r="24" fill="#070d1e" />
-          <text x="55" y="58" text-anchor="middle" fill="#fff" font-family="var(--font-mono)" font-size="9" font-weight="800">POWER</text>
+          <text x="55" y="58" text-anchor="middle" fill="#fff" font-family="var(--font-mono)" font-size="8" font-weight="800">EST. SCORE</text>
         </svg>
       </div>
       <div class="donut-legend">
@@ -500,101 +636,78 @@ function renderFactionDonut() {
 
 function renderResourceFlowChart() {
   const container = document.getElementById('resourceFlowChart');
-  if (!container || !Array.isArray(state.rawSnapshot.factions)) return;
+  if (window.MissionControlBoards?.renderLogisticsBoard) {
+    window.MissionControlBoards.renderLogisticsBoard(container, state.rawSnapshot, state.briefing?.strategic);
+    return;
+  }
+  if (!container) return;
+  const position = state.briefing?.strategic?.resourcePosition;
+  if (!position || !position.resources) {
+    container.innerHTML = '<div class="chart-empty">Resource runway is unavailable in this snapshot.</div>';
+    return;
+  }
 
-  const obs = state.rawSnapshot.factions.find(f => f.ID === state.observer) || {};
-  const res = obs.resources || {};
-
-  const resources = [
-    { label: 'Water', val: toFiniteNumber(res.Water), color: 'var(--accent)' },
-    { label: 'Volatiles', val: toFiniteNumber(res.Volatiles), color: 'var(--success)' },
-    { label: 'Metals', val: toFiniteNumber(res.Metals), color: 'var(--gold)' },
-    { label: 'Nobles', val: toFiniteNumber(res.NobleMetals), color: 'var(--init-pink)' },
-    { label: 'Fissiles', val: toFiniteNumber(res.Fissiles), color: 'var(--purple)' }
-  ];
-
-  const maxVal = Math.max(...resources.map(r => r.val === null ? 0 : r.val), 1);
-
-  const bars = resources.map((r, i) => {
-    const x = 30 + i * 85;
-    const known = r.val !== null;
-    const h = known ? Math.max(0, (r.val / maxVal) * 100) : 0;
-    const y = 130 - h;
-    return `
-      ${known ? `<rect x="${x}" y="${y}" width="28" height="${h}" fill="${r.color}" opacity="0.9"/>` : ''}
-      ${known ? `<circle cx="${x + 14}" cy="${y}" r="3" fill="var(--text)" stroke="${r.color}" stroke-width="2"/>` : ''}
-      <text x="${x + 14}" y="148" text-anchor="middle" fill="var(--text-muted)" font-family="var(--font-mono)" font-size="10">${r.label}</text>
-      <text x="${x + 14}" y="${Math.max(12, y - 8)}" text-anchor="middle" fill="var(--text)" font-family="var(--font-mono)" font-size="10" font-weight="700">${known ? r.val : 'UNAVAILABLE'}</text>
-    `;
+  const resources = Object.values(position.resources);
+  const rows = resources.map(resource => {
+    const stock = resource.stock === null ? 'UNAVAILABLE' : formatChangeValue(resource.stock);
+    const gross = resource.grossPerMonth === null ? 'UNAVAILABLE' : `+${formatChangeValue(resource.grossPerMonth)}`;
+    const runway = resource.runwayDays === null ? 'UNAVAILABLE' : `${formatChangeValue(resource.runwayDays)}d`;
+    const producer = resource.topProducers?.[0]
+      ? `${resource.topProducers[0].site} / +${formatChangeValue(resource.topProducers[0].monthly)}`
+      : 'No active producer';
+    return `<tr><th scope="row">${escapeHtml(resource.label)}</th><td>${escapeHtml(stock)}</td><td>${escapeHtml(gross)} / mo</td><td>${escapeHtml(runway)}</td><td>${escapeHtml(producer)}</td></tr>`;
   }).join('');
 
-  // Connecting glow line
-  const points = resources
-    .filter(r => r.val !== null)
-    .map((r) => `${44 + resources.indexOf(r) * 85},${130 - (r.val / maxVal) * 100}`)
-    .join(' ');
-
-  container.innerHTML = `
-    <svg viewBox="0 0 460 160" style="width: 100%; height: 100%;">
-      <line x1="20" y1="130" x2="440" y2="130" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-      <line x1="20" y1="80" x2="440" y2="80" stroke="rgba(255,255,255,0.04)" stroke-dasharray="3,3"/>
-      <line x1="20" y1="30" x2="440" y2="30" stroke="rgba(255,255,255,0.04)" stroke-dasharray="3,3"/>
-      <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.6"/>
-      ${bars}
-    </svg>
-  `;
+  container.innerHTML = `<div class="resource-position-note"><strong>STOCK / GROSS PRODUCTION</strong><span>Runway and burn remain explicitly unavailable until the save exposes committed consumption.</span></div><div class="resource-position-table-wrap"><table class="resource-position-table"><thead><tr><th>Resource</th><th>Stock</th><th>Gross</th><th>Runway</th><th>Top producer</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function renderPowerTrajectoryChart() {
   const container = document.getElementById('powerTrajectoryChart');
+  if (window.MissionControlBoards?.renderCapabilityMatrix) {
+    window.MissionControlBoards.renderCapabilityMatrix(container, state.rawSnapshot, state.briefing);
+    return;
+  }
   if (!container) return;
 
-  const factions = (state.rawSnapshot.factions || [])
-    .map(f => ({
-      name: f.displayName || 'Unknown faction',
-      id: f.ID,
-      score: typeof f.powerScore === 'number' ? f.powerScore : f.powerScore?.overall
-    }))
-    .filter(f => Number.isFinite(f.score))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
-
-  if (factions.length === 0) {
-    container.innerHTML = '<div class="chart-empty">Faction power is unavailable in this intelligence mode.</div>';
+  const profiles = state.briefing?.strategic?.powerProfiles || [];
+  if (!profiles.length) {
+    container.innerHTML = '<div class="chart-empty">Separate power dimensions are unavailable in this intelligence mode.</div>';
     return;
   }
 
-  const rows = factions.map((f, index) => {
-    const y = 17 + index * 23;
-    const barWidth = Math.max(2, Math.round(Math.min(100, Math.max(0, f.score)) * 1.55));
-    const isObserver = f.id === state.observer;
-    return `
-      <text x="0" y="${y + 4}" fill="${isObserver ? 'var(--accent-strong)' : 'var(--text-muted)'}" font-family="var(--font-sans)" font-size="9">${escapeHtml(f.name)}</text>
-      <rect x="126" y="${y - 5}" width="155" height="8" fill="var(--line)"/>
-      <rect x="126" y="${y - 5}" width="${barWidth}" height="8" fill="${isObserver ? 'var(--accent)' : 'var(--line-strong)'}"/>
-      <text x="292" y="${y + 4}" fill="var(--text)" font-family="var(--font-mono)" font-size="9" text-anchor="end">${Math.round(f.score)}</text>
-    `;
-  }).join('');
-
-  container.innerHTML = `
-    <svg viewBox="0 0 300 140" style="width: 100%; height: 100%;" role="img" aria-label="Current faction power profile">
-      ${rows}
-      <line x1="126" y1="132" x2="281" y2="132" stroke="var(--line-strong)"/>
-      <text x="126" y="139" fill="var(--text-dim)" font-family="var(--font-mono)" font-size="8">0</text>
-      <text x="281" y="139" fill="var(--text-dim)" font-family="var(--font-mono)" font-size="8" text-anchor="end">100</text>
-    </svg>
-  `;
+  const visibleProfiles = profiles.slice().sort((a, b) => (b.compositePower ?? b.fleetAssets ?? 0) - (a.compositePower ?? a.fleetAssets ?? 0)).slice(0, 6);
+  const dimensions = [
+    ['economic', 'Earth'],
+    ['research', 'Research'],
+    ['industry', 'Industry'],
+    ['fleetAssets', 'Fleet assets']
+  ];
+  container.innerHTML = `<div class="power-profile-note">DIMENSIONS / ECONOMY, RESEARCH, INDUSTRY, FLEET ASSETS <span>Fleet assets are ship-count indices when combat power is unavailable.</span></div><div class="power-profile-list">${visibleProfiles.map(profile => {
+    const observerClass = String(profile.factionId) === String(state.observer) ? ' is-observer' : '';
+    return `<article class="power-profile-row${observerClass}"><div class="power-profile-name">${escapeHtml(profile.factionName)}${profile.compositePower === null ? '<small>NO COMBAT VALUE</small>' : ''}</div><div class="power-profile-bars">${dimensions.map(([key, label]) => `<div class="power-profile-bar"><span>${escapeHtml(label)}</span><i><b style="width:${profile[key] === null ? 0 : profile[key]}%"></b></i><em>${profile[key] === null ? 'N/A' : profile[key]}</em></div>`).join('')}</div></article>`;
+  }).join('')}</div>`;
 }
 
 function renderDualAssetRings() {
   const container = document.getElementById('dualAssetRings');
+  if (window.MissionControlBoards?.renderTheaterBoard) {
+    window.MissionControlBoards.renderTheaterBoard(container, state.rawSnapshot, state.briefing?.strategic);
+    return;
+  }
   if (!container) return;
 
   const observer = (state.rawSnapshot.factions || []).find(f => f.ID === state.observer) || {};
+  const alien = (state.rawSnapshot.factions || []).find(f => f.ID === 4717 || f.displayName === 'the Aliens') || {};
+  const threat = state.briefing?.strategic?.spacePosture || {};
   const metrics = [
     { label: 'Control points', value: observer.controlPointsCount ?? '—' },
     { label: 'Orbital sites', value: observer.habsCount ?? '—' },
     { label: 'Fleets', value: observer.fleetsCount ?? '—' }
+  ];
+  const threatMetrics = [
+    { label: 'Alien hate', value: alien.alienHate?.actual ?? alien.alienHate?.visibleEstimate ?? 'UNAVAILABLE' },
+    { label: 'Alien ships / all tracked bodies', value: threat.total?.ships ?? 'UNAVAILABLE' },
+    { label: 'Alien ships / orbit body: Sol', value: threat.sol?.ships ?? 'UNAVAILABLE' }
   ];
 
   container.innerHTML = `
@@ -602,20 +715,35 @@ function renderDualAssetRings() {
       ${metrics.map(metric => `
         <div class="asset-posture-metric">
           <strong>${escapeHtml(metric.value)}</strong>
+        <span>${escapeHtml(metric.label)}</span>
+      </div>
+      `).join('')}
+    </div>
+    <div class="threat-posture-heading"><span>ALIEN SPACE POSTURE / SCOPE EXPLICIT</span><small>${escapeHtml(threat.confidence || 'UNKNOWN')}</small></div>
+    <div class="asset-posture-grid threat-posture-grid">
+      ${threatMetrics.map(metric => `
+        <div class="asset-posture-metric">
+          <strong>${escapeHtml(metric.value)}</strong>
           <span>${escapeHtml(metric.label)}</span>
         </div>
       `).join('')}
     </div>
+    ${threat.largestHostileFleet ? `<div class="largest-hostile-fleet"><span>LARGEST HOSTILE CONCENTRATION</span><strong>${escapeHtml(threat.largestHostileFleet.name)} / ${escapeHtml(threat.largestHostileFleet.ships)} ships</strong><small>${escapeHtml(threat.largestHostileFleet.orbitBody || 'Unknown body')} · ${escapeHtml(threat.largestHostileFleet.weaponSummary || 'Loadout unavailable')}</small></div>` : ''}
   `;
 }
 
 function renderOperativeLeaderboard() {
   const container = document.getElementById('opLeaderboardList');
+  if (window.MissionControlBoards?.renderOperationsBoard) {
+    window.MissionControlBoards.renderOperationsBoard(container, state.rawSnapshot, state.briefing?.strategic);
+    return;
+  }
   if (!container || !state.briefing.operatives) return;
 
   const operatives = [...state.briefing.operatives].sort((a, b) => b.totalSkills - a.totalSkills).slice(0, 4);
+  const capability = state.briefing.strategic?.councilCapabilities;
 
-  container.innerHTML = operatives.map(op => {
+  const operativeRows = operatives.map(op => {
     const pct = Math.min(100, (op.totalSkills / 50) * 100);
     return `
       <div class="op-bar-row">
@@ -633,21 +761,97 @@ function renderOperativeLeaderboard() {
       </div>
     `;
   }).join('');
+  const roleRows = capability?.missionRoles?.map(role => {
+    const best = role.best;
+    return `<div class="council-capability-row"><span>${escapeHtml(role.mission)}</span><strong>${escapeHtml(best?.name || 'UNAVAILABLE')}</strong><em>${best?.value === null || best?.value === undefined ? '—' : escapeHtml(best.value)} ${escapeHtml(role.skill.slice(0, 3).toUpperCase())}</em></div>`;
+  }).join('') || '';
+  const gaps = capability?.gaps?.length ? `<div class="council-capability-gaps">${capability.gaps.map(gap => `<span>⚠ ${escapeHtml(gap)}</span>`).join('')}</div>` : '';
+  container.innerHTML = `<div class="operative-leaderboard-label">TOP COUNCILORS / AGGREGATE SKILL</div>${operativeRows}<div class="council-capability-block"><div class="operative-leaderboard-label">MISSION COVERAGE</div>${roleRows}${gaps}</div>`;
+}
+
+function renderResearchWatchlist() {
+  const container = document.getElementById('researchWatchlist');
+  if (window.MissionControlBoards?.renderResearchWatchlist) {
+    window.MissionControlBoards.renderResearchWatchlist(container, state.rawSnapshot);
+  }
+}
+
+function formatChangeValue(value) {
+  if (value === null || value === undefined) return 'UNKNOWN';
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return String(value);
+  if (Math.abs(numeric) >= 1000000000000) return `${(numeric / 1000000000000).toFixed(1)}T`;
+  if (Math.abs(numeric) >= 1000000000) return `${(numeric / 1000000000).toFixed(1)}B`;
+  if (Math.abs(numeric) >= 1000000) return `${(numeric / 1000000).toFixed(1)}M`;
+  return Number.isInteger(numeric) ? numeric.toLocaleString() : numeric.toFixed(2);
+}
+
+function changeLine(change) {
+  if (!change) return '';
+  const isThreat = change.polarity === 'danger';
+  const directionClass = isThreat
+    ? (change.delta > 0 ? 'is-negative' : 'is-positive')
+    : (change.delta > 0 ? 'is-positive' : 'is-negative');
+  return `<div class="since-save-change ${isThreat ? 'is-threat' : ''}"><span>${escapeHtml(change.metric)}</span><strong>${escapeHtml(formatChangeValue(change.from))} → ${escapeHtml(formatChangeValue(change.to))}</strong><em class="${directionClass}">${escapeHtml(change.deltaLabel || '')}</em></div>`;
+}
+
+function renderSinceLastSave() {
+  const container = document.getElementById('sinceLastSave');
+  if (!container) return;
+  const panel = container.closest('.init-since-save-banner');
+  const delta = state.rawSnapshot?.changesSincePrevious || state.briefing?.changesSincePrevious;
+  if (!delta || !delta.available) {
+    if (panel) panel.hidden = true;
+    return;
+  }
+  if (panel) panel.hidden = false;
+
+  const sections = [];
+  const changedFactions = (delta.factions || []).filter(faction => (faction.changes || []).length);
+  changedFactions.slice(0, 6).forEach((faction) => {
+    sections.push(`<article class="since-save-card"><div class="since-save-card-heading"><span>${escapeHtml(faction.factionName)}</span><small>FACTION POSTURE</small></div>${faction.changes.slice(0, 5).map(changeLine).join('')}</article>`);
+  });
+  if ((delta.resources || []).length) {
+    sections.push(`<article class="since-save-card"><div class="since-save-card-heading"><span>OBSERVER RESOURCES</span><small>STOCKPILE CHANGE</small></div>${delta.resources.slice(0, 6).map(changeLine).join('')}</article>`);
+  }
+  if ((delta.politics || []).length) {
+    sections.push(`<article class="since-save-card"><div class="since-save-card-heading"><span>EXECUTIVE CONTROL</span><small>${delta.politics.length} CHANGE${delta.politics.length === 1 ? '' : 'S'}</small></div>${delta.politics.slice(0, 5).map(change => `<div class="since-save-politics"><strong>${escapeHtml(change.nationName)}</strong><span>${escapeHtml(change.fromFactionName)} → ${escapeHtml(change.toFactionName)}</span></div>`).join('')}</article>`);
+  }
+  if ((delta.unrest || []).length) {
+    sections.push(`<article class="since-save-card since-save-card--threat"><div class="since-save-card-heading"><span>CIVIL STABILITY</span><small>${delta.unrest.length} UNREST CHANGE${delta.unrest.length === 1 ? '' : 'S'}</small></div>${delta.unrest.slice(0, 5).map(entry => `<div class="since-save-politics"><strong>${escapeHtml(entry.nationName)}</strong>${changeLine(entry.change)}</div>`).join('')}</article>`);
+  }
+  if ((delta.research || []).length) {
+    sections.push(`<article class="since-save-card"><div class="since-save-card-heading"><span>RESEARCH MOVEMENT</span><small>${delta.research.length} ACTIVE</small></div>${delta.research.slice(0, 5).map(change => `<div class="since-save-politics"><strong>${escapeHtml(change.projectName || change.projectId || 'Project')}</strong><span>${change.fromPercent === null ? 'NEW' : `${escapeHtml(formatChangeValue(change.fromPercent))}%`} → ${change.toPercent === null ? 'UNKNOWN' : `${escapeHtml(formatChangeValue(change.toPercent))}%`}</span></div>`).join('')}</article>`);
+  }
+  const threatChanges = Object.values(delta.threat || {}).filter(Boolean);
+  if (threatChanges.length) {
+    sections.push(`<article class="since-save-card since-save-card--threat"><div class="since-save-card-heading"><span>ALIEN SPACE POSTURE</span><small>ALIEN CONTACTS / ALL TRACKED BODIES · ORBIT BODY: SOL</small></div>${threatChanges.map(changeLine).join('')}</article>`);
+  }
+
+  const elapsed = delta.elapsedGameDays === null || delta.elapsedGameDays === undefined ? 'ELAPSED TIME UNKNOWN' : `${formatChangeValue(delta.elapsedGameDays)} GAME DAYS ELAPSED`;
+  const previousLabel = delta.previousCampaignDate || 'previous save unavailable';
+  container.innerHTML = `<div class="since-save-meta"><strong>${escapeHtml(elapsed)}</strong><span>Compared with ${escapeHtml(previousLabel)}. Empty categories mean no normalized change was detected.</span></div>${sections.length ? sections.join('') : '<div class="since-save-empty"><strong>NO MATERIAL CHANGE DETECTED</strong><span>The current normalized datasets match the immediately previous save.</span></div>'}`;
 }
 
 function renderHoldingsBubbleMatrix() {
   const container = document.getElementById('holdingsBubbleMatrix');
+  if (window.MissionControlBoards?.renderNationQueue) {
+    window.MissionControlBoards.renderNationQueue(container, state.rawSnapshot, state.briefing);
+    return;
+  }
   if (!container || !state.rawSnapshot.nations) return;
 
   const topNations = [...state.rawSnapshot.nations].sort((a, b) => (b.GDP || 0) - (a.GDP || 0)).slice(0, 5);
 
   const colors = ['var(--blue)', 'var(--accent)', 'var(--init-pink)', 'var(--gold)', 'var(--success)'];
 
+  container.setAttribute('role', 'img');
+  container.setAttribute('aria-label', 'Largest economies: ' + topNations.map((n) => `${n.displayName}, ${((n.GDP || 0) / 1e12).toFixed(1)} trillion GDP, executive ${n.executiveFactionName || 'Independent'}`).join('; '));
   container.innerHTML = topNations.map((n, i) => {
     const gdpTrill = ((n.GDP || 0) / 1e12).toFixed(1);
     const size = 42 + i * 4;
     return `
-      <div class="holding-bubble" style="--bubble-accent: ${colors[i % colors.length]}; width: ${size}px; height: ${size}px; font-size: ${size < 48 ? '8.5px' : '9.5px'};" title="${escapeHtml(n.displayName)}: $${escapeHtml(gdpTrill)}T (${escapeHtml(n.executiveFactionName || 'Independent')})">
+      <div class="holding-bubble" role="img" aria-label="${escapeHtml(n.displayName)}: $${escapeHtml(gdpTrill)}T GDP; executive ${escapeHtml(n.executiveFactionName || 'Independent')}" style="--bubble-accent: ${colors[i % colors.length]}; width: ${size}px; height: ${size}px; font-size: ${size < 48 ? '8.5px' : '9.5px'};" title="${escapeHtml(n.displayName)}: $${escapeHtml(gdpTrill)}T (${escapeHtml(n.executiveFactionName || 'Independent')})">
         <div style="font-weight: 900; line-height: 1;">${escapeHtml(n.displayName.slice(0, 5))}</div>
         <div style="font-size: 8px; opacity: 0.85;">$${escapeHtml(gdpTrill)}T</div>
       </div>
@@ -722,11 +926,28 @@ async function copyLibraryExport(format, statusNode) {
     const res = await fetch(`/api/export?format=${format === 'full' ? 'full' : 'chatgpt'}&mode=${encodeURIComponent(state.mode)}&observer=${encodeURIComponent(state.observer)}`);
     const payload = await res.json();
     if (!res.ok || !payload.success || !payload.markdown) throw new Error(payload.error || 'Export unavailable');
-    await navigator.clipboard.writeText(payload.markdown);
+    await copyText(payload.markdown);
     if (statusNode) statusNode.textContent = `${format === 'full' ? 'Full' : 'Compact'} snapshot copied with ${state.mode.toUpperCase()} visibility labels.`;
     showToast('Snapshot copied to clipboard.');
   } catch (err) {
     if (statusNode) statusNode.textContent = `Export unavailable — ${err.message}`;
     showToast('Snapshot export failed.');
   }
+}
+
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  if (!copied) throw new Error('Clipboard access is unavailable in this browser.');
 }

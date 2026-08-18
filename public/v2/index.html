@@ -33,10 +33,13 @@
         <span>OBSERVER:</span> <strong id="hudFaction">the Initiative</strong>
       </div>
       <div class="init-hud-pill">
-        <span>POWER:</span> <strong id="hudPower">-</strong>
+        <span>STRATEGIC SCORE (EST.):</span> <strong id="hudPower">-</strong>
       </div>
       <div class="init-hud-pill">
         <span>ALERT:</span> <strong id="hudDefcon">DEFCON 2</strong>
+      </div>
+      <div class="init-hud-pill">
+        <span>SNAPSHOT:</span> <strong id="hudSnapshot">-</strong>
       </div>
     </div>
 
@@ -44,13 +47,14 @@
     <div class="init-topbar-controls">
       <!-- Intel Mode Selector -->
       <div class="init-mode-switch">
-        <button class="init-btn init-mode-btn init-btn-cyan" data-mode="player">PLAYER INTEL</button>
-        <button class="init-btn init-mode-btn" data-mode="enhanced">ENHANCED</button>
-        <button class="init-btn init-mode-btn" data-mode="omniscient">OMNISCIENT</button>
+        <button class="init-btn init-mode-btn init-btn-cyan" data-mode="player" aria-pressed="true">PLAYER INTEL</button>
+        <button class="init-btn init-mode-btn" data-mode="enhanced" aria-pressed="false">ENHANCED</button>
+        <button class="init-btn init-mode-btn" data-mode="omniscient" aria-pressed="false">OMNISCIENT</button>
       </div>
 
       <!-- Observer Switcher -->
-      <select id="initObserverSelect" class="init-select">
+      <label class="visually-hidden" for="initObserverSelect">Observer faction</label>
+      <select id="initObserverSelect" class="init-select" aria-label="Observer faction">
         <option value="4712">the Initiative</option>
       </select>
 
@@ -88,19 +92,8 @@
         </div>
         <div class="tech-card-body">
           <div class="init-map-container">
-            <!-- Stylized theater overview; values below are the live source of truth. -->
-            <svg class="init-map-svg" viewBox="0 0 400 200">
-              <path d="M 55,46 Q 105,34 145,62 Q 121,103 72,91 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
-              <path d="M 103,111 Q 132,118 122,171 Q 89,157 103,111 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
-              <path d="M 178,45 Q 239,38 230,84 Q 182,76 178,45 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
-              <path d="M 190,98 Q 229,105 210,163 Q 180,136 190,98 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
-              <path d="M 252,46 Q 358,39 340,109 Q 258,95 252,46 Z" fill="rgba(212,125,118,0.18)" stroke="var(--danger)" stroke-width="1.25"/>
-              <path d="M 310,131 Q 359,135 345,174 Q 302,161 310,131 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
-              <circle cx="310" cy="75" r="4" fill="var(--danger)"/>
-              <circle cx="110" cy="135" r="4" fill="var(--danger)"/>
-              <circle cx="205" cy="65" r="4" fill="var(--accent)"/>
-              <circle cx="95" cy="65" r="4" fill="var(--accent)"/>
-            </svg>
+            <!-- Bundled GeoJSON map is injected here. A text state prevents a schematic fallback from implying geography. -->
+            <div class="world-map-fallback" role="status">REAL WORLD MAP INITIALIZING…</div>
           </div>
 
           <div id="mapSectorsList" style="margin-top: 10px;">
@@ -112,8 +105,8 @@
       <!-- 2. Global Power & CP Allocation Donut (回款分布) -->
       <div class="tech-card">
         <div class="tech-card-header">
-          <div class="tech-card-title">FACTION BALANCE</div>
-          <span>POWER INDEX</span>
+          <div class="tech-card-title">STRATEGIC FACTION LEDGER</div>
+          <span>CURRENT STATE</span>
         </div>
         <div class="tech-card-body">
           <div id="factionDonutContainer">
@@ -155,7 +148,7 @@
 
         <div class="init-kpi-item">
           <div class="init-kpi-label">
-            STRATEGIC INDEX
+            STRATEGIC SCORE (EST.)
           </div>
           <div id="kpiPower" class="init-kpi-val">0/100</div>
           <div id="kpiPowerSub" class="init-kpi-sub">Global Rank #1</div>
@@ -217,8 +210,8 @@
       <!-- 3. Resource position -->
       <div class="tech-card">
         <div class="tech-card-header">
-          <div class="tech-card-title">RESOURCE POSITION</div>
-          <span>ON HAND</span>
+          <div class="tech-card-title">WARTIME LOGISTICS</div>
+          <span>STOCKPILE + OUTPUT</span>
         </div>
         <div class="tech-card-body">
           <div id="resourceFlowChart" class="chart-container-box">
@@ -235,11 +228,11 @@
       <!-- 1. Current power profile -->
       <div class="tech-card">
         <div class="tech-card-header">
-          <div class="tech-card-title">POWER PROFILE</div>
-          <span>CURRENT SNAPSHOT</span>
+          <div class="tech-card-title">CAPABILITY MATRIX</div>
+          <span>DISCRETE SIGNALS</span>
         </div>
         <div class="tech-card-body">
-          <div id="powerTrajectoryChart" class="chart-container-box" style="height: 140px;">
+          <div id="powerTrajectoryChart" class="chart-container-box power-profile-container">
             <!-- Current faction profile injected dynamically -->
           </div>
         </div>
@@ -248,8 +241,8 @@
       <!-- 2. Asset posture -->
       <div class="tech-card">
         <div class="tech-card-header">
-          <div class="tech-card-title">ASSET POSTURE</div>
-          <span>EARTH / ORBIT</span>
+          <div class="tech-card-title">THEATER SITUATION</div>
+          <span>SPACE POSTURE</span>
         </div>
         <div class="tech-card-body">
           <div id="dualAssetRings">
@@ -261,8 +254,8 @@
       <!-- 3. Council roster -->
       <div class="tech-card">
         <div class="tech-card-header">
-          <div class="tech-card-title">COUNCIL ROSTER</div>
-          <span>SKILL TOTAL</span>
+          <div class="tech-card-title">OPERATIONS BOARD</div>
+          <span>ACTIVE COUNCILORS</span>
         </div>
         <div class="tech-card-body">
           <div id="opLeaderboardList" class="operative-leaderboard">
@@ -274,8 +267,8 @@
       <!-- 4. Strategic holdings -->
       <div class="tech-card">
         <div class="tech-card-header">
-          <div class="tech-card-title">STRATEGIC HOLDINGS</div>
-          <span>GDP SCALE</span>
+          <div class="tech-card-title">NATION ACTION QUEUE</div>
+          <span>EARTH HOLDINGS</span>
         </div>
         <div class="tech-card-body" style="padding: 0;">
           <div id="holdingsBubbleMatrix" class="bubble-matrix-container">
@@ -284,6 +277,36 @@
         </div>
       </div>
 
+    </div>
+
+    <!-- ==================== BOTTOM FULL-WIDTH: RESEARCH + GAPS ==================== -->
+    <div class="init-directives-banner">
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">TECHNOLOGY WATCH</div>
+          <span>RESEARCH + INTELLIGENCE GAPS</span>
+        </div>
+        <div class="tech-card-body">
+          <div id="researchWatchlist" class="research-watchlist" aria-live="polite">
+            <p class="since-save-empty">Loading research and capability signals…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== BOTTOM FULL-WIDTH: TEMPORAL CHANGE ==================== -->
+    <div class="init-directives-banner init-since-save-banner">
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">SINCE LAST SAVE</div>
+          <span>CHANGE DETECTION</span>
+        </div>
+        <div class="tech-card-body">
+          <div id="sinceLastSave" class="since-save-grid" aria-live="polite">
+            <p class="since-save-empty">Comparing the current snapshot with the immediately previous save…</p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ==================== BOTTOM FULL-WIDTH: SITREP & DIRECTIVES ==================== -->
@@ -311,7 +334,7 @@
   <!-- On-demand faction intelligence screen. It is populated from the current filtered snapshot. -->
   <section id="factionIntelScreen" class="faction-intel-screen" hidden aria-labelledby="factionIntelTitle">
     <div class="faction-intel-screen__backdrop" data-faction-intel-close></div>
-    <div class="faction-intel-screen__dialog" role="dialog" aria-modal="true">
+    <div class="faction-intel-screen__dialog" role="dialog" aria-modal="true" aria-labelledby="factionIntelTitle">
       <header class="faction-intel-screen__header">
         <div>
           <div class="faction-intel-screen__eyebrow">CAMPAIGN INTELLIGENCE</div>
@@ -326,7 +349,7 @@
   <!-- Integrated classic-dashboard data room. -->
   <section id="intelligenceLibraryScreen" class="intelligence-library-screen" hidden aria-labelledby="intelligenceLibraryTitle">
     <div class="intelligence-library-screen__backdrop" data-intelligence-library-close></div>
-    <div class="intelligence-library-screen__dialog" role="dialog" aria-modal="true">
+    <div class="intelligence-library-screen__dialog" role="dialog" aria-modal="true" aria-labelledby="intelligenceLibraryTitle">
       <header class="intelligence-library-screen__header">
         <div>
           <div class="intelligence-library-screen__eyebrow">OPERATIONS DATA ROOM</div>
@@ -345,6 +368,7 @@
   <script src="/v2/js/components/world-map.js"></script>
   <script src="/v2/js/components/faction-intel.js"></script>
   <script src="/v2/js/components/intelligence-library.js"></script>
+  <script src="/v2/js/components/executive-boards.js"></script>
   <script src="/v2/js/mission-control.js"></script>
 </body>
 </html>

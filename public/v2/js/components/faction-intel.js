@@ -270,6 +270,18 @@
       entries.push({ key: key, faction: faction, button: button });
     });
 
+    list.addEventListener('keydown', function handleRosterKeydown(event) {
+      var buttons = entries.map(function entryButton(entry) { return entry.button; });
+      if (!buttons.length || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      var currentIndex = buttons.indexOf(document.activeElement);
+      if (event.key === 'Home') currentIndex = 0;
+      else if (event.key === 'End') currentIndex = buttons.length - 1;
+      else if (event.key === 'ArrowDown') currentIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % buttons.length;
+      else currentIndex = currentIndex <= 0 ? buttons.length - 1 : currentIndex - 1;
+      buttons[currentIndex].focus();
+    });
+
     if (!context.factions.length) {
       list.appendChild(buildEmptyState(documentRef, 'No selectable factions were supplied.'));
     }
@@ -454,7 +466,11 @@
     if (factionId === null || factionId === undefined) return [];
     var councilors = Array.isArray(context.data.councilors) ? context.data.councilors : [];
     return councilors
-      .filter(function (councilor) { return sameId(councilor.factionId, factionId); })
+      .filter(function (councilor) {
+        if (councilor.isActiveCouncilor === false || councilor.isIndependent === true) return false;
+        if (String(councilor.status || 'Active').toLowerCase() !== 'active') return false;
+        return sameId(councilor.factionId, factionId);
+      })
       .sort(function (a, b) {
         var aSkills = Number(a.totalSkills);
         var bSkills = Number(b.totalSkills);
@@ -701,7 +717,7 @@
     var power = getPowerValue(faction);
     var components = getPowerComponents(faction);
     return [
-      { label: 'Overall power index', value: metricValue(power, function (value) { return formatCount(value) + ' / 100'; }) },
+      { label: 'Composite score estimate', value: metricValue(power, function (value) { return formatCount(value) + ' / 100'; }) },
       { label: 'Military score', value: metricScore(components.military.value) },
       { label: 'Estimated', value: isPowerEstimate(faction) ? 'YES' : (power === null ? UNKNOWN_VALUE : 'NO') }
     ];

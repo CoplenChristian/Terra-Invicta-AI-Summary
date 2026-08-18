@@ -58,6 +58,15 @@
     return faction && faction.color ? faction.color : 'var(--accent)';
   }
 
+  function activeCouncilors(snapshot) {
+    return (snapshot && Array.isArray(snapshot.councilors) ? snapshot.councilors : [])
+      .filter(function activeCouncilor(councilor) {
+        if (!councilor || councilor.isActiveCouncilor === false || councilor.isIndependent === true) return false;
+        if (councilor.factionId === null || councilor.factionId === undefined || councilor.factionId === '') return false;
+        return String(councilor.status || 'Active').toLowerCase() === 'active';
+      });
+  }
+
   function visibleAttribute(councilor, key) {
     var field = councilor && councilor.maskedAttributes && councilor.maskedAttributes[key];
     if (!field || field.visibility === 'unknown' || field.visibility === 'unavailable') return '—';
@@ -78,24 +87,25 @@
     if (!rows.length) {
       return '<div class="intel-library-empty">' + escapeHtml(emptyMessage || 'No records are available in this intelligence view.') + '</div>';
     }
-    return '<div class="intel-library-table-wrap"><table class="intel-library-table"><thead><tr>' +
-      headers.map(function headerCell(header) { return '<th>' + escapeHtml(header) + '</th>'; }).join('') +
+    return '<div class="intel-library-table-wrap"><div class="intel-library-table-scroll-hint" role="note">Swipe horizontally to inspect all columns</div><table class="intel-library-table"><caption class="intel-library-table-caption">Filtered intelligence records</caption><thead><tr>' +
+      headers.map(function headerCell(header) { return '<th scope="col">' + escapeHtml(header) + '</th>'; }).join('') +
       '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>';
   }
 
   function row(cells, className) {
     return '<tr' + (className ? ' class="' + escapeHtml(className) + '"' : '') + '>' +
-      cells.map(function rowCell(cell) { return '<td>' + cell + '</td>'; }).join('') + '</tr>';
+      cells.map(function rowCell(cell, index) { return index === 0 ? '<th scope="row">' + cell + '</th>' : '<td>' + cell + '</td>'; }).join('') + '</tr>';
   }
 
   function countLabel(value, noun) {
     var parsed = numberValue(value);
     if (parsed === null) return 'UNAVAILABLE';
-    return number(parsed, 0) + ' ' + noun + (parsed === 1 ? '' : 's');
+    var plural = noun === 'capability' ? 'capabilities' : noun === 'facility' ? 'facilities' : noun + 's';
+    return number(parsed, 0) + ' ' + (parsed === 1 ? noun : plural);
   }
 
   function visibility(snapshot) {
-    if (snapshot.mode === 'omniscient') return 'RAW SAVE STATE';
+    if (snapshot.mode === 'omniscient') return 'OMNISCIENT / FULL SAVE STATE';
     if (snapshot.mode === 'enhanced') return 'ENHANCED INTELLIGENCE';
     return 'PLAYER INTEL / FILTERED';
   }
@@ -119,12 +129,14 @@
 
   function renderOverview(snapshot, briefing, observerId, factions) {
     var metadata = snapshot.metadata || {};
+    var councilors = activeCouncilors(snapshot);
     var observer = (snapshot.factions || []).find(function findObserver(faction) {
       return String(faction.ID) === String(observerId);
     }) || {};
     var stats = [
       ['FACTIONS', countLabel((snapshot.factions || []).length, 'faction')],
-      ['COUNCILORS', countLabel((snapshot.councilors || []).length, 'councilor')],
+      ['ACTIVE COUNCILORS', countLabel(councilors.length, 'councilor')],
+      ['ALIEN COUNCILORS', countLabel(councilors.filter(function isAlien(councilor) { return councilor.isAlien; }).length, 'councilor')],
       ['NATIONS', countLabel((snapshot.nations || []).length, 'nation')],
       ['HABS', countLabel((snapshot.habs || []).length, 'hab')],
       ['FLEETS', countLabel((snapshot.fleets || []).length, 'fleet')],
@@ -169,10 +181,13 @@
 
   function renderFactions(snapshot, observerId, factions) {
     var relationships = snapshot.factionRelationships || [];
+    var councilors = activeCouncilors(snapshot);
     var rows = (snapshot.factions || []).map(function factionRow(faction) {
       var relation = relationFor(faction.ID, observerId, relationships);
       var power = faction.powerScore && typeof faction.powerScore === 'object' ? faction.powerScore.overall : faction.powerScore;
       var space = faction.spaceVisibility === 'unavailable' ? 'UNAVAILABLE' : countLabel(faction.shipsCount, 'ship');
+      var factionCouncilors = councilors.filter(function factionCouncilor(councilor) { return String(councilor.factionId) === String(faction.ID); });
+      var alienCouncilors = factionCouncilors.filter(function alienCouncilor(councilor) { return councilor.isAlien; }).length;
       return row([
         '<span class="intel-library-faction-name"><i style="background:' + escapeHtml(faction.color || 'var(--accent)') + '"></i>' + display(faction.displayName) + '</span>',
         display(relation.hateOfUs, 'UNAVAILABLE'),
@@ -182,16 +197,37 @@
         money(faction.totalGdp),
         number(faction.habsCount, 0),
         escapeHtml(space),
+        number(factionCouncilors.length, 0) + (alienCouncilors ? ' / ' + number(alienCouncilors, 0) + ' alien' : ''),
         statusChip(faction.spaceVisibility === 'unavailable' ? 'LIMITED' : 'AVAILABLE', faction.spaceVisibility === 'unavailable' ? 'muted' : 'good') +
           ' <button type="button" class="intel-library-inline-action" data-library-faction="' + escapeHtml(faction.ID) + '">Open dossier</button>'
       ]);
     });
     return '<div class="intel-library-section-intro"><div><div class="intel-library-kicker">STRATEGIC BALANCE / ALL FACTIONS</div><h3>Faction operating picture</h3><p>Directional hate is shown as “hate of us” and “our hate” when the filtered snapshot contains that relationship.</p></div><span class="intel-library-count">' + countLabel(rows.length, 'faction') + '</span></div>' +
-      table(['Faction', 'Hate of us', 'Our hate', 'Power', 'CPs', 'GDP', 'Habs', 'Ships', 'Dossier'], rows, 'No faction records are available.');
+      table(['Faction', 'Hate of us', 'Our hate', 'Strategic score (est.)', 'CPs', 'GDP', 'Habs', 'Ships', 'Councilors', 'Dossier'], rows, 'No faction records are available.');
   }
 
-  function renderCouncilors(snapshot, factions) {
-    var rows = (snapshot.councilors || []).map(function councilorRow(councilor) {
+  function councilorProfile(councilor) {
+    var orgNames = Array.isArray(councilor.orgs) ? councilor.orgs.map(function orgName(org) { return org.displayName; }).filter(Boolean) : [];
+    var traitNames = Array.isArray(councilor.traits) ? councilor.traits.filter(Boolean) : [];
+    var profile = orgNames.concat(traitNames).slice(0, 4).join(' · ');
+    if (profile) return profile;
+    return councilor.visibility === 'raw_save_only' || councilor.visibility === 'confirmed' ? 'No attached profile' : 'UNAVAILABLE';
+  }
+
+  function renderCouncilors(snapshot, factions, options) {
+    var allCouncilors = activeCouncilors(snapshot);
+    var selectedFaction = options && options.councilorFaction ? String(options.councilorFaction) : '';
+    var search = options && options.councilorSearch ? String(options.councilorSearch).trim().toLowerCase() : '';
+    var factionOptions = {};
+    allCouncilors.forEach(function collectCouncilorFaction(councilor) {
+      factionOptions[String(councilor.factionId)] = councilor.factionName || factionNameById(councilor.factionId, factions);
+    });
+    var visibleCouncilors = allCouncilors.filter(function filterCouncilor(councilor) {
+      var matchesFaction = !selectedFaction || String(councilor.factionId) === selectedFaction;
+      var haystack = [councilor.displayName, councilor.factionName, councilor.typeTemplateName, councilor.locationName, councilor.activeMissionName, councilorProfile(councilor)].join(' ').toLowerCase();
+      return matchesFaction && (!search || haystack.indexOf(search) !== -1);
+    });
+    var rows = visibleCouncilors.map(function councilorRow(councilor) {
       var isAlien = councilor.isAlien;
       var status = councilor.isTurnedMole ? 'TURNED MOLE' : (councilor.status || 'ACTIVE');
       return row([
@@ -201,12 +237,21 @@
         display(councilor.locationName),
         display(status),
         display(councilor.activeMissionName),
+        number(councilor.totalSkills, 0),
         display(topSkill(councilor)),
+        display(councilorProfile(councilor)),
         isAlien ? statusChip('ALIEN', 'danger') : (councilor.visibility === 'raw_save_only' ? statusChip('RAW', 'muted') : statusChip('VISIBLE', 'good'))
       ], councilor.isTurnedMole ? 'intel-library-row-highlight' : '');
     });
+    var factionSelect = '<select class="intel-library-filter-control" data-library-councilor-faction aria-label="Filter councilors by faction"><option value="">ALL ACTIVE FACTIONS (' + allCouncilors.length + ')</option>' +
+      Object.keys(factionOptions).sort(function sortFactions(a, b) { return factionOptions[a].localeCompare(factionOptions[b]); }).map(function factionOption(factionId) {
+        var count = allCouncilors.filter(function countFaction(councilor) { return String(councilor.factionId) === factionId; }).length;
+        return '<option value="' + escapeHtml(factionId) + '"' + (selectedFaction === factionId ? ' selected' : '') + '>' + escapeHtml(factionOptions[factionId]) + ' (' + count + ')</option>';
+      }).join('') + '</select>';
+    var searchInput = '<input class="intel-library-filter-control intel-library-filter-search" type="search" data-library-councilor-search placeholder="Search name, location, mission" value="' + escapeHtml(options && options.councilorSearch || '') + '" aria-label="Search councilors">';
     return '<div class="intel-library-section-intro"><div><div class="intel-library-kicker">EARTH OPERATIONS / COUNCIL</div><h3>Councilor intelligence</h3><p>Skills use the filtered visible or masked values. Hidden attributes are intentionally represented as unavailable.</p></div><span class="intel-library-count">' + countLabel(rows.length, 'councilor') + '</span></div>' +
-      table(['Councilor', 'Faction', 'Profession', 'Location', 'Status', 'Mission', 'Top skill', 'Visibility'], rows, 'No councilors are available in this intelligence view.');
+      '<div class="intel-library-filter-bar"><label class="intel-library-filter-field"><span>FACTION FILTER</span>' + factionSelect + '</label><label class="intel-library-filter-field intel-library-filter-field--search"><span>SEARCH ROSTER</span>' + searchInput + '</label><span class="intel-library-filter-result">SHOWING ' + rows.length + ' / ' + allCouncilors.length + ' ACTIVE</span></div>' +
+      table(['Councilor', 'Faction', 'Profession', 'Location', 'Status', 'Mission', 'Total', 'Lead skill', 'Org / traits', 'Visibility'], rows, selectedFaction || search ? 'No active councilors match the current filter.' : 'No active councilors are available in this intelligence view.');
   }
 
   function renderNations(snapshot, factions) {
@@ -239,8 +284,24 @@
     return number(value, 2);
   }
 
-  function renderMining(snapshot) {
-    var rows = (snapshot.habSites || []).map(function miningRow(site) {
+  function matchesSpaceTheater(body, theaterKey, explicitTheaterKey) {
+    if (!theaterKey) return true;
+    if (explicitTheaterKey) return String(explicitTheaterKey) === String(theaterKey);
+    var value = String(body || '').trim().replace(/^\d+\s+/, '').replace(/\s+/g, ' ').toLowerCase();
+    var bodyMap = {
+      sol: 'sol', earth: 'sol', luna: 'sol', mars: 'mars', mercury: 'inner', venus: 'inner',
+      ceres: 'belt', psyche: 'belt', klotho: 'belt', pallas: 'belt', vesta: 'belt', bienor: 'belt',
+      jupiter: 'jupiter', io: 'jupiter', europa: 'jupiter', ganymede: 'jupiter', callisto: 'jupiter', leda: 'jupiter',
+      saturn: 'saturn', titan: 'saturn', rhea: 'saturn', dione: 'saturn', tethys: 'saturn', mimas: 'saturn', enceladus: 'saturn', iapetus: 'saturn',
+      uranus: 'outer', miranda: 'outer', neptune: 'outer', triton: 'outer', pluto: 'outer', charon: 'outer', quaoar: 'outer', sedna: 'outer', eris: 'outer', makemake: 'outer', haumea: 'outer'
+    };
+    return (bodyMap[value] || 'unassigned') === theaterKey;
+  }
+
+  function renderMining(snapshot, spaceTheater) {
+    var rows = (snapshot.habSites || []).filter(function filterMiningSite(site) {
+      return matchesSpaceTheater(site.parentBodyName, spaceTheater, site.spaceTheaterKey);
+    }).map(function miningRow(site) {
       var construction = site.pendingHab ? (site.constructionStatus || 'building') : (site.mineModuleName || site.constructionStatus || 'not installed');
       return row([
         display(site.displayName),
@@ -261,8 +322,10 @@
       table(['Site', 'Body', 'Owner', 'Water/day', 'Volatiles/day', 'Metals/day', 'Nobles/day', 'Fissiles/day', 'Mine tier', 'Status', 'Days left', 'Hab'], rows, 'No mining sites are available in this intelligence view.');
   }
 
-  function renderHabs(snapshot) {
-    var rows = (snapshot.habs || []).map(function habRow(hab) {
+  function renderHabs(snapshot, spaceTheater) {
+    var rows = (snapshot.habs || []).filter(function filterHab(hab) {
+      return matchesSpaceTheater(hab.orbitBody, spaceTheater, hab.spaceTheaterKey);
+    }).map(function habRow(hab) {
       var status = hab.underAssault ? 'UNDER ASSAULT' : (hab.underBombardment ? 'UNDER BOMBARDMENT' : (hab.inCombat ? 'IN COMBAT' : 'OPERATIONAL'));
       return row([
         display(hab.displayName),
@@ -279,8 +342,10 @@
       table(['Hab', 'Faction', 'Type', 'Tier', 'Orbit / body', 'LEO', 'Status', 'Template'], rows, 'No habs are available in this intelligence view.');
   }
 
-  function renderFleets(snapshot) {
-    var rows = (snapshot.fleets || []).map(function fleetRow(fleet) {
+  function renderFleets(snapshot, spaceTheater) {
+    var rows = (snapshot.fleets || []).filter(function filterFleet(fleet) {
+      return matchesSpaceTheater(fleet.orbitBody, spaceTheater, fleet.spaceTheaterKey);
+    }).map(function fleetRow(fleet) {
       var power = fleet.combatPowerAvailable ? number(fleet.combatPower, 0) : 'UNAVAILABLE';
       return row([
         display(fleet.displayName),
@@ -298,9 +363,11 @@
       table(['Fleet', 'Faction', 'Ships', 'Combat power', 'Loadout', 'Orbit / body', 'Mission', 'Destination', 'Arrival'], rows, 'No fleets are available in this intelligence view.');
   }
 
-  function renderShips(snapshot) {
+  function renderShips(snapshot, spaceTheater) {
     var rows = [];
-    (snapshot.fleets || []).forEach(function flattenFleet(fleet) {
+    (snapshot.fleets || []).filter(function filterFleet(fleet) {
+      return matchesSpaceTheater(fleet.orbitBody, spaceTheater, fleet.spaceTheaterKey);
+    }).forEach(function flattenFleet(fleet) {
       (fleet.ships || []).forEach(function shipRow(ship) {
         var weaponSummary = (ship.weaponLoadout || []).map(function loadout(item) {
           return item.role + ' x' + item.count;
@@ -320,15 +387,40 @@
       table(['Ship', 'Faction', 'Fleet', 'Hull', 'Dominant', 'Equipped weapons', 'Combat power'], rows, 'No ship records are available in this intelligence view.');
   }
 
-  function renderSpace(snapshot, spaceTab) {
+  function renderSpaceTheaters(briefing, spaceTheater) {
+    var theaters = briefing && briefing.strategic && Array.isArray(briefing.strategic.spaceTheaters)
+      ? briefing.strategic.spaceTheaters
+      : [];
+    theaters = theaters.filter(function visibleTheater(theater) { return theater.key !== 'unassigned' || theater.fleets || theater.habs || theater.miningSites; });
+    if (spaceTheater) theaters = theaters.filter(function filterTheater(theater) { return String(theater.key) === String(spaceTheater); });
+    if (!theaters.length) return '';
+    var rows = theaters.map(function spaceTheaterRow(theater) {
+      var weaponMix = (theater.weaponMix || []).slice(0, 3).map(function weapon(item) { return item.role + ' x' + item.count; }).join(' · ') || '—';
+      return row([
+        display(theater.name),
+        number(theater.ownShips, 0) + ' / ' + number(theater.ownFleets, 0),
+        theater.alienShips ? statusChip(number(theater.alienShips, 0) + ' / ' + number(theater.alienFleets, 0), 'danger') : '0 / 0',
+        number(theater.ownHabs === undefined ? theater.habs : theater.ownHabs, 0),
+        number(theater.ownMiningSites === undefined ? theater.miningSites : theater.ownMiningSites, 0),
+        display(theater.status),
+        display(weaponMix)
+      ]);
+    });
+    return '<section class="intel-library-block intel-library-space-theaters"><div class="intel-library-block-heading"><span>SPACE THEATER POSTURE</span><small>OWN / HOSTILE / LOADOUT</small></div>' + table(['Theater', 'Own ships / fleets', 'Alien ships / fleets', 'Our habs', 'Our mining sites', 'Status', 'Alien weapon mix'], rows, 'No space theater posture is available.') + '</section>';
+  }
+
+  function renderSpace(snapshot, briefing, spaceTab, spaceTheater) {
     var activeTab = spaceTab || 'mining';
-    var content = activeTab === 'habs' ? renderHabs(snapshot) : activeTab === 'fleets' ? renderFleets(snapshot) : activeTab === 'ships' ? renderShips(snapshot) : renderMining(snapshot);
-    return '<div class="intel-library-section-intro"><div><div class="intel-library-kicker">SPACE & MINING / CLASSIC SURFACES</div><h3>Orbital operating picture</h3><p>Switch between yields, installations, fleet movement and individual hulls without leaving Mission Control.</p></div></div>' +
-      '<div class="intel-library-subnav" role="tablist">' +
+    var content = activeTab === 'habs' ? renderHabs(snapshot, spaceTheater) : activeTab === 'fleets' ? renderFleets(snapshot, spaceTheater) : activeTab === 'ships' ? renderShips(snapshot, spaceTheater) : renderMining(snapshot, spaceTheater);
+    var filterNote = spaceTheater ? ' / FILTERED TO ' + String(spaceTheater).toUpperCase() : '';
+    return '<div class="intel-library-section-intro"><div><div class="intel-library-kicker">SPACE & MINING / CLASSIC SURFACES' + filterNote + '</div><h3>Orbital operating picture</h3><p>Switch between yields, installations, fleet movement and individual hulls without leaving Mission Control.</p></div></div>' +
+      '<div class="intel-library-space-panel" id="intel-library-space-panel" role="tabpanel" aria-labelledby="intel-library-space-tab-' + activeTab + '">' +
+      renderSpaceTheaters(briefing, spaceTheater) +
+      '<div class="intel-library-subnav" role="tablist" aria-label="Space and mining views">' +
         [['mining', 'Mining'], ['habs', 'Habs'], ['fleets', 'Fleets'], ['ships', 'Ships']].map(function spaceTabButton(item) {
-          return '<button type="button" class="intel-library-subnav-btn ' + (activeTab === item[0] ? 'is-active' : '') + '" data-library-space="' + item[0] + '" role="tab" aria-selected="' + (activeTab === item[0] ? 'true' : 'false') + '">' + item[1] + '</button>';
+          return '<button type="button" class="intel-library-subnav-btn ' + (activeTab === item[0] ? 'is-active' : '') + '" id="intel-library-space-tab-' + item[0] + '" data-library-space="' + item[0] + '" role="tab" aria-controls="intel-library-space-panel" aria-selected="' + (activeTab === item[0] ? 'true' : 'false') + '">' + item[1] + '</button>';
         }).join('') +
-      '</div>' + content;
+      '</div>' + content + '</div>';
   }
 
   function renderResearch(snapshot) {
@@ -366,6 +458,7 @@
   function renderThreats(snapshot) {
     var capabilities = snapshot.capabilities || {};
     var details = capabilities.details || {};
+    var alienCouncilors = activeCouncilors(snapshot).filter(function filterAlien(councilor) { return councilor.isAlien; });
     var capabilityRows = Object.keys(details).map(function capabilityRow(key) {
       var detail = details[key] || {};
       return row([
@@ -382,8 +475,19 @@
     var facilityRows = (snapshot.builtAlienFacilities || []).map(function facilityRow(facility) {
       return row([display(facility.displayName || facility.name), display(facility.regionName || facility.locationName), display(facility.factionName), display(facility.type || facility.templateName)]);
     });
+    var alienCouncilorRows = alienCouncilors.map(function alienCouncilorRow(councilor) {
+      return row([
+        display(councilor.displayName),
+        display(councilor.locationName),
+        display(councilor.activeMissionName),
+        display(councilor.activeMissionTarget),
+        number(councilor.totalSkills, 0),
+        statusChip(councilor.status || 'ACTIVE', 'danger')
+      ]);
+    });
     return '<div class="intel-library-section-intro"><div><div class="intel-library-kicker">ALIEN INTELLIGENCE / CAPABILITY GATING</div><h3>Threat and discovery record</h3><p>Detection capabilities are separated from raw records so an unavailable panel is not mistaken for an empty world.</p></div><span class="intel-library-count">' + countLabel(Object.keys(details).length, 'capability') + '</span></div>' +
       '<section class="intel-library-block"><div class="intel-library-block-heading"><span>CAPABILITY VALIDATION</span><small>TECH / STORY GATES</small></div>' + table(['Capability', 'State', 'Unlock', 'Effect', 'Description'], capabilityRows, 'No capability details are available.') + '</section>' +
+      '<section class="intel-library-block"><div class="intel-library-block-heading"><span>ACTIVE ALIEN COUNCILORS</span><small>' + countLabel(alienCouncilorRows.length, 'confirmed record') + '</small></div>' + table(['Councilor', 'Location', 'Last mission', 'Target', 'Total skills', 'Status'], alienCouncilorRows, snapshot.mode === 'omniscient' ? 'No active alien councilors are present in the current save.' : 'Alien councilor records are unavailable at the current detection level.') + '</section>' +
       '<section class="intel-library-block"><div class="intel-library-block-heading"><span>XENOFORMING</span><small>' + countLabel(xenoRows.length, 'visible site') + '</small></div>' + table(['Region', 'Level', 'Region ID'], xenoRows, 'No xenoforming sites are visible in this intelligence view.') + '</section>' +
       '<section class="intel-library-block"><div class="intel-library-block-heading"><span>ALIEN FACILITIES</span><small>' + countLabel(facilityRows.length, 'facility') + '</small></div>' + table(['Facility', 'Location', 'Faction', 'Type'], facilityRows, 'No alien facilities are visible in this intelligence view.') + '</section>' +
       '<div class="intel-library-note"><strong>Discovery state:</strong> Deep System Skywatch is represented by the current filtered space records; it does not override the separate Earth-side discovery gates above.</div>';
@@ -399,14 +503,18 @@
   }
 
   function renderSection(root, snapshot, briefing, observerId, factions, section, spaceTab, options) {
+    if (options) {
+      options.section = section || options.section || 'overview';
+      options.spaceTab = spaceTab || options.spaceTab || 'mining';
+    }
     var content = section === 'factions'
       ? renderFactions(snapshot, observerId, factions)
       : section === 'councilors'
-        ? renderCouncilors(snapshot, factions)
+        ? renderCouncilors(snapshot, factions, options)
         : section === 'nations'
-          ? renderNations(snapshot, factions)
-          : section === 'space'
-            ? renderSpace(snapshot, spaceTab)
+            ? renderNations(snapshot, factions)
+            : section === 'space'
+            ? renderSpace(snapshot, briefing, spaceTab, options && options.spaceTheater)
             : section === 'research'
               ? renderResearch(snapshot)
               : section === 'threats'
@@ -415,16 +523,48 @@
                   ? renderExports(snapshot)
                 : renderOverview(snapshot, briefing, observerId, factions);
     root.querySelector('[data-library-content]').innerHTML = content;
+    var contentPanel = root.querySelector('[data-library-content]');
+    var activeSectionButton = root.querySelector('[data-library-section="' + section + '"]');
+    contentPanel.id = 'intel-library-panel';
+    contentPanel.setAttribute('role', 'tabpanel');
+    contentPanel.setAttribute('tabindex', '0');
+    if (activeSectionButton) contentPanel.setAttribute('aria-labelledby', activeSectionButton.id);
     root.querySelectorAll('[data-library-section]').forEach(function bindSection(button) {
       button.classList.toggle('is-active', button.dataset.librarySection === section);
       button.setAttribute('aria-selected', button.dataset.librarySection === section ? 'true' : 'false');
       button.onclick = function onSectionClick() {
+        if (options) {
+          options.section = button.dataset.librarySection;
+          options.spaceTab = 'mining';
+          options.spaceTheater = null;
+        }
         renderSection(root, snapshot, briefing, observerId, factions, button.dataset.librarySection, 'mining', options);
       };
     });
     root.querySelectorAll('[data-library-space]').forEach(function bindSpace(button) {
       button.onclick = function onSpaceClick() {
+        if (options) {
+          options.section = 'space';
+          options.spaceTab = button.dataset.librarySpace;
+        }
         renderSection(root, snapshot, briefing, observerId, factions, 'space', button.dataset.librarySpace, options);
+      };
+    });
+    root.querySelectorAll('[data-library-councilor-faction]').forEach(function bindCouncilorFaction(select) {
+      select.onchange = function onCouncilorFactionChange() {
+        if (options) options.councilorFaction = select.value;
+        renderSection(root, snapshot, briefing, observerId, factions, 'councilors', 'mining', options);
+      };
+    });
+    root.querySelectorAll('[data-library-councilor-search]').forEach(function bindCouncilorSearch(input) {
+      input.oninput = function onCouncilorSearchInput() {
+        if (options) options.councilorSearch = input.value;
+        renderSection(root, snapshot, briefing, observerId, factions, 'councilors', 'mining', options);
+        var nextInput = root.querySelector('[data-library-councilor-search]');
+        if (nextInput) {
+          nextInput.focus();
+          try { nextInput.setSelectionRange(nextInput.value.length, nextInput.value.length); } catch (error) { /* no-op */ }
+        }
       };
     });
     root.querySelectorAll('[data-library-faction]').forEach(function bindFaction(button) {
@@ -451,12 +591,12 @@
         '<div class="intel-library-header"><div><div class="intel-library-kicker">MISSION CONTROL / INTELLIGENCE LIBRARY</div><h3>Record room</h3><p>All classic dashboard datasets, normalized for the current observer and intelligence mode.</p></div><div class="intel-library-header-meta"><span>' + escapeHtml(visibility(snapshot || {})) + '</span><strong>' + display(snapshot && (snapshot.metadata || {}).gameTimeString) + '</strong></div></div>' +
         '<div class="intel-library-layout"><nav class="intel-library-nav" aria-label="Intelligence library sections" role="tablist">' +
           [['overview', 'Overview'], ['factions', 'Faction balance'], ['councilors', 'Councilors'], ['nations', 'Nations'], ['space', 'Space & mining'], ['research', 'Technology'], ['threats', 'Alien intelligence'], ['exports', 'Exports']].map(function navItem(item) {
-            return '<button type="button" class="intel-library-nav-btn" data-library-section="' + item[0] + '" role="tab" aria-selected="false"><span>' + item[1] + '</span><small>VIEW</small></button>';
+            return '<button type="button" class="intel-library-nav-btn" id="intel-library-tab-' + item[0] + '" data-library-section="' + item[0] + '" role="tab" aria-controls="intel-library-panel" aria-selected="false"><span>' + item[1] + '</span><small>VIEW</small></button>';
           }).join('') +
           '<a class="intel-library-nav-link" href="/" target="_self">Open classic dashboard</a>' +
         '</nav><div class="intel-library-content" data-library-content></div></div>' +
       '</div>';
-    renderSection(container, snapshot, briefing, observerId, factions, activeSection, 'mining', options || {});
+    renderSection(container, snapshot, briefing, observerId, factions, activeSection, options && options.spaceTab || 'mining', options || {});
   }
 
   global.IntelligenceLibrary = { render: render };

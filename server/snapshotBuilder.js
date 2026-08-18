@@ -1,5 +1,6 @@
 const templateLoader = require('./templateLoader');
 const opportunityScorer = require('./opportunityScorer');
+const spaceTheater = require('./spaceTheater');
 
 class SnapshotBuilder {
   constructor() {
@@ -216,7 +217,18 @@ class SnapshotBuilder {
       if (!councilorId) continue;
 
       const factionId = c.faction?.value || null;
-      const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Independent') : 'Independent';
+      const factionRecord = factionId ? factionsById.get(factionId) : null;
+      const factionName = factionRecord?.displayName || 'Independent';
+      const lifecycleStatus = String(c.status || 'Active').trim();
+      const isActiveCouncilor = Boolean(factionId && factionRecord && lifecycleStatus.toLowerCase() === 'active');
+      const isIndependent = String(factionName).trim().toLowerCase() === 'independent';
+
+      // TICouncilorState also stores the independent pool and other save-level
+      // people who are not active faction councilors. They are useful to the
+      // game, but are not part of an intelligence roster and should never be
+      // presented as an active faction operative.
+      if (!isActiveCouncilor || isIndependent) continue;
+
       const isAlien = !!(c.typeTemplateName && c.typeTemplateName.toLowerCase().includes('alien')) || factionName === 'the Aliens';
 
       const locationId = c.location?.value || c.location || null;
@@ -308,7 +320,9 @@ class SnapshotBuilder {
         factionId,
         factionName,
         isAlien,
-        status: c.status || 'Active',
+        status: lifecycleStatus,
+        isActiveCouncilor: true,
+        isIndependent,
         locationRegionId: locationId,
         locationName,
         locationType,
@@ -372,6 +386,7 @@ class SnapshotBuilder {
       }
 
       const orbitBody = this.resolveOrbitBody(f, bodiesById, orbitsById);
+      const theater = spaceTheater.theaterForBody(orbitBody);
       const orbitBodyDistanceAU = this.resolveOrbitBodyDistanceAU(f, bodiesById, orbitsById, bodyDistanceAUById);
       const trajectory = Array.isArray(f.currentTrajectory) && f.currentTrajectory.length > 0 ? f.currentTrajectory[0] : null;
       const fleetWeaponBreakdown = this.summarizeWeaponCounts(fleetWeaponCounts);
@@ -390,6 +405,8 @@ class SnapshotBuilder {
         dominantWeaponType: this.getDominantWeaponType(fleetWeaponBreakdown),
         weaponSummary: this.formatWeaponSummary(fleetWeaponBreakdown),
         orbitBody,
+        spaceTheaterKey: theater.key,
+        spaceTheaterName: theater.name,
         orbitBodyDistanceAU,
         insideSaturnOrbit: saturnOrbitDistanceAU !== null && orbitBodyDistanceAU !== null
           ? orbitBodyDistanceAU <= saturnOrbitDistanceAU + 0.25
@@ -410,6 +427,7 @@ class SnapshotBuilder {
       const factionId = h.faction?.value || null;
       const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Unknown') : 'Unknown';
       const orbitBody = this.resolveOrbitBody(h, bodiesById, orbitsById);
+      const theater = spaceTheater.theaterForBody(orbitBody);
       const orbitBodyDistanceAU = this.resolveOrbitBodyDistanceAU(h, bodiesById, orbitsById, bodyDistanceAUById);
 
       habs.push({
@@ -420,6 +438,8 @@ class SnapshotBuilder {
         habType: h.habType || 'Station',
         tier: h.tier || 1,
         orbitBody,
+        spaceTheaterKey: theater.key,
+        spaceTheaterName: theater.name,
         orbitBodyDistanceAU,
         insideSaturnOrbit: saturnOrbitDistanceAU !== null && orbitBodyDistanceAU !== null
           ? orbitBodyDistanceAU <= saturnOrbitDistanceAU + 0.25
@@ -441,6 +461,7 @@ class SnapshotBuilder {
       const parentBodyId = hs.parentBody?.value || null;
       const parentBody = parentBodyId ? bodiesById.get(parentBodyId) : null;
       const parentBodyName = parentBody ? parentBody.displayName : 'Unknown';
+      const theater = spaceTheater.theaterForBody(parentBodyName);
 
       const habId = hs.hab?.value || null;
       const hab = habId ? rawHabs.find(x => x.ID?.value === habId) : null;
@@ -502,6 +523,8 @@ class SnapshotBuilder {
         displayName: hs.displayName,
         parentBodyId,
         parentBodyName,
+        spaceTheaterKey: theater.key,
+        spaceTheaterName: theater.name,
         habId,
         factionId,
         factionName,
@@ -621,7 +644,12 @@ class SnapshotBuilder {
       const fHabs = habs.filter(h => h.factionId === factionId);
       const fFleets = fleets.filter(fl => fl.factionId === factionId);
       const fShipsCount = fFleets.reduce((acc, fl) => acc + fl.shipsCount, 0);
-      const fCombatPower = fFleets.reduce((acc, fl) => acc + fl.combatPower, 0);
+      const fCombatPowerValues = fFleets
+        .map(fl => fl.combatPower)
+        .filter(value => typeof value === 'number' && Number.isFinite(value));
+      const fCombatPower = fCombatPowerValues.length > 0
+        ? Math.round(fCombatPowerValues.reduce((acc, value) => acc + value, 0))
+        : null;
 
       // Controlled CPs and Nations
       const fCPs = Array.from(controlPointsById.values()).filter(cp => cp.factionId === factionId);
@@ -637,17 +665,23 @@ class SnapshotBuilder {
       const earthPoliticsScore = Math.min(100, Math.round((fCPs.length / 50) * 100));
       const researchPowerScore = Math.min(100, Math.round((totalResearch / 5000) * 100));
       const spaceEconomyScore = Math.min(100, Math.round((fHabs.length / 20) * 100));
-      const fleetPowerScore = Math.min(100, Math.round((fCombatPower / 3000) * 100));
+      const fleetPowerScore = fCombatPower === null
+        ? null
+        : Math.min(100, Math.round((fCombatPower / 3000) * 100));
       const militaryPowerScore = Math.min(100, Math.round((fNations.reduce((acc, n) => acc + (n.nukes || 0), 0) * 20)));
 
-      const overallPower = Math.round(
-        earthEconomyScore * (scoreWeights.earthEconomy ?? 0) +
-        earthPoliticsScore * (scoreWeights.earthPolitics ?? 0) +
-        researchPowerScore * (scoreWeights.researchPower ?? 0) +
-        spaceEconomyScore * (scoreWeights.spaceEconomy ?? 0) +
-        fleetPowerScore * (scoreWeights.fleetPower ?? 0) +
-        militaryPowerScore * (scoreWeights.militaryPower ?? 0)
-      );
+      const scoreComponents = [
+        [earthEconomyScore, scoreWeights.earthEconomy],
+        [earthPoliticsScore, scoreWeights.earthPolitics],
+        [researchPowerScore, scoreWeights.researchPower],
+        [spaceEconomyScore, scoreWeights.spaceEconomy],
+        [fleetPowerScore, scoreWeights.fleetPower],
+        [militaryPowerScore, scoreWeights.militaryPower]
+      ].filter(([value, weight]) => typeof value === 'number' && Number.isFinite(value) && Number(weight) > 0);
+      const totalScoreWeight = scoreComponents.reduce((sum, [, weight]) => sum + Number(weight), 0);
+      const overallPower = totalScoreWeight > 0
+        ? Math.round(scoreComponents.reduce((sum, [value, weight]) => sum + value * Number(weight), 0) / totalScoreWeight)
+        : null;
 
       const completedProjects = Array.isArray(f.finishedProjectNames) ? f.finishedProjectNames : [];
       const availableProjects = Array.isArray(f.availableProjectNames) ? f.availableProjectNames : [];

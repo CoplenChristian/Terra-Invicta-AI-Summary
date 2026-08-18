@@ -68,7 +68,7 @@ These standalone parsers read the selected save directly and do not require rege
 To publish the newest save to Supabase so that the deployed ChatGPT Site / Worker can read the latest published intelligence data:
 
 The hosted site serves Player Intel by default and also serves the explicitly
-enabled Omniscient mode when `mode=omniscient` is requested. The two modes are
+published Enhanced and Omniscient modes when requested. The three modes are
 stored as separate rows per observer faction, and responses label the mode with
 `intelMode` / `visibility`. Raw save files are never uploaded.
 
@@ -130,7 +130,7 @@ Resource endpoints also accept `faction` / `factionId` and `body` filters.
 > - NEVER put `SUPABASE_SERVICE_ROLE_KEY` into `public/`, `dist/`, browser code, Cloudflare environment variables, worker source, or any git commit.
 > - The hosted worker and web dashboard MUST only use `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (anon key).
 > - Never commit real credentials, `.env` files, `.gz` save files, or raw unredacted save exports.
-> - This campaign intentionally publishes both Player Intel and Omniscient snapshots because the user requested the game-state details to be available on the hosted site.
+> - This campaign intentionally publishes Player Intel, Enhanced, and Omniscient snapshots because the user requested the game-state details to be available on the hosted site.
 
 ### 4. Deploying the Hosted Site
 After running the publisher:

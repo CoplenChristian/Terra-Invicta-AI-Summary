@@ -70,6 +70,21 @@ async function testWithLiveSupabase(supabaseUrl, anonKey, serviceRoleKey, campai
     console.log(`  ✓ Public SELECT succeeded (found ${publicOmniscient?.length || 0} omniscient snapshots).`);
   }
 
+  // Test 2c: Public SELECT on explicitly labeled Enhanced snapshots
+  console.log('\n[Test 2c] Public SELECT on enhanced snapshots...');
+  const { data: publicEnhanced, error: pubEnhancedErr } = await publicClient
+    .from('player_intel_snapshots')
+    .select('id, observer_faction_id, observer_faction_name, visibility, save_filename')
+    .eq('campaign_key', campaignKey)
+    .eq('visibility', 'enhanced')
+    .limit(5);
+
+  if (pubEnhancedErr) {
+    console.error(`  ✕ Public Enhanced SELECT failed: ${pubEnhancedErr.message}`);
+  } else {
+    console.log(`  ✓ Public SELECT succeeded (found ${publicEnhanced?.length || 0} enhanced snapshots).`);
+  }
+
   // Test 3: Public INSERT on campaigns (Must FAIL under RLS)
   console.log('\n[Test 3] Public INSERT on campaigns (RLS rejection expected)...');
   const { error: pubInsertErr } = await publicClient

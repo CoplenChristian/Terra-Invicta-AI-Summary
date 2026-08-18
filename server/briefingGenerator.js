@@ -6,6 +6,9 @@
  * for the Executive Council in Mission Control v2.
  */
 
+const snapshotIdentity = require('./snapshotIdentity');
+const strategicIntelligence = require('./strategicIntelligence');
+
 class BriefingGenerator {
   generateMissionControlBriefing(snapshot = {}, rawSnapshot = null) {
     const metadata = snapshot.metadata || {};
@@ -33,6 +36,8 @@ class BriefingGenerator {
     const mode = snapshot.mode || (snapshot.isOmniscient ? 'omniscient' : 'player');
     const visibility = snapshot.visibility || `${mode} filtered intelligence`;
     const capabilities = snapshot.capabilities || {};
+    const identity = snapshotIdentity.readSnapshotIdentity(rawSnapshot || snapshot);
+    const strategic = strategicIntelligence.build(snapshot, observerId);
 
     const getPowerOverall = (f) => {
       if (!f) return null;
@@ -128,7 +133,8 @@ class BriefingGenerator {
     const operativeRoster = this.buildOperativeRoster(councilors, observerId);
 
     return {
-      generatedAt: new Date().toISOString(),
+      ...identity,
+      generatedAt: identity.generatedAt || new Date().toISOString(),
       campaignDate: metadata.gameTimeString || 'Unknown',
       mode,
       intelMode: mode,
@@ -149,7 +155,9 @@ class BriefingGenerator {
         research: researchDirectives
       },
       theaters: theaterStatus,
-      operatives: operativeRoster
+      operatives: operativeRoster,
+      strategic,
+      changesSincePrevious: snapshot.changesSincePrevious || { available: false, message: 'No previous snapshot comparison is available.' }
     };
   }
 
@@ -242,9 +250,9 @@ class BriefingGenerator {
 
     // Paragraph 1: Dynamic Geopolitical Stance
     const rivalText = topFaction.displayName && !this.sameId(topFaction.ID, observerId)
-      ? ` The strongest visible rival is ${leadingFactionName} (Power Index: ${this.formatPower(topFactionPower)}/100).`
+      ? ` The strongest visible rival is ${leadingFactionName} (composite score estimate: ${this.formatPower(topFactionPower)}/100).`
       : ' No opposing faction has a confirmed higher visible power score.';
-    const p1 = `As of ${metadata.gameTimeString || 'the current operational cycle'}, ${observerLabel} ${rankText} with a Strategic Power Index of ${powerText}/100. Its network commands ${this.formatCount(controlPoints)} control points across ${this.formatCount(controlledNationCount)} nations, representing $${gdpTrillion}T in terrestrial GDP and ${this.formatCount(researchPts)} monthly scientific output.${rivalText} Current reserves: ${resourceText}.`;
+    const p1 = `As of ${metadata.gameTimeString || 'the current operational cycle'}, ${observerLabel} ${rankText} with a composite strategic score estimate of ${powerText}/100. Its network commands ${this.formatCount(controlPoints)} control points across ${this.formatCount(controlledNationCount)} nations, representing $${gdpTrillion}T in terrestrial GDP and ${this.formatCount(researchPts)} monthly scientific output.${rivalText} Current reserves: ${resourceText}.`;
 
     // Paragraph 2: Priority Target / Geopolitical Visibility
     let p2;

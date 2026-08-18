@@ -1,5 +1,7 @@
 import { staticAssets } from './static-assets.js';
 
+const HOSTED_MODES = new Set(['player', 'enhanced', 'omniscient']);
+
 /**
  * Hosted Cloudflare / Edge Worker API
  *
@@ -53,8 +55,14 @@ const asset = async (env, request, pathname) => {
 };
 
 const observerFile = (observerId, suffix) => {
-  const safeObserverId = /^\d+$/.test(observerId || '') ? observerId : '4712';
-  return `/data/${suffix}-player-${safeObserverId}.json`;
+  return `/data/${suffix}-player-${observerId}.json`;
+};
+
+const corsHeaders = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-allow-headers': 'Content-Type, Authorization',
+  'access-control-max-age': '86400'
 };
 
 const jsonResponse = (body, status = 200) => {
@@ -62,8 +70,10 @@ const jsonResponse = (body, status = 200) => {
     status,
     headers: {
       'content-type': 'application/json; charset=utf-8',
-      'access-control-allow-origin': '*',
-      'cache-control': 'public, max-age=60, s-maxage=60'
+      ...corsHeaders,
+      'cache-control': status >= 400 ? 'no-store' : 'public, max-age=60, s-maxage=60',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer'
     }
   });
 };
@@ -91,8 +101,8 @@ async function querySupabase(env, pathWithParams) {
 
 async function fetchFromSupabase(env, observerId, requestedMode = 'player') {
   const campaignKey = env.SUPABASE_CAMPAIGN_KEY || 'initiative';
-  const safeObserverId = /^\d+$/.test(observerId || '') ? observerId : '4712';
-  const mode = requestedMode === 'omniscient' ? 'omniscient' : 'player';
+  const safeObserverId = String(observerId);
+  const mode = requestedMode;
 
   // Step 1: Query active public campaign pointer
   const campaigns = await querySupabase(
@@ -125,6 +135,26 @@ async function fetchFromSupabase(env, observerId, requestedMode = 'player') {
 
   const row = snapshots[0];
   const payload = row.snapshot;
+  const identity = {
+    snapshotId: payload?.snapshotId || null,
+    saveHash: payload?.saveHash || null,
+    saveModifiedAt: payload?.saveModifiedAt || row.save_last_modified || null,
+    generatedAt: payload?.generatedAt || row.generated_at || null
+  };
+  if (!identity.snapshotId || !identity.saveHash || !identity.saveModifiedAt || !identity.generatedAt) {
+    return {
+      found: false,
+      status: 409,
+      error: 'Published snapshot is missing its consistency identity. Republish the latest save before reading it.'
+    };
+  }
+  if (campaign.current_save_last_modified && new Date(identity.saveModifiedAt).getTime() !== new Date(campaign.current_save_last_modified).getTime()) {
+    return {
+      found: false,
+      status: 409,
+      error: `MIXED / STALE INTELLIGENCE: campaign pointer is ${campaign.current_save_last_modified}, dataset is ${identity.saveModifiedAt}.`
+    };
+  }
   if (payload) {
     payload.mode = mode;
     payload.isOmniscient = mode === 'omniscient';
@@ -163,7 +193,9 @@ const snapshotEnvelope = (result, format = 'compact') => {
     intelMode: result.mode || row.visibility || 'player',
     visibility: row.visibility || result.mode || 'player',
     snapshot: result.snapshot,
-    markdown
+    markdown,
+    snapshotId: result.snapshot?.snapshotId || row.snapshot?.snapshotId || null,
+    saveHash: result.snapshot?.saveHash || row.snapshot?.saveHash || null
   };
 };
 
@@ -173,7 +205,7 @@ const markdownSnapshotResponse = (envelope) => new Response(
     status: 200,
     headers: {
       'content-type': 'text/markdown; charset=utf-8',
-      'access-control-allow-origin': '*',
+      ...corsHeaders,
       'cache-control': 'public, max-age=60, s-maxage=60'
     }
   }
@@ -181,7 +213,17 @@ const markdownSnapshotResponse = (envelope) => new Response(
 
 const asArray = (value) => Array.isArray(value) ? value : [];
 
-const numericQuery = (value) => /^\d+$/.test(String(value || '')) ? Number(value) : null;
+const numericQuery = (value) => {
+  if (!/^\d+$/.test(String(value || ''))) return null;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : null;
+};
+
+const normalizeBody = (value) => String(value || '')
+  .trim()
+  .replace(/^\d+\s+/, '')
+  .replace(/\s+/g, ' ')
+  .toLowerCase();
 
 const factionMatches = (item, factionId) => {
   if (factionId === null) return true;
@@ -192,7 +234,19 @@ const factionMatches = (item, factionId) => {
 
 const bodyMatches = (item, body) => {
   if (!body) return true;
-  return String(item.orbitBody || item.parentBodyName || '').toLowerCase() === body.toLowerCase();
+  return normalizeBody(item.orbitBody || item.parentBodyName) === normalizeBody(body);
+};
+
+const validateResourceQuery = (url) => {
+  const faction = url.searchParams.get('faction') || url.searchParams.get('factionId');
+  if (faction !== null && numericQuery(faction) === null) {
+    return `Invalid faction filter '${faction}'. Use a positive numeric id.`;
+  }
+  const body = url.searchParams.get('body');
+  if (body !== null && (body.length > 80 || /[\u0000-\u001f\u007f]/.test(body))) {
+    return 'Invalid body filter. Use a short body name such as Ceres.';
+  }
+  return null;
 };
 
 const factionResourceRow = (faction) => ({
@@ -405,12 +459,15 @@ const researchResourceRows = (snapshot) => {
 
 const resourceEnvelope = (result, resource, items, query = {}, extra = {}) => {
   const row = result.row;
+  const snapshot = result.snapshot || {};
   return {
     success: true,
     source: 'supabase',
     resource,
     generatedAt: row.generated_at || null,
     saveModifiedAt: row.save_last_modified,
+    snapshotId: snapshot.snapshotId || null,
+    saveHash: snapshot.saveHash || null,
     saveFilename: row.save_filename,
     campaignDate: row.game_time,
     difficulty: row.difficulty,
@@ -421,8 +478,8 @@ const resourceEnvelope = (result, resource, items, query = {}, extra = {}) => {
     intelMode: result.mode || row.visibility || 'player',
     visibility: row.visibility || result.mode || 'player',
     query,
-    count: Array.isArray(items) ? items.length : undefined,
-    items,
+    count: items === null ? null : (Array.isArray(items) ? items.length : 0),
+    items: Array.isArray(items) ? items : [],
     ...extra
   };
 };
@@ -535,7 +592,7 @@ const buildIntelResource = (result, resource, url) => {
       });
     }
     case 'capabilities':
-      return resourceEnvelope(result, resource, null, query, {
+      return resourceEnvelope(result, resource, [], query, {
         capabilities: snapshot.capabilities || {},
         activeXenoforming: snapshot.activeXenoforming || [],
         builtAlienFacilities: snapshot.builtAlienFacilities || []
@@ -543,12 +600,17 @@ const buildIntelResource = (result, resource, url) => {
     case 'alien': {
       const alienFaction = asArray(snapshot.factions).find(faction => faction.ID === 4717 || faction.displayName === 'the Aliens');
       const alienId = alienFaction?.ID;
+      const councilors = asArray(snapshot.councilors).filter(councilor => councilor.factionId === alienId).map(councilor => councilorResourceRow(councilor, result.mode));
+      const fleets = asArray(snapshot.fleets).filter(fleet => fleet.factionId === alienId && bodyMatches(fleet, body)).map(fleetResourceRow);
+      const habs = asArray(snapshot.habs).filter(hab => hab.factionId === alienId && bodyMatches(hab, body)).map(habResourceRow);
+      const habSites = asArray(snapshot.habSites).filter(site => site.factionId === alienId && bodyMatches(site, body)).map(habSiteResourceRow);
       return resourceEnvelope(result, resource, null, query, {
         faction: alienFaction ? factionResourceRow(alienFaction) : null,
-        councilors: asArray(snapshot.councilors).filter(councilor => councilor.factionId === alienId).map(councilor => councilorResourceRow(councilor, result.mode)),
-        fleets: asArray(snapshot.fleets).filter(fleet => fleet.factionId === alienId && bodyMatches(fleet, body)).map(fleetResourceRow),
-        habs: asArray(snapshot.habs).filter(hab => hab.factionId === alienId && bodyMatches(hab, body)).map(habResourceRow),
-        habSites: asArray(snapshot.habSites).filter(site => site.factionId === alienId && bodyMatches(site, body)).map(habSiteResourceRow),
+        count: councilors.length + fleets.length + habs.length + habSites.length,
+        councilors,
+        fleets,
+        habs,
+        habSites,
         activeXenoforming: snapshot.activeXenoforming || [],
         builtAlienFacilities: snapshot.builtAlienFacilities || []
       });
@@ -563,8 +625,19 @@ const buildIntelResource = (result, resource, url) => {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
     const observerId = url.searchParams.get('observer') || '4712';
-    const mode = url.searchParams.get('mode') === 'omniscient' ? 'omniscient' : 'player';
+    if (!/^\d+$/.test(observerId) || !Number.isSafeInteger(Number(observerId)) || Number(observerId) <= 0) {
+      return jsonResponse({ success: false, error: `Invalid observer faction '${observerId}'.` }, 400);
+    }
+    const requestedMode = String(url.searchParams.get('mode') || 'player').toLowerCase();
+    if (!HOSTED_MODES.has(requestedMode)) {
+      return jsonResponse({ success: false, error: `Unsupported hosted intelligence mode '${requestedMode}'. Use player, enhanced, or omniscient.` }, 400);
+    }
+    const mode = requestedMode;
     const isSupabaseConfigured = !!(env.SUPABASE_URL && (env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY));
 
     // The browser uses this capability check to decide whether to show the
@@ -577,7 +650,7 @@ export default {
         environment: 'hosted',
         canPublish: false,
         canRefresh: true,
-        supportedModes: ['player', 'omniscient'],
+        supportedModes: Array.from(HOSTED_MODES),
         defaultMode: 'player',
         source: 'hosted-worker'
       });
@@ -609,6 +682,11 @@ export default {
           }
           return jsonResponse({
             success: true,
+            snapshotId: snapshot.snapshotId,
+            saveHash: snapshot.saveHash,
+            saveModifiedAt: snapshot.saveModifiedAt,
+            generatedAt: snapshot.generatedAt,
+            campaignDate: snapshot.metadata?.gameTimeString || null,
             briefing: snapshot.missionControlBriefing,
             data: snapshot,
             source: 'supabase'
@@ -618,8 +696,8 @@ export default {
         }
       }
 
-      if (mode === 'omniscient') {
-        return jsonResponse({ success: false, error: 'Omniscient briefings require the published Supabase backend.' }, 503);
+      if (mode !== 'player') {
+        return jsonResponse({ success: false, error: `${mode[0].toUpperCase()}${mode.slice(1)} briefings require the published Supabase backend.` }, 503);
       }
 
       const staticResponse = await asset(env, request, observerFile(observerId, 'snapshot'));
@@ -628,6 +706,11 @@ export default {
       const snapshot = staticPayload.data || {};
       return jsonResponse({
         success: true,
+        snapshotId: snapshot.snapshotId || null,
+        saveHash: snapshot.saveHash || null,
+        saveModifiedAt: snapshot.saveModifiedAt || null,
+        generatedAt: snapshot.generatedAt || null,
+        campaignDate: snapshot.metadata?.gameTimeString || null,
         briefing: snapshot.missionControlBriefing || null,
         data: snapshot,
         source: 'static'
@@ -638,6 +721,8 @@ export default {
     // call returns one focused collection instead of the entire nested snapshot.
     const resource = intelResource(url.pathname);
     if (resource) {
+      const queryError = validateResourceQuery(url);
+      if (queryError) return jsonResponse({ success: false, error: queryError }, 400);
       if (!isSupabaseConfigured) {
         return jsonResponse({ success: false, error: 'Hosted Supabase is not configured.' }, 503);
       }
@@ -661,7 +746,16 @@ export default {
           if (!result.found) {
             return jsonResponse({ success: false, error: result.error }, result.status);
           }
-          return jsonResponse({ success: true, data: result.snapshot, source: 'supabase' });
+          return jsonResponse({
+            success: true,
+            snapshotId: result.snapshot?.snapshotId || null,
+            saveHash: result.snapshot?.saveHash || null,
+            saveModifiedAt: result.snapshot?.saveModifiedAt || null,
+            generatedAt: result.snapshot?.generatedAt || null,
+            campaignDate: result.snapshot?.metadata?.gameTimeString || null,
+            data: result.snapshot,
+            source: 'supabase'
+          });
         } catch (err) {
           return jsonResponse({ success: false, error: err.message }, 500);
         }
@@ -715,7 +809,22 @@ export default {
           const markdown = format === 'full'
             ? (exp.full || exp.compact || '')
             : (exp.compact || exp.full || '');
-          return jsonResponse({ success: true, markdown, source: 'supabase' });
+          return jsonResponse({
+            success: true,
+            markdown,
+            source: 'supabase',
+            snapshotId: result.snapshot?.snapshotId || null,
+            saveHash: result.snapshot?.saveHash || null,
+            saveModifiedAt: result.snapshot?.saveModifiedAt || result.row.save_last_modified || null,
+            generatedAt: result.snapshot?.generatedAt || result.row.generated_at || null,
+            campaignDate: result.row.game_time || null,
+            observerFaction: {
+              id: result.row.observer_faction_id,
+              name: result.row.observer_faction_name
+            },
+            intelMode: result.mode,
+            visibility: result.row.visibility || result.mode
+          });
         } catch (err) {
           return jsonResponse({ success: false, error: err.message }, 500);
         }
