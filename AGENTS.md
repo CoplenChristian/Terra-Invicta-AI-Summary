@@ -61,6 +61,8 @@ These standalone parsers read the selected save directly and do not require rege
 - Local dashboard runs with `node server/index.js` or `.\start_dashboard.ps1`.
 - **Local mode does NOT depend on Supabase** and requires no Supabase environment variables.
 - It dynamically reads the newest save from the user's Terra Invicta saves folder and supports local switching between `Player Intel`, `Enhanced`, and `Omniscient` modes on `http://localhost:3000`.
+- In local/dev mode, the header's **Publish Latest Save** button invokes the same publisher as `push_latest_to_supabase.ps1`, then reloads the local dashboard from disk. It is shown only after `/api/runtime` confirms a local/dev runtime.
+- The hosted worker reports `canPublish: false`, so the publish control stays hidden on the public site; publishing always remains a local action using the local-only service role key.
 
 ### 2. Publishing to Hosted Supabase
 To publish the newest save to Supabase so that the deployed ChatGPT Site / Worker can read the latest published intelligence data:

@@ -29,6 +29,7 @@ class SnapshotBuilder {
     const rawAlienFacilities = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIRegionAlienFacilityState');
     const rawXenoforming = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIRegionXenoformingState');
     const rawGlobalResearch = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIGlobalResearchState');
+    const rawMissions = this.getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIMissionState');
 
     const factionIntelligence = {};
     for (const f of rawFactions) {
@@ -46,6 +47,16 @@ class SnapshotBuilder {
         factionsById.set(f.ID.value, f);
         factionsByName.set(f.displayName, f);
       }
+    }
+
+    const nationsById = new Map();
+    for (const n of rawNations) {
+      if (n.ID?.value) nationsById.set(n.ID.value, n);
+    }
+
+    const habsById = new Map();
+    for (const h of rawHabs) {
+      if (h.ID?.value) habsById.set(h.ID.value, h);
     }
 
     const bodiesById = new Map();
@@ -88,6 +99,28 @@ class SnapshotBuilder {
     const orgsById = new Map();
     for (const org of rawOrgs) {
       if (org.ID?.value) orgsById.set(org.ID.value, org);
+    }
+
+    const missionsById = new Map();
+    for (const m of rawMissions) {
+      if (m.ID?.value) {
+        const targetId = m.target?.value || null;
+        let targetName = null;
+        if (targetId) {
+          targetName = regionsById.get(targetId)?.displayName ||
+                       nationsById.get(targetId)?.displayName ||
+                       habsById.get(targetId)?.displayName ||
+                       null;
+        }
+        missionsById.set(m.ID.value, {
+          id: m.ID.value,
+          displayName: m.displayName || m.templateName || 'Assigned Mission',
+          templateName: m.templateName,
+          targetId,
+          targetName,
+          outcome: m.missionOutcome || 'In Progress'
+        });
+      }
     }
 
     const shipsById = new Map();
@@ -186,14 +219,23 @@ class SnapshotBuilder {
       const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Independent') : 'Independent';
       const isAlien = !!(c.typeTemplateName && c.typeTemplateName.toLowerCase().includes('alien')) || factionName === 'the Aliens';
 
-      const locationRegionId = c.location?.value || null;
-      const locationRegion = locationRegionId ? regionsById.get(locationRegionId) : null;
-      const locationName = locationRegion ? locationRegion.displayName : 'In Transit / Orbit';
+      const locationId = c.location?.value || c.location || null;
+      const locationRegion = locationId ? regionsById.get(locationId) : null;
+      const locationHab = locationId ? habsById.get(locationId) : null;
+      const locationName = locationRegion ? locationRegion.displayName : (locationHab ? locationHab.displayName : 'In Transit / Orbit');
+      const locationType = locationRegion ? 'Earth Region' : (locationHab ? (locationHab.habType || 'Station / Base') : 'In Transit');
+
+      const homeRegionId = c.homeRegion?.value || null;
+      const homeRegionName = homeRegionId ? (regionsById.get(homeRegionId)?.displayName || 'Unknown') : 'Unknown';
 
       const agentForFactionId = c.agentForFaction?.value || null;
       const agentForFactionName = agentForFactionId ? (factionsById.get(agentForFactionId)?.displayName || null) : null;
 
       const seenByFactionIds = Array.isArray(c.knowsIveBeenSeenBy) ? c.knowsIveBeenSeenBy.map(x => x.value || x) : [];
+
+      const activeMissionObj = c.activeMission?.value ? missionsById.get(c.activeMission.value) : null;
+      const activeMissionName = activeMissionObj ? activeMissionObj.displayName : (c.priorMissionTemplateName ? `Prior: ${c.priorMissionTemplateName}` : 'Idle / Standby');
+      const activeMissionTarget = activeMissionObj ? activeMissionObj.targetName : null;
 
       const assignedOrgs = [];
       if (Array.isArray(c.orgs)) {
@@ -201,16 +243,61 @@ class SnapshotBuilder {
           const orgId = orgRef.value || orgRef;
           const orgObj = orgsById.get(orgId);
           if (orgObj) {
+            const bonuses = [];
+            if (orgObj.administration) bonuses.push(`+${orgObj.administration} ADM`);
+            if (orgObj.persuasion) bonuses.push(`+${orgObj.persuasion} PER`);
+            if (orgObj.investigation) bonuses.push(`+${orgObj.investigation} INV`);
+            if (orgObj.espionage) bonuses.push(`+${orgObj.espionage} ESP`);
+            if (orgObj.command) bonuses.push(`+${orgObj.command} CMD`);
+            if (orgObj.science) bonuses.push(`+${orgObj.science} SCI`);
+            if (orgObj.security) bonuses.push(`+${orgObj.security} SEC`);
+            if (orgObj.incomeMoney_month) bonuses.push(`$${orgObj.incomeMoney_month > 0 ? '+' : ''}${orgObj.incomeMoney_month}/mo`);
+            if (orgObj.incomeInfluence_month) bonuses.push(`+${orgObj.incomeInfluence_month} Inf/mo`);
+            if (orgObj.incomeOps_month) bonuses.push(`+${orgObj.incomeOps_month} Ops/mo`);
+            if (orgObj.incomeBoost_month) bonuses.push(`+${orgObj.incomeBoost_month} Boost/mo`);
+
             assignedOrgs.push({
               id: orgId,
               displayName: orgObj.displayName,
               templateName: orgObj.templateName,
               stars: orgObj.tier || 1,
-              income: orgObj.income || null
+              tier: orgObj.tier || 1,
+              bonusesText: bonuses.join(', '),
+              statBonuses: {
+                adm: orgObj.administration || 0,
+                per: orgObj.persuasion || 0,
+                inv: orgObj.investigation || 0,
+                esp: orgObj.espionage || 0,
+                cmd: orgObj.command || 0,
+                sci: orgObj.science || 0,
+                sec: orgObj.security || 0
+              },
+              income: {
+                money: orgObj.incomeMoney_month || 0,
+                influence: orgObj.incomeInfluence_month || 0,
+                ops: orgObj.incomeOps_month || 0,
+                boost: orgObj.incomeBoost_month || 0
+              }
             });
           }
         }
       }
+
+      const attrs = {
+        Persuasion: c.attributes?.Persuasion ?? 0,
+        Investigation: c.attributes?.Investigation ?? 0,
+        Espionage: c.attributes?.Espionage ?? 0,
+        Command: c.attributes?.Command ?? 0,
+        Administration: c.attributes?.Administration ?? 0,
+        Science: c.attributes?.Science ?? 0,
+        Security: c.attributes?.Security ?? 0,
+        Loyalty: c.attributes?.Loyalty ?? 0,
+        ApparentLoyalty: c.attributes?.ApparentLoyalty ?? 0
+      };
+
+      const totalSkills = attrs.Persuasion + attrs.Investigation + attrs.Espionage +
+                          attrs.Command + attrs.Administration + attrs.Science +
+                          attrs.Security;
 
       councilors.push({
         ID: councilorId,
@@ -222,26 +309,24 @@ class SnapshotBuilder {
         factionName,
         isAlien,
         status: c.status || 'Active',
-        locationRegionId,
+        locationRegionId: locationId,
         locationName,
-        attributes: {
-          Persuasion: c.attributes?.Persuasion ?? 0,
-          Investigation: c.attributes?.Investigation ?? 0,
-          Espionage: c.attributes?.Espionage ?? 0,
-          Command: c.attributes?.Command ?? 0,
-          Administration: c.attributes?.Administration ?? 0,
-          Science: c.attributes?.Science ?? 0,
-          Security: c.attributes?.Security ?? 0,
-          Loyalty: c.attributes?.Loyalty ?? 0,
-          ApparentLoyalty: c.attributes?.ApparentLoyalty ?? 0
-        },
+        locationType,
+        homeRegionName,
+        attributes: attrs,
+        totalSkills,
         traits: Array.isArray(c.traitTemplateNames) ? c.traitTemplateNames : [],
         orgs: assignedOrgs,
+        activeMissionName,
+        activeMissionTarget,
         priorMissionTemplateName: c.priorMissionTemplateName || null,
         activeMission: c.activeMission?.value || null,
         agentForFactionId,
         agentForFactionName,
-        seenByFactionIds
+        seenByFactionIds,
+        xp: c.XP || 0,
+        gender: c.gender || '',
+        dateBorn: c.dateBorn || null
       });
     }
 

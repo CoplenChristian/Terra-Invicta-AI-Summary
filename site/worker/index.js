@@ -561,6 +561,27 @@ export default {
     const mode = url.searchParams.get('mode') === 'omniscient' ? 'omniscient' : 'player';
     const isSupabaseConfigured = !!(env.SUPABASE_URL && (env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY));
 
+    // The browser uses this capability check to decide whether to show the
+    // local publisher control. Hosted deployments are intentionally read-only:
+    // they can read published snapshots but never receive the service key or
+    // execute a local save parser.
+    if (url.pathname === '/api/runtime') {
+      return jsonResponse({
+        success: true,
+        environment: 'hosted',
+        canPublish: false,
+        canRefresh: true,
+        source: 'hosted-worker'
+      });
+    }
+
+    if (url.pathname === '/api/publish') {
+      return jsonResponse({
+        success: false,
+        error: 'Publishing is available only from the local dashboard.'
+      }, 404);
+    }
+
     // Flat resource endpoints are designed for external analysis tools. Each
     // call returns one focused collection instead of the entire nested snapshot.
     const resource = intelResource(url.pathname);

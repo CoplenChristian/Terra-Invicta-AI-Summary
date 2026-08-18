@@ -199,6 +199,37 @@ body {
   box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
 }
 
+.btn-publish {
+  background: #14532d;
+  color: #dcfce7;
+  border: 1px solid #22c55e;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  font-family: var(--font-mono);
+}
+
+.btn-publish:hover {
+  background: #166534;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.45);
+}
+
+.btn-publish:disabled {
+  opacity: 0.65;
+  cursor: wait;
+  box-shadow: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
 /* Save Meta Bar */
 .save-meta-bar {
   background: #0d1322;

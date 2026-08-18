@@ -6,6 +6,7 @@
   <title>Terra Invicta // Strategic Intelligence & Command</title>
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/components.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⬢</text></svg>">
 </head>
 <body>
 
@@ -46,6 +47,11 @@
       <button id="btnRefresh" class="btn-refresh" title="Reload newest save file from disk">
         <span>⟳</span> Refresh Latest Save
       </button>
+
+      <!-- Local/dev only: hidden until /api/runtime confirms publishing is safe. -->
+      <button id="btnPublishLatest" class="btn-publish hidden" title="Publish newest save to hosted Supabase">
+        <span>⬆</span> Publish Latest Save
+      </button>
     </div>
   </header>
 
@@ -82,6 +88,10 @@
       <a href="#overview" class="nav-item active" data-tab="overview">
         <span class="nav-icon">📊</span>
         <span>Strategic Balance</span>
+      </a>
+      <a href="#councilors" class="nav-item" data-tab="councilors">
+        <span class="nav-icon">👤</span>
+        <span>Councilors</span>
       </a>
       <a href="#earth" class="nav-item" data-tab="earth">
         <span class="nav-icon">🌍</span>
@@ -152,7 +162,90 @@
         </div>
       </section>
 
-      <!-- 2. Earth Operations -->
+      <!-- 2. Dedicated Councilors Screen -->
+      <section id="section-councilors" class="content-section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>👤</span>
+            <span>Council Intelligence & Operations</span>
+            <span id="councilorsTotalCountBadge" class="chip chip-info" style="font-size: 11px; margin-left: 10px;">0 Councilors</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btnCouncilorViewCards" class="filter-btn active" data-council-view="cards">🎴 Cards View</button>
+            <button id="btnCouncilorViewTable" class="filter-btn" data-council-view="table">📋 Skills Table View</button>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="filter-bar" style="background: var(--bg-card); padding: 14px; border-radius: 8px; border: 1px solid var(--border-dim); margin-bottom: 20px;">
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; width: 100%;">
+            <input type="text" id="councilorMainSearch" class="search-input" placeholder="Search by name, profession, location, org, trait..." style="flex: 1; min-width: 240px;">
+            
+            <select id="councilorMainFactionFilter" class="observer-select" style="min-width: 170px;">
+              <option value="all">All Known Factions</option>
+            </select>
+
+            <select id="councilorProfessionFilter" class="observer-select" style="min-width: 140px;">
+              <option value="all">All Professions</option>
+            </select>
+
+            <select id="councilorStatusFilter" class="observer-select" style="min-width: 140px;">
+              <option value="all">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="moles">Turned Moles Only</option>
+              <option value="own">Own Council Only</option>
+              <option value="aliens">Alien Hydras</option>
+            </select>
+
+            <select id="councilorSortSelect" class="observer-select" style="min-width: 180px;">
+              <option value="totalSkills">Sort by Total Skills (High to Low)</option>
+              <option value="persuasion">Sort by Persuasion (PER)</option>
+              <option value="investigation">Sort by Investigation (INV)</option>
+              <option value="espionage">Sort by Espionage (ESP)</option>
+              <option value="command">Sort by Command (CMD)</option>
+              <option value="administration">Sort by Administration (ADM)</option>
+              <option value="science">Sort by Science (SCI)</option>
+              <option value="security">Sort by Security (SEC)</option>
+              <option value="loyalty">Sort by Loyalty (LOY)</option>
+              <option value="location">Sort by Location</option>
+              <option value="name">Sort by Name (A-Z)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- View Container: Cards -->
+        <div id="councilorsMainCardsView" class="grid-cards" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));"></div>
+
+        <!-- View Container: Table -->
+        <div id="councilorsMainTableView" class="table-container" style="display: none;">
+          <table class="data-table" id="councilorsSkillsTable">
+            <thead>
+              <tr>
+                <th style="cursor: pointer;" data-sort="name">Councilor</th>
+                <th style="cursor: pointer;" data-sort="faction">Faction</th>
+                <th style="cursor: pointer;" data-sort="profession">Profession</th>
+                <th style="cursor: pointer;" data-sort="status">Status</th>
+                <th style="cursor: pointer;" data-sort="location">📍 Location</th>
+                <th>🎯 Active / Prior Mission</th>
+                <th style="cursor: pointer; text-align: center;" data-sort="adm" title="Administration">ADM</th>
+                <th style="cursor: pointer; text-align: center;" data-sort="per" title="Persuasion">PER</th>
+                <th style="cursor: pointer; text-align: center;" data-sort="inv" title="Investigation">INV</th>
+                <th style="cursor: pointer; text-align: center;" data-sort="esp" title="Espionage">ESP</th>
+                <th style="cursor: pointer; text-align: center;" data-sort="cmd" title="Command">CMD</th>
+                <th style="cursor: pointer; text-align: center;" data-sort="sci" title="Science">SCI</th>
+                <th style="cursor: pointer; text-align: center;" data-sort="sec" title="Security">SEC</th>
+                <th style="cursor: pointer; text-align: center;" data-sort="loy" title="Loyalty">LOY</th>
+                <th style="cursor: pointer; text-align: center;" data-sort="total" title="Total Active Skills">Total</th>
+                <th style="text-align: center;">Orgs</th>
+                <th>Traits</th>
+              </tr>
+            </thead>
+            <tbody id="councilorsMainTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 3. Earth Operations -->
       <section id="section-earth" class="content-section">
         <div class="section-header">
           <div class="section-title">
@@ -413,6 +506,17 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- Councilor Detail Modal -->
+  <div id="councilorModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div id="councilorModalTitle" class="modal-title">👤 Councilor Dossier</div>
+        <button id="btnCloseCouncilorModal" class="modal-close-btn">&times;</button>
+      </div>
+      <div id="councilorModalBody" class="modal-body"></div>
+    </div>
   </div>
 
   <!-- Toast Notification -->

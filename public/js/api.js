@@ -5,9 +5,30 @@ const API = {
     const res = await fetch(url, options);
     const contentType = res.headers.get('content-type') || '';
     if (!res.ok || !contentType.includes('application/json')) {
-      throw new Error(`Request failed: ${res.status}`);
+      let detail = '';
+      if (contentType.includes('application/json')) {
+        const payload = await res.json().catch(() => null);
+        detail = payload?.error || '';
+      }
+      throw new Error(detail || `Request failed: ${res.status}`);
     }
     return await res.json();
+  },
+
+  async getRuntime() {
+    try {
+      return await API.requestJson('/api/runtime');
+    } catch {
+      // A missing runtime endpoint means this is an older/static hosted build.
+      // Fail closed so a publish control can never appear by accident.
+      return {
+        success: true,
+        environment: 'hosted',
+        canPublish: false,
+        canRefresh: false,
+        source: 'fallback'
+      };
+    }
   },
 
   async getStaticSnapshot(observerId = 4712) {
@@ -47,6 +68,10 @@ const API = {
     } catch {
       return API.getStaticSnapshot(observerId);
     }
+  },
+
+  async publishLatest() {
+    return await API.requestJson('/api/publish', { method: 'POST' });
   },
 
   async getExport(format = 'chatgpt', mode = 'player', observerId = 4712) {

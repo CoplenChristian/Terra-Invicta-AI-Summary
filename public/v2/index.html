@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terra Invicta // Mission Control Center</title>
+  <link rel="stylesheet" href="/v2/css/mission-control.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⬢</text></svg>">
+</head>
+<body>
+
+  <!-- Top Header & Secure Comms -->
+  <header class="mc-header">
+    <div class="mc-brand">
+      <div class="mc-brand-icon">⬢</div>
+      <div>
+        <div class="mc-brand-title">Terra Invicta // Strategic Mission Control</div>
+        <div class="mc-brand-subtitle">EXECUTIVE WAR ROOM & SITUATIONAL INTELLIGENCE BRIEFING</div>
+      </div>
+    </div>
+
+    <div class="mc-telemetry-live">
+      <div class="mc-live-dot"></div>
+      <span>SECURE COMM-LINK ACTIVE</span>
+    </div>
+
+    <div class="mc-header-controls">
+      <!-- Intel Mode Selector -->
+      <div style="display: flex; gap: 2px; background: var(--mc-bg-surface); padding: 2px; border-radius: 4px; border: 1px solid var(--mc-border-subtle);">
+        <button class="mc-btn mc-mode-btn active" data-mode="player" style="padding: 4px 8px; font-size: 10px;">PLAYER INTEL</button>
+        <button class="mc-btn mc-mode-btn" data-mode="enhanced" style="padding: 4px 8px; font-size: 10px;">ENHANCED</button>
+        <button class="mc-btn mc-mode-btn" data-mode="omniscient" style="padding: 4px 8px; font-size: 10px;">OMNISCIENT</button>
+      </div>
+
+      <!-- Observer Faction Switcher -->
+      <select id="mcObserverSelect" class="mc-select">
+        <option value="4712">the Initiative</option>
+      </select>
+
+      <!-- Refresh Telemetry -->
+      <button id="mcRefreshBtn" class="mc-btn mc-btn-primary">
+        ⟳ Refresh Telemetry
+      </button>
+
+      <!-- Return to Classic Dashboard -->
+      <a href="/" class="mc-btn" title="Switch to Database Dashboard">
+        ⮌ Classic Dashboard
+      </a>
+    </div>
+  </header>
+
+  <!-- Live Status & DEFCON HUD Bar -->
+  <div class="mc-status-bar">
+    <div class="mc-status-item">
+      <span>Operational Date:</span>
+      <span id="mcStatusDate" class="mc-status-val">Loading...</span>
+    </div>
+    <div class="mc-status-item">
+      <span>Telemetry Source:</span>
+      <span id="mcStatusSave" class="mc-status-val">-</span>
+    </div>
+    <div class="mc-status-item">
+      <span>Commanding Council:</span>
+      <span id="mcStatusObserver" class="mc-status-val">the Initiative</span>
+    </div>
+    <div class="mc-status-item">
+      <span>Strategic Power Index:</span>
+      <span id="mcStatusPower" class="mc-status-val">-</span>
+    </div>
+    <div class="mc-status-item">
+      <span>Global Alert:</span>
+      <span id="mcStatusDefcon" class="mc-defcon-badge defcon-elevated">DEFCON 3</span>
+    </div>
+  </div>
+
+  <!-- Main Mission Control Container -->
+  <main id="mcMainContainer" class="mc-container">
+
+    <!-- 1. Executive SITREP Section -->
+    <section>
+      <div class="mc-section-header">
+        <div class="mc-section-title">
+          <span>📡 EXECUTIVE SITUATION REPORT (SITREP)</span>
+        </div>
+        <button id="btnCopySitrep" class="mc-btn" style="font-size: 10.5px;">
+          📋 Copy Briefing
+        </button>
+      </div>
+
+      <div class="mc-sitrep-terminal">
+        <div class="mc-terminal-topbar">
+          <span>// CLASSIFIED STRATEGIC OVERVIEW &bull; LEVEL 5 CLEARANCE</span>
+          <span>LIVE SYNTHESIS</span>
+        </div>
+
+        <div id="mcSitrepContent" class="mc-terminal-content">
+          <p>Compiling global telemetry and parsing orbital sensor streams...</p>
+        </div>
+
+        <div id="mcHudGrid" class="mc-hud-grid">
+          <!-- Metrics dynamically populated -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Priority Directives Matrix -->
+    <section>
+      <div class="mc-section-header">
+        <div class="mc-section-title">
+          <span>⚡ STRATEGIC PRIORITY DIRECTIVES & ACTIONABLE ORDERS</span>
+        </div>
+      </div>
+
+      <!-- Department Filter Tabs -->
+      <div class="mc-directive-tabs">
+        <button class="mc-tab-btn active" data-tab="all">All Departments</button>
+        <button class="mc-tab-btn" data-tab="geo">🏛 Geopolitical Operations</button>
+        <button class="mc-tab-btn" data-tab="council">👤 Directorate of Operatives</button>
+        <button class="mc-tab-btn" data-tab="space">🚀 Aerospace & Fleet Logistics</button>
+        <button class="mc-tab-btn" data-tab="research">🔬 Technological Superiority</button>
+      </div>
+
+      <div id="mcDirectivesGrid" class="mc-directives-grid">
+        <!-- Directives dynamically injected -->
+      </div>
+    </section>
+
+    <!-- 3. Global Theater Command Matrix -->
+    <section>
+      <div class="mc-section-header">
+        <div class="mc-section-title">
+          <span>🌍 GLOBAL THEATER COMMAND MATRIX</span>
+        </div>
+      </div>
+
+      <div id="mcTheatersGrid" class="mc-theaters-grid">
+        <!-- Theaters dynamically injected -->
+      </div>
+    </section>
+
+    <!-- 4. Operative Tactical Command Board -->
+    <section>
+      <div class="mc-section-header">
+        <div class="mc-section-title">
+          <span>👤 OPERATIVE TACTICAL COMMAND ROSTER</span>
+        </div>
+      </div>
+
+      <div class="mc-operatives-table-container">
+        <table class="mc-operatives-table">
+          <thead>
+            <tr>
+              <th>Operative</th>
+              <th>Stationed Location</th>
+              <th>Active Mission</th>
+              <th>Prime Specialty</th>
+              <th>Readiness Status</th>
+              <th>Recommended Tactical Directive</th>
+            </tr>
+          </thead>
+          <tbody id="mcOperativesTableBody">
+            <!-- Operatives dynamically injected -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Interactive Toast Notification -->
+  <div id="mcToast" class="mc-toast">Telemetry updated.</div>
+
+  <script src="/v2/js/mission-control.js"></script>
+</body>
+</html>

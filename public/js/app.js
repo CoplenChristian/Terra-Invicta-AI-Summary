@@ -8,6 +8,13 @@ let state = {
   nationSearch: '',
   councilorSearch: '',
   councilorFactionFilter: 'all',
+  councilorMainSearch: '',
+  councilorMainFaction: 'all',
+  councilorProfession: 'all',
+  councilorStatus: 'all',
+  councilorSort: 'totalSkills',
+  councilorViewMode: 'cards',
+  councilorTableSort: { col: 'total', asc: false },
   earthSubView: 'nations',
   spaceSubView: 'mining',
   techSubView: 'global',
@@ -16,8 +23,21 @@ let state = {
 
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
+  initializeRuntime();
   loadData();
 });
+
+async function initializeRuntime() {
+  const publishButton = document.getElementById('btnPublishLatest');
+  if (!publishButton) return;
+
+  // Keep the control hidden unless the server explicitly identifies itself as
+  // the local/dev runtime and opts into publishing.
+  publishButton.classList.add('hidden');
+  const runtime = await API.getRuntime();
+  const localRuntime = runtime?.success && ['local', 'dev'].includes(runtime.environment);
+  publishButton.classList.toggle('hidden', !(localRuntime && runtime.canPublish === true));
+}
 
 function initEventListeners() {
   // Mode Switcher
@@ -57,6 +77,37 @@ function initEventListeners() {
     }
   });
 
+  // Local/dev only: publish the newest save, then refresh the file-backed
+  // dashboard so its in-memory snapshot matches what was just uploaded.
+  document.getElementById('btnPublishLatest')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    const originalLabel = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span>⟳</span> Publishing...';
+    showToast('Publishing the newest save to hosted Supabase...');
+
+    try {
+      const published = await API.publishLatest();
+      if (!published.success) {
+        throw new Error(published.error || 'Publish failed.');
+      }
+
+      const refreshed = await API.refresh(state.mode, state.observerId);
+      if (refreshed.success) {
+        state.snapshot = refreshed.data;
+        renderAll();
+      }
+
+      const saveLabel = published.saveFilename ? ` (${published.saveFilename})` : '';
+      showToast(`Published latest save${saveLabel}.`);
+    } catch (err) {
+      showToast('Publish failed: ' + err.message);
+    } finally {
+      button.disabled = false;
+      button.innerHTML = originalLabel;
+    }
+  });
+
   // Sidebar Navigation
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
@@ -64,6 +115,72 @@ function initEventListeners() {
       const targetTab = item.dataset.tab;
       switchTab(targetTab);
     });
+  });
+
+  // Dedicated Councilor Screen: View Mode Toggles (Cards / Table)
+  document.getElementById('btnCouncilorViewCards')?.addEventListener('click', () => {
+    state.councilorViewMode = 'cards';
+    document.getElementById('btnCouncilorViewCards').classList.add('active');
+    document.getElementById('btnCouncilorViewTable').classList.remove('active');
+    document.getElementById('councilorsMainCardsView').style.display = 'grid';
+    document.getElementById('councilorsMainTableView').style.display = 'none';
+  });
+
+  document.getElementById('btnCouncilorViewTable')?.addEventListener('click', () => {
+    state.councilorViewMode = 'table';
+    document.getElementById('btnCouncilorViewTable').classList.add('active');
+    document.getElementById('btnCouncilorViewCards').classList.remove('active');
+    document.getElementById('councilorsMainCardsView').style.display = 'none';
+    document.getElementById('councilorsMainTableView').style.display = 'block';
+  });
+
+  // Dedicated Councilor Screen: Filters & Sorts
+  document.getElementById('councilorMainSearch')?.addEventListener('input', (e) => {
+    state.councilorMainSearch = e.target.value.toLowerCase();
+    renderCouncilorsScreen();
+  });
+
+  document.getElementById('councilorMainFactionFilter')?.addEventListener('change', (e) => {
+    state.councilorMainFaction = e.target.value;
+    renderCouncilorsScreen();
+  });
+
+  document.getElementById('councilorProfessionFilter')?.addEventListener('change', (e) => {
+    state.councilorProfession = e.target.value;
+    renderCouncilorsScreen();
+  });
+
+  document.getElementById('councilorStatusFilter')?.addEventListener('change', (e) => {
+    state.councilorStatus = e.target.value;
+    renderCouncilorsScreen();
+  });
+
+  document.getElementById('councilorSortSelect')?.addEventListener('change', (e) => {
+    state.councilorSort = e.target.value;
+    renderCouncilorsScreen();
+  });
+
+  // Dedicated Councilor Screen: Table Header Sorting
+  document.querySelectorAll('#councilorsSkillsTable th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (state.councilorTableSort.col === col) {
+        state.councilorTableSort.asc = !state.councilorTableSort.asc;
+      } else {
+        state.councilorTableSort.col = col;
+        state.councilorTableSort.asc = false;
+      }
+      renderCouncilorsScreen();
+    });
+  });
+
+  // Modal Handlers
+  document.getElementById('btnCloseCouncilorModal')?.addEventListener('click', closeCouncilorModal);
+  document.getElementById('councilorModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'councilorModal') closeCouncilorModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeCouncilorModal();
   });
 
   // Earth Sub-views
@@ -112,13 +229,13 @@ function initEventListeners() {
     renderNationsTable();
   });
 
-  // Councilor Search
+  // Councilor Search (Earth tab)
   document.getElementById('councilorSearch').addEventListener('input', (e) => {
     state.councilorSearch = e.target.value.toLowerCase();
     renderCouncilorsGrid();
   });
 
-  // Councilor Faction Filter
+  // Councilor Faction Filter (Earth tab)
   document.getElementById('councilorFactionFilter').addEventListener('change', (e) => {
     state.councilorFactionFilter = e.target.value;
     renderCouncilorsGrid();
@@ -200,6 +317,7 @@ function renderAll() {
 
   renderMetadata();
   renderOverview();
+  renderCouncilorsScreen();
   renderEarth();
   renderSpace();
   renderFactionDossier();
@@ -434,7 +552,383 @@ function renderCouncilorsGrid() {
 function formatAttr(attrObj) {
   if (!attrObj) return '?';
   if (attrObj.visibility === 'unknown' || attrObj.visibility === 'unavailable') return '?';
-  return attrObj.visible !== null ? attrObj.visible : '?';
+  return attrObj.visible !== null && attrObj.visible !== undefined ? attrObj.visible : '?';
+}
+
+function renderCouncilorsScreen() {
+  if (!state.snapshot) return;
+  const rawList = state.snapshot.councilors || [];
+  let councilors = [...rawList];
+
+  // Update total count badge
+  const countBadge = document.getElementById('councilorsTotalCountBadge');
+  if (countBadge) {
+    countBadge.textContent = `${rawList.length} Discovered Councilor${rawList.length === 1 ? '' : 's'}`;
+  }
+
+  // Populate Faction filter options
+  const factionSelect = document.getElementById('councilorMainFactionFilter');
+  if (factionSelect) {
+    const factions = Array.from(new Set(rawList.map(c => c.factionName))).filter(Boolean);
+    const currVal = state.councilorMainFaction;
+    factionSelect.innerHTML = `<option value="all">All Known Factions (${rawList.length})</option>` +
+      factions.map(f => {
+        const fCount = rawList.filter(c => c.factionName === f).length;
+        return `<option value="${f}" ${currVal === f ? 'selected' : ''}>${f} (${fCount})</option>`;
+      }).join('');
+  }
+
+  // Populate Profession filter options
+  const profSelect = document.getElementById('councilorProfessionFilter');
+  if (profSelect) {
+    const profs = Array.from(new Set(rawList.map(c => c.typeTemplateName))).filter(Boolean).sort();
+    const currProf = state.councilorProfession;
+    profSelect.innerHTML = `<option value="all">All Professions (${profs.length})</option>` +
+      profs.map(p => {
+        const pCount = rawList.filter(c => c.typeTemplateName === p).length;
+        return `<option value="${p}" ${currProf === p ? 'selected' : ''}>${p} (${pCount})</option>`;
+      }).join('');
+  }
+
+  // Apply Faction Filter
+  if (state.councilorMainFaction !== 'all') {
+    councilors = councilors.filter(c => c.factionName === state.councilorMainFaction);
+  }
+
+  // Apply Profession Filter
+  if (state.councilorProfession !== 'all') {
+    councilors = councilors.filter(c => c.typeTemplateName === state.councilorProfession);
+  }
+
+  // Apply Status Filter
+  if (state.councilorStatus === 'active') {
+    councilors = councilors.filter(c => c.status === 'Active');
+  } else if (state.councilorStatus === 'moles') {
+    councilors = councilors.filter(c => c.isTurnedMole);
+  } else if (state.councilorStatus === 'own') {
+    councilors = councilors.filter(c => c.isOwnCouncilor);
+  } else if (state.councilorStatus === 'aliens') {
+    councilors = councilors.filter(c => c.isAlien);
+  }
+
+  // Apply Search Query
+  if (state.councilorMainSearch) {
+    const q = state.councilorMainSearch;
+    councilors = councilors.filter(c =>
+      c.displayName.toLowerCase().includes(q) ||
+      (c.personalName && c.personalName.toLowerCase().includes(q)) ||
+      (c.familyName && c.familyName.toLowerCase().includes(q)) ||
+      c.typeTemplateName.toLowerCase().includes(q) ||
+      c.locationName.toLowerCase().includes(q) ||
+      (c.activeMissionName && c.activeMissionName.toLowerCase().includes(q)) ||
+      (c.traits && c.traits.some(t => t.toLowerCase().includes(q))) ||
+      (c.orgs && c.orgs.some(o => o.displayName.toLowerCase().includes(q)))
+    );
+  }
+
+  // Sorting
+  const getRawAttr = (c, attr) => {
+    const a = c.maskedAttributes?.[attr] || { visible: c.attributes?.[attr] };
+    return (a && a.visible !== null && a.visible !== undefined && a.visible !== '?') ? Number(a.visible) : -1;
+  };
+
+  const sortKey = state.councilorViewMode === 'table' ? state.councilorTableSort.col : state.councilorSort;
+  const isAsc = state.councilorViewMode === 'table' ? state.councilorTableSort.asc : false;
+
+  councilors.sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === 'totalSkills' || sortKey === 'total') {
+      cmp = (b.totalSkills || 0) - (a.totalSkills || 0);
+    } else if (sortKey === 'persuasion' || sortKey === 'per') {
+      cmp = getRawAttr(b, 'Persuasion') - getRawAttr(a, 'Persuasion');
+    } else if (sortKey === 'investigation' || sortKey === 'inv') {
+      cmp = getRawAttr(b, 'Investigation') - getRawAttr(a, 'Investigation');
+    } else if (sortKey === 'espionage' || sortKey === 'esp') {
+      cmp = getRawAttr(b, 'Espionage') - getRawAttr(a, 'Espionage');
+    } else if (sortKey === 'command' || sortKey === 'cmd') {
+      cmp = getRawAttr(b, 'Command') - getRawAttr(a, 'Command');
+    } else if (sortKey === 'administration' || sortKey === 'adm') {
+      cmp = getRawAttr(b, 'Administration') - getRawAttr(a, 'Administration');
+    } else if (sortKey === 'science' || sortKey === 'sci') {
+      cmp = getRawAttr(b, 'Science') - getRawAttr(a, 'Science');
+    } else if (sortKey === 'security' || sortKey === 'sec') {
+      cmp = getRawAttr(b, 'Security') - getRawAttr(a, 'Security');
+    } else if (sortKey === 'loyalty' || sortKey === 'loy') {
+      cmp = getRawAttr(b, 'Loyalty') - getRawAttr(a, 'Loyalty');
+    } else if (sortKey === 'location') {
+      cmp = (a.locationName || '').localeCompare(b.locationName || '');
+    } else if (sortKey === 'name') {
+      cmp = (a.displayName || '').localeCompare(b.displayName || '');
+    } else if (sortKey === 'faction') {
+      cmp = (a.factionName || '').localeCompare(b.factionName || '');
+    } else if (sortKey === 'profession') {
+      cmp = (a.typeTemplateName || '').localeCompare(b.typeTemplateName || '');
+    } else if (sortKey === 'status') {
+      cmp = (a.status || '').localeCompare(b.status || '');
+    }
+    return isAsc ? -cmp : cmp;
+  });
+
+  renderCouncilorsMainCards(councilors);
+  renderCouncilorsMainTable(councilors);
+}
+
+function renderCouncilorsMainCards(councilors) {
+  const container = document.getElementById('councilorsMainCardsView');
+  if (!container) return;
+
+  if (councilors.length === 0) {
+    container.innerHTML = `<div style="grid-column: 1 / -1; color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px;">No councilors match the current search or filter criteria.</div>`;
+    return;
+  }
+
+  container.innerHTML = councilors.map(c => {
+    const fColor = getFactionColorByName(c.factionName);
+    const isMole = c.isTurnedMole;
+    const isOwn = c.isOwnCouncilor;
+
+    const renderSkillPill = (label, attrName) => {
+      const val = formatAttr(c.maskedAttributes?.[attrName]);
+      const num = typeof val === 'number' ? val : (parseInt(val, 10) || null);
+      let colorStyle = '';
+      if (num !== null && num >= 15) colorStyle = 'color: #ffd700; font-weight: 800; text-shadow: 0 0 8px rgba(255,215,0,0.4);';
+      else if (num !== null && num >= 10) colorStyle = 'color: #38bdf8; font-weight: 700;';
+      return `<div style="background: rgba(0,0,0,0.3); padding: 5px 4px; border-radius: 4px; text-align: center; border: 1px solid rgba(255,255,255,0.03);">
+        <div style="font-size: 9px; color: var(--text-muted); font-weight: 600;">${label}</div>
+        <div style="font-size: 13px; font-family: var(--font-mono); ${colorStyle}">${val}</div>
+      </div>`;
+    };
+
+    return `
+      <div class="card" style="border-left: 4px solid ${isMole ? '#d500f9' : fColor}; display: flex; flex-direction: column; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease;" onclick="openCouncilorModal('${c.ID}')" onmouseover="this.style.borderColor='var(--color-initiative)'" onmouseout="this.style.borderColor=''">
+        <div class="card-header" style="align-items: flex-start; margin-bottom: 8px;">
+          <div>
+            <div class="card-title" style="font-size: 15px; margin-bottom: 2px;">${c.displayName}</div>
+            <div style="font-size: 11px; color: ${fColor}; font-family: var(--font-mono); font-weight: 600;">
+              ${c.factionName} &bull; ${c.typeTemplateName}
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+            ${isMole ? `<span class="chip chip-mole">TURNED MOLE</span>` : ''}
+            ${c.isAlien ? `<span class="chip chip-danger">HYDRA OPERATIVE</span>` : ''}
+            ${isOwn ? `<span class="chip chip-success">OWN COUNCIL</span>` : ''}
+            <span class="chip chip-info" style="font-size: 10px;">${c.status}</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
+            <span class="location-chip" title="Current Location">📍 ${c.locationName}</span>
+            <span style="font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);">${c.locationType || 'Earth'}</span>
+          </div>
+          ${c.activeMissionName ? `
+            <div class="mission-chip" title="Assigned Mission">
+              🎯 ${c.activeMissionName}${c.activeMissionTarget ? ' &rarr; ' + c.activeMissionTarget : ''}
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Skills Grid -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 10px;">
+          ${renderSkillPill('ADM', 'Administration')}
+          ${renderSkillPill('PER', 'Persuasion')}
+          ${renderSkillPill('INV', 'Investigation')}
+          ${renderSkillPill('ESP', 'Espionage')}
+          ${renderSkillPill('CMD', 'Command')}
+          ${renderSkillPill('SCI', 'Science')}
+          ${renderSkillPill('SEC', 'Security')}
+          ${renderSkillPill('LOY', 'Loyalty')}
+        </div>
+
+        <!-- Total Skills & Traits / Orgs -->
+        <div style="margin-top: auto; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 11px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="color: var(--text-muted);">Active Skills Sum:</span>
+            <strong style="color: var(--color-initiative); font-family: var(--font-mono); font-size: 12px;">${c.totalSkills || 0}</strong>
+          </div>
+
+          ${c.traits && c.traits.length > 0 ? `
+            <div style="margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 2px;">
+              ${c.traits.slice(0, 4).map(t => `<span class="trait-tag">${t}</span>`).join('')}
+              ${c.traits.length > 4 ? `<span class="trait-tag">+${c.traits.length - 4} more</span>` : ''}
+            </div>
+          ` : ''}
+
+          ${c.orgs && c.orgs.length > 0 ? `
+            <div style="font-size: 11px; color: var(--text-muted); line-height: 1.3;">
+              <strong>Orgs (${c.orgs.length}):</strong> ${c.orgs.slice(0, 2).map(o => `${'★'.repeat(o.stars || 1)} ${o.displayName}`).join(', ')}${c.orgs.length > 2 ? ` (+${c.orgs.length - 2} more)` : ''}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderCouncilorsMainTable(councilors) {
+  const tbody = document.getElementById('councilorsMainTableBody');
+  if (!tbody) return;
+
+  if (councilors.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="17" style="text-align: center; color: var(--text-muted); padding: 30px;">No councilors match criteria.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = councilors.map(c => {
+    const fColor = getFactionColorByName(c.factionName);
+    const isMole = c.isTurnedMole;
+    const formatCell = (attr) => {
+      const val = formatAttr(c.maskedAttributes?.[attr]);
+      const num = typeof val === 'number' ? val : (parseInt(val, 10) || null);
+      if (num !== null && num >= 15) return `<span style="color: #ffd700; font-weight: 800;">${val}</span>`;
+      if (num !== null && num >= 10) return `<span style="color: #38bdf8; font-weight: 700;">${val}</span>`;
+      return val;
+    };
+
+    return `
+      <tr style="cursor: pointer;" onclick="openCouncilorModal('${c.ID}')">
+        <td>
+          <div style="font-weight: 700; color: ${isMole ? '#d500f9' : '#fff'};">${c.displayName}</div>
+          ${isMole ? `<span class="chip chip-mole" style="font-size: 9px; padding: 1px 4px;">MOLE</span>` : ''}
+          ${c.isAlien ? `<span class="chip chip-danger" style="font-size: 9px; padding: 1px 4px;">HYDRA</span>` : ''}
+        </td>
+        <td style="color: ${fColor}; font-weight: 600;">${c.factionName}</td>
+        <td>${c.typeTemplateName}</td>
+        <td><span class="chip chip-info" style="font-size: 10px;">${c.status}</span></td>
+        <td><span class="location-chip">📍 ${c.locationName}</span></td>
+        <td>${c.activeMissionName ? `<span class="mission-chip">🎯 ${c.activeMissionName}${c.activeMissionTarget ? ' &rarr; ' + c.activeMissionTarget : ''}</span>` : '<span style="color: var(--text-dim);">-</span>'}</td>
+        <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Administration')}</td>
+        <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Persuasion')}</td>
+        <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Investigation')}</td>
+        <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Espionage')}</td>
+        <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Command')}</td>
+        <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Science')}</td>
+        <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Security')}</td>
+        <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Loyalty')}</td>
+        <td style="text-align: center; font-family: var(--font-mono); font-weight: 700; color: var(--color-initiative);">${c.totalSkills || 0}</td>
+        <td style="text-align: center;" title="${(c.orgs || []).map(o => o.displayName).join(', ')}">${c.orgs?.length || 0}</td>
+        <td title="${(c.traits || []).join(', ')}">${(c.traits || []).slice(0, 2).join(', ')}${c.traits?.length > 2 ? '...' : ''}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function openCouncilorModal(councilorId) {
+  if (!state.snapshot) return;
+  const c = state.snapshot.councilors?.find(x => String(x.ID) === String(councilorId));
+  if (!c) return;
+
+  const modal = document.getElementById('councilorModal');
+  const modalTitle = document.getElementById('councilorModalTitle');
+  const modalBody = document.getElementById('councilorModalBody');
+  const fColor = getFactionColorByName(c.factionName);
+
+  modalTitle.innerHTML = `
+    <span>${c.displayName}</span>
+    <span style="font-size: 12px; color: ${fColor}; font-weight: 600;">[${c.factionName} &bull; ${c.typeTemplateName}]</span>
+  `;
+
+  const renderBar = (label, attrName, color = 'var(--color-initiative)') => {
+    const val = formatAttr(c.maskedAttributes?.[attrName]);
+    const num = typeof val === 'number' ? val : (parseInt(val, 10) || 0);
+    const pct = Math.min(100, Math.max(0, (num / 25) * 100));
+    return `
+      <div class="skill-bar-container">
+        <div class="skill-bar-label">${label}</div>
+        <div class="skill-bar-track">
+          <div class="skill-bar-fill" style="width: ${val === '?' ? 0 : pct}%; background: ${color};"></div>
+        </div>
+        <div class="skill-bar-val" style="color: ${val === '?' ? 'var(--text-dim)' : '#fff'};">${val}</div>
+      </div>
+    `;
+  };
+
+  modalBody.innerHTML = `
+    <!-- Top Meta Row -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 18px; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 6px;">
+      <div>
+        <div style="font-size: 11px; color: var(--text-muted);">Current Location</div>
+        <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">📍 ${c.locationName}</div>
+        <div style="font-size: 10px; color: var(--text-dim);">${c.locationType || 'Earth Region'}</div>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: var(--text-muted);">Assigned Mission</div>
+        <div style="font-size: 13px; font-weight: 700; color: #fbbf24;">🎯 ${c.activeMissionName || 'Standby'}</div>
+        <div style="font-size: 10px; color: var(--text-dim);">${c.activeMissionTarget ? 'Target: ' + c.activeMissionTarget : ''}</div>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: var(--text-muted);">Status & Intel</div>
+        <div>
+          ${c.isTurnedMole ? `<span class="chip chip-mole">TURNED MOLE</span>` : ''}
+          ${c.isAlien ? `<span class="chip chip-danger">HYDRA</span>` : ''}
+          <span class="chip chip-info">${c.status}</span>
+        </div>
+        <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Intel Confidence: <strong>${c.investigationConfidence || 'CONFIRMED'}</strong></div>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: var(--text-muted);">Home & Background</div>
+        <div style="font-size: 12px; font-weight: 600;">${c.homeRegionName ? 'Home: ' + c.homeRegionName : ''}</div>
+        <div style="font-size: 10px; color: var(--text-dim);">${c.gender || ''} ${c.xp ? '&bull; XP: ' + c.xp : ''}</div>
+      </div>
+    </div>
+
+    <!-- Skills Section -->
+    <div style="margin-bottom: 20px;">
+      <div style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--color-initiative); margin-bottom: 10px; display: flex; justify-content: space-between;">
+        <span>SKILLS & ATTRIBUTES (0 - 25 SCALE)</span>
+        <span>Total Active Skills: ${c.totalSkills || 0}</span>
+      </div>
+      <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-dim); border-radius: 6px; padding: 12px;">
+        ${renderBar('Administration', 'Administration', '#00e5ff')}
+        ${renderBar('Persuasion', 'Persuasion', '#ffd600')}
+        ${renderBar('Investigation', 'Investigation', '#2979ff')}
+        ${renderBar('Espionage', 'Espionage', '#d500f9')}
+        ${renderBar('Command', 'Command', '#ff1744')}
+        ${renderBar('Science', 'Science', '#00e676')}
+        ${renderBar('Security', 'Security', '#ff9100')}
+        ${renderBar('Loyalty', 'Loyalty', '#78909c')}
+      </div>
+    </div>
+
+    <!-- Traits Section -->
+    <div style="margin-bottom: 20px;">
+      <div style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 8px;">
+        TRAITS & PERKS (${c.traits?.length || 0})
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+        ${c.traits && c.traits.length > 0
+          ? c.traits.map(t => `<span class="trait-tag" style="padding: 4px 8px; font-size: 12px; background: rgba(0, 229, 255, 0.06); border-color: rgba(0, 229, 255, 0.2);">${t}</span>`).join('')
+          : '<div style="color: var(--text-dim); font-size: 12px;">No special traits recorded.</div>'}
+      </div>
+    </div>
+
+    <!-- Organizations Section -->
+    <div>
+      <div style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 8px;">
+        ASSIGNED ORGANIZATIONS (${c.orgs?.length || 0})
+      </div>
+      <div>
+        ${c.orgs && c.orgs.length > 0
+          ? c.orgs.map(o => `
+            <div class="org-item-card">
+              <div>
+                <div style="font-weight: 700; color: #fff;">${'★'.repeat(o.stars || 1)} ${o.displayName}</div>
+                <div style="font-size: 11px; color: var(--color-initiative);">${o.bonusesText || 'Operational support'}</div>
+              </div>
+              <span class="chip chip-dim" style="font-size: 10px;">Tier ${o.tier || 1}</span>
+            </div>
+          `).join('')
+          : '<div style="color: var(--text-dim); font-size: 12px;">No organizations currently assigned.</div>'}
+      </div>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+}
+
+function closeCouncilorModal() {
+  const modal = document.getElementById('councilorModal');
+  if (modal) modal.classList.add('hidden');
 }
 
 function renderServantTargets() {
