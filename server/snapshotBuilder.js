@@ -587,6 +587,32 @@ class SnapshotBuilder {
       militaryPower: 0.10
     };
 
+    // FactionHate is stored as a per-faction map in the save. Preserve it as
+    // an explicit, shallow relationship list so observer-relative screens can
+    // explain faction posture without exposing the raw save structure.
+    const factionRelationships = [];
+    for (const source of rawFactions) {
+      const sourceFactionId = source.ID?.value;
+      if (!sourceFactionId || !Array.isArray(source.factionHate)) continue;
+      for (const entry of source.factionHate) {
+        const targetFactionId = entry?.Key?.value ?? entry?.Key?.Value ?? entry?.key?.value ?? entry?.key;
+        const hate = entry?.Value ?? entry?.value;
+        if (!targetFactionId || typeof hate !== 'number' || !Number.isFinite(hate)) continue;
+        const target = rawFactions.find(f => f.ID?.value === targetFactionId);
+        if (!target) continue;
+        const roundedHate = Math.round(hate * 100) / 100;
+        factionRelationships.push({
+          sourceFactionId,
+          sourceFactionName: source.displayName,
+          targetFactionId,
+          targetFactionName: target.displayName,
+          hate: roundedHate,
+          relationship: `HATE ${roundedHate.toFixed(2)}`,
+          visibility: 'raw_save_only'
+        });
+      }
+    }
+
     for (const f of rawFactions) {
       const factionId = f.ID?.value;
       if (!factionId) continue;
@@ -789,6 +815,7 @@ class SnapshotBuilder {
         campaignStartYear: saveData.campaignStartYear
       },
       factions,
+      factionRelationships,
       nations,
       councilors,
       fleets,

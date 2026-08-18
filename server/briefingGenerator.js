@@ -7,62 +7,139 @@
  */
 
 class BriefingGenerator {
-  generateMissionControlBriefing(snapshot, rawSnapshot = null) {
-    const observerId = snapshot.observerFactionId || 4712;
-    const observerName = snapshot.observerFactionName || 'the Initiative';
+  generateMissionControlBriefing(snapshot = {}, rawSnapshot = null) {
     const metadata = snapshot.metadata || {};
-    const factions = snapshot.factions || [];
-    const observer = factions.find(f => f.ID === observerId) || factions[0] || {};
-    const councilors = snapshot.councilors || [];
-    const nations = snapshot.nations || [];
-    const servantTargets = snapshot.servantTargets || [];
-    const targetFactionName = snapshot.priorityTargetFaction?.name || 'the Servants';
+    const factions = this.asArray(snapshot.factions);
+    const requestedObserverId = this.toFiniteNumber(snapshot.observerFactionId);
+    const observer = (requestedObserverId !== null
+      ? factions.find(f => this.sameId(f.ID, requestedObserverId))
+      : null) || factions[0] || {};
+    const observerId = observer.ID ?? snapshot.observerFactionId ?? null;
+    const observerName = observer.displayName || snapshot.observerFactionName || 'the selected faction';
+    const councilors = this.asArray(snapshot.councilors);
+    const nations = this.asArray(snapshot.nations);
+    const targetEntries = this.asArray(snapshot.servantTargets);
+    const priorityTarget = snapshot.priorityTargetFaction || {};
+    const priorityTargetId = priorityTarget.id ?? priorityTarget.ID ?? priorityTarget.factionId ?? targetEntries[0]?.targetFactionId ?? null;
+    const targetFaction = factions.find(f => this.sameId(f.ID, priorityTargetId));
+    const targetFactionName = targetFaction?.displayName || priorityTarget.name || targetEntries[0]?.targetFactionName || null;
     const activeAlienStages = snapshot.alienIntelligenceStage || {};
-    const xenoforming = snapshot.activeXenoforming || [];
-    const globalResearch = snapshot.globalResearch || [];
-    const habs = snapshot.habs || [];
-    const fleets = snapshot.fleets || [];
-    const habSites = snapshot.habSites || [];
+    const xenoforming = this.asArray(snapshot.activeXenoforming);
+    const builtAlienFacilities = this.asArray(snapshot.builtAlienFacilities);
+    const globalResearch = this.getResearchSlots(snapshot.globalResearch);
+    const habs = this.asArray(snapshot.habs);
+    const fleets = this.asArray(snapshot.fleets);
+    const habSites = this.asArray(snapshot.habSites);
+    const mode = snapshot.mode || (snapshot.isOmniscient ? 'omniscient' : 'player');
+    const visibility = snapshot.visibility || `${mode} filtered intelligence`;
+    const capabilities = snapshot.capabilities || {};
 
-    // Calculate Strategic Rank
-    const sortedFactions = [...factions].sort((a, b) => (b.powerScore || 0) - (a.powerScore || 0));
-    const observerRank = sortedFactions.findIndex(f => f.ID === observerId) + 1;
-    const topFaction = sortedFactions[0] || observer;
+    const getPowerOverall = (f) => {
+      if (!f) return null;
+      const powerValue = typeof f.powerScore === 'number'
+        ? f.powerScore
+        : f.powerScore?.overall;
+      return this.toFiniteNumber(powerValue);
+    };
+
+    // Calculate Strategic Rank from the filtered power values. Unknown enemy
+    // power is kept unknown and sorted after factions with visible scores.
+    const sortedFactions = [...factions].sort((a, b) => {
+      const aPower = getPowerOverall(a);
+      const bPower = getPowerOverall(b);
+      if (aPower === null && bPower === null) return 0;
+      if (aPower === null) return 1;
+      if (bPower === null) return -1;
+      return bPower - aPower;
+    });
+    const observerIndex = observer.ID === undefined || observer.ID === null
+      ? -1
+      : sortedFactions.findIndex(f => this.sameId(f.ID, observer.ID));
+    const observerRank = observerIndex >= 0 ? observerIndex + 1 : null;
+    const observerPower = getPowerOverall(observer);
+    const visibleRivals = sortedFactions.filter(f => !this.sameId(f.ID, observerId));
+    const topFaction = visibleRivals[0] || observer;
+    const topFactionPower = getPowerOverall(topFaction);
+    const xenoformingAvailable = this.isFilteredDataAvailable(
+      snapshot,
+      'activeXenoforming',
+      'canDetectXenoforming',
+      mode
+    );
+    const alienFacilitiesAvailable = this.isFilteredDataAvailable(
+      snapshot,
+      'builtAlienFacilities',
+      'canDetectAlienFacilities',
+      mode
+    );
 
     // 1. Executive SITREP
     const sitrep = this.buildExecutiveSitrep({
       metadata,
       observer,
+      observerId,
+      observerName,
       observerRank,
+      observerPower,
       totalFactions: factions.length,
       topFaction,
+      topFactionPower,
       factions,
+      nations,
       targetFactionName,
-      servantTargets,
+      targetFactionId: priorityTargetId,
+      targetFaction,
+      servantTargets: targetEntries,
       activeAlienStages,
+      capabilities,
+      mode,
+      visibility,
       xenoforming,
+      xenoformingAvailable,
+      builtAlienFacilities,
+      alienFacilitiesAvailable,
       councilors,
       habs,
-      fleets
+      fleets,
+      habSites
     });
 
     // 2. Department Directives (Actionable Statements)
-    const geopoliticalDirectives = this.buildGeopoliticalDirectives(servantTargets, nations, targetFactionName, observer);
+    const geopoliticalDirectives = this.buildGeopoliticalDirectives(targetEntries, nations, targetFactionName, observer, observerName);
     const councilDirectives = this.buildCouncilDirectives(councilors, observerId);
-    const spaceDirectives = this.buildSpaceDirectives(habs, fleets, habSites, observer);
-    const researchDirectives = this.buildResearchDirectives(globalResearch, observer, activeAlienStages);
+    const spaceDirectives = this.buildSpaceDirectives(habs, fleets, habSites, observer, observerName);
+    const researchDirectives = this.buildResearchDirectives(globalResearch, observer, activeAlienStages, {
+      mode,
+      capabilities
+    });
 
     // 3. Theater Command Status
-    const theaterStatus = this.buildTheaterStatus(nations, xenoforming, targetFactionName, observerId);
+    const theaterStatus = this.buildTheaterStatus(
+      nations,
+      xenoforming,
+      targetFactionName,
+      observerId,
+      observerName,
+      xenoformingAvailable,
+      priorityTargetId
+    );
 
     // 4. Operative Roster with Tactical Recommendations
     const operativeRoster = this.buildOperativeRoster(councilors, observerId);
 
     return {
+      generatedAt: new Date().toISOString(),
       campaignDate: metadata.gameTimeString || 'Unknown',
+      mode,
+      intelMode: mode,
+      visibility,
+      observerFactionId: observerId,
       observerName,
+      priorityTargetFaction: targetFactionName
+        ? { id: priorityTargetId, name: targetFactionName }
+        : null,
       observerRank,
-      powerScore: observer.powerScore || 0,
+      powerScore: observerPower,
       alienHateStatus: observer.alienHate?.visibleEstimate || 'UNAVAILABLE',
       sitrep,
       directives: {
@@ -76,115 +153,236 @@ class BriefingGenerator {
     };
   }
 
-  buildExecutiveSitrep(ctx) {
+  buildExecutiveSitrep(ctx = {}) {
     const {
-      metadata,
-      observer,
+      metadata = {},
+      observer = {},
+      observerId = observer.ID,
+      observerName,
       observerRank,
+      observerPower,
       totalFactions,
-      topFaction,
+      topFaction = {},
+      topFactionPower,
+      nations = [],
       targetFactionName,
-      servantTargets,
-      activeAlienStages,
-      xenoforming,
-      councilors,
-      habs,
-      fleets
+      servantTargets = [],
+      activeAlienStages = {},
+      capabilities = {},
+      mode = 'player',
+      visibility = 'filtered intelligence',
+      xenoforming = [],
+      xenoformingAvailable = true,
+      builtAlienFacilities = [],
+      alienFacilitiesAvailable = true,
+      councilors = [],
+      habs = [],
+      fleets = [],
+      habSites = []
     } = ctx;
 
-    const ownCouncilors = councilors.filter(c => c.isOwnCouncilor);
-    const moles = councilors.filter(c => c.isTurnedMole);
-    const hydras = councilors.filter(c => c.isAlien);
+    const visibleCouncilors = this.asArray(councilors);
+    const ownCouncilors = visibleCouncilors.filter(c => this.isOwnCouncilor(c, observerId));
+    const moles = visibleCouncilors.filter(c => c.isTurnedMole === true || this.sameId(c.agentForFactionId, observerId));
+    const hydras = visibleCouncilors.filter(c => c.isAlien === true || /alien/i.test(c.typeTemplateName || ''));
+    const visibleXenoforming = this.asArray(xenoforming);
+    const visibleAlienFacilities = this.asArray(builtAlienFacilities);
+    const ownHabs = this.asArray(habs).filter(h => this.sameId(h.factionId, observerId));
+    const ownFleets = this.asArray(fleets).filter(f => this.sameId(f.factionId, observerId));
+    const observerLabel = observerName || observer.displayName || 'the selected faction';
+    const leadingFactionName = topFaction.displayName || 'a rival faction';
+    const factionCountText = this.formatCount(totalFactions);
+    const rankText = observerRank === null || observerRank === undefined
+      ? 'has no confirmed strategic rank in the filtered intelligence picture'
+      : `maintains rank #${observerRank} among ${factionCountText} visible factions`;
+    const powerText = this.formatPower(observerPower);
+    const targetEntries = this.asArray(servantTargets);
+    const xenoformingKnown = xenoformingAvailable !== false;
+    const alienFacilitiesKnown = alienFacilitiesAvailable !== false;
+    const alienCouncilorKnown = mode === 'omniscient' || mode === 'enhanced' ||
+      activeAlienStages.operatives !== undefined ||
+      capabilities.canDirectlyDetectAlienCouncilors === true ||
+      hydras.length > 0;
+    const xenoCount = xenoformingKnown ? visibleXenoforming.length : null;
+    const facilityCount = alienFacilitiesKnown ? visibleAlienFacilities.length : null;
+    const controlledNationData = this.getControlledNationData(nations, observerId);
+    const controlPoints = this.firstAvailableNumber(
+      observer.controlPointsCount,
+      controlledNationData.controlPoints
+    );
+    const controlledNationCount = this.firstAvailableNumber(
+      observer.nationsCount,
+      controlledNationData.nations
+    );
+    const gdpTrillion = this.formatFactionGdp(observer, controlledNationData.gdp);
+    const researchPts = this.firstAvailableNumber(
+      observer.totalResearch,
+      observer.monthlyResearch,
+      controlledNationData.research
+    );
+    const fleetCombatPower = this.getFleetCombatPower(observer, ownFleets);
+    const ownHabCount = ownHabs.length || (!habs.length ? this.toFiniteNumber(observer.habsCount) || 0 : 0);
+    const ownFleetCount = ownFleets.length || (!fleets.length ? this.toFiniteNumber(observer.fleetsCount) || 0 : 0);
+    const resources = this.getResourceSnapshot(observer.resources);
+    const resourceText = this.formatResourceSummary(resources);
+    const totalFactionText = this.formatCount(totalFactions);
 
-    // Overall Status Tone
+    // Overall Status Tone is based only on alien indicators visible in this
+    // filtered snapshot. An unavailable telemetry stream is not reported as
+    // proof that the world is quiet.
+    const visibleAlienThreat = (xenoCount !== null && xenoCount > 0) ||
+      (facilityCount !== null && facilityCount > 0) || hydras.length > 0;
+    const threatPictureUnavailable = !xenoformingKnown && !alienFacilitiesKnown && !alienCouncilorKnown;
     let defconLevel = 'DEFCON 3 — ELEVATED TACTICAL SURVEILLANCE';
-    if (xenoforming.length > 5 || hydras.length > 0) {
+    if (visibleAlienThreat) {
       defconLevel = 'DEFCON 2 — ACTIVE ALIEN INCURSION IN PROGRESS';
+    } else if (threatPictureUnavailable) {
+      defconLevel = 'DEFCON 3 — LIMITED ALIEN THREAT PICTURE';
     }
 
-    // Paragraph 1: Global Geopolitical Stance
-    const p1 = `As of ${metadata.gameTimeString || 'the current operational cycle'}, ${observer.displayName} maintains rank #${observerRank} among global factions with a Strategic Power Index of ${observer.powerScore}/100. Our network commands ${observer.controlPointsCount || 0} control points controlling $${observer.gdpTrillion || 0}T in terrestrial GDP, supported by ${observer.monthlyResearch || 0} monthly scientific output. The leading rival faction is ${topFaction.displayName} (Power Index: ${topFaction.powerScore}/100).`;
+    // Paragraph 1: Dynamic Geopolitical Stance
+    const rivalText = topFaction.displayName && !this.sameId(topFaction.ID, observerId)
+      ? ` The strongest visible rival is ${leadingFactionName} (Power Index: ${this.formatPower(topFactionPower)}/100).`
+      : ' No opposing faction has a confirmed higher visible power score.';
+    const p1 = `As of ${metadata.gameTimeString || 'the current operational cycle'}, ${observerLabel} ${rankText} with a Strategic Power Index of ${powerText}/100. Its network commands ${this.formatCount(controlPoints)} control points across ${this.formatCount(controlledNationCount)} nations, representing $${gdpTrillion}T in terrestrial GDP and ${this.formatCount(researchPts)} monthly scientific output.${rivalText} Current reserves: ${resourceText}.`;
 
-    // Paragraph 2: Hostile Infiltration & Primary Target
-    let p2 = '';
-    if (servantTargets.length > 0) {
-      const topTarget = servantTargets[0];
-      p2 = `PRIORITY THEATER ALERT: Hostile ${targetFactionName} control remains concentrated in ${topTarget.nationName} ($${topTarget.gdpTrillion}T GDP, ${topTarget.targetCPCount || topTarget.servantCPCount}/${topTarget.totalCPCount} CPs). ${topTarget.vulnerabilities?.length > 0 ? `Key intelligence vulnerabilities identified: ${topTarget.vulnerabilities.join(', ')}.` : 'Immediate crackdown authorization recommended.'}`;
+    // Paragraph 2: Priority Target / Geopolitical Visibility
+    let p2;
+    if (targetEntries.length > 0 && targetFactionName) {
+      const topTarget = targetEntries[0];
+      const targetCpCount = this.firstAvailableNumber(topTarget.targetCPCount, topTarget.servantCPCount);
+      const targetCpText = targetCpCount === null
+        ? 'control-point count unavailable'
+        : `${targetCpCount}/${this.formatCount(topTarget.totalCPCount)} CPs`;
+      const targetGdp = this.formatTargetGdp(topTarget);
+      const targetReasons = this.asArray(topTarget.vulnerabilities).length > 0
+        ? `Visible vulnerabilities: ${topTarget.vulnerabilities.join(', ')}.`
+        : this.asArray(topTarget.reasons).length > 0
+          ? `Visible indicators: ${topTarget.reasons.slice(0, 3).join('; ')}.`
+          : topTarget.isExecutiveTarget
+            ? 'Executive authority is included in the visible holding.'
+            : 'No additional vulnerability data is available.';
+      p2 = `PRIORITY THEATER ALERT: ${targetFactionName} control is visible in ${topTarget.nationName || 'an unidentified nation'} ($${targetGdp}T GDP, ${targetCpText}). ${targetReasons}`;
+    } else if (targetFactionName) {
+      p2 = `PRIORITY THEATER STATUS: No scored holdings for ${targetFactionName} are visible in this filtered snapshot. This does not establish that the faction has no holdings outside the current intelligence picture.`;
     } else {
-      p2 = `Terrestrial geopolitics are relatively stabilized; no immediate critical superpower takeover alerts for ${targetFactionName}. Continue consolidating executive control in core territories.`;
+      p2 = 'PRIORITY THEATER STATUS: No priority opposing faction or target holdings are identified in this filtered snapshot; geopolitical targeting data is unavailable.';
     }
 
-    // Paragraph 3: Alien Threat & Extraterrestrial Activity
-    let p3 = '';
-    const xenoCount = xenoforming.length;
-    if (xenoCount > 0) {
-      const topXeno = xenoforming[0];
-      p3 = `ALIEN INCURSION ADVISORY: Planetary surveillance tracks active xenoforming in ${xenoCount} terrestrial regions (highest activity centered in ${topXeno.regionName} at level ${topXeno.level}). Direct Hydra detection capability: ${activeAlienStages.operatives?.active ? 'ONLINE' : 'RESTRICTED (Alien Movements project required)'}.`;
-    } else {
-      p3 = `Extraterrestrial terrestrial presence is currently subdued; no anomalous planetary xenoforming hot-zones detected in surveyed sectors.`;
-    }
+    // Paragraph 3: Visible Alien Threat & Xenoforming Activity
+    const directDetectionText = mode === 'omniscient'
+      ? 'ONLINE (omniscient view)'
+      : activeAlienStages.operatives?.active === true || capabilities.canDirectlyDetectAlienCouncilors === true
+        ? 'ONLINE'
+        : activeAlienStages.operatives !== undefined
+          ? 'RESTRICTED by current intelligence capabilities'
+          : 'UNAVAILABLE in the current intelligence view';
+    const alienCouncilorText = alienCouncilorKnown
+      ? `${hydras.length} visible alien councilor${hydras.length === 1 ? '' : 's'}`
+      : 'alien councilor detections are unavailable';
+    const xenoformingText = !xenoformingKnown
+      ? 'xenoforming telemetry is unavailable'
+      : xenoCount === 0
+        ? 'no active xenoforming sites are visible'
+        : (() => {
+          const topXeno = visibleXenoforming[0];
+          const level = this.formatNumber(topXeno.level, 1);
+          return `active xenoforming is visible in ${xenoCount} region${xenoCount === 1 ? '' : 's'} (highest activity: ${topXeno.regionName || 'unknown region'} at level ${level})`;
+        })();
+    const facilityText = !alienFacilitiesKnown
+      ? 'alien facility telemetry is unavailable'
+      : `${facilityCount} visible alien facilit${facilityCount === 1 ? 'y' : 'ies'}`;
+    const p3Prefix = visibleAlienThreat ? 'ALIEN INCURSION ADVISORY' : 'ALIEN/XENOFORMING STATUS';
+    const p3 = `${p3Prefix}: ${alienCouncilorText}; ${xenoformingText}; ${facilityText}. Direct alien-councilor detection: ${directDetectionText}.`;
 
     // Paragraph 4: Space Logistics & Asset Posture
-    const ownHabs = habs.filter(h => h.factionId === observer.ID);
-    const ownFleets = fleets.filter(f => f.factionId === observer.ID);
-    const p4 = `SPACE POSTURE: Strategic aerospace command oversees ${ownHabs.length} orbital installations and ${ownFleets.length} naval battle groups with an active combat fleet rating of ${observer.fleetCombatPower || 0}. Space resource logistics are operational.`;
+    const miningRates = this.getMiningRateSummary(habSites, ownHabs, observerId);
+    const spaceResources = miningRates || 'visible mining-rate data is unavailable';
+    const p4 = `SPACE POSTURE: ${observerLabel} has ${this.formatCount(ownHabCount)} visible orbital installation${ownHabCount === 1 ? '' : 's'} and ${this.formatCount(ownFleetCount)} visible fleet group${ownFleetCount === 1 ? '' : 's'}. Fleet combat power is ${this.formatPower(fleetCombatPower)}; ${spaceResources}.`;
+
+    const counts = {
+      controlPoints,
+      nations: controlledNationCount,
+      visibleCouncilors: visibleCouncilors.length,
+      ownCouncilors: ownCouncilors.length,
+      turnedMoles: moles.length,
+      visibleAlienCouncilors: alienCouncilorKnown ? hydras.length : null,
+      orbitalInstallations: ownHabCount,
+      fleets: ownFleetCount,
+      visibleXenoformingSites: xenoCount,
+      visibleAlienFacilities: facilityCount
+    };
 
     return {
       defcon: defconLevel,
       summaryParagraphs: [p1, p2, p3, p4],
       keyMetrics: {
-        strategicRank: `#${observerRank} of ${totalFactions}`,
-        powerScore: `${observer.powerScore}/100`,
-        activeOperatives: `${ownCouncilors.length} Field Agents`,
+        strategicRank: observerRank === null || observerRank === undefined
+          ? 'UNAVAILABLE'
+          : `#${observerRank} of ${totalFactionText}`,
+        powerScore: `${powerText}/100`,
+        activeOperatives: `${ownCouncilors.length} Visible Field Agents`,
         turnedMoles: `${moles.length} Assets Embedded`,
         alienHateAssessment: observer.alienHate?.visibleEstimate || 'UNAVAILABLE',
-        orbitalInstallations: `${ownHabs.length} Habs Active`
+        orbitalInstallations: `${ownHabCount} Visible Habs Active`,
+        resources,
+        resourceSummary: resourceText,
+        counts,
+        visibility
       }
     };
   }
 
-  buildGeopoliticalDirectives(servantTargets, nations, targetFactionName, observer) {
+  buildGeopoliticalDirectives(servantTargets, nations, targetFactionName, observer, observerName = null) {
     const directives = [];
+    const targets = this.asArray(servantTargets);
+    const factionLabel = targetFactionName || 'the selected opposing faction';
+    const observerLabel = observerName || observer?.displayName || 'the selected faction';
 
-    // Target 1: Top Hostile Country
-    if (servantTargets.length > 0) {
-      const t = servantTargets[0];
+    // Target 1: Top visible opposing holding
+    if (targets.length > 0 && targetFactionName) {
+      const t = targets[0];
+      const targetCpCount = this.firstAvailableNumber(t.targetCPCount, t.servantCPCount);
+      const unrest = this.toFiniteNumber(t.unrest);
       directives.push({
         id: 'geo-1',
         title: `Authorize Operation 'Severance' in ${t.nationName}`,
         category: 'CRACKDOWN & PURGE',
         severity: 'CRITICAL',
         target: t.nationName,
-        statement: `${t.nationName} ($${t.gdpTrillion}T GDP) holds ${t.targetCPCount || t.servantCPCount} ${targetFactionName} control points including Executive authority. Stability index is ${t.unrest > 4 ? 'severely degraded (Unrest: ' + t.unrest + ')' : 'stable'}.`,
-        action: `Deploy high-Espionage operative to execute Crackdown on executive point, followed by Purge to permanently eliminate ${targetFactionName} control.`,
-        successFactor: t.unrest > 4 ? 'HIGH (Vulnerable to subversion)' : 'MODERATE'
+        statement: `${t.nationName || 'The identified nation'} ($${this.formatTargetGdp(t)}T GDP) holds ${targetCpCount === null ? 'an unknown number of' : targetCpCount} ${targetFactionName} control point${targetCpCount === 1 ? '' : 's'}${t.isExecutiveTarget ? ', including Executive authority' : ''}. Stability data is ${unrest === null ? 'unavailable' : unrest > 4 ? 'degraded (Unrest: ' + unrest + ')' : 'not critically degraded'}.`,
+        action: `Deploy a suitable ${observerLabel} operative to investigate the holding and execute a visible crackdown or purge only when the current target data supports it.`,
+        successFactor: unrest !== null && unrest > 4 ? 'HIGH (Vulnerable to subversion)' : 'MODERATE'
       });
     }
 
-    // Target 2: Secondary Superpower or Contested Zone
-    if (servantTargets.length > 1) {
-      const t2 = servantTargets[1];
+    // Target 2: Secondary visible holding
+    if (targets.length > 1 && targetFactionName) {
+      const t2 = targets[1];
+      const targetCpCount = this.firstAvailableNumber(t2.targetCPCount, t2.servantCPCount);
       directives.push({
         id: 'geo-2',
         title: `Containment Sweep in ${t2.nationName}`,
         category: 'PUBLIC CAMPAIGN',
         severity: 'HIGH',
         target: t2.nationName,
-        statement: `${targetFactionName} maintain ${t2.targetCPCount || t2.servantCPCount} control points in ${t2.nationName} ($${t2.gdpTrillion}T GDP). Popular support can be shifted before next council cycle.`,
-        action: `Deploy high-Persuasion councilor on continuous Public Campaign mission to lower crackdown defense thresholds.`,
+        statement: `${targetFactionName} maintain${targetCpCount === 1 ? 's' : ''} ${targetCpCount === null ? 'an unknown number of' : targetCpCount} control point${targetCpCount === 1 ? '' : 's'} in ${t2.nationName || 'the identified nation'} ($${this.formatTargetGdp(t2)}T GDP).`,
+        action: `Deploy a high-Persuasion ${observerLabel} councilor on a visible Public Campaign mission if the current intelligence picture confirms the opportunity.`,
         successFactor: 'VERY HIGH'
       });
     }
 
-    // General Defense Directive
+    // General defense / data-quality directive
     directives.push({
       id: 'geo-3',
-      title: 'Consolidate Executive Defense in Core Superpowers',
+      title: `Protect ${observerLabel} Core Holdings`,
       category: 'DEFEND INTERESTS',
       severity: 'STANDARD',
       target: 'Core National Holdings',
-      statement: 'Unprotected control points in high-GDP nations are susceptible to rival Hostile Takeover and Purge operations during council turnovers.',
-      action: 'Verify all executive and major economy control points have active "Defend Interests" wards in place.',
+      statement: targetFactionName
+        ? `Unprotected control points in high-GDP nations remain susceptible to rival operations, including ${factionLabel} activity where visible.`
+        : 'No priority opposing faction is identified in this filtered snapshot; protect confirmed executive and high-value control points while intelligence is incomplete.',
+      action: 'Verify all confirmed executive and major-economy control points have active "Defend Interests" wards in place.',
       successFactor: 'GUARANTEED PROTECTION'
     });
 
@@ -193,8 +391,9 @@ class BriefingGenerator {
 
   buildCouncilDirectives(councilors, observerId) {
     const directives = [];
-    const ownCouncilors = councilors.filter(c => c.isOwnCouncilor);
-    const moles = councilors.filter(c => c.isTurnedMole);
+    const visibleCouncilors = this.asArray(councilors);
+    const ownCouncilors = visibleCouncilors.filter(c => this.isOwnCouncilor(c, observerId));
+    const moles = visibleCouncilors.filter(c => c.isTurnedMole === true || this.sameId(c.agentForFactionId, observerId));
 
     // Mole Directive
     if (moles.length > 0) {
@@ -214,13 +413,14 @@ class BriefingGenerator {
     const idleAgents = ownCouncilors.filter(c => !c.activeMissionName || c.activeMissionName.includes('Idle') || c.activeMissionName.includes('Standby'));
     if (idleAgents.length > 0) {
       const agent = idleAgents[0];
+      const attrs = agent.attributes || {};
       directives.push({
         id: 'c-idle',
         title: `Assign Mission Orders to ${agent.displayName} (${agent.typeTemplateName})`,
         category: 'OPERATIVE ASSIGNMENT',
         severity: 'HIGH',
-        statement: `${agent.displayName} is currently stationed in ${agent.locationName} with no active operations queued (Skills: ADM ${agent.attributes.Administration}, PER ${agent.attributes.Persuasion}, ESP ${agent.attributes.Espionage}).`,
-        action: `Deploy on priority mission matched to specialty: ${agent.attributes.Persuasion > 10 ? 'Public Campaign' : (agent.attributes.Espionage > 10 ? 'Crackdown / Sabotage' : 'Advise Nation')}.`,
+        statement: `${agent.displayName} is currently stationed in ${agent.locationName || 'an unknown location'} with no active operations queued (Skills: ADM ${attrs.Administration ?? 'UNAVAILABLE'}, PER ${attrs.Persuasion ?? 'UNAVAILABLE'}, ESP ${attrs.Espionage ?? 'UNAVAILABLE'}).`,
+        action: `Deploy on a priority mission matched to specialty: ${attrs.Persuasion > 10 ? 'Public Campaign' : (attrs.Espionage > 10 ? 'Crackdown / Sabotage' : 'Advise Nation')}.`,
         successFactor: 'IMMEDIATE'
       });
     }
@@ -242,20 +442,32 @@ class BriefingGenerator {
     return directives;
   }
 
-  buildSpaceDirectives(habs, fleets, habSites, observer) {
+  buildSpaceDirectives(habs, fleets, habSites, observer, observerName = null) {
     const directives = [];
-    const ownHabs = habs.filter(h => h.factionId === observer.ID);
-    const ownFleets = fleets.filter(f => f.factionId === observer.ID);
+    const visibleHabs = this.asArray(habs);
+    const visibleFleets = this.asArray(fleets);
+    const visibleHabSites = this.asArray(habSites);
+    const ownHabs = visibleHabs.filter(h => this.sameId(h.factionId, observer?.ID));
+    const ownFleets = visibleFleets.filter(f => this.sameId(f.factionId, observer?.ID));
+    const observerLabel = observerName || observer?.displayName || 'the selected faction';
+    const fleetPower = this.getFleetCombatPower(observer || {}, ownFleets);
+    const miningRates = this.getMiningRateSummary(visibleHabSites, ownHabs, observer?.ID);
 
     // Directive 1: Mining Infrastructure
     directives.push({
       id: 'sp-1',
-      title: 'Accelerate Off-World Mining Grid (Water & Fissiles)',
+      title: `Review Off-World Mining Grid (${ownHabs.length} Habs Visible)`,
       category: 'LOGISTICS & MINING',
       severity: 'HIGH',
-      statement: 'Off-world industrial shipyards and propulsion systems require steady daily yields of Water, Volatiles, Metals, and Fissiles to sustain naval parity.',
-      action: 'Deploy automated colony probes and claim high-yield celestial mining deposits on Luna and Mars.',
-      successFactor: 'EXPONENTIAL COMPOUNDING'
+      statement: miningRates
+        ? `${observerLabel}'s visible mining sites report ${miningRates}.`
+        : visibleHabSites.length > 0
+          ? 'Mining-site records are visible, but current production rates are not available.'
+          : 'No mining-site records are visible in this filtered snapshot; current off-world production cannot be assessed.',
+      action: visibleHabSites.length > 0
+        ? 'Prioritize construction or expansion at confirmed high-yield sites after comparing current resource reserves.'
+        : 'Acquire prospecting data before assigning a mining expansion order.',
+      successFactor: miningRates ? 'DATA-SUPPORTED' : 'INTELLIGENCE REQUIRED'
     });
 
     // Directive 2: Orbital Fleet Readiness
@@ -264,19 +476,26 @@ class BriefingGenerator {
       title: `Orbital Defense Squadron Posture (${ownFleets.length} Fleets Active)`,
       category: 'SPACE DEFENSE',
       severity: 'STANDARD',
-      statement: `Extraterrestrial reconnaissance fleets operate across inner system orbits. Current fleet combat power: ${observer.fleetCombatPower || 0}.`,
-      action: 'Maintain intercept squadrons in Low Earth Orbit (LEO) to interdict incoming alien surveillance gunships.',
-      successFactor: 'DETERRENCE'
+      statement: ownFleets.length > 0
+        ? `Visible fleet combat power for ${observerLabel} is ${this.formatPower(fleetPower)} across ${ownFleets.length} fleet group${ownFleets.length === 1 ? '' : 's'}.`
+        : 'No own fleet groups are visible in this filtered snapshot; fleet posture cannot be confirmed.',
+      action: ownFleets.length > 0
+        ? 'Maintain a defensive patrol in a relevant inner-system orbit and assign intercept orders when a confirmed threat is identified.'
+        : 'Obtain current fleet telemetry before issuing an orbital defense order.',
+      successFactor: ownFleets.length > 0 ? 'DETERRENCE' : 'INTELLIGENCE REQUIRED'
     });
 
     return directives;
   }
 
-  buildResearchDirectives(globalResearch, observer, activeAlienStages) {
+  buildResearchDirectives(globalResearch, observer, activeAlienStages, options = {}) {
     const directives = [];
+    const researchSlots = this.getResearchSlots(globalResearch);
+    const stages = activeAlienStages || {};
+    const hasStageData = Object.keys(stages).length > 0;
 
     // Research Vector 1: Alien Threat Meter
-    if (!activeAlienStages.operations?.active) {
+    if (hasStageData && stages.operations && stages.operations.active === false) {
       directives.push({
         id: 'res-1',
         title: "Unlock Project 'Alien Operations' (Project_TheirOperations)",
@@ -289,7 +508,7 @@ class BriefingGenerator {
     }
 
     // Research Vector 2: Direct Hydra Detection
-    if (!activeAlienStages.operatives?.active) {
+    if (hasStageData && stages.operatives && stages.operatives.active === false) {
       directives.push({
         id: 'res-2',
         title: "Advance Project 'Alien Movements' (Project_TheirMovements)",
@@ -302,23 +521,36 @@ class BriefingGenerator {
     }
 
     // Research Vector 3: Global Tech Dominance
-    if (globalResearch.length > 0) {
-      const topSlot = globalResearch[0];
+    if (researchSlots.length > 0) {
+      const topSlot = researchSlots[0];
+      const progress = this.firstAvailableNumber(topSlot.progressPct, topSlot.percent);
+      const displayName = topSlot.displayName || topSlot.techId || 'the current technology';
+      const isLeading = topSlot.isLeading === true ||
+        this.sameId(topSlot.leadFactionId, observer?.ID) ||
+        (topSlot.leadFactionName && topSlot.leadFactionName === observer?.displayName);
       directives.push({
         id: 'res-3',
-        title: `Contribute to Global Technology: ${topSlot.displayName}`,
+        title: `Contribute to Global Technology: ${displayName}`,
         category: 'GLOBAL R&D LEADERSHIP',
         severity: 'STANDARD',
-        statement: `Global research slot #1 is researching '${topSlot.displayName}' (${Math.round(topSlot.progressPct || 0)}% complete). Leading contributor decides the next global tech branch.`,
-        action: 'Maintain majority research allocation to select the subsequent planetary technological vector.',
-        successFactor: `${topSlot.isLeading ? 'CURRENT LEADER' : 'CONTESTED'}`
+        statement: `Global research slot #${topSlot.slotNumber || 1} is researching '${displayName}' (${progress === null ? 'progress unavailable' : Math.round(progress) + '% complete'}). Leading contributor: ${topSlot.leadFactionName || 'unavailable'}.`,
+        action: `Maintain or increase ${observer?.displayName || 'the selected faction'} research allocation when the visible slot data supports leadership.`,
+        successFactor: `${isLeading ? 'CURRENT LEADER' : 'CONTESTED'}`
       });
     }
 
     return directives;
   }
 
-  buildTheaterStatus(nations, xenoforming, targetFactionName, observerId) {
+  buildTheaterStatus(
+    nations,
+    xenoforming,
+    targetFactionName,
+    observerId,
+    observerName = null,
+    xenoformingAvailable = true,
+    targetFactionId = null
+  ) {
     const theaters = [
       { id: 'nam', name: 'North America', nations: ['United States', 'Canada', 'Mexico'] },
       { id: 'eur', name: 'Europe & Mediterranean', nations: ['France', 'Germany', 'United Kingdom', 'Italy', 'Spain', 'Poland', 'Ukraine'] },
@@ -328,26 +560,38 @@ class BriefingGenerator {
       { id: 'afr', name: 'African Continent', nations: ['Nigeria', 'Egypt', 'South Africa', 'Ethiopia', 'Kenya'] }
     ];
 
-    return theaters.map(t => {
-      const matchedNations = nations.filter(n => t.nations.includes(n.displayName));
-      const totalGdp = matchedNations.reduce((sum, n) => sum + (n.GDP || 0), 0);
-      const totalGdpTrillion = (totalGdp / 1000).toFixed(1);
+    const visibleNations = this.asArray(nations);
+    const visibleXenoforming = this.asArray(xenoforming);
+    const selectedFactionLabel = observerName || 'the selected faction';
+    const hasTarget = targetFactionName || targetFactionId !== null && targetFactionId !== undefined;
 
-      const hostileCount = matchedNations.filter(n => n.executiveFactionName === targetFactionName).length;
-      const ownCount = matchedNations.filter(n => n.executiveFactionId === observerId).length;
+    return theaters.map(t => {
+      const matchedNations = visibleNations.filter(n => t.nations.includes(n.displayName));
+      const totalGdp = matchedNations.reduce((sum, n) => sum + (n.GDP || 0), 0);
+      const totalGdpTrillion = (totalGdp / 1e12).toFixed(1);
+
+      const hostileCount = hasTarget
+        ? matchedNations.filter(n => targetFactionId !== null && targetFactionId !== undefined
+          ? this.sameId(n.executiveFactionId, targetFactionId)
+          : n.executiveFactionName === targetFactionName).length
+        : 0;
+      const ownCount = matchedNations.filter(n => this.sameId(n.executiveFactionId, observerId)).length;
 
       let statusTone = 'STABLE';
       let statusColor = '#10b981';
-      if (hostileCount > 0) {
+      if (!hasTarget) {
+        statusTone = 'NO PRIORITY TARGET DATA';
+        statusColor = '#64748b';
+      } else if (hostileCount > 0) {
         statusTone = `CONTESTED (${hostileCount} Hostile ${targetFactionName} Executives)`;
         statusColor = '#ef4444';
       } else if (ownCount > 0) {
-        statusTone = `SECURED (${ownCount} Initiative Executives)`;
+        statusTone = `SECURED (${ownCount} ${selectedFactionLabel} Executives)`;
         statusColor = '#00e5ff';
       }
 
       // Xenoforming check
-      const sectorXeno = xenoforming.filter(x => matchedNations.some(n => n.displayName.includes(x.regionName) || x.regionName.includes(n.displayName)));
+      const sectorXeno = visibleXenoforming.filter(x => matchedNations.some(n => n.displayName.includes(x.regionName) || x.regionName.includes(n.displayName)));
 
       return {
         id: t.id,
@@ -358,12 +602,13 @@ class BriefingGenerator {
         hostileCount,
         ownCount,
         nationsCount: matchedNations.length,
-        xenoformingActive: sectorXeno.length > 0,
-        xenoCount: sectorXeno.length,
+        xenoformingActive: xenoformingAvailable === false ? null : sectorXeno.length > 0,
+        xenoCount: xenoformingAvailable === false ? null : sectorXeno.length,
+        targetFactionName: targetFactionName || null,
         keyNations: matchedNations.slice(0, 4).map(n => ({
           name: n.displayName,
-          executive: n.executiveFactionName,
-          gdpTrillion: ((n.GDP || 0) / 1000).toFixed(1),
+          executive: n.executiveFactionName || 'UNAVAILABLE',
+          gdpTrillion: ((n.GDP || 0) / 1e12).toFixed(1),
           nukes: n.nukes || 0,
           unrest: (n.unrest || 0).toFixed(1)
         }))
@@ -372,7 +617,7 @@ class BriefingGenerator {
   }
 
   buildOperativeRoster(councilors, observerId) {
-    const ownCouncilors = councilors.filter(c => c.isOwnCouncilor);
+    const ownCouncilors = this.asArray(councilors).filter(c => this.isOwnCouncilor(c, observerId));
 
     return ownCouncilors.map(c => {
       let readiness = 'READY FOR DEPLOYMENT';
@@ -414,6 +659,160 @@ class BriefingGenerator {
         recommendedOrder: recOrder
       };
     });
+  }
+
+  asArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  toFiniteNumber(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+
+  sameId(left, right) {
+    if (left === null || left === undefined || right === null || right === undefined) return false;
+    return String(left) === String(right);
+  }
+
+  firstAvailableNumber(...values) {
+    for (const value of values) {
+      const number = this.toFiniteNumber(value);
+      if (number !== null) return number;
+    }
+    return null;
+  }
+
+  formatNumber(value, decimals = 0) {
+    const number = this.toFiniteNumber(value);
+    if (number === null) return 'UNAVAILABLE';
+    return decimals > 0 ? number.toFixed(decimals) : Math.round(number).toString();
+  }
+
+  formatCount(value) {
+    const number = this.toFiniteNumber(value);
+    return number === null ? 'UNAVAILABLE' : Math.round(number).toString();
+  }
+
+  formatPower(value) {
+    const number = this.toFiniteNumber(value);
+    return number === null ? 'UNAVAILABLE' : Math.round(number).toString();
+  }
+
+  isOwnCouncilor(councilor, observerId) {
+    return councilor?.isOwnCouncilor === true || this.sameId(councilor?.factionId, observerId);
+  }
+
+  isFilteredDataAvailable(snapshot, fieldName, capabilityName, mode) {
+    if (!Object.prototype.hasOwnProperty.call(snapshot, fieldName)) return false;
+    if (mode === 'player' && snapshot.capabilities && snapshot.capabilities[capabilityName] === false) return false;
+    return true;
+  }
+
+  getResearchSlots(globalResearch) {
+    if (Array.isArray(globalResearch)) return globalResearch;
+    return this.asArray(globalResearch?.activeSlots);
+  }
+
+  getControlledNationData(nations, observerId) {
+    const visibleNations = this.asArray(nations);
+    let controlPoints = 0;
+    let hasControlPointData = false;
+    const controlled = [];
+
+    for (const nation of visibleNations) {
+      const nationControlPoints = this.asArray(nation.controlPoints);
+      const ownControlPoints = nationControlPoints.filter(cp => this.sameId(cp.factionId, observerId));
+      if (nationControlPoints.length > 0) hasControlPointData = true;
+      if (ownControlPoints.length > 0 || this.sameId(nation.executiveFactionId, observerId)) {
+        controlled.push(nation);
+        controlPoints += ownControlPoints.length;
+      }
+    }
+
+    return {
+      controlPoints: hasControlPointData ? controlPoints : null,
+      nations: controlled.length > 0 ? controlled.length : null,
+      gdp: controlled.length > 0 ? controlled.reduce((sum, nation) => sum + (this.toFiniteNumber(nation.GDP) || 0), 0) : null,
+      research: controlled.length > 0 ? controlled.reduce((sum, nation) => sum + (this.toFiniteNumber(nation.research) || 0), 0) : null
+    };
+  }
+
+  formatFactionGdp(observer, fallbackGdp = null) {
+    const totalGdp = this.firstAvailableNumber(observer?.totalGdp, fallbackGdp);
+    if (totalGdp !== null) return (totalGdp / 1e12).toFixed(1);
+    const alreadyTrillion = this.toFiniteNumber(observer?.gdpTrillion);
+    return alreadyTrillion === null ? 'UNAVAILABLE' : alreadyTrillion.toFixed(1);
+  }
+
+  formatTargetGdp(target) {
+    const targetGdpTrillion = this.toFiniteNumber(target?.gdpTrillion);
+    if (targetGdpTrillion !== null) return targetGdpTrillion.toFixed(2);
+    const rawGdp = this.toFiniteNumber(target?.GDP);
+    return rawGdp === null ? 'UNAVAILABLE' : (rawGdp / 1e12).toFixed(2);
+  }
+
+  getFleetCombatPower(observer, ownFleets) {
+    const visibleFleets = this.asArray(ownFleets);
+    const fleetValues = visibleFleets
+      .map(fleet => this.toFiniteNumber(fleet.combatPower))
+      .filter(value => value !== null);
+    if (fleetValues.length > 0) return fleetValues.reduce((sum, value) => sum + value, 0);
+    if (observer?.combatPowerAvailable === false) return null;
+    return this.firstAvailableNumber(observer?.combatPower, observer?.fleetCombatPower);
+  }
+
+  getResourceSnapshot(resources) {
+    if (!resources || typeof resources !== 'object') return null;
+    const keys = ['Money', 'Influence', 'Operations', 'Boost', 'Water', 'Volatiles', 'Metals', 'NobleMetals', 'Fissiles', 'Exotics'];
+    const snapshot = {};
+    for (const key of keys) {
+      const value = this.toFiniteNumber(resources[key]);
+      if (value !== null) snapshot[key] = value;
+    }
+    return Object.keys(snapshot).length > 0 ? snapshot : null;
+  }
+
+  formatResourceSummary(resources) {
+    if (!resources) return 'UNAVAILABLE';
+    const labels = [
+      ['Money', 'Money', 0],
+      ['Influence', 'Influence', 0],
+      ['Operations', 'Operations', 0],
+      ['Boost', 'Boost', 1],
+      ['Water', 'Water', 0],
+      ['Volatiles', 'Volatiles', 0],
+      ['Metals', 'Metals', 0],
+      ['NobleMetals', 'Noble Metals', 0],
+      ['Fissiles', 'Fissiles', 0],
+      ['Exotics', 'Exotics', 0]
+    ];
+    const entries = labels
+      .filter(([key]) => resources[key] !== undefined)
+      .map(([key, label, decimals]) => `${label} ${this.formatNumber(resources[key], decimals)}`);
+    return entries.length > 0 ? entries.join(', ') : 'UNAVAILABLE';
+  }
+
+  getMiningRateSummary(habSites, ownHabs, observerId) {
+    const ownHabIds = new Set(this.asArray(ownHabs).map(hab => String(hab.ID ?? hab.id)));
+    const visibleSites = this.asArray(habSites).filter(site =>
+      this.sameId(site.factionId, observerId) || (site.habId !== null && site.habId !== undefined && ownHabIds.has(String(site.habId)))
+    );
+    const rates = [
+      ['Water', 'water'],
+      ['Volatiles', 'volatiles'],
+      ['Metals', 'metals'],
+      ['NobleMetals', 'nobleMetals'],
+      ['Fissiles', 'fissiles']
+    ].map(([label, key]) => {
+      const values = visibleSites.map(site => this.toFiniteNumber(site[key])).filter(value => value !== null);
+      return values.length > 0 ? `${label} ${values.reduce((sum, value) => sum + value, 0).toFixed(1)}/day` : null;
+    }).filter(Boolean);
+    return rates.length > 0 ? rates.join(', ') : null;
   }
 
   getTopSkillString(attrs) {

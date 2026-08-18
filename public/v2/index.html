@@ -3,173 +3,328 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Terra Invicta // Mission Control Center</title>
+  <title>The Initiative // Executive Situation Report</title>
   <link rel="stylesheet" href="/v2/css/mission-control.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⬢</text></svg>">
 </head>
 <body>
 
-  <!-- Top Header & Secure Comms -->
-  <header class="mc-header">
-    <div class="mc-brand">
-      <div class="mc-brand-icon">⬢</div>
+  <!-- Top Strategic Command Bar -->
+  <header class="init-topbar">
+    <div class="init-brand">
+      <div class="init-logo-icon">⬢</div>
       <div>
-        <div class="mc-brand-title">Terra Invicta // Strategic Mission Control</div>
-        <div class="mc-brand-subtitle">EXECUTIVE WAR ROOM & SITUATIONAL INTELLIGENCE BRIEFING</div>
+        <div class="init-brand-name">
+          THE INITIATIVE <span class="init-brand-tag">EXECUTIVE COMMAND</span>
+        </div>
+        <div class="init-brand-sub">CAMPAIGN INTELLIGENCE / EXECUTIVE BRIEFING</div>
       </div>
     </div>
 
-    <div class="mc-telemetry-live">
-      <div class="mc-live-dot"></div>
-      <span>SECURE COMM-LINK ACTIVE</span>
+    <!-- Live Status HUD -->
+    <div class="init-topbar-hud">
+      <div class="init-hud-pill">
+        <span>DATE:</span> <strong id="hudDate">Loading...</strong>
+      </div>
+      <div class="init-hud-pill">
+        <span>SAVE:</span> <strong id="hudSave">-</strong>
+      </div>
+      <div class="init-hud-pill">
+        <span>OBSERVER:</span> <strong id="hudFaction">the Initiative</strong>
+      </div>
+      <div class="init-hud-pill">
+        <span>POWER:</span> <strong id="hudPower">-</strong>
+      </div>
+      <div class="init-hud-pill">
+        <span>ALERT:</span> <strong id="hudDefcon">DEFCON 2</strong>
+      </div>
     </div>
 
-    <div class="mc-header-controls">
+    <!-- Top Controls -->
+    <div class="init-topbar-controls">
       <!-- Intel Mode Selector -->
-      <div style="display: flex; gap: 2px; background: var(--mc-bg-surface); padding: 2px; border-radius: 4px; border: 1px solid var(--mc-border-subtle);">
-        <button class="mc-btn mc-mode-btn active" data-mode="player" style="padding: 4px 8px; font-size: 10px;">PLAYER INTEL</button>
-        <button class="mc-btn mc-mode-btn" data-mode="enhanced" style="padding: 4px 8px; font-size: 10px;">ENHANCED</button>
-        <button class="mc-btn mc-mode-btn" data-mode="omniscient" style="padding: 4px 8px; font-size: 10px;">OMNISCIENT</button>
+      <div class="init-mode-switch">
+        <button class="init-btn init-mode-btn init-btn-cyan" data-mode="player">PLAYER INTEL</button>
+        <button class="init-btn init-mode-btn" data-mode="enhanced">ENHANCED</button>
+        <button class="init-btn init-mode-btn" data-mode="omniscient">OMNISCIENT</button>
       </div>
 
-      <!-- Observer Faction Switcher -->
-      <select id="mcObserverSelect" class="mc-select">
+      <!-- Observer Switcher -->
+      <select id="initObserverSelect" class="init-select">
         <option value="4712">the Initiative</option>
       </select>
 
-      <!-- Refresh Telemetry -->
-      <button id="mcRefreshBtn" class="mc-btn mc-btn-primary">
-        ⟳ Refresh Telemetry
+      <!-- Refresh -->
+      <button id="initRefreshBtn" class="init-btn init-btn-cyan">
+        Refresh save
       </button>
 
-      <!-- Return to Classic Dashboard -->
-      <a href="/" class="mc-btn" title="Switch to Database Dashboard">
-        ⮌ Classic Dashboard
+      <button id="openFactionIntelBtn" class="init-btn" type="button">
+        Faction intel
+      </button>
+
+      <!-- Classic Dashboard Switch -->
+      <a href="/" class="init-btn" title="Switch to Database View">
+        Classic view
       </a>
     </div>
   </header>
 
-  <!-- Live Status & DEFCON HUD Bar -->
-  <div class="mc-status-bar">
-    <div class="mc-status-item">
-      <span>Operational Date:</span>
-      <span id="mcStatusDate" class="mc-status-val">Loading...</span>
+  <!-- Main Big-Screen Grid Layout -->
+  <main class="init-grid-layout">
+
+    <!-- ==================== LEFT COLUMN ==================== -->
+    <div class="init-col">
+
+      <!-- 1. Global Geopolitical Infiltration & Sectors Map -->
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">THEATERS</div>
+          <span>6 REGIONS</span>
+        </div>
+        <div class="tech-card-body">
+          <div class="init-map-container">
+            <!-- Stylized theater overview; values below are the live source of truth. -->
+            <svg class="init-map-svg" viewBox="0 0 400 200">
+              <path d="M 55,46 Q 105,34 145,62 Q 121,103 72,91 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
+              <path d="M 103,111 Q 132,118 122,171 Q 89,157 103,111 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
+              <path d="M 178,45 Q 239,38 230,84 Q 182,76 178,45 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
+              <path d="M 190,98 Q 229,105 210,163 Q 180,136 190,98 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
+              <path d="M 252,46 Q 358,39 340,109 Q 258,95 252,46 Z" fill="rgba(212,125,118,0.18)" stroke="var(--danger)" stroke-width="1.25"/>
+              <path d="M 310,131 Q 359,135 345,174 Q 302,161 310,131 Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
+              <circle cx="310" cy="75" r="4" fill="var(--danger)"/>
+              <circle cx="110" cy="135" r="4" fill="var(--danger)"/>
+              <circle cx="205" cy="65" r="4" fill="var(--accent)"/>
+              <circle cx="95" cy="65" r="4" fill="var(--accent)"/>
+            </svg>
+          </div>
+
+          <div id="mapSectorsList" style="margin-top: 10px;">
+            <!-- Sector items populated dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Global Power & CP Allocation Donut (回款分布) -->
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">FACTION BALANCE</div>
+          <span>POWER INDEX</span>
+        </div>
+        <div class="tech-card-body">
+          <div id="factionDonutContainer">
+            <!-- Donut injected dynamically -->
+          </div>
+        </div>
+      </div>
+
     </div>
-    <div class="mc-status-item">
-      <span>Telemetry Source:</span>
-      <span id="mcStatusSave" class="mc-status-val">-</span>
+
+    <!-- ==================== CENTER COLUMN ==================== -->
+    <div class="init-col">
+
+      <!-- 1. Hero KPI Banner (Matching top KPIs in image) -->
+      <div class="init-kpi-banner">
+        <div class="init-kpi-item">
+          <div class="init-kpi-label">
+            TREASURY
+          </div>
+          <div id="kpiMoney" class="init-kpi-val">$0</div>
+          <div id="kpiMoneySub" class="init-kpi-sub">+0/mo Flow</div>
+        </div>
+
+        <div class="init-kpi-item">
+          <div class="init-kpi-label">
+            TERRESTRIAL GDP
+          </div>
+          <div id="kpiGdp" class="init-kpi-val">$0T</div>
+          <div id="kpiGdpSub" class="init-kpi-sub">0 Control Points</div>
+        </div>
+
+        <div class="init-kpi-item">
+          <div class="init-kpi-label">
+            RESEARCH OUTPUT
+          </div>
+          <div id="kpiResearch" class="init-kpi-val">0 pts</div>
+          <div id="kpiResearchSub" class="init-kpi-sub">R&D Leadership</div>
+        </div>
+
+        <div class="init-kpi-item">
+          <div class="init-kpi-label">
+            STRATEGIC INDEX
+          </div>
+          <div id="kpiPower" class="init-kpi-val">0/100</div>
+          <div id="kpiPowerSub" class="init-kpi-sub">Global Rank #1</div>
+        </div>
+      </div>
+
+      <!-- 2. Primary executive directive -->
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">PRIORITY BRIEF</div>
+          <span>ONE ACTION FIRST</span>
+        </div>
+        <div class="tech-card-body">
+          <div id="priorityBriefCard" class="init-hologram-stage" role="button" tabindex="0" aria-label="Open primary directive details">
+            <div class="holo-orbit-ring-outer"></div>
+            <div class="holo-orbit-ring-inner"></div>
+
+            <div class="holo-core-content">
+              <div class="holo-core-badge">01</div>
+              <div id="holoPrimaryTitle" class="holo-core-title">AUTHORIZE CRACKDOWN IN JAPAN</div>
+              <div id="holoPrimaryStatement" class="holo-core-statement">
+                Servant hold in Tokyo compromised. Espionage operative required to eliminate hostile executive control.
+              </div>
+            </div>
+
+            <!-- Live context fields -->
+            <div class="holo-node-grid">
+              <div class="holo-node">
+                <div class="holo-node-num">01</div>
+                <div class="holo-node-label">GDP under command</div>
+                <div id="node1Val" class="holo-node-status">$39.4T GDP</div>
+              </div>
+              <div class="holo-node">
+                <div class="holo-node-num">02</div>
+                <div class="holo-node-label">Councilors</div>
+                <div id="node2Val" class="holo-node-status">5 Active</div>
+              </div>
+              <div class="holo-node">
+                <div class="holo-node-num">03</div>
+                <div class="holo-node-label">Orbital sites</div>
+                <div id="node3Val" class="holo-node-status">18 Habs</div>
+              </div>
+              <div class="holo-node">
+                <div class="holo-node-num">04</div>
+                <div class="holo-node-label">Research position</div>
+                <div id="node4Val" class="holo-node-status">Leading</div>
+              </div>
+              <div class="holo-node">
+                <div class="holo-node-num">05</div>
+                <div class="holo-node-label">Xenoforming sites</div>
+                <div id="node5Val" class="holo-node-status">DEFCON 2</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Resource position -->
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">RESOURCE POSITION</div>
+          <span>ON HAND</span>
+        </div>
+        <div class="tech-card-body">
+          <div id="resourceFlowChart" class="chart-container-box">
+            <!-- Flow Chart injected dynamically -->
+          </div>
+        </div>
+      </div>
+
     </div>
-    <div class="mc-status-item">
-      <span>Commanding Council:</span>
-      <span id="mcStatusObserver" class="mc-status-val">the Initiative</span>
+
+    <!-- ==================== RIGHT COLUMN ==================== -->
+    <div class="init-col">
+
+      <!-- 1. Current power profile -->
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">POWER PROFILE</div>
+          <span>CURRENT SNAPSHOT</span>
+        </div>
+        <div class="tech-card-body">
+          <div id="powerTrajectoryChart" class="chart-container-box" style="height: 140px;">
+            <!-- Current faction profile injected dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Asset posture -->
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">ASSET POSTURE</div>
+          <span>EARTH / ORBIT</span>
+        </div>
+        <div class="tech-card-body">
+          <div id="dualAssetRings">
+            <!-- Dual rings injected dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Council roster -->
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">COUNCIL ROSTER</div>
+          <span>SKILL TOTAL</span>
+        </div>
+        <div class="tech-card-body">
+          <div id="opLeaderboardList" class="operative-leaderboard">
+            <!-- Operative bars injected dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Strategic holdings -->
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">STRATEGIC HOLDINGS</div>
+          <span>GDP SCALE</span>
+        </div>
+        <div class="tech-card-body" style="padding: 0;">
+          <div id="holdingsBubbleMatrix" class="bubble-matrix-container">
+            <!-- Bubbles injected dynamically -->
+          </div>
+        </div>
+      </div>
+
     </div>
-    <div class="mc-status-item">
-      <span>Strategic Power Index:</span>
-      <span id="mcStatusPower" class="mc-status-val">-</span>
+
+    <!-- ==================== BOTTOM FULL-WIDTH: SITREP & DIRECTIVES ==================== -->
+    <div class="init-directives-banner">
+      <div class="tech-card">
+        <div class="tech-card-header">
+          <div class="tech-card-title">EXECUTIVE BRIEF & DIRECTIVES</div>
+          <button id="btnCopySitrep" class="init-btn">
+            Copy SITREP
+          </button>
+        </div>
+        <div class="tech-card-body">
+          <div id="sitrepSummary" class="sitrep-summary" aria-live="polite">
+            <p>Generating the current executive situation report...</p>
+          </div>
+          <div id="directivesStreamList">
+            <!-- Directives dynamically injected -->
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="mc-status-item">
-      <span>Global Alert:</span>
-      <span id="mcStatusDefcon" class="mc-defcon-badge defcon-elevated">DEFCON 3</span>
-    </div>
-  </div>
-
-  <!-- Main Mission Control Container -->
-  <main id="mcMainContainer" class="mc-container">
-
-    <!-- 1. Executive SITREP Section -->
-    <section>
-      <div class="mc-section-header">
-        <div class="mc-section-title">
-          <span>📡 EXECUTIVE SITUATION REPORT (SITREP)</span>
-        </div>
-        <button id="btnCopySitrep" class="mc-btn" style="font-size: 10.5px;">
-          📋 Copy Briefing
-        </button>
-      </div>
-
-      <div class="mc-sitrep-terminal">
-        <div class="mc-terminal-topbar">
-          <span>// CLASSIFIED STRATEGIC OVERVIEW &bull; LEVEL 5 CLEARANCE</span>
-          <span>LIVE SYNTHESIS</span>
-        </div>
-
-        <div id="mcSitrepContent" class="mc-terminal-content">
-          <p>Compiling global telemetry and parsing orbital sensor streams...</p>
-        </div>
-
-        <div id="mcHudGrid" class="mc-hud-grid">
-          <!-- Metrics dynamically populated -->
-        </div>
-      </div>
-    </section>
-
-    <!-- 2. Priority Directives Matrix -->
-    <section>
-      <div class="mc-section-header">
-        <div class="mc-section-title">
-          <span>⚡ STRATEGIC PRIORITY DIRECTIVES & ACTIONABLE ORDERS</span>
-        </div>
-      </div>
-
-      <!-- Department Filter Tabs -->
-      <div class="mc-directive-tabs">
-        <button class="mc-tab-btn active" data-tab="all">All Departments</button>
-        <button class="mc-tab-btn" data-tab="geo">🏛 Geopolitical Operations</button>
-        <button class="mc-tab-btn" data-tab="council">👤 Directorate of Operatives</button>
-        <button class="mc-tab-btn" data-tab="space">🚀 Aerospace & Fleet Logistics</button>
-        <button class="mc-tab-btn" data-tab="research">🔬 Technological Superiority</button>
-      </div>
-
-      <div id="mcDirectivesGrid" class="mc-directives-grid">
-        <!-- Directives dynamically injected -->
-      </div>
-    </section>
-
-    <!-- 3. Global Theater Command Matrix -->
-    <section>
-      <div class="mc-section-header">
-        <div class="mc-section-title">
-          <span>🌍 GLOBAL THEATER COMMAND MATRIX</span>
-        </div>
-      </div>
-
-      <div id="mcTheatersGrid" class="mc-theaters-grid">
-        <!-- Theaters dynamically injected -->
-      </div>
-    </section>
-
-    <!-- 4. Operative Tactical Command Board -->
-    <section>
-      <div class="mc-section-header">
-        <div class="mc-section-title">
-          <span>👤 OPERATIVE TACTICAL COMMAND ROSTER</span>
-        </div>
-      </div>
-
-      <div class="mc-operatives-table-container">
-        <table class="mc-operatives-table">
-          <thead>
-            <tr>
-              <th>Operative</th>
-              <th>Stationed Location</th>
-              <th>Active Mission</th>
-              <th>Prime Specialty</th>
-              <th>Readiness Status</th>
-              <th>Recommended Tactical Directive</th>
-            </tr>
-          </thead>
-          <tbody id="mcOperativesTableBody">
-            <!-- Operatives dynamically injected -->
-          </tbody>
-        </table>
-      </div>
-    </section>
 
   </main>
+
+  <!-- On-demand faction intelligence screen. It is populated from the current filtered snapshot. -->
+  <section id="factionIntelScreen" class="faction-intel-screen" hidden aria-labelledby="factionIntelTitle">
+    <div class="faction-intel-screen__backdrop" data-faction-intel-close></div>
+    <div class="faction-intel-screen__dialog" role="dialog" aria-modal="true">
+      <header class="faction-intel-screen__header">
+        <div>
+          <div class="faction-intel-screen__eyebrow">CAMPAIGN INTELLIGENCE</div>
+          <h2 id="factionIntelTitle">Faction dossier</h2>
+        </div>
+        <button id="closeFactionIntelBtn" class="init-btn" type="button">Close</button>
+      </header>
+      <div id="factionIntelRoot" class="faction-intel-screen__body"></div>
+    </div>
+  </section>
 
   <!-- Interactive Toast Notification -->
   <div id="mcToast" class="mc-toast">Telemetry updated.</div>
 
+  <script src="/v2/js/components/detail-panel.js"></script>
+  <script src="/v2/js/components/world-map.js"></script>
+  <script src="/v2/js/components/faction-intel.js"></script>
   <script src="/v2/js/mission-control.js"></script>
 </body>
 </html>

@@ -21,6 +21,11 @@ class IntelligenceFilter {
     const priorityTargets = priorityTargetFaction
       ? this.buildPriorityTargets(rawSnapshot, actualObserverId, priorityTargetFaction)
       : [];
+    const factionRelationships = this.filterFactionRelationships(
+      rawSnapshot.factionRelationships,
+      actualObserverId,
+      mode
+    );
 
     if (mode === 'omniscient') {
       return {
@@ -38,6 +43,7 @@ class IntelligenceFilter {
             visibility: 'raw_save_only'
           }
         })),
+        factionRelationships,
         nations: rawSnapshot.nations,
         councilors: rawSnapshot.councilors.map(c => ({
           ...c,
@@ -168,13 +174,18 @@ class IntelligenceFilter {
         }
       }
 
+      const exposesRawCouncilorData = isOwnCouncilor || isTurnedMole || isEnhanced;
+      const councilorData = exposesRawCouncilorData
+        ? c
+        : this.sanitizeObservedCouncilor(c, maskedAttributes);
+
       filteredCouncilors.push({
-        ...c,
+        ...councilorData,
         isTurnedMole,
         isOwnCouncilor,
         visibility: isOwnCouncilor ? 'confirmed' : (isTurnedMole ? 'confirmed' : (isSeen ? 'detected' : 'raw_save_only')),
         investigationConfidence: isOwnCouncilor ? 'HIGH' : (isTurnedMole ? 'VERY HIGH' : (isSeen ? 'PARTIAL' : 'NONE')),
-        maskedAttributes
+        maskedAttributes: exposesRawCouncilorData ? maskedAttributes : this.sanitizeMaskedAttributes(maskedAttributes)
       });
     }
 
@@ -267,6 +278,7 @@ class IntelligenceFilter {
       alienIntelligenceStage,
       metadata: rawSnapshot.metadata,
       factions: visibleFactions,
+      factionRelationships,
       nations: rawSnapshot.nations,
       councilors: filteredCouncilors,
       fleets: visibleSpaceAssets.fleets,
@@ -301,6 +313,65 @@ class IntelligenceFilter {
       targetFaction.id,
       targetFaction.name
     );
+  }
+
+  filterFactionRelationships(relationships, observerFactionId, mode) {
+    if (!Array.isArray(relationships)) return [];
+
+    return relationships
+      .filter((relationship) => mode === 'omniscient' || mode === 'enhanced' ||
+        String(relationship.sourceFactionId) === String(observerFactionId))
+      .map((relationship) => ({
+        ...relationship,
+        visibility: mode === 'omniscient'
+          ? 'raw_save_only'
+          : mode === 'enhanced'
+            ? 'enhanced telemetry'
+            : 'observer faction telemetry'
+      }));
+  }
+
+  sanitizeObservedCouncilor(councilor, maskedAttributes) {
+    const {
+      attributes,
+      maskedAttributes: rawMaskedAttributes,
+      orgs,
+      traits,
+      totalSkills,
+      ...safeCouncilor
+    } = councilor;
+
+    return {
+      ...safeCouncilor,
+      maskedAttributes: this.sanitizeMaskedAttributes(maskedAttributes)
+    };
+  }
+
+  sanitizeMaskedAttributes(maskedAttributes) {
+    return Object.fromEntries(Object.entries(maskedAttributes || {}).map(([name, value]) => {
+      if (!value || typeof value !== 'object') return [name, value];
+      const { actual, ...safeValue } = value;
+      return [name, safeValue];
+    }));
+  }
+
+  assertPlayerSnapshotSafe(snapshot) {
+    const leaks = [];
+    for (const councilor of snapshot?.councilors || []) {
+      if (councilor.isOwnCouncilor || councilor.isTurnedMole) continue;
+      if (councilor.attributes && Object.keys(councilor.attributes).length) {
+        leaks.push(`${councilor.ID}:attributes`);
+      }
+      for (const [name, value] of Object.entries(councilor.maskedAttributes || {})) {
+        if (value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'actual')) {
+          leaks.push(`${councilor.ID}:maskedAttributes.${name}.actual`);
+        }
+      }
+    }
+    if (leaks.length) {
+      throw new Error(`Player snapshot contains hidden councilor telemetry: ${leaks.join(', ')}`);
+    }
+    return true;
   }
 
   hasIntel(observerIntelligence, id, typeFragment = null) {

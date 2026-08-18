@@ -19,6 +19,7 @@ const saveParser = require('../server/saveParser');
 const snapshotBuilder = require('../server/snapshotBuilder');
 const intelligenceFilter = require('../server/intelligenceFilter');
 const exportGenerator = require('../server/exportGenerator');
+const briefingGenerator = require('../server/briefingGenerator');
 const templateLoader = require('../server/templateLoader');
 
 // Parse CLI Arguments
@@ -123,6 +124,8 @@ async function main() {
   for (const observer of observerFactions) {
     for (const mode of publishedModes) {
       const modeData = intelligenceFilter.applyFilter(rawSnapshot, mode, observer.ID);
+      if (mode === 'player') intelligenceFilter.assertPlayerSnapshotSafe(modeData);
+      const missionControlBriefing = briefingGenerator.generateMissionControlBriefing(modeData, rawSnapshot);
       const compactMarkdown = exportGenerator.generateCompactSnapshot(modeData);
       const fullMarkdown = exportGenerator.generateFullMarkdownReport(modeData);
 
@@ -135,7 +138,10 @@ async function main() {
         campaign_start_year: rawSnapshot.metadata.campaignStartYear,
         observer_faction_id: observer.ID,
         observer_faction_name: observer.displayName,
-        snapshot: modeData,
+        snapshot: {
+          ...modeData,
+          missionControlBriefing
+        },
         chatgpt_export: {
           compact: compactMarkdown,
           full: fullMarkdown

@@ -19,21 +19,27 @@ const mimeTypeFor = (pathname) => {
 
 const embeddedAsset = (pathname) => {
   const key = pathname.replace(/^\/+/, '') || 'index.html';
-  const body = staticAssets[key];
+  const candidates = [
+    key,
+    key.endsWith('/') ? `${key}index.html` : `${key}/index.html`
+  ];
+  const assetKey = candidates.find(candidate => staticAssets[candidate] !== undefined);
+  const body = assetKey === undefined ? undefined : staticAssets[assetKey];
   if (body === undefined) return null;
 
   return new Response(body, {
     status: 200,
     headers: {
-      'content-type': mimeTypeFor(key),
-      'cache-control': key === 'index.html' ? 'no-cache' : 'public, max-age=300'
+      'content-type': mimeTypeFor(assetKey),
+      'cache-control': assetKey === 'index.html' ? 'no-cache' : 'public, max-age=300'
     }
   });
 };
 
 const asset = async (env, request, pathname) => {
   const url = new URL(request.url);
-  url.pathname = pathname;
+  const assetPath = pathname === '/v2' ? '/v2/index.html' : pathname;
+  url.pathname = assetPath;
 
   if (env?.ASSETS?.fetch) {
     const response = await env.ASSETS.fetch(new Request(url.toString(), {
@@ -43,7 +49,7 @@ const asset = async (env, request, pathname) => {
     if (response.status !== 404) return response;
   }
 
-  return embeddedAsset(pathname) || new Response('Not found', { status: 404 });
+  return embeddedAsset(assetPath) || new Response('Not found', { status: 404 });
 };
 
 const observerFile = (observerId, suffix) => {
@@ -571,6 +577,8 @@ export default {
         environment: 'hosted',
         canPublish: false,
         canRefresh: true,
+        supportedModes: ['player', 'omniscient'],
+        defaultMode: 'player',
         source: 'hosted-worker'
       });
     }
@@ -580,6 +588,50 @@ export default {
         success: false,
         error: 'Publishing is available only from the local dashboard.'
       }, 404);
+    }
+
+    // Mission Control v2 consumes the same generated briefing that the local
+    // publisher stores beside each filtered snapshot. This keeps the hosted
+    // SITREP, faction dossier, and observer/mode controls data-backed.
+    if (url.pathname === '/api/v2/briefing') {
+      if (isSupabaseConfigured) {
+        try {
+          const result = await fetchFromSupabase(env, observerId, mode);
+          if (!result.found) {
+            return jsonResponse({ success: false, error: result.error }, result.status);
+          }
+          const snapshot = result.snapshot || {};
+          if (!snapshot.missionControlBriefing) {
+            return jsonResponse({
+              success: false,
+              error: 'The published snapshot predates the Mission Control briefing payload. Republish the latest save.'
+            }, 503);
+          }
+          return jsonResponse({
+            success: true,
+            briefing: snapshot.missionControlBriefing,
+            data: snapshot,
+            source: 'supabase'
+          });
+        } catch (err) {
+          return jsonResponse({ success: false, error: err.message }, 500);
+        }
+      }
+
+      if (mode === 'omniscient') {
+        return jsonResponse({ success: false, error: 'Omniscient briefings require the published Supabase backend.' }, 503);
+      }
+
+      const staticResponse = await asset(env, request, observerFile(observerId, 'snapshot'));
+      if (!staticResponse.ok) return staticResponse;
+      const staticPayload = await staticResponse.json();
+      const snapshot = staticPayload.data || {};
+      return jsonResponse({
+        success: true,
+        briefing: snapshot.missionControlBriefing || null,
+        data: snapshot,
+        source: 'static'
+      });
     }
 
     // Flat resource endpoints are designed for external analysis tools. Each

@@ -4,6 +4,7 @@ const saveParser = require('../server/saveParser');
 const snapshotBuilder = require('../server/snapshotBuilder');
 const intelligenceFilter = require('../server/intelligenceFilter');
 const exportGenerator = require('../server/exportGenerator');
+const briefingGenerator = require('../server/briefingGenerator');
 const templateLoader = require('../server/templateLoader');
 
 const projectRoot = path.resolve(__dirname, '..');
@@ -35,7 +36,12 @@ const writeJson = (name, value) => {
 const observerFactions = rawSnapshot.factions.filter(f => f.ID !== undefined);
 for (const observer of observerFactions) {
   const playerData = intelligenceFilter.applyFilter(rawSnapshot, 'player', observer.ID);
-  writeJson(`snapshot-player-${observer.ID}.json`, { success: true, data: playerData });
+  intelligenceFilter.assertPlayerSnapshotSafe(playerData);
+  const missionControlBriefing = briefingGenerator.generateMissionControlBriefing(playerData, rawSnapshot);
+  writeJson(`snapshot-player-${observer.ID}.json`, {
+    success: true,
+    data: { ...playerData, missionControlBriefing }
+  });
   writeJson(`export-chatgpt-player-${observer.ID}.json`, {
     success: true,
     markdown: exportGenerator.generateCompactSnapshot(playerData)
@@ -71,7 +77,13 @@ const embeddedAssetPaths = [
   'css/components.css',
   'js/api.js',
   'js/app.js',
-  'data/effects.json'
+  'data/effects.json',
+  'v2/index.html',
+  'v2/css/mission-control.css',
+  'v2/js/mission-control.js',
+  'v2/js/components/detail-panel.js',
+  'v2/js/components/world-map.js',
+  'v2/js/components/faction-intel.js'
 ];
 const embeddedAssets = Object.fromEntries(
   embeddedAssetPaths.map(relativePath => [
