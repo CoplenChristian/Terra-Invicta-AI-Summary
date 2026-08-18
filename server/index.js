@@ -325,10 +325,9 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
     );
     const body = requestValidation.parseBodyQuery(req.query.body);
     const projection = intelResources.buildResource(filtered, req.params.resource, { factionId, body, mode });
-    const items = Array.isArray(projection.items) ? projection.items : null;
 
     res.set('Cache-Control', 'no-store');
-    res.json({ ...projection, count: items ? items.length : projection.count });
+    res.json(projection);
   } catch (err) {
     console.error(`[Server] Focused resource failed (${req.params.resource}):`, err);
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
