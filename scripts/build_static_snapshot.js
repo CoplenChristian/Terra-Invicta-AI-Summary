@@ -83,7 +83,8 @@ const embeddedAssetPaths = [
   'v2/js/mission-control.js',
   'v2/js/components/detail-panel.js',
   'v2/js/components/world-map.js',
-  'v2/js/components/faction-intel.js'
+  'v2/js/components/faction-intel.js',
+  'v2/js/components/intelligence-library.js'
 ];
 const embeddedAssets = Object.fromEntries(
   embeddedAssetPaths.map(relativePath => [

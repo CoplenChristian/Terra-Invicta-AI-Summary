@@ -63,6 +63,10 @@
         Faction intel
       </button>
 
+      <button id="openIntelligenceLibraryBtn" class="init-btn" type="button">
+        Intelligence library
+      </button>
+
       <!-- Classic Dashboard Switch -->
       <a href="/" class="init-btn" title="Switch to Database View">
         Classic view
@@ -319,12 +323,28 @@
     </div>
   </section>
 
+  <!-- Integrated classic-dashboard data room. -->
+  <section id="intelligenceLibraryScreen" class="intelligence-library-screen" hidden aria-labelledby="intelligenceLibraryTitle">
+    <div class="intelligence-library-screen__backdrop" data-intelligence-library-close></div>
+    <div class="intelligence-library-screen__dialog" role="dialog" aria-modal="true">
+      <header class="intelligence-library-screen__header">
+        <div>
+          <div class="intelligence-library-screen__eyebrow">OPERATIONS DATA ROOM</div>
+          <h2 id="intelligenceLibraryTitle">Intelligence library</h2>
+        </div>
+        <button id="closeIntelligenceLibraryBtn" class="init-btn" type="button">Close</button>
+      </header>
+      <div id="intelligenceLibraryRoot" class="intelligence-library-screen__body"></div>
+    </div>
+  </section>
+
   <!-- Interactive Toast Notification -->
   <div id="mcToast" class="mc-toast">Telemetry updated.</div>
 
   <script src="/v2/js/components/detail-panel.js"></script>
   <script src="/v2/js/components/world-map.js"></script>
   <script src="/v2/js/components/faction-intel.js"></script>
+  <script src="/v2/js/components/intelligence-library.js"></script>
   <script src="/v2/js/mission-control.js"></script>
 </body>
 </html>

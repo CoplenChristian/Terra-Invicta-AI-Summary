@@ -16,6 +16,8 @@ const state = {
   }
 };
 
+let factionController = null;
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -126,10 +128,13 @@ function initEventListeners() {
     factionScreen.hidden = true;
     document.body.classList.remove('faction-intel-open');
   };
-  const openFactionScreen = () => {
+  const openFactionScreen = (selectedFactionId) => {
     if (!factionScreen || !factionRoot || !state.rawSnapshot) return;
     if (window.FactionIntelScreen) {
-      window.FactionIntelScreen.render(factionRoot, state.rawSnapshot, state.briefing, state.observer);
+      factionController = window.FactionIntelScreen.render(factionRoot, state.rawSnapshot, state.briefing, state.observer);
+      if (selectedFactionId !== undefined && selectedFactionId !== null) {
+        factionController?.select?.(selectedFactionId);
+      }
     }
     factionScreen.hidden = false;
     document.body.classList.add('faction-intel-open');
@@ -142,6 +147,42 @@ function initEventListeners() {
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && factionScreen && !factionScreen.hidden) closeFactionScreen();
+  });
+
+  const openLibraryBtn = document.getElementById('openIntelligenceLibraryBtn');
+  const libraryScreen = document.getElementById('intelligenceLibraryScreen');
+  const closeLibraryBtn = document.getElementById('closeIntelligenceLibraryBtn');
+  const libraryRoot = document.getElementById('intelligenceLibraryRoot');
+  const closeLibraryScreen = () => {
+    if (!libraryScreen) return;
+    libraryScreen.hidden = true;
+    document.body.classList.remove('intelligence-library-open');
+  };
+  const renderLibrary = (section) => {
+    if (!libraryRoot || !state.rawSnapshot || !window.IntelligenceLibrary) return;
+    window.IntelligenceLibrary.render(libraryRoot, state.rawSnapshot, state.briefing, state.observer, {
+      section: section || 'overview',
+      onOpenFaction: (factionId) => {
+        closeLibraryScreen();
+        openFactionScreen(factionId);
+      },
+      onCopyExport: copyLibraryExport
+    });
+  };
+  const openLibraryScreen = () => {
+    if (!libraryScreen || !libraryRoot || !state.rawSnapshot) return;
+    renderLibrary('overview');
+    libraryScreen.hidden = false;
+    document.body.classList.add('intelligence-library-open');
+    closeLibraryBtn?.focus();
+  };
+  openLibraryBtn?.addEventListener('click', openLibraryScreen);
+  closeLibraryBtn?.addEventListener('click', closeLibraryScreen);
+  libraryScreen?.addEventListener('click', (event) => {
+    if (event.target.closest('[data-intelligence-library-close]')) closeLibraryScreen();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && libraryScreen && !libraryScreen.hidden) closeLibraryScreen();
   });
 
   const priorityCard = document.getElementById('priorityBriefCard');
@@ -187,7 +228,25 @@ async function loadData() {
     const factionScreen = document.getElementById('factionIntelScreen');
     const factionRoot = document.getElementById('factionIntelRoot');
     if (factionScreen && !factionScreen.hidden && factionRoot && window.FactionIntelScreen) {
-      window.FactionIntelScreen.render(factionRoot, state.rawSnapshot, state.briefing, state.observer);
+      factionController = window.FactionIntelScreen.render(factionRoot, state.rawSnapshot, state.briefing, state.observer);
+    }
+    const libraryScreen = document.getElementById('intelligenceLibraryScreen');
+    const libraryRoot = document.getElementById('intelligenceLibraryRoot');
+    if (libraryScreen && !libraryScreen.hidden && libraryRoot && window.IntelligenceLibrary) {
+      window.IntelligenceLibrary.render(libraryRoot, state.rawSnapshot, state.briefing, state.observer, {
+        section: 'overview',
+        onOpenFaction: (factionId) => {
+          libraryScreen.hidden = true;
+          document.body.classList.remove('intelligence-library-open');
+          if (factionScreen && factionRoot && window.FactionIntelScreen) {
+            factionController = window.FactionIntelScreen.render(factionRoot, state.rawSnapshot, state.briefing, state.observer);
+            factionController?.select?.(factionId);
+            factionScreen.hidden = false;
+            document.body.classList.add('faction-intel-open');
+          }
+        },
+        onCopyExport: copyLibraryExport
+      });
     }
   } catch (err) {
     console.error('[Mission Control] Error loading telemetry:', err);
@@ -655,4 +714,19 @@ function showToast(msg) {
   toast.textContent = msg;
   toast.style.display = 'block';
   setTimeout(() => { toast.style.display = 'none'; }, 3500);
+}
+
+async function copyLibraryExport(format, statusNode) {
+  if (statusNode) statusNode.textContent = 'Preparing current handoff…';
+  try {
+    const res = await fetch(`/api/export?format=${format === 'full' ? 'full' : 'chatgpt'}&mode=${encodeURIComponent(state.mode)}&observer=${encodeURIComponent(state.observer)}`);
+    const payload = await res.json();
+    if (!res.ok || !payload.success || !payload.markdown) throw new Error(payload.error || 'Export unavailable');
+    await navigator.clipboard.writeText(payload.markdown);
+    if (statusNode) statusNode.textContent = `${format === 'full' ? 'Full' : 'Compact'} snapshot copied with ${state.mode.toUpperCase()} visibility labels.`;
+    showToast('Snapshot copied to clipboard.');
+  } catch (err) {
+    if (statusNode) statusNode.textContent = `Export unavailable — ${err.message}`;
+    showToast('Snapshot export failed.');
+  }
 }
