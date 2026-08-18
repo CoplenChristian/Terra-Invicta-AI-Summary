@@ -1,8 +1,9 @@
 const path = require('path');
 const fs = require('fs');
+const { SUPPORTED_MODES } = require('../shared/constants.mjs');
 
-const LOCAL_MODES = new Set(['player', 'enhanced', 'omniscient']);
-const HOSTED_MODES = new Set(['player', 'enhanced', 'omniscient']);
+const LOCAL_MODES = SUPPORTED_MODES;
+const HOSTED_MODES = SUPPORTED_MODES;
 
 class RequestValidationError extends Error {
   constructor(message, statusCode = 400) {

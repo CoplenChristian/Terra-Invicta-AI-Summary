@@ -599,8 +599,6 @@ class SnapshotBuilder {
 
     // Process Factions Summary & Power Scores
     const factions = [];
-    const servantsFaction = rawFactions.find(f => f.displayName === 'the Servants');
-    const servantsFactionId = servantsFaction?.ID?.value || null;
     const scoreWeights = templateLoader.config.powerScoreWeights || {
       earthEconomy: 0.20,
       earthPolitics: 0.15,

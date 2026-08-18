@@ -20,7 +20,7 @@ const PUBLISH_TIMEOUT_MS = Number(process.env.PUBLISH_TIMEOUT_MS) > 0
   ? Number(process.env.PUBLISH_TIMEOUT_MS)
   : 15 * 60 * 1000;
 
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 if (require.main === module) {
@@ -37,8 +37,8 @@ if (require.main === module) {
 // In-memory snapshot cache
 let cachedRawSave = null;
 let cachedSavePath = null;
+let cachedSaveStatKey = null;
 let cachedPreviousRawSave = null;
-let cachedSaveFingerprint = null;
 const filteredSnapshotCache = new Map();
 let activePublisherProcess = null;
 
@@ -62,22 +62,26 @@ function loadOrGetSnapshot(targetSavePath = null) {
 
   const stats = fs.statSync(saveFile.fullPath);
   if (!saveFile.lastModified) saveFile.lastModified = stats.mtime;
-  const fingerprint = snapshotIdentity.createFileFingerprint(saveFile.fullPath);
-  if (cachedRawSave && cachedSavePath === saveFile.fullPath && cachedSaveFingerprint === fingerprint.key) {
+  const statKey = `${stats.size}:${stats.mtimeMs}`;
+  if (cachedRawSave && cachedSavePath === saveFile.fullPath && cachedSaveStatKey === statKey) {
     return cachedRawSave;
   }
 
+  // Parse the save and verify it did not change while it was being read.
+  // The fingerprint is computed only on a cache miss; a stat comparison is
+  // sufficient for cache hits because the game's writes always bump mtime.
   console.log(`[Server] Parsing save ${saveFile.name}...`);
+  const beforeFingerprint = snapshotIdentity.createFileFingerprint(saveFile.fullPath);
   const parsedSave = saveParser.readSaveJson(saveFile.fullPath);
-  const stableFingerprint = snapshotIdentity.createFileFingerprint(saveFile.fullPath);
-  if (stableFingerprint.key !== fingerprint.key) {
+  const afterFingerprint = snapshotIdentity.createFileFingerprint(saveFile.fullPath);
+  if (afterFingerprint.key !== beforeFingerprint.key) {
     const error = new Error(`Save '${saveFile.name}' changed while it was being parsed. Terra Invicta may still be writing it; retry after the save finishes.`);
     error.statusCode = 503;
     throw error;
   }
   const rawSnapshot = snapshotBuilder.buildRawSnapshot(parsedSave);
   const identity = snapshotIdentity.createSnapshotIdentity(
-    { ...saveFile, saveHash: fingerprint.saveHash },
+    { ...saveFile, saveHash: beforeFingerprint.saveHash },
     process.env.SUPABASE_CAMPAIGN_KEY || 'initiative'
   );
   snapshotIdentity.attachSnapshotIdentity(rawSnapshot, identity);
@@ -108,7 +112,7 @@ function loadOrGetSnapshot(targetSavePath = null) {
 
   cachedRawSave = rawSnapshot;
   cachedSavePath = saveFile.fullPath;
-  cachedSaveFingerprint = fingerprint.key;
+  cachedSaveStatKey = statKey;
   filteredSnapshotCache.clear();
 
   return rawSnapshot;
@@ -270,7 +274,7 @@ app.post('/api/refresh', (req, res) => {
   try {
     cachedRawSave = null;
     cachedSavePath = null;
-    cachedSaveFingerprint = null;
+    cachedSaveStatKey = null;
     cachedPreviousRawSave = null;
     filteredSnapshotCache.clear();
 

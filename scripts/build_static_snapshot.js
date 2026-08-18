@@ -45,6 +45,7 @@ fs.rmSync(distDir, { recursive: true, force: true });
 fs.cpSync(publicDir, distDir, { recursive: true });
 fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(path.join(distDir, 'server'), { recursive: true });
+fs.cpSync(path.join(projectRoot, 'shared'), path.join(distDir, 'shared'), { recursive: true });
 fs.copyFileSync(
   path.join(projectRoot, 'site', 'worker', 'index.js'),
   path.join(distDir, 'server', 'index.js')

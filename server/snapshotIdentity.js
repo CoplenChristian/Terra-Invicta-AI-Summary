@@ -5,9 +5,9 @@ function hashFile(filePath) {
   return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 }
 
-function createFileFingerprint(filePath) {
+function createFileFingerprint(filePath, precomputedHash = null) {
   const stats = fs.statSync(filePath);
-  const saveHash = hashFile(filePath);
+  const saveHash = precomputedHash || hashFile(filePath);
   return {
     saveHash,
     sizeBytes: stats.size,
@@ -17,7 +17,9 @@ function createFileFingerprint(filePath) {
 }
 
 function createSnapshotIdentity(saveFile, campaignKey = 'initiative', generatedAt = new Date().toISOString()) {
-  const stats = saveFile && saveFile.fullPath ? fs.statSync(saveFile.fullPath) : null;
+  const stats = saveFile?.lastModified
+    ? null
+    : (saveFile?.fullPath ? fs.statSync(saveFile.fullPath) : null);
   const saveModifiedAt = new Date(saveFile?.lastModified || stats?.mtimeMs || 0).toISOString();
   const saveHash = saveFile?.saveHash || hashFile(saveFile.fullPath);
   const snapshotId = crypto.createHash('sha256')
@@ -69,6 +71,7 @@ function hasCompleteIdentity(snapshot = {}) {
 }
 
 module.exports = {
+  hashFile,
   createFileFingerprint,
   createSnapshotIdentity,
   attachSnapshotIdentity,

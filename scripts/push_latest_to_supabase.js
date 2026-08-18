@@ -24,6 +24,7 @@ const briefingGenerator = require('../server/briefingGenerator');
 const templateLoader = require('../server/templateLoader');
 const snapshotIdentity = require('../server/snapshotIdentity');
 const snapshotDelta = require('../server/snapshotDelta');
+const { INTELLIGENCE_MODES } = require('../shared/constants.mjs');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -38,7 +39,7 @@ async function withSupabaseRetry(label, operation, attempts = 4) {
     if (!retryable || attempt === attempts) return result;
 
     const delay = Math.min(8000, 400 * (2 ** (attempt - 1))) + Math.round(Math.random() * 250);
-    console.warn(`[Retry] ${label} failed (${error.message}); retrying in ${delay}ms (${attempt}/${attempts - 1})...`);
+    console.warn(`[Retry] ${label} failed (${error.message}); retrying in ${delay}ms (${attempt}/${attempts})...`);
     await sleep(delay);
   }
   throw new Error(`${label} failed without a result.`);
@@ -139,7 +140,18 @@ async function main() {
   // 2. Parse Save & Build Raw Snapshot
   console.log('\nParsing save and generating intelligence snapshots...');
   templateLoader.load();
+
+  // Guard against publishing a save that the game is still writing: verify the
+  // file fingerprint is stable across the parse, mirroring the server's check.
+  const beforeFingerprint = snapshotIdentity.createFileFingerprint(targetSave.fullPath);
   const parsedSave = saveParser.readSaveJson(targetSave.fullPath);
+  const afterFingerprint = snapshotIdentity.createFileFingerprint(targetSave.fullPath);
+  if (afterFingerprint.key !== beforeFingerprint.key) {
+    console.error(`[Error] Save '${targetSave.name}' changed while it was being parsed. Terra Invicta may still be writing it; retry after the save finishes.`);
+    process.exit(1);
+  }
+  targetSave = { ...targetSave, saveHash: beforeFingerprint.saveHash };
+
   const rawSnapshot = snapshotBuilder.buildRawSnapshot(parsedSave);
   const identity = snapshotIdentity.createSnapshotIdentity(targetSave, options.campaignKey);
   snapshotIdentity.attachSnapshotIdentity(rawSnapshot, identity);
@@ -190,7 +202,7 @@ async function main() {
   // Enhanced and Omniscient are intentionally enabled for this campaign at the
   // user's request; each remains clearly labeled in storage and every hosted response.
   const snapshotRows = [];
-  const publishedModes = ['player', 'enhanced', 'omniscient'];
+  const publishedModes = INTELLIGENCE_MODES;
   for (const observer of observerFactions) {
     for (const mode of publishedModes) {
       const modeData = intelligenceFilter.applyFilter(rawSnapshot, mode, observer.ID);
@@ -311,15 +323,35 @@ async function main() {
   }
 
   // Upsert published snapshot rows first. Keep each request comfortably below
-  // the hosted REST payload limit while retaining bulk upserts.
+  // the hosted REST payload limit while retaining bulk upserts. Batch size is
+  // driven by actual payload bytes, not a fixed row count, so large rows can
+  // never push a single request over the limit.
   console.log(`Upserting ${snapshotRows.length} published snapshot rows...`);
-  const snapshotBatchSize = 4;
+  const maxBatchBytes = 3 * 1024 * 1024;
+  const maxBatchRows = 8;
+  const snapshotBatches = [];
+  let currentBatch = [];
+  let currentBatchBytes = 0;
+  for (const row of snapshotRows) {
+    const rowBytes = Buffer.byteLength(JSON.stringify(row), 'utf8');
+    if (currentBatch.length > 0 &&
+      (currentBatchBytes + rowBytes > maxBatchBytes || currentBatch.length >= maxBatchRows)) {
+      snapshotBatches.push(currentBatch);
+      currentBatch = [];
+      currentBatchBytes = 0;
+    }
+    currentBatch.push(row);
+    currentBatchBytes += rowBytes;
+  }
+  if (currentBatch.length > 0) snapshotBatches.push(currentBatch);
+
   let uploadedSnapshotCount = 0;
-  for (let offset = 0; offset < snapshotRows.length; offset += snapshotBatchSize) {
-    const batch = snapshotRows.slice(offset, offset + snapshotBatchSize);
-    const batchNumber = Math.floor(offset / snapshotBatchSize) + 1;
-    const batchCount = Math.ceil(snapshotRows.length / snapshotBatchSize);
-    console.log(`  Batch ${batchNumber}/${batchCount}: ${batch.length} rows...`);
+  const batchCount = snapshotBatches.length;
+  for (let batchIndex = 0; batchIndex < snapshotBatches.length; batchIndex++) {
+    const batch = snapshotBatches[batchIndex];
+    const batchNumber = batchIndex + 1;
+    const batchBytes = batch.reduce((sum, row) => sum + Buffer.byteLength(JSON.stringify(row), 'utf8'), 0);
+    console.log(`  Batch ${batchNumber}/${batchCount}: ${batch.length} rows (~${(batchBytes / 1024).toFixed(0)} KB)...`);
 
     const { error: snapshotUpsertErr } = await withSupabaseRetry(
       `snapshot batch ${batchNumber}/${batchCount}`,

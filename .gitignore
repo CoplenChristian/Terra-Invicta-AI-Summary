@@ -1,8 +1,32 @@
+# Terra Invicta AI Summary & Dashboard - Git Ignore
+
+# Environment and secrets (CRITICAL: Never commit credentials!)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Local configuration and dev files
+config.json
+template.config.local
+
+# Dependency and build directories
+node_modules/
+dist/
+
+# Save files and large binaries
+*.gz
+*.json.gz
+*.tgz
+Again
+Spaceships*
+
+# Generated CSVs and exports
+csv/*.csv
+!csv/README.md
 Again_Save/snippet_pack/*
 !Again_Save/snippet_pack/README.md
 Again_Save/summary/*
 !Again_Save/summary/README.md
-csv/*.csv
-!csv/README.md
-config.json
-Spaceships*
+logs/

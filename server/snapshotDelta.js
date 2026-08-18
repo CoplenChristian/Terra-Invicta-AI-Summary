@@ -1,4 +1,5 @@
 const spaceTheater = require('./spaceTheater');
+const { ALIEN_FACTION_ID, ALIEN_FACTION_DISPLAY_NAME } = require('../shared/constants.mjs');
 
 const RESOURCE_FIELDS = [
   ['Money', 'Money'],
@@ -187,8 +188,8 @@ function buildResearchChanges(previous, current, observerId) {
 }
 
 function buildThreatChange(previous, current) {
-  const previousAlien = findFaction(previous, 4717) || asArray(previous?.factions).find(faction => faction.displayName === 'the Aliens');
-  const currentAlien = findFaction(current, 4717) || asArray(current?.factions).find(faction => faction.displayName === 'the Aliens');
+  const previousAlien = findFaction(previous, ALIEN_FACTION_ID) || asArray(previous?.factions).find(faction => faction.displayName === ALIEN_FACTION_DISPLAY_NAME);
+  const currentAlien = findFaction(current, ALIEN_FACTION_ID) || asArray(current?.factions).find(faction => faction.displayName === ALIEN_FACTION_DISPLAY_NAME);
   const previousFleets = asArray(previous?.fleets).filter(fleet => sameId(fleet.factionId, previousAlien?.ID));
   const currentFleets = asArray(current?.fleets).filter(fleet => sameId(fleet.factionId, currentAlien?.ID));
   const previousSol = previousFleets.filter(fleet => spaceTheater.normalizeBodyName(fleet.orbitBody) === 'sol');

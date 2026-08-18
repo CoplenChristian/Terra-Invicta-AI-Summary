@@ -1,11 +1,16 @@
 const capabilityResolver = require('./capabilityResolver');
 const opportunityScorer = require('./opportunityScorer');
 const snapshotIdentity = require('./snapshotIdentity');
+const {
+  ALIEN_FACTION_DISPLAY_NAME,
+  INITIATIVE_DISPLAY_NAME,
+  SERVANTS_DISPLAY_NAME
+} = require('../shared/constants.mjs');
 
 class IntelligenceFilter {
   applyFilter(rawSnapshot, mode = 'player', observerFactionId = 4712) {
     const observer = rawSnapshot.factions.find(f => f.ID === observerFactionId) ||
-                     rawSnapshot.factions.find(f => f.displayName === 'the Initiative') ||
+                     rawSnapshot.factions.find(f => f.displayName === INITIATIVE_DISPLAY_NAME) ||
                      rawSnapshot.factions[0];
 
     const actualObserverId = observer ? observer.ID : observerFactionId;
@@ -34,7 +39,7 @@ class IntelligenceFilter {
         ...identity,
         mode: 'omniscient',
         observerFactionId: actualObserverId,
-        observerFactionName: observer?.displayName || 'the Initiative',
+        observerFactionName: observer?.displayName || INITIATIVE_DISPLAY_NAME,
         capabilities,
         metadata: rawSnapshot.metadata,
         factions: rawSnapshot.factions.map(f => ({
@@ -279,7 +284,7 @@ class IntelligenceFilter {
       ...identity,
       mode,
       observerFactionId: actualObserverId,
-      observerFactionName: observer?.displayName || 'the Initiative',
+      observerFactionName: observer?.displayName || INITIATIVE_DISPLAY_NAME,
       capabilities,
       alienIntelligenceStage,
       metadata: rawSnapshot.metadata,
@@ -396,7 +401,7 @@ class IntelligenceFilter {
   }
 
   filterSpaceAssets(rawSnapshot, observerFactionId, observerIntelligence, capabilities, isEnhanced) {
-    const alienFactionId = rawSnapshot.factions.find(f => f.displayName === 'the Aliens')?.ID;
+    const alienFactionId = rawSnapshot.factions.find(f => f.displayName === ALIEN_FACTION_DISPLAY_NAME)?.ID;
     const canSeeAlienEverywhere = capabilities.canTrackSolarSystemSpaceAssets;
     const canSeeAlienInnerSystem = capabilities.canTrackInnerSpaceAssets;
 
@@ -449,7 +454,7 @@ class IntelligenceFilter {
   }
 
   filterFactionSpaceMetrics(factions, rawSnapshot, visibleAssets, observerFactionId, capabilities, isEnhanced) {
-    const alienFactionId = rawSnapshot.factions.find(f => f.displayName === 'the Aliens')?.ID;
+    const alienFactionId = rawSnapshot.factions.find(f => f.displayName === ALIEN_FACTION_DISPLAY_NAME)?.ID;
     const weights = rawSnapshot.factions.find(f => f.ID === observerFactionId)?.powerScore?.weights || {
       earthEconomy: 0.20,
       earthPolitics: 0.15,
