@@ -30,3 +30,6 @@ Again_Save/snippet_pack/*
 Again_Save/summary/*
 !Again_Save/summary/README.md
 logs/
+
+# Local Supabase snapshot exports (safety net before pruning; can be large)
+backups/
