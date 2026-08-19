@@ -86,6 +86,13 @@ npm run push:dry-run
 npm run push:supabase
 ```
 
+The publisher keeps the newest three saves as full-fidelity rows by default.
+After the compact strategic-history row is stored successfully, it prunes older
+full snapshot rows while retaining their reduced history records. Override the
+full-save window with `SUPABASE_FULL_SNAPSHOT_RETENTION` or the Node option
+`--full-snapshot-retention <count>`. Publishing an explicitly older historical
+save never prunes newer saves.
+
 **Publish an explicit historical save:**
 ```powershell
 .\push_latest_to_supabase.ps1 -Save "F:\Documents\My Games\TerraInvicta\Saves\initiative.gz"

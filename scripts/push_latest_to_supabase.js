@@ -9,6 +9,7 @@
  *
  * Usage:
  *   node scripts/push_latest_to_supabase.js [--dry-run] [--save <path>] [--campaign <key>]
+ *     [--full-snapshot-retention <count>] [--history-retention <count>]
  */
 
 const fs = require('fs');
@@ -120,6 +121,8 @@ function parseArgs() {
       || PUBLISH_POLICY.observerFactionId,
     historyRetention: Number(process.env.SUPABASE_HISTORY_RETENTION)
       || DEFAULT_HISTORY_POLICY.retention,
+    fullSnapshotRetention: Number(process.env.SUPABASE_FULL_SNAPSHOT_RETENTION)
+      || 3,
     keepTechTree: false
   };
 
@@ -141,10 +144,15 @@ function parseArgs() {
       options.observerFactionId = Number(args[++i]);
     } else if (arg === '--history-retention' && i + 1 < args.length) {
       options.historyRetention = Number(args[++i]);
+    } else if (arg === '--full-snapshot-retention' && i + 1 < args.length) {
+      options.fullSnapshotRetention = Number(args[++i]);
     } else if (arg === '--keep-tech-tree') {
       options.keepTechTree = true;
     }
   }
+
+  options.historyRetention = Math.max(1, Math.floor(Number(options.historyRetention) || DEFAULT_HISTORY_POLICY.retention));
+  options.fullSnapshotRetention = Math.max(1, Math.floor(Number(options.fullSnapshotRetention) || 3));
 
   return options;
 }
@@ -186,6 +194,7 @@ async function main() {
   console.log(`Target Save:        ${targetSave.name}`);
   console.log(`Last Modified:      ${targetSave.lastModified.toISOString()}`);
   console.log(`Campaign Key:       ${options.campaignKey}`);
+  console.log(`Full-save retention: ${options.fullSnapshotRetention} save(s)`);
   console.log(`Mode:               ${options.dryRun ? 'DRY RUN (No network writes)' : 'LIVE PUBLISH'}`);
 
   // 2. Parse Save & Build Raw Snapshot
@@ -516,6 +525,24 @@ async function main() {
       ? ` (${compact.events.map(e => e.type).join(', ')})`
       : '';
     console.log(`✓ Strategic history stored: ${(compactBytes / 1024).toFixed(1)} KB, retaining ${options.historyRetention}${eventSummary}.`);
+
+    // Prune only after the compact history row is safely stored. This keeps
+    // older saves available for trend analysis while bounding the expensive
+    // full-fidelity table. An explicit historical publish must not delete
+    // newer full snapshots or move the active campaign window.
+    if (shouldUpdateCampaignPointer) {
+      const { data: deletedRows, error: pruneErr } = await withSupabaseRetry(
+        'full snapshot retention prune',
+        () => supabase.rpc('prune_intel_snapshots', {
+          p_campaign_key: options.campaignKey,
+          p_keep_saves: options.fullSnapshotRetention
+        })
+      );
+      if (pruneErr) throw new Error(pruneErr.message);
+      console.log(`✓ Full snapshot retention applied: kept ${options.fullSnapshotRetention} save(s), removed ${Number(deletedRows) || 0} row(s).`);
+    } else {
+      console.log('✓ Full snapshot retention skipped for an older historical publish.');
+    }
   } catch (err) {
     // History is supplementary. A failure here must not invalidate a publish
     // whose full snapshots already landed.

@@ -110,7 +110,15 @@ class BriefingGenerator {
     });
 
     // 2. Department Directives (Actionable Statements)
-    const geopoliticalDirectives = this.buildGeopoliticalDirectives(targetEntries, nations, targetFactionName, observer, observerName);
+    const geopoliticalDirectives = this.buildGeopoliticalDirectives(
+      targetEntries,
+      nations,
+      targetFactionName,
+      observer,
+      observerName,
+      councilors,
+      observerId
+    );
     const councilDirectives = this.buildCouncilDirectives(councilors, observerId);
     const spaceDirectives = this.buildSpaceDirectives(habs, fleets, habSites, observer, observerName);
     const researchDirectives = this.buildResearchDirectives(globalResearch, observer, activeAlienStages, {
@@ -156,6 +164,7 @@ class BriefingGenerator {
       },
       theaters: theaterStatus,
       operatives: operativeRoster,
+      primaryDirective: geopoliticalDirectives[0] || councilDirectives[0] || spaceDirectives[0] || researchDirectives[0] || null,
       strategic,
       changesSincePrevious: snapshot.changesSincePrevious || { available: false, message: 'No previous snapshot comparison is available.' }
     };
@@ -321,9 +330,41 @@ class BriefingGenerator {
       visibleAlienFacilities: facilityCount
     };
 
+    const idleOwn = ownCouncilors.filter(c => this.isIdleCouncilor(c)).length;
+    const observerShort = String(observerLabel || '').replace(/^the\s+/i, '');
+    const threatCards = [
+      {
+        id: 'geo',
+        severity: targetEntries.length && targetFactionName ? 'CRITICAL' : 'WATCH',
+        title: targetEntries.length && targetFactionName
+          ? `${targetFactionName} in ${targetEntries[0].nationName || 'an unidentified nation'}`
+          : 'Priority theater',
+        statement: p2.replace(/^PRIORITY THEATER (ALERT|STATUS):\s*/i, '')
+      },
+      {
+        id: 'alien',
+        severity: visibleAlienThreat ? 'CRITICAL' : threatPictureUnavailable ? 'UNKNOWN' : 'WATCH',
+        title: visibleAlienThreat ? 'Alien incursion' : 'Alien / xenoforming picture',
+        statement: p3.replace(/^(ALIEN INCURSION ADVISORY|ALIEN\/XENOFORMING STATUS):\s*/i, '')
+      },
+      {
+        id: 'ops',
+        severity: idleOwn > 0 ? 'READY' : 'WATCH',
+        title: idleOwn > 0
+          ? `${idleOwn} idle operative${idleOwn === 1 ? '' : 's'}`
+          : 'Council roster committed',
+        statement: idleOwn > 0
+          ? `${idleOwn} of ${ownCouncilors.length} visible ${observerShort} councilors are standing by and can take a mission this cycle.`
+          : ownCouncilors.length
+            ? `All ${ownCouncilors.length} visible ${observerShort} councilors currently have an assigned mission.`
+            : 'No observer councilors are visible in this intelligence picture.'
+      }
+    ];
+
     return {
       defcon: defconLevel,
       summaryParagraphs: [p1, p2, p3, p4],
+      threatCards,
       keyMetrics: {
         strategicRank: observerRank === null || observerRank === undefined
           ? 'UNAVAILABLE'
@@ -341,11 +382,12 @@ class BriefingGenerator {
     };
   }
 
-  buildGeopoliticalDirectives(servantTargets, nations, targetFactionName, observer, observerName = null) {
+  buildGeopoliticalDirectives(servantTargets, nations, targetFactionName, observer, observerName = null, councilors = [], observerId = null) {
     const directives = [];
     const targets = this.asArray(servantTargets);
     const factionLabel = targetFactionName || 'the selected opposing faction';
     const observerLabel = observerName || observer?.displayName || 'the selected faction';
+    const resolvedObserverId = observerId ?? observer?.ID;
 
     // Target 1: Top visible opposing holding
     if (targets.length > 0 && targetFactionName) {
@@ -360,7 +402,12 @@ class BriefingGenerator {
         target: t.nationName,
         statement: `${t.nationName || 'The identified nation'} ($${this.formatTargetGdp(t)}T GDP) holds ${targetCpCount === null ? 'an unknown number of' : targetCpCount} ${targetFactionName} control point${targetCpCount === 1 ? '' : 's'}${t.isExecutiveTarget ? ', including Executive authority' : ''}. Stability data is ${unrest === null ? 'unavailable' : unrest > 4 ? 'degraded (Unrest: ' + unrest + ')' : 'not critically degraded'}.`,
         action: `Deploy a suitable ${observerLabel} operative to investigate the holding and execute a visible crackdown or purge only when the current target data supports it.`,
-        successFactor: unrest !== null && unrest > 4 ? 'HIGH (Vulnerable to subversion)' : 'MODERATE'
+        successFactor: unrest !== null && unrest > 4 ? 'HIGH (Vulnerable to subversion)' : 'MODERATE',
+        missionType: 'Crackdown / Purge',
+        preparation: 'Confirm executive control, then assign an idle Espionage or Investigation operative in-theater.',
+        window: unrest !== null && unrest > 4 ? 'This cycle — unrest is already degraded' : 'This cycle',
+        missionCost: 'UNAVAILABLE',
+        eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Espionage', 'Investigation', 'Command'])
       });
     }
 
@@ -376,7 +423,12 @@ class BriefingGenerator {
         target: t2.nationName,
         statement: `${targetFactionName} maintain${targetCpCount === 1 ? 's' : ''} ${targetCpCount === null ? 'an unknown number of' : targetCpCount} control point${targetCpCount === 1 ? '' : 's'} in ${t2.nationName || 'the identified nation'} ($${this.formatTargetGdp(t2)}T GDP).`,
         action: `Deploy a high-Persuasion ${observerLabel} councilor on a visible Public Campaign mission if the current intelligence picture confirms the opportunity.`,
-        successFactor: 'VERY HIGH'
+        successFactor: 'VERY HIGH',
+        missionType: 'Public Campaign',
+        preparation: 'Stage a Persuasion-led councilor in-country before the campaign order.',
+        window: 'This cycle',
+        missionCost: 'UNAVAILABLE',
+        eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Persuasion', 'Administration'])
       });
     }
 
@@ -391,7 +443,12 @@ class BriefingGenerator {
         ? `Unprotected control points in high-GDP nations remain susceptible to rival operations, including ${factionLabel} activity where visible.`
         : 'No priority opposing faction is identified in this filtered snapshot; protect confirmed executive and high-value control points while intelligence is incomplete.',
       action: 'Verify all confirmed executive and major-economy control points have active "Defend Interests" wards in place.',
-      successFactor: 'GUARANTEED PROTECTION'
+      successFactor: 'GUARANTEED PROTECTION',
+      missionType: 'Defend Interests',
+      preparation: 'Confirm executive nations, then assign an Administration or Persuasion operative to ward them.',
+      window: 'Standing order',
+      missionCost: 'UNAVAILABLE',
+      eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Administration', 'Persuasion', 'Security'])
     });
 
     return directives;
@@ -713,6 +770,48 @@ class BriefingGenerator {
 
   isOwnCouncilor(councilor, observerId) {
     return councilor?.isOwnCouncilor === true || this.sameId(councilor?.factionId, observerId);
+  }
+
+  visibleSkill(councilor, skill) {
+    const masked = councilor?.maskedAttributes?.[skill];
+    if (masked && typeof masked === 'object') {
+      if (masked.visibility === 'unknown' || masked.visibility === 'unavailable') return null;
+      return this.toFiniteNumber(masked.visible ?? masked.actual);
+    }
+    return this.toFiniteNumber(councilor?.attributes?.[skill]);
+  }
+
+  isIdleCouncilor(councilor) {
+    const mission = String(councilor?.activeMissionName || '');
+    return !mission || /idle|standby/i.test(mission);
+  }
+
+  eligibleOperatives(councilors, observerId, skills = [], limit = 3) {
+    const wanted = Array.isArray(skills) && skills.length ? skills : ['Espionage', 'Persuasion'];
+    return this.asArray(councilors)
+      .filter(councilor => this.isOwnCouncilor(councilor, observerId))
+      .map(councilor => {
+        const scores = wanted.map(skill => ({ skill, value: this.visibleSkill(councilor, skill) }))
+          .filter(entry => entry.value !== null)
+          .sort((a, b) => b.value - a.value);
+        const best = scores[0] || null;
+        return {
+          id: councilor.ID,
+          name: councilor.displayName,
+          profession: councilor.typeTemplateName || 'Councilor',
+          location: councilor.locationName || 'Unknown location',
+          mission: councilor.activeMissionName || 'Standby',
+          available: this.isIdleCouncilor(councilor),
+          matchSkill: best ? best.skill : null,
+          matchValue: best ? best.value : null,
+          orgsCount: Array.isArray(councilor.orgs) ? councilor.orgs.length : 0
+        };
+      })
+      .sort((a, b) => {
+        if (a.available !== b.available) return a.available ? -1 : 1;
+        return (b.matchValue ?? -1) - (a.matchValue ?? -1);
+      })
+      .slice(0, limit);
   }
 
   isFilteredDataAvailable(snapshot, fieldName, capabilityName, mode) {
