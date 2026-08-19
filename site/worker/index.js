@@ -322,21 +322,25 @@ const resultIdentity = (result) => {
   const row = result.row || {};
   const snapshot = result.snapshot || {};
   const activeSnapshot = result.activeSnapshot || {};
+  const canonicalTimestamp = (value) => {
+    const parsed = new Date(value || '');
+    return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : (value || null);
+  };
   return {
     snapshotId: activeSnapshot.snapshotId || snapshot.snapshotId || row.snapshot?.snapshotId || null,
     saveHash: activeSnapshot.saveHash || snapshot.saveHash || row.snapshot?.saveHash || null,
-    saveModifiedAt: activeSnapshot.saveModifiedAt || row.save_last_modified || null,
+    saveModifiedAt: canonicalTimestamp(activeSnapshot.saveModifiedAt || row.save_last_modified),
     saveFilename: activeSnapshot.saveFilename || row.save_filename || null,
     campaignDate: activeSnapshot.campaignDate || row.game_time || null,
-    generatedAt: activeSnapshot.generatedAt || snapshot.generatedAt || row.generated_at || null,
+    generatedAt: canonicalTimestamp(activeSnapshot.generatedAt || snapshot.generatedAt || row.generated_at),
     isLatestSnapshot: result.isLatestSnapshot === true,
     activeSnapshot: {
       snapshotId: activeSnapshot.snapshotId || snapshot.snapshotId || row.snapshot?.snapshotId || null,
       saveHash: activeSnapshot.saveHash || snapshot.saveHash || row.snapshot?.saveHash || null,
-      saveModifiedAt: activeSnapshot.saveModifiedAt || row.save_last_modified || null,
+      saveModifiedAt: canonicalTimestamp(activeSnapshot.saveModifiedAt || row.save_last_modified),
       saveFilename: activeSnapshot.saveFilename || row.save_filename || null,
       campaignDate: activeSnapshot.campaignDate || row.game_time || null,
-      generatedAt: activeSnapshot.generatedAt || snapshot.generatedAt || row.generated_at || null,
+      generatedAt: canonicalTimestamp(activeSnapshot.generatedAt || snapshot.generatedAt || row.generated_at),
       isLatestSnapshot: result.isLatestSnapshot === true
     }
   };
