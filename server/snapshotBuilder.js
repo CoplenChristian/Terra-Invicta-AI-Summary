@@ -1,6 +1,7 @@
 const templateLoader = require('./templateLoader');
 const opportunityScorer = require('./opportunityScorer');
 const spaceTheater = require('./spaceTheater');
+const { buildCouncilorAttributes } = require('../shared/councilorAttributes.mjs');
 const techGraph = require('../shared/techGraph.mjs');
 
 class SnapshotBuilder {
@@ -347,6 +348,14 @@ class SnapshotBuilder {
         locationType,
         homeRegionName,
         attributes: attrs,
+        // `attributes` is the BASE block from the save; the game applies org
+        // bonuses at resolution time. Anything reasoning about mission odds
+        // must use resolvedAttributes.effective, not these raw values.
+        resolvedAttributes: buildCouncilorAttributes({
+          attributes: attrs,
+          orgs: assignedOrgs,
+          status: lifecycleStatus
+        }),
         totalSkills,
         traits: Array.isArray(c.traitTemplateNames) ? c.traitTemplateNames : [],
         orgs: assignedOrgs,

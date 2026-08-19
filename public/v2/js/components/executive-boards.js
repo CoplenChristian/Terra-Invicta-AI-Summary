@@ -245,11 +245,59 @@
     container.innerHTML = `<div class="mc-board-note"><strong>SPACE / LOCATION FIRST</strong><span>Sol is one orbit-body, not a synonym for the whole solar system. Fragmentation is derived from visible Sol fleet size; contact loadouts are summarized from equipped ship weapons.</span></div>${scopeSummary}${forceSummary}${ownFleetBreakdown}${tableShell(['Theater', 'Our ships / fleets', 'Hostile ships / fleets', 'Our habs', 'Mines', 'Largest hostile fleet', 'Inbound', 'Status'], rows, 'No theater posture is available.')}${contacts ? `<div class="mc-board-subheading"><strong>HOSTILE CONTACT BOARD</strong><span>Largest visible contacts by ship count</span></div>${tableShell(['Fleet', 'Ships', 'Body', 'PD', 'Missiles', 'Lasers', 'Kinetics', 'Mission', 'Destination', 'ETA'], contacts, 'No hostile contacts are visible.')}` : ''}`;
   }
 
-  function visibleSkill(councilor, skill) {
-    const field = councilor?.maskedAttributes?.[skill];
-    return numberValue(field && typeof field === 'object' ? field.visible : councilor?.attributes?.[skill]);
+  // The save stores BASE attributes; the game adds equipped-org bonuses at
+  // resolution time. Reading councilor.attributes shows a number the player
+  // never sees in game, and it can be badly off -- a councilor reading 2 SCI
+  // may actually operate at 11.
+  //
+  // Masked records are left alone: for a councilor whose stats are estimated
+  // we do not know their orgs either, and adding exact org data to a masked
+  // estimate would invent precision.
+  function skillDetail(councilor, skill) {
+    // Own and turned-mole records carry maskedAttributes too, but theirs hold
+    // true values -- so resolved (org-inclusive) data wins for them. Only a
+    // genuinely observed councilor falls back to the masked estimate, where we
+    // do not know their orgs and must not imply we do.
+    const resolved = councilor?.resolvedAttributes;
+    const trusted = resolved && (councilor?.isOwnCouncilor || councilor?.isTurnedMole
+      || councilor?.visibility === 'confirmed' || councilor?.visibility === 'raw_save_only');
+
+    if (!trusted) {
+      const masked = councilor?.maskedAttributes?.[skill];
+      if (masked && typeof masked === 'object') {
+        return { value: numberValue(masked.visible), base: numberValue(masked.visible), orgBonus: 0, masked: true };
+      }
+    }
+
+    if (resolved?.effective && Object.hasOwn(resolved.effective, skill)) {
+      return {
+        value: numberValue(resolved.effective[skill]),
+        base: numberValue(resolved.base?.[skill]),
+        orgBonus: numberValue(resolved.orgBonuses?.[skill]) || 0,
+        masked: false,
+        orgsInactive: resolved.orgsActive === false
+      };
+    }
+
+    const base = numberValue(councilor?.attributes?.[skill]);
+    return { value: base, base, orgBonus: 0, masked: false };
   }
 
+  function visibleSkill(councilor, skill) {
+    return skillDetail(councilor, skill).value;
+  }
+
+  function skillCell(councilor, skill) {
+    const detail = skillDetail(councilor, skill);
+    if (detail.value === null) return '<td>—</td>';
+    const bonus = detail.orgBonus > 0
+      ? `<span class="mc-skill-org" title="${escapeHtml(String(detail.base))} base +${escapeHtml(String(detail.orgBonus))} from orgs">+${escapeHtml(String(detail.orgBonus))}</span>`
+      : '';
+    return `<td class="mc-skill-cell">${escapeHtml(formatNumber(detail.value))}${bonus}</td>`;
+  }
+
+  // Specialty must come from effective values. On base stats alone a councilor
+  // can be labelled with the wrong role entirely once their orgs are counted.
   function operativeRole(councilor) {
     const skills = ['Persuasion', 'Investigation', 'Espionage', 'Command', 'Administration', 'Science', 'Security'];
     return skills.map(skill => ({ skill, value: visibleSkill(councilor, skill) }))
@@ -261,10 +309,10 @@
     if (!container) return;
     const councilors = (snapshot?.councilors || []).filter(councilor => String(councilor.factionId) === String(snapshot.observerFactionId) && councilor.isActiveCouncilor !== false && councilor.isIndependent !== true && String(councilor.status || 'Active').toLowerCase() === 'active');
     const skills = ['Persuasion', 'Investigation', 'Espionage', 'Command', 'Administration', 'Science', 'Security'];
-    const rows = councilors.map(councilor => `<tr><th scope="row">${escapeHtml(councilor.displayName)}</th><td>${escapeHtml(councilor.locationName || 'Unknown')}</td><td>${escapeHtml(councilor.activeMissionName || 'No active mission')}</td>${skills.map(skill => `<td>${escapeHtml(visibleSkill(councilor, skill) === null ? '—' : formatNumber(visibleSkill(councilor, skill)))}</td>`).join('')}<td><span class="mc-status-chip">${escapeHtml(operativeRole(councilor))}</span></td></tr>`).join('');
+    const rows = councilors.map(councilor => `<tr><th scope="row">${escapeHtml(councilor.displayName)}</th><td>${escapeHtml(councilor.locationName || 'Unknown')}</td><td>${escapeHtml(councilor.activeMissionName || 'No active mission')}</td>${skills.map(skill => skillCell(councilor, skill)).join('')}<td><span class="mc-status-chip">${escapeHtml(operativeRole(councilor))}</span></td></tr>`).join('');
     const roles = strategic?.councilCapabilities?.missionRoles || [];
     const coverage = roles.map(role => `<div class="mc-coverage-row"><span>${escapeHtml(role.mission)}</span><strong>${escapeHtml(role.best?.name || 'UNAVAILABLE')}</strong><em>${role.best?.value === null || role.best?.value === undefined ? '—' : `${escapeHtml(formatNumber(role.best.value))} ${escapeHtml(role.skill.slice(0, 3).toUpperCase())}`}</em></div>`).join('');
-    container.innerHTML = `<div class="mc-board-note"><strong>OPERATIONS / ACTIVE COUNCILORS</strong><span>Skill values use the visible or masked value for the selected mode. Independent and inactive records are excluded.</span></div>${tableShell(['Operative', 'Location', 'Current mission', 'PER', 'INV', 'ESP', 'CMD', 'ADM', 'SCI', 'SEC', 'Role'], rows, 'No active councilors are available.')}${coverage ? `<div class="mc-board-subheading"><strong>MISSION COVERAGE</strong><span>Best available operative by role</span></div><div class="mc-coverage-grid">${coverage}</div>` : ''}`;
+    container.innerHTML = `<div class="mc-board-note"><strong>OPERATIONS / ACTIVE COUNCILORS</strong><span>Skill values are <strong>effective</strong>: base attributes plus equipped-org bonuses, which is what missions actually resolve against. A <em>+n</em> marks the org contribution. Trait modifiers are not included — many are conditional on nation state. Independent and inactive records are excluded.</span></div>${tableShell(['Operative', 'Location', 'Current mission', 'PER', 'INV', 'ESP', 'CMD', 'ADM', 'SCI', 'SEC', 'Role'], rows, 'No active councilors are available.')}${coverage ? `<div class="mc-board-subheading"><strong>MISSION COVERAGE</strong><span>Best available operative by role</span></div><div class="mc-coverage-grid">${coverage}</div>` : ''}`;
   }
 
   function nationPosture(nation, observerId, priorityFactionId) {

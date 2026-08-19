@@ -429,6 +429,10 @@ class IntelligenceFilter {
   sanitizeObservedCouncilor(councilor, maskedAttributes) {
     const {
       attributes,
+      // resolvedAttributes carries base + org bonuses in the clear. It must be
+      // stripped alongside `attributes` and `orgs`, or an observed enemy
+      // councilor would expose exact stats the player has not earned.
+      resolvedAttributes,
       maskedAttributes: rawMaskedAttributes,
       orgs,
       traits,

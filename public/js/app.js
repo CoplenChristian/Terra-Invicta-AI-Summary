@@ -593,14 +593,14 @@ function renderCouncilorsGrid() {
         </div>
 
         <div style="margin: 10px 0; font-size: 11px; font-family: var(--font-mono); display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;">
-          <div>ADM: <strong>${formatAttr(c.maskedAttributes?.Administration)}</strong></div>
-          <div>PER: <strong>${formatAttr(c.maskedAttributes?.Persuasion)}</strong></div>
-          <div>INV: <strong>${formatAttr(c.maskedAttributes?.Investigation)}</strong></div>
-          <div>ESP: <strong>${formatAttr(c.maskedAttributes?.Espionage)}</strong></div>
-          <div>CMD: <strong>${formatAttr(c.maskedAttributes?.Command)}</strong></div>
-          <div>SCI: <strong>${formatAttr(c.maskedAttributes?.Science)}</strong></div>
-          <div>SEC: <strong>${formatAttr(c.maskedAttributes?.Security)}</strong></div>
-          <div>LOY: <strong>${formatAttr(c.maskedAttributes?.Loyalty)}</strong></div>
+          <div>ADM: <strong>${formatEffectiveAttr(c, 'Administration')}</strong></div>
+          <div>PER: <strong>${formatEffectiveAttr(c, 'Persuasion')}</strong></div>
+          <div>INV: <strong>${formatEffectiveAttr(c, 'Investigation')}</strong></div>
+          <div>ESP: <strong>${formatEffectiveAttr(c, 'Espionage')}</strong></div>
+          <div>CMD: <strong>${formatEffectiveAttr(c, 'Command')}</strong></div>
+          <div>SCI: <strong>${formatEffectiveAttr(c, 'Science')}</strong></div>
+          <div>SEC: <strong>${formatEffectiveAttr(c, 'Security')}</strong></div>
+          <div>LOY: <strong>${formatEffectiveAttr(c, 'Loyalty')}</strong></div>
         </div>
 
         ${c.orgs?.length > 0 ? `
@@ -617,6 +617,56 @@ function formatAttr(attrObj) {
   if (!attrObj) return '?';
   if (attrObj.visibility === 'unknown' || attrObj.visibility === 'unavailable') return '?';
   return attrObj.visible !== null && attrObj.visible !== undefined ? attrObj.visible : '?';
+}
+
+// The save stores BASE attributes; the game adds equipped-org bonuses when it
+// resolves a mission. Showing maskedAttributes alone therefore displays a
+// number the player never sees in game -- a councilor listed at 2 SCI may
+// actually operate at 11.
+//
+// Records for observed enemies have no orgs or resolved block (the server
+// strips them), so they fall through to the masked estimate unchanged: we do
+// not know their orgs and must not imply otherwise.
+function attrDetail(councilor, attrName) {
+  const resolved = councilor?.resolvedAttributes;
+  if (resolved?.effective && resolved.effective[attrName] !== undefined) {
+    const base = Number(resolved.base?.[attrName]) || 0;
+    const orgBonus = Number(resolved.orgBonuses?.[attrName]) || 0;
+    return {
+      value: Number(resolved.effective[attrName]),
+      base,
+      orgBonus,
+      orgsInactive: resolved.orgsActive === false,
+      known: true
+    };
+  }
+
+  const masked = councilor?.maskedAttributes?.[attrName];
+  const shown = formatAttr(masked);
+  const numeric = Number(shown);
+  return {
+    value: Number.isFinite(numeric) ? numeric : null,
+    base: Number.isFinite(numeric) ? numeric : null,
+    orgBonus: 0,
+    orgsInactive: false,
+    known: shown !== '?'
+  };
+}
+
+/** Effective attribute for display, with the org contribution marked. */
+function formatEffectiveAttr(councilor, attrName) {
+  const detail = attrDetail(councilor, attrName);
+  if (!detail.known || detail.value === null) return '?';
+  if (detail.orgBonus > 0) {
+    return `${detail.value}<span class="attr-org-bonus" title="${detail.base} base +${detail.orgBonus} from equipped orgs">+${detail.orgBonus}</span>`;
+  }
+  return String(detail.value);
+}
+
+/** Numeric effective value for sorting. -1 keeps unknowns at the bottom. */
+function effectiveAttrValue(councilor, attrName) {
+  const detail = attrDetail(councilor, attrName);
+  return detail.known && detail.value !== null ? detail.value : -1;
 }
 
 function renderCouncilorsScreen() {
@@ -698,10 +748,9 @@ function renderCouncilorsScreen() {
   }
 
   // Sorting
-  const getRawAttr = (c, attr) => {
-    const a = c.maskedAttributes?.[attr] || { visible: c.attributes?.[attr] };
-    return (a && a.visible !== null && a.visible !== undefined && a.visible !== '?') ? Number(a.visible) : -1;
-  };
+  // Rank on effective values: a councilor with strong orgs outranks one with a
+  // higher base and none, and sorting on base alone hides that entirely.
+  const getRawAttr = (c, attr) => effectiveAttrValue(c, attr);
 
   const sortKey = state.councilorViewMode === 'table' ? state.councilorTableSort.col : state.councilorSort;
   const isAsc = state.councilorViewMode === 'table' ? state.councilorTableSort.asc : false;
@@ -759,7 +808,7 @@ function renderCouncilorsMainCards(councilors) {
     const isOwn = c.isOwnCouncilor;
 
     const renderSkillPill = (label, attrName) => {
-      const val = formatAttr(c.maskedAttributes?.[attrName]);
+      const val = formatEffectiveAttr(c, attrName);
       const num = typeof val === 'number' ? val : (parseInt(val, 10) || null);
       let colorStyle = '';
       if (num !== null && num >= 15) colorStyle = 'color: #ffd700; font-weight: 800; text-shadow: 0 0 8px rgba(255,215,0,0.4);';
@@ -849,7 +898,7 @@ function renderCouncilorsMainTable(councilors) {
     const fColor = getFactionColorByName(c.factionName);
     const isMole = c.isTurnedMole;
     const formatCell = (attr) => {
-      const val = formatAttr(c.maskedAttributes?.[attr]);
+      const val = formatEffectiveAttr(c, attr);
       const num = typeof val === 'number' ? val : (parseInt(val, 10) || null);
       if (num !== null && num >= 15) return `<span style="color: #ffd700; font-weight: 800;">${val}</span>`;
       if (num !== null && num >= 10) return `<span style="color: #38bdf8; font-weight: 700;">${val}</span>`;
@@ -900,7 +949,7 @@ function openCouncilorModal(councilorId) {
   `;
 
   const renderBar = (label, attrName, color = 'var(--color-initiative)') => {
-    const val = formatAttr(c.maskedAttributes?.[attrName]);
+    const val = formatEffectiveAttr(c, attrName);
     const num = typeof val === 'number' ? val : (parseInt(val, 10) || 0);
     const pct = Math.min(100, Math.max(0, (num / 25) * 100));
     return `

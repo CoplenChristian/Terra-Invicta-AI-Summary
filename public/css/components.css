@@ -466,3 +466,15 @@
   font-size: 12px;
 }
 
+
+/* Councilor attributes are shown as effective values (base + equipped-org
+   bonuses), which is what missions resolve against. The suffix marks how much
+   of the number comes from orgs, so a value that differs from the raw save is
+   self-explaining. */
+.attr-org-bonus {
+  margin-left: 3px;
+  color: var(--success, #4ac07a);
+  font-size: 0.72em;
+  font-weight: 600;
+  vertical-align: super;
+}
