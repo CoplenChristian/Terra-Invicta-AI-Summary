@@ -558,7 +558,17 @@ function populateObserverSelect(factions) {
   const select = document.getElementById('initObserverSelect');
   if (!select || select.options.length > 1) return;
 
-  select.innerHTML = factions.map(f => `
+  // The publishing fan-out policy may cover only some factions. Offering an
+  // observer with no rows returns 404 and blanks the dashboard, so restrict
+  // the list when the runtime advertises one. A null/absent list means no
+  // restriction (local runs, or a campaign published before this was tracked).
+  const allowed = Array.isArray(state.runtime?.availableObservers)
+    ? new Set(state.runtime.availableObservers.map(Number))
+    : null;
+  const selectable = allowed ? factions.filter(f => allowed.has(Number(f.ID))) : factions;
+  if (selectable.length === 0) return;
+
+  select.innerHTML = selectable.map(f => `
     <option value="${escapeHtml(f.ID)}" ${f.ID === state.observer ? 'selected' : ''}>${escapeHtml(f.displayName)}</option>
   `).join('');
 }

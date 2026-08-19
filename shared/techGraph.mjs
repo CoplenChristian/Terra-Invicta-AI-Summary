@@ -699,7 +699,12 @@ export function graphFromTree(snapshot) {
   // `techTreeRef` marker instead. Surface that explicitly: an empty graph and
   // a deliberately-omitted graph look identical otherwise, and callers would
   // report "no techs" as though it were the truth.
-  const omitted = !snapshot?.techTree && !!snapshot?.techTreeRef;
+  // Two shapes mean "deliberately not embedded": the legacy whole-tree
+  // techTreeRef, and the current graphRef, where only the static nodes are
+  // shared per campaign and a reader failed to splice them back in.
+  const graphRef = snapshot?.techTree?.graphRef || null;
+  const unresolvedGraphRef = !!graphRef && nodes.length === 0;
+  const omitted = (!snapshot?.techTree && !!snapshot?.techTreeRef) || unresolvedGraphRef;
   return {
     nodes,
     byId: new Map(nodes.map(n => [n.id, n])),
@@ -708,10 +713,17 @@ export function graphFromTree(snapshot) {
     categories: snapshot?.techTree?.categories || snapshot?.techTreeRef?.categories || {},
     unlockClasses: snapshot?.techTree?.unlockClasses || snapshot?.techTreeRef?.unlockClasses || {},
     omitted,
-    omittedReason: omitted
-      ? (snapshot.techTreeRef.reason || 'tech tree omitted from this snapshot')
-      : null,
-    expectedNodeCount: omitted ? (snapshot.techTreeRef.nodeCount ?? null) : nodes.length
+    omittedReason: !omitted
+      ? null
+      : unresolvedGraphRef
+        ? (snapshot.techTree.graphUnavailable
+          || `shared tech graph ${graphRef.fingerprint} was not spliced in by the reader`)
+        : (snapshot.techTreeRef.reason || 'tech tree omitted from this snapshot'),
+    expectedNodeCount: !omitted
+      ? nodes.length
+      : unresolvedGraphRef
+        ? (graphRef.nodeCount ?? null)
+        : (snapshot.techTreeRef.nodeCount ?? null)
   };
 }
 

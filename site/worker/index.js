@@ -161,7 +161,7 @@ async function querySupabase(env, pathWithParams) {
 async function readPublicCampaign(env, campaignKey) {
   const campaigns = await querySupabase(
     env,
-    `campaigns?campaign_key=eq.${encodeURIComponent(campaignKey)}&is_public=eq.true&select=campaign_key,current_save_last_modified,current_game_time,current_save_filename&limit=1`
+    `campaigns?campaign_key=eq.${encodeURIComponent(campaignKey)}&is_public=eq.true&select=campaign_key,current_save_last_modified,current_game_time,current_save_filename,published_observers,tech_graph,tech_graph_fingerprint&limit=1`
   );
   return campaigns?.[0] || null;
 }
@@ -257,6 +257,33 @@ async function fetchFromSupabase(env, observerId, requestedMode = 'player') {
 
   const row = snapshots[0];
   const payload = row.snapshot;
+
+  // Published rows carry only the per-save half of the tech tree; the static
+  // ~959 KB of nodes is stored once on the campaign. Splice it back before any
+  // consumer reads the graph, so tech endpoints behave identically to a row
+  // that embedded its own copy.
+  if (payload?.techTree?.graphRef && !Array.isArray(payload.techTree.nodes)) {
+    const shared = campaign.tech_graph;
+    if (shared && shared.fingerprint === payload.techTree.graphRef.fingerprint) {
+      payload.techTree = {
+        ...payload.techTree,
+        nodes: shared.nodes || [],
+        categories: shared.categories || {},
+        unlockClasses: shared.unlockClasses || {},
+        graphSource: 'campaign-shared'
+      };
+    } else {
+      // Do not silently serve an empty graph: leave the reference in place so
+      // graphFromTree reports the tree as unavailable rather than as empty.
+      payload.techTree = {
+        ...payload.techTree,
+        graphUnavailable: shared
+          ? 'stored tech graph fingerprint does not match this snapshot; republish the campaign'
+          : 'no shared tech graph stored for this campaign; republish to upload it'
+      };
+    }
+  }
+
   const identity = {
     snapshotId: payload?.snapshotId || null,
     saveHash: payload?.saveHash || null,
@@ -468,11 +495,10 @@ const buildIntelResource = (result, resource, url) => {
         .filter(site => factionMatches(site, factionId) && bodyMatches(site, body))
         .map(habSiteResourceRow);
       break;
-    case 'mining':
-      items = asArray(snapshot.habSites)
-        .filter(site => factionMatches(site, factionId) && bodyMatches(site, body))
-        .map(miningResourceRow);
-      break;
+    // NOTE: 'mining' is handled by the analysis branch further down, which
+    // honours ?status and ?sort and returns best-site analysis. A duplicate
+    // case label here matched first and made that branch unreachable, so
+    // hosted responses silently ignored both parameters.
     case 'fleets':
       items = asArray(snapshot.fleets)
         .filter(fleet => factionMatches(fleet, factionId) && bodyMatches(fleet, body))
@@ -540,6 +566,16 @@ const buildIntelResource = (result, resource, url) => {
     }
     case 'delta': {
       const observerId = snapshot.observerFactionId || 4712;
+      // The hosted worker has no previous raw snapshot to diff against, but
+      // the publisher already embedded a computed comparison in every row.
+      // Passing null unconditionally made this endpoint permanently report
+      // comparisonAvailable:false, even after many saves had been published.
+      if (snapshot.changesSincePrevious) {
+        return resourceEnvelope(result, resource, [], query, {
+          ...snapshot.changesSincePrevious,
+          source: 'published-comparison'
+        });
+      }
       const delta = deltaResource(snapshot, null, observerId);
       return resourceEnvelope(result, resource, [], query, delta);
     }
@@ -689,6 +725,20 @@ export default {
     // they can read published snapshots but never receive the service key or
     // execute a local save parser.
     if (url.pathname === '/api/runtime') {
+      // The publishing fan-out policy may cover only a subset of factions.
+      // Advertise which observers actually have rows; a selector offering an
+      // unpublished observer returns 404 and clears the dashboard.
+      let availableObservers = null;
+      try {
+        const campaign = await readPublicCampaign(env, env.SUPABASE_CAMPAIGN_KEY || 'initiative');
+        if (Array.isArray(campaign?.published_observers) && campaign.published_observers.length > 0) {
+          availableObservers = campaign.published_observers;
+        }
+      } catch (err) {
+        // Leave null (meaning "unknown, allow all") rather than failing the
+        // runtime probe the whole dashboard boots from.
+      }
+
       return jsonResponse({
         success: true,
         environment: 'hosted',
@@ -696,6 +746,7 @@ export default {
         canRefresh: true,
         supportedModes: Array.from(HOSTED_MODES),
         defaultMode: 'player',
+        availableObservers,
         source: 'hosted-worker'
       });
     }
@@ -1062,7 +1113,7 @@ export default {
           const campaignKey = env.SUPABASE_CAMPAIGN_KEY || 'initiative';
           const campaigns = await querySupabase(
             env,
-            `campaigns?campaign_key=eq.${encodeURIComponent(campaignKey)}&is_public=eq.true&select=campaign_key,current_save_last_modified,current_game_time,current_save_filename`
+            `campaigns?campaign_key=eq.${encodeURIComponent(campaignKey)}&is_public=eq.true&select=campaign_key,current_save_last_modified,current_game_time,current_save_filename,published_observers`
           );
           const camp = campaigns?.[0];
           const saves = camp ? [{

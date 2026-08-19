@@ -182,6 +182,9 @@ app.get('/api/runtime', (req, res) => {
     canPublish: true,
     canRefresh: true,
     supportedModes: ['player', 'enhanced', 'omniscient'],
+    // Local runs parse the save directly, so every faction is selectable.
+    // null means "no restriction"; the hosted worker returns a real list.
+    availableObservers: null,
     defaultMode: 'player',
     source: 'express'
   });

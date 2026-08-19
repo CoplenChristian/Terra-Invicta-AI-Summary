@@ -10,7 +10,7 @@
  * Usage:
  *   node scripts/push_latest_to_supabase.js [--dry-run] [--save <path>] [--campaign <key>]
  *     [--full-snapshot-retention <count>] [--history-retention <count>]
- *     [--omit-tech-tree]
+ *     [--inline-tech-tree]
  */
 
 const fs = require('fs');
@@ -47,24 +47,50 @@ const PUBLISH_POLICY = {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Replaces the inline tech tree with a fingerprint. The tree is derived from
-// StreamingAssets templates plus a per-faction status overlay, so it is the
-// same bytes in every row of every save -- roughly 12% of stored payload for
-// data any reader with the templates can rebuild.
-function stripTechTree(modeData) {
+// The save's gameTimeString ("8/16/2032 12:00:00 PM") is the in-game date and
+// is what campaign chronology means. Falls back to the file mtime only when the
+// string cannot be parsed, so a row is never left without an ordering key.
+function campaignDateIso(gameTimeString, fallbackIso) {
+  const parsed = Date.parse(gameTimeString);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallbackIso;
+}
+
+// The tech tree is 94% static: `nodes` (~959 KB) is derived from the game
+// templates and is byte-identical across every row and every save, while
+// finishedTechsNames / globalActive / factionStatus (~60 KB) are per-save.
+//
+// Split it: the static half is uploaded once per campaign and rehydrated by
+// readers, the per-save half stays inline. An earlier blanket strip had to be
+// reverted because the hosted worker cannot rebuild template data from a
+// reference alone; sharing one stored copy keeps those queries working.
+function splitTechTree(modeData, fingerprint) {
   if (!modeData || !modeData.techTree) return modeData;
   const { techTree, ...rest } = modeData;
-  const nodes = Array.isArray(techTree.nodes) ? techTree.nodes : [];
+  const { nodes, categories, unlockClasses, ...perSave } = techTree;
   return {
     ...rest,
-    techTreeRef: {
-      omitted: true,
-      reason: 'static template data; rebuild from StreamingAssets templates or /api/intel/tech-tree',
-      nodeCount: nodes.length,
-      categories: techTree.categories || null,
-      unlockClasses: techTree.unlockClasses || null
+    techTree: {
+      ...perSave,
+      // Readers splice the shared graph back in via this fingerprint.
+      graphRef: {
+        fingerprint,
+        nodeCount: Array.isArray(nodes) ? nodes.length : 0,
+        source: 'campaigns.tech_graph'
+      }
     }
   };
+}
+
+function techGraphFingerprint(techTree) {
+  const nodes = Array.isArray(techTree?.nodes) ? techTree.nodes : [];
+  // Cheap, stable identity: node count plus a rolling hash of the ids. Enough
+  // to detect a game-template change without hashing a megabyte of payload.
+  let hash = 0x811c9dc5;
+  for (const node of nodes) {
+    const id = String(node?.id || '');
+    for (let i = 0; i < id.length; i++) hash = Math.imul(hash ^ id.charCodeAt(i), 0x01000193) >>> 0;
+  }
+  return `tg:${nodes.length}:${hash.toString(16)}`;
 }
 
 async function withSupabaseRetry(label, operation, attempts = 4) {
@@ -124,10 +150,10 @@ function parseArgs() {
       || DEFAULT_HISTORY_POLICY.retention,
     fullSnapshotRetention: Number(process.env.SUPABASE_FULL_SNAPSHOT_RETENTION)
       || 3,
-    // The retained full-fidelity window must keep the tree because the hosted
-    // worker cannot rebuild template data from a techTreeRef alone. Older
-    // saves are removed from this table after compact history is stored.
-    keepTechTree: true
+    // The static half of the tech tree is stored once per campaign and spliced
+    // back in by readers, so sharing it is lossless. --inline-tech-tree forces
+    // the old per-row copy for a consumer that cannot follow the reference.
+    shareTechGraph: true
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -150,10 +176,8 @@ function parseArgs() {
       options.historyRetention = Number(args[++i]);
     } else if (arg === '--full-snapshot-retention' && i + 1 < args.length) {
       options.fullSnapshotRetention = Number(args[++i]);
-    } else if (arg === '--keep-tech-tree') {
-      options.keepTechTree = true;
-    } else if (arg === '--omit-tech-tree') {
-      options.keepTechTree = false;
+    } else if (arg === '--inline-tech-tree') {
+      options.shareTechGraph = false;
     }
   }
 
@@ -291,6 +315,18 @@ async function main() {
     + `previous behaviour would have written ${observerFactions.length * publishedModes.length}.`
   );
 
+  // Identity of the static tech graph. Every row this publish writes references
+  // it instead of embedding its own ~959 KB copy.
+  const techGraphId = techGraphFingerprint(rawSnapshot.techTree);
+  const sharedTechGraph = options.shareTechGraph && rawSnapshot.techTree
+    ? {
+      fingerprint: techGraphId,
+      nodes: rawSnapshot.techTree.nodes || [],
+      categories: rawSnapshot.techTree.categories || {},
+      unlockClasses: rawSnapshot.techTree.unlockClasses || {}
+    }
+    : null;
+
   for (const observer of observerFactions) {
     for (const mode of modesForObserver(observer.ID)) {
       const modeData = intelligenceFilter.applyFilter(rawSnapshot, mode, observer.ID);
@@ -320,7 +356,7 @@ async function main() {
         // that row will expose techTreeRef and the hosted tech endpoints will
         // correctly report that the graph is unavailable.
         snapshot: {
-          ...(options.keepTechTree ? modeData : stripTechTree(modeData)),
+          ...(options.shareTechGraph ? splitTechTree(modeData, techGraphId) : modeData),
           missionControlBriefing
         },
         chatgpt_export: {
@@ -379,7 +415,7 @@ async function main() {
     'campaign lookup',
     () => supabase
       .from('campaigns')
-      .select('campaign_key, display_name, is_public, current_save_last_modified, current_game_time, current_save_filename')
+      .select('campaign_key, display_name, is_public, current_save_last_modified, current_game_time, current_save_filename, tech_graph_fingerprint')
       .eq('campaign_key', options.campaignKey)
       .maybeSingle()
   );
@@ -413,6 +449,19 @@ async function main() {
     campaignPayload.current_save_last_modified = saveMtimeIso;
     campaignPayload.current_game_time = gameTimeString;
     campaignPayload.current_save_filename = targetSave.name;
+    // Record which observers actually have rows. The fan-out policy can publish
+    // a subset of factions, and a selector offering an unpublished observer
+    // returns 404 and clears the hosted dashboard.
+    campaignPayload.published_observers = [...new Set(snapshotRows.map(row => row.observer_faction_id))]
+      .sort((a, b) => a - b);
+
+    // Upload the shared static tech graph alongside the pointer, but only when
+    // it actually changed -- it is stable until the game templates do.
+    if (sharedTechGraph && existingCampaign?.tech_graph_fingerprint !== techGraphId) {
+      campaignPayload.tech_graph = sharedTechGraph;
+      campaignPayload.tech_graph_fingerprint = techGraphId;
+      console.log(`Shared tech graph updated (${techGraphId}, ${sharedTechGraph.nodes.length} nodes).`);
+    }
   }
 
   // Upsert published snapshot rows first. Keep each request comfortably below
@@ -520,7 +569,10 @@ async function main() {
         p_save_last_modified: saveMtimeIso,
         p_save_filename: targetSave.name,
         p_game_time: gameTimeString,
-        p_campaign_date: rawSnapshot.metadata.lastModified,
+        // In-game date, not the file mtime. Retention orders rows by
+        // campaign_date, so storing wall-clock time here would retain and
+        // present a restored or copied save in the wrong chronology.
+        p_campaign_date: campaignDateIso(gameTimeString, saveMtimeIso),
         p_payload: compact,
         p_retention: options.historyRetention
       })

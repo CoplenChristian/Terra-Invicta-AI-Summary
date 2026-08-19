@@ -2,6 +2,14 @@ const fs = require('fs');
 const path = require('path');
 
 class TemplateLoader {
+  // Without these a candidate directory cannot produce a tech graph, so it
+  // must not be selected just because the path exists.
+  static REQUIRED_TEMPLATES = [
+    'TITechTemplate.json',
+    'TIProjectTemplate.json',
+    'TIEffectTemplate.json'
+  ];
+
   constructor(configPath = null) {
     this.configPath = configPath || path.join(__dirname, '../config/intelligence_capabilities.json');
     this.config = this.loadConfig();
@@ -69,11 +77,26 @@ class TemplateLoader {
     ];
 
     for (const p of candidates) {
-      if (p && fs.existsSync(p)) {
+      if (p && this.isUsableTemplatesDir(p)) {
         return p;
+      }
+      if (p && fs.existsSync(p)) {
+        console.warn(`[TemplateLoader] Skipping ${p}: missing required template files (${TemplateLoader.REQUIRED_TEMPLATES.join(', ')}).`);
       }
     }
     return null;
+  }
+
+  // A directory that merely exists is not a usable templates directory. The
+  // repo's Ship_Info/raw_json, for example, has no tech/project/effect
+  // templates -- selecting it produced a present-but-empty tech tree, so tech
+  // endpoints returned empty results instead of the documented unavailable
+  // response, and template-backed tests failed on a clean checkout.
+  isUsableTemplatesDir(dir) {
+    if (!fs.existsSync(dir)) return false;
+    return TemplateLoader.REQUIRED_TEMPLATES.every(
+      file => fs.existsSync(path.join(dir, file))
+    );
   }
 
   load() {

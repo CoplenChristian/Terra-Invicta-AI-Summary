@@ -35,6 +35,14 @@ function loadEnv() {
   }
 }
 
+// The save's game_time ("8/16/2032 12:00:00 PM") is the in-game date, which is
+// what campaign chronology means. Falls back to the file mtime only when it
+// cannot be parsed, so a row never lacks an ordering key.
+function campaignDateIso(gameTimeString, fallbackIso) {
+  const parsed = Date.parse(gameTimeString);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallbackIso;
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {
@@ -143,7 +151,10 @@ async function main() {
         p_save_last_modified: saveLastModified,
         p_save_filename: entry.meta.save_filename,
         p_game_time: entry.meta.game_time,
-        p_campaign_date: saveLastModified,
+        // In-game date, not the file mtime: retention orders rows by
+        // campaign_date, so wall-clock time here puts restored or copied saves
+        // in the wrong chronology.
+        p_campaign_date: campaignDateIso(entry.meta.game_time, saveLastModified),
         p_payload: doc,
         p_retention: retention
       });

@@ -207,3 +207,45 @@ test('an omitted tech tree is distinguishable from an empty one', () => {
   assert.strictEqual(genuinelyEmpty.omitted, false);
   assert.strictEqual(genuinelyEmpty.expectedNodeCount, 0);
 });
+
+test('an unresolved shared tech graph reports unavailable, not empty', () => {
+  // Published rows carry only the per-save half of the tree; the static nodes
+  // live once on the campaign. If a reader fails to splice them back in, that
+  // must read as "unavailable", never as "this campaign has no techs".
+  const unresolved = techGraph.graphFromTree({
+    techTree: {
+      finishedTechsNames: ['MissiontoMars'],
+      graphRef: { fingerprint: 'tg:899:abc123', nodeCount: 899, source: 'campaigns.tech_graph' }
+    }
+  });
+  assert.strictEqual(unresolved.omitted, true);
+  assert.strictEqual(unresolved.expectedNodeCount, 899);
+  assert.match(unresolved.omittedReason, /tg:899:abc123/);
+
+  // Once spliced, it is an ordinary graph again.
+  const resolved = techGraph.graphFromTree({
+    techTree: {
+      finishedTechsNames: ['MissiontoMars'],
+      graphRef: { fingerprint: 'tg:2:abc123', nodeCount: 2 },
+      nodes: [
+        { id: 'A', type: 'global_tech' },
+        { id: 'Project_B', type: 'faction_project' }
+      ]
+    }
+  });
+  assert.strictEqual(resolved.omitted, false);
+  assert.strictEqual(resolved.nodes.length, 2);
+  assert.strictEqual(resolved.techs.length, 1);
+  assert.strictEqual(resolved.projects.length, 1);
+});
+
+test('a reader-supplied unavailable reason is surfaced verbatim', () => {
+  const mismatch = techGraph.graphFromTree({
+    techTree: {
+      graphRef: { fingerprint: 'tg:899:aaa', nodeCount: 899 },
+      graphUnavailable: 'stored tech graph fingerprint does not match this snapshot; republish the campaign'
+    }
+  });
+  assert.strictEqual(mismatch.omitted, true);
+  assert.match(mismatch.omittedReason, /republish the campaign/);
+});
