@@ -136,3 +136,74 @@ test('shared module and local wrapper produce identical projections', async () =
   const pure = shared.buildTechTreeProjection(snapshot, 'omniscient', OBSERVER, { category: 'all' });
   assert.deepStrictEqual(pure.nodes, local.nodes);
 });
+
+// --- Project availability ----------------------------------------------------
+// Project availability is a monthly RNG gate: it starts at initialUnlockChance,
+// rises by deltaUnlockChance each month, and caps at maxUnlockChance. A project
+// capped below 100 can never be scheduled, only waited on.
+test('project availability distinguishes schedulable from RNG-capped', () => {
+  const graph = techGraph.buildTechGraph(
+    { allTechs: () => [], allProjects: () => [] },
+    {
+      techs: [],
+      projects: [
+        { dataName: 'Project_Certain', friendlyName: 'Certain', researchCost: 6000,
+          initialUnlockChance: 0, deltaUnlockChance: 5, maxUnlockChance: 100 },
+        { dataName: 'Project_Capped', friendlyName: 'Capped', researchCost: 5000,
+          initialUnlockChance: 0, deltaUnlockChance: 5, maxUnlockChance: 35 },
+        { dataName: 'Project_Unknown', friendlyName: 'Unknown', researchCost: 100 }
+      ],
+      effects: {},
+      componentByEffect: {}
+    }
+  );
+
+  const certain = graph.byId.get('Project_Certain');
+  assert.strictEqual(certain.availability.schedulable, true);
+  assert.strictEqual(certain.availability.maxPercent, 100);
+  assert.ok(certain.availability.expectedMonths > 0);
+
+  const capped = graph.byId.get('Project_Capped');
+  assert.strictEqual(capped.availability.schedulable, false,
+    'a 35% cap means it can never be counted on in a plan');
+  assert.strictEqual(capped.availability.maxPercent, 35);
+
+  // Missing template fields must report unknown, not a confident schedulable.
+  const unknown = graph.byId.get('Project_Unknown');
+  assert.strictEqual(unknown.availability.known, false);
+  assert.strictEqual(unknown.availability.schedulable, null);
+});
+
+test('a higher monthly ramp shortens the expected wait', () => {
+  const graph = techGraph.buildTechGraph(
+    { allTechs: () => [], allProjects: () => [] },
+    {
+      techs: [],
+      projects: [
+        { dataName: 'Project_Slow', initialUnlockChance: 0, deltaUnlockChance: 5, maxUnlockChance: 100 },
+        { dataName: 'Project_Fast', initialUnlockChance: 0, deltaUnlockChance: 10, maxUnlockChance: 100 }
+      ],
+      effects: {},
+      componentByEffect: {}
+    }
+  );
+  const slow = graph.byId.get('Project_Slow').availability.expectedMonths;
+  const fast = graph.byId.get('Project_Fast').availability.expectedMonths;
+  assert.ok(fast < slow, `expected faster ramp to resolve sooner (${fast} vs ${slow})`);
+});
+
+test('an omitted tech tree is distinguishable from an empty one', () => {
+  // Published snapshots strip the tech tree (static template data) to save
+  // storage. Without an explicit marker, "omitted" and "no techs exist" are
+  // indistinguishable and callers would report the latter as fact.
+  const stripped = techGraph.graphFromTree({
+    techTreeRef: { omitted: true, nodeCount: 899, reason: 'static template data' }
+  });
+  assert.strictEqual(stripped.omitted, true);
+  assert.strictEqual(stripped.expectedNodeCount, 899);
+  assert.match(stripped.omittedReason, /static template data/);
+
+  const genuinelyEmpty = techGraph.graphFromTree({ techTree: { nodes: [] } });
+  assert.strictEqual(genuinelyEmpty.omitted, false);
+  assert.strictEqual(genuinelyEmpty.expectedNodeCount, 0);
+});

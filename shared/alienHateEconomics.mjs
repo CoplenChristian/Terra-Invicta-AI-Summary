@@ -11,6 +11,32 @@ export const DIFFICULTY_MULTIPLIERS = Object.freeze({
 
 export const ALIEN_HATE_WAR_THRESHOLD = 50;
 
+// Total war requires BOTH conditions. Verified against the wiki's Diplomacy
+// page ("Alien Total War"), last edited 2026-08-11.
+export const ALIEN_TOTAL_WAR_HATE = 200;
+
+// Years since the campaign began before total war can be declared. Note Brutal
+// is 0: there, reaching 200 hate is sufficient on its own.
+export const ALIEN_TOTAL_WAR_YEARS = Object.freeze({
+  cinematic: 25,
+  normal: 20,
+  veteran: 10,
+  brutal: 0
+});
+
+// Alien maximum hate: starting value and yearly growth by difficulty.
+export const ALIEN_MAX_HATE = Object.freeze({
+  cinematic: { start: 70, perYear: 2 },
+  normal: { start: 1000, perYear: 100 },
+  veteran: { start: 1000, perYear: 100 },
+  brutal: { start: 1000, perYear: 100 }
+});
+
+// If this many years have passed and the maximum is still below 200, it is
+// raised to 200. Campaign-duration checks are divided by progression speed.
+const MAX_HATE_FLOOR_YEARS = 25;
+const MAX_HATE_FLOOR_VALUE = 200;
+
 export const ALIEN_HATE_REDUCTION_PROJECTS = Object.freeze([
   Object.freeze({ id: 'Project_StrategicDeception', label: 'Strategic Deception', appliesTo: 'human' }),
   Object.freeze({ id: 'Project_Maskirovka', label: 'Maskirovka', appliesTo: 'human' }),
@@ -19,6 +45,11 @@ export const ALIEN_HATE_REDUCTION_PROJECTS = Object.freeze([
 ]);
 
 const toFiniteNumber = (value) => {
+  // Number(null) and Number('') are both 0, so guarding on Number.isFinite
+  // alone would turn an absent or redacted field into a confident zero --
+  // e.g. reporting "alien hate: 0" for a player-mode snapshot that simply
+  // does not expose it.
+  if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 };
@@ -37,11 +68,84 @@ const isExemptFaction = (factionName) =>
 
 const formatFactor = (value) => value === null ? 'UNAVAILABLE' : Number(value).toFixed(2);
 
+/**
+ * Total war state, given elapsed campaign years and difficulty.
+ * Returns 'unavailable' when either input is unknown -- never a false 'safe'.
+ */
+export function buildTotalWarState({
+  difficultyKey,
+  actualAlienHate,
+  yearsElapsed,
+  alienProgressionSpeed = 1
+} = {}) {
+  const speed = Number(alienProgressionSpeed) > 0 ? Number(alienProgressionSpeed) : 1;
+  const baseYears = ALIEN_TOTAL_WAR_YEARS[difficultyKey];
+  const maxHateConfig = ALIEN_MAX_HATE[difficultyKey];
+
+  if (baseYears === undefined || yearsElapsed === null || yearsElapsed === undefined) {
+    return {
+      state: 'unavailable',
+      hateThreshold: ALIEN_TOTAL_WAR_HATE,
+      yearsThreshold: baseYears === undefined ? null : baseYears / speed,
+      yearsElapsed: yearsElapsed ?? null,
+      hateRemaining: null,
+      yearsRemaining: null,
+      maximumAlienHate: null,
+      progressionSpeedAssumed: speed === 1
+    };
+  }
+
+  const yearsThreshold = baseYears / speed;
+  const yearsRemaining = Math.max(0, yearsThreshold - yearsElapsed);
+  const yearGateOpen = yearsElapsed >= yearsThreshold;
+
+  let maximumAlienHate = null;
+  if (maxHateConfig) {
+    maximumAlienHate = maxHateConfig.start + maxHateConfig.perYear * yearsElapsed;
+    if (yearsElapsed >= MAX_HATE_FLOOR_YEARS / speed && maximumAlienHate < MAX_HATE_FLOOR_VALUE) {
+      maximumAlienHate = MAX_HATE_FLOOR_VALUE;
+    }
+  }
+
+  const hateRemaining = actualAlienHate === null || actualAlienHate === undefined
+    ? null
+    : Math.max(0, ALIEN_TOTAL_WAR_HATE - actualAlienHate);
+
+  let state;
+  if (actualAlienHate === null || actualAlienHate === undefined) {
+    // The year gate is knowable even when hate is not.
+    state = yearGateOpen ? 'armed_hate_unknown' : 'safe_hate_unknown';
+  } else if (yearGateOpen && actualAlienHate >= ALIEN_TOTAL_WAR_HATE) {
+    state = 'active';
+  } else if (yearGateOpen) {
+    // Year gate passed: only hate stands between the faction and total war.
+    state = 'armed';
+  } else if (actualAlienHate >= ALIEN_TOTAL_WAR_HATE) {
+    // Hate is already sufficient; total war lands the moment the years elapse.
+    state = 'pending';
+  } else {
+    state = 'safe';
+  }
+
+  return {
+    state,
+    hateThreshold: ALIEN_TOTAL_WAR_HATE,
+    yearsThreshold,
+    yearsElapsed,
+    hateRemaining,
+    yearsRemaining,
+    maximumAlienHate,
+    progressionSpeedAssumed: speed === 1
+  };
+}
+
 export function buildAlienHateEconomics({
   observer = {},
   difficulty,
   mode = 'player',
-  visibleHateEstimate = null
+  visibleHateEstimate = null,
+  yearsElapsed = null,
+  alienProgressionSpeed = 1
 } = {}) {
   const factionName = normalizeFactionName(observer.displayName);
   const exempt = isExemptFaction(factionName);
@@ -91,6 +195,13 @@ export function buildAlienHateEconomics({
     ? ALIEN_HATE_WAR_THRESHOLD / baseMultiplier
     : null;
 
+  const totalWar = buildTotalWarState({
+    difficultyKey,
+    actualAlienHate,
+    yearsElapsed,
+    alienProgressionSpeed
+  });
+
   let minimumFloorStatus = 'UNAVAILABLE';
   let statusCode = 'unavailable';
   if (!applicable) {
@@ -139,6 +250,11 @@ export function buildAlienHateEconomics({
     visibleHateEstimate: actualAlienHate === null ? visibleHateEstimate : null,
     minimumAlienHate,
     hateAboveFloor,
+    // Hate above the floor is not automatically recoverable: venting requires
+    // not being at total war, the asset not trespassing, and the aliens having
+    // targeted it. Total war makes the whole differential unrecoverable.
+    ventingBlockedByTotalWar: totalWar.state === 'active',
+    totalWar,
     warThreshold: ALIEN_HATE_WAR_THRESHOLD,
     minimumHateDelta,
     minimumHateHeadroom,

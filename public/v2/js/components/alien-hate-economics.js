@@ -26,6 +26,52 @@
     return '';
   }
 
+  // Total war requires BOTH >=200 hate AND >=X elapsed years (Normal 20).
+  // Two independent gates, so a single bar would mislead -- render both.
+  const TOTAL_WAR_COPY = {
+    active: { label: 'TOTAL WAR DECLARED', tone: 'is-danger',
+      note: 'Hate venting is severely restricted. This war is effectively permanent.' },
+    armed: { label: 'ARMED — HATE GATE ONLY', tone: 'is-warning',
+      note: 'The year gate has passed. Only the hate ceiling now prevents total war.' },
+    pending: { label: 'PENDING — YEAR GATE ONLY', tone: 'is-warning',
+      note: 'Hate is already past 200. Total war lands the moment the years elapse.' },
+    safe: { label: 'BOTH GATES CLOSED', tone: 'is-safe', note: '' },
+    armed_hate_unknown: { label: 'ARMED — HATE UNKNOWN', tone: 'is-warning',
+      note: 'The year gate has passed; current hate is not exposed in this view.' },
+    safe_hate_unknown: { label: 'YEAR GATE CLOSED', tone: '',
+      note: 'Current hate is not exposed in this view.' },
+    unavailable: { label: 'UNAVAILABLE', tone: '',
+      note: 'Campaign duration or difficulty missing from this snapshot.' }
+  };
+
+  function renderTotalWar(totalWar) {
+    if (!totalWar) return '';
+    const copy = TOTAL_WAR_COPY[totalWar.state] || TOTAL_WAR_COPY.unavailable;
+    const speedCaveat = totalWar.progressionSpeedAssumed === false
+      ? ''
+      : '<small>Assumes default Alien Progression Speed; the slider is not read from the save.</small>';
+
+    return `
+      <div class="alien-hate-econ-section">
+        <div class="alien-hate-econ-section-heading">
+          <span>TOTAL WAR PROXIMITY</span>
+          <small class="alien-hate-econ-status ${copy.tone}">${escapeHtml(copy.label)}</small>
+        </div>
+        <div class="alien-hate-econ-mc-grid">
+          ${metric('Hate gate', value(totalWar.hateThreshold, 0),
+            totalWar.hateRemaining === null ? 'current hate unknown' : `${value(totalWar.hateRemaining, 1)} to go`)}
+          ${metric('Year gate', value(totalWar.yearsThreshold, 0) + ' yrs',
+            totalWar.yearsRemaining === null ? 'duration unknown'
+              : totalWar.yearsRemaining === 0 ? 'PASSED' : `${value(totalWar.yearsRemaining, 1)} yrs to go`,
+            totalWar.yearsRemaining === 0 ? 'is-emphasis' : '')}
+          ${metric('Maximum hate', value(totalWar.maximumAlienHate, 0), 'ceiling, grows yearly')}
+        </div>
+        ${copy.note ? `<p class="alien-hate-econ-note">${escapeHtml(copy.note)}</p>` : ''}
+        ${speedCaveat}
+      </div>
+    `;
+  }
+
   function metric(label, metricValue, note, className = '') {
     return `
       <div class="alien-hate-econ-metric ${className}">
@@ -62,12 +108,17 @@
       : economics.visibleHateEstimate
         ? 'game-visible estimate'
         : 'requires available alien threat intel';
-    const ventCapacityValue = actual !== null && actual !== undefined
-      ? value(economics.hateAboveFloor)
-      : 'RAW-ONLY';
-    const ventCapacityNote = actual !== null && actual !== undefined
-      ? 'actual − minimum floor'
-      : 'requires raw hate';
+    // Hate above the floor is NOT automatically recoverable. Venting requires
+    // all of: not at total war, asset not trespassing, and the aliens having
+    // targeted it. Showing a bare number here reads as "this will drain away".
+    const ventBlocked = economics.ventingBlockedByTotalWar === true;
+    const ventCapacityValue = ventBlocked
+      ? 'VOIDED'
+      : (actual !== null && actual !== undefined ? value(economics.hateAboveFloor) : 'RAW-ONLY');
+    const ventCapacityNote = ventBlocked
+      ? 'total war — venting restricted'
+      : (actual !== null && actual !== undefined ? 'conditional · ±20%' : 'requires raw hate');
+    const ventClass = ventBlocked ? 'is-danger' : 'is-emphasis';
     const projects = (economics.reductionProjects || []).filter(project => project.applicable);
     const currentStatus = economics.currentWarStatus || 'UNAVAILABLE';
     const floorStatus = economics.minimumFloorStatus || 'UNAVAILABLE';
@@ -88,9 +139,24 @@
         <div class="alien-hate-econ-grid">
           ${metric('Actual hate', actualValue, actualNote)}
           ${metric('Minimum hate', value(economics.minimumAlienHate), 'floor from used MC')}
-          ${metric('Hate vent capacity', ventCapacityValue, ventCapacityNote, 'is-emphasis')}
+          ${metric('Hate vent capacity', ventCapacityValue, ventCapacityNote, ventClass)}
           ${metric('War threshold', value(economics.warThreshold), 'alien threshold')}
         </div>
+
+        <details class="alien-hate-econ-formula">
+          <summary>WHEN DOES HATE ACTUALLY VENT?</summary>
+          <div class="alien-hate-econ-formula-body">
+            <p>The aliens only shed hate when they destroy one of our assets, and only if <strong>all three</strong> hold:</p>
+            <ul>
+              <li>We are <strong>not at Total War</strong>.</li>
+              <li>The asset is <strong>not Trespassing</strong> — at or beyond Jupiter, or anywhere the aliens hold a hab, except Earth.</li>
+              <li>The aliens <strong>actually targeted</strong> it. Kills made in self-defence vent nothing.</li>
+            </ul>
+            <p>Amounts: a ship vents its hull Construction Tier; a complete hab module vents Tier² (+Tier if a Mining Complex or Construction Module), divided by 3 on Normal. Every hate modifier is also scaled by a random 0.8–1.2, so treat any figure here as ±20%.</p>
+          </div>
+        </details>
+
+        ${renderTotalWar(economics.totalWar)}
 
         <div class="alien-hate-econ-section">
           <div class="alien-hate-econ-section-heading">
@@ -131,5 +197,110 @@
     `;
   }
 
-  global.MissionControlHateEconomics = { render };
+  global.MissionControlHateEconomics = { render, renderHud };
+
+  function finiteOrNull(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function pipCount(estimate) {
+    const text = String(estimate || '');
+    if (!text || text === 'UNAVAILABLE' || text === 'UNKNOWN') return null;
+    if (!/■|□/.test(text)) return null;
+    return (text.match(/■/g) || []).length;
+  }
+
+  function renderHud(root, economics, observerHate) {
+    if (!root) return;
+    const fill = root.querySelector('#hudHateFill');
+    const floorMark = root.querySelector('#hudHateFloor');
+    const valueNode = root.querySelector('#hudHateValue');
+    const statusNode = root.querySelector('#hudHateStatus');
+    const warThreshold = Number(economics?.warThreshold) > 0 ? Number(economics.warThreshold) : 50;
+
+    const actual = finiteOrNull(economics?.actualAlienHate);
+    const pips = observerHate?.pips ?? pipCount(observerHate?.visibleEstimate || economics?.visibleHateEstimate);
+    const estimate = observerHate?.visibleEstimate || economics?.visibleHateEstimate || null;
+    const numeric = actual !== null
+      ? actual
+      : (Number.isFinite(pips) ? pips * 10 : null);
+    const floor = finiteOrNull(economics?.minimumAlienHate);
+    const applicable = economics?.applicable !== false;
+    const unavailable = !applicable
+      || (numeric === null && (!estimate || estimate === 'UNAVAILABLE'));
+
+    let tone = 'is-unknown';
+    let status = 'UNAVAILABLE';
+    let valueText = 'UNAVAILABLE';
+
+    if (!applicable) {
+      tone = 'is-unknown';
+      status = 'NOT APPLICABLE';
+      valueText = '—';
+    } else if (unavailable) {
+      tone = 'is-unknown';
+      status = observerHate?.requiredProject ? 'INTEL GATED' : 'UNAVAILABLE';
+      valueText = 'UNAVAILABLE';
+    } else if (actual !== null) {
+      valueText = `${actual.toFixed(actual >= 10 ? 0 : 1)} / ${warThreshold}`;
+      if (numeric >= warThreshold) {
+        tone = 'is-danger';
+        status = 'WAR THRESHOLD';
+      } else if (floor !== null && floor >= warThreshold) {
+        tone = 'is-danger';
+        status = 'PERM. WAR FLOOR';
+      } else if (numeric >= warThreshold * 0.7) {
+        tone = 'is-warning';
+        status = 'APPROACHING WAR';
+      } else {
+        tone = 'is-safe';
+        status = 'BELOW WAR';
+      }
+    } else {
+      valueText = String(estimate);
+      if (pips >= 5) {
+        tone = 'is-danger';
+        status = 'MAX ESTIMATE';
+      } else if (pips >= 4) {
+        tone = 'is-warning';
+        status = 'HIGH ESTIMATE';
+      } else {
+        tone = 'is-safe';
+        status = 'GAME ESTIMATE';
+      }
+    }
+
+    root.classList.remove('is-safe', 'is-warning', 'is-danger', 'is-unknown');
+    root.classList.add(tone);
+    if (valueNode) valueNode.textContent = valueText;
+    if (statusNode) statusNode.textContent = status;
+
+    const fillPct = unavailable ? 0 : Math.max(0, Math.min(100, ((numeric ?? 0) / warThreshold) * 100));
+    if (fill) fill.style.width = `${fillPct}%`;
+    if (floorMark) {
+      if (floor === null || unavailable) {
+        floorMark.hidden = true;
+      } else {
+        floorMark.hidden = false;
+        floorMark.style.left = `${Math.max(0, Math.min(100, (floor / warThreshold) * 100))}%`;
+        floorMark.title = `Minimum hate floor ${floor.toFixed(1)}`;
+      }
+    }
+
+    const parts = [
+      `Alien hate ${valueText}`,
+      status,
+      floor !== null ? `MC floor ${floor.toFixed(1)}` : null,
+      'Open full hate economics'
+    ].filter(Boolean);
+    root.title = parts.join(' · ');
+    root.setAttribute('aria-label', `Alien hate ${valueText}, ${status}. Open full economics.`);
+    root.setAttribute('aria-valuemin', '0');
+    root.setAttribute('aria-valuemax', String(warThreshold));
+    if (numeric !== null) root.setAttribute('aria-valuenow', String(Math.round(numeric)));
+    else root.removeAttribute('aria-valuenow');
+  }
 })(window);
+

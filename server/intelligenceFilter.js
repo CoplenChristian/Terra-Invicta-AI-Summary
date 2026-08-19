@@ -34,11 +34,22 @@ class IntelligenceFilter {
       actualObserverId,
       mode
     );
+    // Elapsed campaign years gate the alien total-war declaration, so the
+    // hate model needs them to report anything but 'unavailable'.
+    const campaignYear = Number(
+      String(rawSnapshot.metadata?.gameTimeString || '').match(/\/(\d{4})\b/)?.[1]
+    );
+    const startYear = Number(rawSnapshot.metadata?.campaignStartYear);
+    const yearsElapsed = Number.isFinite(campaignYear) && Number.isFinite(startYear)
+      ? campaignYear - startYear
+      : null;
+
     const buildHateEconomics = (visibleHateEstimate = null) => buildAlienHateEconomics({
       observer,
       difficulty: rawSnapshot.metadata?.difficulty,
       mode,
-      visibleHateEstimate
+      visibleHateEstimate,
+      yearsElapsed
     });
 
     if (mode === 'omniscient') {
@@ -86,6 +97,7 @@ class IntelligenceFilter {
         priorityTargetFaction,
         techMatrix: rawSnapshot.techMatrix,
         techTree: rawSnapshot.techTree,
+        shipHullStats: rawSnapshot.shipHullStats,
         isOmniscient: true
       };
     }
@@ -372,6 +384,7 @@ class IntelligenceFilter {
       priorityTargetFaction,
       techMatrix: filteredTechMatrix,
       techTree: rawSnapshot.techTree,
+      shipHullStats: rawSnapshot.shipHullStats,
       isOmniscient: false
     };
   }

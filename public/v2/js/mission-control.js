@@ -134,12 +134,45 @@ function applyRuntimeCapabilities() {
   syncModeButtons();
 }
 
+const MODE_CAPTIONS = {
+  player: 'Player Intel: only what this faction has legitimately learned.',
+  enhanced: 'Enhanced: player intel plus selected raw metrics that would not appear in-game.',
+  omniscient: 'Omniscient: full unredacted campaign state for analysis.'
+};
+
+function primaryDirective() {
+  const directives = state.briefing?.directives || {};
+  return state.briefing?.primaryDirective
+    || directives.geopolitical?.[0]
+    || directives.council?.[0]
+    || directives.space?.[0]
+    || directives.research?.[0]
+    || null;
+}
+
+function formatCampaignDate(value) {
+  if (!value || value === 'Unknown' || value === 'UNAVAILABLE') return value || 'UNAVAILABLE';
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return String(value);
+  return parsed.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function setOverlayOpen(screen, open) {
+  if (!screen) return;
+  screen.hidden = !open;
+  screen.toggleAttribute('inert', !open);
+  screen.setAttribute('aria-hidden', open ? 'false' : 'true');
+  window.MissionControlDetailPanel?.syncPageInert?.();
+}
+
 function syncModeButtons() {
   document.querySelectorAll('.init-mode-btn').forEach((button) => {
     const selected = button.dataset.mode === state.mode;
     button.classList.toggle('init-btn-cyan', selected);
     button.setAttribute('aria-pressed', selected ? 'true' : 'false');
   });
+  const caption = document.getElementById('initModeCaption');
+  if (caption) caption.textContent = MODE_CAPTIONS[state.mode] || MODE_CAPTIONS.player;
 }
 
 function initEventListeners() {
@@ -151,6 +184,30 @@ function initEventListeners() {
       syncModeButtons();
       loadData();
     });
+  });
+
+  const systemMenuBtn = document.getElementById('initSystemMenuBtn');
+  const systemMenuPanel = document.getElementById('initSystemMenuPanel');
+  const setSystemMenuOpen = (open) => {
+    if (!systemMenuBtn || !systemMenuPanel) return;
+    systemMenuPanel.hidden = !open;
+    systemMenuPanel.toggleAttribute('inert', !open);
+    systemMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  systemMenuBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setSystemMenuOpen(Boolean(systemMenuPanel?.hidden));
+  });
+  document.addEventListener('click', (event) => {
+    if (!systemMenuPanel || systemMenuPanel.hidden) return;
+    if (event.target.closest('.init-system-menu')) return;
+    setSystemMenuOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && systemMenuPanel && !systemMenuPanel.hidden) {
+      setSystemMenuOpen(false);
+      systemMenuBtn?.focus();
+    }
   });
 
   // Observer select
@@ -253,7 +310,7 @@ function initEventListeners() {
   const factionRoot = document.getElementById('factionIntelRoot');
   const closeFactionScreen = () => {
     if (!factionScreen) return;
-    factionScreen.hidden = true;
+    setOverlayOpen(factionScreen, false);
     document.body.classList.remove('faction-intel-open');
     if (factionModalTrigger && document.contains(factionModalTrigger)) factionModalTrigger.focus();
     factionModalTrigger = null;
@@ -267,7 +324,7 @@ function initEventListeners() {
         factionController?.select?.(selectedFactionId);
       }
     }
-    factionScreen.hidden = false;
+    setOverlayOpen(factionScreen, true);
     document.body.classList.add('faction-intel-open');
     closeFactionBtn?.focus();
   };
@@ -286,7 +343,7 @@ function initEventListeners() {
   const libraryRoot = document.getElementById('intelligenceLibraryRoot');
   const closeLibraryScreen = () => {
     if (!libraryScreen) return;
-    libraryScreen.hidden = true;
+    setOverlayOpen(libraryScreen, false);
     document.body.classList.remove('intelligence-library-open');
     if (libraryModalTrigger && document.contains(libraryModalTrigger)) libraryModalTrigger.focus();
     libraryModalTrigger = null;
@@ -305,15 +362,15 @@ function initEventListeners() {
     });
     window.IntelligenceLibrary.render(libraryRoot, state.rawSnapshot, state.briefing, state.observer, state.libraryView);
   };
-  const openLibraryScreen = () => {
+  const openLibraryScreen = (section) => {
     if (!libraryScreen || !libraryRoot || !state.rawSnapshot) return;
     libraryModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    renderLibrary(state.libraryView.section || 'overview', state.libraryView.spaceTab, state.libraryView.spaceTheater);
-    libraryScreen.hidden = false;
+    renderLibrary(section || state.libraryView.section || 'overview', state.libraryView.spaceTab, state.libraryView.spaceTheater);
+    setOverlayOpen(libraryScreen, true);
     document.body.classList.add('intelligence-library-open');
     closeLibraryBtn?.focus();
   };
-  openLibraryBtn?.addEventListener('click', openLibraryScreen);
+  openLibraryBtn?.addEventListener('click', () => openLibraryScreen());
   closeLibraryBtn?.addEventListener('click', closeLibraryScreen);
   libraryScreen?.addEventListener('click', (event) => {
     if (event.target.closest('[data-intelligence-library-close]')) closeLibraryScreen();
@@ -322,7 +379,7 @@ function initEventListeners() {
     const theaterLink = event.target.closest('[data-board-theater-link]');
     if (!theaterLink || !libraryScreen || !libraryRoot || !state.rawSnapshot) return;
     renderLibrary('space', 'fleets', theaterLink.dataset.boardTheaterLink);
-    libraryScreen.hidden = false;
+    setOverlayOpen(libraryScreen, true);
     document.body.classList.add('intelligence-library-open');
     closeLibraryBtn?.focus();
   });
@@ -334,12 +391,14 @@ function initEventListeners() {
     trapModalFocus(event, libraryScreen);
   });
 
-  const priorityCard = document.getElementById('priorityBriefCard');
   const openPriorityDetails = () => {
     if (!window.MissionControlDetailPanel || !state.briefing) return;
-    const directives = state.briefing.directives || {};
-    const directive = directives.geopolitical?.[0] || directives.council?.[0] || directives.space?.[0];
+    const directive = primaryDirective();
     if (!directive) return;
+    const operatives = Array.isArray(directive.eligibleOperatives) ? directive.eligibleOperatives : [];
+    const rosterLabel = operatives.length
+      ? operatives.map((op) => `${op.name} (${op.available ? 'idle' : op.mission || 'assigned'}${op.matchSkill ? `, ${op.matchSkill} ${op.matchValue ?? ''}` : ''})`).join('; ')
+      : 'No eligible observer councilors are visible in this intelligence picture.';
     window.MissionControlDetailPanel.open({
       eyebrow: 'PRIMARY DIRECTIVE',
       title: directive.title,
@@ -347,17 +406,38 @@ function initEventListeners() {
       facts: [
         { label: 'Department', value: directive.category || 'Unassigned' },
         { label: 'Severity', value: directive.severity || 'Unspecified' },
+        { label: 'Mission', value: directive.missionType || 'UNAVAILABLE' },
+        { label: 'Window', value: directive.window || 'This cycle' },
+        { label: 'Preparation', value: directive.preparation || 'UNAVAILABLE' },
+        { label: 'Mission cost', value: directive.missionCost || 'UNAVAILABLE' },
         { label: 'Recommended action', value: directive.action || 'No action specified' },
-        { label: 'Success factor', value: directive.successFactor || 'Not assessed' }
+        { label: 'Success factor', value: directive.successFactor || 'Not assessed' },
+        { label: 'Eligible operatives', value: rosterLabel }
+      ],
+      actions: [
+        { label: 'Open councilor roster', primary: true, onClick: () => openLibraryScreen('councilors') }
       ]
     });
   };
-  priorityCard?.addEventListener('click', openPriorityDetails);
-  priorityCard?.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      openPriorityDetails();
-    }
+  document.getElementById('openPriorityDetailsBtn')?.addEventListener('click', openPriorityDetails);
+  document.getElementById('openCouncilorRosterBtn')?.addEventListener('click', () => openLibraryScreen('councilors'));
+  document.getElementById('priorityOperatives')?.addEventListener('click', (event) => {
+    const chip = event.target.closest('[data-open-roster]');
+    if (!chip) return;
+    openLibraryScreen('councilors');
+  });
+  document.getElementById('hudHateMeter')?.addEventListener('click', () => {
+    const records = document.querySelector('.init-records');
+    if (records && !records.open) records.open = true;
+    const target = document.getElementById('alienHateEconomics');
+    requestAnimationFrame(() => {
+      (target?.closest('.tech-card') || target)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+  document.querySelector('.init-records')?.addEventListener('toggle', (event) => {
+    const grid = event.currentTarget.querySelector('.init-records__grid');
+    grid?.toggleAttribute('inert', !event.currentTarget.open);
+    if (event.currentTarget.open && state.briefing && state.rawSnapshot) renderDashboard();
   });
 }
 
@@ -395,12 +475,12 @@ async function loadData() {
     if (libraryScreen && !libraryScreen.hidden && libraryRoot && window.IntelligenceLibrary) {
       Object.assign(state.libraryView, {
         onOpenFaction: (factionId) => {
-          libraryScreen.hidden = true;
+          setOverlayOpen(libraryScreen, false);
           document.body.classList.remove('intelligence-library-open');
           if (factionScreen && factionRoot && window.FactionIntelScreen) {
             factionController = window.FactionIntelScreen.render(factionRoot, state.rawSnapshot, state.briefing, state.observer);
             factionController?.select?.(factionId);
-            factionScreen.hidden = false;
+            setOverlayOpen(factionScreen, true);
             document.body.classList.add('faction-intel-open');
           }
         },
@@ -489,11 +569,24 @@ function renderDashboard() {
   renderTopHUD();
   renderHeroKPIs();
   renderHolographicCore();
+  renderThreatBoard();
   renderGeopoliticalMapAndSectors();
   renderFactionDonut();
   renderResourceFlowChart();
   renderPowerTrajectoryChart();
   renderDualAssetRings();
+  if (window.MissionControlMcBudget?.render) {
+    // Per-hull Mission Control comes from the game templates via the snapshot;
+    // it is what turns the hate floor from a readout into a build decision.
+    window.MissionControlMcBudget.render(
+      document.getElementById('mcBudget'),
+      {
+        economics: state.rawSnapshot.alienHateEconomics,
+        shipHullStats: state.rawSnapshot.shipHullStats
+      }
+    );
+  }
+
   if (window.MissionControlHateEconomics?.render) {
     window.MissionControlHateEconomics.render(
       document.getElementById('alienHateEconomics'),
@@ -514,7 +607,9 @@ function renderTopHUD() {
   const observerFaction = observerFactionRecord();
   const resolvedObserverName = observerName || observerFaction?.displayName || 'Unknown faction';
 
-  document.getElementById('hudDate').textContent = campaignDate;
+  document.getElementById('hudDate').textContent = formatCampaignDate(campaignDate);
+  const hudDate = document.getElementById('hudDate');
+  if (hudDate) hudDate.title = campaignDate || 'UNAVAILABLE';
   document.getElementById('hudSave').textContent = meta.fileName || meta.activeSaveFileName || 'Latest';
 
   const brandName = document.getElementById('initBrandFactionName');
@@ -528,6 +623,13 @@ function renderTopHUD() {
   updateFactionLogoSlot(document.getElementById('initObserverSelectLogo'), observerFaction, 'faction-logo faction-logo--select');
 
   document.getElementById('hudPower').textContent = `${powerScore}/100`;
+  if (window.MissionControlHateEconomics?.renderHud) {
+    window.MissionControlHateEconomics.renderHud(
+      document.getElementById('hudHateMeter'),
+      state.rawSnapshot.alienHateEconomics,
+      observerFaction?.alienHate
+    );
+  }
   const snapshotHud = document.getElementById('hudSnapshot');
   if (snapshotHud) {
     const generatedDate = identity.generatedAt ? new Date(identity.generatedAt) : null;
@@ -584,16 +686,49 @@ function renderHeroKPIs() {
 }
 
 function renderHolographicCore() {
-  const directives = state.briefing.directives || {};
-  const topDirective = directives.geopolitical?.[0] || directives.council?.[0] || {
+  const topDirective = primaryDirective() || {
     title: 'Consolidate holdings',
-    statement: 'Maintain network surveillance until a higher-priority order is available.'
+    statement: 'Maintain network surveillance until a higher-priority order is available.',
+    missionType: 'UNAVAILABLE',
+    window: 'This cycle',
+    successFactor: 'UNAVAILABLE',
+    missionCost: 'UNAVAILABLE',
+    eligibleOperatives: []
   };
 
   document.getElementById('holoPrimaryTitle').textContent = topDirective.title;
   document.getElementById('holoPrimaryStatement').textContent = topDirective.statement;
 
-  // 5 Orbiting Tactical Nodes
+  const setMeta = (id, value) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    const text = value || 'UNAVAILABLE';
+    node.textContent = text;
+    node.classList.toggle('is-unavailable', String(text).toUpperCase() === 'UNAVAILABLE');
+  };
+  setMeta('priorityMissionType', topDirective.missionType);
+  setMeta('priorityWindow', topDirective.window || 'This cycle');
+  setMeta('prioritySuccess', topDirective.successFactor);
+  setMeta('priorityMissionCost', topDirective.missionCost || 'UNAVAILABLE');
+
+  const roster = document.getElementById('priorityOperatives');
+  if (roster) {
+    const operatives = Array.isArray(topDirective.eligibleOperatives) ? topDirective.eligibleOperatives.slice(0, 3) : [];
+    if (!operatives.length) {
+      roster.innerHTML = '<p class="since-save-empty">No eligible observer councilors are visible. Open the roster to inspect the current picture.</p>';
+    } else {
+      roster.innerHTML = operatives.map((op) => `
+        <button class="priority-op ${op.available ? 'is-ready' : ''}" type="button" data-open-roster="${escapeHtml(op.id)}">
+          <span>
+            <strong>${escapeHtml(op.name)}</strong>
+            <span>${escapeHtml(op.profession || 'Councilor')} · ${escapeHtml(op.location || 'Unknown location')}${op.matchSkill ? ` · ${escapeHtml(op.matchSkill)} ${escapeHtml(op.matchValue ?? '')}` : ''}</span>
+          </span>
+          <em>${op.available ? 'Idle' : escapeHtml(op.mission || 'Assigned')}</em>
+        </button>
+      `).join('');
+    }
+  }
+
   const obs = (state.rawSnapshot.factions || []).find(f => f.ID === state.observer) || {};
   const ownCouncilors = (state.rawSnapshot.councilors || []).filter(c =>
     c.isOwnCouncilor || String(c.factionId) === String(state.observer)
@@ -610,6 +745,23 @@ function renderHolographicCore() {
     ? `${activeSlot.leadFactionName || 'UNAVAILABLE'} / ${Number(activeSlot.percent || 0).toFixed(1)}%`
     : 'UNAVAILABLE';
   document.getElementById('node5Val').textContent = `${xeno.length} Xeno Sites`;
+}
+
+function renderThreatBoard() {
+  const board = document.getElementById('threatBoard');
+  if (!board) return;
+  const cards = Array.isArray(state.briefing?.sitrep?.threatCards) ? state.briefing.sitrep.threatCards.slice(0, 3) : [];
+  if (!cards.length) {
+    board.innerHTML = '<p class="since-save-empty">No discrete threat cards are available in this intelligence picture.</p>';
+    return;
+  }
+  board.innerHTML = cards.map((card) => `
+    <article class="threat-card">
+      <div class="threat-card__kicker severity-${escapeHtml(card.severity || 'WATCH')}">${escapeHtml(card.severity || 'WATCH')}</div>
+      <h3 class="threat-card__title">${escapeHtml(card.title)}</h3>
+      <p class="threat-card__statement">${escapeHtml(card.statement)}</p>
+    </article>
+  `).join('');
 }
 
 function renderGeopoliticalMapAndSectors() {
@@ -934,8 +1086,8 @@ function renderSinceLastSave() {
   }
 
   const elapsed = delta.elapsedGameDays === null || delta.elapsedGameDays === undefined ? 'ELAPSED TIME UNKNOWN' : `${formatChangeValue(delta.elapsedGameDays)} GAME DAYS ELAPSED`;
-  const previousLabel = delta.previousCampaignDate || 'previous save unavailable';
-  container.innerHTML = `<div class="since-save-meta"><strong>${escapeHtml(elapsed)}</strong><span>Compared with ${escapeHtml(previousLabel)}. Empty categories mean no normalized change was detected.</span></div>${sections.length ? sections.join('') : '<div class="since-save-empty"><strong>NO MATERIAL CHANGE DETECTED</strong><span>The current normalized datasets match the immediately previous save.</span></div>'}`;
+  const previousLabel = formatCampaignDate(delta.previousCampaignDate) || 'previous save unavailable';
+  container.innerHTML = `<div class="since-save-meta"><strong>${escapeHtml(elapsed)}</strong><span>Compared with ${escapeHtml(previousLabel)}. Empty categories mean no normalized change was detected.</span></div>${sections.length ? sections.slice(0, 3).join('') : '<div class="since-save-empty"><strong>NO MATERIAL CHANGE DETECTED</strong><span>The current normalized datasets match the immediately previous save.</span></div>'}`;
 }
 
 function renderHoldingsBubbleMatrix() {

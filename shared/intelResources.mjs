@@ -5,13 +5,15 @@
 // file free of any runtime-specific imports so it stays usable in both.
 
 import { ALIEN_FACTION_ID, ALIEN_FACTION_DISPLAY_NAME } from './constants.mjs';
+import { buildAlienHateEconomics, ALIEN_HATE_WAR_THRESHOLD } from './alienHateEconomics.mjs';
 
 export const SUPPORTED_RESOURCES = new Set([
   'summary', 'factions', 'nations', 'councilors', 'habs', 'hab-sites',
   'mining', 'fleets', 'ships', 'research', 'capabilities', 'alien',
   'resources', 'hab-modules', 'shipyards', 'shipyard-queues', 'arrivals', 'transfers',
   'logistics', 'construction', 'ship-designs', 'theaters', 'infrastructure',
-  'alien-threat', 'delta', 'mobility', 'production-plan', 'body-status'
+  'alien-threat', 'delta', 'mobility', 'production-plan', 'body-status',
+  'mining-prospects'
 ]);
 
 // Public discovery map shared by the local Express API and hosted worker.
@@ -46,6 +48,9 @@ export const INTEL_ENDPOINT_INDEX = Object.freeze({
   mobility: '/api/intel/mobility',
   productionPlan: '/api/intel/production-plan',
   bodyStatus: '/api/intel/body-status',
+  miningProspects: '/api/intel/mining-prospects',
+  history: '/api/intel/history',
+  strategicDelta: '/api/intel/strategic-delta',
   techTree: '/api/intel/tech-tree',
   techPath: '/api/intel/tech-path',
   techSearch: '/api/intel/tech-search',
@@ -84,6 +89,9 @@ export const INTEL_ENDPOINT_EXAMPLES = Object.freeze({
   mobility: '?observer=4712&mode=omniscient',
   productionPlan: '?observer=4712&mode=omniscient&design=playerShipTemplate584&quantity=4',
   bodyStatus: '?observer=4712&mode=omniscient&body=Mars',
+  miningProspects: '?mode=omniscient&theater=belt&limit=10',
+  history: '?limit=20',
+  strategicDelta: '?observer=4712',
   techTree: '?observer=4712&mode=omniscient&category=all',
   techPath: '?observer=4712&mode=omniscient&target=Project_RailCannonMk3',
   techSearch: '?observer=4712&mode=omniscient&q=battlecruiser',
@@ -814,14 +822,15 @@ export const shipDesignsResource = (snapshot, factionId = null) => {
   const designs = asArray(snapshot.shipDesigns || asArray(snapshot.factions).flatMap(f => f.shipDesigns || []));
   const ships = asArray(snapshot.ships || asArray(snapshot.fleets).flatMap(fl => fl.ships || []));
   const queues = asArray(snapshot.shipyardQueues);
+  const hullStatsByName = snapshot.shipHullStats || {};
 
   return designs
     .filter(d => factionMatches(d, factionId))
     .map(d => {
       const designName = d._displayName || d.displayName || d.friendlyName || d.dataName;
       const designId = d.dataName || d.id;
-      const existing = ships.filter(s => s.hullName === d.hullName || s.displayName === designName || s.design === designId).length;
-      const underConstruction = queues.filter(q => q.design === designId || q.design === designName || q.hull === d.hullName).length;
+      const existing = ships.filter(s => s.hullName === designId || s.hullName === d.hullName || s.displayName === designName || s.design === designId).length;
+      const underConstruction = queues.filter(q => (q.design === designId || q.hull === designId) && factionMatches(q, factionId)).length;
 
       const noseWeapons = asArray(d.noseWeaponTemplateEntries).map(w => w.moduleName || w.name || w);
       const hullWeapons = asArray(d.hullWeaponTemplateEntries).map(w => w.moduleName || w.name || w);
@@ -838,6 +847,9 @@ export const shipDesignsResource = (snapshot, factionId = null) => {
         ...hullWeapons,
         ...asArray(d.moduleTemplateEntries).map(m => m.moduleName || m.name || m)
       ].filter(Boolean);
+
+      const hullStats = hullStatsByName[d.hullName] || {};
+      const hullStatsKnown = Boolean(hullStatsByName[d.hullName]);
 
       return {
         designId,
@@ -873,8 +885,14 @@ export const shipDesignsResource = (snapshot, factionId = null) => {
         combatAccelerationMps2: d.combatAccelerationMps2 ?? null,
         turnRate: d.turnRate ?? null,
         constructionCost: normalizeCostObject(d.constructionCost || { water: 120, volatiles: 60, metals: 250, nobleMetals: 40, fissiles: 10 }),
-        buildTimeDays: d.buildTimeDays || 45,
-        missionControl: 1,
+        isEstimatedCost: !d.constructionCost,
+        // Real per-hull values from the game templates where available.
+        // Mission Control varies by hull (Escort 1 ... Lancer 4) and is the
+        // only input to the alien hate floor, so never flatten it to 1.
+        buildTimeDays: d.buildTimeDays ?? hullStats.baseConstructionTimeDays ?? null,
+        missionControl: hullStats.missionControl ?? null,
+        constructionTier: hullStats.constructionTier ?? null,
+        hullStatsSource: hullStatsKnown ? 'game-template' : 'unavailable',
         numberExisting: existing,
         numberUnderConstruction: underConstruction,
         componentIds
@@ -1042,61 +1060,201 @@ export const infrastructureResource = (snapshot, factionId = null, body = null) 
 };
 
 /**
+ * Mining prospects: ranks UNOWNED hab sites as expansion targets.
+ *
+ * Two percentiles are reported per resource, because "best of its type" and
+ * "good in absolute terms" are different questions -- conflating them is what
+ * produced the doctrine error of treating generic Common Carbonaceous sites
+ * (shared by ~95 of 671 sites) as notable water/volatile producers.
+ *
+ * Scoring is scarcity-weighted, not raw yield: noble metals bind military
+ * construction (17-38% of most component build costs, 0% for drives) and cap
+ * far lower across the solar system than base metals, so an unweighted sum
+ * would rank metal sites first and reproduce that same mistake.
+ */
+export const MINING_SCARCITY_WEIGHTS = Object.freeze({
+  nobleMetals: 3.0,
+  fissiles: 3.0,
+  volatiles: 1.5,
+  water: 1.0,
+  metals: 1.0
+});
+
+const MINING_RESOURCE_KEYS = Object.freeze(['water', 'volatiles', 'metals', 'nobleMetals', 'fissiles']);
+
+const percentileOf = (value, population) => {
+  if (!Number.isFinite(value) || population.length === 0) return null;
+  const below = population.filter(v => v < value).length;
+  const equal = population.filter(v => v === value).length;
+  // Midpoint rank, so a value tied with many others lands mid-band rather than
+  // at the top -- which is exactly the Fortuna/Zelinda case.
+  return Math.round(((below + equal / 2) / population.length) * 100);
+};
+
+export const miningProspectsResource = (snapshot, {
+  weights = MINING_SCARCITY_WEIGHTS,
+  limit = null,
+  theater = null
+} = {}) => {
+  const sites = asArray(snapshot.habSites);
+  const rate = (site, key) => {
+    const value = Number(site[key]);
+    return Number.isFinite(value) ? value : 0;
+  };
+
+  // Global population per resource, across every site in the system.
+  const globalPop = {};
+  for (const key of MINING_RESOURCE_KEYS) globalPop[key] = sites.map(s => rate(s, key));
+
+  // Population per mining profile, so "best of its type" is answerable.
+  const byProfile = new Map();
+  for (const site of sites) {
+    const profile = site.mineModuleTemplate || site.miningProfileName || 'unknown';
+    if (!byProfile.has(profile)) byProfile.set(profile, []);
+    byProfile.get(profile).push(site);
+  }
+
+  // Raw yield alone ranks the outer system first -- Haumea, Makemake, Varuna --
+  // which is useless to a fleet that cannot get there. Theater is therefore a
+  // first-class filter, not a display field.
+  const wantTheater = theater === null || theater === undefined
+    ? null
+    : String(theater).toLowerCase();
+
+  const unowned = sites.filter(site => {
+    const unclaimed = site.factionId === null || site.factionId === undefined
+      || String(site.factionName || '').toLowerCase() === 'unclaimed';
+    if (!unclaimed || site.pendingHab) return false;
+    if (wantTheater === null) return true;
+    return String(site.spaceTheaterKey || '').toLowerCase() === wantTheater
+      || String(site.spaceTheaterName || '').toLowerCase() === wantTheater;
+  });
+
+  const scored = unowned.map(site => {
+    const profile = site.mineModuleTemplate || site.miningProfileName || 'unknown';
+    const peers = byProfile.get(profile) || [];
+
+    const resources = {};
+    let score = 0;
+    for (const key of MINING_RESOURCE_KEYS) {
+      const value = rate(site, key);
+      const weight = weights[key] ?? 1;
+      score += value * weight;
+      resources[key] = {
+        perDay: value,
+        globalPercentile: percentileOf(value, globalPop[key]),
+        profilePercentile: percentileOf(value, peers.map(p => rate(p, key)))
+      };
+    }
+
+    return {
+      siteId: site.ID,
+      name: site.displayName,
+      body: site.parentBodyName,
+      theater: site.spaceTheaterName || site.spaceTheaterKey || null,
+      miningProfile: profile === 'unknown' ? null : profile,
+      profilePeerCount: peers.length,
+      resources,
+      scarcityScore: Number(score.toFixed(3))
+    };
+  }).sort((a, b) => b.scarcityScore - a.scarcityScore);
+
+  const ranked = limit ? scored.slice(0, Number(limit)) : scored;
+
+  return {
+    weights,
+    totalSites: sites.length,
+    unownedSites: unowned.length,
+    ranked,
+    note: 'Unowned sites only. profilePercentile ranks a site against others sharing its mining profile; globalPercentile ranks it against every site in the system.'
+  };
+};
+
+/**
  * 7. Alien Threat: Precise hate math, minimum-hate floor, and retaliation mechanics.
  */
 export const alienThreatResource = (snapshot, observerId = 4712) => {
   const observer = asArray(snapshot.factions).find(f => Number(f.ID) === Number(observerId)) || {};
-  const actualHate = observer.assessedAlienHateOfMe ?? 0;
-  const usedMC = Number(observer.missionControlUsage) || 0;
   const difficulty = snapshot.metadata?.difficulty || 'Normal';
 
-  let difficultyMultiplier = 0.30;
-  if (/cinematic/i.test(difficulty)) difficultyMultiplier = 0.20;
-  else if (/veteran/i.test(difficulty)) difficultyMultiplier = 0.35;
-  else if (/brutal/i.test(difficulty)) difficultyMultiplier = 0.40;
+  // Do NOT reimplement the hate floor here. buildAlienHateEconomics is the
+  // single source of truth and is what the dashboard card renders: difficulty
+  // multipliers are 0.05/0.30/0.60/1.00, and each completed concealment
+  // project multiplies the floor by 0.8 (they compound, they do not add).
+  // This resource reports raw save values; callers pass an already
+  // intel-filtered snapshot, so read the actual hate rather than masking it.
+  const economics = buildAlienHateEconomics({ observer, difficulty, mode: 'omniscient' });
 
-  const finishedTechs = asArray(snapshot.globalResearch?.finishedTechsNames);
-  const finishedProjects = asArray(observer.completedProjects);
-  const allFinished = [...finishedTechs, ...finishedProjects];
+  const round1 = (value) => (value === null ? null : Number(Number(value).toFixed(1)));
+  const projectKey = (id) => {
+    const bare = String(id).replace(/^Project_/, '');
+    return bare.charAt(0).toLowerCase() + bare.slice(1);
+  };
 
-  const hasStrategicDeception = allFinished.some(p => /strategicdeception/i.test(String(p)));
-  const hasMaskirovka = allFinished.some(p => /maskirovka/i.test(String(p)));
-  const hasOperationalMisdirection = allFinished.some(p => /operationalmisdirection/i.test(String(p)));
+  const projects = { applicable: [], completed: [] };
+  for (const project of economics.reductionProjects) {
+    projects[projectKey(project.id)] = project.completed;
+    if (project.applicable) projects.applicable.push(project.id);
+    if (project.completed) projects.completed.push(project.id);
+  }
+  // Reduction is multiplicative: n projects leave 0.8^n of the floor standing.
+  projects.concealmentMultiplier = economics.concealmentMultiplier;
+  projects.totalReductionPercent = Math.round((1 - economics.concealmentMultiplier) * 100);
 
-  let discount = 0;
-  if (hasStrategicDeception) discount += 0.25;
-  if (hasMaskirovka) discount += 0.25;
-  if (hasOperationalMisdirection) discount += 0.25;
+  const actualHate = economics.actualAlienHate;
+  const atWar = actualHate === null ? null : actualHate >= ALIEN_HATE_WAR_THRESHOLD;
 
-  const effectiveMultiplier = difficultyMultiplier * (1 - discount);
-  const minimumHate = Number((usedMC * effectiveMultiplier).toFixed(1));
-  const ventableHate = Number(Math.max(0, actualHate - minimumHate).toFixed(1));
-  const warThreshold = 50;
-  const minimumHateMCThreshold = effectiveMultiplier > 0 ? Math.round(50 / effectiveMultiplier) : 999;
+  // Fields the save parser does not currently produce. Emit null (unknown)
+  // rather than 0, which would read as a verified "this never happened".
+  const unknownIfAbsent = (value) => (value === undefined || value === null ? null : value);
+  const investigations = observer.alienInvestigations;
+  const alienInvestigationCount = Array.isArray(investigations)
+    ? investigations.length
+    : Number.isFinite(Number(investigations)) ? Number(investigations) : null;
 
   return {
-    actualHate: Number(actualHate.toFixed(1)),
-    usedMC,
+    actualHate: round1(actualHate),
+    usedMC: economics.usedMissionControl,
     difficulty,
-    difficultyMultiplier,
-    projects: {
-      strategicDeception: hasStrategicDeception,
-      maskirovka: hasMaskirovka,
-      operationalMisdirection: hasOperationalMisdirection,
-      totalDiscountPercent: Math.round(discount * 100)
+    difficultyMultiplier: economics.difficultyMultiplier,
+    projects,
+    minimumHate: round1(economics.minimumAlienHate),
+    ventableHate: round1(economics.hateAboveFloor),
+    warThreshold: ALIEN_HATE_WAR_THRESHOLD,
+    minimumHateMCThreshold: economics.mcWarFloor === null ? null : Math.floor(economics.mcWarFloor),
+    calculation: economics.formula.text,
+    // Hate above the floor is not automatically recoverable. The aliens only
+    // vent hate when they destroy an asset AND all of the following hold.
+    venting: {
+      ventableHate: round1(economics.hateAboveFloor),
+      guaranteed: false,
+      conditions: [
+        'Not at Total War with the aliens',
+        'Asset not Trespassing (at/beyond Jupiter, or anywhere the aliens hold a hab, except Earth)',
+        'Asset was actually targeted by the aliens (self-defence kills do not vent)'
+      ],
+      shipVentValue: 'hull Construction Tier',
+      habModuleVentValue: 'ModuleTier^2 (+Tier if Mining Complex, +Tier if Construction Module), divided by 2/3/4/5 for Cinematic/Normal/Veteran/Brutal'
     },
-    minimumHate,
-    ventableHate,
-    warThreshold,
-    minimumHateMCThreshold,
-    calculation: `${usedMC} MC × ${effectiveMultiplier.toFixed(2)} = ${minimumHate}`,
+    // Every hate modifier the game applies is scaled by a random 0.8-1.2,
+    // so any delta derived from these values carries at least +/-20% error.
+    hateModifierVariance: { min: 0.8, max: 1.2 },
     retaliation: {
-      retaliationActive: actualHate >= warThreshold,
-      aliensRemoved: observer.aliensRemoved || 0,
-      alienInvestigations: observer.alienInvestigations || 0,
-      factionAssassinations: observer.factionAssassinations || 0,
-      lastDateOfFixedAlienHate: observer.lastDateOfFixedAlienHate || null,
-      retaliationReason: actualHate >= warThreshold ? 'Alien hate crossed critical war threshold (50)' : 'None'
+      retaliationActive: atWar,
+      retaliationReason: atWar === null
+        ? 'UNAVAILABLE — alien hate not exposed in this snapshot'
+        : atWar
+          ? `Alien hate crossed the war threshold (${ALIEN_HATE_WAR_THRESHOLD})`
+          : 'None',
+      // Killing an alien councilor marks up to 3 space assets for death for
+      // 5 years, independent of current hate. Assassinate triggers this only
+      // on a normal success; Detain never triggers it.
+      alienInvestigationCount,
+      aliensRemoved: unknownIfAbsent(observer.aliensRemoved),
+      factionAssassinations: unknownIfAbsent(observer.factionAssassinations),
+      lastDateOfFixedAlienHate: unknownIfAbsent(observer.lastDateOfFixedAlienHate),
+      unavailableFields: ['aliensRemoved', 'factionAssassinations', 'lastDateOfFixedAlienHate']
+        .filter(field => observer[field] === undefined || observer[field] === null)
     }
   };
 };

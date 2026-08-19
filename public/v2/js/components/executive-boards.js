@@ -298,15 +298,44 @@
     container.innerHTML = `<div class="mc-board-note"><strong>EARTH / ACTION QUEUE</strong><span>Postures are triage labels derived from executive control, unrest, and the selected priority faction. They are not completed operations.</span></div>${tableShell(['Nation', 'Executive', 'CP composition', 'GDP', 'Research', 'Cohesion', 'Unrest', 'Armies', 'Recommended posture'], rows, 'No nation holdings are available.')}`;
   }
 
+  // Project availability is a monthly RNG roll, not a queue position: a project
+  // whose maxUnlockChance is below 100 can never be scheduled, only waited on.
+  // Over half the projects in the game are capped this way, so a plan that
+  // treats them as orderable steps will desync from the real project list.
+  function availabilityChip(node) {
+    const availability = node && node.availability;
+    if (!availability || !availability.known) {
+      return '<span class="mc-status-chip">UNKNOWN</span>';
+    }
+    const wait = availability.expectedMonths === null || availability.expectedMonths === undefined
+      ? ''
+      : ' · ~' + availability.expectedMonths + ' mo';
+    if (availability.schedulable) {
+      return '<span class="mc-status-chip is-safe">GUARANTEED' + escapeHtml(wait) + '</span>';
+    }
+    return '<span class="mc-status-chip is-warning">RNG ' + escapeHtml(String(availability.maxPercent))
+      + '% CAP' + escapeHtml(wait) + '</span>';
+  }
+
+  function availabilityByProjectId(snapshot) {
+    const nodes = (snapshot.techTree && snapshot.techTree.nodes) || [];
+    const map = new Map();
+    for (const node of nodes) {
+      if (node && node.availability) map.set(node.id, node);
+    }
+    return map;
+  }
+
   function renderResearchWatchlist(container, snapshot) {
     if (!container) return;
     const observer = factionById(snapshot, snapshot.observerFactionId) || {};
     const observerLabel = observer.displayName || snapshot.observerFactionName || 'SELECTED FACTION';
     const slots = snapshot.globalResearch?.activeSlots || [];
     const globalRows = slots.map(slot => `<tr><th scope="row">${escapeHtml(slot.displayName || slot.techId)}</th><td>${escapeHtml(formatNumber(slot.percent, 1))}%</td><td>${escapeHtml(slot.leadFactionName || 'UNAVAILABLE')}</td><td>${escapeHtml(formatNumber(slot.leadContribution, 0))}</td></tr>`).join('');
-    const projectRows = (observer.currentProjects || []).slice().sort((a, b) => (numberValue(b.percent) || 0) - (numberValue(a.percent) || 0)).map(project => `<tr><th scope="row">${escapeHtml(project.displayName || project.projectId)}</th><td>${escapeHtml(formatNumber(project.percent, 1))}%</td><td>${escapeHtml(formatNumber(project.accumulatedResearch, 0))} / ${escapeHtml(formatNumber(project.totalCost, 0))}</td></tr>`).join('');
+    const availability = availabilityByProjectId(snapshot);
+    const projectRows = (observer.currentProjects || []).slice().sort((a, b) => (numberValue(b.percent) || 0) - (numberValue(a.percent) || 0)).map(project => `<tr><th scope="row">${escapeHtml(project.displayName || project.projectId)}</th><td>${escapeHtml(formatNumber(project.percent, 1))}%</td><td>${escapeHtml(formatNumber(project.accumulatedResearch, 0))} / ${escapeHtml(formatNumber(project.totalCost, 0))}</td><td>${availabilityChip(availability.get(project.projectId))}</td></tr>`).join('');
     const gaps = Object.values(snapshot.capabilities?.details || {}).filter(detail => detail.active === false).slice(0, 6).map(detail => `<tr><th scope="row">${escapeHtml(detail.name)}</th><td><span class="mc-status-chip is-danger">LOCKED</span></td><td>${escapeHtml(detail.requiredDisplayName || detail.requiredProject || 'Requirement unavailable')}</td></tr>`).join('');
-    container.innerHTML = `<div class="mc-watch-grid"><section><div class="mc-board-subheading"><strong>GLOBAL RESEARCH</strong><span>Active slots</span></div>${tableShell(['Project', 'Progress', 'Current lead', 'Lead output'], globalRows, 'No global research slots are available.')}</section><section><div class="mc-board-subheading"><strong>${escapeHtml(observerLabel.toUpperCase())} PROJECTS</strong><span>Active projects</span></div>${tableShell(['Project', 'Progress', 'Accumulated / cost'], projectRows, 'No active faction projects are available.')}</section><section><div class="mc-board-subheading"><strong>INTELLIGENCE GAPS</strong><span>Capability unlocks</span></div>${tableShell(['Capability', 'Status', 'Unlock / consequence'], gaps, 'No locked capability records are available.')}</section></div>`;
+    container.innerHTML = `<div class="mc-watch-grid"><section><div class="mc-board-subheading"><strong>GLOBAL RESEARCH</strong><span>Active slots</span></div>${tableShell(['Project', 'Progress', 'Current lead', 'Lead output'], globalRows, 'No global research slots are available.')}</section><section><div class="mc-board-subheading"><strong>${escapeHtml(observerLabel.toUpperCase())} PROJECTS</strong><span>Active projects</span></div>${tableShell(['Project', 'Progress', 'Accumulated / cost', 'Availability'], projectRows, 'No active faction projects are available.')}</section><section><div class="mc-board-subheading"><strong>INTELLIGENCE GAPS</strong><span>Capability unlocks</span></div>${tableShell(['Capability', 'Status', 'Unlock / consequence'], gaps, 'No locked capability records are available.')}</section></div>`;
   }
 
   window.MissionControlBoards = {

@@ -20,7 +20,12 @@ class TemplateLoader {
       radiators: new Map(),
       batteries: new Map(),
       utilityModules: new Map(),
-      shipArmor: new Map()
+      shipArmor: new Map(),
+      // Hab sites carry the mining profile that determines a site's resource
+      // yields. The save does not repeat the profile on unclaimed sites, so
+      // ranking expansion targets requires joining back to these templates.
+      habSites: new Map(),
+      miningProfiles: new Map()
     };
     // Inverts each component template's `requiredProjectName` so the tech
     // graph can answer "which project unlocks this component" without any
@@ -135,6 +140,16 @@ class TemplateLoader {
     this.loadJsonFile('TIShipHullTemplate.json', (item) => {
       const id = item.dataName || item.displayName || item.templateName;
       if (id) this.templates.shipHulls.set(id, item);
+    });
+
+    this.loadJsonFile('TIHabSiteTemplate.json', (item) => {
+      const id = item.dataName || item.displayName || item.templateName;
+      if (id) this.templates.habSites.set(id, item);
+    });
+
+    this.loadJsonFile('TIMiningProfileTemplate.json', (item) => {
+      const id = item.dataName || item.displayName || item.templateName;
+      if (id) this.templates.miningProfiles.set(id, item);
     });
 
     this.loadJsonFile('TIOrgTemplate.json', (item) => {

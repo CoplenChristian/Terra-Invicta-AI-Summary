@@ -24,9 +24,46 @@ const briefingGenerator = require('../server/briefingGenerator');
 const templateLoader = require('../server/templateLoader');
 const snapshotIdentity = require('../server/snapshotIdentity');
 const snapshotDelta = require('../server/snapshotDelta');
-const { INTELLIGENCE_MODES } = require('../shared/constants.mjs');
+const { INTELLIGENCE_MODES, DEFAULT_OBSERVER_FACTION_ID } = require('../shared/constants.mjs');
+const { buildStrategicSnapshot, DEFAULT_HISTORY_POLICY } = require('../shared/strategicSnapshot.mjs');
+
+// Publishing fan-out policy.
+//
+// Every save previously published one row per (observer faction x visibility
+// mode) = 24 rows, at roughly 625 kB each on disk. With no retention that put
+// the free-plan 500 MB ceiling about 25 saves away. Publishing only the
+// observer faction cuts 24 rows to 3 (~87%).
+//
+// The non-observer rows answer "what does the Servants know?" -- useful, but
+// not worth 21/24 of the storage budget. Pass --all-observers to restore the
+// old behaviour for a one-off cross-faction analysis.
+const PUBLISH_POLICY = {
+  observerFactionId: DEFAULT_OBSERVER_FACTION_ID,
+  observerModes: INTELLIGENCE_MODES,
+  otherFactionModes: []
+};
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Replaces the inline tech tree with a fingerprint. The tree is derived from
+// StreamingAssets templates plus a per-faction status overlay, so it is the
+// same bytes in every row of every save -- roughly 12% of stored payload for
+// data any reader with the templates can rebuild.
+function stripTechTree(modeData) {
+  if (!modeData || !modeData.techTree) return modeData;
+  const { techTree, ...rest } = modeData;
+  const nodes = Array.isArray(techTree.nodes) ? techTree.nodes : [];
+  return {
+    ...rest,
+    techTreeRef: {
+      omitted: true,
+      reason: 'static template data; rebuild from StreamingAssets templates or /api/intel/tech-tree',
+      nodeCount: nodes.length,
+      categories: techTree.categories || null,
+      unlockClasses: techTree.unlockClasses || null
+    }
+  };
+}
 
 async function withSupabaseRetry(label, operation, attempts = 4) {
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -77,7 +114,13 @@ function parseArgs() {
     savePath: null,
     campaignKey: process.env.SUPABASE_CAMPAIGN_KEY || 'initiative',
     displayName: process.env.SUPABASE_CAMPAIGN_NAME || 'the Initiative Campaign',
-    isPublic: true
+    isPublic: true,
+    allObservers: false,
+    observerFactionId: Number(process.env.SUPABASE_OBSERVER_FACTION_ID)
+      || PUBLISH_POLICY.observerFactionId,
+    historyRetention: Number(process.env.SUPABASE_HISTORY_RETENTION)
+      || DEFAULT_HISTORY_POLICY.retention,
+    keepTechTree: false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -92,6 +135,14 @@ function parseArgs() {
       options.displayName = args[++i];
     } else if (arg === '--private') {
       options.isPublic = false;
+    } else if (arg === '--all-observers') {
+      options.allObservers = true;
+    } else if (arg === '--observer' && i + 1 < args.length) {
+      options.observerFactionId = Number(args[++i]);
+    } else if (arg === '--history-retention' && i + 1 < args.length) {
+      options.historyRetention = Number(args[++i]);
+    } else if (arg === '--keep-tech-tree') {
+      options.keepTechTree = true;
     }
   }
 
@@ -203,8 +254,30 @@ async function main() {
   // user's request; each remains clearly labeled in storage and every hosted response.
   const snapshotRows = [];
   const publishedModes = INTELLIGENCE_MODES;
+
+  // Apply the fan-out policy: publish every mode for the observer faction, and
+  // only PUBLISH_POLICY.otherFactionModes for everyone else (empty by default).
+  const modesForObserver = (factionId) => {
+    if (options.allObservers) return publishedModes;
+    return Number(factionId) === Number(options.observerFactionId)
+      ? PUBLISH_POLICY.observerModes
+      : PUBLISH_POLICY.otherFactionModes;
+  };
+
+  const plannedRows = observerFactions
+    .reduce((total, f) => total + modesForObserver(f.ID).length, 0);
+  if (plannedRows === 0) {
+    console.error(`[Error] Fan-out policy produced 0 rows. Observer faction ${options.observerFactionId} was not found among ${observerFactions.length} discovered factions.`);
+    process.exit(1);
+  }
+  console.log(
+    `Fan-out policy: ${plannedRows} row(s) this publish `
+    + `(${options.allObservers ? 'ALL observers' : `observer ${options.observerFactionId} only`}); `
+    + `previous behaviour would have written ${observerFactions.length * publishedModes.length}.`
+  );
+
   for (const observer of observerFactions) {
-    for (const mode of publishedModes) {
+    for (const mode of modesForObserver(observer.ID)) {
       const modeData = intelligenceFilter.applyFilter(rawSnapshot, mode, observer.ID);
       if (mode === 'player') intelligenceFilter.assertPlayerSnapshotSafe(modeData);
       if (previousRawSnapshot) {
@@ -226,8 +299,13 @@ async function main() {
         campaign_start_year: rawSnapshot.metadata.campaignStartYear,
         observer_faction_id: observer.ID,
         observer_faction_name: observer.displayName,
+        // The tech tree is ~12% of the stored payload and is almost entirely
+        // static template data -- identical across every row and every save.
+        // Store a fingerprint instead and rehydrate from the templates at read
+        // time. Pass --keep-tech-tree to store it inline for a consumer that
+        // cannot resolve it locally.
         snapshot: {
-          ...modeData,
+          ...(options.keepTechTree ? modeData : stripTechTree(modeData)),
           missionControlBriefing
         },
         chatgpt_export: {
@@ -391,6 +469,59 @@ async function main() {
   }
 
   console.log(`✓ Successfully uploaded ${uploadedSnapshotCount} published snapshots to Supabase.`);
+
+  // Compact strategic history. ~15 KB per save against ~2 MB for the full
+  // snapshot set, so this is what lets us retain a long trend line cheaply --
+  // and what makes pruning the full snapshots safe later.
+  try {
+    const { data: priorRow, error: priorErr } = await withSupabaseRetry(
+      'previous strategic snapshot fetch',
+      () => supabase
+        .from('strategic_snapshots')
+        .select('payload')
+        .eq('campaign_key', options.campaignKey)
+        .lt('save_last_modified', saveMtimeIso)
+        .order('save_last_modified', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    );
+    if (priorErr) throw new Error(priorErr.message);
+
+    const compact = buildStrategicSnapshot(rawSnapshot, {
+      observerFactionId: options.observerFactionId,
+      campaignKey: options.campaignKey,
+      previous: priorRow?.payload || null
+    });
+
+    const compactBytes = Buffer.byteLength(JSON.stringify(compact), 'utf8');
+    if (compactBytes > 250 * 1024) {
+      throw new Error(`compact snapshot is ${(compactBytes / 1024).toFixed(0)} KB, above the 250 KB ceiling`);
+    }
+
+    const { error: historyErr } = await withSupabaseRetry(
+      'strategic snapshot store',
+      () => supabase.rpc('store_strategic_snapshot', {
+        p_campaign_key: options.campaignKey,
+        p_save_last_modified: saveMtimeIso,
+        p_save_filename: targetSave.name,
+        p_game_time: gameTimeString,
+        p_campaign_date: rawSnapshot.metadata.lastModified,
+        p_payload: compact,
+        p_retention: options.historyRetention
+      })
+    );
+    if (historyErr) throw new Error(historyErr.message);
+
+    const eventSummary = compact.events.length > 0
+      ? ` (${compact.events.map(e => e.type).join(', ')})`
+      : '';
+    console.log(`✓ Strategic history stored: ${(compactBytes / 1024).toFixed(1)} KB, retaining ${options.historyRetention}${eventSummary}.`);
+  } catch (err) {
+    // History is supplementary. A failure here must not invalidate a publish
+    // whose full snapshots already landed.
+    console.warn(`[Warn] Strategic history not stored: ${err.message}`);
+  }
+
   console.log('========================================================');
   console.log('  PUBLISH COMPLETED SUCCESSFULLY                        ');
   console.log(`  Campaign:        ${options.campaignKey}`);

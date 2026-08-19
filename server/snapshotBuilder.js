@@ -562,9 +562,19 @@ class SnapshotBuilder {
         ? Math.max(0, Math.round(((moduleCompletion - gameDate) / 86400000) * 10) / 10)
         : constructionStatus === 'operational' ? 0 : null;
 
+      // Join the site's mining profile from the game templates. The save omits
+      // it on unclaimed sites, but it is what determines yields -- without it
+      // an expansion-target ranking cannot tell a genuinely rich site from one
+      // of the ~95 that share the generic Common Carbonaceous profile.
+      const siteTemplate = templateLoader.templates.habSites.get(hs.templateName)
+        || templateLoader.templates.habSites.get(hs.displayName)
+        || null;
+
       habSites.push({
         ID: siteId,
         displayName: hs.displayName,
+        miningProfileName: siteTemplate?.miningProfileName || null,
+        siteDensity: siteTemplate?.Density ?? null,
         parentBodyId,
         parentBodyName,
         spaceTheaterKey: theater.key,
@@ -1099,8 +1109,33 @@ class SnapshotBuilder {
         deepSystemSkywatchRule: templateLoader.config.intelligenceRules?.spaceAssets?.deepSystemDescription || null
       },
       techMatrix,
+      shipHullStats: this.buildShipHullStats(),
       techTree: this.buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions)
     };
+  }
+
+  // Per-hull Mission Control cost, construction tier and base build time,
+  // read from the installed game templates. Mission Control is the sole input
+  // to the alien minimum-hate floor, so a flat per-design guess makes any
+  // "what does this fleet do to my hate" projection wrong. Exposed on the
+  // snapshot because shared/intelResources.mjs must stay free of runtime
+  // (fs-backed) imports so the hosted worker can import it too.
+  buildShipHullStats() {
+    const stats = {};
+    for (const hull of templateLoader.templates.shipHulls.values()) {
+      const name = hull.dataName;
+      if (!name) continue;
+      stats[name] = {
+        missionControl: hull.missionControl ?? null,
+        constructionTier: hull.consTier ?? null,
+        baseConstructionTimeDays: hull.baseConstructionTime_days ?? null,
+        noseHardpoints: hull.noseHardpoints ?? null,
+        hullHardpoints: hull.hullHardpoints ?? null,
+        structuralIntegrity: hull.structuralIntegrity ?? null,
+        requiredProjectName: hull.requiredProjectName || null
+      };
+    }
+    return stats;
   }
 
   // Builds the normalized tech dependency graph from game templates and the

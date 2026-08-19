@@ -290,7 +290,7 @@ img.faction-logo {
   min-width: 0;
   flex-wrap: wrap;
   gap: 5px 16px;
-  align-items: baseline;
+  align-items: center;
 }
 
 .init-hud-pill {
@@ -345,6 +345,15 @@ img.faction-logo {
     grid-column: 1 / span 3;
   }
 
+  .init-hud-hate {
+    grid-column: 1 / -1;
+    max-width: none;
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding-top: 7px;
+  }
+
   .init-hud-pill-alert strong {
     max-width: none;
   }
@@ -362,6 +371,128 @@ img.faction-logo {
   color: var(--danger);
 }
 
+.init-hud-hate {
+  display: flex;
+  min-width: 280px;
+  max-width: none;
+  flex: 1 1 100%;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0 1px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.init-hud-hate__label {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.init-hud-hate__track {
+  position: relative;
+  flex: 1 1 160px;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-inset);
+}
+
+.init-hud-hate__fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--success);
+  transition: width 180ms ease, background-color 180ms ease;
+}
+
+.init-hud-hate.is-warning .init-hud-hate__fill {
+  background: var(--warning);
+}
+
+.init-hud-hate.is-danger .init-hud-hate__fill {
+  background: var(--danger);
+}
+
+.init-hud-hate.is-unknown .init-hud-hate__fill {
+  width: 0;
+  background: var(--line-strong);
+}
+
+.init-hud-hate__floor {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--canvas);
+}
+
+.init-hud-hate__war {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--danger);
+  opacity: 0.85;
+}
+
+.init-hud-hate__reading {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.15;
+}
+
+.init-hud-hate__reading strong {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.init-hud-hate__reading em {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.init-hud-hate.is-safe .init-hud-hate__reading em {
+  color: var(--success);
+}
+
+.init-hud-hate.is-warning .init-hud-hate__reading em {
+  color: var(--warning);
+}
+
+.init-hud-hate.is-danger .init-hud-hate__reading em {
+  color: var(--danger);
+}
+
+.init-hud-hate.is-unknown .init-hud-hate__reading strong,
+.init-hud-hate.is-unknown .init-hud-hate__reading em {
+  color: var(--warning);
+}
+
+.init-hud-hate:hover .init-hud-hate__track {
+  border-color: var(--accent);
+}
+
 .init-topbar-controls {
   display: flex;
   flex-wrap: wrap;
@@ -370,13 +501,65 @@ img.faction-logo {
   align-items: center;
 }
 
-.init-topbar-controls > div:first-child {
+.init-mode-cluster {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.init-mode-switch {
   display: flex !important;
   gap: 0 !important;
   padding: 2px !important;
   border: 1px solid var(--line) !important;
   border-radius: 3px !important;
   background: var(--surface-inset) !important;
+}
+
+.init-mode-caption {
+  max-width: 320px;
+  color: var(--text-dim);
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.init-system-menu {
+  position: relative;
+}
+
+.init-system-menu__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  min-width: 220px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-raised);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.init-system-menu__panel .init-select,
+.init-system-menu__panel .init-btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.init-system-menu__panel .init-observer-select-wrap {
+  width: 100%;
+}
+
+.init-system-menu__panel .init-select {
+  max-width: none;
+  flex: 1;
 }
 
 .init-select,
@@ -502,11 +685,16 @@ img.faction-logo {
 
 .init-grid-layout {
   display: grid;
-  grid-template-columns: minmax(235px, 0.76fr) minmax(430px, 1.28fr) minmax(290px, 0.92fr);
+  grid-template-columns: minmax(280px, 0.9fr) minmax(520px, 1.4fr);
   gap: 22px;
   max-width: 1660px;
   margin: 0 auto;
   padding: 27px 26px 54px;
+}
+
+.init-directives-banner,
+.init-records {
+  grid-column: 1 / -1;
 }
 
 .init-telemetry-banner {
@@ -531,8 +719,27 @@ img.faction-logo {
 
 .tech-card {
   min-width: 0;
-  border-top: 1px solid var(--line-strong);
+  border-top: 1px solid var(--line);
   background: var(--surface);
+}
+
+.tech-card--priority {
+  border-top: 2px solid var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.tech-card--alert {
+  border-top: 2px solid var(--danger);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.tech-card--featured {
+  border-top: 2px solid var(--line-strong);
+}
+
+.tech-card--quiet {
+  border-top: 1px solid var(--line);
+  background: transparent;
 }
 
 .tech-card-header {
@@ -552,28 +759,38 @@ img.faction-logo {
   align-items: center;
   color: var(--text-soft);
   font-family: var(--sans);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   line-height: 1.25;
   text-transform: uppercase;
 }
 
-.tech-card-title::before {
+.tech-card--priority .tech-card-title::before,
+.tech-card--alert .tech-card-title::before,
+.tech-card--featured .tech-card-title::before {
   flex: 0 0 6px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
   content: '';
+}
+
+.tech-card--priority .tech-card-title::before,
+.tech-card--featured .tech-card-title::before {
+  background: var(--accent);
+}
+
+.tech-card--alert .tech-card-title::before {
+  background: var(--danger);
 }
 
 .tech-card-header > span {
   flex: 0 0 auto;
   color: var(--text-dim) !important;
   font-family: var(--mono) !important;
-  font-size: 9px !important;
-  letter-spacing: 0.08em;
+  font-size: 10px !important;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -615,9 +832,9 @@ img.faction-logo {
   overflow: hidden;
   color: var(--text-dim) !important;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
@@ -644,8 +861,8 @@ img.faction-logo {
   margin-top: 6px;
   overflow: hidden;
   color: var(--text-muted);
-  font-family: var(--mono);
-  font-size: 9px;
+  font-family: var(--sans);
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -654,7 +871,7 @@ img.faction-logo {
 
 .init-hologram-stage {
   position: relative;
-  min-height: 326px;
+  min-height: 0;
   overflow: hidden;
   padding: 25px 24px 19px;
   border: 1px solid var(--line);
@@ -714,8 +931,223 @@ img.faction-logo {
   max-width: 560px;
   margin-top: 13px;
   color: var(--text-soft);
-  font-size: 14px;
+  font-family: var(--sans);
+  font-size: 15px;
   line-height: 1.55;
+}
+
+.priority-ops-meta {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.priority-ops-meta > div {
+  min-width: 0;
+  padding: 0 12px;
+  border-left: 1px solid var(--line);
+}
+
+.priority-ops-meta > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.priority-ops-meta dt {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.priority-ops-meta dd {
+  margin-top: 4px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.priority-ops-meta dd.is-unavailable,
+.is-unavailable {
+  color: var(--warning);
+}
+
+.priority-ops-roster {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.priority-op {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-inset);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.priority-op strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.priority-op span {
+  display: block;
+  color: var(--text-muted);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.priority-op em {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--warning);
+}
+
+.priority-op.is-ready em {
+  color: var(--success);
+}
+
+.priority-ops-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.threat-board {
+  display: grid;
+  gap: 0;
+}
+
+.threat-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 0 13px;
+  border-top: 1px solid var(--line);
+}
+
+.threat-card:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.threat-card__kicker {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.threat-card__title {
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.threat-card__statement {
+  color: var(--text-soft);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.severity-CRITICAL {
+  color: var(--danger);
+}
+
+.severity-HIGH {
+  color: var(--warning);
+}
+
+.severity-READY {
+  color: var(--success);
+}
+
+.severity-WATCH {
+  color: var(--accent);
+}
+
+.severity-UNKNOWN,
+.severity-STANDARD {
+  color: var(--warning);
+}
+
+.since-save-grid--compact {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.init-records {
+  border-top: 1px solid var(--line);
+}
+
+.init-records__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: baseline;
+  padding: 14px 2px;
+  color: var(--text-soft);
+  font-family: var(--sans);
+  font-size: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.init-records__summary::-webkit-details-marker,
+.init-records__summary::marker {
+  color: var(--accent);
+}
+
+.init-records__summary small {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.init-records__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  padding: 4px 0 8px;
+}
+
+.init-records__span {
+  grid-column: 1 / -1;
+}
+
+.detail-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .holo-node-grid {
@@ -1057,6 +1489,111 @@ img.faction-logo {
 
 .alien-hate-econ-status.is-danger,
 .alien-hate-econ-war-status.is-danger strong {
+  color: var(--danger);
+}
+
+/* Total war proximity: an intermediate state between safe and declared.
+   "Armed" (year gate passed) and "pending" (hate gate passed) are both one
+   condition away from a permanent war, so they need their own tone. */
+.alien-hate-econ-status.is-warning {
+  color: var(--warning, #d9a441);
+}
+
+.alien-hate-econ-metric.is-danger strong {
+  color: var(--danger);
+}
+
+.alien-hate-econ-note {
+  margin: 9px 0 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Mission Control budget planner: stage a build and see what it does to the
+   alien hate floor before committing shipyard time to it. */
+.mc-budget-hulls {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.mc-budget-hull {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 10px;
+  background: var(--panel);
+}
+
+.mc-budget-hull-name {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+
+.mc-budget-hull-cost {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.mc-budget-hull-controls {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.mc-budget-hull-controls button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mc-budget-hull-controls button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mc-budget-hull-controls button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mc-budget-hull-controls output {
+  min-width: 20px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.mc-budget-reset {
+  margin-top: 9px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.mc-budget-reset:hover {
+  border-color: var(--danger);
   color: var(--danger);
 }
 
@@ -1924,7 +2461,8 @@ img.faction-logo {
 }
 
 body.detail-panel-open,
-body.faction-intel-open {
+body.faction-intel-open,
+body.intelligence-library-open {
   overflow: hidden;
 }
 
@@ -1946,10 +2484,6 @@ body.faction-intel-open {
   .intelligence-library-screen__body {
     padding: 14px;
   }
-}
-
-body.intelligence-library-open {
-  overflow: hidden;
 }
 
 /* Integrated classic-dashboard data room ------------------------------- */
@@ -2937,6 +3471,18 @@ body.intelligence-library-open {
   color: var(--danger);
 }
 
+/* A project capped below 100% availability can never be scheduled, only
+   waited on -- distinct from both "unlocked" and "locked". */
+.mc-status-chip.is-warning {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.mc-status-chip.is-safe {
+  border-color: var(--success);
+  color: var(--success);
+}
+
 .mc-board-row-link {
   padding: 0;
   border: 0;
@@ -3773,13 +4319,6 @@ body.intelligence-library-open {
   .init-grid-layout {
     grid-template-columns: minmax(230px, 0.78fr) minmax(420px, 1.22fr);
   }
-
-  .init-col:nth-child(3) {
-    display: grid;
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-  }
 }
 
 @media (max-width: 1200px) and (min-width: 901px) {
@@ -3835,15 +4374,11 @@ body.intelligence-library-open {
     display: block;
   }
 
-  .init-grid-layout > .init-col:nth-child(2) {
+  .init-grid-layout > .init-col--command {
     order: -2;
   }
 
-  .init-grid-layout > .init-col:nth-child(3) {
-    order: -1;
-  }
-
-  .init-grid-layout > .init-col:first-child {
+  .init-grid-layout > .init-col--theaters {
     order: 0;
   }
 
@@ -3859,23 +4394,38 @@ body.intelligence-library-open {
     gap: 7px 13px;
   }
 
+  .init-hud-hate {
+    flex: 1 1 100%;
+    max-width: none;
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding-top: 8px;
+  }
+
   .init-topbar-controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
     justify-content: stretch;
   }
 
-  .init-topbar-controls > div:first-child,
+  .init-topbar-controls > .init-mode-cluster,
   .init-topbar-controls .init-btn,
   .init-topbar-controls .init-select {
     width: 100%;
   }
 
-  .init-topbar-controls > div:first-child {
+  .init-topbar-controls > .init-mode-cluster {
     grid-column: 1 / -1;
+    align-items: stretch;
   }
 
-  .init-topbar-controls > div:first-child .init-btn {
+  .init-mode-caption {
+    max-width: none;
+    text-align: left;
+  }
+
+  .init-topbar-controls > .init-mode-cluster .init-btn {
     flex: 1;
   }
 
@@ -3910,6 +4460,20 @@ body.intelligence-library-open {
   .holo-node-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px 0;
+  }
+
+  .priority-ops-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 0;
+  }
+
+  .priority-ops-meta > div:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .init-records__grid {
+    grid-template-columns: 1fr;
   }
 
   .holo-node:nth-child(3) {

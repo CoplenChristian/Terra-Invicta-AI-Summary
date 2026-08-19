@@ -35,6 +35,18 @@
       <div class="init-hud-pill init-hud-pill-score">
         <span>STRATEGIC SCORE (EST.):</span> <strong id="hudPower">-</strong>
       </div>
+      <button type="button" class="init-hud-hate" id="hudHateMeter" aria-label="Alien hate. Open full economics.">
+        <span class="init-hud-hate__label">ALIEN HATE</span>
+        <span class="init-hud-hate__track" aria-hidden="true">
+          <span class="init-hud-hate__fill" id="hudHateFill"></span>
+          <span class="init-hud-hate__floor" id="hudHateFloor" hidden></span>
+          <span class="init-hud-hate__war" title="War threshold"></span>
+        </span>
+        <span class="init-hud-hate__reading">
+          <strong id="hudHateValue">—</strong>
+          <em id="hudHateStatus">UNAVAILABLE</em>
+        </span>
+      </button>
       <div class="init-hud-pill init-hud-pill-alert">
         <span>ALERT:</span> <strong id="hudDefcon">DEFCON 2</strong>
       </div>
@@ -43,34 +55,16 @@
       </div>
     </div>
 
-    <!-- Top Controls -->
+    <!-- Top Controls: intel mode stays visible; local/dev tools sit in System. -->
     <div class="init-topbar-controls">
-      <!-- Intel Mode Selector -->
-      <div class="init-mode-switch">
-        <button class="init-btn init-mode-btn init-btn-cyan" data-mode="player" aria-pressed="true">PLAYER INTEL</button>
-        <button class="init-btn init-mode-btn" data-mode="enhanced" aria-pressed="false">ENHANCED</button>
-        <button class="init-btn init-mode-btn" data-mode="omniscient" aria-pressed="false">OMNISCIENT</button>
+      <div class="init-mode-cluster">
+        <div class="init-mode-switch">
+          <button class="init-btn init-mode-btn init-btn-cyan" data-mode="player" aria-pressed="true">PLAYER INTEL</button>
+          <button class="init-btn init-mode-btn" data-mode="enhanced" aria-pressed="false">ENHANCED</button>
+          <button class="init-btn init-mode-btn" data-mode="omniscient" aria-pressed="false">OMNISCIENT</button>
+        </div>
+        <p id="initModeCaption" class="init-mode-caption">Player Intel: only what this faction has legitimately learned.</p>
       </div>
-
-      <!-- Observer Switcher -->
-      <div class="init-observer-select-wrap">
-        <span id="initObserverSelectLogo" class="init-observer-select-logo" aria-hidden="true"></span>
-        <label class="visually-hidden" for="initObserverSelect">Observer faction</label>
-        <select id="initObserverSelect" class="init-select" aria-label="Observer faction">
-          <option value="4712">the Initiative</option>
-        </select>
-      </div>
-
-      <!-- Refresh -->
-      <button id="initRefreshBtn" class="init-btn init-btn-cyan">
-        Refresh save
-      </button>
-
-      <!-- Local/dev only: the runtime capability probe reveals this control. -->
-      <button id="initPublishBtn" class="init-btn init-btn-publish" type="button" hidden
-        title="Parse and publish the newest save to the hosted site">
-        Publish latest
-      </button>
 
       <button id="openFactionIntelBtn" class="init-btn" type="button">
         Faction intel
@@ -80,105 +74,87 @@
         Intelligence library
       </button>
 
-      <a href="/api/intel" class="init-btn" target="_blank" rel="noopener" title="Machine-readable API endpoint index">
-        API index
-      </a>
-
-      <!-- Classic Dashboard Switch -->
-      <a href="/" class="init-btn" title="Switch to Database View">
-        Classic view
-      </a>
+      <div class="init-system-menu">
+        <button id="initSystemMenuBtn" class="init-btn" type="button" aria-expanded="false" aria-controls="initSystemMenuPanel">
+          System
+        </button>
+        <div id="initSystemMenuPanel" class="init-system-menu__panel" hidden inert>
+          <div class="init-observer-select-wrap">
+            <span id="initObserverSelectLogo" class="init-observer-select-logo" aria-hidden="true"></span>
+            <label class="visually-hidden" for="initObserverSelect">Observer faction</label>
+            <select id="initObserverSelect" class="init-select" aria-label="Observer faction">
+              <option value="4712">the Initiative</option>
+            </select>
+          </div>
+          <button id="initRefreshBtn" class="init-btn init-btn-cyan" type="button">
+            Refresh save
+          </button>
+          <button id="initPublishBtn" class="init-btn init-btn-publish" type="button" hidden
+            title="Parse and publish the newest save to the hosted site">
+            Publish latest
+          </button>
+          <a href="/api/intel" class="init-btn" target="_blank" rel="noopener" title="Machine-readable API endpoint index">
+            API index
+          </a>
+          <a href="/" class="init-btn" title="Switch to Database View">
+            Classic view
+          </a>
+        </div>
+      </div>
     </div>
   </header>
 
-  <!-- Main Big-Screen Grid Layout -->
+  <!-- Decision board: posture, one action, threats, and material change. -->
   <main class="init-grid-layout">
 
-    <!-- ==================== LEFT COLUMN ==================== -->
-    <div class="init-col">
-
-      <!-- 1. Global Geopolitical Infiltration & Sectors Map -->
-      <div class="tech-card">
+    <div class="init-col init-col--theaters">
+      <div class="tech-card tech-card--featured">
         <div class="tech-card-header">
           <div class="tech-card-title">THEATERS</div>
           <span>6 REGIONS</span>
         </div>
         <div class="tech-card-body">
           <div class="init-map-container">
-            <!-- Bundled GeoJSON map is injected here. A text state prevents a schematic fallback from implying geography. -->
             <div class="world-map-fallback" role="status">REAL WORLD MAP INITIALIZING…</div>
           </div>
-
-          <div id="mapSectorsList" style="margin-top: 10px;">
-            <!-- Sector items populated dynamically -->
-          </div>
+          <div id="mapSectorsList" style="margin-top: 10px;"></div>
         </div>
       </div>
-
-      <!-- 2. Global Power & CP Allocation Donut (回款分布) -->
-      <div class="tech-card">
-        <div class="tech-card-header">
-          <div class="tech-card-title">STRATEGIC FACTION LEDGER</div>
-          <span>CURRENT STATE</span>
-        </div>
-        <div class="tech-card-body">
-          <div id="factionDonutContainer">
-            <!-- Donut injected dynamically -->
-          </div>
-        </div>
-      </div>
-
     </div>
 
-    <!-- ==================== CENTER COLUMN ==================== -->
-    <div class="init-col">
-
-      <!-- 1. Hero KPI Banner (Matching top KPIs in image) -->
+    <div class="init-col init-col--command">
       <div class="init-kpi-banner">
         <div class="init-kpi-item">
-          <div class="init-kpi-label">
-            TREASURY
-          </div>
+          <div class="init-kpi-label">TREASURY</div>
           <div id="kpiMoney" class="init-kpi-val">$0</div>
           <div id="kpiMoneySub" class="init-kpi-sub">+0/mo Flow</div>
         </div>
-
         <div class="init-kpi-item">
-          <div class="init-kpi-label">
-            TERRESTRIAL GDP
-          </div>
+          <div class="init-kpi-label">TERRESTRIAL GDP</div>
           <div id="kpiGdp" class="init-kpi-val">$0T</div>
           <div id="kpiGdpSub" class="init-kpi-sub">0 Control Points</div>
         </div>
-
         <div class="init-kpi-item">
-          <div class="init-kpi-label">
-            RESEARCH OUTPUT
-          </div>
+          <div class="init-kpi-label">RESEARCH OUTPUT</div>
           <div id="kpiResearch" class="init-kpi-val">0 pts</div>
-          <div id="kpiResearchSub" class="init-kpi-sub">R&D Leadership</div>
+          <div id="kpiResearchSub" class="init-kpi-sub">R&amp;D Leadership</div>
         </div>
-
         <div class="init-kpi-item">
-          <div class="init-kpi-label">
-            STRATEGIC SCORE (EST.)
-          </div>
+          <div class="init-kpi-label">STRATEGIC SCORE (EST.)</div>
           <div id="kpiPower" class="init-kpi-val">0/100</div>
           <div id="kpiPowerSub" class="init-kpi-sub">Global Rank #1</div>
         </div>
       </div>
 
-      <!-- 2. Primary executive directive -->
-      <div class="tech-card">
+      <div class="tech-card tech-card--priority">
         <div class="tech-card-header">
           <div class="tech-card-title">PRIORITY BRIEF</div>
           <span>ONE ACTION FIRST</span>
         </div>
         <div class="tech-card-body">
-          <div id="priorityBriefCard" class="init-hologram-stage" role="button" tabindex="0" aria-label="Open primary directive details">
+          <div id="priorityBriefCard" class="init-hologram-stage">
             <div class="holo-orbit-ring-outer"></div>
             <div class="holo-orbit-ring-inner"></div>
-
             <div class="holo-core-content">
               <div class="holo-core-badge">01</div>
               <div id="holoPrimaryTitle" class="holo-core-title">AUTHORIZE CRACKDOWN IN JAPAN</div>
@@ -186,8 +162,17 @@
                 Servant hold in Tokyo compromised. Espionage operative required to eliminate hostile executive control.
               </div>
             </div>
-
-            <!-- Live context fields -->
+            <dl id="priorityOpsMeta" class="priority-ops-meta">
+              <div><dt>Mission</dt><dd id="priorityMissionType">UNAVAILABLE</dd></div>
+              <div><dt>Window</dt><dd id="priorityWindow">This cycle</dd></div>
+              <div><dt>Success</dt><dd id="prioritySuccess">UNAVAILABLE</dd></div>
+              <div><dt>Mission cost</dt><dd id="priorityMissionCost">UNAVAILABLE</dd></div>
+            </dl>
+            <div id="priorityOperatives" class="priority-ops-roster"></div>
+            <div class="priority-ops-actions">
+              <button id="openPriorityDetailsBtn" class="init-btn init-btn-cyan" type="button">Open details</button>
+              <button id="openCouncilorRosterBtn" class="init-btn" type="button">Open councilor roster</button>
+            </div>
             <div class="holo-node-grid">
               <div class="holo-node">
                 <div class="holo-node-num">01</div>
@@ -215,169 +200,167 @@
                 <div id="node5Val" class="holo-node-status">DEFCON 2</div>
               </div>
             </div>
-
           </div>
         </div>
       </div>
 
-      <!-- 3. Resource position -->
-      <div class="tech-card">
+      <div class="tech-card tech-card--alert">
         <div class="tech-card-header">
-          <div class="tech-card-title">WARTIME LOGISTICS</div>
-          <span>STOCKPILE + OUTPUT</span>
+          <div class="tech-card-title">THREAT PICTURE</div>
+          <span>TOP SIGNALS</span>
         </div>
         <div class="tech-card-body">
-          <div id="resourceFlowChart" class="chart-container-box">
-            <!-- Flow Chart injected dynamically -->
-          </div>
+          <div id="threatBoard" class="threat-board" aria-live="polite"></div>
         </div>
       </div>
 
+      <div class="init-since-save-banner">
+        <div class="tech-card">
+          <div class="tech-card-header">
+            <div class="tech-card-title">SINCE LAST SAVE</div>
+            <span>MATERIAL CHANGE</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="sinceLastSave" class="since-save-grid since-save-grid--compact" aria-live="polite">
+              <p class="since-save-empty">Comparing the current snapshot with the immediately previous save…</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- ==================== RIGHT COLUMN ==================== -->
-    <div class="init-col">
-
-      <!-- 1. Current power profile -->
-      <div class="tech-card">
-        <div class="tech-card-header">
-          <div class="tech-card-title">CAPABILITY MATRIX</div>
-          <span>DISCRETE SIGNALS</span>
-        </div>
-        <div class="tech-card-body">
-          <div id="powerTrajectoryChart" class="chart-container-box power-profile-container">
-            <!-- Current faction profile injected dynamically -->
-          </div>
-        </div>
-      </div>
-
-      <!-- 2. Alien force posture -->
-      <div class="tech-card">
-        <div class="tech-card-header">
-          <div class="tech-card-title">ALIEN FORCE POSTURE</div>
-          <span>LOCATION + FRAGMENTATION</span>
-        </div>
-        <div class="tech-card-body">
-          <div id="dualAssetRings">
-            <!-- Dual rings injected dynamically -->
-          </div>
-        </div>
-      </div>
-
-      <!-- 3. Alien hate floor economics -->
-      <div class="tech-card">
-        <div class="tech-card-header">
-          <div class="tech-card-title">ALIEN HATE ECONOMICS</div>
-          <span>MC THREAT FLOOR</span>
-        </div>
-        <div class="tech-card-body">
-          <div id="alienHateEconomics" aria-live="polite">
-            <div class="alien-hate-econ-empty">LOADING HATE ECONOMICS…</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 4. Council roster -->
+    <div class="init-directives-banner">
       <div class="tech-card">
         <div class="tech-card-header">
           <div class="tech-card-title">OPERATIONS BOARD</div>
           <span>ACTIVE COUNCILORS</span>
         </div>
         <div class="tech-card-body">
-          <div id="opLeaderboardList" class="operative-leaderboard">
-            <!-- Operative bars injected dynamically -->
-          </div>
-        </div>
-      </div>
-
-      <!-- 5. Strategic holdings -->
-      <div class="tech-card">
-        <div class="tech-card-header">
-          <div class="tech-card-title">NATION ACTION QUEUE</div>
-          <span>EARTH HOLDINGS</span>
-        </div>
-        <div class="tech-card-body" style="padding: 0;">
-          <div id="holdingsBubbleMatrix" class="bubble-matrix-container">
-            <!-- Bubbles injected dynamically -->
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ==================== BOTTOM FULL-WIDTH: RESEARCH + GAPS ==================== -->
-    <div class="init-directives-banner">
-      <div class="tech-card">
-        <div class="tech-card-header">
-          <div class="tech-card-title">TECHNOLOGY WATCH</div>
-          <span>RESEARCH + INTELLIGENCE GAPS</span>
-        </div>
-        <div class="tech-card-body">
-          <div id="researchWatchlist" class="research-watchlist" aria-live="polite">
-            <p class="since-save-empty">Loading research and capability signals…</p>
-          </div>
+          <div id="opLeaderboardList" class="operative-leaderboard"></div>
         </div>
       </div>
     </div>
 
-    <!-- ==================== BOTTOM FULL-WIDTH: TEMPORAL CHANGE ==================== -->
-    <div class="init-directives-banner init-since-save-banner">
-      <div class="tech-card">
-        <div class="tech-card-header">
-          <div class="tech-card-title">SINCE LAST SAVE</div>
-          <span>CHANGE DETECTION</span>
-        </div>
-        <div class="tech-card-body">
-          <div id="sinceLastSave" class="since-save-grid" aria-live="polite">
-            <p class="since-save-empty">Comparing the current snapshot with the immediately previous save…</p>
+    <details class="init-records">
+      <summary class="init-records__summary">
+        <span>Supporting records</span>
+        <small>Logistics, ledgers, research, full SITREP</small>
+      </summary>
+          <div class="init-records__grid" inert>
+        <div class="tech-card tech-card--quiet">
+          <div class="tech-card-header">
+            <div class="tech-card-title">STRATEGIC FACTION LEDGER</div>
+            <span>CURRENT STATE</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="factionDonutContainer"></div>
           </div>
         </div>
-      </div>
-    </div>
+        <div class="tech-card tech-card--quiet">
+          <div class="tech-card-header">
+            <div class="tech-card-title">WARTIME LOGISTICS</div>
+            <span>STOCKPILE + OUTPUT</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="resourceFlowChart" class="chart-container-box"></div>
+          </div>
+        </div>
+        <div class="tech-card tech-card--quiet">
+          <div class="tech-card-header">
+            <div class="tech-card-title">CAPABILITY MATRIX</div>
+            <span>DISCRETE SIGNALS</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="powerTrajectoryChart" class="chart-container-box power-profile-container"></div>
+          </div>
+        </div>
 
-    <!-- ==================== BOTTOM FULL-WIDTH: SITREP & DIRECTIVES ==================== -->
-    <div class="init-directives-banner">
-      <div class="tech-card">
-        <div class="tech-card-header">
-          <div class="tech-card-title">EXECUTIVE BRIEF & DIRECTIVES</div>
-          <button id="btnCopySitrep" class="init-btn">
-            Copy SITREP
-          </button>
-        </div>
-        <div class="tech-card-body">
-          <div id="sitrepSummary" class="sitrep-summary" aria-live="polite">
-            <p>Generating the current executive situation report...</p>
+        <div class="tech-card tech-card--quiet">
+          <div class="tech-card-header">
+            <div class="tech-card-title">ALIEN FORCE POSTURE</div>
+            <span>LOCATION + FRAGMENTATION</span>
           </div>
-          <div id="directivesStreamList">
-            <!-- Directives dynamically injected -->
+          <div class="tech-card-body">
+            <div id="dualAssetRings"></div>
           </div>
         </div>
-      </div>
-    </div>
+        <div class="tech-card tech-card--quiet">
+          <div class="tech-card-header">
+            <div class="tech-card-title">ALIEN HATE ECONOMICS</div>
+            <span>MC THREAT FLOOR</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="alienHateEconomics" aria-live="polite">
+              <div class="alien-hate-econ-empty">LOADING HATE ECONOMICS…</div>
+            </div>
+          </div>
+        </div>
 
+        <div class="tech-card">
+          <div class="tech-card-header">
+            <div class="tech-card-title">MC BUDGET PLANNER</div>
+            <span>FLEET COST VS HATE FLOOR</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="mcBudget" aria-live="polite">
+              <div class="alien-hate-econ-empty">LOADING MC BUDGET…</div>
+            </div>
+          </div>
+        </div>
+        <div class="tech-card tech-card--quiet">
+          <div class="tech-card-header">
+            <div class="tech-card-title">NATION ACTION QUEUE</div>
+            <span>EARTH HOLDINGS</span>
+          </div>
+          <div class="tech-card-body" style="padding: 0;">
+            <div id="holdingsBubbleMatrix" class="bubble-matrix-container"></div>
+          </div>
+        </div>
+        <div class="tech-card tech-card--quiet init-records__span">
+          <div class="tech-card-header">
+            <div class="tech-card-title">TECHNOLOGY WATCH</div>
+            <span>RESEARCH + INTELLIGENCE GAPS</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="researchWatchlist" class="research-watchlist" aria-live="polite">
+              <p class="since-save-empty">Loading research and capability signals…</p>
+            </div>
+          </div>
+        </div>
+        <div class="tech-card tech-card--quiet init-records__span">
+          <div class="tech-card-header">
+            <div class="tech-card-title">EXECUTIVE BRIEF &amp; DIRECTIVES</div>
+            <button id="btnCopySitrep" class="init-btn" type="button">Copy SITREP</button>
+          </div>
+          <div class="tech-card-body">
+            <div id="sitrepSummary" class="sitrep-summary" aria-live="polite">
+              <p>Generating the current executive situation report...</p>
+            </div>
+            <div id="directivesStreamList"></div>
+          </div>
+        </div>
+        <section class="init-api-access init-records__span" aria-labelledby="initApiAccessTitle">
+          <div class="init-api-access__header">
+            <div>
+              <div class="init-api-access__eyebrow">EXTERNAL ANALYSIS</div>
+              <h2 id="initApiAccessTitle">API / AI ACCESS</h2>
+            </div>
+            <a href="/api/intel" class="init-api-access__directory">Open full API directory</a>
+          </div>
+          <div class="init-api-access__links">
+            <a href="/api/intel/ship-designs?observer=4712&amp;mode=omniscient&amp;faction=4712">Ship designs</a>
+            <a href="/api/intel/logistics?observer=4712&amp;mode=omniscient">Logistics</a>
+            <a href="/api/intel/construction?observer=4712&amp;mode=omniscient">Construction</a>
+            <a href="/api/intel/transfers?observer=4712&amp;mode=omniscient">Transfers</a>
+            <a href="/api/intel/theaters?observer=4712&amp;mode=omniscient">Theaters</a>
+            <a href="/api/intel/tech-tree?observer=4712&amp;mode=omniscient&amp;category=all">Tech tree</a>
+          </div>
+        </section>
+      </div>
+    </details>
   </main>
 
-  <!-- Crawlable endpoint directory for external analysis clients. -->
-  <section class="init-api-access" aria-labelledby="initApiAccessTitle">
-    <div class="init-api-access__header">
-      <div>
-        <div class="init-api-access__eyebrow">EXTERNAL ANALYSIS</div>
-        <h2 id="initApiAccessTitle">API / AI ACCESS</h2>
-      </div>
-      <a href="/api/intel" class="init-api-access__directory">Open full API directory</a>
-    </div>
-    <div class="init-api-access__links">
-      <a href="/api/intel/ship-designs?observer=4712&amp;mode=omniscient&amp;faction=4712">Ship designs</a>
-      <a href="/api/intel/logistics?observer=4712&amp;mode=omniscient">Logistics</a>
-      <a href="/api/intel/construction?observer=4712&amp;mode=omniscient">Construction</a>
-      <a href="/api/intel/transfers?observer=4712&amp;mode=omniscient">Transfers</a>
-      <a href="/api/intel/theaters?observer=4712&amp;mode=omniscient">Theaters</a>
-      <a href="/api/intel/tech-tree?observer=4712&amp;mode=omniscient&amp;category=all">Tech tree</a>
-    </div>
-  </section>
-
-  <!-- On-demand faction intelligence screen. It is populated from the current filtered snapshot. -->
-  <section id="factionIntelScreen" class="faction-intel-screen" hidden aria-labelledby="factionIntelTitle">
+  <section id="factionIntelScreen" class="faction-intel-screen" hidden inert aria-hidden="true" aria-labelledby="factionIntelTitle">
     <div class="faction-intel-screen__backdrop" data-faction-intel-close></div>
     <div class="faction-intel-screen__dialog" role="dialog" aria-modal="true" aria-labelledby="factionIntelTitle">
       <header class="faction-intel-screen__header">
@@ -391,8 +374,7 @@
     </div>
   </section>
 
-  <!-- Integrated classic-dashboard data room. -->
-  <section id="intelligenceLibraryScreen" class="intelligence-library-screen" hidden aria-labelledby="intelligenceLibraryTitle">
+  <section id="intelligenceLibraryScreen" class="intelligence-library-screen" hidden inert aria-hidden="true" aria-labelledby="intelligenceLibraryTitle">
     <div class="intelligence-library-screen__backdrop" data-intelligence-library-close></div>
     <div class="intelligence-library-screen__dialog" role="dialog" aria-modal="true" aria-labelledby="intelligenceLibraryTitle">
       <header class="intelligence-library-screen__header">
@@ -416,6 +398,7 @@
   <script src="/v2/js/components/intelligence-library.js"></script>
   <script src="/v2/js/components/executive-boards.js"></script>
   <script src="/v2/js/components/alien-hate-economics.js"></script>
+  <script src="/v2/js/components/mc-budget.js"></script>
   <script src="/v2/js/mission-control.js"></script>
 </body>
 </html>

@@ -35,7 +35,8 @@ const {
   miningAnalysisResource,
   mobilityResource,
   productionPlanResource,
-  bodyStatusResource
+  bodyStatusResource,
+  miningProspectsResource
 } = shared;
 
 function buildResource(snapshot, resource, {
@@ -150,6 +151,10 @@ function buildResource(snapshot, resource, {
   if (resource === 'production-plan') {
     const plan = productionPlanResource(snapshot, designId, quantity, observerId);
     return { ...base, count: null, items: [], ...plan };
+  }
+  if (resource === 'mining-prospects') {
+    const prospects = miningProspectsResource(snapshot, { theater: body || null, limit: quantity > 1 ? quantity : null });
+    return { ...base, count: prospects.ranked.length, items: prospects.ranked, ...prospects };
   }
   if (resource === 'body-status') {
     const statusObj = bodyStatusResource(snapshot, body || 'Mars', observerId);

@@ -1,6 +1,10 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+// Supabase-backed routes (strategic history) need SUPABASE_URL and a key.
+// The publish script already loads .env; the server did not, so those routes
+// reported "not configured" locally even when credentials were present.
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const { spawn } = require('child_process');
 const saveParser = require('./saveParser');
 const snapshotBuilder = require('./snapshotBuilder');
@@ -13,6 +17,13 @@ const snapshotDelta = require('./snapshotDelta');
 const intelResources = require('./intelResources');
 const techIntel = require('./techIntel');
 const requestValidation = require('./requestValidation');
+const SupabaseAdapter = require('./supabaseAdapter');
+const { buildStrategicSnapshot } = require('../shared/strategicSnapshot.mjs');
+const { buildStrategicDelta } = require('../shared/strategicDelta.mjs');
+
+// Compact strategic history lives in Supabase, not on disk, so these routes
+// degrade cleanly to a clear message when Supabase is not configured locally.
+const strategicHistory = new SupabaseAdapter();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -432,6 +443,94 @@ app.post(['/api/intel/production-plan', '/api/production-plan'], (req, res) => {
 });
 
 // 5. Template effect validation info
+
+// --- Strategic history -------------------------------------------------------
+// Compact strategic_snapshot_v1 documents for trend analysis. Deltas are
+// computed on demand; storing them would defeat the point of a compact format.
+
+app.get('/api/intel/history', async (req, res) => {
+  if (!strategicHistory.isConfigured()) {
+    return res.status(503).json({ error: 'Strategic history requires Supabase configuration (SUPABASE_URL + key).' });
+  }
+  try {
+    const result = await strategicHistory.listStrategicSnapshots(req.query.campaign || null, req.query.limit || 25);
+    if (!result.found) return res.status(404).json({ error: result.error || 'Strategic history unavailable for this campaign.' });
+    res.json({
+      schema: 'strategic_snapshot_v1',
+      campaignKey: result.campaignKey,
+      count: result.history.length,
+      history: result.history
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Addressed by save_last_modified: this schema has no separate snapshot hash.
+app.get('/api/intel/history/:saveLastModified', async (req, res) => {
+  if (!strategicHistory.isConfigured()) {
+    return res.status(503).json({ error: 'Strategic history requires Supabase configuration (SUPABASE_URL + key).' });
+  }
+  try {
+    const result = await strategicHistory.getStrategicSnapshot(
+      decodeURIComponent(req.params.saveLastModified),
+      req.query.campaign || null
+    );
+    if (!result.found) return res.status(404).json({ error: result.error || 'Strategic history unavailable for this campaign.' });
+    res.json(result.snapshot);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/intel/strategic-delta', async (req, res) => {
+  if (!strategicHistory.isConfigured()) {
+    return res.status(503).json({ error: 'Strategic history requires Supabase configuration (SUPABASE_URL + key).' });
+  }
+  try {
+    const campaign = req.query.campaign || null;
+    let fromDoc = null;
+    let toDoc = null;
+
+    if (req.query.from && req.query.to) {
+      const [a, b] = await Promise.all([
+        strategicHistory.getStrategicSnapshot(decodeURIComponent(req.query.from), campaign),
+        strategicHistory.getStrategicSnapshot(decodeURIComponent(req.query.to), campaign)
+      ]);
+      if (!a.found) return res.status(404).json({ error: a.error || 'from snapshot not found.' });
+      if (!b.found) return res.status(404).json({ error: b.error || 'to snapshot not found.' });
+      fromDoc = a.snapshot.payload;
+      toDoc = b.snapshot.payload;
+    } else {
+      // Default: current live save versus the most recent stored history entry
+      // that predates it, so "I just uploaded a save, what changed?" works with
+      // no parameters.
+      const recent = await strategicHistory.getRecentStrategicSnapshots(campaign, 2);
+      if (!recent.found) return res.status(404).json({ error: recent.error || 'No strategic history available.' });
+      if (recent.snapshots.length === 0) return res.status(404).json({ error: 'No strategic history stored yet.' });
+
+      try {
+        const { targetPath } = requestContext(req);
+        const rawSnapshot = loadOrGetSnapshot(targetPath);
+        toDoc = buildStrategicSnapshot(rawSnapshot, {
+          observerFactionId: Number(req.query.observer) || 4712,
+          campaignKey: campaign
+        });
+        fromDoc = recent.snapshots[0]?.payload || null;
+      } catch (localErr) {
+        // No local save available (hosted context): fall back to the two most
+        // recent stored snapshots.
+        toDoc = recent.snapshots[0]?.payload || null;
+        fromDoc = recent.snapshots[1]?.payload || null;
+      }
+    }
+
+    res.json(buildStrategicDelta(fromDoc, toDoc));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/templates/effects', (req, res) => {
   try {
     res.json({

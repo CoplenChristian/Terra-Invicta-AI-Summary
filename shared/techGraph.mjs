@@ -221,6 +221,41 @@ export function buildTechGraph(templates, saveState = {}) {
     };
   };
 
+  // Project availability ramps from initialUnlockChance by deltaUnlockChance
+  // each month, capped at maxUnlockChance. Expected wait is the mean of the
+  // resulting (non-stationary) geometric process.
+  const projectAvailability = (template) => {
+    const initial = Number(template.initialUnlockChance);
+    const delta = Number(template.deltaUnlockChance);
+    const max = Number(template.maxUnlockChance);
+    if (![initial, delta, max].every(Number.isFinite)) {
+      return { known: false, schedulable: null, initialPercent: null, deltaPercent: null, maxPercent: null, expectedMonths: null };
+    }
+
+    const schedulable = max >= 100;
+    let expectedMonths = null;
+    if (max > 0) {
+      // E[months] = sum over m of (m * P(first success at m)).
+      let survive = 1;
+      let expected = 0;
+      for (let month = 1; month <= 600 && survive > 1e-6; month++) {
+        const p = Math.min(initial + delta * (month - 1), max) / 100;
+        expected += month * survive * p;
+        survive *= (1 - p);
+      }
+      expectedMonths = Math.round(expected * 10) / 10;
+    }
+
+    return {
+      known: true,
+      schedulable,
+      initialPercent: initial,
+      deltaPercent: delta,
+      maxPercent: max,
+      expectedMonths
+    };
+  };
+
   const projectNode = (template) => {
     const id = template.dataName || template.friendlyName;
     const category = template.techCategory || 'General';
@@ -241,6 +276,11 @@ export function buildTechGraph(templates, saveState = {}) {
       researchPercent: 0,
       repeatable: !!template.repeatable,
       oneTimeGlobally: !!template.oneTimeGlobally,
+      // Availability is a monthly RNG gate, not a queue position. A project
+      // whose maxUnlockChance is below 100 can never be scheduled -- it can
+      // only be waited on. Ordering a research plan without this desyncs from
+      // the actual project list.
+      availability: projectAvailability(template),
       prerequisites: prereqRefs,
       alternatePrerequisites: altRefs,
       effects: asArray(template.effects).map(eid => effectRecord(eid, effects[eid], componentByEffect)),
@@ -655,13 +695,23 @@ export function buildResearchQueue(snapshot, observerFactionId) {
 
 export function graphFromTree(snapshot) {
   const nodes = snapshot?.techTree?.nodes || [];
+  // Published snapshots may omit the tech tree to save storage, leaving a
+  // `techTreeRef` marker instead. Surface that explicitly: an empty graph and
+  // a deliberately-omitted graph look identical otherwise, and callers would
+  // report "no techs" as though it were the truth.
+  const omitted = !snapshot?.techTree && !!snapshot?.techTreeRef;
   return {
     nodes,
     byId: new Map(nodes.map(n => [n.id, n])),
     techs: nodes.filter(n => n.type === 'global_tech'),
     projects: nodes.filter(n => n.type === 'faction_project'),
-    categories: snapshot?.techTree?.categories || {},
-    unlockClasses: snapshot?.techTree?.unlockClasses || {}
+    categories: snapshot?.techTree?.categories || snapshot?.techTreeRef?.categories || {},
+    unlockClasses: snapshot?.techTree?.unlockClasses || snapshot?.techTreeRef?.unlockClasses || {},
+    omitted,
+    omittedReason: omitted
+      ? (snapshot.techTreeRef.reason || 'tech tree omitted from this snapshot')
+      : null,
+    expectedNodeCount: omitted ? (snapshot.techTreeRef.nodeCount ?? null) : nodes.length
   };
 }
 
@@ -703,6 +753,9 @@ function projectTreeNode(node, includeEffects) {
     prerequisites: node.prerequisites,
     unlocks: node.unlocks.map(u => ({ class: u.class, id: u.targetId, displayName: u.displayName }))
   };
+  // Projects are gated by a monthly availability roll, so a research plan that
+  // treats them as orderable steps will desync from the real project list.
+  if (node.availability) out.availability = node.availability;
   if (node.type === 'global_tech') out.contributors = node.contributors;
   if (includeEffects) {
     out.effects = node.effects;
