@@ -3,6 +3,7 @@ import { SUPPORTED_MODES } from '../shared/constants.mjs';
 import {
   SUPPORTED_RESOURCES,
   INTEL_ENDPOINT_INDEX,
+  INTEL_ENDPOINT_EXAMPLES,
   asArray,
   factionMatches,
   bodyMatches,
@@ -665,16 +666,42 @@ export default {
     }
 
     if (url.pathname === '/api/intel' || url.pathname === '/api/intel/') {
-      return jsonResponse({
+      const payload = {
         success: true,
         source: 'hosted-worker',
         name: 'Terra Invicta Strategic Intelligence API',
         endpoints: INTEL_ENDPOINT_INDEX,
+        examples: INTEL_ENDPOINT_EXAMPLES,
         query: {
           observer: 'Observer faction ID, e.g. 4712',
           mode: 'player | enhanced | omniscient',
           faction: 'Optional faction ID filter',
           body: 'Optional body/theater filter'
+        }
+      };
+      if (url.searchParams.get('format') === 'json' || request.headers.get('accept')?.includes('application/json')) {
+        return jsonResponse(payload);
+      }
+
+      const links = Object.entries(payload.endpoints).map(([name, endpoint]) => {
+        const query = payload.examples[name] || '?observer=4712&mode=omniscient';
+        const href = `${endpoint}${query}`.replace(/&/g, '&amp;');
+        return `<li><span>${name}</span><a href="${href}">${endpoint}${query}</a></li>`;
+      }).join('');
+      return new Response(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="index,follow">
+<title>Terra Invicta Strategic Intelligence API</title></head><body>
+<main><h1>Terra Invicta Strategic Intelligence API</h1>
+<p>Machine-readable endpoint directory. Add or change observer, mode, faction, body, and other filters as needed.</p>
+<p><a href="/api/intel?format=json">JSON index</a> · <a href="/v2/">Command Center</a></p>
+<ul>${links}</ul></main></body></html>`, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+          'referrer-policy': 'no-referrer'
         }
       });
     }

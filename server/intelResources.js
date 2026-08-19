@@ -4,6 +4,7 @@ const shared = require('../shared/intelResources.mjs');
 const {
   SUPPORTED_RESOURCES,
   INTEL_ENDPOINT_INDEX,
+  INTEL_ENDPOINT_EXAMPLES,
   asArray,
   factionMatches,
   bodyMatches,
@@ -205,5 +206,6 @@ function buildResource(snapshot, resource, {
 module.exports = {
   SUPPORTED_RESOURCES,
   INTEL_ENDPOINT_INDEX,
+  INTEL_ENDPOINT_EXAMPLES,
   buildResource
 };

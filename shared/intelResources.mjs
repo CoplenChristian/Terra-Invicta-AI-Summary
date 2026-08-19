@@ -55,6 +55,44 @@ export const INTEL_ENDPOINT_INDEX = Object.freeze({
   researchQueue: '/api/intel/research-queue'
 });
 
+export const INTEL_ENDPOINT_EXAMPLES = Object.freeze({
+  summary: '?observer=4712&mode=omniscient',
+  factions: '?observer=4712&mode=omniscient',
+  nations: '?observer=4712&mode=omniscient&faction=4712',
+  councilors: '?observer=4712&mode=omniscient&faction=4712',
+  habs: '?observer=4712&mode=omniscient&faction=4712',
+  habSites: '?observer=4712&mode=omniscient&body=Ceres',
+  mining: '?observer=4712&mode=omniscient&body=Ceres&sort=water',
+  fleets: '?observer=4712&mode=omniscient&faction=4717',
+  ships: '?observer=4712&mode=omniscient&faction=4717',
+  research: '?observer=4712&mode=omniscient',
+  capabilities: '?observer=4712&mode=omniscient',
+  alien: '?observer=4712&mode=omniscient',
+  resources: '?observer=4712&mode=omniscient&faction=4712',
+  habModules: '?observer=4712&mode=omniscient&faction=4712',
+  shipyards: '?observer=4712&mode=omniscient&faction=4712',
+  shipyardQueues: '?observer=4712&mode=omniscient&faction=4712',
+  arrivals: '?observer=4712&mode=omniscient',
+  transfers: '?observer=4712&mode=omniscient&destination=Mars',
+  logistics: '?observer=4712&mode=omniscient',
+  construction: '?observer=4712&mode=omniscient&faction=4712',
+  shipDesigns: '?observer=4712&mode=omniscient&faction=4712',
+  theaters: '?observer=4712&mode=omniscient',
+  infrastructure: '?observer=4712&mode=omniscient&body=Mars',
+  alienThreat: '?observer=4712&mode=omniscient',
+  delta: '?observer=4712&mode=omniscient',
+  mobility: '?observer=4712&mode=omniscient',
+  productionPlan: '?observer=4712&mode=omniscient&design=playerShipTemplate584&quantity=4',
+  bodyStatus: '?observer=4712&mode=omniscient&body=Mars',
+  techTree: '?observer=4712&mode=omniscient&category=all',
+  techPath: '?observer=4712&mode=omniscient&target=Project_RailCannonMk3',
+  techSearch: '?observer=4712&mode=omniscient&q=battlecruiser',
+  techMilestones: '?observer=4712&mode=omniscient&category=ship_hull',
+  techMatrix: '?observer=4712&mode=omniscient',
+  techOpportunities: '?observer=4712&mode=omniscient',
+  researchQueue: '?observer=4712&mode=omniscient'
+});
+
 export const asArray = (value) => (Array.isArray(value) ? value : []);
 
 export const normalizeBody = (value) => String(value || '')

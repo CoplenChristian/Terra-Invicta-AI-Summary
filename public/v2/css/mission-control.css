@@ -442,6 +442,62 @@ img.faction-logo {
   opacity: 0.65;
 }
 
+.init-api-access {
+  grid-column: 1 / -1;
+  margin: 0 22px 24px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-inset);
+}
+
+.init-api-access__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 9px;
+}
+
+.init-api-access__eyebrow {
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+.init-api-access h2 {
+  margin: 3px 0 0;
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.init-api-access__directory,
+.init-api-access__links a {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.init-api-access__directory:hover,
+.init-api-access__links a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.init-api-access__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+}
+
+.init-api-access__links a::before {
+  color: var(--text-muted);
+  content: '/';
+  margin-right: 3px;
+}
+
 /* Page structure --------------------------------------------------------- */
 
 .init-grid-layout {
