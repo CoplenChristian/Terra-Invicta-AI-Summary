@@ -46,6 +46,7 @@ import {
   buildResearchQueueProjection,
   CATEGORIES
 } from '../shared/techGraph.mjs';
+import { buildStrategicDelta } from '../shared/strategicDelta.mjs';
 
 const HOSTED_MODES = SUPPORTED_MODES;
 
@@ -163,6 +164,43 @@ async function readPublicCampaign(env, campaignKey) {
     `campaigns?campaign_key=eq.${encodeURIComponent(campaignKey)}&is_public=eq.true&select=campaign_key,current_save_last_modified,current_game_time,current_save_filename&limit=1`
   );
   return campaigns?.[0] || null;
+}
+
+const strategicHistoryMeta = (row) => ({
+  saveLastModified: row?.save_last_modified || null,
+  saveFilename: row?.save_filename || null,
+  gameTime: row?.game_time || null,
+  campaignDate: row?.campaign_date || null,
+  schemaVersion: row?.schema_version ?? null,
+  createdAt: row?.created_at || null
+});
+
+const boundedHistoryLimit = (value, fallback = 25) => {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, 100);
+};
+
+async function readStrategicHistory(env, campaignKey, options = {}) {
+  const campaign = await readPublicCampaign(env, campaignKey);
+  if (!campaign) {
+    return {
+      found: false,
+      status: 404,
+      error: `Public campaign '${campaignKey}' not found.`
+    };
+  }
+
+  const select = options.includePayload
+    ? 'save_last_modified,save_filename,game_time,campaign_date,schema_version,created_at,payload'
+    : 'save_last_modified,save_filename,game_time,campaign_date,schema_version,created_at';
+  let query = `strategic_snapshots?campaign_key=eq.${encodeURIComponent(campaign.campaign_key)}&select=${select}&order=save_last_modified.desc&limit=${boundedHistoryLimit(options.limit)}`;
+  if (options.saveLastModified) {
+    query += `&save_last_modified=eq.${encodeURIComponent(options.saveLastModified)}`;
+  }
+
+  const rows = await querySupabase(env, query);
+  return { found: true, campaign, rows: Array.isArray(rows) ? rows : [] };
 }
 
 const timestampMs = (value) => {
@@ -704,6 +742,110 @@ export default {
           'referrer-policy': 'no-referrer'
         }
       });
+    }
+
+    // Compact strategic history is intentionally separate from the large
+    // observer/mode snapshot table. It remains public read-only data under the
+    // campaign's RLS policy and is safe to expose without a mode parameter.
+    if (url.pathname === '/api/intel/history' || url.pathname === '/api/intel/history/') {
+      if (!isSupabaseConfigured) {
+        return jsonResponse({ success: false, error: 'Hosted Supabase is not configured.' }, 503);
+      }
+      try {
+        const campaignKey = url.searchParams.get('campaign') || env.SUPABASE_CAMPAIGN_KEY || 'initiative';
+        const result = await readStrategicHistory(env, campaignKey, {
+          limit: boundedHistoryLimit(url.searchParams.get('limit'))
+        });
+        if (!result.found) return jsonResponse({ success: false, error: result.error }, result.status);
+        return jsonResponse({
+          success: true,
+          source: 'supabase',
+          schema: 'strategic_snapshot_v1',
+          campaignKey: result.campaign.campaign_key,
+          count: result.rows.length,
+          history: result.rows.map(strategicHistoryMeta)
+        });
+      } catch (err) {
+        return jsonResponse({ success: false, error: err.message }, 500);
+      }
+    }
+
+    if (url.pathname.startsWith('/api/intel/history/')) {
+      if (!isSupabaseConfigured) {
+        return jsonResponse({ success: false, error: 'Hosted Supabase is not configured.' }, 503);
+      }
+      try {
+        const saveLastModified = decodeURIComponent(url.pathname.slice('/api/intel/history/'.length));
+        if (!saveLastModified) {
+          return jsonResponse({ success: false, error: 'A save_last_modified timestamp is required.' }, 400);
+        }
+        const campaignKey = url.searchParams.get('campaign') || env.SUPABASE_CAMPAIGN_KEY || 'initiative';
+        const result = await readStrategicHistory(env, campaignKey, {
+          saveLastModified,
+          limit: 1,
+          includePayload: true
+        });
+        if (!result.found) return jsonResponse({ success: false, error: result.error }, result.status);
+        const row = result.rows[0];
+        if (!row) {
+          return jsonResponse({ success: false, error: `No strategic snapshot for ${saveLastModified}.` }, 404);
+        }
+        return jsonResponse({
+          success: true,
+          source: 'supabase',
+          schema: 'strategic_snapshot_v1',
+          campaignKey: result.campaign.campaign_key,
+          ...strategicHistoryMeta(row),
+          payload: row.payload || null
+        });
+      } catch (err) {
+        return jsonResponse({ success: false, error: err.message }, 500);
+      }
+    }
+
+    if (url.pathname === '/api/intel/strategic-delta') {
+      if (!isSupabaseConfigured) {
+        return jsonResponse({ success: false, error: 'Hosted Supabase is not configured.' }, 503);
+      }
+      try {
+        const campaignKey = url.searchParams.get('campaign') || env.SUPABASE_CAMPAIGN_KEY || 'initiative';
+        const fromStamp = url.searchParams.get('from');
+        const toStamp = url.searchParams.get('to');
+        let fromRow = null;
+        let toRow = null;
+
+        if (fromStamp && toStamp) {
+          const [fromResult, toResult] = await Promise.all([
+            readStrategicHistory(env, campaignKey, { saveLastModified: fromStamp, limit: 1, includePayload: true }),
+            readStrategicHistory(env, campaignKey, { saveLastModified: toStamp, limit: 1, includePayload: true })
+          ]);
+          if (!fromResult.found) return jsonResponse({ success: false, error: fromResult.error }, fromResult.status);
+          if (!toResult.found) return jsonResponse({ success: false, error: toResult.error }, toResult.status);
+          fromRow = fromResult.rows[0] || null;
+          toRow = toResult.rows[0] || null;
+        } else {
+          const recent = await readStrategicHistory(env, campaignKey, { limit: 2, includePayload: true });
+          if (!recent.found) return jsonResponse({ success: false, error: recent.error }, recent.status);
+          toRow = recent.rows[0] || null;
+          fromRow = recent.rows[1] || null;
+        }
+
+        if (!toRow) {
+          return jsonResponse({ success: false, error: 'No strategic history is available for this campaign.' }, 404);
+        }
+
+        return jsonResponse({
+          success: true,
+          source: 'supabase',
+          schema: 'strategic_snapshot_v1',
+          campaignKey,
+          from: fromRow ? strategicHistoryMeta(fromRow) : null,
+          to: strategicHistoryMeta(toRow),
+          ...buildStrategicDelta(fromRow?.payload || null, toRow.payload || null)
+        });
+      } catch (err) {
+        return jsonResponse({ success: false, error: err.message }, 500);
+      }
     }
 
     // Mission Control v2 consumes the same generated briefing that the local
