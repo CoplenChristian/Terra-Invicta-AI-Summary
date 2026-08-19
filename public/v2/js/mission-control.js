@@ -66,6 +66,26 @@ if (__shared) {
   escapeHtml = __shared.escapeHtml;
 }
 
+function brandFactionLabel(displayName) {
+  if (!displayName) return 'UNKNOWN';
+  const trimmed = String(displayName).trim();
+  return (/^the /i.test(trimmed) ? trimmed.slice(4) : trimmed).toUpperCase();
+}
+
+function updateFactionLogoSlot(container, faction, className) {
+  if (!container) return;
+  container.innerHTML = '';
+  container.classList.remove('has-faction-logo');
+  const appendLogo = __shared?.appendFactionLogo;
+  if (!appendLogo) return;
+  const img = appendLogo(document, container, faction, className || 'faction-logo');
+  if (img) container.classList.add('has-faction-logo');
+}
+
+function observerFactionRecord() {
+  return (state.rawSnapshot?.factions || []).find(f => String(f.ID) === String(state.observer)) || null;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
   loadRuntime().finally(loadData);
@@ -491,10 +511,22 @@ function renderTopHUD() {
   const { campaignDate, observerName, powerScore, sitrep = {} } = state.briefing;
   const meta = state.rawSnapshot?.metadata || {};
   const identity = state.snapshotIdentity || state.briefing || {};
+  const observerFaction = observerFactionRecord();
+  const resolvedObserverName = observerName || observerFaction?.displayName || 'Unknown faction';
 
   document.getElementById('hudDate').textContent = campaignDate;
   document.getElementById('hudSave').textContent = meta.fileName || meta.activeSaveFileName || 'Latest';
-  document.getElementById('hudFaction').textContent = observerName;
+
+  const brandName = document.getElementById('initBrandFactionName');
+  if (brandName) brandName.textContent = brandFactionLabel(resolvedObserverName);
+  updateFactionLogoSlot(document.getElementById('initFactionLogo'), observerFaction, 'faction-logo faction-logo--title');
+  document.title = `${resolvedObserverName} // Executive Situation Report`;
+
+  const hudName = document.getElementById('hudFactionName');
+  if (hudName) hudName.textContent = resolvedObserverName;
+  updateFactionLogoSlot(document.getElementById('hudFactionLogo'), observerFaction, 'faction-logo faction-logo--hud');
+  updateFactionLogoSlot(document.getElementById('initObserverSelectLogo'), observerFaction, 'faction-logo faction-logo--select');
+
   document.getElementById('hudPower').textContent = `${powerScore}/100`;
   const snapshotHud = document.getElementById('hudSnapshot');
   if (snapshotHud) {

@@ -180,6 +180,77 @@ a:focus-visible {
   opacity: 0.7;
 }
 
+.init-logo-icon.has-faction-logo {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  overflow: visible;
+  border-color: transparent;
+  border-radius: 2px;
+}
+
+.init-logo-icon.has-faction-logo::before,
+.init-logo-icon.has-faction-logo::after {
+  display: none;
+}
+
+img.faction-logo {
+  display: block;
+  object-fit: contain;
+  mix-blend-mode: lighten;
+}
+
+.faction-logo--title {
+  width: 38px;
+  height: 38px;
+}
+
+.faction-logo--hud,
+.faction-logo--select {
+  width: 20px;
+  height: 20px;
+}
+
+.faction-logo--roster {
+  width: 20px;
+  height: 20px;
+}
+
+.faction-logo--identity {
+  width: 40px;
+  height: 40px;
+}
+
+.faction-logo--table {
+  width: 22px;
+  height: 22px;
+}
+
+.faction-logo--ledger {
+  width: 20px;
+  height: 20px;
+}
+
+.init-hud-faction-value {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.init-hud-faction-logo,
+.init-observer-select-logo {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.init-observer-select-wrap {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .init-brand-name {
   display: flex;
   min-width: 0;
@@ -2322,9 +2393,20 @@ body.intelligence-library-open {
 
 .intel-library-faction-name i {
   display: inline-block;
+  flex: 0 0 7px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
+}
+
+.intel-library-faction-name.has-faction-logo i {
+  display: none;
+}
+
+.mc-board-faction-head {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .intel-library-inline-action {
@@ -3138,7 +3220,7 @@ body.intelligence-library-open {
 
 .faction-intel-faction {
   display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   gap: 9px;
   align-items: center;
   min-width: 0;
@@ -3163,11 +3245,25 @@ body.intelligence-library-open {
 
 .faction-intel-faction-swatch,
 .faction-intel-identity-mark {
-  display: block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--faction-intel-accent, var(--accent));
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--faction-intel-accent, var(--accent));
+  border-radius: 2px;
+  background: transparent;
+}
+
+.faction-intel-faction-swatch {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+}
+
+.faction-intel-identity-mark {
+  width: 44px;
+  height: 44px;
 }
 
 .faction-intel-faction-copy {
@@ -3210,11 +3306,6 @@ body.intelligence-library-open {
   gap: 11px;
   align-items: center;
   padding: 15px 16px 5px;
-}
-
-.faction-intel-identity-mark {
-  width: 12px;
-  height: 12px;
 }
 
 .faction-intel-identity-name {
@@ -3825,6 +3916,23 @@ body.intelligence-library-open {
 
   .init-brand-name {
     font-size: 15px;
+  }
+
+  .init-logo-icon.has-faction-logo {
+    flex-basis: 30px;
+    width: 30px;
+    height: 30px;
+  }
+
+  .faction-logo--title {
+    width: 30px;
+    height: 30px;
+  }
+
+  .faction-logo--hud,
+  .faction-logo--select {
+    width: 18px;
+    height: 18px;
   }
 
   .init-brand-tag {

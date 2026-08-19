@@ -246,6 +246,10 @@
       var swatch = createElement(documentRef, 'span', 'faction-intel-faction-swatch');
       swatch.setAttribute('aria-hidden', 'true');
       applyAccent(swatch, faction.color);
+      if (global.MissionControlShared && global.MissionControlShared.appendFactionLogo) {
+        var rosterLogo = global.MissionControlShared.appendFactionLogo(documentRef, swatch, faction, 'faction-logo faction-logo--roster');
+        if (rosterLogo) swatch.style.backgroundColor = 'transparent';
+      }
 
       var copy = createElement(documentRef, 'span', 'faction-intel-faction-copy');
       copy.appendChild(createElement(documentRef, 'strong', 'faction-intel-faction-name', getFactionName(faction)));
@@ -305,6 +309,10 @@
     var identityMark = createElement(documentRef, 'span', 'faction-intel-identity-mark');
     identityMark.setAttribute('aria-hidden', 'true');
     applyAccent(identityMark, faction.color);
+    if (global.MissionControlShared && global.MissionControlShared.appendFactionLogo) {
+      var identityLogo = global.MissionControlShared.appendFactionLogo(documentRef, identityMark, faction, 'faction-logo faction-logo--identity');
+      if (identityLogo) identityMark.style.backgroundColor = 'transparent';
+    }
 
     var identityCopy = createElement(documentRef, 'div', 'faction-intel-identity-copy');
     identityCopy.appendChild(createElement(documentRef, 'h3', 'faction-intel-identity-name', getFactionName(faction)));

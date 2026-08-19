@@ -106,6 +106,74 @@
     return factionById(snapshot, id) && factionById(snapshot, id).displayName || 'Unknown faction';
   }
 
+  const FACTION_DISPLAY_NAME_TO_TEMPLATE = {
+    'the Initiative': 'ExploitCouncil',
+    'the Resistance': 'ResistCouncil',
+    'Humanity First': 'DestroyCouncil',
+    'the Servants': 'SubmitCouncil',
+    'the Protectorate': 'AppeaseCouncil',
+    'the Academy': 'CooperateCouncil',
+    'Project Exodus': 'EscapeCouncil',
+    'the Aliens': 'AlienCouncil'
+  };
+
+  const FACTION_LOGO_BASE = '/v2/assets/faction-logos/';
+
+  function resolveFactionTemplateName(factionOrTemplateName) {
+    if (!factionOrTemplateName) return '';
+    if (typeof factionOrTemplateName === 'string') {
+      const trimmed = factionOrTemplateName.trim();
+      if (/Council$/i.test(trimmed)) return trimmed;
+      return FACTION_DISPLAY_NAME_TO_TEMPLATE[trimmed] || '';
+    }
+    if (typeof factionOrTemplateName === 'object') {
+      if (factionOrTemplateName.templateName) return String(factionOrTemplateName.templateName).trim();
+      if (factionOrTemplateName.displayName) {
+        return FACTION_DISPLAY_NAME_TO_TEMPLATE[String(factionOrTemplateName.displayName).trim()] || '';
+      }
+    }
+    return '';
+  }
+
+  function factionLogoUrl(factionOrTemplateName) {
+    const templateName = resolveFactionTemplateName(factionOrTemplateName);
+    if (!templateName) return '';
+    return `${FACTION_LOGO_BASE}${encodeURIComponent(templateName)}.png`;
+  }
+
+  function factionLogoImgHtml(factionOrTemplateName, options) {
+    const url = factionLogoUrl(factionOrTemplateName);
+    if (!url) return '';
+    const opts = options || {};
+    const className = opts.className || 'faction-logo';
+    const width = opts.width;
+    const height = opts.height;
+    const sizeAttrs = [
+      width ? ` width="${escapeHtml(String(width))}"` : '',
+      height ? ` height="${escapeHtml(String(height))}"` : ''
+    ].join('');
+    return `<img src="${escapeHtml(url)}" alt="" aria-hidden="true" class="${escapeHtml(className)}"${sizeAttrs} onerror="this.style.display='none';this.parentElement&&this.parentElement.classList.remove('has-faction-logo');">`;
+  }
+
+  function appendFactionLogo(documentRef, parent, faction, className) {
+    const url = factionLogoUrl(faction);
+    if (!url || !parent) return null;
+    const doc = documentRef || (typeof document !== 'undefined' ? document : null);
+    if (!doc) return null;
+    const img = doc.createElement('img');
+    img.src = url;
+    img.alt = '';
+    img.setAttribute('aria-hidden', 'true');
+    img.className = className || 'faction-logo';
+    img.addEventListener('error', function onFactionLogoError() {
+      img.style.display = 'none';
+      parent.classList.remove('has-faction-logo');
+    });
+    parent.classList.add('has-faction-logo');
+    parent.appendChild(img);
+    return img;
+  }
+
   global.MissionControlShared = {
     escapeHtml: escapeHtml,
     display: display,
@@ -120,6 +188,9 @@
     bodyLabel: bodyLabel,
     matchesSpaceTheater: matchesSpaceTheater,
     factionById: factionById,
-    factionName: factionName
+    factionName: factionName,
+    factionLogoUrl: factionLogoUrl,
+    factionLogoImgHtml: factionLogoImgHtml,
+    appendFactionLogo: appendFactionLogo
   };
 })(window);

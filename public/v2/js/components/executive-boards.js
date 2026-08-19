@@ -2,7 +2,7 @@
   'use strict';
 
   const {
-    escapeHtml, numberValue, formatNumber, formatGdp, formatDelta, bodyKey, bodyLabel
+    escapeHtml, numberValue, formatNumber, formatGdp, formatDelta, bodyKey, bodyLabel, factionLogoImgHtml
   } = window.MissionControlShared || {};
 
   function factionById(snapshot, id) {
@@ -57,7 +57,10 @@
       const observerClass = String(faction.ID) === String(snapshot.observerFactionId) ? ' class="is-observer"' : '';
       const hateLabel = hate === undefined || hate === null ? 'UNAVAILABLE' : formatNumber(hate, 1);
       const shipDeltaClass = shipDelta?.delta > 0 ? 'is-positive' : shipDelta?.delta < 0 ? 'is-negative' : '';
-      return `<tr${observerClass} data-board-faction-id="${escapeHtml(faction.ID)}"><th scope="row">${escapeHtml(faction.displayName)}<small class="mc-board-secondary">R&amp;D ${escapeHtml(formatNumber(faction.totalResearch))} · HATE ${escapeHtml(hateLabel)}</small></th><td>${formatNumber(faction.controlPointsCount)}</td><td>${formatGdp(faction.totalGdp)}<small class="mc-board-secondary">GDP Δ ${escapeHtml(formatDelta(gdpDelta))}</small></td><td>${formatNumber(faction.habsCount)} / ${formatNumber(faction.shipsCount)}<small class="mc-board-secondary ${shipDeltaClass}">Δ ships ${escapeHtml(formatDelta(shipDelta))}</small></td><td><span class="mc-status-chip">${escapeHtml(factionStatus(faction, factions))}</span></td></tr>`;
+      const logoHtml = factionLogoImgHtml
+        ? factionLogoImgHtml(faction, { className: 'faction-logo faction-logo--ledger' })
+        : '';
+      return `<tr${observerClass} data-board-faction-id="${escapeHtml(faction.ID)}"><th scope="row"><span class="mc-board-faction-head">${logoHtml}<span>${escapeHtml(faction.displayName)}<small class="mc-board-secondary">R&amp;D ${escapeHtml(formatNumber(faction.totalResearch))} · HATE ${escapeHtml(hateLabel)}</small></span></span></th><td>${formatNumber(faction.controlPointsCount)}</td><td>${formatGdp(faction.totalGdp)}<small class="mc-board-secondary">GDP Δ ${escapeHtml(formatDelta(gdpDelta))}</small></td><td>${formatNumber(faction.habsCount)} / ${formatNumber(faction.shipsCount)}<small class="mc-board-secondary ${shipDeltaClass}">Δ ships ${escapeHtml(formatDelta(shipDelta))}</small></td><td><span class="mc-status-chip">${escapeHtml(factionStatus(faction, factions))}</span></td></tr>`;
     }).join('');
     container.innerHTML = `<div class="mc-board-note"><strong>LEDGER / CURRENT STATE</strong><span>R&amp;D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate.</span></div>${tableShell(['Faction', 'CP', 'GDP', 'Habs / Ships', 'Strategic status'], rows, 'No faction records are available.', 'ledger')}`;
   }

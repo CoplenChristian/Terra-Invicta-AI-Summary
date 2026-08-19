@@ -340,9 +340,27 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
       'faction filter'
     );
     const body = requestValidation.parseBodyQuery(req.query.body);
+    const destination = req.query.destination ? String(req.query.destination).trim() : null;
+    const fleetId = req.query.fleet || req.query.fleetId || null;
+    const designId = req.query.design || req.query.designId || req.query.target || null;
+    const quantity = parseInt(req.query.quantity, 10) || 1;
+    const status = req.query.status ? String(req.query.status).trim() : null;
+    const sort = req.query.sort ? String(req.query.sort).trim() : null;
+
+    const previousFiltered = cachedPreviousRawSave
+      ? buildFilteredSnapshot(cachedPreviousRawSave, mode, observerId)
+      : null;
+
     const projection = intelResources.buildResource(filtered, req.params.resource, {
       factionId,
       body,
+      destination,
+      fleetId,
+      designId,
+      quantity,
+      status,
+      sort,
+      previousSnapshot: previousFiltered,
       mode,
       isLatestSnapshot: targetPath === null
     });
@@ -351,6 +369,31 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
     res.json(projection);
   } catch (err) {
     console.error(`[Server] Focused resource failed (${req.params.resource}):`, err);
+    res.status(err.statusCode || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Production plan query endpoint (POST)
+app.post(['/api/intel/production-plan', '/api/production-plan'], (req, res) => {
+  try {
+    const { mode, observerId, targetPath } = requestContext(req);
+    const rawSnapshot = loadOrGetSnapshot(targetPath);
+    assertObserver(rawSnapshot, observerId);
+    const filtered = buildFilteredSnapshot(rawSnapshot, mode, observerId);
+    const designId = req.body?.designId || req.body?.design || req.query.designId || req.query.design;
+    const quantity = parseInt(req.body?.quantity || req.query.quantity, 10) || 1;
+
+    const projection = intelResources.buildResource(filtered, 'production-plan', {
+      designId,
+      quantity,
+      mode,
+      isLatestSnapshot: targetPath === null
+    });
+
+    res.set('Cache-Control', 'no-store');
+    res.json(projection);
+  } catch (err) {
+    console.error('[Server] Production plan failed:', err);
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
   }
 });

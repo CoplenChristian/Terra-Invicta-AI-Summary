@@ -104,7 +104,7 @@ published Omniscient view. `observer=4712` is the Initiative observer.
 /api/intel/councilors?observer=4712&mode=omniscient&faction=4712
 /api/intel/habs?observer=4712&mode=omniscient&faction=4717
 /api/intel/hab-sites?observer=4712&mode=omniscient&faction=4717
-/api/intel/mining?observer=4712&mode=omniscient&body=Ceres
+/api/intel/mining?observer=4712&mode=omniscient&body=Ceres&sort=water
 /api/intel/fleets?observer=4712&mode=omniscient&faction=4717
 /api/intel/ships?observer=4712&mode=omniscient&faction=4717
 /api/intel/resources?observer=4712&mode=omniscient&faction=4712
@@ -112,10 +112,20 @@ published Omniscient view. `observer=4712` is the Initiative observer.
 /api/intel/shipyards?observer=4712&mode=omniscient&faction=4712
 /api/intel/shipyard-queues?observer=4712&mode=omniscient&faction=4712
 /api/intel/arrivals?observer=4712&mode=omniscient
-/api/intel/transfers?observer=4712&mode=omniscient&faction=4712
+/api/intel/transfers?observer=4712&mode=omniscient&destination=Mars
 /api/intel/research?observer=4712&mode=omniscient
 /api/intel/capabilities?observer=4712&mode=omniscient
 /api/intel/alien?observer=4712&mode=omniscient
+/api/intel/logistics?observer=4712&mode=omniscient
+/api/intel/construction?observer=4712&mode=omniscient
+/api/intel/ship-designs?observer=4712&mode=omniscient&faction=4712
+/api/intel/theaters?observer=4712&mode=omniscient
+/api/intel/infrastructure?observer=4712&mode=omniscient&body=Mars
+/api/intel/alien-threat?observer=4712&mode=omniscient
+/api/intel/delta?observer=4712&mode=omniscient
+/api/intel/mobility?observer=4712&fleet=<fleetId>
+/api/intel/production-plan?observer=4712&mode=omniscient&design=playerShipTemplate584&quantity=4 (or POST)
+/api/intel/body-status?body=Mars&observer=4712&mode=omniscient
 ```
 
 **Tech Tree Intelligence endpoints** expose the observer faction's research state

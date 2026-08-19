@@ -12,10 +12,10 @@
   <!-- Top Strategic Command Bar -->
   <header class="init-topbar">
     <div class="init-brand">
-      <div class="init-logo-icon">⬢</div>
+      <div class="init-logo-icon" id="initFactionLogo">⬢</div>
       <div>
         <div class="init-brand-name">
-          THE INITIATIVE <span class="init-brand-tag">EXECUTIVE COMMAND</span>
+          <span id="initBrandFactionName">THE INITIATIVE</span> <span class="init-brand-tag">EXECUTIVE COMMAND</span>
         </div>
         <div class="init-brand-sub">CAMPAIGN INTELLIGENCE / EXECUTIVE BRIEFING</div>
       </div>
@@ -29,8 +29,8 @@
       <div class="init-hud-pill">
         <span>SAVE:</span> <strong id="hudSave">-</strong>
       </div>
-      <div class="init-hud-pill">
-        <span>OBSERVER:</span> <strong id="hudFaction">the Initiative</strong>
+      <div class="init-hud-pill init-hud-pill-observer">
+        <span>OBSERVER:</span> <strong id="hudFaction" class="init-hud-faction-value"><span id="hudFactionLogo" class="init-hud-faction-logo" aria-hidden="true"></span><span id="hudFactionName">the Initiative</span></strong>
       </div>
       <div class="init-hud-pill init-hud-pill-score">
         <span>STRATEGIC SCORE (EST.):</span> <strong id="hudPower">-</strong>
@@ -53,10 +53,13 @@
       </div>
 
       <!-- Observer Switcher -->
-      <label class="visually-hidden" for="initObserverSelect">Observer faction</label>
-      <select id="initObserverSelect" class="init-select" aria-label="Observer faction">
-        <option value="4712">the Initiative</option>
-      </select>
+      <div class="init-observer-select-wrap">
+        <span id="initObserverSelectLogo" class="init-observer-select-logo" aria-hidden="true"></span>
+        <label class="visually-hidden" for="initObserverSelect">Observer faction</label>
+        <select id="initObserverSelect" class="init-select" aria-label="Observer faction">
+          <option value="4712">the Initiative</option>
+        </select>
+      </div>
 
       <!-- Refresh -->
       <button id="initRefreshBtn" class="init-btn init-btn-cyan">

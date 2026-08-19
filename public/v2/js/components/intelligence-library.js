@@ -2,7 +2,7 @@
   'use strict';
 
   const {
-    escapeHtml, numberValue, number, money, matchesSpaceTheater
+    escapeHtml, numberValue, number, money, matchesSpaceTheater, factionLogoImgHtml
   } = global.MissionControlShared || {};
 
   function display(value, fallback) {
@@ -27,6 +27,17 @@
   function factionColorById(id, factions) {
     var faction = factions[String(id)];
     return faction && faction.color ? faction.color : 'var(--accent)';
+  }
+
+  function factionLabelHtml(factionOrId, factions, displayText) {
+    var faction = factionOrId && typeof factionOrId === 'object' ? factionOrId : factions[String(factionOrId)];
+    var logoHtml = faction && factionLogoImgHtml
+      ? factionLogoImgHtml(faction, { className: 'faction-logo faction-logo--table' })
+      : '';
+    var color = faction && faction.color ? faction.color : factionColorById(factionOrId, factions);
+    var name = displayText || (faction ? faction.displayName : factionNameById(factionOrId, factions));
+    var fallback = logoHtml ? '' : '<i style="background:' + escapeHtml(color) + '"></i>';
+    return '<span class="intel-library-faction-name' + (logoHtml ? ' has-faction-logo' : '') + '">' + (logoHtml || fallback) + display(name) + '</span>';
   }
 
   function activeCouncilors(snapshot) {
@@ -160,7 +171,7 @@
       var factionCouncilors = councilors.filter(function factionCouncilor(councilor) { return String(councilor.factionId) === String(faction.ID); });
       var alienCouncilors = factionCouncilors.filter(function alienCouncilor(councilor) { return councilor.isAlien; }).length;
       return row([
-        '<span class="intel-library-faction-name"><i style="background:' + escapeHtml(faction.color || 'var(--accent)') + '"></i>' + display(faction.displayName) + '</span>',
+        factionLabelHtml(faction, factions),
         display(relation.hateOfUs, 'UNAVAILABLE'),
         display(relation.ourHate, 'UNAVAILABLE'),
         power === null || power === undefined ? 'UNAVAILABLE' : number(power, 0) + '/100',
@@ -203,7 +214,7 @@
       var status = councilor.isTurnedMole ? 'TURNED MOLE' : (councilor.status || 'ACTIVE');
       return row([
         display(councilor.displayName),
-        '<span style="color:' + escapeHtml(factionColorById(councilor.factionId, factions)) + '">' + display(councilor.factionName || factionNameById(councilor.factionId, factions)) + '</span>',
+        factionLabelHtml(councilor.factionId, factions, councilor.factionName || factionNameById(councilor.factionId, factions)),
         display(councilor.typeTemplateName),
         display(councilor.locationName),
         display(status),

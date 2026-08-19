@@ -18,10 +18,21 @@ import {
   shipyardStationResourceRow,
   arrivalResourceRow,
   friendlyStrengthAtDestination,
-  transferResourceRow,
   researchResourceRows,
   summaryResource,
-  findAlienFaction
+  findAlienFaction,
+  logisticsResource,
+  constructionResource,
+  transfersResource,
+  shipDesignsResource,
+  theatersResource,
+  infrastructureResource,
+  alienThreatResource,
+  deltaResource,
+  miningAnalysisResource,
+  mobilityResource,
+  productionPlanResource,
+  bodyStatusResource
 } from '../shared/intelResources.mjs';
 import {
   buildTechTreeProjection,
@@ -50,6 +61,7 @@ const mimeTypeFor = (pathname) => {
   if (lowerPath.endsWith('.css')) return 'text/css; charset=utf-8';
   if (lowerPath.endsWith('.js')) return 'text/javascript; charset=utf-8';
   if (lowerPath.endsWith('.json')) return 'application/json; charset=utf-8';
+  if (lowerPath.endsWith('.png')) return 'image/png';
   return 'application/octet-stream';
 };
 
@@ -446,11 +458,67 @@ const buildIntelResource = (result, resource, url) => {
         .filter(fleet => fleet.arrivalDate && factionMatches(fleet, factionId) && bodyMatches(fleet, body))
         .map(fleet => arrivalResourceRow(fleet, friendlyStrengthAtDestination(fleet, snapshot)));
       break;
-    case 'transfers':
-      items = asArray(snapshot.resourceTransfers)
-        .filter(transfer => factionId === null || transfer.sourceFactionId === factionId || transfer.targetFactionId === factionId)
-        .map(transferResourceRow);
+    case 'transfers': {
+      const destination = url.searchParams.get('destination');
+      items = transfersResource(snapshot, factionId, body, destination);
       break;
+    }
+    case 'logistics': {
+      const observerId = snapshot.observerFactionId || 4712;
+      const log = logisticsResource(snapshot, observerId);
+      return resourceEnvelope(result, resource, log.resources, query, log);
+    }
+    case 'construction': {
+      items = constructionResource(snapshot, factionId, body);
+      break;
+    }
+    case 'ship-designs': {
+      items = shipDesignsResource(snapshot, factionId);
+      break;
+    }
+    case 'theaters': {
+      const observerId = snapshot.observerFactionId || 4712;
+      items = theatersResource(snapshot, observerId);
+      break;
+    }
+    case 'infrastructure': {
+      items = infrastructureResource(snapshot, factionId, body);
+      break;
+    }
+    case 'alien-threat': {
+      const observerId = snapshot.observerFactionId || 4712;
+      const threat = alienThreatResource(snapshot, observerId);
+      return resourceEnvelope(result, resource, [], query, threat);
+    }
+    case 'delta': {
+      const observerId = snapshot.observerFactionId || 4712;
+      const delta = deltaResource(snapshot, null, observerId);
+      return resourceEnvelope(result, resource, [], query, delta);
+    }
+    case 'mobility': {
+      const fleetId = url.searchParams.get('fleet') || url.searchParams.get('fleetId');
+      const observerId = snapshot.observerFactionId || 4712;
+      const mob = mobilityResource(snapshot, fleetId, observerId);
+      return resourceEnvelope(result, resource, mob.transfers || [], query, mob);
+    }
+    case 'production-plan': {
+      const designId = url.searchParams.get('design') || url.searchParams.get('designId') || url.searchParams.get('target');
+      const quantity = parseInt(url.searchParams.get('quantity'), 10) || 1;
+      const observerId = snapshot.observerFactionId || 4712;
+      const plan = productionPlanResource(snapshot, designId, quantity, observerId);
+      return resourceEnvelope(result, resource, [], query, plan);
+    }
+    case 'body-status': {
+      const observerId = snapshot.observerFactionId || 4712;
+      const statusObj = bodyStatusResource(snapshot, body || 'Mars', observerId);
+      return resourceEnvelope(result, resource, [], query, statusObj);
+    }
+    case 'mining': {
+      const status = url.searchParams.get('status');
+      const sort = url.searchParams.get('sort');
+      const mining = miningAnalysisResource(snapshot, factionId, body, status, sort);
+      return resourceEnvelope(result, resource, mining.items, query, mining);
+    }
     case 'research': {
       const research = researchResourceRows(snapshot);
       return resourceEnvelope(result, resource, research.rows, query, {

@@ -19,21 +19,41 @@ const {
   shipyardStationResourceRow,
   arrivalResourceRow,
   friendlyStrengthAtDestination,
-  transferResourceRow,
   researchResourceRows,
   summaryResource,
-  findAlienFaction
+  findAlienFaction,
+  logisticsResource,
+  constructionResource,
+  transfersResource,
+  shipDesignsResource,
+  theatersResource,
+  infrastructureResource,
+  alienThreatResource,
+  deltaResource,
+  miningAnalysisResource,
+  mobilityResource,
+  productionPlanResource,
+  bodyStatusResource
 } = shared;
 
 function buildResource(snapshot, resource, {
   factionId = null,
   body = null,
+  destination = null,
+  fleetId = null,
+  designId = null,
+  quantity = 1,
+  status = null,
+  sort = null,
+  previousSnapshot = null,
   mode = 'player',
   isLatestSnapshot = true
 } = {}) {
   if (!SUPPORTED_RESOURCES.has(resource)) return null;
   const identity = snapshotIdentity.readSnapshotIdentity(snapshot);
-  const query = { faction: factionId, body };
+  const query = { faction: factionId, body, destination, fleet: fleetId, design: designId, quantity, status, sort };
+  const observerId = snapshot.observerFactionId || 4712;
+
   const base = {
     success: true,
     source: 'local',
@@ -54,6 +74,7 @@ function buildResource(snapshot, resource, {
     },
     query
   };
+
   if (resource === 'summary') {
     return { ...base, count: null, items: [], ...summaryResource(snapshot) };
   }
@@ -88,6 +109,51 @@ function buildResource(snapshot, resource, {
     };
   }
 
+  if (resource === 'logistics') {
+    const log = logisticsResource(snapshot, observerId);
+    return { ...base, count: log.resources.length, items: log.resources, ...log };
+  }
+  if (resource === 'construction') {
+    const items = constructionResource(snapshot, factionId, body);
+    return { ...base, count: items.length, items };
+  }
+  if (resource === 'transfers') {
+    const items = transfersResource(snapshot, factionId, body, destination);
+    return { ...base, count: items.length, items };
+  }
+  if (resource === 'ship-designs') {
+    const items = shipDesignsResource(snapshot, factionId);
+    return { ...base, count: items.length, items };
+  }
+  if (resource === 'theaters') {
+    const items = theatersResource(snapshot, observerId);
+    return { ...base, count: items.length, items };
+  }
+  if (resource === 'infrastructure') {
+    const items = infrastructureResource(snapshot, factionId, body);
+    return { ...base, count: items.length, items };
+  }
+  if (resource === 'alien-threat') {
+    const threat = alienThreatResource(snapshot, observerId);
+    return { ...base, count: null, items: [], ...threat };
+  }
+  if (resource === 'delta') {
+    const delta = deltaResource(snapshot, previousSnapshot, observerId);
+    return { ...base, count: null, items: [], ...delta };
+  }
+  if (resource === 'mobility') {
+    const mob = mobilityResource(snapshot, fleetId, observerId);
+    return { ...base, count: mob.transfers?.length || 0, items: mob.transfers || [], ...mob };
+  }
+  if (resource === 'production-plan') {
+    const plan = productionPlanResource(snapshot, designId, quantity, observerId);
+    return { ...base, count: null, items: [], ...plan };
+  }
+  if (resource === 'body-status') {
+    const statusObj = bodyStatusResource(snapshot, body || 'Mars', observerId);
+    return { ...base, count: null, items: [], ...statusObj };
+  }
+
   let items = [];
   switch (resource) {
     case 'factions': items = asArray(snapshot.factions).filter(item => factionMatches(item, factionId)).map(factionResourceRow); break;
@@ -95,7 +161,10 @@ function buildResource(snapshot, resource, {
     case 'councilors': items = asArray(snapshot.councilors).filter(item => factionMatches(item, factionId)).map(item => councilorResourceRow(item, mode)); break;
     case 'habs': items = asArray(snapshot.habs).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(habResourceRow); break;
     case 'hab-sites': items = asArray(snapshot.habSites).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(habSiteResourceRow); break;
-    case 'mining': items = asArray(snapshot.habSites).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(miningResourceRow); break;
+    case 'mining': {
+      const mining = miningAnalysisResource(snapshot, factionId, body, status, sort);
+      return { ...base, count: mining.items.length, ...mining };
+    }
     case 'fleets': items = asArray(snapshot.fleets).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(fleetResourceRow); break;
     case 'ships': items = shipResourceRows(asArray(snapshot.fleets), factionId, body); break;
     case 'resources':
@@ -122,11 +191,6 @@ function buildResource(snapshot, resource, {
       items = asArray(snapshot.fleets)
         .filter(item => item.arrivalDate && factionMatches(item, factionId) && bodyMatches(item, body))
         .map(item => arrivalResourceRow(item, friendlyStrengthAtDestination(item, snapshot)));
-      break;
-    case 'transfers':
-      items = asArray(snapshot.resourceTransfers)
-        .filter(item => factionId === null || item.sourceFactionId === factionId || item.targetFactionId === factionId)
-        .map(transferResourceRow);
       break;
     case 'research': {
       const research = researchResourceRows(snapshot);
