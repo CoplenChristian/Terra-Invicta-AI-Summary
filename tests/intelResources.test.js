@@ -70,6 +70,12 @@ test('unknown resources are rejected', () => {
   assert.strictEqual(localResources.buildResource(snapshot, 'unknown', {}), null);
 });
 
+test('API discovery index lists focused routes', () => {
+  assert.strictEqual(localResources.INTEL_ENDPOINT_INDEX.logistics, '/api/intel/logistics');
+  assert.strictEqual(localResources.INTEL_ENDPOINT_INDEX.techTree, '/api/intel/tech-tree');
+  assert.ok(Object.keys(localResources.INTEL_ENDPOINT_INDEX).length >= 30);
+});
+
 test('local wrapper and shared ESM module produce identical rows', async () => {
   const shared = await import('../shared/intelResources.mjs');
   const snapshot = omniscientSnapshot({ ships: 2 });

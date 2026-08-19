@@ -14,6 +14,47 @@ export const SUPPORTED_RESOURCES = new Set([
   'alien-threat', 'delta', 'mobility', 'production-plan', 'body-status'
 ]);
 
+// Public discovery map shared by the local Express API and hosted worker.
+// Keep these as path-only links so external analysis clients can discover the
+// focused routes before adding observer/mode/faction filters themselves.
+export const INTEL_ENDPOINT_INDEX = Object.freeze({
+  summary: '/api/intel/summary',
+  factions: '/api/intel/factions',
+  nations: '/api/intel/nations',
+  councilors: '/api/intel/councilors',
+  habs: '/api/intel/habs',
+  habSites: '/api/intel/hab-sites',
+  mining: '/api/intel/mining',
+  fleets: '/api/intel/fleets',
+  ships: '/api/intel/ships',
+  research: '/api/intel/research',
+  capabilities: '/api/intel/capabilities',
+  alien: '/api/intel/alien',
+  resources: '/api/intel/resources',
+  habModules: '/api/intel/hab-modules',
+  shipyards: '/api/intel/shipyards',
+  shipyardQueues: '/api/intel/shipyard-queues',
+  arrivals: '/api/intel/arrivals',
+  transfers: '/api/intel/transfers',
+  logistics: '/api/intel/logistics',
+  construction: '/api/intel/construction',
+  shipDesigns: '/api/intel/ship-designs',
+  theaters: '/api/intel/theaters',
+  infrastructure: '/api/intel/infrastructure',
+  alienThreat: '/api/intel/alien-threat',
+  delta: '/api/intel/delta',
+  mobility: '/api/intel/mobility',
+  productionPlan: '/api/intel/production-plan',
+  bodyStatus: '/api/intel/body-status',
+  techTree: '/api/intel/tech-tree',
+  techPath: '/api/intel/tech-path',
+  techSearch: '/api/intel/tech-search',
+  techMilestones: '/api/intel/tech-milestones',
+  techMatrix: '/api/intel/tech-matrix',
+  techOpportunities: '/api/intel/tech-opportunities',
+  researchQueue: '/api/intel/research-queue'
+});
+
 export const asArray = (value) => (Array.isArray(value) ? value : []);
 
 export const normalizeBody = (value) => String(value || '')

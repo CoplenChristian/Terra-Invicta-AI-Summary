@@ -97,6 +97,11 @@ The hosted worker exposes focused, shallow JSON endpoints for external analysis
 tools. They default to Player Intel; add `mode=omniscient` for the intentionally
 published Omniscient view. `observer=4712` is the Initiative observer.
 
+The machine-readable discovery index is available at `/api/intel` and is linked
+from the v2 dashboard. It lists every focused endpoint without filters so an
+external analysis client can discover the route surface before adding query
+parameters.
+
 ```text
 /api/intel/summary?observer=4712&mode=omniscient
 /api/intel/factions?observer=4712&mode=omniscient

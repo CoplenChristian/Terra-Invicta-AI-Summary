@@ -327,6 +327,22 @@ app.get('/api/export', (req, res) => {
 
 // Focused resource routes keep local Express and the hosted worker on the
 // same shallow contract for external analysis clients and lazy library views.
+app.get(['/api/intel', '/api/intel/'], (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    success: true,
+    source: 'local',
+    name: 'Terra Invicta Strategic Intelligence API',
+    endpoints: intelResources.INTEL_ENDPOINT_INDEX,
+    query: {
+      observer: 'Observer faction ID, e.g. 4712',
+      mode: 'player | enhanced | omniscient',
+      faction: 'Optional faction ID filter',
+      body: 'Optional body/theater filter'
+    }
+  });
+});
+
 app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
   if (!intelResources.SUPPORTED_RESOURCES.has(req.params.resource)) return next();
 

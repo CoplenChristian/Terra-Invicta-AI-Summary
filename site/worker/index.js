@@ -2,6 +2,7 @@ import { staticAssets } from './static-assets.js';
 import { SUPPORTED_MODES } from '../shared/constants.mjs';
 import {
   SUPPORTED_RESOURCES,
+  INTEL_ENDPOINT_INDEX,
   asArray,
   factionMatches,
   bodyMatches,
@@ -661,6 +662,21 @@ export default {
         success: false,
         error: 'Publishing is available only from the local dashboard.'
       }, 404);
+    }
+
+    if (url.pathname === '/api/intel' || url.pathname === '/api/intel/') {
+      return jsonResponse({
+        success: true,
+        source: 'hosted-worker',
+        name: 'Terra Invicta Strategic Intelligence API',
+        endpoints: INTEL_ENDPOINT_INDEX,
+        query: {
+          observer: 'Observer faction ID, e.g. 4712',
+          mode: 'player | enhanced | omniscient',
+          faction: 'Optional faction ID filter',
+          body: 'Optional body/theater filter'
+        }
+      });
     }
 
     // Mission Control v2 consumes the same generated briefing that the local
