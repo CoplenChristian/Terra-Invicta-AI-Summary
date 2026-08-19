@@ -50,6 +50,14 @@ fs.copyFileSync(
   path.join(projectRoot, 'site', 'worker', 'index.js'),
   path.join(distDir, 'server', 'index.js')
 );
+// Sites executes dist/server/index.js as the worker entrypoint. Keep the
+// worker's ESM dependencies beside that entrypoint because some deployments
+// do not expose sibling directories under dist during module resolution.
+fs.cpSync(path.join(projectRoot, 'shared'), path.join(distDir, 'server', 'shared'), { recursive: true });
+const workerPath = path.join(distDir, 'server', 'index.js');
+const workerSource = fs.readFileSync(workerPath, 'utf8')
+  .replaceAll("from '../shared/", "from './shared/");
+fs.writeFileSync(workerPath, workerSource);
 
 const writeJson = (name, value) => {
   fs.writeFileSync(path.join(dataDir, name), JSON.stringify(value));
