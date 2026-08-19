@@ -130,11 +130,23 @@ const embeddedAssetPaths = [
   'v2/js/components/executive-boards.js',
   'v2/js/components/alien-hate-economics.js'
 ];
+const factionLogoDir = path.join(distDir, 'v2', 'assets', 'faction-logos');
+if (fs.existsSync(factionLogoDir)) {
+  for (const fileName of fs.readdirSync(factionLogoDir).filter(name => name.toLowerCase().endsWith('.png')).sort()) {
+    embeddedAssetPaths.push(`v2/assets/faction-logos/${fileName}`);
+  }
+}
 const embeddedAssets = Object.fromEntries(
-  embeddedAssetPaths.map(relativePath => [
-    relativePath,
-    fs.readFileSync(path.join(distDir, relativePath), 'utf8')
-  ])
+  embeddedAssetPaths.map(relativePath => {
+    const absolutePath = path.join(distDir, relativePath);
+    if (relativePath.toLowerCase().endsWith('.png')) {
+      return [relativePath, {
+        encoding: 'base64',
+        data: fs.readFileSync(absolutePath).toString('base64')
+      }];
+    }
+    return [relativePath, fs.readFileSync(absolutePath, 'utf8')];
+  })
 );
 fs.writeFileSync(
   path.join(distDir, 'server', 'static-assets.js'),

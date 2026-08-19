@@ -72,8 +72,12 @@ const embeddedAsset = (pathname) => {
     key.endsWith('/') ? `${key}index.html` : `${key}/index.html`
   ];
   const assetKey = candidates.find(candidate => staticAssets[candidate] !== undefined);
-  const body = assetKey === undefined ? undefined : staticAssets[assetKey];
-  if (body === undefined) return null;
+  const embedded = assetKey === undefined ? undefined : staticAssets[assetKey];
+  if (embedded === undefined) return null;
+
+  const body = embedded && typeof embedded === 'object' && embedded.encoding === 'base64'
+    ? Uint8Array.from(atob(embedded.data), character => character.charCodeAt(0))
+    : embedded;
 
   return new Response(body, {
     status: 200,
