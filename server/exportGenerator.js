@@ -23,6 +23,39 @@ class ExportGenerator {
     }
     lines.push(``);
 
+    const economics = filteredData.alienHateEconomics;
+    if (economics) {
+      lines.push(`## Alien Hate Economics`);
+      if (!economics.applicable) {
+        lines.push(`- **Minimum-hate floor:** NOT APPLICABLE to ${observer?.displayName || 'this faction'}.`);
+      } else {
+        const actualHate = economics.actualAlienHate !== null
+          ? economics.actualAlienHate.toFixed(2)
+          : economics.visibleHateEstimate || 'UNAVAILABLE';
+        const actualLabel = economics.actualAlienHate !== null
+          ? 'Raw-save actual hate'
+          : economics.visibleHateEstimate
+            ? 'Game-visible hate estimate'
+            : 'Actual hate';
+        lines.push(`- **${actualLabel}:** ${actualHate}`);
+        lines.push(`- **Minimum hate floor:** ${economics.minimumAlienHate === null ? 'UNAVAILABLE' : economics.minimumAlienHate.toFixed(2)}`);
+        lines.push(`- **Hate above floor:** ${economics.hateAboveFloor === null ? 'UNAVAILABLE' : economics.hateAboveFloor.toFixed(2)}`);
+        lines.push(`- **War threshold:** ${economics.warThreshold.toFixed(2)}`);
+        lines.push(`- **Minimum-hate headroom:** ${economics.minimumHateHeadroom === null ? 'UNAVAILABLE' : economics.minimumHateHeadroom.toFixed(2)}`);
+        lines.push(`- **Mission Control used:** ${economics.usedMissionControl === null ? 'UNAVAILABLE' : economics.usedMissionControl.toFixed(0)}`);
+        lines.push(`- **Mission Control capacity:** ${economics.missionControlCapacity === null ? 'UNAVAILABLE' : economics.missionControlCapacity.toFixed(0)} (context only; capacity does not affect hate)`);
+        lines.push(`- **MC threshold for a 50-hate floor:** ${economics.mcWarFloor === null ? 'UNAVAILABLE' : economics.mcWarFloor.toFixed(1)} used MC`);
+        lines.push(`- **Minimum floor status:** ${economics.minimumFloorStatus}`);
+        lines.push(`- **Current hate status:** ${economics.currentWarStatus}`);
+        lines.push(`- **Calculation:** \`${economics.formula?.text || 'UNAVAILABLE'}\``);
+        for (const project of economics.reductionProjects || []) {
+          if (!project.applicable) continue;
+          lines.push(`- **${project.label}:** ${project.completed ? 'COMPLETED (×0.80)' : 'NOT COMPLETED'}`);
+        }
+      }
+      lines.push(``);
+    }
+
     // 1. Faction Balance
     lines.push(`## Faction Balance`);
     lines.push(``);

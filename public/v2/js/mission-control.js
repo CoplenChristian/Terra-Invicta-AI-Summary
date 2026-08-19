@@ -60,6 +60,12 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+// Prefer the shared utility when loaded ahead of this script.
+const __shared = window.MissionControlShared;
+if (__shared) {
+  escapeHtml = __shared.escapeHtml;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
   loadRuntime().finally(loadData);
@@ -468,6 +474,12 @@ function renderDashboard() {
   renderResourceFlowChart();
   renderPowerTrajectoryChart();
   renderDualAssetRings();
+  if (window.MissionControlHateEconomics?.render) {
+    window.MissionControlHateEconomics.render(
+      document.getElementById('alienHateEconomics'),
+      state.rawSnapshot.alienHateEconomics
+    );
+  }
   renderOperativeLeaderboard();
   renderHoldingsBubbleMatrix();
   renderResearchWatchlist();
@@ -971,6 +983,9 @@ function toFiniteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+if (__shared) {
+  toFiniteNumber = __shared.toFiniteNumber;
 }
 
 function showToast(msg) {

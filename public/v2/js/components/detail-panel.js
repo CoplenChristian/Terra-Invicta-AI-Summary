@@ -1,11 +1,12 @@
 /* Shared detail surface for clickable Mission Control modules. */
 (function attachDetailPanel(global) {
-  const escapeHtml = (value) => String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  const escapeHtml = (global.MissionControlShared && global.MissionControlShared.escapeHtml) ||
+    ((value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;'));
 
   let lastTrigger = null;
 

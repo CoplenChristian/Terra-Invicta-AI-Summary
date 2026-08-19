@@ -14,12 +14,23 @@ const {
   miningResourceRow,
   fleetResourceRow,
   shipResourceRows,
+  habModuleResourceRow,
+  shipyardResourceRow,
+  shipyardStationResourceRow,
+  arrivalResourceRow,
+  friendlyStrengthAtDestination,
+  transferResourceRow,
   researchResourceRows,
   summaryResource,
   findAlienFaction
 } = shared;
 
-function buildResource(snapshot, resource, { factionId = null, body = null, mode = 'player' } = {}) {
+function buildResource(snapshot, resource, {
+  factionId = null,
+  body = null,
+  mode = 'player',
+  isLatestSnapshot = true
+} = {}) {
   if (!SUPPORTED_RESOURCES.has(resource)) return null;
   const identity = snapshotIdentity.readSnapshotIdentity(snapshot);
   const query = { faction: factionId, body };
@@ -34,6 +45,13 @@ function buildResource(snapshot, resource, { factionId = null, body = null, mode
     observerFaction: { id: snapshot.observerFactionId, name: snapshot.observerFactionName },
     intelMode: mode,
     visibility: mode,
+    isLatestSnapshot,
+    activeSnapshot: {
+      ...identity,
+      saveFilename: snapshot.metadata?.fileName || null,
+      campaignDate: snapshot.metadata?.gameTimeString || null,
+      isLatestSnapshot
+    },
     query
   };
   if (resource === 'summary') {
@@ -80,6 +98,36 @@ function buildResource(snapshot, resource, { factionId = null, body = null, mode
     case 'mining': items = asArray(snapshot.habSites).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(miningResourceRow); break;
     case 'fleets': items = asArray(snapshot.fleets).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(fleetResourceRow); break;
     case 'ships': items = shipResourceRows(asArray(snapshot.fleets), factionId, body); break;
+    case 'resources':
+      items = asArray(snapshot.factions)
+        .filter(item => factionMatches(item, factionId))
+        .map(factionResourceRow);
+      break;
+    case 'hab-modules':
+      items = asArray(snapshot.habModules)
+        .filter(item => factionMatches(item, factionId) && bodyMatches(item, body))
+        .map(habModuleResourceRow);
+      break;
+    case 'shipyards':
+      items = asArray(snapshot.shipyardStations)
+        .filter(item => factionMatches(item, factionId) && bodyMatches(item, body))
+        .map(shipyardStationResourceRow);
+      break;
+    case 'shipyard-queues':
+      items = asArray(snapshot.shipyardQueues)
+        .filter(item => factionMatches(item, factionId) && bodyMatches(item, body))
+        .map(shipyardResourceRow);
+      break;
+    case 'arrivals':
+      items = asArray(snapshot.fleets)
+        .filter(item => item.arrivalDate && factionMatches(item, factionId) && bodyMatches(item, body))
+        .map(item => arrivalResourceRow(item, friendlyStrengthAtDestination(item, snapshot)));
+      break;
+    case 'transfers':
+      items = asArray(snapshot.resourceTransfers)
+        .filter(item => factionId === null || item.sourceFactionId === factionId || item.targetFactionId === factionId)
+        .map(transferResourceRow);
+      break;
     case 'research': {
       const research = researchResourceRows(snapshot);
       return { ...base, count: research.rows.length, items: research.rows, finishedGlobalProjects: research.finishedGlobalProjects };

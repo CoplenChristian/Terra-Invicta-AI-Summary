@@ -807,6 +807,14 @@ a:focus-visible {
   height: 180px;
 }
 
+/* The logistics panel now contains a data table rather than a fixed-height
+   chart. Let the card grow with its rows so the mobile scroll hint and the
+   following capability panel remain in normal document flow. */
+#resourceFlowChart.chart-container-box {
+  height: auto;
+  min-height: 0;
+}
+
 .power-profile-container {
   height: auto;
   min-height: 180px;
@@ -881,6 +889,208 @@ a:focus-visible {
 .threat-posture-grid .asset-posture-metric strong {
   color: var(--danger);
   font-size: 21px;
+}
+
+/* Alien hate economics --------------------------------------------------- */
+
+.alien-hate-econ {
+  display: grid;
+  gap: 13px;
+}
+
+.alien-hate-econ-statusbar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 2px 0 11px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.alien-hate-econ-eyebrow,
+.alien-hate-econ-war-status span,
+.alien-hate-econ-section-heading,
+.alien-hate-econ-metric > span {
+  display: block;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.alien-hate-econ-status {
+  display: block;
+  margin-top: 5px;
+  color: var(--success);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.alien-hate-econ-status.is-danger,
+.alien-hate-econ-war-status.is-danger strong {
+  color: var(--danger);
+}
+
+.alien-hate-econ-war-status {
+  display: grid;
+  gap: 5px;
+  max-width: 48%;
+  text-align: right;
+}
+
+.alien-hate-econ-war-status strong {
+  color: var(--accent-strong);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.alien-hate-econ-grid,
+.alien-hate-econ-mc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+
+.alien-hate-econ-mc-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.alien-hate-econ-metric {
+  min-width: 0;
+  padding: 9px 8px 8px;
+  background: var(--surface-inset);
+}
+
+.alien-hate-econ-metric strong {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 19px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alien-hate-econ-metric small {
+  display: block;
+  min-height: 18px;
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 7px;
+  line-height: 1.35;
+}
+
+.alien-hate-econ-metric.is-emphasis strong {
+  color: var(--warning);
+}
+
+.alien-hate-econ-section {
+  display: grid;
+  gap: 7px;
+}
+
+.alien-hate-econ-section-heading {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.alien-hate-econ-section-heading small {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 7px;
+  letter-spacing: 0;
+}
+
+.alien-hate-econ-projects {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+
+.alien-hate-econ-project {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 8px;
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 8px;
+}
+
+.alien-hate-econ-project strong {
+  flex: 0 0 auto;
+  color: var(--danger);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+}
+
+.alien-hate-econ-project strong.is-complete {
+  color: var(--success);
+}
+
+.alien-hate-econ-formula {
+  border-top: 1px solid var(--line-strong);
+}
+
+.alien-hate-econ-formula summary {
+  padding: 8px 0 0;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.07em;
+  list-style-position: inside;
+  text-transform: uppercase;
+}
+
+.alien-hate-econ-formula-body {
+  display: grid;
+  gap: 7px;
+  padding: 9px 10px;
+  border-left: 2px solid var(--accent);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.alien-hate-econ-formula-body code {
+  color: var(--text);
+  font-size: 10px;
+}
+
+.alien-hate-econ-formula-body p {
+  margin: 0;
+}
+
+.alien-hate-econ-formula-body strong {
+  color: var(--accent-strong);
+}
+
+.alien-hate-econ-empty {
+  display: grid;
+  gap: 6px;
+  padding: 12px 0;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.alien-hate-econ-empty strong {
+  color: var(--text-soft);
 }
 
 .largest-hostile-fleet {
@@ -3425,6 +3635,22 @@ body.intelligence-library-open {
   }
 }
 
+@media (max-width: 1200px) and (min-width: 901px) {
+  .init-topbar {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .init-topbar-hud,
+  .init-topbar-controls {
+    grid-column: 1;
+  }
+
+  .init-topbar-controls {
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 900px) {
   html,
   body {
@@ -3519,6 +3745,7 @@ body.intelligence-library-open {
 
   .init-col:nth-child(3) {
     display: flex;
+    align-items: stretch;
   }
 
   .init-kpi-banner {
@@ -3550,6 +3777,24 @@ body.intelligence-library-open {
 }
 
 @media (max-width: 520px) {
+  .alien-hate-econ-statusbar {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .alien-hate-econ-war-status {
+    max-width: none;
+    text-align: left;
+  }
+
+  .alien-hate-econ-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .alien-hate-econ-metric strong {
+    font-size: 17px;
+  }
+
   .mc-space-force-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

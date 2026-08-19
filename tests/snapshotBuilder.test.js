@@ -17,6 +17,8 @@ test('buildRawSnapshot builds factions with derived power metrics', () => {
   assert.strictEqual(initiative.nationsCount, 1);
   assert.strictEqual(initiative.totalGdp, 20e12);
   assert.strictEqual(initiative.shipsCount, 1);
+  assert.strictEqual(initiative.missionControlUsage, 10);
+  assert.strictEqual(initiative.missionControlCapacity, 8);
   assert.ok(Number.isFinite(initiative.powerScore.overall), 'composite power computed from visible fleet power');
   assert.ok(initiative.powerScore.fleet > 0, 'fleet power component derived from combat power');
 
@@ -31,6 +33,7 @@ test('buildRawSnapshot captures nations, councilors and control points', () => {
   const usa = raw.nations.find(n => n.ID === 1);
   assert.strictEqual(usa.executiveFactionId, 4712);
   assert.strictEqual(usa.GDP, 20e12);
+  assert.strictEqual(usa.missionControl, 8);
   assert.strictEqual(usa.controlPoints.length, 2);
   assert.strictEqual(usa.regionsCount, 2);
 

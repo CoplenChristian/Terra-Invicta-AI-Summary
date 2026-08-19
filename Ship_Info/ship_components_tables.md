@@ -1056,3 +1056,68 @@ Each section summarizes one template file. Mass values are in tons where applica
 | Alien Surveillance Ring | AlienSurveillanceRing | Project_AlienMasterProject |  | 128 | 15 | 3 | 0 |
 | Empty | Empty |  | 0 | 0 | -1 | 0 |  |
 
+## Particle Weapons
+
+| Component | Template ID | Required Project | Mount | Crew | Weapon Mass (t) | Cooldown (s) | Eff. | Shot Power (MJ) | Range (km) | Pivot (deg) | PD Target? |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Point Defense E-Beamer | PointDefenseE-Beamer | Project_EBeamBatteries | OneHull | 1 | 5 | 4 | 0.2 | 5 | 200 | 180 | False |
+| Light E-Beam Battery | LightE-BeamBattery | Project_EBeamBatteries | OneHull | 1 | 10 | 20 | 0.15 | 20 | 300 | 180 | False |
+| E-Beam Battery | E-BeamBattery | Project_EBeamBatteries | TwoHullHoriz | 2 | 20 | 20 | 0.15 | 40 | 400 | 180 | False |
+| Heavy E-Beam Battery | HeavyE-BeamBattery | Project_EBeamBatteries | FourHull | 2 | 40 | 20 | 0.15 | 80 | 500 | 180 | False |
+| Electron Lance | ElectronLance | Project_ElectronLance | TwoNoseVert | 2 | 30 | 20 | 0.15 | 60 | 500 | 30 | False |
+| Heavy Electron Lance | HeavyElectronLance | Project_ElectronLance | ThreeNoseAngle | 2 | 60 | 20 | 0.15 | 120 | 600 | 30 | False |
+| Spinal Electron Lance | SpinalElectronLance | Project_ElectronLance | FourNose | 2 | 120 | 20 | 0.15 | 240 | 800 | 30 | False |
+| Point Defense Ion Battery | PointDefenseIonBattery | Project_IonBatteries | OneHull | 1 | 5 | 3 | 0.2 | 5 | 200 | 180 | False |
+| Light Ion Battery | LightIonBattery | Project_IonBatteries | OneHull | 1 | 10 | 30 | 0.15 | 20 | 500 | 180 | False |
+| Ion Battery | IonBattery | Project_IonBatteries | TwoHullHoriz | 2 | 20 | 30 | 0.15 | 40 | 600 | 180 | False |
+| Heavy Ion Battery | HeavyIonBattery | Project_IonBatteries | FourHull | 2 | 40 | 30 | 0.15 | 80 | 700 | 180 | False |
+| Light Ion Cannon | LightIonCannon | Project_IonCannon | OneNose | 2 | 15 | 30 | 0.15 | 30 | 500 | 30 | False |
+| Ion Cannon | IonCannon | Project_IonCannon | TwoNoseVert | 2 | 30 | 30 | 0.15 | 60 | 600 | 30 | False |
+| Heavy Ion Cannon | HeavyIonCannon | Project_IonCannon | ThreeNoseAngle | 2 | 60 | 30 | 0.15 | 120 | 700 | 30 | False |
+| Spinal Ion Cannon | SpinalIonCannon | Project_IonCannon | FourNose | 2 | 120 | 30 | 0.15 | 240 | 850 | 30 | False |
+| Particle Beam Battery | ParticleBeamBattery | Project_ParticleBeamBatteries | TwoHullHoriz | 2 | 25 | 30 | 0.15 | 40 | 600 | 180 | False |
+| Heavy Particle Beam Battery | HeavyParticleBeamBattery | Project_ParticleBeamBatteries | FourHull | 2 | 50 | 30 | 0.15 | 80 | 700 | 180 | False |
+| Light Particle Lance | LightParticleLance | Project_ParticleLance | OneNose | 3 | 20 | 30 | 0.15 | 30 | 700 | 30 | False |
+| Particle Lance | ParticleLance | Project_ParticleLance | TwoNoseVert | 3 | 40 | 30 | 0.15 | 60 | 800 | 30 | False |
+| Heavy Particle Lance | HeavyParticleLance | Project_ParticleLance | ThreeNoseAngle | 3 | 80 | 30 | 0.15 | 120 | 900 | 30 | False |
+| Spinal Particle Lance | SpinalParticleLance | Project_ParticleLance | FourNose | 3 | 160 | 30 | 0.15 | 240 | 1000 | 30 | False |
+| Antimatter Particle Cannon | AntimatterParticleCannon | Project_AntimatterParticleCannon | TwoNoseVert | 4 | 40 | 40 | 0.15 | 80 | 800 | 30 | False |
+| Heavy Antimatter Particle Cannon | HeavyAntimatterParticleCannon | Project_AntimatterParticleCannon | ThreeNoseAngle | 4 | 120 | 40 | 0.15 | 160 | 900 | 30 | False |
+| Spinal Antimatter Particle Cannon | SpinalAntimatterParticleCannon | Project_AntimatterParticleCannon | FourNose | 4 | 240 | 40 | 0.15 | 320 | 1000 | 30 | False |
+| Spinal Neutron Lance | SpinalNeutronLance | Project_SpinalNeutronLance | FourNose | 8 | 360 | 60 | 0.15 | 560 | 1000 | 30 | False |
+| Alien Point Defense Particle Beam | AlienPointDefenseParticleBeam | Project_AlienMasterProject | OneHull | 0 | 1 | 2 | 0.2 | 32 | 300 | 180 | False |
+| Alien Light Particle Cannon | AlienLightParticleCannon | Project_AlienMasterProject | OneNose | 1 | 150 | 16 | 0.2 | 96 | 400 | 30 | False |
+| Alien Particle Cannon | AlienParticleCannon | Project_AlienMasterProject | TwoNoseVert | 1 | 80 | 16 | 0.2 | 144 | 450 | 30 | False |
+| Alien Heavy Particle Cannon | AlienHeavyParticleCannon | Project_AlienMasterProject | ThreeNoseAngle | 2 | 400 | 16 | 0.2 | 216 | 525 | 30 | False |
+| Alien Spinal Particle Cannon | AlienSpinalParticleCannon | Project_AlienMasterProject | FourNose | 2 | 800 | 16 | 0.2 | 324 | 600 | 30 | False |
+| Alien Relativistic Particle Cannon | AlienRelativisticParticleCannon | Project_AlienMasterProject | FourNose | 2 | 1200 | 240 | 0.1 | 1024 | 1200 | 20 | False |
+
+## Plasma Weapons
+
+| Component | Template ID | Required Project | Mount | Crew | Weapon Mass (t) | Cooldown (s) | Eff. | Damage (MJ) | Range (km) | Pivot (deg) | Muzzle Vel. (km/s) | PD Target? |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Plasma Battery Mk 1 | PlasmaBatteryMk1 | Project_PlasmaBatteryMk1 | TwoHullHoriz | 4 | 320 | 30 | 0.3 |  | 600 | 180 | 30 | False |
+| Plasma Battery Mk 2 | PlasmaBatteryMk2 | Project_PlasmaBatteryMk2 | TwoHullHoriz | 4 | 280 | 25 | 0.4 |  | 700 | 180 | 30 | False |
+| Plasma Battery Mk 3 | PlasmaBatteryMk3 | Project_PlasmaBatteryMk3 | TwoHullHoriz | 4 | 240 | 20 | 0.5 |  | 800 | 180 | 30 | False |
+| Heavy Plasma Battery Mk 1 | HeavyPlasmaBatteryMk1 | Project_PlasmaBatteryMk1 | FourHull | 5 | 640 | 36 | 0.2 |  | 700 | 180 | 32 | False |
+| Heavy Plasma Battery Mk 2 | HeavyPlasmaBatteryMk2 | Project_PlasmaBatteryMk2 | FourHull | 5 | 560 | 30 | 0.3 |  | 800 | 180 | 32 | False |
+| Heavy Plasma Battery Mk 3 | HeavyPlasmaBatteryMk3 | Project_PlasmaBatteryMk3 | FourHull | 5 | 480 | 24 | 0.4 |  | 900 | 180 | 32 | False |
+| Plasma Cannon Mk 1 | PlasmaCannonMk1 | Project_PlasmaCannonMk1 | ThreeNoseAngle | 5 | 540 | 48 | 0.25 |  | 900 | 30 | 35 | False |
+| Plasma Cannon Mk 2 | PlasmaCannonMk2 | Project_PlasmaCannonMk2 | ThreeNoseAngle | 5 | 480 | 40 | 0.35 |  | 950 | 30 | 35 | False |
+| Plasma Cannon Mk 3 | PlasmaCannonMk3 | Project_PlasmaCannonMk3 | ThreeNoseAngle | 5 | 420 | 32 | 0.45 |  | 1000 | 30 | 35 | False |
+| Heavy Plasma Cannon Mk 1 | HeavyPlasmaCannonMk1 | Project_PlasmaCannonMk1 | FourNose | 6 | 720 | 60 | 0.2 |  | 900 | 30 | 35 | False |
+| Heavy Plasma Cannon Mk 2 | HeavyPlasmaCannonMk2 | Project_PlasmaCannonMk2 | FourNose | 6 | 640 | 50 | 0.3 |  | 950 | 30 | 35 | False |
+| Heavy Plasma Cannon Mk 3 | HeavyPlasmaCannonMk3 | Project_PlasmaCannonMk3 | FourNose | 6 | 560 | 40 | 0.4 |  | 1000 | 30 | 35 | False |
+| Alien Plasma Battery | AlienPlasmaBattery | Project_AlienMasterProject | TwoHullHoriz | 1 | 200 | 20 | 0.5 |  | 900 | 180 | 42 | False |
+| Alien Heavy Plasma Battery | AlienHeavyPlasmaBattery | Project_AlienMasterProject | FourHull | 2 | 400 | 24 | 0.4 |  | 1000 | 180 | 42 | False |
+| Alien Plasma Cannon | AlienPlasmaCannon | Project_AlienMasterProject | ThreeNoseAngle | 2 | 390 | 32 | 0.45 |  | 1100 | 30 | 42 | False |
+| Alien Heavy Plasma Cannon | AlienHeavyPlasmaCannon | Project_AlienMasterProject | FourNose | 2 | 520 | 40 | 0.4 |  | 1200 | 30 | 42 | False |
+
+## Propellant Tanks
+
+Note: Raw JSON template for propellant tanks is not available. The user has confirmed that all tanks are effectively identical in capacity.
+
+| Component | Propellant Capacity | Tank Mass | Notes |
+|---|---|---|---|
+| Standard Propellant Tank | 100 tons | 0 tons | Universal standard size (structural mass negligible/included in hull) |
+

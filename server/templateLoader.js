@@ -14,7 +14,20 @@ class TemplateLoader {
       habModules: new Map(),
       shipHulls: new Map(),
       orgs: new Map(),
-      weaponModules: new Map()
+      weaponModules: new Map(),
+      drives: new Map(),
+      reactors: new Map(),
+      radiators: new Map(),
+      batteries: new Map(),
+      utilityModules: new Map(),
+      shipArmor: new Map()
+    };
+    // Inverts each component template's `requiredProjectName` so the tech
+    // graph can answer "which project unlocks this component" without any
+    // display-name guessing.
+    this.unlockMappings = {
+      requiredProjectToComponents: new Map(),
+      projectToUnlocks: new Map()
     };
     this.effectMappings = {
       effectToProjects: new Map(),
@@ -129,6 +142,23 @@ class TemplateLoader {
       if (id) this.templates.orgs.set(id, item);
     });
 
+    // Component templates used by the tech graph to answer "which project
+    // unlocks this drive/weapon/hull/module" via their requiredProjectName.
+    const componentFiles = [
+      ['drives', 'TIDriveTemplate.json'],
+      ['reactors', 'TIPowerPlantTemplate.json'],
+      ['radiators', 'TIRadiatorTemplate.json'],
+      ['batteries', 'TIBatteryTemplate.json'],
+      ['utilityModules', 'TIUtilityModuleTemplate.json'],
+      ['shipArmor', 'TIShipArmorTemplate.json']
+    ];
+    for (const [key, filename] of componentFiles) {
+      this.loadJsonFile(filename, (item) => {
+        const id = item.dataName || item.displayName || item.friendlyName || item.templateName;
+        if (id) this.templates[key].set(id, item);
+      });
+    }
+
     // Ship weapon templates are split across several files in the game data.
     // Keeping them in one index lets the save parser classify equipped weapons
     // without relying on display-name guesses.
@@ -158,9 +188,51 @@ class TemplateLoader {
       });
     }
 
+    this.buildUnlockMappings();
     this.validateIntelligenceMappings();
     this.isLoaded = true;
     console.log(`[TemplateLoader] Loaded ${this.templates.techs.size} techs, ${this.templates.projects.size} projects, ${this.templates.effects.size} effects.`);
+  }
+
+  // Builds a reverse index from every component template's requiredProjectName
+  // to the component, letting the tech graph report exactly which project
+  // unlocks each drive/weapon/hull/hab module/utility/armor/battery.
+  registerComponentUnlock(componentType, item) {
+    const projectId = item.requiredProjectName;
+    if (!projectId) return;
+    if (!this.unlockMappings.requiredProjectToComponents.has(projectId)) {
+      this.unlockMappings.requiredProjectToComponents.set(projectId, []);
+    }
+    this.unlockMappings.requiredProjectToComponents.get(projectId).push({
+      componentType,
+      id: item.dataName || item.displayName || item.friendlyName || item.templateName,
+      displayName: item.friendlyName || item.displayName || (item.dataName || item.templateName || item.componentType),
+      item
+    });
+  }
+
+  buildUnlockMappings() {
+    this.unlockMappings.requiredProjectToComponents.clear();
+    this.unlockMappings.projectToUnlocks.clear();
+
+    for (const weapon of this.templates.weaponModules.values()) {
+      this.registerComponentUnlock('weapon', weapon);
+    }
+    for (const drive of this.templates.drives.values()) this.registerComponentUnlock('drive', drive);
+    for (const reactor of this.templates.reactors.values()) this.registerComponentUnlock('reactor', reactor);
+    for (const radiator of this.templates.radiators.values()) this.registerComponentUnlock('radiator', radiator);
+    for (const battery of this.templates.batteries.values()) this.registerComponentUnlock('battery', battery);
+    for (const utility of this.templates.utilityModules.values()) this.registerComponentUnlock('utility', utility);
+    for (const armor of this.templates.shipArmor.values()) this.registerComponentUnlock('armor', armor);
+    for (const hull of this.templates.shipHulls.values()) this.registerComponentUnlock('ship_hull', hull);
+    for (const habModule of this.templates.habModules.values()) this.registerComponentUnlock('hab_module', habModule);
+
+    for (const [projectId, components] of this.unlockMappings.requiredProjectToComponents) {
+      this.unlockMappings.projectToUnlocks.set(
+        projectId,
+        components.map(c => ({ componentType: c.componentType, id: c.id, displayName: c.displayName }))
+      );
+    }
   }
 
   loadJsonFile(filename, itemHandler) {
@@ -265,6 +337,29 @@ class TemplateLoader {
 
   getTech(techId) {
     return this.templates.techs.get(techId) || null;
+  }
+
+  getComponent(componentType, componentId) {
+    const map = {
+      weapon: 'weaponModules',
+      drive: 'drives',
+      reactor: 'reactors',
+      radiator: 'radiators',
+      battery: 'batteries',
+      utility: 'utilityModules',
+      armor: 'shipArmor',
+      ship_hull: 'shipHulls',
+      hab_module: 'habModules'
+    }[componentType];
+    return map ? (this.templates[map].get(componentId) || null) : null;
+  }
+
+  getProjectUnlocks(projectId) {
+    return this.unlockMappings.projectToUnlocks.get(projectId) || [];
+  }
+
+  getComponentsForRequiredProject(projectId) {
+    return this.unlockMappings.requiredProjectToComponents.get(projectId) || [];
   }
 }
 

@@ -112,13 +112,15 @@ const embeddedAssetPaths = [
   'data/effects.json',
   'v2/index.html',
   'v2/css/mission-control.css',
+  'v2/js/shared.js',
   'v2/js/mission-control.js',
   'v2/js/components/detail-panel.js',
   'v2/js/components/world-map.js',
   'v2/data/world.geojson',
   'v2/js/components/faction-intel.js',
   'v2/js/components/intelligence-library.js',
-  'v2/js/components/executive-boards.js'
+  'v2/js/components/executive-boards.js',
+  'v2/js/components/alien-hate-economics.js'
 ];
 const embeddedAssets = Object.fromEntries(
   embeddedAssetPaths.map(relativePath => [

@@ -11,6 +11,7 @@ const briefingGenerator = require('./briefingGenerator');
 const snapshotIdentity = require('./snapshotIdentity');
 const snapshotDelta = require('./snapshotDelta');
 const intelResources = require('./intelResources');
+const techIntel = require('./techIntel');
 const requestValidation = require('./requestValidation');
 
 const app = express();
@@ -141,10 +142,21 @@ function assertObserver(rawSnapshot, observerId) {
   return requestValidation.assertKnownObserver(rawSnapshot, observerId);
 }
 
-function responseIdentity(snapshot) {
+function responseIdentity(snapshot, isLatestSnapshot = true) {
+  const identity = snapshotIdentity.readSnapshotIdentity(snapshot);
+  const saveFilename = snapshot?.metadata?.fileName || null;
+  const campaignDate = snapshot?.metadata?.gameTimeString || null;
   return {
-    ...snapshotIdentity.readSnapshotIdentity(snapshot),
-    campaignDate: snapshot?.metadata?.gameTimeString || null
+    ...identity,
+    saveFilename,
+    campaignDate,
+    isLatestSnapshot,
+    activeSnapshot: {
+      ...identity,
+      saveFilename,
+      campaignDate,
+      isLatestSnapshot
+    }
   };
 }
 
@@ -262,7 +274,7 @@ app.get('/api/snapshot', (req, res) => {
     assertObserver(rawSnapshot, observerId);
     const filtered = buildFilteredSnapshot(rawSnapshot, mode, observerId);
 
-    res.json({ success: true, ...responseIdentity(filtered), data: filtered });
+    res.json({ success: true, ...responseIdentity(filtered, targetPath === null), data: filtered });
   } catch (err) {
     console.error('[Server] Error generating snapshot:', err);
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
@@ -283,7 +295,7 @@ app.post('/api/refresh', (req, res) => {
     assertObserver(rawSnapshot, observerId);
     const filtered = buildFilteredSnapshot(rawSnapshot, mode, observerId);
 
-    res.json({ success: true, ...responseIdentity(filtered), message: 'Latest save refreshed successfully.', data: filtered });
+    res.json({ success: true, ...responseIdentity(filtered, targetPath === null), message: 'Latest save refreshed successfully.', data: filtered });
   } catch (err) {
     console.error('[Server] Refresh failed:', err);
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
@@ -307,7 +319,7 @@ app.get('/api/export', (req, res) => {
       ? exportGenerator.generateFullMarkdownReport(filtered)
       : exportGenerator.generateCompactSnapshot(filtered);
 
-    res.json({ success: true, ...responseIdentity(filtered), markdown });
+    res.json({ success: true, ...responseIdentity(filtered, targetPath === null), markdown });
   } catch (err) {
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
   }
@@ -328,7 +340,12 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
       'faction filter'
     );
     const body = requestValidation.parseBodyQuery(req.query.body);
-    const projection = intelResources.buildResource(filtered, req.params.resource, { factionId, body, mode });
+    const projection = intelResources.buildResource(filtered, req.params.resource, {
+      factionId,
+      body,
+      mode,
+      isLatestSnapshot: targetPath === null
+    });
 
     res.set('Cache-Control', 'no-store');
     res.json(projection);
@@ -354,6 +371,60 @@ app.get('/api/templates/effects', (req, res) => {
   }
 });
 
+// Tech Tree Intelligence endpoints. These expose the observer's technology
+// state as a normalized dependency graph (see shared/techGraph.mjs) and answer
+// research-path, search, milestone and queue questions against the live save.
+app.get(['/api/intel/tech-tree', '/api/intel/tech-path', '/api/intel/tech-search',
+  '/api/intel/tech-milestones', '/api/intel/tech-matrix', '/api/intel/tech-opportunities',
+  '/api/intel/research-queue'], (req, res) => {
+  try {
+    const { mode, observerId, targetPath } = requestContext(req);
+    const rawSnapshot = loadOrGetSnapshot(targetPath);
+    assertObserver(rawSnapshot, observerId);
+    const filtered = buildFilteredSnapshot(rawSnapshot, mode, observerId);
+
+    let projection;
+    if (req.path.endsWith('/tech-tree')) {
+      const category = String(req.query.category || 'all').toLowerCase();
+      if (!techIntel.CATEGORIES.has(category)) {
+        throw new requestValidation.RequestValidationError(
+          `Invalid category '${category}'. Supported: ${Array.from(techIntel.CATEGORIES).join(', ')}.`
+        );
+      }
+      const includeEffects = String(req.query.includeEffects ?? 'true') !== 'false';
+      projection = techIntel.buildTechTree(filtered, mode, observerId, { category, includeEffects });
+    } else if (req.path.endsWith('/tech-path')) {
+      const rawTarget = req.query.target;
+      if (!rawTarget) {
+        throw new requestValidation.RequestValidationError('Missing required query parameter: target.');
+      }
+      const targets = String(rawTarget).split(',').map(t => t.trim()).filter(Boolean);
+      projection = techIntel.buildPath(filtered, mode, observerId, targets);
+    } else if (req.path.endsWith('/tech-search')) {
+      const query = String(req.query.q || '');
+      if (!query) {
+        throw new requestValidation.RequestValidationError('Missing required query parameter: q.');
+      }
+      projection = techIntel.buildSearch(filtered, mode, observerId, query);
+    } else if (req.path.endsWith('/tech-milestones')) {
+      const category = req.query.category ? String(req.query.category).toLowerCase() : null;
+      projection = techIntel.buildMilestones(filtered, mode, observerId, category);
+    } else if (req.path.endsWith('/tech-matrix')) {
+      projection = techIntel.buildMatrix(filtered, mode, observerId);
+    } else if (req.path.endsWith('/tech-opportunities')) {
+      projection = techIntel.buildOpportunities(filtered, mode, observerId);
+    } else {
+      projection = techIntel.buildQueue(filtered, mode, observerId);
+    }
+
+    res.set('Cache-Control', 'no-store');
+    res.json(projection);
+  } catch (err) {
+    console.error(`[Server] Tech endpoint failed (${req.path}):`, err);
+    res.status(err.statusCode || 500).json({ success: false, error: err.message });
+  }
+});
+
 // 6. Mission Control v2 Briefing endpoint
 app.get('/api/v2/briefing', (req, res) => {
   try {
@@ -364,7 +435,7 @@ app.get('/api/v2/briefing', (req, res) => {
     const filtered = buildFilteredSnapshot(rawSnapshot, mode, observerId);
     const briefing = briefingGenerator.generateMissionControlBriefing(filtered, rawSnapshot);
 
-    res.json({ success: true, ...responseIdentity(filtered), briefing, data: filtered });
+    res.json({ success: true, ...responseIdentity(filtered, targetPath === null), briefing, data: filtered });
   } catch (err) {
     console.error('[Server] Error generating v2 briefing:', err);
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
@@ -393,8 +464,7 @@ app.get(['/api/snapshot/compact', '/api/snapshot/full', '/latest-snapshot.json',
     res.json({
       success: true,
       source: 'local',
-      ...responseIdentity(filtered),
-      saveFilename: filtered.metadata?.fileName || null,
+      ...responseIdentity(filtered, targetPath === null),
       difficulty: filtered.metadata?.difficulty || null,
       observerFaction: {
         id: filtered.observerFactionId,

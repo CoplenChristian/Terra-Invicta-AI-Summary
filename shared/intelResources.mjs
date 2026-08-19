@@ -8,7 +8,8 @@ import { ALIEN_FACTION_ID, ALIEN_FACTION_DISPLAY_NAME } from './constants.mjs';
 
 export const SUPPORTED_RESOURCES = new Set([
   'summary', 'factions', 'nations', 'councilors', 'habs', 'hab-sites',
-  'mining', 'fleets', 'ships', 'research', 'capabilities', 'alien'
+  'mining', 'fleets', 'ships', 'research', 'capabilities', 'alien',
+  'resources', 'hab-modules', 'shipyards', 'shipyard-queues', 'arrivals', 'transfers'
 ]);
 
 export const asArray = (value) => (Array.isArray(value) ? value : []);
@@ -47,6 +48,15 @@ export const factionResourceRow = (faction) => ({
   combatPower: faction.combatPower ?? null,
   combatPowerAvailable: faction.combatPowerAvailable ?? false,
   powerScore: faction.powerScore?.overall ?? null,
+  missionControlUsage: faction.missionControlUsage ?? null,
+  missionControlCapacity: faction.missionControlCapacity ?? null,
+  shipyardCount: faction.shipyardCount ?? 0,
+  shipyardQueueCount: faction.shipyardQueueCount ?? 0,
+  resources: faction.resources || null,
+  monthlyIncome: faction.monthlyIncome || null,
+  monthlyExpense: faction.monthlyExpense ?? null,
+  monthlyNet: faction.monthlyNet ?? null,
+  financials: faction.financials || null,
   alienHate: faction.alienHate?.actual ?? faction.alienHate?.visibleEstimate ?? null,
   assessedAlienHateOfMe: faction.assessedAlienHateOfMe ?? null
 });
@@ -199,12 +209,17 @@ export const fleetResourceRow = (fleet) => ({
   dominantWeaponType: fleet.dominantWeaponType,
   weaponSummary: fleet.weaponSummary,
   weaponBreakdown: fleet.weaponBreakdown,
+  shipManifest: asArray(fleet.ships).map(ship => shipResourceRow(ship, fleet)),
+  lowestDeltaVKps: fleet.lowestDeltaVKps ?? null,
+  lowestCombatAccelerationMps2: fleet.lowestCombatAccelerationMps2 ?? null,
+  armorMedian: fleet.armorMedian ?? null,
+  currentOrders: fleet.currentOrders || null,
+  destinationType: fleet.destinationType || null,
+  destinationId: fleet.destinationId || null,
   insideSaturnOrbit: fleet.insideSaturnOrbit ?? false
 });
 
-export const shipResourceRows = (fleets, factionId, body) => fleets
-  .filter(fleet => factionMatches(fleet, factionId) && bodyMatches(fleet, body))
-  .flatMap(fleet => asArray(fleet.ships).map(ship => ({
+export const shipResourceRow = (ship, fleet) => ({
     id: ship.id,
     name: ship.displayName,
     hullName: ship.hullName,
@@ -222,8 +237,150 @@ export const shipResourceRows = (fleets, factionId, body) => fleets
     combatPower: ship.combatPower ?? null,
     combatPowerSource: ship.combatPowerSource,
     dominantWeaponType: ship.dominantWeaponType,
-    weaponLoadout: ship.weaponLoadout
-  })));
+    weaponLoadout: ship.weaponLoadout,
+    currentDeltaVKps: ship.currentDeltaVKps ?? null,
+    currentMaxDeltaVKps: ship.currentMaxDeltaVKps ?? null,
+    cruiseAccelerationMps2: ship.cruiseAccelerationMps2 ?? null,
+    combatAccelerationMps2: ship.combatAccelerationMps2 ?? null,
+    currentMassKg: ship.currentMassKg ?? null,
+    missionControlConsumption: ship.missionControlConsumption ?? null,
+    propellantTons: ship.propellantTons ?? null,
+    armor: ship.armor || null,
+    armorMedian: ship.armorMedian ?? null
+});
+
+export const shipResourceRows = (fleets, factionId, body) => fleets
+  .filter(fleet => factionMatches(fleet, factionId) && bodyMatches(fleet, body))
+  .flatMap(fleet => asArray(fleet.ships).map(ship => shipResourceRow(ship, fleet)));
+
+export const habModuleResourceRow = (module) => ({
+  id: module.id,
+  name: module.name,
+  templateName: module.templateName,
+  moduleType: module.moduleType,
+  factionId: module.factionId,
+  factionName: module.factionName,
+  habId: module.habId,
+  habName: module.habName,
+  habTier: module.habTier,
+  sectorId: module.sectorId,
+  sectorNumber: module.sectorNumber,
+  orbitBody: module.orbitBody,
+  spaceTheaterKey: module.spaceTheaterKey,
+  spaceTheaterName: module.spaceTheaterName,
+  isShipyard: module.isShipyard ?? false,
+  constructionStatus: module.constructionStatus,
+  constructionCompleted: module.constructionCompleted,
+  powered: module.powered,
+  destroyed: module.destroyed,
+  decommissioning: module.decommissioning,
+  completionDate: module.completionDate,
+  startBuildDate: module.startBuildDate,
+  buildDurationDays: module.buildDurationDays,
+  daysRemaining: module.daysRemaining,
+  buildCost: module.buildCost || []
+});
+
+export const shipyardResourceRow = (queue) => ({
+  id: queue.id,
+  factionId: queue.factionId,
+  factionName: queue.factionName,
+  shipyardId: queue.shipyardId,
+  shipyardName: queue.shipyardName,
+  habId: queue.habId,
+  habName: queue.habName,
+  orbitBody: queue.orbitBody,
+  spaceTheaterKey: queue.spaceTheaterKey,
+  spaceTheaterName: queue.spaceTheaterName,
+  queuePosition: queue.queuePosition,
+  design: queue.design,
+  hull: queue.hull,
+  isRefit: queue.isRefit,
+  costPaid: queue.costPaid,
+  constructionStatus: queue.constructionStatus,
+  startDate: queue.startDate,
+  completionDate: queue.completionDate,
+  daysToCompletion: queue.daysToCompletion,
+  resourcesCost: queue.resourcesCost || [],
+  resourcesRefund: queue.resourcesRefund || [],
+  aiGoalId: queue.aiGoalId,
+  aiGoalType: queue.aiGoalType
+});
+
+export const shipyardStationResourceRow = (station) => ({
+  id: station.id,
+  name: station.name,
+  templateName: station.templateName,
+  factionId: station.factionId,
+  factionName: station.factionName,
+  habId: station.habId,
+  habName: station.habName,
+  habTier: station.habTier,
+  orbitBody: station.orbitBody,
+  spaceTheaterKey: station.spaceTheaterKey,
+  spaceTheaterName: station.spaceTheaterName,
+  constructionStatus: station.constructionStatus,
+  powered: station.powered,
+  queueCount: station.queueCount ?? 0,
+  currentConstruction: station.currentConstruction ? shipyardResourceRow(station.currentConstruction) : null,
+  queue: asArray(station.queue).map(shipyardResourceRow)
+});
+
+export const friendlyStrengthAtDestination = (fleet, snapshot) => {
+  const destinationBody = normalizeBody(String(fleet.destination || '').replace(/\s+orbit$/i, ''));
+  if (!destinationBody || destinationBody === normalizeBody('in transit')) return null;
+  const observerFactionId = snapshot?.observerFactionId;
+  if (observerFactionId === null || observerFactionId === undefined) return null;
+  const friendlyFleets = asArray(snapshot.fleets).filter(other =>
+    other.factionId === observerFactionId && normalizeBody(other.orbitBody) === destinationBody
+  );
+  const currentShips = friendlyFleets.reduce((sum, other) => sum + (Number(other.shipsCount) || 0), 0);
+  const combatValues = friendlyFleets
+    .map(other => other.combatPower)
+    .filter(value => typeof value === 'number' && Number.isFinite(value));
+  const completingShips = asArray(snapshot.shipyardQueues).filter(queue =>
+    queue.factionId === observerFactionId && normalizeBody(queue.orbitBody) === destinationBody
+  ).length;
+  return {
+    currentShips,
+    completingShips,
+    expectedShips: currentShips + completingShips,
+    currentCombatPower: combatValues.length ? combatValues.reduce((sum, value) => sum + value, 0) : null,
+    combatPowerAvailable: combatValues.length > 0,
+    source: 'current friendly assets plus save-backed shipyard queue',
+    futureReinforcementSimulation: false
+  };
+};
+
+export const arrivalResourceRow = (fleet, friendlyStrength = null) => ({
+  fleetId: fleet.ID,
+  fleetName: fleet.displayName,
+  factionId: fleet.factionId,
+  factionName: fleet.factionName,
+  currentLocation: fleet.orbitBody,
+  destination: fleet.destination,
+  destinationType: fleet.destinationType,
+  destinationId: fleet.destinationId,
+  arrivalDate: fleet.arrivalDate,
+  ships: fleet.shipsCount ?? 0,
+  combatPower: fleet.combatPower ?? null,
+  combatPowerAvailable: fleet.combatPowerAvailable ?? false,
+  dominantWeaponType: fleet.dominantWeaponType,
+  weaponBreakdown: fleet.weaponBreakdown,
+  inCombat: fleet.inCombat ?? false,
+  friendlyStrengthAtDestination: friendlyStrength
+});
+
+export const transferResourceRow = (transfer) => ({
+  id: transfer.id,
+  sourceFactionId: transfer.sourceFactionId,
+  sourceFactionName: transfer.sourceFactionName,
+  targetFactionId: transfer.targetFactionId,
+  targetFactionName: transfer.targetFactionName,
+  resource: transfer.resource,
+  amountPerDay: transfer.amountPerDay,
+  expiry: transfer.expiry
+});
 
 export const researchResourceRows = (snapshot) => {
   const globalResearch = snapshot.globalResearch || {};
@@ -295,6 +452,7 @@ export const summaryResource = (snapshot) => {
       councilors: asArray(snapshot.councilors).filter(councilor => councilor.factionId === alienFaction?.ID).length
     },
     capabilities: snapshot.capabilities,
-    priorityTargetFaction: snapshot.priorityTargetFaction
+    priorityTargetFaction: snapshot.priorityTargetFaction,
+    alienHateEconomics: snapshot.alienHateEconomics ?? null
   };
 };

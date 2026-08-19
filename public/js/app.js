@@ -15,11 +15,22 @@ let state = {
   councilorSort: 'totalSkills',
   councilorViewMode: 'cards',
   councilorTableSort: { col: 'total', asc: false },
+  councilorsDatasetKey: '',
   earthSubView: 'nations',
   spaceSubView: 'mining',
   techSubView: 'global',
-  dossierFactionId: 4712
+  dossierFactionId: 4712,
+  renderedTabs: new Set(['overview'])
 };
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
@@ -183,6 +194,10 @@ function initEventListeners() {
     if (e.key === 'Escape') closeCouncilorModal();
   });
 
+  // Delegated councilor detail opens (no inline onclick attributes).
+  document.getElementById('councilorsMainCardsView')?.addEventListener('click', onCouncilorCardClick);
+  document.getElementById('councilorsMainTableBody')?.addEventListener('click', onCouncilorCardClick);
+
   // Earth Sub-views
   document.querySelectorAll('[data-earth-view]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -285,8 +300,51 @@ function switchTab(tabId) {
   document.querySelectorAll('.content-section').forEach(sec => {
     sec.classList.toggle('active', sec.id === `section-${tabId}`);
   });
-  if (tabId === 'export') {
-    renderExportPreview();
+  renderTab(tabId);
+}
+
+// Render a section's content on demand. Sections are rebuilt once per data
+// load, so switching tabs never triggers wasted work for hidden panels.
+function renderTab(tabId) {
+  if (state.renderedTabs.has(tabId)) return;
+  state.renderedTabs.add(tabId);
+  switch (tabId) {
+    case 'councilors': renderCouncilorsScreen(); break;
+    case 'earth': renderEarth(); break;
+    case 'space': renderSpace(); break;
+    case 'factions': renderFactionDossier(); break;
+    case 'technology': renderTechnology(); break;
+    case 'intelligence': renderIntelligence(); break;
+    case 'export': renderExportPreview(); break;
+  }
+}
+
+// Keep the observer and dossier selectors in sync with the save's actual
+// faction roster instead of the static option lists in the markup.
+function populateObserverSelects() {
+  const factions = state.snapshot?.factions || [];
+  if (!factions.length) return;
+  const optionHtml = factions.map(f =>
+    `<option value="${escapeHtml(f.ID)}">${escapeHtml(f.displayName)}</option>`
+  ).join('');
+
+  const observerSelect = document.getElementById('observerSelect');
+  if (observerSelect) {
+    if (!factions.some(f => String(f.ID) === String(state.observerId))) {
+      state.observerId = factions[0].ID;
+      state.dossierFactionId = state.observerId;
+    }
+    observerSelect.innerHTML = optionHtml;
+    observerSelect.value = String(state.observerId);
+  }
+
+  const dossierSelect = document.getElementById('factionDossierSelect');
+  if (dossierSelect) {
+    if (!factions.some(f => String(f.ID) === String(state.dossierFactionId))) {
+      state.dossierFactionId = state.observerId;
+    }
+    dossierSelect.innerHTML = optionHtml;
+    dossierSelect.value = String(state.dossierFactionId);
   }
 }
 
@@ -316,16 +374,11 @@ function renderAll() {
   if (!state.snapshot) return;
 
   renderMetadata();
+  populateObserverSelects();
   renderOverview();
-  renderCouncilorsScreen();
-  renderEarth();
-  renderSpace();
-  renderFactionDossier();
-  renderTechnology();
-  renderIntelligence();
-  if (state.activeTab === 'export') {
-    renderExportPreview();
-  }
+  // A fresh data load invalidates every cached section.
+  state.renderedTabs = new Set(['overview']);
+  renderTab(state.activeTab);
 }
 
 function renderMetadata() {
@@ -361,13 +414,13 @@ function renderOverview() {
     const isObserver = f.ID === state.snapshot.observerFactionId;
 
     return `
-      <div class="card" style="border-top: 3px solid ${f.color}; ${isObserver ? 'box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);' : ''}">
+      <div class="card" style="border-top: 3px solid ${escapeHtml(f.color)}; ${isObserver ? 'box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);' : ''}">
         <div class="card-header">
           <div class="card-title">
-            <span class="faction-indicator" style="background: ${f.color};"></span>
-            <span>${f.displayName}</span>
+            <span class="faction-indicator" style="background: ${escapeHtml(f.color)};"></span>
+            <span>${escapeHtml(f.displayName)}</span>
           </div>
-          <span class="card-badge" style="background: rgba(255,255,255,0.06); color: ${f.color};">
+          <span class="card-badge" style="background: rgba(255,255,255,0.06); color: ${escapeHtml(f.color)};">
             Dashboard estimate: ${f.powerScore?.overall ?? 'UNKNOWN'}
           </span>
         </div>
@@ -411,9 +464,9 @@ function renderOverview() {
 
     return `
       <tr>
-        <td style="font-weight: 700; color: ${f.color};">
-          <span class="faction-indicator" style="background: ${f.color}; margin-right: 6px;"></span>
-          ${f.displayName}
+        <td style="font-weight: 700; color: ${escapeHtml(f.color)};">
+          <span class="faction-indicator" style="background: ${escapeHtml(f.color)}; margin-right: 6px;"></span>
+          ${escapeHtml(f.displayName)}
         </td>
         <td><strong style="color: var(--color-initiative);">${f.powerScore?.overall ?? 'UNKNOWN'}</strong>${f.powerScore?.overall !== null && f.powerScore?.overall !== undefined ? '/100' : ''}</td>
         <td>${f.nationsCount}</td>
@@ -453,7 +506,18 @@ function renderNationsTable() {
   } else if (state.nationFilter === 'servants') {
     nations = nations.filter(n => n.controlPoints.some(cp => cp.factionName === 'the Servants'));
   } else if (state.nationFilter === 'aliens') {
-    nations = nations.filter(n => n.executiveFactionName === 'the Aliens');
+    // Alien activity is a region-level signal; match nations whose name
+    // overlaps a xenoforming or alien-facility region (same heuristic the
+    // briefing uses for theater status).
+    const alienRegionNames = [
+      ...(state.snapshot.activeXenoforming || []).map(x => String(x.regionName || '')),
+      ...(state.snapshot.builtAlienFacilities || []).map(x => String(x.regionName || ''))
+    ].map(name => name.toLowerCase()).filter(Boolean);
+    nations = nations.filter(n => {
+      if (n.executiveFactionName === 'the Aliens') return true;
+      const name = String(n.displayName || '').toLowerCase();
+      return alienRegionNames.some(region => region.includes(name) || name.includes(region));
+    });
   }
 
   // Search
@@ -468,8 +532,8 @@ function renderNationsTable() {
 
     return `
       <tr>
-        <td style="font-weight: 600;">${n.displayName}</td>
-        <td style="color: ${execColor}; font-weight: 700;">${n.executiveFactionName}</td>
+        <td style="font-weight: 600;">${escapeHtml(n.displayName)}</td>
+        <td style="color: ${escapeHtml(execColor)}; font-weight: 700;">${escapeHtml(n.executiveFactionName)}</td>
         <td>${n.controlPoints.length} CPs</td>
         <td>${gdpStr}</td>
         <td>${(n.milTech || 0).toFixed(1)}</td>
@@ -492,7 +556,7 @@ function renderCouncilorsGrid() {
   const filterSelect = document.getElementById('councilorFactionFilter');
   const knownFactions = Array.from(new Set(councilors.map(c => c.factionName))).filter(Boolean);
   filterSelect.innerHTML = `<option value="all">All Known Factions (${councilors.length})</option>` +
-    knownFactions.map(f => `<option value="${f}" ${state.councilorFactionFilter === f ? 'selected' : ''}>${f}</option>`).join('');
+    knownFactions.map(f => `<option value="${escapeHtml(f)}" ${state.councilorFactionFilter === f ? 'selected' : ''}>${escapeHtml(f)}</option>`).join('');
 
   if (state.councilorFactionFilter !== 'all') {
     councilors = councilors.filter(c => c.factionName === state.councilorFactionFilter);
@@ -510,22 +574,22 @@ function renderCouncilorsGrid() {
     const isMole = c.isTurnedMole;
 
     return `
-      <div class="card" style="border-left: 3px solid ${isMole ? '#d500f9' : fColor};">
+      <div class="card" style="border-left: 3px solid ${isMole ? '#d500f9' : escapeHtml(fColor)};">
         <div class="card-header">
           <div>
-            <div class="card-title">${c.displayName}</div>
-            <div style="font-size: 11px; color: ${fColor}; font-family: var(--font-mono);">${c.factionName} (${c.typeTemplateName})</div>
+            <div class="card-title">${escapeHtml(c.displayName)}</div>
+            <div style="font-size: 11px; color: ${escapeHtml(fColor)}; font-family: var(--font-mono);">${escapeHtml(c.factionName)} (${escapeHtml(c.typeTemplateName)})</div>
           </div>
           <div>
             ${isMole ? `<span class="chip chip-mole">TURNED MOLE</span>` : ''}
             ${c.isAlien ? `<span class="chip chip-danger">HYDRA</span>` : ''}
-            <span class="chip chip-info">${c.status}</span>
+            <span class="chip chip-info">${escapeHtml(c.status)}</span>
           </div>
         </div>
 
         <div class="stat-row">
           <span class="stat-label">Location</span>
-          <span class="stat-value">${c.locationName}</span>
+          <span class="stat-value">${escapeHtml(c.locationName)}</span>
         </div>
 
         <div style="margin: 10px 0; font-size: 11px; font-family: var(--font-mono); display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;">
@@ -541,7 +605,7 @@ function renderCouncilorsGrid() {
 
         ${c.orgs?.length > 0 ? `
           <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
-            <strong>Orgs:</strong> ${c.orgs.map(o => o.displayName).join(', ')}
+            <strong>Orgs:</strong> ${c.orgs.map(o => escapeHtml(o.displayName)).join(', ')}
           </div>
         ` : ''}
       </div>
@@ -560,34 +624,41 @@ function renderCouncilorsScreen() {
   const rawList = state.snapshot.councilors || [];
   let councilors = [...rawList];
 
-  // Update total count badge
-  const countBadge = document.getElementById('councilorsTotalCountBadge');
-  if (countBadge) {
-    countBadge.textContent = `${rawList.length} Discovered Councilor${rawList.length === 1 ? '' : 's'}`;
-  }
+  // Filter option lists are rebuilt only when the underlying roster changes,
+  // so typing a search no longer rebuilds (and closes) the dropdowns.
+  const datasetKey = rawList.map(c => `${c.ID}:${c.factionName}:${c.typeTemplateName}`).join('|');
+  if (state.councilorsDatasetKey !== datasetKey) {
+    state.councilorsDatasetKey = datasetKey;
 
-  // Populate Faction filter options
-  const factionSelect = document.getElementById('councilorMainFactionFilter');
-  if (factionSelect) {
-    const factions = Array.from(new Set(rawList.map(c => c.factionName))).filter(Boolean);
-    const currVal = state.councilorMainFaction;
-    factionSelect.innerHTML = `<option value="all">All Known Factions (${rawList.length})</option>` +
-      factions.map(f => {
-        const fCount = rawList.filter(c => c.factionName === f).length;
-        return `<option value="${f}" ${currVal === f ? 'selected' : ''}>${f} (${fCount})</option>`;
-      }).join('');
-  }
+    // Update total count badge
+    const countBadge = document.getElementById('councilorsTotalCountBadge');
+    if (countBadge) {
+      countBadge.textContent = `${rawList.length} Discovered Councilor${rawList.length === 1 ? '' : 's'}`;
+    }
 
-  // Populate Profession filter options
-  const profSelect = document.getElementById('councilorProfessionFilter');
-  if (profSelect) {
-    const profs = Array.from(new Set(rawList.map(c => c.typeTemplateName))).filter(Boolean).sort();
-    const currProf = state.councilorProfession;
-    profSelect.innerHTML = `<option value="all">All Professions (${profs.length})</option>` +
-      profs.map(p => {
-        const pCount = rawList.filter(c => c.typeTemplateName === p).length;
-        return `<option value="${p}" ${currProf === p ? 'selected' : ''}>${p} (${pCount})</option>`;
-      }).join('');
+    // Populate Faction filter options
+    const factionSelect = document.getElementById('councilorMainFactionFilter');
+    if (factionSelect) {
+      const factions = Array.from(new Set(rawList.map(c => c.factionName))).filter(Boolean);
+      const currVal = state.councilorMainFaction;
+      factionSelect.innerHTML = `<option value="all">All Known Factions (${rawList.length})</option>` +
+        factions.map(f => {
+          const fCount = rawList.filter(c => c.factionName === f).length;
+          return `<option value="${escapeHtml(f)}" ${currVal === f ? 'selected' : ''}>${escapeHtml(f)} (${fCount})</option>`;
+        }).join('');
+    }
+
+    // Populate Profession filter options
+    const profSelect = document.getElementById('councilorProfessionFilter');
+    if (profSelect) {
+      const profs = Array.from(new Set(rawList.map(c => c.typeTemplateName))).filter(Boolean).sort();
+      const currProf = state.councilorProfession;
+      profSelect.innerHTML = `<option value="all">All Professions (${profs.length})</option>` +
+        profs.map(p => {
+          const pCount = rawList.filter(c => c.typeTemplateName === p).length;
+          return `<option value="${escapeHtml(p)}" ${currProf === p ? 'selected' : ''}>${escapeHtml(p)} (${pCount})</option>`;
+        }).join('');
+    }
   }
 
   // Apply Faction Filter
@@ -700,30 +771,30 @@ function renderCouncilorsMainCards(councilors) {
     };
 
     return `
-      <div class="card" style="border-left: 4px solid ${isMole ? '#d500f9' : fColor}; display: flex; flex-direction: column; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease;" onclick="openCouncilorModal('${c.ID}')" onmouseover="this.style.borderColor='var(--color-initiative)'" onmouseout="this.style.borderColor=''">
+      <div class="card" style="border-left: 4px solid ${isMole ? '#d500f9' : escapeHtml(fColor)}; display: flex; flex-direction: column; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease;" data-councilor-id="${escapeHtml(c.ID)}">
         <div class="card-header" style="align-items: flex-start; margin-bottom: 8px;">
           <div>
-            <div class="card-title" style="font-size: 15px; margin-bottom: 2px;">${c.displayName}</div>
-            <div style="font-size: 11px; color: ${fColor}; font-family: var(--font-mono); font-weight: 600;">
-              ${c.factionName} &bull; ${c.typeTemplateName}
+            <div class="card-title" style="font-size: 15px; margin-bottom: 2px;">${escapeHtml(c.displayName)}</div>
+            <div style="font-size: 11px; color: ${escapeHtml(fColor)}; font-family: var(--font-mono); font-weight: 600;">
+              ${escapeHtml(c.factionName)} &bull; ${escapeHtml(c.typeTemplateName)}
             </div>
           </div>
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
             ${isMole ? `<span class="chip chip-mole">TURNED MOLE</span>` : ''}
             ${c.isAlien ? `<span class="chip chip-danger">HYDRA OPERATIVE</span>` : ''}
             ${isOwn ? `<span class="chip chip-success">OWN COUNCIL</span>` : ''}
-            <span class="chip chip-info" style="font-size: 10px;">${c.status}</span>
+            <span class="chip chip-info" style="font-size: 10px;">${escapeHtml(c.status)}</span>
           </div>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
           <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
-            <span class="location-chip" title="Current Location">📍 ${c.locationName}</span>
-            <span style="font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);">${c.locationType || 'Earth'}</span>
+            <span class="location-chip" title="Current Location">📍 ${escapeHtml(c.locationName)}</span>
+            <span style="font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);">${escapeHtml(c.locationType || 'Earth')}</span>
           </div>
           ${c.activeMissionName ? `
             <div class="mission-chip" title="Assigned Mission">
-              🎯 ${c.activeMissionName}${c.activeMissionTarget ? ' &rarr; ' + c.activeMissionTarget : ''}
+              🎯 ${escapeHtml(c.activeMissionName)}${c.activeMissionTarget ? ' &rarr; ' + escapeHtml(c.activeMissionTarget) : ''}
             </div>
           ` : ''}
         </div>
@@ -749,14 +820,14 @@ function renderCouncilorsMainCards(councilors) {
 
           ${c.traits && c.traits.length > 0 ? `
             <div style="margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 2px;">
-              ${c.traits.slice(0, 4).map(t => `<span class="trait-tag">${t}</span>`).join('')}
+              ${c.traits.slice(0, 4).map(t => `<span class="trait-tag">${escapeHtml(t)}</span>`).join('')}
               ${c.traits.length > 4 ? `<span class="trait-tag">+${c.traits.length - 4} more</span>` : ''}
             </div>
           ` : ''}
 
           ${c.orgs && c.orgs.length > 0 ? `
             <div style="font-size: 11px; color: var(--text-muted); line-height: 1.3;">
-              <strong>Orgs (${c.orgs.length}):</strong> ${c.orgs.slice(0, 2).map(o => `${'★'.repeat(o.stars || 1)} ${o.displayName}`).join(', ')}${c.orgs.length > 2 ? ` (+${c.orgs.length - 2} more)` : ''}
+              <strong>Orgs (${c.orgs.length}):</strong> ${c.orgs.slice(0, 2).map(o => `${'★'.repeat(o.stars || 1)} ${escapeHtml(o.displayName)}`).join(', ')}${c.orgs.length > 2 ? ` (+${c.orgs.length - 2} more)` : ''}
             </div>
           ` : ''}
         </div>
@@ -786,17 +857,17 @@ function renderCouncilorsMainTable(councilors) {
     };
 
     return `
-      <tr style="cursor: pointer;" onclick="openCouncilorModal('${c.ID}')">
+      <tr style="cursor: pointer;" data-councilor-id="${escapeHtml(c.ID)}">
         <td>
-          <div style="font-weight: 700; color: ${isMole ? '#d500f9' : '#fff'};">${c.displayName}</div>
+          <div style="font-weight: 700; color: ${isMole ? '#d500f9' : '#fff'};">${escapeHtml(c.displayName)}</div>
           ${isMole ? `<span class="chip chip-mole" style="font-size: 9px; padding: 1px 4px;">MOLE</span>` : ''}
           ${c.isAlien ? `<span class="chip chip-danger" style="font-size: 9px; padding: 1px 4px;">HYDRA</span>` : ''}
         </td>
-        <td style="color: ${fColor}; font-weight: 600;">${c.factionName}</td>
-        <td>${c.typeTemplateName}</td>
-        <td><span class="chip chip-info" style="font-size: 10px;">${c.status}</span></td>
-        <td><span class="location-chip">📍 ${c.locationName}</span></td>
-        <td>${c.activeMissionName ? `<span class="mission-chip">🎯 ${c.activeMissionName}${c.activeMissionTarget ? ' &rarr; ' + c.activeMissionTarget : ''}</span>` : '<span style="color: var(--text-dim);">-</span>'}</td>
+        <td style="color: ${escapeHtml(fColor)}; font-weight: 600;">${escapeHtml(c.factionName)}</td>
+        <td>${escapeHtml(c.typeTemplateName)}</td>
+        <td><span class="chip chip-info" style="font-size: 10px;">${escapeHtml(c.status)}</span></td>
+        <td><span class="location-chip">📍 ${escapeHtml(c.locationName)}</span></td>
+        <td>${c.activeMissionName ? `<span class="mission-chip">🎯 ${escapeHtml(c.activeMissionName)}${c.activeMissionTarget ? ' &rarr; ' + escapeHtml(c.activeMissionTarget) : ''}</span>` : '<span style="color: var(--text-dim);">-</span>'}</td>
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Administration')}</td>
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Persuasion')}</td>
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Investigation')}</td>
@@ -806,8 +877,8 @@ function renderCouncilorsMainTable(councilors) {
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Security')}</td>
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Loyalty')}</td>
         <td style="text-align: center; font-family: var(--font-mono); font-weight: 700; color: var(--color-initiative);">${c.totalSkills || 0}</td>
-        <td style="text-align: center;" title="${(c.orgs || []).map(o => o.displayName).join(', ')}">${c.orgs?.length || 0}</td>
-        <td title="${(c.traits || []).join(', ')}">${(c.traits || []).slice(0, 2).join(', ')}${c.traits?.length > 2 ? '...' : ''}</td>
+        <td style="text-align: center;" title="${(c.orgs || []).map(o => escapeHtml(o.displayName)).join(', ')}">${c.orgs?.length || 0}</td>
+        <td title="${(c.traits || []).map(escapeHtml).join(', ')}">${(c.traits || []).slice(0, 2).map(escapeHtml).join(', ')}${c.traits?.length > 2 ? '...' : ''}</td>
       </tr>
     `;
   }).join('');
@@ -824,8 +895,8 @@ function openCouncilorModal(councilorId) {
   const fColor = getFactionColorByName(c.factionName);
 
   modalTitle.innerHTML = `
-    <span>${c.displayName}</span>
-    <span style="font-size: 12px; color: ${fColor}; font-weight: 600;">[${c.factionName} &bull; ${c.typeTemplateName}]</span>
+    <span>${escapeHtml(c.displayName)}</span>
+    <span style="font-size: 12px; color: ${escapeHtml(fColor)}; font-weight: 600;">[${escapeHtml(c.factionName)} &bull; ${escapeHtml(c.typeTemplateName)}]</span>
   `;
 
   const renderBar = (label, attrName, color = 'var(--color-initiative)') => {
@@ -848,27 +919,27 @@ function openCouncilorModal(councilorId) {
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 18px; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 6px;">
       <div>
         <div style="font-size: 11px; color: var(--text-muted);">Current Location</div>
-        <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">📍 ${c.locationName}</div>
-        <div style="font-size: 10px; color: var(--text-dim);">${c.locationType || 'Earth Region'}</div>
+        <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">📍 ${escapeHtml(c.locationName)}</div>
+        <div style="font-size: 10px; color: var(--text-dim);">${escapeHtml(c.locationType || 'Earth Region')}</div>
       </div>
       <div>
         <div style="font-size: 11px; color: var(--text-muted);">Assigned Mission</div>
-        <div style="font-size: 13px; font-weight: 700; color: #fbbf24;">🎯 ${c.activeMissionName || 'Standby'}</div>
-        <div style="font-size: 10px; color: var(--text-dim);">${c.activeMissionTarget ? 'Target: ' + c.activeMissionTarget : ''}</div>
+        <div style="font-size: 13px; font-weight: 700; color: #fbbf24;">🎯 ${escapeHtml(c.activeMissionName || 'Standby')}</div>
+        <div style="font-size: 10px; color: var(--text-dim);">${c.activeMissionTarget ? 'Target: ' + escapeHtml(c.activeMissionTarget) : ''}</div>
       </div>
       <div>
         <div style="font-size: 11px; color: var(--text-muted);">Status & Intel</div>
         <div>
           ${c.isTurnedMole ? `<span class="chip chip-mole">TURNED MOLE</span>` : ''}
           ${c.isAlien ? `<span class="chip chip-danger">HYDRA</span>` : ''}
-          <span class="chip chip-info">${c.status}</span>
+          <span class="chip chip-info">${escapeHtml(c.status)}</span>
         </div>
-        <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Intel Confidence: <strong>${c.investigationConfidence || 'CONFIRMED'}</strong></div>
+        <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Intel Confidence: <strong>${escapeHtml(c.investigationConfidence || 'CONFIRMED')}</strong></div>
       </div>
       <div>
         <div style="font-size: 11px; color: var(--text-muted);">Home & Background</div>
-        <div style="font-size: 12px; font-weight: 600;">${c.homeRegionName ? 'Home: ' + c.homeRegionName : ''}</div>
-        <div style="font-size: 10px; color: var(--text-dim);">${c.gender || ''} ${c.xp ? '&bull; XP: ' + c.xp : ''}</div>
+        <div style="font-size: 12px; font-weight: 600;">${c.homeRegionName ? 'Home: ' + escapeHtml(c.homeRegionName) : ''}</div>
+        <div style="font-size: 10px; color: var(--text-dim);">${escapeHtml(c.gender || '')} ${c.xp ? '&bull; XP: ' + escapeHtml(c.xp) : ''}</div>
       </div>
     </div>
 
@@ -897,7 +968,7 @@ function openCouncilorModal(councilorId) {
       </div>
       <div style="display: flex; flex-wrap: wrap; gap: 4px;">
         ${c.traits && c.traits.length > 0
-          ? c.traits.map(t => `<span class="trait-tag" style="padding: 4px 8px; font-size: 12px; background: rgba(0, 229, 255, 0.06); border-color: rgba(0, 229, 255, 0.2);">${t}</span>`).join('')
+          ? c.traits.map(t => `<span class="trait-tag" style="padding: 4px 8px; font-size: 12px; background: rgba(0, 229, 255, 0.06); border-color: rgba(0, 229, 255, 0.2);">${escapeHtml(t)}</span>`).join('')
           : '<div style="color: var(--text-dim); font-size: 12px;">No special traits recorded.</div>'}
       </div>
     </div>
@@ -912,10 +983,10 @@ function openCouncilorModal(councilorId) {
           ? c.orgs.map(o => `
             <div class="org-item-card">
               <div>
-                <div style="font-weight: 700; color: #fff;">${'★'.repeat(o.stars || 1)} ${o.displayName}</div>
-                <div style="font-size: 11px; color: var(--color-initiative);">${o.bonusesText || 'Operational support'}</div>
+                <div style="font-weight: 700; color: #fff;">${'★'.repeat(o.stars || 1)} ${escapeHtml(o.displayName)}</div>
+                <div style="font-size: 11px; color: var(--color-initiative);">${escapeHtml(o.bonusesText || 'Operational support')}</div>
               </div>
-              <span class="chip chip-dim" style="font-size: 10px;">Tier ${o.tier || 1}</span>
+              <span class="chip chip-dim" style="font-size: 10px;">Tier ${escapeHtml(o.tier || 1)}</span>
             </div>
           `).join('')
           : '<div style="color: var(--text-dim); font-size: 12px;">No organizations currently assigned.</div>'}
@@ -929,6 +1000,13 @@ function openCouncilorModal(councilorId) {
 function closeCouncilorModal() {
   const modal = document.getElementById('councilorModal');
   if (modal) modal.classList.add('hidden');
+}
+
+// Delegated handler powering the councilor cards/table (no inline onclick).
+function onCouncilorCardClick(event) {
+  const target = event.target.closest('[data-councilor-id]');
+  if (!target) return;
+  openCouncilorModal(target.dataset.councilorId);
 }
 
 function renderServantTargets() {
@@ -949,19 +1027,19 @@ function renderServantTargets() {
     return `
       <div class="card" style="border-top: 3px solid #d500f9;">
         <div class="card-header">
-          <div class="card-title">${t.nationName}</div>
+          <div class="card-title">${escapeHtml(t.nationName)}</div>
           <span class="card-badge" style="background: rgba(213, 0, 249, 0.2); color: #e040fb;">
             Score: ${t.score}/100
           </span>
         </div>
 
         <div class="stat-row">
-          <span class="stat-label">${targetFaction} Holdings</span>
-          <span class="stat-value" style="color: ${getFactionColorByName(targetFaction)};">${t.targetCPCount ?? t.servantCPCount} / ${t.totalCPCount} CPs</span>
+          <span class="stat-label">${escapeHtml(targetFaction)} Holdings</span>
+          <span class="stat-value" style="color: ${escapeHtml(getFactionColorByName(targetFaction))};">${t.targetCPCount ?? t.servantCPCount} / ${t.totalCPCount} CPs</span>
         </div>
         <div class="stat-row">
           <span class="stat-label">Economy (GDP)</span>
-          <span class="stat-value">$${t.gdpTrillion}T</span>
+          <span class="stat-value">$${escapeHtml(t.gdpTrillion)}T</span>
         </div>
         ${t.nukes > 0 ? `
           <div class="stat-row">
@@ -973,7 +1051,7 @@ function renderServantTargets() {
         <div style="margin-top: 8px; font-size: 11px; color: #cbd5e1;">
           <strong>Strategic Rationale:</strong>
           <ul style="margin-left: 16px; margin-top: 4px;">
-            ${t.reasons.map(r => `<li>${r}</li>`).join('')}
+            ${t.reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
           </ul>
         </div>
       </div>
@@ -1002,9 +1080,9 @@ function renderMiningTable() {
     const fColor = getFactionColorByName(s.factionName);
     return `
       <tr>
-        <td style="font-weight: 600;">${s.displayName}</td>
-        <td>${s.parentBodyName}</td>
-        <td style="color: ${fColor}; font-weight: 700;">${s.factionName}</td>
+        <td style="font-weight: 600;">${escapeHtml(s.displayName)}</td>
+        <td>${escapeHtml(s.parentBodyName)}</td>
+        <td style="color: ${escapeHtml(fColor)}; font-weight: 700;">${escapeHtml(s.factionName)}</td>
         <td>${Number(s.water || 0).toFixed(2)}</td>
         <td>${Number(s.volatiles || 0).toFixed(2)}</td>
         <td>${Number(s.metals || 0).toFixed(2)}</td>
@@ -1023,11 +1101,11 @@ function renderHabsTable() {
     const fColor = getFactionColorByName(h.factionName);
     return `
       <tr>
-        <td style="font-weight: 600;">${h.displayName}</td>
-        <td style="color: ${fColor}; font-weight: 700;">${h.factionName}</td>
-        <td>${h.habType}</td>
-        <td>Tier ${h.tier}</td>
-        <td>${h.orbitBody}</td>
+        <td style="font-weight: 600;">${escapeHtml(h.displayName)}</td>
+        <td style="color: ${escapeHtml(fColor)}; font-weight: 700;">${escapeHtml(h.factionName)}</td>
+        <td>${escapeHtml(h.habType)}</td>
+        <td>Tier ${escapeHtml(h.tier)}</td>
+        <td>${escapeHtml(h.orbitBody)}</td>
         <td>${h.inEarthLEO ? 'LEO' : 'Deep Orbit'}</td>
         <td>${h.inCombat ? '<span class="chip chip-danger">COMBAT</span>' : '<span class="chip chip-success">Operational</span>'}</td>
       </tr>
@@ -1043,14 +1121,14 @@ function renderFleetsTable() {
     const fColor = getFactionColorByName(fl.factionName);
     return `
       <tr>
-        <td style="font-weight: 600;">${fl.displayName}</td>
-        <td style="color: ${fColor}; font-weight: 700;">${fl.factionName}</td>
+        <td style="font-weight: 600;">${escapeHtml(fl.displayName)}</td>
+        <td style="color: ${escapeHtml(fColor)}; font-weight: 700;">${escapeHtml(fl.factionName)}</td>
         <td>${fl.shipsCount}</td>
-        <td><strong>${fl.combatPower ?? 'Unavailable'}</strong></td>
-        <td>${fl.weaponSummary || fl.dominantWeaponType || 'Unknown'}</td>
-        <td>${fl.orbitBody}</td>
-        <td>${fl.mission}</td>
-        <td>${fl.destination}</td>
+        <td><strong>${escapeHtml(fl.combatPower ?? 'Unavailable')}</strong></td>
+        <td>${escapeHtml(fl.weaponSummary || fl.dominantWeaponType || 'Unknown')}</td>
+        <td>${escapeHtml(fl.orbitBody)}</td>
+        <td>${escapeHtml(fl.mission)}</td>
+        <td>${escapeHtml(fl.destination)}</td>
         <td>${fl.arrivalDate ? `${fl.arrivalDate.year}-${fl.arrivalDate.month}-${fl.arrivalDate.day}` : 'Stationary'}</td>
       </tr>
     `;
@@ -1069,10 +1147,10 @@ function renderFactionDossier() {
     <div class="card" style="border-top: 4px solid ${faction.color}; margin-bottom: 20px;">
       <div class="card-header">
         <div class="card-title" style="font-size: 18px;">
-          <span class="faction-indicator" style="background: ${faction.color}; width: 14px; height: 14px;"></span>
-          ${faction.displayName} Intelligence Summary
+          <span class="faction-indicator" style="background: ${escapeHtml(faction.color)}; width: 14px; height: 14px;"></span>
+          ${escapeHtml(faction.displayName)} Intelligence Summary
         </div>
-        <span class="card-badge" style="background: ${faction.color}; color: #000; font-size: 12px;">
+        <span class="card-badge" style="background: ${escapeHtml(faction.color)}; color: #000; font-size: 12px;">
           Dashboard estimate: ${faction.powerScore?.overall ?? 'UNKNOWN'}${faction.powerScore?.overall !== null && faction.powerScore?.overall !== undefined ? '/100' : ''}
         </span>
       </div>
@@ -1139,7 +1217,7 @@ function renderGlobalTechSlots() {
     return `
       <div class="card" style="border-top: 3px solid var(--color-initiative);">
         <div class="card-header">
-          <div class="card-title">Slot ${s.slotNumber}: ${s.displayName}</div>
+          <div class="card-title">Slot ${s.slotNumber}: ${escapeHtml(s.displayName)}</div>
           <span class="chip chip-info">${s.percent}%</span>
         </div>
 
@@ -1155,13 +1233,13 @@ function renderGlobalTechSlots() {
         </div>
         <div class="stat-row">
           <span class="stat-label">Leading Contributor</span>
-          <span class="stat-value" style="color: var(--color-initiative);">${s.leadFactionName} (${s.leadContribution.toLocaleString()})</span>
+          <span class="stat-value" style="color: var(--color-initiative);">${escapeHtml(s.leadFactionName)} (${s.leadContribution.toLocaleString()})</span>
         </div>
 
         <div style="margin-top: 8px; font-size: 11px; color: var(--text-muted);">
           <strong>Faction Contributions:</strong>
           <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
-            ${s.contributions.map(c => `<span class="chip chip-dim">${c.factionName.replace('the ', '')}: ${c.contribution.toLocaleString()}</span>`).join('')}
+            ${s.contributions.map(c => `<span class="chip chip-dim">${escapeHtml(c.factionName.replace('the ', ''))}: ${c.contribution.toLocaleString()}</span>`).join('')}
           </div>
         </div>
       </div>
@@ -1170,7 +1248,7 @@ function renderGlobalTechSlots() {
 
   const completedBox = document.getElementById('completedTechsContainer');
   const completed = state.snapshot.globalResearch?.finishedTechsNames || [];
-  completedBox.innerHTML = completed.map(t => `<span class="chip chip-success">✓ ${t}</span>`).join('');
+  completedBox.innerHTML = completed.map(t => `<span class="chip chip-success">✓ ${escapeHtml(t)}</span>`).join('');
 }
 
 function renderTechMatrix() {
@@ -1182,14 +1260,14 @@ function renderTechMatrix() {
   thead.innerHTML = `
     <tr>
       <th>Strategic Project</th>
-      ${factions.map(f => `<th style="color: ${f.color}; text-align: center;">${f.displayName.replace('the ', '')}</th>`).join('')}
+      ${factions.map(f => `<th style="color: ${escapeHtml(f.color)}; text-align: center;">${escapeHtml(f.displayName.replace('the ', ''))}</th>`).join('')}
     </tr>
   `;
 
   tbody.innerHTML = matrix.map(row => {
     return `
       <tr>
-        <td style="font-weight: 600;">${row.displayName}</td>
+        <td style="font-weight: 600;">${escapeHtml(row.displayName)}</td>
         ${factions.map(f => {
           const st = row.factions[f.ID]?.status || 'locked';
           let icon = '—';
@@ -1212,7 +1290,7 @@ async function renderTechInspector() {
     if (res.success) {
       container.innerHTML = `
         <div style="margin-bottom: 12px; font-size: 12px; color: var(--text-muted);">
-          Templates Source: <code>${res.templatesPath || 'StreamingAssets/Templates'}</code> (${res.techCount} techs, ${res.projectCount} projects, ${res.effectCount} effects loaded)
+          Templates Source: <code>${escapeHtml(res.templatesPath || 'StreamingAssets/Templates')}</code> (${res.techCount} techs, ${res.projectCount} projects, ${res.effectCount} effects loaded)
         </div>
         <div class="table-container">
           <table class="data-table">
@@ -1227,9 +1305,9 @@ async function renderTechInspector() {
             <tbody>
               ${res.validation.map(v => `
                 <tr>
-                  <td style="font-family: var(--font-mono); font-weight: 700;">${v.targetId}</td>
-                  <td>${v.targetType}</td>
-                  <td style="font-family: var(--font-mono); color: var(--color-initiative);">${v.expectedEffect}</td>
+                  <td style="font-family: var(--font-mono); font-weight: 700;">${escapeHtml(v.targetId)}</td>
+                  <td>${escapeHtml(v.targetType)}</td>
+                  <td style="font-family: var(--font-mono); color: var(--color-initiative);">${escapeHtml(v.expectedEffect)}</td>
                   <td>${v.valid ? '<span class="chip chip-success">✓ VALIDATED IN TEMPLATE</span>' : '<span class="chip chip-danger">⚠ MISSING</span>'}</td>
                 </tr>
               `).join('')}
@@ -1254,8 +1332,8 @@ function renderIntelligence() {
         <div class="card-title">Stage 1: Abductions</div>
         <span class="chip ${stages.abductions.active ? 'chip-success' : 'chip-dim'}">${stages.abductions.status}</span>
       </div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;"><strong>${stages.abductions.name}</strong></div>
-      <div style="font-size: 11px; color: var(--text-dim);">${stages.abductions.description}</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;"><strong>${escapeHtml(stages.abductions.name)}</strong></div>
+      <div style="font-size: 11px; color: var(--text-dim);">${escapeHtml(stages.abductions.description)}</div>
     </div>
 
     <div class="card" style="border-top: 3px solid ${stages.contacts.active ? 'var(--color-success)' : 'var(--color-dim)'};">
@@ -1263,8 +1341,8 @@ function renderIntelligence() {
         <div class="card-title">Stage 2: Contacts & Enthrall</div>
         <span class="chip ${stages.contacts.active ? 'chip-success' : 'chip-dim'}">${stages.contacts.status}</span>
       </div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;"><strong>${stages.contacts.name}</strong></div>
-      <div style="font-size: 11px; color: var(--text-dim);">${stages.contacts.description}</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;"><strong>${escapeHtml(stages.contacts.name)}</strong></div>
+      <div style="font-size: 11px; color: var(--text-dim);">${escapeHtml(stages.contacts.description)}</div>
     </div>
 
     <div class="card" style="border-top: 3px solid ${stages.operations.active ? 'var(--color-success)' : 'var(--color-dim)'};">
@@ -1272,8 +1350,8 @@ function renderIntelligence() {
         <div class="card-title">Stage 3: Alien Operations</div>
         <span class="chip ${stages.operations.active ? 'chip-success' : 'chip-dim'}">${stages.operations.status}</span>
       </div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;"><strong>${stages.operations.name}</strong></div>
-      <div style="font-size: 11px; color: var(--text-dim);">${stages.operations.description}</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;"><strong>${escapeHtml(stages.operations.name)}</strong></div>
+      <div style="font-size: 11px; color: var(--text-dim);">${escapeHtml(stages.operations.description)}</div>
     </div>
 
     <div class="card" style="border-top: 3px solid ${stages.operatives.active ? 'var(--color-success)' : 'var(--color-dim)'};">
@@ -1281,8 +1359,8 @@ function renderIntelligence() {
         <div class="card-title">Stage 4: Alien Operatives</div>
         <span class="chip ${stages.operatives.active ? 'chip-success' : 'chip-dim'}">${stages.operatives.status}</span>
       </div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;"><strong>${stages.operatives.name}</strong></div>
-      <div style="font-size: 11px; color: var(--text-dim);">${stages.operatives.description}</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;"><strong>${escapeHtml(stages.operatives.name)}</strong></div>
+      <div style="font-size: 11px; color: var(--text-dim);">${escapeHtml(stages.operatives.description)}</div>
        <div style="margin-top: 8px; font-size: 11px; font-weight: 700; color: var(--color-initiative);">Detected: ${stages.operatives.active ? (stages.operatives.detectedCount ?? 0) : 'UNAVAILABLE'}</div>
     </div>
   `;
@@ -1291,8 +1369,8 @@ function renderIntelligence() {
   const xenos = state.snapshot.activeXenoforming || [];
   xenoBody.innerHTML = xenos.map(x => `
     <tr>
-      <td style="font-weight: 600;">${x.regionName}</td>
-      <td><strong>${x.level}</strong></td>
+      <td style="font-weight: 600;">${escapeHtml(x.regionName)}</td>
+      <td><strong>${escapeHtml(x.level)}</strong></td>
       <td><span class="chip chip-warning">Monitored Alien Activity</span></td>
     </tr>
   `).join('');
@@ -1300,9 +1378,16 @@ function renderIntelligence() {
 
 async function renderExportPreview() {
   const preview = document.getElementById('exportMarkdownPreview');
-  const res = await API.getExport('chatgpt', state.mode, state.observerId);
-  if (res.success) {
-    preview.textContent = res.markdown;
+  if (!preview) return;
+  try {
+    const res = await API.getExport('chatgpt', state.mode, state.observerId);
+    if (res.success) {
+      preview.textContent = res.markdown;
+    } else {
+      preview.textContent = 'Export unavailable: ' + (res.error || 'unknown error');
+    }
+  } catch (err) {
+    preview.textContent = 'Export unavailable: ' + err.message;
   }
 }
 

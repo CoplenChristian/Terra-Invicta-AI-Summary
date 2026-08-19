@@ -61,6 +61,8 @@ test('buildResource summary aggregates alien posture', () => {
   assert.strictEqual(summary.alien.factionId, 4717);
   assert.strictEqual(summary.alien.fleets, 0);
   assert.ok(summary.alien.fleetsByBody, 'empty fleet aggregation is present');
+  assert.ok(summary.alienHateEconomics, 'summary includes alien hate economics');
+  assert.strictEqual(summary.alienHateEconomics.usedMissionControl, 10);
 });
 
 test('unknown resources are rejected', () => {

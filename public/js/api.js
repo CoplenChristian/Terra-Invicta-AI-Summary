@@ -1,5 +1,8 @@
 const API = {
   staticOnly: false,
+  // Set once the runtime probe has run. 'local'/'dev' -> live API present,
+  // errors must surface. 'hosted'/'fallback' -> static assets are authoritative.
+  runtimeEnvironment: null,
 
   async requestJson(url, options = {}) {
     const res = await fetch(url, options);
@@ -10,17 +13,26 @@ const API = {
         const payload = await res.json().catch(() => null);
         detail = payload?.error || '';
       }
-      throw new Error(detail || `Request failed: ${res.status}`);
+      const error = new Error(detail || `Request failed: ${res.status}`);
+      error.status = res.status;
+      throw error;
     }
     return await res.json();
   },
 
+  isStaticHosted() {
+    return API.staticOnly || API.runtimeEnvironment === 'hosted' || API.runtimeEnvironment === 'fallback';
+  },
+
   async getRuntime() {
     try {
-      return await API.requestJson('/api/runtime');
+      const runtime = await API.requestJson('/api/runtime');
+      API.runtimeEnvironment = runtime.environment || 'hosted';
+      return runtime;
     } catch {
       // A missing runtime endpoint means this is an older/static hosted build.
       // Fail closed so a publish control can never appear by accident.
+      API.runtimeEnvironment = 'fallback';
       return {
         success: true,
         environment: 'hosted',
@@ -55,7 +67,11 @@ const API = {
       const payload = await API.requestJson(url);
       if (payload.data?.mode === 'player' && mode !== 'player') payload.staticOnly = true;
       return payload;
-    } catch {
+    } catch (err) {
+      // On a live local server a real error (e.g. 503 save-locked) must reach
+      // the UI instead of being hidden by stale static data. Static fallback
+      // is only for hosted builds that were never backed by the API.
+      if (!API.isStaticHosted() && err.status !== 404) throw err;
       return API.getStaticSnapshot(observerId);
     }
   },
@@ -65,7 +81,8 @@ const API = {
       return await API.requestJson(`/api/refresh?mode=${encodeURIComponent(mode)}&observer=${encodeURIComponent(observerId)}`, {
         method: 'POST'
       });
-    } catch {
+    } catch (err) {
+      if (!API.isStaticHosted() && err.status !== 404) throw err;
       return API.getStaticSnapshot(observerId);
     }
   },
@@ -79,7 +96,8 @@ const API = {
       const payload = await API.requestJson(`/api/export?format=${encodeURIComponent(format)}&mode=${encodeURIComponent(mode)}&observer=${encodeURIComponent(observerId)}`);
       if (mode !== 'player' && payload.markdown?.includes('**Intelligence Mode:** PLAYER')) payload.staticOnly = true;
       return payload;
-    } catch {
+    } catch (err) {
+      if (!API.isStaticHosted() && err.status !== 404) throw err;
       API.staticOnly = true;
       const res = await fetch(`/data/export-${encodeURIComponent(format)}-player-${encodeURIComponent(observerId)}.json`);
       if (!res.ok) throw new Error('Hosted export is unavailable.');
@@ -92,7 +110,8 @@ const API = {
   async getEffectsInfo() {
     try {
       return await API.requestJson('/api/templates/effects');
-    } catch {
+    } catch (err) {
+      if (!API.isStaticHosted() && err.status !== 404) throw err;
       API.staticOnly = true;
       const res = await fetch('/data/effects.json');
       return await res.json();

@@ -1,42 +1,9 @@
 (function () {
   'use strict';
 
-  function escapeHtml(value) {
-    return String(value === null || value === undefined ? '' : value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function numberValue(value) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  function formatNumber(value, decimals) {
-    const parsed = numberValue(value);
-    if (parsed === null) return 'UNAVAILABLE';
-    return parsed.toLocaleString(undefined, {
-      maximumFractionDigits: decimals === undefined ? 0 : decimals,
-      minimumFractionDigits: decimals || 0
-    });
-  }
-
-  function formatGdp(value) {
-    const parsed = numberValue(value);
-    return parsed === null ? 'UNAVAILABLE' : `$${(parsed / 1e12).toFixed(1)}T`;
-  }
-
-  function formatDelta(change) {
-    if (!change) return '—';
-    const delta = numberValue(change.delta);
-    if (delta === null) return '—';
-    if (Math.abs(delta) >= 1e9) return `${delta > 0 ? '+' : ''}${(delta / 1e9).toFixed(1)}B`;
-    if (Math.abs(delta) >= 1e6) return `${delta > 0 ? '+' : ''}${(delta / 1e6).toFixed(1)}M`;
-    return `${delta > 0 ? '+' : ''}${formatNumber(delta, Math.abs(delta) < 10 && !Number.isInteger(delta) ? 1 : 0)}`;
-  }
+  const {
+    escapeHtml, numberValue, formatNumber, formatGdp, formatDelta, bodyKey, bodyLabel
+  } = window.MissionControlShared || {};
 
   function factionById(snapshot, id) {
     return (Array.isArray(snapshot?.factions) ? snapshot.factions : [])
@@ -180,24 +147,6 @@
       ['Alien intelligence', capabilities.canDetectAlienOperations ? 'OPERATIONS ONLINE' : 'OPERATIONS LOCKED', intelActive]
     ];
     container.innerHTML = `<div class="mc-board-note"><strong>CAPABILITY / DISCRETE SIGNALS</strong><span>Ranks compare current save values. Weapon and technology labels are evidence from the parsed save, not a combat-power estimate.</span></div>${tableShell(['Capability', 'Current signal', 'Evidence / consequence'], rows.map(row => `<tr><th scope="row">${escapeHtml(row[0])}</th><td>${escapeHtml(row[1])}</td><td>${escapeHtml(row[2])}</td></tr>`).join(''), 'No capability records are available.')}`;
-  }
-
-  function bodyKey(body, explicitKey) {
-    if (explicitKey) return explicitKey;
-    const value = String(body || '').trim().replace(/^\d+\s+/, '').replace(/\s+/g, ' ').toLowerCase();
-    const bodyMap = {
-      sol: 'sol', earth: 'sol', luna: 'sol', mars: 'mars', mercury: 'inner', venus: 'inner',
-      ceres: 'belt', psyche: 'belt', klotho: 'belt', pallas: 'belt', vesta: 'belt', bienor: 'belt',
-      jupiter: 'jupiter', io: 'jupiter', europa: 'jupiter', ganymede: 'jupiter', callisto: 'jupiter', leda: 'jupiter',
-      saturn: 'saturn', titan: 'saturn', rhea: 'saturn', dione: 'saturn', tethys: 'saturn', mimas: 'saturn', enceladus: 'saturn', iapetus: 'saturn',
-      uranus: 'outer', miranda: 'outer', neptune: 'outer', triton: 'outer', pluto: 'outer', charon: 'outer', quaoar: 'outer', sedna: 'outer', eris: 'outer', makemake: 'outer', haumea: 'outer'
-    };
-    return bodyMap[value] || 'unassigned';
-  }
-
-  function bodyLabel(body) {
-    const value = String(body || '').trim();
-    return value.replace(/^\d+\s+/, '') || 'Unknown body';
   }
 
   function weaponCount(fleet, role) {

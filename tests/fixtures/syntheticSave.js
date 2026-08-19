@@ -23,6 +23,7 @@ function makeFaction(id, displayName, options = {}) {
         Exotics: 0
       },
       assessedAlienHateOfMe: options.hate ?? 0,
+      missionControlUsage: options.missionControlUsage ?? 0,
       finishedProjectNames: options.finishedProjects || [],
       availableProjectNames: options.availableProjects || [],
       currentProjectProgress: options.currentProjects || [],
@@ -114,7 +115,7 @@ function makeSaveData({ money = 100, ships = 1, gameTimeString = '2025-01-01T00:
         { Value: { gameTimeString, difficulty: 'Veteran', campaignStartYear: 2022 } }
       ],
       'PavonisInteractive.TerraInvicta.TIFactionState': [
-        makeFaction(4712, 'the Initiative', { money, hate: 5, finishedProjects: ['Project_TheirOperations'] }),
+        makeFaction(4712, 'the Initiative', { money, hate: 5, missionControlUsage: 10, finishedProjects: ['Project_TheirOperations'] }),
         makeFaction(4713, 'the Servants', { money: 200, hate: 90, factionHate: [{ targetId: 4712, hate: 90 }] }),
         makeFaction(4717, 'the Aliens', { money: 0, hate: 100, factionHate: [{ targetId: 4712, hate: 100 }] })
       ],

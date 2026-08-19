@@ -13,10 +13,26 @@ import {
   miningResourceRow,
   fleetResourceRow,
   shipResourceRows,
+  habModuleResourceRow,
+  shipyardResourceRow,
+  shipyardStationResourceRow,
+  arrivalResourceRow,
+  friendlyStrengthAtDestination,
+  transferResourceRow,
   researchResourceRows,
   summaryResource,
   findAlienFaction
 } from '../shared/intelResources.mjs';
+import {
+  buildTechTreeProjection,
+  buildTechPathProjection,
+  buildTechSearchProjection,
+  buildTechMilestonesProjection,
+  buildTechMatrixProjection,
+  buildTechOpportunitiesProjection,
+  buildResearchQueueProjection,
+  CATEGORIES
+} from '../shared/techGraph.mjs';
 
 const HOSTED_MODES = SUPPORTED_MODES;
 
@@ -89,7 +105,11 @@ const jsonResponse = (body, status = 200) => {
     headers: {
       'content-type': 'application/json; charset=utf-8',
       ...corsHeaders,
-      'cache-control': status >= 400 ? 'no-store' : 'public, max-age=60, s-maxage=60',
+      // Snapshot data is mutable: publishing a new save moves the campaign
+      // pointer and every focused endpoint must observe that same pointer.
+      // Edge/browser caching here can otherwise make /summary and /research
+      // appear to come from different saves for up to a minute.
+      'cache-control': 'no-store',
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'no-referrer'
     }
@@ -102,10 +122,12 @@ async function querySupabase(env, pathWithParams) {
 
   const url = `${supabaseUrl}/rest/v1/${pathWithParams}`;
   const response = await fetch(url, {
+    cache: 'no-store',
     headers: {
       'apikey': anonKey,
       'Authorization': `Bearer ${anonKey}`,
-      'Accept': 'application/json'
+      'Accept': 'application/json',
+      'Cache-Control': 'no-cache'
     }
   });
 
@@ -117,22 +139,42 @@ async function querySupabase(env, pathWithParams) {
   return await response.json();
 }
 
+async function readPublicCampaign(env, campaignKey) {
+  const campaigns = await querySupabase(
+    env,
+    `campaigns?campaign_key=eq.${encodeURIComponent(campaignKey)}&is_public=eq.true&select=campaign_key,current_save_last_modified,current_game_time,current_save_filename&limit=1`
+  );
+  return campaigns?.[0] || null;
+}
+
+const timestampMs = (value) => {
+  const result = new Date(value || '').getTime();
+  return Number.isFinite(result) ? result : null;
+};
+
+const sameTimestamp = (left, right) => {
+  const leftMs = timestampMs(left);
+  const rightMs = timestampMs(right);
+  return leftMs !== null && rightMs !== null && leftMs === rightMs;
+};
+
+const consistencyError = (message) => ({
+  found: false,
+  status: 409,
+  error: `MIXED / STALE INTELLIGENCE: ${message}`
+});
+
 async function fetchFromSupabase(env, observerId, requestedMode = 'player') {
   const campaignKey = env.SUPABASE_CAMPAIGN_KEY || 'initiative';
   const safeObserverId = String(observerId);
   const mode = requestedMode;
 
   // Step 1: Query active public campaign pointer
-  const campaigns = await querySupabase(
-    env,
-    `campaigns?campaign_key=eq.${encodeURIComponent(campaignKey)}&is_public=eq.true&select=campaign_key,current_save_last_modified,current_game_time,current_save_filename`
-  );
-
-  if (!campaigns || campaigns.length === 0) {
+  const campaign = await readPublicCampaign(env, campaignKey);
+  if (!campaign) {
     return { found: false, status: 404, error: `Public campaign '${campaignKey}' not found.` };
   }
 
-  const campaign = campaigns[0];
   if (!campaign.current_save_last_modified) {
     return { found: false, status: 404, error: `No active save recorded for campaign '${campaignKey}'.` };
   }
@@ -140,7 +182,7 @@ async function fetchFromSupabase(env, observerId, requestedMode = 'player') {
   // Step 2: Query the matching published snapshot row for the requested observer and mode.
   const snapshots = await querySupabase(
     env,
-    `player_intel_snapshots?campaign_key=eq.${encodeURIComponent(campaignKey)}&save_last_modified=eq.${encodeURIComponent(campaign.current_save_last_modified)}&observer_faction_id=eq.${safeObserverId}&visibility=eq.${encodeURIComponent(mode)}&select=snapshot,chatgpt_export,observer_faction_id,observer_faction_name,save_filename,save_last_modified,game_time,difficulty,campaign_start_year,visibility,generated_at`
+    `player_intel_snapshots?campaign_key=eq.${encodeURIComponent(campaignKey)}&save_last_modified=eq.${encodeURIComponent(campaign.current_save_last_modified)}&observer_faction_id=eq.${safeObserverId}&visibility=eq.${encodeURIComponent(mode)}&select=snapshot,chatgpt_export,observer_faction_id,observer_faction_name,save_filename,save_last_modified,game_time,difficulty,campaign_start_year,visibility,generated_at&limit=2`
   );
 
   if (!snapshots || snapshots.length === 0) {
@@ -149,6 +191,12 @@ async function fetchFromSupabase(env, observerId, requestedMode = 'player') {
       status: 404,
       error: `No ${mode} snapshot found for observer ${safeObserverId} at timestamp ${campaign.current_save_last_modified}.`
     };
+  }
+
+  if (snapshots.length > 1) {
+    return consistencyError(
+      `multiple ${mode} rows exist for observer ${safeObserverId} at active timestamp ${campaign.current_save_last_modified}; republish or repair the duplicate rows.`
+    );
   }
 
   const row = snapshots[0];
@@ -166,12 +214,28 @@ async function fetchFromSupabase(env, observerId, requestedMode = 'player') {
       error: 'Published snapshot is missing its consistency identity. Republish the latest save before reading it.'
     };
   }
-  if (campaign.current_save_last_modified && new Date(identity.saveModifiedAt).getTime() !== new Date(campaign.current_save_last_modified).getTime()) {
-    return {
-      found: false,
-      status: 409,
-      error: `MIXED / STALE INTELLIGENCE: campaign pointer is ${campaign.current_save_last_modified}, dataset is ${identity.saveModifiedAt}.`
-    };
+  if (!sameTimestamp(row.save_last_modified, campaign.current_save_last_modified) ||
+      !sameTimestamp(identity.saveModifiedAt, campaign.current_save_last_modified) ||
+      !sameTimestamp(identity.saveModifiedAt, row.save_last_modified)) {
+    return consistencyError(
+      `campaign pointer is ${campaign.current_save_last_modified}, row is ${row.save_last_modified}, dataset is ${identity.saveModifiedAt}.`
+    );
+  }
+  if (row.visibility !== mode) {
+    return consistencyError(`requested mode is ${mode}, but the selected row is ${row.visibility}.`);
+  }
+
+  // Publishing uploads all rows first and advances the campaign pointer last,
+  // but it can still move while this request is in flight. Re-read the pointer
+  // before returning so a single response can never claim to be current after
+  // a newer publish committed.
+  const confirmedCampaign = await readPublicCampaign(env, campaignKey);
+  if (!confirmedCampaign ||
+      !sameTimestamp(confirmedCampaign.current_save_last_modified, campaign.current_save_last_modified) ||
+      confirmedCampaign.current_save_filename !== campaign.current_save_filename) {
+    return consistencyError(
+      `the active save changed while reading this request (started at ${campaign.current_save_last_modified}, now ${confirmedCampaign?.current_save_last_modified || 'unknown'}); retry.`
+    );
   }
   if (payload) {
     payload.mode = mode;
@@ -184,9 +248,43 @@ async function fetchFromSupabase(env, observerId, requestedMode = 'player') {
     row,
     snapshot: payload,
     chatgptExport: row.chatgpt_export,
-    mode
+    mode,
+    isLatestSnapshot: true,
+    activeSnapshot: {
+      snapshotId: identity.snapshotId,
+      saveHash: identity.saveHash,
+      saveModifiedAt: campaign.current_save_last_modified,
+      saveFilename: campaign.current_save_filename || row.save_filename || null,
+      campaignDate: campaign.current_game_time || row.game_time || null,
+      generatedAt: identity.generatedAt,
+      isLatestSnapshot: true
+    }
   };
 }
+
+const resultIdentity = (result) => {
+  const row = result.row || {};
+  const snapshot = result.snapshot || {};
+  const activeSnapshot = result.activeSnapshot || {};
+  return {
+    snapshotId: activeSnapshot.snapshotId || snapshot.snapshotId || row.snapshot?.snapshotId || null,
+    saveHash: activeSnapshot.saveHash || snapshot.saveHash || row.snapshot?.saveHash || null,
+    saveModifiedAt: activeSnapshot.saveModifiedAt || row.save_last_modified || null,
+    saveFilename: activeSnapshot.saveFilename || row.save_filename || null,
+    campaignDate: activeSnapshot.campaignDate || row.game_time || null,
+    generatedAt: activeSnapshot.generatedAt || snapshot.generatedAt || row.generated_at || null,
+    isLatestSnapshot: result.isLatestSnapshot === true,
+    activeSnapshot: {
+      snapshotId: activeSnapshot.snapshotId || snapshot.snapshotId || row.snapshot?.snapshotId || null,
+      saveHash: activeSnapshot.saveHash || snapshot.saveHash || row.snapshot?.saveHash || null,
+      saveModifiedAt: activeSnapshot.saveModifiedAt || row.save_last_modified || null,
+      saveFilename: activeSnapshot.saveFilename || row.save_filename || null,
+      campaignDate: activeSnapshot.campaignDate || row.game_time || null,
+      generatedAt: activeSnapshot.generatedAt || snapshot.generatedAt || row.generated_at || null,
+      isLatestSnapshot: result.isLatestSnapshot === true
+    }
+  };
+};
 
 const snapshotEnvelope = (result, format = 'compact') => {
   const row = result.row;
@@ -198,10 +296,7 @@ const snapshotEnvelope = (result, format = 'compact') => {
   return {
     success: true,
     source: 'supabase',
-    generatedAt: row.generated_at || null,
-    saveModifiedAt: row.save_last_modified,
-    saveFilename: row.save_filename,
-    campaignDate: row.game_time,
+    ...resultIdentity(result),
     difficulty: row.difficulty,
     campaignStartYear: row.campaign_start_year,
     observerFaction: {
@@ -224,7 +319,7 @@ const markdownSnapshotResponse = (envelope) => new Response(
     headers: {
       'content-type': 'text/markdown; charset=utf-8',
       ...corsHeaders,
-      'cache-control': 'public, max-age=60, s-maxage=60'
+      'cache-control': 'no-store'
     }
   }
 );
@@ -254,12 +349,7 @@ const resourceEnvelope = (result, resource, items, query = {}, extra = {}) => {
     success: true,
     source: 'supabase',
     resource,
-    generatedAt: row.generated_at || null,
-    saveModifiedAt: row.save_last_modified,
-    snapshotId: snapshot.snapshotId || null,
-    saveHash: snapshot.saveHash || null,
-    saveFilename: row.save_filename,
-    campaignDate: row.game_time,
+    ...resultIdentity(result),
     difficulty: row.difficulty,
     observerFaction: {
       id: row.observer_faction_id,
@@ -331,6 +421,36 @@ const buildIntelResource = (result, resource, url) => {
     case 'ships':
       items = shipResourceRows(asArray(snapshot.fleets), factionId, body);
       break;
+    case 'resources':
+      items = asArray(snapshot.factions)
+        .filter(faction => factionMatches(faction, factionId))
+        .map(factionResourceRow);
+      break;
+    case 'hab-modules':
+      items = asArray(snapshot.habModules)
+        .filter(module => factionMatches(module, factionId) && bodyMatches(module, body))
+        .map(habModuleResourceRow);
+      break;
+    case 'shipyards':
+      items = asArray(snapshot.shipyardStations)
+        .filter(station => factionMatches(station, factionId) && bodyMatches(station, body))
+        .map(shipyardStationResourceRow);
+      break;
+    case 'shipyard-queues':
+      items = asArray(snapshot.shipyardQueues)
+        .filter(queue => factionMatches(queue, factionId) && bodyMatches(queue, body))
+        .map(shipyardResourceRow);
+      break;
+    case 'arrivals':
+      items = asArray(snapshot.fleets)
+        .filter(fleet => fleet.arrivalDate && factionMatches(fleet, factionId) && bodyMatches(fleet, body))
+        .map(fleet => arrivalResourceRow(fleet, friendlyStrengthAtDestination(fleet, snapshot)));
+      break;
+    case 'transfers':
+      items = asArray(snapshot.resourceTransfers)
+        .filter(transfer => factionId === null || transfer.sourceFactionId === factionId || transfer.targetFactionId === factionId)
+        .map(transferResourceRow);
+      break;
     case 'research': {
       const research = researchResourceRows(snapshot);
       return resourceEnvelope(result, resource, research.rows, query, {
@@ -366,6 +486,68 @@ const buildIntelResource = (result, resource, url) => {
   }
 
   return resourceEnvelope(result, resource, items, query);
+};
+
+const TECH_RESOURCES = new Set([
+  'tech-tree', 'tech-path', 'tech-search', 'tech-milestones',
+  'tech-matrix', 'tech-opportunities', 'research-queue'
+]);
+
+const techIntelResource = (pathName) => {
+  const direct = pathName.match(/^\/api\/([^/]+)$/);
+  const grouped = pathName.match(/^\/api\/intel\/([^/]+)$/);
+  const resource = grouped?.[1] || direct?.[1];
+  return resource && TECH_RESOURCES.has(resource) ? resource : null;
+};
+
+const buildTechIntelResource = (result, resource, snapshot, url) => {
+  const row = result.row;
+  const identity = resultIdentity(result);
+  const observerId = Number(url.searchParams.get('observer') || row.observer_faction_id || 4712);
+  const mode = result.mode || row.visibility || 'player';
+
+  let projection;
+  if (resource === 'tech-tree') {
+    const category = String(url.searchParams.get('category') || 'all').toLowerCase();
+    if (!CATEGORIES.has(category)) {
+      return jsonResponse({ success: false, error: `Invalid category '${category}'.` }, 400);
+    }
+    const includeEffects = String(url.searchParams.get('includeEffects') ?? 'true') !== 'false';
+    projection = buildTechTreeProjection(snapshot, mode, observerId, { category, includeEffects });
+  } else if (resource === 'tech-path') {
+    const rawTarget = url.searchParams.get('target');
+    if (!rawTarget) {
+      return jsonResponse({ success: false, error: 'Missing required query parameter: target.' }, 400);
+    }
+    const targets = rawTarget.split(',').map(t => t.trim()).filter(Boolean);
+    projection = buildTechPathProjection(snapshot, mode, observerId, targets);
+  } else if (resource === 'tech-search') {
+    const query = url.searchParams.get('q') || '';
+    if (!query) {
+      return jsonResponse({ success: false, error: 'Missing required query parameter: q.' }, 400);
+    }
+    projection = buildTechSearchProjection(snapshot, mode, observerId, query);
+  } else if (resource === 'tech-milestones') {
+    const category = url.searchParams.get('category') ? String(url.searchParams.get('category')).toLowerCase() : null;
+    projection = buildTechMilestonesProjection(snapshot, mode, observerId, category);
+  } else if (resource === 'tech-matrix') {
+    projection = buildTechMatrixProjection(snapshot, mode, observerId);
+  } else if (resource === 'tech-opportunities') {
+    projection = buildTechOpportunitiesProjection(snapshot, mode, observerId);
+  } else {
+    projection = buildResearchQueueProjection(snapshot, mode, observerId);
+  }
+
+  return {
+    success: true,
+    source: 'supabase',
+    ...identity,
+    difficulty: row.difficulty,
+    observerFaction: { id: observerId, name: row.observer_faction_name || null },
+    intelMode: mode,
+    visibility: row.visibility || mode,
+    ...projection
+  };
 };
 
 export default {
@@ -428,11 +610,7 @@ export default {
           }
           return jsonResponse({
             success: true,
-            snapshotId: snapshot.snapshotId,
-            saveHash: snapshot.saveHash,
-            saveModifiedAt: snapshot.saveModifiedAt,
-            generatedAt: snapshot.generatedAt,
-            campaignDate: snapshot.metadata?.gameTimeString || null,
+            ...resultIdentity(result),
             briefing: snapshot.missionControlBriefing,
             data: snapshot,
             source: 'supabase'
@@ -457,6 +635,17 @@ export default {
         saveModifiedAt: snapshot.saveModifiedAt || null,
         generatedAt: snapshot.generatedAt || null,
         campaignDate: snapshot.metadata?.gameTimeString || null,
+        saveFilename: snapshot.metadata?.fileName || null,
+        isLatestSnapshot: true,
+        activeSnapshot: {
+          snapshotId: snapshot.snapshotId || null,
+          saveHash: snapshot.saveHash || null,
+          saveModifiedAt: snapshot.saveModifiedAt || null,
+          saveFilename: snapshot.metadata?.fileName || null,
+          campaignDate: snapshot.metadata?.gameTimeString || null,
+          generatedAt: snapshot.generatedAt || null,
+          isLatestSnapshot: true
+        },
         briefing: snapshot.missionControlBriefing || null,
         data: snapshot,
         source: 'static'
@@ -484,6 +673,32 @@ export default {
       }
     }
 
+    // Tech Tree Intelligence endpoints. These project the normalized dependency
+    // graph embedded in the published snapshot and answer research-path, search,
+    // milestone and queue questions against the live save state.
+    const techResource = techIntelResource(url.pathname);
+    if (techResource) {
+      if (!isSupabaseConfigured) {
+        return jsonResponse({ success: false, error: 'Hosted Supabase is not configured.' }, 503);
+      }
+      try {
+        const result = await fetchFromSupabase(env, observerId, mode);
+        if (!result.found) {
+          return jsonResponse({ success: false, error: result.error }, result.status);
+        }
+        const snapshot = result.snapshot || {};
+        if (!snapshot.techTree) {
+          return jsonResponse({
+            success: false,
+            error: 'The published snapshot predates the tech-tree payload. Republish the latest save to enable tech-tree endpoints.'
+          }, 503);
+        }
+        return jsonResponse(buildTechIntelResource(result, techResource, snapshot, url));
+      } catch (err) {
+        return jsonResponse({ success: false, error: err.message }, 500);
+      }
+    }
+
     // Handle snapshot & refresh routes
     if (url.pathname === '/api/snapshot' || url.pathname === '/api/refresh') {
       if (isSupabaseConfigured) {
@@ -494,11 +709,7 @@ export default {
           }
           return jsonResponse({
             success: true,
-            snapshotId: result.snapshot?.snapshotId || null,
-            saveHash: result.snapshot?.saveHash || null,
-            saveModifiedAt: result.snapshot?.saveModifiedAt || null,
-            generatedAt: result.snapshot?.generatedAt || null,
-            campaignDate: result.snapshot?.metadata?.gameTimeString || null,
+            ...resultIdentity(result),
             data: result.snapshot,
             source: 'supabase'
           });
@@ -559,11 +770,7 @@ export default {
             success: true,
             markdown,
             source: 'supabase',
-            snapshotId: result.snapshot?.snapshotId || null,
-            saveHash: result.snapshot?.saveHash || null,
-            saveModifiedAt: result.snapshot?.saveModifiedAt || result.row.save_last_modified || null,
-            generatedAt: result.snapshot?.generatedAt || result.row.generated_at || null,
-            campaignDate: result.row.game_time || null,
+            ...resultIdentity(result),
             observerFaction: {
               id: result.row.observer_faction_id,
               name: result.row.observer_faction_name
