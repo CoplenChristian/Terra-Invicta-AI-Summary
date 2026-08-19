@@ -390,5 +390,67 @@ $utilHeaders = @{
 }
 $out += New-MarkdownTable -Title "Utility Modules" -Rows $utils -Columns $utilColumns -HeaderMap $utilHeaders
 
+# Particle Weapons
+$particles = Get-TIJson "TIParticleWeaponTemplate.json"
+$particleColumns = @(
+    "friendlyName","dataName","requiredProjectName",
+    "mount","crew",
+    "baseWeaponMass_tons","cooldown_s","efficiency",
+    "shotPower_MJ","targetingRange_km","pivotRange_deg",
+    "isPointDefenseTargetable"
+)
+$particleHeaders = @{
+    friendlyName        = "Component"
+    dataName            = "Template ID"
+    requiredProjectName = "Required Project"
+    mount               = "Mount"
+    crew                = "Crew"
+    baseWeaponMass_tons = "Weapon Mass (t)"
+    cooldown_s          = "Cooldown (s)"
+    efficiency          = "Eff."
+    shotPower_MJ        = "Shot Power (MJ)"
+    targetingRange_km   = "Range (km)"
+    pivotRange_deg      = "Pivot (deg)"
+    isPointDefenseTargetable = "PD Target?"
+}
+$out += New-MarkdownTable -Title "Particle Weapons" -Rows $particles -Columns $particleColumns -HeaderMap $particleHeaders
+
+# Plasma Weapons
+$plasmas = Get-TIJson "TIPlasmaWeaponTemplate.json"
+$plasmaColumns = @(
+    "friendlyName","dataName","requiredProjectName",
+    "mount","crew",
+    "baseWeaponMass_tons","cooldown_s","efficiency",
+    "damage_MJ","targetingRange_km","pivotRange_deg",
+    "muzzleVelocity_kps",
+    "isPointDefenseTargetable"
+)
+$plasmaHeaders = @{
+    friendlyName        = "Component"
+    dataName            = "Template ID"
+    requiredProjectName = "Required Project"
+    mount               = "Mount"
+    crew                = "Crew"
+    baseWeaponMass_tons = "Weapon Mass (t)"
+    cooldown_s          = "Cooldown (s)"
+    efficiency          = "Eff."
+    damage_MJ           = "Damage (MJ)"
+    targetingRange_km   = "Range (km)"
+    pivotRange_deg      = "Pivot (deg)"
+    muzzleVelocity_kps  = "Muzzle Vel. (km/s)"
+    isPointDefenseTargetable = "PD Target?"
+}
+$out += New-MarkdownTable -Title "Plasma Weapons" -Rows $plasmas -Columns $plasmaColumns -HeaderMap $plasmaHeaders
+
+# Propellant Tanks
+$out += "## Propellant Tanks"
+$out += ""
+$out += "Note: Raw JSON template for propellant tanks is not available. The user has confirmed that all tanks are effectively identical in capacity."
+$out += ""
+$out += "| Component | Propellant Capacity | Tank Mass | Notes |"
+$out += "|---|---|---|---|"
+$out += "| Standard Propellant Tank | 100 tons | 0 tons | Universal standard size (structural mass negligible/included in hull) |"
+$out += ""
+
 $out | Set-Content -Path $outPath -Encoding UTF8
 Write-Host "Wrote $outPath"

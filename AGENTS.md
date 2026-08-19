@@ -86,6 +86,15 @@ npm run push:dry-run
 npm run push:supabase
 ```
 
+The publisher keeps the newest three saves as full-fidelity rows by default.
+After the compact strategic-history row is stored successfully, it prunes older
+full snapshot rows while retaining their reduced history records. Override the
+full-save window with `SUPABASE_FULL_SNAPSHOT_RETENTION` or the Node option
+`--full-snapshot-retention <count>`. Publishing an explicitly older historical
+save never prunes newer saves. Full rows retain the tech tree by default so the
+hosted technology endpoints remain available; use `--omit-tech-tree` only when
+an intentionally reduced row is more important than hosted tech queries.
+
 **Publish an explicit historical save:**
 ```powershell
 .\push_latest_to_supabase.ps1 -Save "F:\Documents\My Games\TerraInvicta\Saves\initiative.gz"
@@ -97,6 +106,11 @@ The hosted worker exposes focused, shallow JSON endpoints for external analysis
 tools. They default to Player Intel; add `mode=omniscient` for the intentionally
 published Omniscient view. `observer=4712` is the Initiative observer.
 
+The machine-readable discovery index is available at `/api/intel` and is linked
+from the v2 dashboard. It lists every focused endpoint without filters so an
+external analysis client can discover the route surface before adding query
+parameters.
+
 ```text
 /api/intel/summary?observer=4712&mode=omniscient
 /api/intel/factions?observer=4712&mode=omniscient
@@ -104,17 +118,63 @@ published Omniscient view. `observer=4712` is the Initiative observer.
 /api/intel/councilors?observer=4712&mode=omniscient&faction=4712
 /api/intel/habs?observer=4712&mode=omniscient&faction=4717
 /api/intel/hab-sites?observer=4712&mode=omniscient&faction=4717
-/api/intel/mining?observer=4712&mode=omniscient&body=Ceres
+/api/intel/mining?observer=4712&mode=omniscient&body=Ceres&sort=water
 /api/intel/fleets?observer=4712&mode=omniscient&faction=4717
 /api/intel/ships?observer=4712&mode=omniscient&faction=4717
+/api/intel/resources?observer=4712&mode=omniscient&faction=4712
+/api/intel/hab-modules?observer=4712&mode=omniscient&faction=4712
+/api/intel/shipyards?observer=4712&mode=omniscient&faction=4712
+/api/intel/shipyard-queues?observer=4712&mode=omniscient&faction=4712
+/api/intel/arrivals?observer=4712&mode=omniscient
+/api/intel/transfers?observer=4712&mode=omniscient&destination=Mars
 /api/intel/research?observer=4712&mode=omniscient
 /api/intel/capabilities?observer=4712&mode=omniscient
 /api/intel/alien?observer=4712&mode=omniscient
+/api/intel/logistics?observer=4712&mode=omniscient
+/api/intel/construction?observer=4712&mode=omniscient
+/api/intel/ship-designs?observer=4712&mode=omniscient&faction=4712
+/api/intel/theaters?observer=4712&mode=omniscient
+/api/intel/infrastructure?observer=4712&mode=omniscient&body=Mars
+/api/intel/alien-threat?observer=4712&mode=omniscient
+/api/intel/delta?observer=4712&mode=omniscient
+/api/intel/mobility?observer=4712&fleet=<fleetId>
+/api/intel/production-plan?observer=4712&mode=omniscient&design=playerShipTemplate584&quantity=4 (or POST)
+/api/intel/body-status?body=Mars&observer=4712&mode=omniscient
 ```
+
+**Tech Tree Intelligence endpoints** expose the observer faction's research state
+as a normalized dependency graph parsed from the game templates and overlaid
+with the current save's completion/progress. They answer path, search, milestone
+and queue questions against the live save. Enemy project state respects the
+selected mode (`player` = only legitimately known; `omniscient` = full).
+
+```text
+/api/intel/tech-tree?observer=4712&mode=omniscient&category=weapons&includeEffects=true
+/api/intel/tech-path?observer=4712&mode=omniscient&target=Project_RailCannonMk3
+/api/intel/tech-path?observer=4712&mode=omniscient&target=Battlecruiser,Project_RailCannonMk3
+/api/intel/tech-search?observer=4712&mode=omniscient&q=battlecruiser
+/api/intel/tech-milestones?observer=4712&mode=omniscient&category=ship_hull
+/api/intel/tech-matrix?observer=4712&mode=omniscient
+/api/intel/tech-opportunities?observer=4712&mode=omniscient
+/api/intel/research-queue?observer=4712&mode=omniscient
+```
+
+- `tech-tree` `category` accepts `all|weapons|drives|ships|habs|intel|economy|xenology|computing|materials|energy|social|military|space|life|information|general`.
+- `tech-path` `target` accepts one or more comma-separated internal IDs or search
+  names and deduplicates shared prerequisites; remaining cost accounts for current progress.
+- `tech-search` `q` matches display names, internal IDs, unlock names, and effect IDs.
+- `tech-milestones` `category` filters unlock classes
+  (`ship_hull|weapon|missile|point_defense|drive|reactor|battery|radiator|armor|utility|hab_module|mine|shipyard|intel_capability`).
+- These endpoints require a snapshot published with the `techTree` payload
+  (re-publish after upgrading); otherwise they return a 503 guidance error.
 
 Each resource response includes save metadata, `intelMode`, `visibility`, a
 `count`, and a focused `items` array (or focused top-level summary fields).
 Resource endpoints also accept `faction` / `factionId` and `body` filters.
+Every data response also includes `snapshotId`, `saveFilename`,
+`saveModifiedAt`, `campaignDate`, and `isLatestSnapshot`. Hosted responses are
+read against the active campaign pointer with no cache so focused endpoints
+cannot silently mix saves; a pointer/row mismatch returns a visible 409 error.
 
 ### 3. Environment Variables & Security Rules
 

@@ -1,6 +1,7 @@
 const templateLoader = require('./templateLoader');
 const opportunityScorer = require('./opportunityScorer');
 const spaceTheater = require('./spaceTheater');
+const techGraph = require('../shared/techGraph.mjs');
 
 class SnapshotBuilder {
   constructor() {
@@ -73,6 +74,21 @@ class SnapshotBuilder {
     const habModulesById = new Map();
     for (const module of rawHabModules) {
       if (module.ID?.value) habModulesById.set(module.ID.value, module);
+    }
+
+    const habModuleLocationById = new Map();
+    for (const sector of rawHabSectors) {
+      const sectorId = sector.ID?.value || null;
+      const habId = sector.hab?.value || null;
+      for (const moduleRef of (Array.isArray(sector.habModules) ? sector.habModules : [])) {
+        const moduleId = moduleRef?.value ?? moduleRef;
+        if (moduleId) habModuleLocationById.set(moduleId, { sectorId, habId, sector });
+      }
+    }
+
+    const fleetsById = new Map();
+    for (const fleet of rawFleets) {
+      if (fleet.ID?.value) fleetsById.set(fleet.ID.value, fleet);
     }
 
     const bodyDistanceAUById = new Map();
@@ -186,7 +202,10 @@ class SnapshotBuilder {
       const unrest = n.unrest || 0;
       const nukes = n.nuclearWeapons || n.nukes || (n.historyNuclearWeapons?.length ? n.historyNuclearWeapons[n.historyNuclearWeapons.length - 1] : 0);
       const armies = Array.isArray(n.armies) ? n.armies.length : 0;
-      const mc = n.missionControl || 0;
+      const currentMissionControl = Number(n.missionControl);
+      const mc = Number.isFinite(currentMissionControl)
+        ? currentMissionControl
+        : this.lastFiniteNumber(n.historyMissionControl);
 
       nations.push({
         ID: nationId,
@@ -380,7 +399,16 @@ class SnapshotBuilder {
             combatPower: power,
             combatPowerSource: power === null ? 'not present in save' : 'save',
             weaponLoadout,
-            dominantWeaponType: this.getDominantWeaponType(weaponLoadout)
+            dominantWeaponType: this.getDominantWeaponType(weaponLoadout),
+            currentDeltaVKps: this.firstNumericOrNull(sObj.currentDeltaV_kps),
+            currentMaxDeltaVKps: this.firstNumericOrNull(sObj.currentMaxDeltaV_kps),
+            cruiseAccelerationMps2: this.firstNumericOrNull(sObj.cruiseAcceleration_mps2),
+            combatAccelerationMps2: this.firstNumericOrNull(sObj.combatAcceleration_mps2),
+            currentMassKg: this.firstNumericOrNull(sObj.currentMass_kg),
+            missionControlConsumption: this.firstNumericOrNull(sObj.missionControlConsumption),
+            propellantTons: this.firstNumericOrNull(sObj.propellant_tons),
+            armor: this.normalizeArmor(sObj.armor),
+            armorMedian: this.medianArmor(sObj.armor)
           });
         }
       }
@@ -388,8 +416,13 @@ class SnapshotBuilder {
       const orbitBody = this.resolveOrbitBody(f, bodiesById, orbitsById);
       const theater = spaceTheater.theaterForBody(orbitBody);
       const orbitBodyDistanceAU = this.resolveOrbitBodyDistanceAU(f, bodiesById, orbitsById, bodyDistanceAUById);
-      const trajectory = Array.isArray(f.currentTrajectory) && f.currentTrajectory.length > 0 ? f.currentTrajectory[0] : null;
+      const trajectory = f.trajectory || null;
       const fleetWeaponBreakdown = this.summarizeWeaponCounts(fleetWeaponCounts);
+      const destination = this.resolveFleetDestination(trajectory, fleetsById, habsById, bodiesById, orbitsById);
+      const arrivalDate = this.dateValueToIso(trajectory?.arrivalTime || null);
+      const shipDeltaVs = shipList.map(ship => ship.currentDeltaVKps).filter(value => value !== null);
+      const shipCombatAccelerations = shipList.map(ship => ship.combatAccelerationMps2).filter(value => value !== null);
+      const shipArmorMedians = shipList.map(ship => ship.armorMedian).filter(value => value !== null);
 
       fleets.push({
         ID: fleetId,
@@ -411,9 +444,20 @@ class SnapshotBuilder {
         insideSaturnOrbit: saturnOrbitDistanceAU !== null && orbitBodyDistanceAU !== null
           ? orbitBodyDistanceAU <= saturnOrbitDistanceAU + 0.25
           : null,
-        mission: trajectory?.GoalType || (f.inCombat ? 'Combat' : 'Stationary / Patrol'),
-        destination: trajectory?.GoalTarget ? 'In Transit' : orbitBody,
-        arrivalDate: trajectory?.Date || null,
+        mission: f.currentOperations?.[0]?.templateName || (f.inCombat ? 'Combat' : (trajectory ? 'Transfer' : 'Stationary / Patrol')),
+        destination: destination.name,
+        destinationType: destination.type,
+        destinationId: destination.id,
+        arrivalDate,
+        currentOrders: {
+          mission: f.currentOperations?.[0]?.templateName || null,
+          destination: destination.name,
+          arrivalDate,
+          inTransit: Boolean(trajectory)
+        },
+        lowestDeltaVKps: shipDeltaVs.length ? Math.min(...shipDeltaVs) : null,
+        lowestCombatAccelerationMps2: shipCombatAccelerations.length ? Math.min(...shipCombatAccelerations) : null,
+        armorMedian: shipArmorMedians.length ? this.roundNumber(shipArmorMedians.reduce((sum, value) => sum + value, 0) / shipArmorMedians.length, 2) : null,
         inCombat: !!f.inCombat
       });
     }
@@ -518,9 +562,19 @@ class SnapshotBuilder {
         ? Math.max(0, Math.round(((moduleCompletion - gameDate) / 86400000) * 10) / 10)
         : constructionStatus === 'operational' ? 0 : null;
 
+      // Join the site's mining profile from the game templates. The save omits
+      // it on unclaimed sites, but it is what determines yields -- without it
+      // an expansion-target ranking cannot tell a genuinely rich site from one
+      // of the ~95 that share the generic Common Carbonaceous profile.
+      const siteTemplate = templateLoader.templates.habSites.get(hs.templateName)
+        || templateLoader.templates.habSites.get(hs.displayName)
+        || null;
+
       habSites.push({
         ID: siteId,
         displayName: hs.displayName,
+        miningProfileName: siteTemplate?.miningProfileName || null,
+        siteDensity: siteTemplate?.Density ?? null,
         parentBodyId,
         parentBodyName,
         spaceTheaterKey: theater.key,
@@ -551,6 +605,150 @@ class SnapshotBuilder {
         resourceRateUnit: 'per day'
       });
     }
+
+    // Process hab module detail and shipyard queues. The save stores these as
+    // separate sector/module records, so join them back to the owning hab
+    // before exposing them through the focused API.
+    const habModules = [];
+    const shipyardCountByFaction = new Map();
+    const habModuleRowsById = new Map();
+    for (const module of rawHabModules) {
+      const moduleId = module.ID?.value;
+      if (!moduleId || module.archived) continue;
+      const template = module.templateName
+        ? templateLoader.templates.habModules.get(module.templateName)
+        : null;
+      if (!module.templateName && !module.displayName) continue;
+
+      const location = habModuleLocationById.get(moduleId);
+      const hab = location?.habId ? habs.find(item => item.ID === location.habId) : null;
+      const factionId = hab?.factionId || null;
+      const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Unknown') : null;
+      const constructionStatus = this.moduleConstructionStatus(module);
+      const moduleType = this.classifyHabModule(module, template);
+      const completionDate = this.dateValueToIso(module.completionDate);
+      const startBuildDate = this.dateValueToIso(module.startBuildDate);
+      const moduleCompletion = completionDate ? new Date(completionDate) : null;
+      const gameDate = saveData.gameTimeString ? new Date(saveData.gameTimeString) : null;
+      const daysRemaining = constructionStatus === 'building' && gameDate && moduleCompletion &&
+        !Number.isNaN(gameDate.getTime()) && !Number.isNaN(moduleCompletion.getTime())
+        ? Math.max(0, this.roundNumber((moduleCompletion - gameDate) / 86400000, 1))
+        : constructionStatus === 'operational' ? 0 : null;
+      const isShipyard = template?.allowsShipConstruction === true ||
+        (Array.isArray(template?.specialRules) && template.specialRules.includes('Shipyard'));
+
+      const row = {
+        id: moduleId,
+        name: template?.friendlyName || module.displayName || module.templateName,
+        templateName: module.templateName || null,
+        moduleType,
+        factionId,
+        factionName,
+        habId: hab?.ID || null,
+        habName: hab?.displayName || null,
+        habTier: hab?.tier || null,
+        sectorId: location?.sectorId || null,
+        sectorNumber: location?.sector?.sectorNum ?? null,
+        orbitBody: hab?.orbitBody || null,
+        spaceTheaterKey: hab?.spaceTheaterKey || null,
+        spaceTheaterName: hab?.spaceTheaterName || null,
+        isShipyard,
+        constructionStatus,
+        constructionCompleted: module.constructionCompleted ?? null,
+        powered: module.powered ?? null,
+        destroyed: module.destroyed ?? false,
+        decommissioning: module.decommissioning ?? false,
+        completionDate,
+        startBuildDate,
+        buildDurationDays: module.baseBuildDuration_days ?? template?.buildTime_Days ?? null,
+        daysRemaining,
+        buildCost: this.normalizeResourceCosts(module.buildCost)
+      };
+      habModules.push(row);
+      habModuleRowsById.set(moduleId, row);
+      if (isShipyard && constructionStatus !== 'destroyed' && factionId) {
+        shipyardCountByFaction.set(factionId, (shipyardCountByFaction.get(factionId) || 0) + 1);
+      }
+    }
+
+    const shipyardQueues = [];
+    for (const rawFaction of rawFactions) {
+      const factionId = rawFaction.ID?.value;
+      if (!factionId || !Array.isArray(rawFaction.nShipyardQueues)) continue;
+      for (const queue of rawFaction.nShipyardQueues) {
+        const shipyardId = queue?.Key?.value ?? queue?.Key ?? null;
+        const shipyard = shipyardId ? habModuleRowsById.get(shipyardId) : null;
+        const entries = Array.isArray(queue?.Value) ? queue.Value : [];
+        entries.forEach((entry, index) => {
+          const startDate = this.dateValueToIso(entry?.startDate);
+          const daysToCompletion = this.firstNumericOrNull(entry?.daysToCompletion);
+          const completionDate = startDate && daysToCompletion !== null
+            ? new Date(new Date(startDate).getTime() + daysToCompletion * 86400000).toISOString()
+            : null;
+          shipyardQueues.push({
+            id: `${factionId}:${shipyardId || 'unknown'}:${index}`,
+            factionId,
+            factionName: factionsById.get(factionId)?.displayName || 'Unknown',
+            shipyardId,
+            shipyardName: shipyard?.name || null,
+            habId: shipyard?.habId || null,
+            habName: shipyard?.habName || null,
+            orbitBody: shipyard?.orbitBody || null,
+            spaceTheaterKey: shipyard?.spaceTheaterKey || null,
+            spaceTheaterName: shipyard?.spaceTheaterName || null,
+            queuePosition: index + 1,
+            design: entry?.shipDesignTemplateName || null,
+            hull: entry?.shipDesignTemplateName || null,
+            isRefit: entry?.isRefit === true,
+            costPaid: entry?.costPaid === true,
+            constructionStatus: entry?.costPaid === true ? 'building' : 'queued',
+            startDate,
+            completionDate,
+            daysToCompletion,
+            resourcesCost: this.normalizeResourceCosts(entry?.resourcesCost),
+            resourcesRefund: this.normalizeResourceCosts(entry?.resourcesRefund),
+            aiGoalId: entry?.AIFactionGoal?.value || null,
+            aiGoalType: entry?.AIFactionGoal?.$type || null
+          });
+        });
+      }
+    }
+
+    const resourceTransfers = [];
+    for (const rawFaction of rawFactions) {
+      const sourceFactionId = rawFaction.ID?.value;
+      const transferList = Array.isArray(rawFaction.dailyResourceTransfers)
+        ? rawFaction.dailyResourceTransfers
+        : [];
+      transferList.forEach((entry, index) => {
+        const targetFactionId = entry?.targetFaction?.value || null;
+        const resource = entry?.transfer?.resource || null;
+        const amountPerDay = this.firstNumericOrNull(entry?.transfer?.value);
+        if (!sourceFactionId || !targetFactionId || !resource || amountPerDay === null) return;
+        resourceTransfers.push({
+          id: `${sourceFactionId}:${targetFactionId}:${resource}:${index}`,
+          sourceFactionId,
+          sourceFactionName: factionsById.get(sourceFactionId)?.displayName || 'Unknown',
+          targetFactionId,
+          targetFactionName: factionsById.get(targetFactionId)?.displayName || 'Unknown',
+          resource,
+          amountPerDay: this.roundNumber(amountPerDay, 3),
+          expiry: this.dateValueToIso(entry?.expiry)
+        });
+      });
+    }
+
+    const shipyardStations = habModules
+      .filter(module => module.isShipyard)
+      .map(station => {
+        const queue = shipyardQueues.filter(item => item.shipyardId === station.id);
+        return {
+          ...station,
+          queueCount: queue.length,
+          currentConstruction: queue[0] || null,
+          queue
+        };
+      });
 
     // Process Global Research
     const globalResearchObj = rawGlobalResearch[0] || {};
@@ -657,6 +855,11 @@ class SnapshotBuilder {
       const totalPop = fNations.reduce((acc, n) => acc + (n.population || 0), 0);
       const totalBoost = fNations.reduce((acc, n) => acc + (n.boost || 0), 0);
       const totalResearch = fNations.reduce((acc, n) => acc + (n.research || 0), 0);
+      const recent30DayFlow = this.summarizeRecentTransactions(f.Transactions, saveData.gameTimeString, 30);
+      const projectedMonthlyIncome = this.scaleResourceMap(f.cachedYearlyRevenue, 1 / 12);
+      const monthlyIncome = recent30DayFlow.income;
+      const monthlyExpense = recent30DayFlow.expense;
+      const monthlyNet = recent30DayFlow.net;
 
       // Power Score Components (0-100 scales)
       const earthEconomyScore = Math.min(100, Math.round((totalGdp / 40e12) * 100));
@@ -697,22 +900,30 @@ class SnapshotBuilder {
         };
       });
 
+      const fShipDesigns = (Array.isArray(f.shipDesigns) ? f.shipDesigns : []).map(d => ({
+        ...d,
+        factionId,
+        factionName: f.displayName
+      }));
+
       factions.push({
         ID: factionId,
         displayName: f.displayName,
         templateName: f.templateName,
         color: this.getFactionColor(f.displayName),
-        resources: {
-          Money: Math.round(f.resources?.Money || 0),
-          Influence: Math.round(f.resources?.Influence || 0),
-          Operations: Math.round(f.resources?.Operations || 0),
-          Boost: Math.round((f.resources?.Boost || 0) * 10) / 10,
-          Water: Math.round(f.resources?.Water || 0),
-          Volatiles: Math.round(f.resources?.Volatiles || 0),
-          Metals: Math.round(f.resources?.Metals || 0),
-          NobleMetals: Math.round(f.resources?.NobleMetals || 0),
-          Fissiles: Math.round(f.resources?.Fissiles || 0),
-          Exotics: Math.round(f.resources?.Exotics || 0)
+        resources: this.roundResourceMap(f.resources),
+        monthlyIncome,
+        monthlyExpense,
+        monthlyNet,
+        financials: {
+          monthlyIncome,
+          monthlyExpense,
+          monthlyNet,
+          monthlyFlowSource: 'last 30 days of the save transaction ledger',
+          isRecurringEstimate: false,
+          projectedMonthlyIncome,
+          projectedMonthlyIncomeSource: 'cachedYearlyRevenue / 12',
+          recent30Days: recent30DayFlow
         },
         assessedAlienHateOfMe: f.assessedAlienHateOfMe ?? 0,
         controlPointsCount: fCPs.length,
@@ -740,8 +951,33 @@ class SnapshotBuilder {
         },
         completedProjects,
         currentProjects,
-        availableProjectsCount: availableProjects.length
+        availableProjectsCount: availableProjects.length,
+        availableProjectNames: availableProjects,
+        missionControlUsage: Number.isFinite(Number(f.missionControlUsage)) ? Number(f.missionControlUsage) : null,
+        // Mission Control capacity is useful context, but it is deliberately
+        // kept separate from missionControlUsage because only used MC affects
+        // the alien minimum-hate floor.
+        missionControlCapacity: fNations.length
+          ? fNations.reduce((sum, nation) => sum + (Number(nation.missionControl) || 0), 0)
+          : null,
+        shipyardCount: shipyardCountByFaction.get(factionId) || 0,
+        shipyardQueueCount: shipyardQueues.filter(queue => queue.factionId === factionId).length,
+        shipDesigns: fShipDesigns
       });
+    }
+
+    const allShipDesigns = [];
+    for (const f of rawFactions) {
+      const factionId = f.ID?.value;
+      if (!factionId) continue;
+      const rawDesigns = Array.isArray(f.shipDesigns) ? f.shipDesigns : [];
+      for (const d of rawDesigns) {
+        allShipDesigns.push({
+          ...d,
+          factionId,
+          factionName: f.displayName
+        });
+      }
     }
 
     // Active Xenoforming and Alien Facilities
@@ -853,6 +1089,11 @@ class SnapshotBuilder {
       fleets,
       habs,
       habSites,
+      habModules,
+      shipyardStations,
+      shipyardQueues,
+      shipDesigns: allShipDesigns,
+      resourceTransfers,
       globalResearch: {
         finishedTechsNames,
         activeSlots: activeGlobalSlots
@@ -867,13 +1108,274 @@ class SnapshotBuilder {
         skywatchRule: templateLoader.config.intelligenceRules?.spaceAssets?.innerSystemDescription || null,
         deepSystemSkywatchRule: templateLoader.config.intelligenceRules?.spaceAssets?.deepSystemDescription || null
       },
-      techMatrix
+      techMatrix,
+      shipHullStats: this.buildShipHullStats(),
+      techTree: this.buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions)
     };
+  }
+
+  // Per-hull Mission Control cost, construction tier and base build time,
+  // read from the installed game templates. Mission Control is the sole input
+  // to the alien minimum-hate floor, so a flat per-design guess makes any
+  // "what does this fleet do to my hate" projection wrong. Exposed on the
+  // snapshot because shared/intelResources.mjs must stay free of runtime
+  // (fs-backed) imports so the hosted worker can import it too.
+  buildShipHullStats() {
+    const stats = {};
+    for (const hull of templateLoader.templates.shipHulls.values()) {
+      const name = hull.dataName;
+      if (!name) continue;
+      stats[name] = {
+        missionControl: hull.missionControl ?? null,
+        constructionTier: hull.consTier ?? null,
+        baseConstructionTimeDays: hull.baseConstructionTime_days ?? null,
+        noseHardpoints: hull.noseHardpoints ?? null,
+        hullHardpoints: hull.hullHardpoints ?? null,
+        structuralIntegrity: hull.structuralIntegrity ?? null,
+        requiredProjectName: hull.requiredProjectName || null
+      };
+    }
+    return stats;
+  }
+
+  // Builds the normalized tech dependency graph from game templates and the
+  // save's research state. This is attached to every snapshot (raw and filtered)
+  // so the local dashboard and the hosted worker can serve the tech-tree,
+  // tech-path, tech-search, tech-milestones and research-queue endpoints from
+  // the exact same graph. Enemy project status is resolved per-observer/mode at
+  // projection time, not here.
+  buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions) {
+    const effects = {};
+    for (const [id, eff] of templateLoader.templates.effects) effects[id] = eff;
+
+    const globalActive = activeGlobalSlots.map(slot => ({
+      techId: slot.techId,
+      accumulatedResearch: slot.accumulatedResearch,
+      totalCost: slot.totalCost,
+      contributors: slot.contributions
+    }));
+
+    const templatesAdapter = {
+      allTechs: () => Array.from(templateLoader.templates.techs.values()),
+      allProjects: () => Array.from(templateLoader.templates.projects.values()),
+      componentsForProject: (projectId) =>
+        templateLoader.getComponentsForRequiredProject(projectId)
+    };
+
+    const rawGraph = techGraph.buildTechGraph(templatesAdapter, {
+      techs: templatesAdapter.allTechs(),
+      projects: templatesAdapter.allProjects(),
+      effects,
+      componentByEffect: {}
+    });
+
+    // Per-faction status overlay is stored keyed by faction id so any observer
+    // / mode combination can be projected later without rebuilding the graph.
+    const factionStatus = {};
+    for (const faction of factions) {
+      factionStatus[faction.ID] = {
+        completedProjects: faction.completedProjects,
+        availableProjectNames: faction.availableProjectNames,
+        currentProjects: faction.currentProjects.map(p => ({
+          projectId: p.projectId,
+          accumulatedResearch: p.accumulatedResearch,
+          totalCost: p.totalCost
+        }))
+      };
+    }
+
+    return {
+      nodes: rawGraph.nodes,
+      categories: rawGraph.categories,
+      unlockClasses: rawGraph.unlockClasses,
+      finishedTechsNames,
+      globalActive,
+      factionStatus,
+      counts: { techs: rawGraph.techs.length, projects: rawGraph.projects.length }
+    };
+  }
+
+  roundNumber(value, decimals = 2) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    const factor = 10 ** decimals;
+    return Math.round(number * factor) / factor;
+  }
+
+  firstNumericOrNull(...values) {
+    for (const value of values) {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+    }
+    return null;
+  }
+
+  roundResourceMap(resources = {}) {
+    const names = [
+      'Money', 'Influence', 'Operations', 'Research', 'Projects', 'Boost',
+      'MissionControl', 'Water', 'Volatiles', 'Metals', 'NobleMetals',
+      'Fissiles', 'Antimatter', 'Exotics'
+    ];
+    return Object.fromEntries(names.map(name => {
+      const value = Number(resources?.[name] || 0);
+      const decimals = ['Boost', 'Water', 'Volatiles', 'Metals', 'NobleMetals', 'Fissiles', 'Antimatter', 'Exotics'].includes(name)
+        ? 2
+        : 0;
+      return [name, Number.isFinite(value) ? this.roundNumber(value, decimals) : 0];
+    }));
+  }
+
+  scaleResourceMap(resources = {}, scale = 1) {
+    const rounded = this.roundResourceMap(resources);
+    return Object.fromEntries(Object.entries(rounded).map(([name, value]) => [
+      name,
+      this.roundNumber(Number(value) * scale, name === 'Money' || name === 'Influence' || name === 'Operations' || name === 'Research' || name === 'Projects' || name === 'MissionControl' ? 2 : 3)
+    ]));
+  }
+
+  dateValueToIso(value) {
+    if (!value) return null;
+    if (typeof value === 'string') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) || parsed.getUTCFullYear() <= 1 ? null : parsed.toISOString();
+    }
+    if (typeof value !== 'object') return null;
+    const year = Number(value.year);
+    const month = Number(value.month);
+    const day = Number(value.day);
+    if (!Number.isFinite(year) || year <= 1 || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+    const parsed = new Date(Date.UTC(
+      year,
+      Math.max(0, month - 1),
+      day,
+      Number(value.hour) || 0,
+      Number(value.minute) || 0,
+      Number(value.second) || 0,
+      Number(value.millisecond) || 0
+    ));
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+
+  normalizeResourceCosts(value) {
+    const costs = Array.isArray(value?.resourceCosts)
+      ? value.resourceCosts
+      : Array.isArray(value) ? value : [];
+    return costs.map(cost => ({
+      resource: cost?.resource || cost?.Resource || null,
+      amount: this.firstNumericOrNull(cost?.value, cost?.Amount, cost?.amount)
+    })).filter(cost => cost.resource && cost.amount !== null);
+  }
+
+  summarizeRecentTransactions(transactions, gameTimeString, days = 30) {
+    const gameDate = gameTimeString ? new Date(gameTimeString) : null;
+    const endMs = gameDate && !Number.isNaN(gameDate.getTime()) ? gameDate.getTime() : null;
+    const startMs = endMs === null ? null : endMs - days * 86400000;
+    const income = {};
+    const expense = {};
+    if (!transactions || typeof transactions !== 'object') {
+      return { windowDays: days, income, expense, net: {}, source: 'save transaction ledger' };
+    }
+    for (const entries of Object.values(transactions)) {
+      const list = Array.isArray(entries) ? entries : [];
+      for (const entry of list) {
+        const date = this.dateValueToIso(entry?.Date || entry?.date);
+        const dateMs = date ? new Date(date).getTime() : null;
+        if (startMs !== null && (dateMs === null || dateMs < startMs || dateMs > endMs)) continue;
+        const resource = entry?.Resource || entry?.resource;
+        const amount = Number(entry?.Amount ?? entry?.amount);
+        if (!resource || !Number.isFinite(amount)) continue;
+        const bucket = amount >= 0 ? income : expense;
+        bucket[resource] = (bucket[resource] || 0) + Math.abs(amount);
+      }
+    }
+    const resources = new Set([...Object.keys(income), ...Object.keys(expense)]);
+    const net = {};
+    for (const resource of resources) {
+      net[resource] = (income[resource] || 0) - (expense[resource] || 0);
+    }
+    return {
+      windowDays: days,
+      income: this.scaleResourceMap(income, 1),
+      expense: this.scaleResourceMap(expense, 1),
+      net: this.scaleResourceMap(net, 1),
+      source: 'save transaction ledger'
+    };
+  }
+
+  moduleConstructionStatus(module) {
+    if (module?.destroyed) return 'destroyed';
+    if (module?.decommissioning) return 'decommissioning';
+    if (module?.constructionCompleted) return 'operational';
+    return 'building';
+  }
+
+  classifyHabModule(module, template) {
+    const name = `${module?.templateName || ''} ${module?.displayName || ''} ${template?.friendlyName || ''}`;
+    if (template?.mine === true || /mine|mining/i.test(name)) return 'mine';
+    if (template?.allowsShipConstruction === true || template?.specialRules?.includes?.('Shipyard')) return 'shipyard';
+    if (/defen[sc]|weapon|laser|missile|railgun|coilgun|plasma/i.test(name)) return 'defensive';
+    if (/research|academy|science|laboratory/i.test(name)) return 'research';
+    if (/construction|industrial|fabricator|constructionyard/i.test(name)) return 'construction';
+    return 'support';
+  }
+
+  normalizeArmor(armor) {
+    if (!armor || typeof armor !== 'object') return null;
+    return Object.fromEntries(Object.entries(armor).map(([face, values]) => ({
+      face,
+      values
+    })).filter(entry => entry.values && typeof entry.values === 'object')
+      .map(entry => [entry.face, {
+        current: this.firstNumericOrNull(entry.values.armorValue),
+        maximum: this.firstNumericOrNull(entry.values.maxArmor),
+        chippedPct: this.firstNumericOrNull(entry.values.chippedPct)
+      }]));
+  }
+
+  medianArmor(armor) {
+    if (!armor || typeof armor !== 'object') return null;
+    const values = Object.values(armor)
+      .map(face => Number(face?.armorValue))
+      .filter(value => Number.isFinite(value));
+    if (!values.length) return null;
+    values.sort((a, b) => a - b);
+    const middle = Math.floor(values.length / 2);
+    return this.roundNumber(values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2, 2);
+  }
+
+  resolveFleetDestination(trajectory, fleetsById, habsById, bodiesById, orbitsById) {
+    if (!trajectory) return { type: 'stationary', id: null, name: null };
+    const fleetId = trajectory.destinationFleet?.value || null;
+    if (fleetId) {
+      const fleet = fleetsById.get(fleetId);
+      return { type: 'fleet', id: fleetId, name: fleet?.displayName || `Fleet ${fleetId}` };
+    }
+    const stationId = trajectory.destinationStation?.value || null;
+    if (stationId) {
+      const hab = habsById.get(stationId);
+      return { type: 'hab', id: stationId, name: hab?.displayName || `Hab ${stationId}` };
+    }
+    const orbitId = trajectory.destinationOrbit?.value || trajectory.destination?.value || null;
+    if (orbitId && orbitsById.has(orbitId)) {
+      const orbit = orbitsById.get(orbitId);
+      const bodyId = orbit.barycenter?.value || null;
+      const body = bodyId ? bodiesById.get(bodyId) : null;
+      return { type: 'orbit', id: orbitId, name: body ? `${body.displayName} orbit` : `Orbit ${orbitId}` };
+    }
+    return { type: 'transfer', id: null, name: 'In Transit' };
   }
 
   firstNumeric(...values) {
     for (const value of values) {
       if (typeof value === 'number' && Number.isFinite(value)) return value;
+    }
+    return 0;
+  }
+
+  lastFiniteNumber(values) {
+    if (!Array.isArray(values)) return 0;
+    for (let index = values.length - 1; index >= 0; index -= 1) {
+      const value = Number(values[index]);
+      if (Number.isFinite(value)) return value;
     }
     return 0;
   }

@@ -50,6 +50,14 @@ fs.copyFileSync(
   path.join(projectRoot, 'site', 'worker', 'index.js'),
   path.join(distDir, 'server', 'index.js')
 );
+// Sites executes dist/server/index.js as the worker entrypoint. Keep the
+// worker's ESM dependencies beside that entrypoint because some deployments
+// do not expose sibling directories under dist during module resolution.
+fs.cpSync(path.join(projectRoot, 'shared'), path.join(distDir, 'server', 'shared'), { recursive: true });
+const workerPath = path.join(distDir, 'server', 'index.js');
+const workerSource = fs.readFileSync(workerPath, 'utf8')
+  .replaceAll("from '../shared/", "from './shared/");
+fs.writeFileSync(workerPath, workerSource);
 
 const writeJson = (name, value) => {
   fs.writeFileSync(path.join(dataDir, name), JSON.stringify(value));
@@ -112,19 +120,33 @@ const embeddedAssetPaths = [
   'data/effects.json',
   'v2/index.html',
   'v2/css/mission-control.css',
+  'v2/js/shared.js',
   'v2/js/mission-control.js',
   'v2/js/components/detail-panel.js',
   'v2/js/components/world-map.js',
   'v2/data/world.geojson',
   'v2/js/components/faction-intel.js',
   'v2/js/components/intelligence-library.js',
-  'v2/js/components/executive-boards.js'
+  'v2/js/components/executive-boards.js',
+  'v2/js/components/alien-hate-economics.js'
 ];
+const factionLogoDir = path.join(distDir, 'v2', 'assets', 'faction-logos');
+if (fs.existsSync(factionLogoDir)) {
+  for (const fileName of fs.readdirSync(factionLogoDir).filter(name => name.toLowerCase().endsWith('.png')).sort()) {
+    embeddedAssetPaths.push(`v2/assets/faction-logos/${fileName}`);
+  }
+}
 const embeddedAssets = Object.fromEntries(
-  embeddedAssetPaths.map(relativePath => [
-    relativePath,
-    fs.readFileSync(path.join(distDir, relativePath), 'utf8')
-  ])
+  embeddedAssetPaths.map(relativePath => {
+    const absolutePath = path.join(distDir, relativePath);
+    if (relativePath.toLowerCase().endsWith('.png')) {
+      return [relativePath, {
+        encoding: 'base64',
+        data: fs.readFileSync(absolutePath).toString('base64')
+      }];
+    }
+    return [relativePath, fs.readFileSync(absolutePath, 'utf8')];
+  })
 );
 fs.writeFileSync(
   path.join(distDir, 'server', 'static-assets.js'),

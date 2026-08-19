@@ -1,42 +1,9 @@
 (function () {
   'use strict';
 
-  function escapeHtml(value) {
-    return String(value === null || value === undefined ? '' : value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function numberValue(value) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  function formatNumber(value, decimals) {
-    const parsed = numberValue(value);
-    if (parsed === null) return 'UNAVAILABLE';
-    return parsed.toLocaleString(undefined, {
-      maximumFractionDigits: decimals === undefined ? 0 : decimals,
-      minimumFractionDigits: decimals || 0
-    });
-  }
-
-  function formatGdp(value) {
-    const parsed = numberValue(value);
-    return parsed === null ? 'UNAVAILABLE' : `$${(parsed / 1e12).toFixed(1)}T`;
-  }
-
-  function formatDelta(change) {
-    if (!change) return '—';
-    const delta = numberValue(change.delta);
-    if (delta === null) return '—';
-    if (Math.abs(delta) >= 1e9) return `${delta > 0 ? '+' : ''}${(delta / 1e9).toFixed(1)}B`;
-    if (Math.abs(delta) >= 1e6) return `${delta > 0 ? '+' : ''}${(delta / 1e6).toFixed(1)}M`;
-    return `${delta > 0 ? '+' : ''}${formatNumber(delta, Math.abs(delta) < 10 && !Number.isInteger(delta) ? 1 : 0)}`;
-  }
+  const {
+    escapeHtml, numberValue, formatNumber, formatGdp, formatDelta, bodyKey, bodyLabel, factionLogoImgHtml
+  } = window.MissionControlShared || {};
 
   function factionById(snapshot, id) {
     return (Array.isArray(snapshot?.factions) ? snapshot.factions : [])
@@ -90,7 +57,10 @@
       const observerClass = String(faction.ID) === String(snapshot.observerFactionId) ? ' class="is-observer"' : '';
       const hateLabel = hate === undefined || hate === null ? 'UNAVAILABLE' : formatNumber(hate, 1);
       const shipDeltaClass = shipDelta?.delta > 0 ? 'is-positive' : shipDelta?.delta < 0 ? 'is-negative' : '';
-      return `<tr${observerClass} data-board-faction-id="${escapeHtml(faction.ID)}"><th scope="row">${escapeHtml(faction.displayName)}<small class="mc-board-secondary">R&amp;D ${escapeHtml(formatNumber(faction.totalResearch))} · HATE ${escapeHtml(hateLabel)}</small></th><td>${formatNumber(faction.controlPointsCount)}</td><td>${formatGdp(faction.totalGdp)}<small class="mc-board-secondary">GDP Δ ${escapeHtml(formatDelta(gdpDelta))}</small></td><td>${formatNumber(faction.habsCount)} / ${formatNumber(faction.shipsCount)}<small class="mc-board-secondary ${shipDeltaClass}">Δ ships ${escapeHtml(formatDelta(shipDelta))}</small></td><td><span class="mc-status-chip">${escapeHtml(factionStatus(faction, factions))}</span></td></tr>`;
+      const logoHtml = factionLogoImgHtml
+        ? factionLogoImgHtml(faction, { className: 'faction-logo faction-logo--ledger' })
+        : '';
+      return `<tr${observerClass} data-board-faction-id="${escapeHtml(faction.ID)}"><th scope="row"><span class="mc-board-faction-head">${logoHtml}<span>${escapeHtml(faction.displayName)}<small class="mc-board-secondary">R&amp;D ${escapeHtml(formatNumber(faction.totalResearch))} · HATE ${escapeHtml(hateLabel)}</small></span></span></th><td>${formatNumber(faction.controlPointsCount)}</td><td>${formatGdp(faction.totalGdp)}<small class="mc-board-secondary">GDP Δ ${escapeHtml(formatDelta(gdpDelta))}</small></td><td>${formatNumber(faction.habsCount)} / ${formatNumber(faction.shipsCount)}<small class="mc-board-secondary ${shipDeltaClass}">Δ ships ${escapeHtml(formatDelta(shipDelta))}</small></td><td><span class="mc-status-chip">${escapeHtml(factionStatus(faction, factions))}</span></td></tr>`;
     }).join('');
     container.innerHTML = `<div class="mc-board-note"><strong>LEDGER / CURRENT STATE</strong><span>R&amp;D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate.</span></div>${tableShell(['Faction', 'CP', 'GDP', 'Habs / Ships', 'Strategic status'], rows, 'No faction records are available.', 'ledger')}`;
   }
@@ -180,24 +150,6 @@
       ['Alien intelligence', capabilities.canDetectAlienOperations ? 'OPERATIONS ONLINE' : 'OPERATIONS LOCKED', intelActive]
     ];
     container.innerHTML = `<div class="mc-board-note"><strong>CAPABILITY / DISCRETE SIGNALS</strong><span>Ranks compare current save values. Weapon and technology labels are evidence from the parsed save, not a combat-power estimate.</span></div>${tableShell(['Capability', 'Current signal', 'Evidence / consequence'], rows.map(row => `<tr><th scope="row">${escapeHtml(row[0])}</th><td>${escapeHtml(row[1])}</td><td>${escapeHtml(row[2])}</td></tr>`).join(''), 'No capability records are available.')}`;
-  }
-
-  function bodyKey(body, explicitKey) {
-    if (explicitKey) return explicitKey;
-    const value = String(body || '').trim().replace(/^\d+\s+/, '').replace(/\s+/g, ' ').toLowerCase();
-    const bodyMap = {
-      sol: 'sol', earth: 'sol', luna: 'sol', mars: 'mars', mercury: 'inner', venus: 'inner',
-      ceres: 'belt', psyche: 'belt', klotho: 'belt', pallas: 'belt', vesta: 'belt', bienor: 'belt',
-      jupiter: 'jupiter', io: 'jupiter', europa: 'jupiter', ganymede: 'jupiter', callisto: 'jupiter', leda: 'jupiter',
-      saturn: 'saturn', titan: 'saturn', rhea: 'saturn', dione: 'saturn', tethys: 'saturn', mimas: 'saturn', enceladus: 'saturn', iapetus: 'saturn',
-      uranus: 'outer', miranda: 'outer', neptune: 'outer', triton: 'outer', pluto: 'outer', charon: 'outer', quaoar: 'outer', sedna: 'outer', eris: 'outer', makemake: 'outer', haumea: 'outer'
-    };
-    return bodyMap[value] || 'unassigned';
-  }
-
-  function bodyLabel(body) {
-    const value = String(body || '').trim();
-    return value.replace(/^\d+\s+/, '') || 'Unknown body';
   }
 
   function weaponCount(fleet, role) {
@@ -346,15 +298,44 @@
     container.innerHTML = `<div class="mc-board-note"><strong>EARTH / ACTION QUEUE</strong><span>Postures are triage labels derived from executive control, unrest, and the selected priority faction. They are not completed operations.</span></div>${tableShell(['Nation', 'Executive', 'CP composition', 'GDP', 'Research', 'Cohesion', 'Unrest', 'Armies', 'Recommended posture'], rows, 'No nation holdings are available.')}`;
   }
 
+  // Project availability is a monthly RNG roll, not a queue position: a project
+  // whose maxUnlockChance is below 100 can never be scheduled, only waited on.
+  // Over half the projects in the game are capped this way, so a plan that
+  // treats them as orderable steps will desync from the real project list.
+  function availabilityChip(node) {
+    const availability = node && node.availability;
+    if (!availability || !availability.known) {
+      return '<span class="mc-status-chip">UNKNOWN</span>';
+    }
+    const wait = availability.expectedMonths === null || availability.expectedMonths === undefined
+      ? ''
+      : ' · ~' + availability.expectedMonths + ' mo';
+    if (availability.schedulable) {
+      return '<span class="mc-status-chip is-safe">GUARANTEED' + escapeHtml(wait) + '</span>';
+    }
+    return '<span class="mc-status-chip is-warning">RNG ' + escapeHtml(String(availability.maxPercent))
+      + '% CAP' + escapeHtml(wait) + '</span>';
+  }
+
+  function availabilityByProjectId(snapshot) {
+    const nodes = (snapshot.techTree && snapshot.techTree.nodes) || [];
+    const map = new Map();
+    for (const node of nodes) {
+      if (node && node.availability) map.set(node.id, node);
+    }
+    return map;
+  }
+
   function renderResearchWatchlist(container, snapshot) {
     if (!container) return;
     const observer = factionById(snapshot, snapshot.observerFactionId) || {};
     const observerLabel = observer.displayName || snapshot.observerFactionName || 'SELECTED FACTION';
     const slots = snapshot.globalResearch?.activeSlots || [];
     const globalRows = slots.map(slot => `<tr><th scope="row">${escapeHtml(slot.displayName || slot.techId)}</th><td>${escapeHtml(formatNumber(slot.percent, 1))}%</td><td>${escapeHtml(slot.leadFactionName || 'UNAVAILABLE')}</td><td>${escapeHtml(formatNumber(slot.leadContribution, 0))}</td></tr>`).join('');
-    const projectRows = (observer.currentProjects || []).slice().sort((a, b) => (numberValue(b.percent) || 0) - (numberValue(a.percent) || 0)).map(project => `<tr><th scope="row">${escapeHtml(project.displayName || project.projectId)}</th><td>${escapeHtml(formatNumber(project.percent, 1))}%</td><td>${escapeHtml(formatNumber(project.accumulatedResearch, 0))} / ${escapeHtml(formatNumber(project.totalCost, 0))}</td></tr>`).join('');
+    const availability = availabilityByProjectId(snapshot);
+    const projectRows = (observer.currentProjects || []).slice().sort((a, b) => (numberValue(b.percent) || 0) - (numberValue(a.percent) || 0)).map(project => `<tr><th scope="row">${escapeHtml(project.displayName || project.projectId)}</th><td>${escapeHtml(formatNumber(project.percent, 1))}%</td><td>${escapeHtml(formatNumber(project.accumulatedResearch, 0))} / ${escapeHtml(formatNumber(project.totalCost, 0))}</td><td>${availabilityChip(availability.get(project.projectId))}</td></tr>`).join('');
     const gaps = Object.values(snapshot.capabilities?.details || {}).filter(detail => detail.active === false).slice(0, 6).map(detail => `<tr><th scope="row">${escapeHtml(detail.name)}</th><td><span class="mc-status-chip is-danger">LOCKED</span></td><td>${escapeHtml(detail.requiredDisplayName || detail.requiredProject || 'Requirement unavailable')}</td></tr>`).join('');
-    container.innerHTML = `<div class="mc-watch-grid"><section><div class="mc-board-subheading"><strong>GLOBAL RESEARCH</strong><span>Active slots</span></div>${tableShell(['Project', 'Progress', 'Current lead', 'Lead output'], globalRows, 'No global research slots are available.')}</section><section><div class="mc-board-subheading"><strong>${escapeHtml(observerLabel.toUpperCase())} PROJECTS</strong><span>Active projects</span></div>${tableShell(['Project', 'Progress', 'Accumulated / cost'], projectRows, 'No active faction projects are available.')}</section><section><div class="mc-board-subheading"><strong>INTELLIGENCE GAPS</strong><span>Capability unlocks</span></div>${tableShell(['Capability', 'Status', 'Unlock / consequence'], gaps, 'No locked capability records are available.')}</section></div>`;
+    container.innerHTML = `<div class="mc-watch-grid"><section><div class="mc-board-subheading"><strong>GLOBAL RESEARCH</strong><span>Active slots</span></div>${tableShell(['Project', 'Progress', 'Current lead', 'Lead output'], globalRows, 'No global research slots are available.')}</section><section><div class="mc-board-subheading"><strong>${escapeHtml(observerLabel.toUpperCase())} PROJECTS</strong><span>Active projects</span></div>${tableShell(['Project', 'Progress', 'Accumulated / cost', 'Availability'], projectRows, 'No active faction projects are available.')}</section><section><div class="mc-board-subheading"><strong>INTELLIGENCE GAPS</strong><span>Capability unlocks</span></div>${tableShell(['Capability', 'Status', 'Unlock / consequence'], gaps, 'No locked capability records are available.')}</section></div>`;
   }
 
   window.MissionControlBoards = {

@@ -1,42 +1,13 @@
 (function exposeIntelligenceLibrary(global) {
   'use strict';
 
-  function escapeHtml(value) {
-    return String(value === null || value === undefined ? '' : value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
+  const {
+    escapeHtml, numberValue, number, money, matchesSpaceTheater, factionLogoImgHtml
+  } = global.MissionControlShared || {};
 
   function display(value, fallback) {
     if (value === null || value === undefined || value === '') return fallback || '—';
     return escapeHtml(value);
-  }
-
-  function numberValue(value) {
-    if (value === null || value === undefined || value === '') return null;
-    var parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  function number(value, decimals) {
-    var parsed = numberValue(value);
-    if (parsed === null) return '—';
-    return parsed.toLocaleString(undefined, {
-      minimumFractionDigits: decimals || 0,
-      maximumFractionDigits: decimals || 0
-    });
-  }
-
-  function money(value) {
-    var parsed = numberValue(value);
-    if (parsed === null) return '—';
-    if (Math.abs(parsed) >= 1000000000000) return '$' + (parsed / 1000000000000).toFixed(2) + 'T';
-    if (Math.abs(parsed) >= 1000000000) return '$' + (parsed / 1000000000).toFixed(1) + 'B';
-    if (Math.abs(parsed) >= 1000000) return '$' + (parsed / 1000000).toFixed(1) + 'M';
-    return '$' + number(parsed, 0);
   }
 
   function factionMap(snapshot) {
@@ -56,6 +27,17 @@
   function factionColorById(id, factions) {
     var faction = factions[String(id)];
     return faction && faction.color ? faction.color : 'var(--accent)';
+  }
+
+  function factionLabelHtml(factionOrId, factions, displayText) {
+    var faction = factionOrId && typeof factionOrId === 'object' ? factionOrId : factions[String(factionOrId)];
+    var logoHtml = faction && factionLogoImgHtml
+      ? factionLogoImgHtml(faction, { className: 'faction-logo faction-logo--table' })
+      : '';
+    var color = faction && faction.color ? faction.color : factionColorById(factionOrId, factions);
+    var name = displayText || (faction ? faction.displayName : factionNameById(factionOrId, factions));
+    var fallback = logoHtml ? '' : '<i style="background:' + escapeHtml(color) + '"></i>';
+    return '<span class="intel-library-faction-name' + (logoHtml ? ' has-faction-logo' : '') + '">' + (logoHtml || fallback) + display(name) + '</span>';
   }
 
   function activeCouncilors(snapshot) {
@@ -189,7 +171,7 @@
       var factionCouncilors = councilors.filter(function factionCouncilor(councilor) { return String(councilor.factionId) === String(faction.ID); });
       var alienCouncilors = factionCouncilors.filter(function alienCouncilor(councilor) { return councilor.isAlien; }).length;
       return row([
-        '<span class="intel-library-faction-name"><i style="background:' + escapeHtml(faction.color || 'var(--accent)') + '"></i>' + display(faction.displayName) + '</span>',
+        factionLabelHtml(faction, factions),
         display(relation.hateOfUs, 'UNAVAILABLE'),
         display(relation.ourHate, 'UNAVAILABLE'),
         power === null || power === undefined ? 'UNAVAILABLE' : number(power, 0) + '/100',
@@ -232,7 +214,7 @@
       var status = councilor.isTurnedMole ? 'TURNED MOLE' : (councilor.status || 'ACTIVE');
       return row([
         display(councilor.displayName),
-        '<span style="color:' + escapeHtml(factionColorById(councilor.factionId, factions)) + '">' + display(councilor.factionName || factionNameById(councilor.factionId, factions)) + '</span>',
+        factionLabelHtml(councilor.factionId, factions, councilor.factionName || factionNameById(councilor.factionId, factions)),
         display(councilor.typeTemplateName),
         display(councilor.locationName),
         display(status),
@@ -282,20 +264,6 @@
 
   function resourceCell(value) {
     return number(value, 2);
-  }
-
-  function matchesSpaceTheater(body, theaterKey, explicitTheaterKey) {
-    if (!theaterKey) return true;
-    if (explicitTheaterKey) return String(explicitTheaterKey) === String(theaterKey);
-    var value = String(body || '').trim().replace(/^\d+\s+/, '').replace(/\s+/g, ' ').toLowerCase();
-    var bodyMap = {
-      sol: 'sol', earth: 'sol', luna: 'sol', mars: 'mars', mercury: 'inner', venus: 'inner',
-      ceres: 'belt', psyche: 'belt', klotho: 'belt', pallas: 'belt', vesta: 'belt', bienor: 'belt',
-      jupiter: 'jupiter', io: 'jupiter', europa: 'jupiter', ganymede: 'jupiter', callisto: 'jupiter', leda: 'jupiter',
-      saturn: 'saturn', titan: 'saturn', rhea: 'saturn', dione: 'saturn', tethys: 'saturn', mimas: 'saturn', enceladus: 'saturn', iapetus: 'saturn',
-      uranus: 'outer', miranda: 'outer', neptune: 'outer', triton: 'outer', pluto: 'outer', charon: 'outer', quaoar: 'outer', sedna: 'outer', eris: 'outer', makemake: 'outer', haumea: 'outer'
-    };
-    return (bodyMap[value] || 'unassigned') === theaterKey;
   }
 
   function renderMining(snapshot, spaceTheater) {

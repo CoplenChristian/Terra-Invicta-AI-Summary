@@ -57,6 +57,7 @@ test('enhanced mode exposes raw telemetry with explicit labeling', () => {
 
   const alienHate = filtered.factions.find(f => f.ID === 4713).alienHate;
   assert.strictEqual(alienHate.actual, 90);
+  assert.strictEqual(filtered.alienHateEconomics.actualAlienHate, 5);
 });
 
 test('omniscient mode returns the full raw picture', () => {
@@ -71,6 +72,7 @@ test('omniscient mode returns the full raw picture', () => {
   const servantsHate = filtered.factions.find(f => f.ID === 4713).alienHate;
   assert.strictEqual(servantsHate.actual, 90);
   assert.strictEqual(servantsHate.visibility, 'raw_save_only');
+  assert.strictEqual(filtered.alienHateEconomics.actualAlienHate, 5);
 });
 
 test('capabilities resolve from finished projects', () => {
@@ -86,8 +88,24 @@ test('player faction rows hide assessed alien hate while enhanced exposes it', (
   assert.strictEqual(playerServants.assessedAlienHateOfMe, undefined, 'raw hate stripped');
   assert.strictEqual(playerServants.alienHate.actual, null);
   assert.ok(playerServants.alienHate.visibleEstimate.length > 0, 'pips estimate present');
+  assert.strictEqual(player.alienHateEconomics.actualAlienHate, null);
+  assert.strictEqual(player.alienHateEconomics.visibleHateEstimate, '■□□□□');
 
   const enhanced = intelligenceFilter.applyFilter(rawFor(), 'enhanced', OBSERVER);
   const enhancedServants = enhanced.factions.find(f => f.ID === 4713);
   assert.strictEqual(enhancedServants.alienHate.actual, 90);
+});
+
+test('player mode keeps new logistics projections private to the observer faction', () => {
+  const player = intelligenceFilter.applyFilter(rawFor(), 'player', OBSERVER);
+  const enemy = player.factions.find(f => f.ID === 4713);
+  const own = player.factions.find(f => f.ID === OBSERVER);
+
+  assert.ok(own.resources, 'own resource balances remain available');
+  assert.strictEqual(enemy.resources, null, 'enemy resource balances are not exposed');
+  assert.strictEqual(enemy.financials, null, 'enemy financial telemetry is not exposed');
+  assert.strictEqual(enemy.shipyardCount, null, 'enemy shipyard counts are not exposed');
+
+  const enhanced = intelligenceFilter.applyFilter(rawFor(), 'enhanced', OBSERVER);
+  assert.ok(enhanced.factions.find(f => f.ID === 4713).resources, 'enhanced mode exposes the explicit telemetry view');
 });

@@ -76,6 +76,11 @@ Use this when instructing an AI to design or evaluate Terra Invicta ships so it 
 ### 🔧 Updated Terra Invicta Ship Design Prompt
 
 You are designing a **Terra Invicta** ship.
+
+**Data Setup:**
+Before starting, ensure the unlocked component list is up to date by running:
+`powershell -ExecutionPolicy Bypass -File .\Get-UnlockedShipComponents.ps1`
+
 Use the snippet pack with the **latest date** to detect what research the Resistance has already unlocked and decide which components are available.
 
 The following four files contain rules, data, and formulas you MUST use for every Terra Invicta ship design or evaluation:
@@ -101,6 +106,41 @@ The purpose of this ship is:
 
 ---
 
+### 🤖 AI Design Rules (STRICT DOCTRINE)
+
+You must follow these rules to avoid common design pitfalls. Violating them is a failure.
+
+1.  **Enforce Archetypes**:
+    *   Do **not** design generic "good stats" ships.
+    *   You MUST select a specific **Archetype** from `current_meta.md` (e.g., "Missile Monitor", "Beam Battlecruiser") that fits the mission.
+    *   State the chosen archetype clearly at the start.
+
+2.  **PD Baseline (The "40mm + Ion" Rule)**:
+    *   "Ion PD" means a dedicated **Point Defense** module (e.g., `PointDefenseIonBattery`), NOT a main offensive Ion Cannon.
+    *   Every combat ship must have at least 1x 40mm Autocannon AND 1x Ion PD (if slots allow).
+
+3.  **Design Workflow (Order of Operations)**:
+    *   **Step 1**: Select Weapons & Role (Archetype).
+    *   **Step 2**: Select Utilities (Magazines, ECM, etc.).
+    *   **Step 3**: Select Armor (Material & Thickness).
+    *   **Step 4**: Select Drive & Fuel to meet Accel/Delta-V targets.
+    *   *Do not pick a drive first and then squeeze weapons in.*
+
+4.  **Fuel & Drive Logic**:
+    *   **Fuel Fraction**: Must be ≤ 50%. If > 50%, the design is invalid; reduce fuel or change drive.
+    *   **Drive Selection**: Use the drive recommended for the Archetype in `current_meta.md` (e.g., Orion for Monitors, Burner for early DDs).
+
+5.  **Calculation Rigor (NO LAZY UNKNOWNS)**:
+    *   You **MUST** compute all derived stats (Armor Mass, Delta-V, Accel, Power Margin).
+    *   **Never** write `UNKNOWN` just because you didn't finish the math.
+    *   `UNKNOWN` is **only** permitted if a specific input value (e.g., a component's base mass) is completely missing from the provided files.
+
+6.  **Tech-Adaptive Hull Selection**:
+    *   Check for the **"Mid-Game Power Spike"** (Tin Droplet Radiator + Terawatt Gas Core/Orion Drive).
+    *   If these are unlocked, **prefer Cruiser/Battlecruiser archetypes** (e.g., Beam BC) over early-game hulls (Monitor/DD), as heavier hulls become viable and superior.
+
+---
+
 ### 📚 Design obligations (MANDATORY)
 
 When producing a ship design, you must use the following files **conditionally based on your specific task**:
@@ -123,13 +163,9 @@ When producing a ship design, you must use the following files **conditionally b
 
 3. **Use ONLY components listed in `ship_components_tables.md`** OR the filtered CSV
 
-   * Mass
-   * Thrust
-   * Exhaust velocity
-   * Efficiency
-   * Power draw
-   * Propellant type
-   * Any other stats needed for calculations
+   * **CRITICAL TECH CHECK**: Verify the specific **Faction Project** (e.g., `Project_SolidCoreFissionReactorI`) is unlocked in the snippet pack. **Do not** assume a component is available just because the parent Global Tech is done.
+   * Mass & Power: Read table columns carefully. `Mass (t/GW)` is often present for reactors/radiators.
+   * Thrust, Exhaust velocity, Efficiency, Propellant type.
 
 4. **Follow the design procedure and output structure defined in `ship_design_guide.md`**
    Including explicitly listing:
@@ -139,6 +175,8 @@ When producing a ship design, you must use the following files **conditionally b
    * Armor material + exact **front / sides / rear** thickness
    * Exact **weapons per hardpoint**
    * Exact **utilities per slot**
+     * **Batteries**: Select exactly **ONE** battery module (unless hull forces multiple utility slots and you have space). Do not stack multiple battery types.
+     * **Radiators**: Select exactly **ONE** radiator type. Do not mix radiator types (e.g. no Tin Droplet + Nanotube).
    * Calculated final stats:
 
      * Accel (cruise & combat)
@@ -177,8 +215,13 @@ You are allowed to show your reasoning and describe what you're doing step by st
 
   * Write `UNKNOWN` for that specific number,
   * And briefly state **which input is missing** (e.g. “armor material tons per point is not specified in the provided files”).
+  * **SELF-CORRECTION CHECK**: Before writing UNKNOWN, double-check the table headers. For example, `Mass (t)` and `Mass (t/GW)` ARE present for reactors and radiators. Do not miss them.
 
 * Prefer choosing **components and configurations where all required stats are available**, so you can compute **all values exactly**.
+
+* **Armor Mass & Geometry**:
+  * You **MUST** use the hull geometry (Length/Width) from the Hulls table and the armor density/heat from the Armor table to calculate mass via `math.md`.
+  * Do **not** claim this data is missing. It is in `ship_components_tables.md`.
 
 * **Exception for canonical rules explicitly stated here:**
 
@@ -186,6 +229,11 @@ You are allowed to show your reasoning and describe what you're doing step by st
 
     * **Each propellant tank holds exactly 100 tons of propellant.**
       Use this when computing FuelMass and Δv, unless one of the four files directly contradicts it.
+
+    * **Propellant Tank Structural Mass is 0 tons.**
+      Treat the empty mass of the tank itself as negligible (included in hull mass).
+      Therefore: `FuelMass = Count * 100`, and `TankComponentMass = 0`.
+      This allows you to compute DryMass and WetMass exactly.
 
 ---
 
@@ -347,5 +395,7 @@ Turn rate heuristic:
 
 You must treat **every requirement above** as a **binding system-level instruction**, not as user preference.
 They override all other model behavior.
+
+
 
 

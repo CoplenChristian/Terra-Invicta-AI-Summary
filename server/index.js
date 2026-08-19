@@ -1,6 +1,10 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+// Supabase-backed routes (strategic history) need SUPABASE_URL and a key.
+// The publish script already loads .env; the server did not, so those routes
+// reported "not configured" locally even when credentials were present.
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const { spawn } = require('child_process');
 const saveParser = require('./saveParser');
 const snapshotBuilder = require('./snapshotBuilder');
@@ -11,7 +15,15 @@ const briefingGenerator = require('./briefingGenerator');
 const snapshotIdentity = require('./snapshotIdentity');
 const snapshotDelta = require('./snapshotDelta');
 const intelResources = require('./intelResources');
+const techIntel = require('./techIntel');
 const requestValidation = require('./requestValidation');
+const SupabaseAdapter = require('./supabaseAdapter');
+const { buildStrategicSnapshot } = require('../shared/strategicSnapshot.mjs');
+const { buildStrategicDelta } = require('../shared/strategicDelta.mjs');
+
+// Compact strategic history lives in Supabase, not on disk, so these routes
+// degrade cleanly to a clear message when Supabase is not configured locally.
+const strategicHistory = new SupabaseAdapter();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -141,10 +153,21 @@ function assertObserver(rawSnapshot, observerId) {
   return requestValidation.assertKnownObserver(rawSnapshot, observerId);
 }
 
-function responseIdentity(snapshot) {
+function responseIdentity(snapshot, isLatestSnapshot = true) {
+  const identity = snapshotIdentity.readSnapshotIdentity(snapshot);
+  const saveFilename = snapshot?.metadata?.fileName || null;
+  const campaignDate = snapshot?.metadata?.gameTimeString || null;
   return {
-    ...snapshotIdentity.readSnapshotIdentity(snapshot),
-    campaignDate: snapshot?.metadata?.gameTimeString || null
+    ...identity,
+    saveFilename,
+    campaignDate,
+    isLatestSnapshot,
+    activeSnapshot: {
+      ...identity,
+      saveFilename,
+      campaignDate,
+      isLatestSnapshot
+    }
   };
 }
 
@@ -159,6 +182,9 @@ app.get('/api/runtime', (req, res) => {
     canPublish: true,
     canRefresh: true,
     supportedModes: ['player', 'enhanced', 'omniscient'],
+    // Local runs parse the save directly, so every faction is selectable.
+    // null means "no restriction"; the hosted worker returns a real list.
+    availableObservers: null,
     defaultMode: 'player',
     source: 'express'
   });
@@ -262,7 +288,7 @@ app.get('/api/snapshot', (req, res) => {
     assertObserver(rawSnapshot, observerId);
     const filtered = buildFilteredSnapshot(rawSnapshot, mode, observerId);
 
-    res.json({ success: true, ...responseIdentity(filtered), data: filtered });
+    res.json({ success: true, ...responseIdentity(filtered, targetPath === null), data: filtered });
   } catch (err) {
     console.error('[Server] Error generating snapshot:', err);
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
@@ -283,7 +309,7 @@ app.post('/api/refresh', (req, res) => {
     assertObserver(rawSnapshot, observerId);
     const filtered = buildFilteredSnapshot(rawSnapshot, mode, observerId);
 
-    res.json({ success: true, ...responseIdentity(filtered), message: 'Latest save refreshed successfully.', data: filtered });
+    res.json({ success: true, ...responseIdentity(filtered, targetPath === null), message: 'Latest save refreshed successfully.', data: filtered });
   } catch (err) {
     console.error('[Server] Refresh failed:', err);
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
@@ -307,7 +333,7 @@ app.get('/api/export', (req, res) => {
       ? exportGenerator.generateFullMarkdownReport(filtered)
       : exportGenerator.generateCompactSnapshot(filtered);
 
-    res.json({ success: true, ...responseIdentity(filtered), markdown });
+    res.json({ success: true, ...responseIdentity(filtered, targetPath === null), markdown });
   } catch (err) {
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
   }
@@ -315,6 +341,39 @@ app.get('/api/export', (req, res) => {
 
 // Focused resource routes keep local Express and the hosted worker on the
 // same shallow contract for external analysis clients and lazy library views.
+app.get(['/api/intel', '/api/intel/'], (req, res) => {
+  const payload = {
+    success: true,
+    source: 'local',
+    name: 'Terra Invicta Strategic Intelligence API',
+    endpoints: intelResources.INTEL_ENDPOINT_INDEX,
+    examples: intelResources.INTEL_ENDPOINT_EXAMPLES,
+    query: {
+      observer: 'Observer faction ID, e.g. 4712',
+      mode: 'player | enhanced | omniscient',
+      faction: 'Optional faction ID filter',
+      body: 'Optional body/theater filter'
+    }
+  };
+  if (req.query.format === 'json' || String(req.get('accept') || '').includes('application/json')) {
+    res.set('Cache-Control', 'no-store').json(payload);
+    return;
+  }
+
+  const links = Object.entries(payload.endpoints).map(([name, endpoint]) => {
+    const query = payload.examples[name] || '?observer=4712&mode=omniscient';
+    const href = `${endpoint}${query}`.replace(/&/g, '&amp;');
+    return `<li><span>${name}</span><a href="${href}">${endpoint}${query}</a></li>`;
+  }).join('');
+  res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="index,follow">
+<title>Terra Invicta Strategic Intelligence API</title></head><body>
+<main><h1>Terra Invicta Strategic Intelligence API</h1>
+<p>Machine-readable endpoint directory. Add or change observer, mode, faction, body, and other filters as needed.</p>
+<p><a href="/api/intel?format=json">JSON index</a> · <a href="/v2/">Command Center</a></p>
+<ul>${links}</ul></main></body></html>`);
+});
+
 app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
   if (!intelResources.SUPPORTED_RESOURCES.has(req.params.resource)) return next();
 
@@ -328,7 +387,30 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
       'faction filter'
     );
     const body = requestValidation.parseBodyQuery(req.query.body);
-    const projection = intelResources.buildResource(filtered, req.params.resource, { factionId, body, mode });
+    const destination = req.query.destination ? String(req.query.destination).trim() : null;
+    const fleetId = req.query.fleet || req.query.fleetId || null;
+    const designId = req.query.design || req.query.designId || req.query.target || null;
+    const quantity = parseInt(req.query.quantity, 10) || 1;
+    const status = req.query.status ? String(req.query.status).trim() : null;
+    const sort = req.query.sort ? String(req.query.sort).trim() : null;
+
+    const previousFiltered = cachedPreviousRawSave
+      ? buildFilteredSnapshot(cachedPreviousRawSave, mode, observerId)
+      : null;
+
+    const projection = intelResources.buildResource(filtered, req.params.resource, {
+      factionId,
+      body,
+      destination,
+      fleetId,
+      designId,
+      quantity,
+      status,
+      sort,
+      previousSnapshot: previousFiltered,
+      mode,
+      isLatestSnapshot: targetPath === null
+    });
 
     res.set('Cache-Control', 'no-store');
     res.json(projection);
@@ -338,7 +420,120 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
   }
 });
 
+// Production plan query endpoint (POST)
+app.post(['/api/intel/production-plan', '/api/production-plan'], (req, res) => {
+  try {
+    const { mode, observerId, targetPath } = requestContext(req);
+    const rawSnapshot = loadOrGetSnapshot(targetPath);
+    assertObserver(rawSnapshot, observerId);
+    const filtered = buildFilteredSnapshot(rawSnapshot, mode, observerId);
+    const designId = req.body?.designId || req.body?.design || req.query.designId || req.query.design;
+    const quantity = parseInt(req.body?.quantity || req.query.quantity, 10) || 1;
+
+    const projection = intelResources.buildResource(filtered, 'production-plan', {
+      designId,
+      quantity,
+      mode,
+      isLatestSnapshot: targetPath === null
+    });
+
+    res.set('Cache-Control', 'no-store');
+    res.json(projection);
+  } catch (err) {
+    console.error('[Server] Production plan failed:', err);
+    res.status(err.statusCode || 500).json({ success: false, error: err.message });
+  }
+});
+
 // 5. Template effect validation info
+
+// --- Strategic history -------------------------------------------------------
+// Compact strategic_snapshot_v1 documents for trend analysis. Deltas are
+// computed on demand; storing them would defeat the point of a compact format.
+
+app.get('/api/intel/history', async (req, res) => {
+  if (!strategicHistory.isConfigured()) {
+    return res.status(503).json({ error: 'Strategic history requires Supabase configuration (SUPABASE_URL + key).' });
+  }
+  try {
+    const result = await strategicHistory.listStrategicSnapshots(req.query.campaign || null, req.query.limit || 25);
+    if (!result.found) return res.status(404).json({ error: result.error || 'Strategic history unavailable for this campaign.' });
+    res.json({
+      schema: 'strategic_snapshot_v1',
+      campaignKey: result.campaignKey,
+      count: result.history.length,
+      history: result.history
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Addressed by save_last_modified: this schema has no separate snapshot hash.
+app.get('/api/intel/history/:saveLastModified', async (req, res) => {
+  if (!strategicHistory.isConfigured()) {
+    return res.status(503).json({ error: 'Strategic history requires Supabase configuration (SUPABASE_URL + key).' });
+  }
+  try {
+    const result = await strategicHistory.getStrategicSnapshot(
+      decodeURIComponent(req.params.saveLastModified),
+      req.query.campaign || null
+    );
+    if (!result.found) return res.status(404).json({ error: result.error || 'Strategic history unavailable for this campaign.' });
+    res.json(result.snapshot);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/intel/strategic-delta', async (req, res) => {
+  if (!strategicHistory.isConfigured()) {
+    return res.status(503).json({ error: 'Strategic history requires Supabase configuration (SUPABASE_URL + key).' });
+  }
+  try {
+    const campaign = req.query.campaign || null;
+    let fromDoc = null;
+    let toDoc = null;
+
+    if (req.query.from && req.query.to) {
+      const [a, b] = await Promise.all([
+        strategicHistory.getStrategicSnapshot(decodeURIComponent(req.query.from), campaign),
+        strategicHistory.getStrategicSnapshot(decodeURIComponent(req.query.to), campaign)
+      ]);
+      if (!a.found) return res.status(404).json({ error: a.error || 'from snapshot not found.' });
+      if (!b.found) return res.status(404).json({ error: b.error || 'to snapshot not found.' });
+      fromDoc = a.snapshot.payload;
+      toDoc = b.snapshot.payload;
+    } else {
+      // Default: current live save versus the most recent stored history entry
+      // that predates it, so "I just uploaded a save, what changed?" works with
+      // no parameters.
+      const recent = await strategicHistory.getRecentStrategicSnapshots(campaign, 2);
+      if (!recent.found) return res.status(404).json({ error: recent.error || 'No strategic history available.' });
+      if (recent.snapshots.length === 0) return res.status(404).json({ error: 'No strategic history stored yet.' });
+
+      try {
+        const { targetPath } = requestContext(req);
+        const rawSnapshot = loadOrGetSnapshot(targetPath);
+        toDoc = buildStrategicSnapshot(rawSnapshot, {
+          observerFactionId: Number(req.query.observer) || 4712,
+          campaignKey: campaign
+        });
+        fromDoc = recent.snapshots[0]?.payload || null;
+      } catch (localErr) {
+        // No local save available (hosted context): fall back to the two most
+        // recent stored snapshots.
+        toDoc = recent.snapshots[0]?.payload || null;
+        fromDoc = recent.snapshots[1]?.payload || null;
+      }
+    }
+
+    res.json(buildStrategicDelta(fromDoc, toDoc));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/templates/effects', (req, res) => {
   try {
     res.json({
@@ -354,6 +549,60 @@ app.get('/api/templates/effects', (req, res) => {
   }
 });
 
+// Tech Tree Intelligence endpoints. These expose the observer's technology
+// state as a normalized dependency graph (see shared/techGraph.mjs) and answer
+// research-path, search, milestone and queue questions against the live save.
+app.get(['/api/intel/tech-tree', '/api/intel/tech-path', '/api/intel/tech-search',
+  '/api/intel/tech-milestones', '/api/intel/tech-matrix', '/api/intel/tech-opportunities',
+  '/api/intel/research-queue'], (req, res) => {
+  try {
+    const { mode, observerId, targetPath } = requestContext(req);
+    const rawSnapshot = loadOrGetSnapshot(targetPath);
+    assertObserver(rawSnapshot, observerId);
+    const filtered = buildFilteredSnapshot(rawSnapshot, mode, observerId);
+
+    let projection;
+    if (req.path.endsWith('/tech-tree')) {
+      const category = String(req.query.category || 'all').toLowerCase();
+      if (!techIntel.CATEGORIES.has(category)) {
+        throw new requestValidation.RequestValidationError(
+          `Invalid category '${category}'. Supported: ${Array.from(techIntel.CATEGORIES).join(', ')}.`
+        );
+      }
+      const includeEffects = String(req.query.includeEffects ?? 'true') !== 'false';
+      projection = techIntel.buildTechTree(filtered, mode, observerId, { category, includeEffects });
+    } else if (req.path.endsWith('/tech-path')) {
+      const rawTarget = req.query.target;
+      if (!rawTarget) {
+        throw new requestValidation.RequestValidationError('Missing required query parameter: target.');
+      }
+      const targets = String(rawTarget).split(',').map(t => t.trim()).filter(Boolean);
+      projection = techIntel.buildPath(filtered, mode, observerId, targets);
+    } else if (req.path.endsWith('/tech-search')) {
+      const query = String(req.query.q || '');
+      if (!query) {
+        throw new requestValidation.RequestValidationError('Missing required query parameter: q.');
+      }
+      projection = techIntel.buildSearch(filtered, mode, observerId, query);
+    } else if (req.path.endsWith('/tech-milestones')) {
+      const category = req.query.category ? String(req.query.category).toLowerCase() : null;
+      projection = techIntel.buildMilestones(filtered, mode, observerId, category);
+    } else if (req.path.endsWith('/tech-matrix')) {
+      projection = techIntel.buildMatrix(filtered, mode, observerId);
+    } else if (req.path.endsWith('/tech-opportunities')) {
+      projection = techIntel.buildOpportunities(filtered, mode, observerId);
+    } else {
+      projection = techIntel.buildQueue(filtered, mode, observerId);
+    }
+
+    res.set('Cache-Control', 'no-store');
+    res.json(projection);
+  } catch (err) {
+    console.error(`[Server] Tech endpoint failed (${req.path}):`, err);
+    res.status(err.statusCode || 500).json({ success: false, error: err.message });
+  }
+});
+
 // 6. Mission Control v2 Briefing endpoint
 app.get('/api/v2/briefing', (req, res) => {
   try {
@@ -364,7 +613,7 @@ app.get('/api/v2/briefing', (req, res) => {
     const filtered = buildFilteredSnapshot(rawSnapshot, mode, observerId);
     const briefing = briefingGenerator.generateMissionControlBriefing(filtered, rawSnapshot);
 
-    res.json({ success: true, ...responseIdentity(filtered), briefing, data: filtered });
+    res.json({ success: true, ...responseIdentity(filtered, targetPath === null), briefing, data: filtered });
   } catch (err) {
     console.error('[Server] Error generating v2 briefing:', err);
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
@@ -393,8 +642,7 @@ app.get(['/api/snapshot/compact', '/api/snapshot/full', '/latest-snapshot.json',
     res.json({
       success: true,
       source: 'local',
-      ...responseIdentity(filtered),
-      saveFilename: filtered.metadata?.fileName || null,
+      ...responseIdentity(filtered, targetPath === null),
       difficulty: filtered.metadata?.difficulty || null,
       observerFaction: {
         id: filtered.observerFactionId,

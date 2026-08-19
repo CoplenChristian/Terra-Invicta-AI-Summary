@@ -1,17 +1,34 @@
 /* Shared detail surface for clickable Mission Control modules. */
 (function attachDetailPanel(global) {
-  const escapeHtml = (value) => String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  const escapeHtml = (global.MissionControlShared && global.MissionControlShared.escapeHtml) ||
+    ((value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;'));
 
   let lastTrigger = null;
 
   function focusableIn(dialog) {
     return Array.from(dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
       .filter((node) => !node.disabled && !node.hidden && node.offsetParent !== null);
+  }
+
+  function syncPageInert() {
+    const overlayOpen = Boolean(document.querySelector(
+      '#factionIntelScreen:not([hidden]), #intelligenceLibraryScreen:not([hidden]), #mcDetailPanel:not([hidden])'
+    ));
+    document.querySelector('.init-topbar')?.toggleAttribute('inert', overlayOpen);
+    document.querySelector('main')?.toggleAttribute('inert', overlayOpen);
+  }
+
+  function setPanelOpen(panel, open) {
+    panel.hidden = !open;
+    panel.toggleAttribute('inert', !open);
+    panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    document.body.classList.toggle('detail-panel-open', open);
+    syncPageInert();
   }
 
   function ensurePanel() {
@@ -22,6 +39,8 @@
     panel.id = 'mcDetailPanel';
     panel.className = 'detail-panel';
     panel.hidden = true;
+    panel.setAttribute('inert', '');
+    panel.setAttribute('aria-hidden', 'true');
     panel.innerHTML = `
       <div class="detail-panel__backdrop" data-detail-close></div>
       <div class="detail-panel__dialog" role="dialog" aria-modal="true" aria-labelledby="detailPanelTitle">
@@ -35,6 +54,7 @@
         <div class="detail-panel__body">
           <p id="detailPanelSummary" class="detail-panel__summary"></p>
           <dl id="detailPanelFacts" class="detail-panel__facts"></dl>
+          <div id="detailPanelActions" class="detail-panel__actions"></div>
         </div>
       </div>
     `;
@@ -66,6 +86,24 @@
     return panel;
   }
 
+  function renderActions(panel, actions) {
+    const root = panel.querySelector('#detailPanelActions');
+    if (!root) return;
+    root.replaceChildren();
+    (Array.isArray(actions) ? actions : []).forEach((action) => {
+      if (!action?.label) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = action.primary ? 'init-btn init-btn-cyan' : 'init-btn';
+      button.textContent = action.label;
+      button.addEventListener('click', () => {
+        if (action.close !== false) close();
+        if (typeof action.onClick === 'function') action.onClick();
+      });
+      root.appendChild(button);
+    });
+  }
+
   function open(options = {}) {
     const panel = ensurePanel();
     lastTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -80,8 +118,8 @@
         <dd>${escapeHtml(fact.value)}</dd>
       </div>
     `).join('');
-    panel.hidden = false;
-    document.body.classList.add('detail-panel-open');
+    renderActions(panel, options.actions);
+    setPanelOpen(panel, true);
     const closeButton = panel.querySelector('button[data-detail-close]');
     (closeButton || panel.querySelector('[data-detail-close]')).focus();
   }
@@ -89,11 +127,10 @@
   function close() {
     const panel = document.getElementById('mcDetailPanel');
     if (!panel) return;
-    panel.hidden = true;
-    document.body.classList.remove('detail-panel-open');
+    setPanelOpen(panel, false);
     if (lastTrigger && document.contains(lastTrigger)) lastTrigger.focus();
     lastTrigger = null;
   }
 
-  global.MissionControlDetailPanel = { open, close };
+  global.MissionControlDetailPanel = { open, close, syncPageInert };
 })(window);

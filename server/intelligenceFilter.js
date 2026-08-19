@@ -1,6 +1,7 @@
 const capabilityResolver = require('./capabilityResolver');
 const opportunityScorer = require('./opportunityScorer');
 const snapshotIdentity = require('./snapshotIdentity');
+const { buildAlienHateEconomics } = require('./alienHateEconomics');
 const {
   ALIEN_FACTION_DISPLAY_NAME,
   INITIATIVE_DISPLAY_NAME,
@@ -33,6 +34,23 @@ class IntelligenceFilter {
       actualObserverId,
       mode
     );
+    // Elapsed campaign years gate the alien total-war declaration, so the
+    // hate model needs them to report anything but 'unavailable'.
+    const campaignYear = Number(
+      String(rawSnapshot.metadata?.gameTimeString || '').match(/\/(\d{4})\b/)?.[1]
+    );
+    const startYear = Number(rawSnapshot.metadata?.campaignStartYear);
+    const yearsElapsed = Number.isFinite(campaignYear) && Number.isFinite(startYear)
+      ? campaignYear - startYear
+      : null;
+
+    const buildHateEconomics = (visibleHateEstimate = null) => buildAlienHateEconomics({
+      observer,
+      difficulty: rawSnapshot.metadata?.difficulty,
+      mode,
+      visibleHateEstimate,
+      yearsElapsed
+    });
 
     if (mode === 'omniscient') {
       return {
@@ -66,12 +84,20 @@ class IntelligenceFilter {
         fleets: rawSnapshot.fleets,
         habs: rawSnapshot.habs,
         habSites: rawSnapshot.habSites,
+        habModules: rawSnapshot.habModules,
+        shipyardStations: rawSnapshot.shipyardStations,
+        shipyardQueues: rawSnapshot.shipyardQueues,
+        shipDesigns: rawSnapshot.shipDesigns || [],
+        resourceTransfers: rawSnapshot.resourceTransfers,
         globalResearch: rawSnapshot.globalResearch,
         activeXenoforming: rawSnapshot.activeXenoforming,
         builtAlienFacilities: rawSnapshot.builtAlienFacilities,
+        alienHateEconomics: buildHateEconomics(),
         servantTargets: priorityTargets,
         priorityTargetFaction,
         techMatrix: rawSnapshot.techMatrix,
+        techTree: rawSnapshot.techTree,
+        shipHullStats: rawSnapshot.shipHullStats,
         isOmniscient: true
       };
     }
@@ -105,19 +131,46 @@ class IntelligenceFilter {
         };
       }
 
-      // Filter enemy projects if not omniscient
       const isObserver = f.ID === actualObserverId;
+      // Filter enemy projects and private financial/production telemetry if
+      // not omniscient. Own-faction resource values remain available to the
+      // player; enhanced mode intentionally exposes the broader save view.
       const completedProjs = isObserver ? f.completedProjects : f.completedProjects.slice(0, 5); // Partial visibility for enemy
 
-      const safeFaction = isEnhanced ? f : (({ assessedAlienHateOfMe, ...rest }) => rest)(f);
+      const safeFaction = isEnhanced || isObserver
+        ? f
+        : (({
+          assessedAlienHateOfMe,
+          resources,
+          monthlyIncome,
+          monthlyExpense,
+          monthlyNet,
+          financials,
+          shipyardCount,
+          shipyardQueueCount,
+          ...rest
+        }) => ({
+          ...rest,
+          resources: null,
+          monthlyIncome: null,
+          monthlyExpense: null,
+          monthlyNet: null,
+          financials: null,
+          shipyardCount: null,
+          shipyardQueueCount: null
+        }))(f);
 
       return {
         ...safeFaction,
         alienHate: hateObj,
         completedProjects: completedProjs,
-        currentProjects: isObserver ? f.currentProjects : []
+        currentProjects: isObserver ? f.currentProjects : [],
+        availableProjectNames: isObserver ? f.availableProjectNames : []
       };
     });
+
+    const observerFaction = filteredFactions.find(f => f.ID === actualObserverId);
+    const alienHateEconomics = buildHateEconomics(observerFaction?.alienHate?.visibleEstimate || null);
 
     // 2. Councilor Intelligence Filtering
     const turnedCouncilorIds = new Set(
@@ -279,6 +332,29 @@ class IntelligenceFilter {
       capabilities,
       isEnhanced
     );
+    const visibleHabModules = (rawSnapshot.habModules || [])
+      // Seeing a hab's location does not reveal its module manifest. Player
+      // mode gets own-faction modules; Enhanced/Omniscient are the explicit
+      // telemetry views that expose other factions' internals.
+      .filter(module => isEnhanced || module.factionId === actualObserverId)
+      .map(module => ({
+        ...module,
+        visibility: isEnhanced ? 'enhanced telemetry' : (module.factionId === actualObserverId ? 'own faction' : 'known hab')
+      }));
+    const visibleShipyardQueues = (rawSnapshot.shipyardQueues || [])
+      .filter(queue => isEnhanced || queue.factionId === actualObserverId)
+      .map(queue => ({ ...queue, visibility: isEnhanced ? 'enhanced telemetry' : 'own faction' }));
+    const visibleShipyardStations = (rawSnapshot.shipyardStations || [])
+      .filter(station => isEnhanced || station.factionId === actualObserverId)
+      .map(station => ({
+        ...station,
+        queue: (station.queue || []).filter(queue => isEnhanced || queue.factionId === actualObserverId),
+        currentConstruction: isEnhanced || station.factionId === actualObserverId ? station.currentConstruction : null,
+        visibility: isEnhanced ? 'enhanced telemetry' : 'own faction'
+      }));
+    const visibleResourceTransfers = (rawSnapshot.resourceTransfers || [])
+      .filter(transfer => isEnhanced || transfer.sourceFactionId === actualObserverId || transfer.targetFactionId === actualObserverId)
+      .map(transfer => ({ ...transfer, visibility: isEnhanced ? 'enhanced telemetry' : 'own faction' }));
 
     return {
       ...identity,
@@ -295,12 +371,20 @@ class IntelligenceFilter {
       fleets: visibleSpaceAssets.fleets,
       habs: visibleSpaceAssets.habs,
       habSites: visibleSpaceAssets.habSites,
+        habModules: visibleHabModules,
+        shipyardStations: visibleShipyardStations,
+        shipyardQueues: visibleShipyardQueues,
+        shipDesigns: (rawSnapshot.shipDesigns || []).filter(d => isEnhanced || d.factionId === actualObserverId),
+        resourceTransfers: visibleResourceTransfers,
       globalResearch: rawSnapshot.globalResearch,
       activeXenoforming: visibleXenoforming,
       builtAlienFacilities: visibleAlienFacilities,
+      alienHateEconomics,
       servantTargets: priorityTargets,
       priorityTargetFaction,
       techMatrix: filteredTechMatrix,
+      techTree: rawSnapshot.techTree,
+      shipHullStats: rawSnapshot.shipHullStats,
       isOmniscient: false
     };
   }

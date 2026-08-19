@@ -2,6 +2,14 @@ const fs = require('fs');
 const path = require('path');
 
 class TemplateLoader {
+  // Without these a candidate directory cannot produce a tech graph, so it
+  // must not be selected just because the path exists.
+  static REQUIRED_TEMPLATES = [
+    'TITechTemplate.json',
+    'TIProjectTemplate.json',
+    'TIEffectTemplate.json'
+  ];
+
   constructor(configPath = null) {
     this.configPath = configPath || path.join(__dirname, '../config/intelligence_capabilities.json');
     this.config = this.loadConfig();
@@ -14,7 +22,25 @@ class TemplateLoader {
       habModules: new Map(),
       shipHulls: new Map(),
       orgs: new Map(),
-      weaponModules: new Map()
+      weaponModules: new Map(),
+      drives: new Map(),
+      reactors: new Map(),
+      radiators: new Map(),
+      batteries: new Map(),
+      utilityModules: new Map(),
+      shipArmor: new Map(),
+      // Hab sites carry the mining profile that determines a site's resource
+      // yields. The save does not repeat the profile on unclaimed sites, so
+      // ranking expansion targets requires joining back to these templates.
+      habSites: new Map(),
+      miningProfiles: new Map()
+    };
+    // Inverts each component template's `requiredProjectName` so the tech
+    // graph can answer "which project unlocks this component" without any
+    // display-name guessing.
+    this.unlockMappings = {
+      requiredProjectToComponents: new Map(),
+      projectToUnlocks: new Map()
     };
     this.effectMappings = {
       effectToProjects: new Map(),
@@ -51,11 +77,26 @@ class TemplateLoader {
     ];
 
     for (const p of candidates) {
-      if (p && fs.existsSync(p)) {
+      if (p && this.isUsableTemplatesDir(p)) {
         return p;
+      }
+      if (p && fs.existsSync(p)) {
+        console.warn(`[TemplateLoader] Skipping ${p}: missing required template files (${TemplateLoader.REQUIRED_TEMPLATES.join(', ')}).`);
       }
     }
     return null;
+  }
+
+  // A directory that merely exists is not a usable templates directory. The
+  // repo's Ship_Info/raw_json, for example, has no tech/project/effect
+  // templates -- selecting it produced a present-but-empty tech tree, so tech
+  // endpoints returned empty results instead of the documented unavailable
+  // response, and template-backed tests failed on a clean checkout.
+  isUsableTemplatesDir(dir) {
+    if (!fs.existsSync(dir)) return false;
+    return TemplateLoader.REQUIRED_TEMPLATES.every(
+      file => fs.existsSync(path.join(dir, file))
+    );
   }
 
   load() {
@@ -124,10 +165,37 @@ class TemplateLoader {
       if (id) this.templates.shipHulls.set(id, item);
     });
 
+    this.loadJsonFile('TIHabSiteTemplate.json', (item) => {
+      const id = item.dataName || item.displayName || item.templateName;
+      if (id) this.templates.habSites.set(id, item);
+    });
+
+    this.loadJsonFile('TIMiningProfileTemplate.json', (item) => {
+      const id = item.dataName || item.displayName || item.templateName;
+      if (id) this.templates.miningProfiles.set(id, item);
+    });
+
     this.loadJsonFile('TIOrgTemplate.json', (item) => {
       const id = item.dataName || item.displayName || item.templateName;
       if (id) this.templates.orgs.set(id, item);
     });
+
+    // Component templates used by the tech graph to answer "which project
+    // unlocks this drive/weapon/hull/module" via their requiredProjectName.
+    const componentFiles = [
+      ['drives', 'TIDriveTemplate.json'],
+      ['reactors', 'TIPowerPlantTemplate.json'],
+      ['radiators', 'TIRadiatorTemplate.json'],
+      ['batteries', 'TIBatteryTemplate.json'],
+      ['utilityModules', 'TIUtilityModuleTemplate.json'],
+      ['shipArmor', 'TIShipArmorTemplate.json']
+    ];
+    for (const [key, filename] of componentFiles) {
+      this.loadJsonFile(filename, (item) => {
+        const id = item.dataName || item.displayName || item.friendlyName || item.templateName;
+        if (id) this.templates[key].set(id, item);
+      });
+    }
 
     // Ship weapon templates are split across several files in the game data.
     // Keeping them in one index lets the save parser classify equipped weapons
@@ -158,9 +226,51 @@ class TemplateLoader {
       });
     }
 
+    this.buildUnlockMappings();
     this.validateIntelligenceMappings();
     this.isLoaded = true;
     console.log(`[TemplateLoader] Loaded ${this.templates.techs.size} techs, ${this.templates.projects.size} projects, ${this.templates.effects.size} effects.`);
+  }
+
+  // Builds a reverse index from every component template's requiredProjectName
+  // to the component, letting the tech graph report exactly which project
+  // unlocks each drive/weapon/hull/hab module/utility/armor/battery.
+  registerComponentUnlock(componentType, item) {
+    const projectId = item.requiredProjectName;
+    if (!projectId) return;
+    if (!this.unlockMappings.requiredProjectToComponents.has(projectId)) {
+      this.unlockMappings.requiredProjectToComponents.set(projectId, []);
+    }
+    this.unlockMappings.requiredProjectToComponents.get(projectId).push({
+      componentType,
+      id: item.dataName || item.displayName || item.friendlyName || item.templateName,
+      displayName: item.friendlyName || item.displayName || (item.dataName || item.templateName || item.componentType),
+      item
+    });
+  }
+
+  buildUnlockMappings() {
+    this.unlockMappings.requiredProjectToComponents.clear();
+    this.unlockMappings.projectToUnlocks.clear();
+
+    for (const weapon of this.templates.weaponModules.values()) {
+      this.registerComponentUnlock('weapon', weapon);
+    }
+    for (const drive of this.templates.drives.values()) this.registerComponentUnlock('drive', drive);
+    for (const reactor of this.templates.reactors.values()) this.registerComponentUnlock('reactor', reactor);
+    for (const radiator of this.templates.radiators.values()) this.registerComponentUnlock('radiator', radiator);
+    for (const battery of this.templates.batteries.values()) this.registerComponentUnlock('battery', battery);
+    for (const utility of this.templates.utilityModules.values()) this.registerComponentUnlock('utility', utility);
+    for (const armor of this.templates.shipArmor.values()) this.registerComponentUnlock('armor', armor);
+    for (const hull of this.templates.shipHulls.values()) this.registerComponentUnlock('ship_hull', hull);
+    for (const habModule of this.templates.habModules.values()) this.registerComponentUnlock('hab_module', habModule);
+
+    for (const [projectId, components] of this.unlockMappings.requiredProjectToComponents) {
+      this.unlockMappings.projectToUnlocks.set(
+        projectId,
+        components.map(c => ({ componentType: c.componentType, id: c.id, displayName: c.displayName }))
+      );
+    }
   }
 
   loadJsonFile(filename, itemHandler) {
@@ -265,6 +375,29 @@ class TemplateLoader {
 
   getTech(techId) {
     return this.templates.techs.get(techId) || null;
+  }
+
+  getComponent(componentType, componentId) {
+    const map = {
+      weapon: 'weaponModules',
+      drive: 'drives',
+      reactor: 'reactors',
+      radiator: 'radiators',
+      battery: 'batteries',
+      utility: 'utilityModules',
+      armor: 'shipArmor',
+      ship_hull: 'shipHulls',
+      hab_module: 'habModules'
+    }[componentType];
+    return map ? (this.templates[map].get(componentId) || null) : null;
+  }
+
+  getProjectUnlocks(projectId) {
+    return this.unlockMappings.projectToUnlocks.get(projectId) || [];
+  }
+
+  getComponentsForRequiredProject(projectId) {
+    return this.unlockMappings.requiredProjectToComponents.get(projectId) || [];
   }
 }
 

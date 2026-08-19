@@ -120,6 +120,71 @@ class SupabaseAdapter {
       observerFactionName: result.snapshotRow.observer_faction_name
     };
   }
+
+  /**
+   * Compact strategic history, newest first. Metadata only -- the payloads are
+   * fetched individually so listing stays cheap.
+   */
+  async listStrategicSnapshots(campaignKey = null, limit = 25) {
+    if (!this.isConfigured()) return { found: false, error: 'Supabase is not configured.' };
+    const campaign = await this.getActiveCampaign(campaignKey);
+    if (!campaign) {
+      return { found: false, error: `No public campaign found for key "${campaignKey || this.defaultCampaignKey}".` };
+    }
+
+    const { data, error } = await this.client
+      .from('strategic_snapshots')
+      .select('save_last_modified, save_filename, game_time, campaign_date, schema_version, created_at')
+      .eq('campaign_key', campaign.campaign_key)
+      .order('save_last_modified', { ascending: false })
+      .limit(Number(limit) || 25);
+
+    if (error) return { found: false, error: error.message };
+    return { found: true, campaignKey: campaign.campaign_key, history: data || [] };
+  }
+
+  /**
+   * One compact snapshot, addressed by save_last_modified -- there is no
+   * separate snapshot hash column on this schema to address by.
+   */
+  async getStrategicSnapshot(saveLastModified, campaignKey = null) {
+    if (!this.isConfigured()) return { found: false, error: 'Supabase is not configured.' };
+    const campaign = await this.getActiveCampaign(campaignKey);
+    if (!campaign) {
+      return { found: false, error: `No public campaign found for key "${campaignKey || this.defaultCampaignKey}".` };
+    }
+
+    const { data, error } = await this.client
+      .from('strategic_snapshots')
+      .select('save_last_modified, save_filename, game_time, campaign_date, schema_version, payload')
+      .eq('campaign_key', campaign.campaign_key)
+      .eq('save_last_modified', saveLastModified)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) return { found: false, error: error.message };
+    if (!data) return { found: false, error: `No strategic snapshot for ${saveLastModified}.` };
+    return { found: true, snapshot: data };
+  }
+
+  /** The two most recent compact snapshots, for a default delta. */
+  async getRecentStrategicSnapshots(campaignKey = null, count = 2) {
+    if (!this.isConfigured()) return { found: false, error: 'Supabase is not configured.' };
+    const campaign = await this.getActiveCampaign(campaignKey);
+    if (!campaign) {
+      return { found: false, error: `No public campaign found for key "${campaignKey || this.defaultCampaignKey}".` };
+    }
+
+    const { data, error } = await this.client
+      .from('strategic_snapshots')
+      .select('save_last_modified, game_time, campaign_date, payload')
+      .eq('campaign_key', campaign.campaign_key)
+      .order('save_last_modified', { ascending: false })
+      .limit(Number(count) || 2);
+
+    if (error) return { found: false, error: error.message };
+    return { found: true, snapshots: data || [] };
+  }
 }
 
 module.exports = SupabaseAdapter;

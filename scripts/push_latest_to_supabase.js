@@ -9,6 +9,8 @@
  *
  * Usage:
  *   node scripts/push_latest_to_supabase.js [--dry-run] [--save <path>] [--campaign <key>]
+ *     [--full-snapshot-retention <count>] [--history-retention <count>]
+ *     [--inline-tech-tree]
  */
 
 const fs = require('fs');
@@ -24,9 +26,72 @@ const briefingGenerator = require('../server/briefingGenerator');
 const templateLoader = require('../server/templateLoader');
 const snapshotIdentity = require('../server/snapshotIdentity');
 const snapshotDelta = require('../server/snapshotDelta');
-const { INTELLIGENCE_MODES } = require('../shared/constants.mjs');
+const { INTELLIGENCE_MODES, DEFAULT_OBSERVER_FACTION_ID } = require('../shared/constants.mjs');
+const { buildStrategicSnapshot, DEFAULT_HISTORY_POLICY } = require('../shared/strategicSnapshot.mjs');
+
+// Publishing fan-out policy.
+//
+// Every save previously published one row per (observer faction x visibility
+// mode) = 24 rows, at roughly 625 kB each on disk. With no retention that put
+// the free-plan 500 MB ceiling about 25 saves away. Publishing only the
+// observer faction cuts 24 rows to 3 (~87%).
+//
+// The non-observer rows answer "what does the Servants know?" -- useful, but
+// not worth 21/24 of the storage budget. Pass --all-observers to restore the
+// old behaviour for a one-off cross-faction analysis.
+const PUBLISH_POLICY = {
+  observerFactionId: DEFAULT_OBSERVER_FACTION_ID,
+  observerModes: INTELLIGENCE_MODES,
+  otherFactionModes: []
+};
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// The save's gameTimeString ("8/16/2032 12:00:00 PM") is the in-game date and
+// is what campaign chronology means. Falls back to the file mtime only when the
+// string cannot be parsed, so a row is never left without an ordering key.
+function campaignDateIso(gameTimeString, fallbackIso) {
+  const parsed = Date.parse(gameTimeString);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallbackIso;
+}
+
+// The tech tree is 94% static: `nodes` (~959 KB) is derived from the game
+// templates and is byte-identical across every row and every save, while
+// finishedTechsNames / globalActive / factionStatus (~60 KB) are per-save.
+//
+// Split it: the static half is uploaded once per campaign and rehydrated by
+// readers, the per-save half stays inline. An earlier blanket strip had to be
+// reverted because the hosted worker cannot rebuild template data from a
+// reference alone; sharing one stored copy keeps those queries working.
+function splitTechTree(modeData, fingerprint) {
+  if (!modeData || !modeData.techTree) return modeData;
+  const { techTree, ...rest } = modeData;
+  const { nodes, categories, unlockClasses, ...perSave } = techTree;
+  return {
+    ...rest,
+    techTree: {
+      ...perSave,
+      // Readers splice the shared graph back in via this fingerprint.
+      graphRef: {
+        fingerprint,
+        nodeCount: Array.isArray(nodes) ? nodes.length : 0,
+        source: 'campaigns.tech_graph'
+      }
+    }
+  };
+}
+
+function techGraphFingerprint(techTree) {
+  const nodes = Array.isArray(techTree?.nodes) ? techTree.nodes : [];
+  // Cheap, stable identity: node count plus a rolling hash of the ids. Enough
+  // to detect a game-template change without hashing a megabyte of payload.
+  let hash = 0x811c9dc5;
+  for (const node of nodes) {
+    const id = String(node?.id || '');
+    for (let i = 0; i < id.length; i++) hash = Math.imul(hash ^ id.charCodeAt(i), 0x01000193) >>> 0;
+  }
+  return `tg:${nodes.length}:${hash.toString(16)}`;
+}
 
 async function withSupabaseRetry(label, operation, attempts = 4) {
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -77,7 +142,18 @@ function parseArgs() {
     savePath: null,
     campaignKey: process.env.SUPABASE_CAMPAIGN_KEY || 'initiative',
     displayName: process.env.SUPABASE_CAMPAIGN_NAME || 'the Initiative Campaign',
-    isPublic: true
+    isPublic: true,
+    allObservers: false,
+    observerFactionId: Number(process.env.SUPABASE_OBSERVER_FACTION_ID)
+      || PUBLISH_POLICY.observerFactionId,
+    historyRetention: Number(process.env.SUPABASE_HISTORY_RETENTION)
+      || DEFAULT_HISTORY_POLICY.retention,
+    fullSnapshotRetention: Number(process.env.SUPABASE_FULL_SNAPSHOT_RETENTION)
+      || 3,
+    // The static half of the tech tree is stored once per campaign and spliced
+    // back in by readers, so sharing it is lossless. --inline-tech-tree forces
+    // the old per-row copy for a consumer that cannot follow the reference.
+    shareTechGraph: true
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -92,8 +168,21 @@ function parseArgs() {
       options.displayName = args[++i];
     } else if (arg === '--private') {
       options.isPublic = false;
+    } else if (arg === '--all-observers') {
+      options.allObservers = true;
+    } else if (arg === '--observer' && i + 1 < args.length) {
+      options.observerFactionId = Number(args[++i]);
+    } else if (arg === '--history-retention' && i + 1 < args.length) {
+      options.historyRetention = Number(args[++i]);
+    } else if (arg === '--full-snapshot-retention' && i + 1 < args.length) {
+      options.fullSnapshotRetention = Number(args[++i]);
+    } else if (arg === '--inline-tech-tree') {
+      options.shareTechGraph = false;
     }
   }
+
+  options.historyRetention = Math.max(1, Math.floor(Number(options.historyRetention) || DEFAULT_HISTORY_POLICY.retention));
+  options.fullSnapshotRetention = Math.max(1, Math.floor(Number(options.fullSnapshotRetention) || 3));
 
   return options;
 }
@@ -135,6 +224,7 @@ async function main() {
   console.log(`Target Save:        ${targetSave.name}`);
   console.log(`Last Modified:      ${targetSave.lastModified.toISOString()}`);
   console.log(`Campaign Key:       ${options.campaignKey}`);
+  console.log(`Full-save retention: ${options.fullSnapshotRetention} save(s)`);
   console.log(`Mode:               ${options.dryRun ? 'DRY RUN (No network writes)' : 'LIVE PUBLISH'}`);
 
   // 2. Parse Save & Build Raw Snapshot
@@ -203,8 +293,42 @@ async function main() {
   // user's request; each remains clearly labeled in storage and every hosted response.
   const snapshotRows = [];
   const publishedModes = INTELLIGENCE_MODES;
+
+  // Apply the fan-out policy: publish every mode for the observer faction, and
+  // only PUBLISH_POLICY.otherFactionModes for everyone else (empty by default).
+  const modesForObserver = (factionId) => {
+    if (options.allObservers) return publishedModes;
+    return Number(factionId) === Number(options.observerFactionId)
+      ? PUBLISH_POLICY.observerModes
+      : PUBLISH_POLICY.otherFactionModes;
+  };
+
+  const plannedRows = observerFactions
+    .reduce((total, f) => total + modesForObserver(f.ID).length, 0);
+  if (plannedRows === 0) {
+    console.error(`[Error] Fan-out policy produced 0 rows. Observer faction ${options.observerFactionId} was not found among ${observerFactions.length} discovered factions.`);
+    process.exit(1);
+  }
+  console.log(
+    `Fan-out policy: ${plannedRows} row(s) this publish `
+    + `(${options.allObservers ? 'ALL observers' : `observer ${options.observerFactionId} only`}); `
+    + `previous behaviour would have written ${observerFactions.length * publishedModes.length}.`
+  );
+
+  // Identity of the static tech graph. Every row this publish writes references
+  // it instead of embedding its own ~959 KB copy.
+  const techGraphId = techGraphFingerprint(rawSnapshot.techTree);
+  const sharedTechGraph = options.shareTechGraph && rawSnapshot.techTree
+    ? {
+      fingerprint: techGraphId,
+      nodes: rawSnapshot.techTree.nodes || [],
+      categories: rawSnapshot.techTree.categories || {},
+      unlockClasses: rawSnapshot.techTree.unlockClasses || {}
+    }
+    : null;
+
   for (const observer of observerFactions) {
-    for (const mode of publishedModes) {
+    for (const mode of modesForObserver(observer.ID)) {
       const modeData = intelligenceFilter.applyFilter(rawSnapshot, mode, observer.ID);
       if (mode === 'player') intelligenceFilter.assertPlayerSnapshotSafe(modeData);
       if (previousRawSnapshot) {
@@ -226,8 +350,13 @@ async function main() {
         campaign_start_year: rawSnapshot.metadata.campaignStartYear,
         observer_faction_id: observer.ID,
         observer_faction_name: observer.displayName,
+        // The retained full-fidelity rows keep the tech tree because the
+        // hosted worker's tech endpoints need it to answer queries. Operators
+        // can pass --omit-tech-tree when publishing a deliberately reduced row;
+        // that row will expose techTreeRef and the hosted tech endpoints will
+        // correctly report that the graph is unavailable.
         snapshot: {
-          ...modeData,
+          ...(options.shareTechGraph ? splitTechTree(modeData, techGraphId) : modeData),
           missionControlBriefing
         },
         chatgpt_export: {
@@ -286,7 +415,7 @@ async function main() {
     'campaign lookup',
     () => supabase
       .from('campaigns')
-      .select('campaign_key, display_name, is_public, current_save_last_modified, current_game_time, current_save_filename')
+      .select('campaign_key, display_name, is_public, current_save_last_modified, current_game_time, current_save_filename, tech_graph_fingerprint')
       .eq('campaign_key', options.campaignKey)
       .maybeSingle()
   );
@@ -320,6 +449,19 @@ async function main() {
     campaignPayload.current_save_last_modified = saveMtimeIso;
     campaignPayload.current_game_time = gameTimeString;
     campaignPayload.current_save_filename = targetSave.name;
+    // Record which observers actually have rows. The fan-out policy can publish
+    // a subset of factions, and a selector offering an unpublished observer
+    // returns 404 and clears the hosted dashboard.
+    campaignPayload.published_observers = [...new Set(snapshotRows.map(row => row.observer_faction_id))]
+      .sort((a, b) => a - b);
+
+    // Upload the shared static tech graph alongside the pointer, but only when
+    // it actually changed -- it is stable until the game templates do.
+    if (sharedTechGraph && existingCampaign?.tech_graph_fingerprint !== techGraphId) {
+      campaignPayload.tech_graph = sharedTechGraph;
+      campaignPayload.tech_graph_fingerprint = techGraphId;
+      console.log(`Shared tech graph updated (${techGraphId}, ${sharedTechGraph.nodes.length} nodes).`);
+    }
   }
 
   // Upsert published snapshot rows first. Keep each request comfortably below
@@ -391,6 +533,80 @@ async function main() {
   }
 
   console.log(`✓ Successfully uploaded ${uploadedSnapshotCount} published snapshots to Supabase.`);
+
+  // Compact strategic history. ~15 KB per save against ~2 MB for the full
+  // snapshot set, so this is what lets us retain a long trend line cheaply --
+  // and what makes pruning the full snapshots safe later.
+  try {
+    const { data: priorRow, error: priorErr } = await withSupabaseRetry(
+      'previous strategic snapshot fetch',
+      () => supabase
+        .from('strategic_snapshots')
+        .select('payload')
+        .eq('campaign_key', options.campaignKey)
+        .lt('save_last_modified', saveMtimeIso)
+        .order('save_last_modified', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    );
+    if (priorErr) throw new Error(priorErr.message);
+
+    const compact = buildStrategicSnapshot(rawSnapshot, {
+      observerFactionId: options.observerFactionId,
+      campaignKey: options.campaignKey,
+      previous: priorRow?.payload || null
+    });
+
+    const compactBytes = Buffer.byteLength(JSON.stringify(compact), 'utf8');
+    if (compactBytes > 250 * 1024) {
+      throw new Error(`compact snapshot is ${(compactBytes / 1024).toFixed(0)} KB, above the 250 KB ceiling`);
+    }
+
+    const { error: historyErr } = await withSupabaseRetry(
+      'strategic snapshot store',
+      () => supabase.rpc('store_strategic_snapshot', {
+        p_campaign_key: options.campaignKey,
+        p_save_last_modified: saveMtimeIso,
+        p_save_filename: targetSave.name,
+        p_game_time: gameTimeString,
+        // In-game date, not the file mtime. Retention orders rows by
+        // campaign_date, so storing wall-clock time here would retain and
+        // present a restored or copied save in the wrong chronology.
+        p_campaign_date: campaignDateIso(gameTimeString, saveMtimeIso),
+        p_payload: compact,
+        p_retention: options.historyRetention
+      })
+    );
+    if (historyErr) throw new Error(historyErr.message);
+
+    const eventSummary = compact.events.length > 0
+      ? ` (${compact.events.map(e => e.type).join(', ')})`
+      : '';
+    console.log(`✓ Strategic history stored: ${(compactBytes / 1024).toFixed(1)} KB, retaining ${options.historyRetention}${eventSummary}.`);
+
+    // Prune only after the compact history row is safely stored. This keeps
+    // older saves available for trend analysis while bounding the expensive
+    // full-fidelity table. An explicit historical publish must not delete
+    // newer full snapshots or move the active campaign window.
+    if (shouldUpdateCampaignPointer) {
+      const { data: deletedRows, error: pruneErr } = await withSupabaseRetry(
+        'full snapshot retention prune',
+        () => supabase.rpc('prune_intel_snapshots', {
+          p_campaign_key: options.campaignKey,
+          p_keep_saves: options.fullSnapshotRetention
+        })
+      );
+      if (pruneErr) throw new Error(pruneErr.message);
+      console.log(`✓ Full snapshot retention applied: kept ${options.fullSnapshotRetention} save(s), removed ${Number(deletedRows) || 0} row(s).`);
+    } else {
+      console.log('✓ Full snapshot retention skipped for an older historical publish.');
+    }
+  } catch (err) {
+    // History is supplementary. A failure here must not invalidate a publish
+    // whose full snapshots already landed.
+    console.warn(`[Warn] Strategic history not stored: ${err.message}`);
+  }
+
   console.log('========================================================');
   console.log('  PUBLISH COMPLETED SUCCESSFULLY                        ');
   console.log(`  Campaign:        ${options.campaignKey}`);
