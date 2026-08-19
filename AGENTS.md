@@ -91,7 +91,9 @@ After the compact strategic-history row is stored successfully, it prunes older
 full snapshot rows while retaining their reduced history records. Override the
 full-save window with `SUPABASE_FULL_SNAPSHOT_RETENTION` or the Node option
 `--full-snapshot-retention <count>`. Publishing an explicitly older historical
-save never prunes newer saves.
+save never prunes newer saves. Full rows retain the tech tree by default so the
+hosted technology endpoints remain available; use `--omit-tech-tree` only when
+an intentionally reduced row is more important than hosted tech queries.
 
 **Publish an explicit historical save:**
 ```powershell

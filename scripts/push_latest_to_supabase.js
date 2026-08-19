@@ -10,6 +10,7 @@
  * Usage:
  *   node scripts/push_latest_to_supabase.js [--dry-run] [--save <path>] [--campaign <key>]
  *     [--full-snapshot-retention <count>] [--history-retention <count>]
+ *     [--omit-tech-tree]
  */
 
 const fs = require('fs');
@@ -123,7 +124,10 @@ function parseArgs() {
       || DEFAULT_HISTORY_POLICY.retention,
     fullSnapshotRetention: Number(process.env.SUPABASE_FULL_SNAPSHOT_RETENTION)
       || 3,
-    keepTechTree: false
+    // The retained full-fidelity window must keep the tree because the hosted
+    // worker cannot rebuild template data from a techTreeRef alone. Older
+    // saves are removed from this table after compact history is stored.
+    keepTechTree: true
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -148,6 +152,8 @@ function parseArgs() {
       options.fullSnapshotRetention = Number(args[++i]);
     } else if (arg === '--keep-tech-tree') {
       options.keepTechTree = true;
+    } else if (arg === '--omit-tech-tree') {
+      options.keepTechTree = false;
     }
   }
 
@@ -308,11 +314,11 @@ async function main() {
         campaign_start_year: rawSnapshot.metadata.campaignStartYear,
         observer_faction_id: observer.ID,
         observer_faction_name: observer.displayName,
-        // The tech tree is ~12% of the stored payload and is almost entirely
-        // static template data -- identical across every row and every save.
-        // Store a fingerprint instead and rehydrate from the templates at read
-        // time. Pass --keep-tech-tree to store it inline for a consumer that
-        // cannot resolve it locally.
+        // The retained full-fidelity rows keep the tech tree because the
+        // hosted worker's tech endpoints need it to answer queries. Operators
+        // can pass --omit-tech-tree when publishing a deliberately reduced row;
+        // that row will expose techTreeRef and the hosted tech endpoints will
+        // correctly report that the graph is unavailable.
         snapshot: {
           ...(options.keepTechTree ? modeData : stripTechTree(modeData)),
           missionControlBriefing

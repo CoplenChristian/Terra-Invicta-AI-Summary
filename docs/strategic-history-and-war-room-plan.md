@@ -25,7 +25,7 @@ Everything in this plan is implemented.
 | B Backfill | **Done** — 17 saves, 82 kB on disk |
 | B Prune full snapshots | **Done** — 272 rows removed, DB 89 MB → 43 MB |
 | B `/history`, `/history/{id}`, delta | **Done** — `/api/intel/history`, `/api/intel/history/:saveLastModified`, `/api/intel/strategic-delta` |
-| Lever 3: strip `techTree` | **Done** — 33% smaller stored snapshots; `techTreeRef` marker so omitted never reads as empty |
+| Lever 3: compact static data | **Done** — strategic history excludes the tech tree; retained full-fidelity rows keep it for hosted tech queries, with `--omit-tech-tree` available for an intentionally reduced publish |
 
 Test suite: **113 passing.**
 
