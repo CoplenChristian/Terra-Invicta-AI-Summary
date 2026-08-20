@@ -118,7 +118,7 @@ function spaceTheaters(snapshot, observerId) {
 }
 
 function spacePosture(snapshot, observerId) {
-  const alienFaction = asArray(snapshot?.factions).find(faction => faction.displayName === ALIEN_FACTION_DISPLAY_NAME || faction.ID === ALIEN_FACTION_ID);
+  const alienFaction = asArray(snapshot?.factions).find(faction => faction.displayName === ALIEN_FACTION_DISPLAY_NAME || sameId(faction.ID, ALIEN_FACTION_ID));
   const alienFactionId = alienFaction?.ID;
   const alienFleets = asArray(snapshot?.fleets).filter(fleet => sameId(fleet.factionId, alienFactionId));
   const solFleets = alienFleets.filter(fleet => spaceTheater.normalizeBodyName(fleet.orbitBody) === 'sol');

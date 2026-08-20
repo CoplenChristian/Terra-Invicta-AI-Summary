@@ -32,7 +32,7 @@
 // Keep this file free of runtime-specific imports so the hosted worker can use
 // it alongside the local server.
 
-import { asArray, toFiniteNumber as num } from './util.mjs';
+import { asArray, toFiniteNumber as num, sameId } from './util.mjs';
 
 export const ATTRIBUTE_NAMES = Object.freeze([
   'Persuasion',
@@ -306,7 +306,7 @@ export function rankByAttribute(councilors, attribute, { factionId = null, limit
   }
 
   const ranked = asArray(councilors)
-    .filter(c => factionId === null || Number(c?.factionId) === Number(factionId))
+    .filter(c => factionId === null || sameId(c?.factionId, factionId))
     .map(c => {
       const resolved = buildCouncilorAttributes(c, { traitStatMods });
       return {

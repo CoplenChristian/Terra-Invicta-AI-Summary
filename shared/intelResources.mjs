@@ -48,6 +48,7 @@ const kebab = (key) => key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 // away from the observer the endpoints actually default to.
 const OMNISCIENT = `?observer=${DEFAULT_OBSERVER_FACTION_ID}&mode=omniscient`;
 const OMNISCIENT_OWN = `${OMNISCIENT}&faction=${DEFAULT_OBSERVER_FACTION_ID}`;
+const OMNISCIENT_ALIEN = `${OMNISCIENT}&faction=${ALIEN_FACTION_ID}`;
 const OBSERVER_ONLY = `?observer=${DEFAULT_OBSERVER_FACTION_ID}`;
 
 const INTEL_ENDPOINTS = Object.freeze([
@@ -58,8 +59,8 @@ const INTEL_ENDPOINTS = Object.freeze([
   { key: 'habs', projected: true, example: OMNISCIENT_OWN },
   { key: 'habSites', projected: true, example: `${OMNISCIENT}&body=Ceres` },
   { key: 'mining', projected: true, example: `${OMNISCIENT}&body=Ceres&sort=water` },
-  { key: 'fleets', projected: true, example: `${OMNISCIENT}&faction=4717` },
-  { key: 'ships', projected: true, example: `${OMNISCIENT}&faction=4717` },
+  { key: 'fleets', projected: true, example: OMNISCIENT_ALIEN },
+  { key: 'ships', projected: true, example: OMNISCIENT_ALIEN },
   { key: 'research', projected: true, example: OMNISCIENT },
   { key: 'capabilities', projected: true, example: OMNISCIENT },
   { key: 'alien', projected: true, example: OMNISCIENT },
@@ -143,8 +144,11 @@ export const normalizeBody = (value) => String(value || '')
 export const factionMatches = (item, factionId) => {
   if (factionId === null || factionId === undefined) return true;
   const controlPointIds = asArray(item.controlPoints).map(cp => cp?.factionId);
+  // `item.id` is read alongside `item.ID` only because a few projections
+  // re-emit their rows with a lowercased key before this predicate sees them.
+  // The save itself carries `ID`; nothing here may rely on `id` existing.
   return [item.ID, item.id, item.factionId, item.executiveFactionId, ...controlPointIds]
-    .some(id => Number(id) === Number(factionId));
+    .some(id => sameId(id, factionId));
 };
 
 export const bodyMatches = (item, body) => {
@@ -1000,22 +1004,22 @@ export const theatersResource = (snapshot, observerId = DEFAULT_OBSERVER_FACTION
     const bodySites = sites.filter(s => normalizeBody(s.parentBodyName) === norm);
     const bodyQueues = queues.filter(q => normalizeBody(q.orbitBody) === norm);
 
-    const friendlyFleets = bodyFleets.filter(f => Number(f.factionId) === Number(observerId));
-    const hostileFleets = bodyFleets.filter(f => Number(f.factionId) === Number(alienId) || (f.factionName && f.factionName.toLowerCase().includes('servant')));
+    const friendlyFleets = bodyFleets.filter(f => sameId(f.factionId, observerId));
+    const hostileFleets = bodyFleets.filter(f => sameId(f.factionId, alienId) || (f.factionName && f.factionName.toLowerCase().includes('servant')));
 
     const friendlyShips = friendlyFleets.reduce((sum, f) => sum + (f.shipsCount || 0), 0);
     const hostileShips = hostileFleets.reduce((sum, f) => sum + (f.shipsCount || 0), 0);
     const friendlyCP = friendlyFleets.reduce((sum, f) => sum + (f.combatPower || 0), 0);
     const hostileCP = hostileFleets.reduce((sum, f) => sum + (f.combatPower || 0), 0);
 
-    const friendlyHabs = bodyHabs.filter(h => Number(h.factionId) === Number(observerId)).length;
-    const friendlyYards = bodyHabs.filter(h => Number(h.factionId) === Number(observerId) && (h.isShipyard || h.shipyardCount > 0)).length;
-    const friendlyMines = bodySites.filter(s => Number(s.factionId) === Number(observerId) && s.mineModuleName).length;
+    const friendlyHabs = bodyHabs.filter(h => sameId(h.factionId, observerId)).length;
+    const friendlyYards = bodyHabs.filter(h => sameId(h.factionId, observerId) && (h.isShipyard || h.shipyardCount > 0)).length;
+    const friendlyMines = bodySites.filter(s => sameId(s.factionId, observerId) && s.mineModuleName).length;
 
     // Incoming hostile transfers
     const incomingHostile = transfers.filter(t =>
       normalizeBody(t.destination) === norm &&
-      (Number(t.factionId) === Number(alienId) || (t.faction && t.faction.toLowerCase().includes('servant')))
+      (sameId(t.factionId, alienId) || (t.faction && t.faction.toLowerCase().includes('servant')))
     );
     const incomingHostileShips = incomingHostile.reduce((sum, t) => sum + (t.shipCount || 0), 0);
     const nearestArrivalDays = incomingHostile.length > 0
@@ -1027,8 +1031,8 @@ export const theatersResource = (snapshot, observerId = DEFAULT_OBSERVER_FACTION
 
     // Ships completing before threat arrival
     const completingBefore = nearestArrivalDays !== null
-      ? bodyQueues.filter(q => Number(q.factionId) === Number(observerId) && (q.daysToCompletion ?? 999) <= nearestArrivalDays).length
-      : bodyQueues.filter(q => Number(q.factionId) === Number(observerId)).length;
+      ? bodyQueues.filter(q => sameId(q.factionId, observerId) && (q.daysToCompletion ?? 999) <= nearestArrivalDays).length
+      : bodyQueues.filter(q => sameId(q.factionId, observerId)).length;
 
     let status = 'UNCONTESTED';
     if (incomingHostileShips > 0 && nearestArrivalDays !== null && nearestArrivalDays <= 120) {
@@ -1064,7 +1068,7 @@ export const theatersResource = (snapshot, observerId = DEFAULT_OBSERVER_FACTION
       },
       production: {
         shipsCompletingBeforeThreatArrival: completingBefore,
-        totalQueuedShips: bodyQueues.filter(q => Number(q.factionId) === Number(observerId)).length
+        totalQueuedShips: bodyQueues.filter(q => sameId(q.factionId, observerId)).length
       }
     };
   });
@@ -1361,7 +1365,7 @@ export const buildMiningCapacity = ({
 
   const sites = asArray(habSites);
   const minesBuilt = sites.filter(site =>
-    site.mineModuleId != null && Number(site.factionId) === Number(observer.ID)
+    site.mineModuleId != null && sameId(site.factionId, observer.ID)
   ).length;
 
   const headroom = Math.max(0, mineLimit - minesBuilt);
@@ -2391,8 +2395,8 @@ export const bodyStatusResource = (snapshot, bodyName = 'Mars', observerId = DEF
   const allTransfers = transfersResource(snapshot);
   const incoming = allTransfers.filter(t => normalizeBody(t.destination) === norm);
 
-  const friendlyFleets = fleets.filter(f => Number(f.factionId) === Number(observerId));
-  const hostileFleets = fleets.filter(f => Number(f.factionId) !== Number(observerId) && f.factionName !== 'Neutral');
+  const friendlyFleets = fleets.filter(f => sameId(f.factionId, observerId));
+  const hostileFleets = fleets.filter(f => !sameId(f.factionId, observerId) && f.factionName !== 'Neutral');
 
   return {
     body: bodyName,

@@ -17,13 +17,14 @@ const fs = require('fs');
 const path = require('path');
 const { loadSnapshot, loadFilteredSnapshot, queryIntel } = require('../server/snapshotLoader');
 const { INTEL_ENDPOINT_INDEX } = require('../shared/intelResources.mjs');
+const { INITIATIVE_DISPLAY_NAME, DEFAULT_OBSERVER_FACTION_ID } = require('../shared/constants.mjs');
 
 function parseArgs(args) {
   const options = {
     savePath: null,
     latest: true,
     mode: 'player',
-    observer: 'the Initiative',
+    observer: INITIATIVE_DISPLAY_NAME,
     endpoint: null,
     format: 'pretty', // 'json', 'pretty', 'table', 'summary'
     field: null,
@@ -78,7 +79,7 @@ Options:
   --latest, -l             Use the most recently modified save (default: true)
   --save, -s <path>        Path or filename of a specific save file
   --mode, -m <mode>        Intelligence mode: 'player' (default), 'enhanced', 'omniscient'
-  --observer, -o <name|id> Observer faction (default: 'the Initiative' / 4712)
+  --observer, -o <name|id> Observer faction (default: '${INITIATIVE_DISPLAY_NAME}' / ${DEFAULT_OBSERVER_FACTION_ID})
   --endpoint, -e <name>    Query a specific intel projection (e.g., summary, councilors,
                            habs, mining, mining-expansion, alien-threat, tech-tree)
   --field, -q <path>       Extract a specific dotted/nested field from the output

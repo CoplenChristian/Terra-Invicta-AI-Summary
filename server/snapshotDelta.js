@@ -107,6 +107,11 @@ function buildPoliticalChanges(previous, current) {
   const previousNations = byId(previous?.nations);
   return asArray(current?.nations).map(nation => {
     const older = previousNations.get(String(nation.ID));
+    // Deliberately NOT `sameId`. This is a did-it-change test, not an identity
+    // lookup: an independent nation carries no executive faction in either
+    // save, and `sameId` reports two absent ids as NOT equal -- which would
+    // publish "the executive changed" for every independent nation, every
+    // cycle. Absent-equals-absent is the correct reading of "unchanged".
     if (!older || String(older.executiveFactionId ?? '') === String(nation.executiveFactionId ?? '')) return null;
     return {
       nationId: nation.ID,

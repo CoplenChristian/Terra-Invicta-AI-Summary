@@ -6,6 +6,10 @@
 
 const snapshotIdentity = require('./snapshotIdentity');
 const techGraph = require('../shared/techGraph.mjs');
+// One id-matching idiom repo-wide. The observer id arrives from an HTTP query
+// string while the snapshot's faction ID is numeric, so a strict `===` between
+// them silently answers about no faction at all rather than erroring.
+const { sameId } = require('../shared/util.mjs');
 
 const {
   buildTechTreeProjection,
@@ -20,7 +24,7 @@ const {
 
 function baseEnvelope(snapshot, mode, observerId) {
   const identity = snapshotIdentity.readSnapshotIdentity(snapshot);
-  const observer = (snapshot.factions || []).find(f => f.ID === observerId);
+  const observer = (snapshot.factions || []).find(f => sameId(f.ID, observerId));
   return {
     success: true,
     source: 'local',

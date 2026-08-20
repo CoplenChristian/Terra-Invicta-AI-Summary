@@ -264,7 +264,7 @@ class SnapshotBuilder {
       const cps = controlPointsByNationId.get(nationId) || [];
       const execCp = cps.find(c => c.isExecutive);
       const executiveFactionId = execCp?.factionId || null;
-      const executiveFactionName = executiveFactionId ? (factionsById.get(executiveFactionId)?.displayName || 'None') : 'None';
+      const executiveFactionName = this.resolveFactionName(factionsById, executiveFactionId, 'None');
 
       const gdp = n.GDP || n.gdp || 0;
       const population = n.population || (n.historyPopulation?.length ? n.historyPopulation[n.historyPopulation.length - 1] : 0);
@@ -340,7 +340,7 @@ class SnapshotBuilder {
       const homeRegionName = homeRegionId ? (regionsById.get(homeRegionId)?.displayName || 'Unknown') : 'Unknown';
 
       const agentForFactionId = c.agentForFaction?.value || null;
-      const agentForFactionName = agentForFactionId ? (factionsById.get(agentForFactionId)?.displayName || null) : null;
+      const agentForFactionName = this.resolveFactionName(factionsById, agentForFactionId, null);
 
       const seenByFactionIds = Array.isArray(c.knowsIveBeenSeenBy) ? c.knowsIveBeenSeenBy.map(x => x.value || x) : [];
 
@@ -840,9 +840,9 @@ class SnapshotBuilder {
         resourceTransfers.push({
           id: `${sourceFactionId}:${targetFactionId}:${resource}:${index}`,
           sourceFactionId,
-          sourceFactionName: factionsById.get(sourceFactionId)?.displayName || 'Unknown',
+          sourceFactionName: this.resolveFactionName(factionsById, sourceFactionId, 'Unknown'),
           targetFactionId,
-          targetFactionName: factionsById.get(targetFactionId)?.displayName || 'Unknown',
+          targetFactionName: this.resolveFactionName(factionsById, targetFactionId, 'Unknown'),
           resource,
           amountPerDay: this.roundNumber(amountPerDay, 3),
           expiry: this.dateValueToIso(entry?.expiry)
@@ -884,7 +884,7 @@ class SnapshotBuilder {
         for (const fc of slot.factionContributions) {
           const fid = fc.Key?.value || fc.Key;
           const val = fc.Value || 0;
-          const fname = factionsById.get(fid)?.displayName || 'Unknown';
+          const fname = this.resolveFactionName(factionsById, fid, 'Unknown');
           contributions.push({ factionId: fid, factionName: fname, contribution: Math.round(val) });
           if (val > maxContribution) {
             maxContribution = val;
@@ -909,7 +909,7 @@ class SnapshotBuilder {
         percent,
         contributions,
         leadFactionId,
-        leadFactionName: leadFactionId ? (factionsById.get(leadFactionId)?.displayName || 'None') : 'None',
+        leadFactionName: this.resolveFactionName(factionsById, leadFactionId, 'None'),
         leadContribution: Math.round(maxContribution)
       };
     });
@@ -1683,11 +1683,18 @@ class SnapshotBuilder {
   /**
    * Owning faction's display name, from the id map built once per snapshot.
    *
-   * Six call sites wrote this out by hand and they do NOT agree on the two
+   * Twelve call sites wrote this out by hand and they do NOT agree on the two
    * fallback strings -- an unowned control point is 'Neutral', an unclaimed
-   * hab site is 'Unclaimed', a hab module with no owner is `null`. Passing
-   * them in keeps every existing answer while removing the chance of a seventh
-   * copy inventing a seventh spelling.
+   * hab site is 'Unclaimed', a nation with no executive is 'None', a resource
+   * transfer with an unknown counterparty is 'Unknown', and a hab module or an
+   * unturned councilor with no owner is `null`. Passing them in keeps every
+   * existing answer while removing the chance of a thirteenth copy inventing a
+   * thirteenth spelling.
+   *
+   * Two sibling reads deliberately stay inline: the councilor reducer already
+   * holds the fetched faction record for its own `isActiveCouncilor` check, so
+   * routing through here would repeat the map lookup; and `homeRegionName`
+   * reads the REGION map, which this faction-named helper does not describe.
    *
    * @param {Map}    factionsById
    * @param {*}      factionId

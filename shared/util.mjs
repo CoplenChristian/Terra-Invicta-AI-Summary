@@ -99,6 +99,18 @@ export const MS_PER_DAY = 86400000;
 export const METERS_PER_AU = 149597870700;
 
 /**
+ * Dollars in a trillion. The save quotes every GDP figure in whole dollars and
+ * three places report it in trillions -- `server/briefingGenerator.js` and
+ * `server/exportGenerator.js` each declared their own `ONE_TRILLION`, and
+ * `server/directiveAdvisor.js` divided by a bare `1e12`.
+ *
+ * Deliberately NOT applied to the SI-suffix ladder in `server/snapshotDelta.js`
+ * (`1e12`/`1e9`/`1e6`/`1e3`): there the value is one rung of a magnitude scale,
+ * not a currency unit, and naming a single rung would obscure the pattern.
+ */
+export const ONE_TRILLION = 1e12;
+
+/**
  * Finds the observer faction in a faction list.
  *
  * Four near-identical fallback chains existed for this (`intelligenceFilter`,

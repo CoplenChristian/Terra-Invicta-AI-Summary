@@ -9,7 +9,7 @@ const snapshotDelta = require('./snapshotDelta');
 const saveComparison = require('./saveComparison');
 const templateLoader = require('./templateLoader');
 const intelResources = require('./intelResources');
-const { DEFAULT_OBSERVER_FACTION_ID } = require('../shared/constants.mjs');
+const { DEFAULT_OBSERVER_FACTION_ID, INITIATIVE_DISPLAY_NAME } = require('../shared/constants.mjs');
 
 let cachedRawSave = null;
 let cachedSavePath = null;
@@ -250,7 +250,7 @@ function resolveObserverId(rawSnapshot, observer) {
 function loadFilteredSnapshot({
   savePath = null,
   mode = 'player',
-  observer = 'the Initiative',
+  observer = INITIATIVE_DISPLAY_NAME,
   bypassCache = false
 } = {}) {
   const rawSnapshot = loadSnapshot({ savePath, bypassCache });
@@ -291,7 +291,7 @@ function queryIntel({
   endpoint,
   queryOptions = {},
   mode = 'player',
-  observer = 'the Initiative',
+  observer = INITIATIVE_DISPLAY_NAME,
   savePath = null
 } = {}) {
   const effectiveSnapshot = snapshot || loadFilteredSnapshot({ savePath, mode, observer });

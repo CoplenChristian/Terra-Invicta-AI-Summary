@@ -26,7 +26,8 @@ const {
   ALIEN_HATE_WAR_THRESHOLD,
   ALIEN_TOTAL_WAR_HATE
 } = require('./alienHateEconomics');
-const { toFiniteNumber, sameId } = require('../shared/util.mjs');
+const { SERVANTS_DISPLAY_NAME } = require('../shared/constants.mjs');
+const { toFiniteNumber, sameId, ONE_TRILLION } = require('../shared/util.mjs');
 
 // Wiki, Diplomacy § Pro-Alien Hate Sharing:
 //   Servants gain hate -> aliens gain that/4 when the Servants can contact
@@ -280,7 +281,7 @@ function classifyProxy(faction = {}) {
   };
 
   if (template === 'submitcouncil' || /\bservants?\b/.test(name)) {
-    return proxy('servants', 'the Servants');
+    return proxy('servants', SERVANTS_DISPLAY_NAME);
   }
   if (template === 'appeasecouncil' || /protectorate/.test(name)) {
     return proxy('protectorate', 'the Protectorate');
@@ -916,7 +917,7 @@ function findHumanNonProxyTarget(nations = [], factions = [], observerId = null)
       best = {
         nationName: nation.displayName,
         gdp,
-        gdpTrillion: gdp / 1e12,
+        gdpTrillion: gdp / ONE_TRILLION,
         executiveFactionId: executiveId,
         executiveFactionName: faction?.displayName || nation.executiveFactionName,
         faction,

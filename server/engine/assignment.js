@@ -19,6 +19,12 @@ const {
   computeAdviseHabBonuses,
   evaluateAdviseValue
 } = require('./adviseEconomics');
+// The one id-matching idiom. `resolveCouncilorId` yields null for a councilor
+// whose identity could not be resolved, and `String(null) === String(null)` is
+// true -- so the `String()`-comparison this replaced would have paired every
+// unidentified councilor with every other one. `sameId` treats an absent id as
+// matching nothing, which is the whole point of the helper.
+const { sameId } = require('../../shared/util.mjs');
 
 const FREE_ACTIONS = Object.freeze(['Surveil Location', 'Protect Councilor', 'Go To Ground']);
 
@@ -508,7 +514,7 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     // The best switch that was considered and turned down, so the held
     // commitment shows its reasoning rather than reading as inertia.
     const rejectedSwitches = heldCommitments
-      .filter((h) => String(h.councilorId) === String(entry.councilorId))
+      .filter((h) => sameId(h.councilorId, entry.councilorId))
       .sort((a, b) => (b.netExpectedValue ?? -Infinity) - (a.netExpectedValue ?? -Infinity));
 
     committed.push({

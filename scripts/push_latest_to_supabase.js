@@ -37,6 +37,9 @@ const {
   SERVANTS_DISPLAY_NAME
 } = require('../shared/constants.mjs');
 const { buildStrategicSnapshot, DEFAULT_HISTORY_POLICY } = require('../shared/strategicSnapshot.mjs');
+// The one id-matching idiom. Faction ids reach this script both as numbers
+// from the parsed save and as strings from `--observer` on the command line.
+const { sameId } = require('../shared/util.mjs');
 const runtimeConfig = resolveConfig();
 
 // Publishing fan-out policy.
@@ -446,7 +449,7 @@ async function main() {
   // only PUBLISH_POLICY.otherFactionModes for everyone else (empty by default).
   const modesForObserver = (factionId) => {
     if (options.allObservers) return allObserverModes;
-    return Number(factionId) === Number(options.observerFactionId)
+    return sameId(factionId, options.observerFactionId)
       ? PUBLISH_POLICY.observerModes
       : PUBLISH_POLICY.otherFactionModes;
   };

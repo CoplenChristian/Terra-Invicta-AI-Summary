@@ -15,11 +15,9 @@ const {
   asArray,
   strictFiniteNumber,
   sameId,
-  resolveObserverFaction
+  resolveObserverFaction,
+  ONE_TRILLION
 } = require('../shared/util.mjs');
-
-// Trillions. GDP is quoted in dollars throughout the save.
-const ONE_TRILLION = 1e12;
 
 /**
  * The attribute score at which a councilor is called out by that skill in the

@@ -1,8 +1,5 @@
-const { INITIATIVE_DISPLAY_NAME } = require('../shared/constants.mjs');
-const { resolveObserverFaction } = require('../shared/util.mjs');
-
-// Trillions. GDP is quoted in dollars throughout the save.
-const ONE_TRILLION = 1e12;
+const { INITIATIVE_DISPLAY_NAME, SERVANTS_DISPLAY_NAME } = require('../shared/constants.mjs');
+const { resolveObserverFaction, ONE_TRILLION } = require('../shared/util.mjs');
 
 // Absence-preserving render helpers. Every one of these exists because
 // `Number(null) === 0`: an unmeasured value coerced into a template reads as a
@@ -102,7 +99,7 @@ class ExportGenerator {
     lines.push(``);
 
     // 2. Strategic Servant / Hostile Holdings
-    const priorityFactionName = filteredData.priorityTargetFaction?.name || 'the Servants';
+    const priorityFactionName = filteredData.priorityTargetFaction?.name || SERVANTS_DISPLAY_NAME;
     lines.push(`## Strategic Enemy Holdings (Priority Targets: ${priorityFactionName})`);
     lines.push(``);
     const topTargets = (filteredData.servantTargets || []).slice(0, 8);

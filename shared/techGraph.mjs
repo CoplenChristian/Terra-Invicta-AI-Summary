@@ -9,7 +9,7 @@
 //   into a dependency graph, then overlay the current save's completion /
 //   progress state on top of it.
 
-import { asArray, toFiniteNumber } from './util.mjs';
+import { asArray, toFiniteNumber, sameId } from './util.mjs';
 
 export const UNLOCK_CLASSES = [
   'ship_hull', 'weapon', 'missile', 'point_defense', 'drive', 'reactor',
@@ -701,14 +701,14 @@ function factionStatus(faction, projectId) {
 
 export function buildResearchQueue(snapshot, observerFactionId) {
   const globalResearch = snapshot.globalResearch || {};
-  const observer = asArray(snapshot.factions).find(f => f.ID === observerFactionId);
+  const observer = asArray(snapshot.factions).find(f => sameId(f.ID, observerFactionId));
   const globalSlots = asArray(globalResearch.activeSlots).map(slot => ({
     techId: slot.techId,
     displayName: slot.displayName,
     progress: slot.percent / 100,
     accumulatedResearch: slot.accumulatedResearch,
     totalCost: slot.totalCost,
-    initiativeContribution: (asArray(slot.contributions).find(c => c.factionId === observerFactionId) || {}).contribution || 0,
+    initiativeContribution: (asArray(slot.contributions).find(c => sameId(c.factionId, observerFactionId)) || {}).contribution || 0,
     leadingFaction: slot.leadFactionName || null
   }));
   const factionProjects = asArray(observer?.currentProjects).map(p => ({
