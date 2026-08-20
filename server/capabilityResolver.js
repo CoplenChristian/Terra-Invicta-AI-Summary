@@ -32,21 +32,12 @@ class CapabilityResolver {
     // Capability grants are data-driven. The configuration maps each effect to
     // a capability and its fallback project/tech; adding a new grant no longer
     // requires editing this resolver's decision logic.
-    const capabilityAliases = {
-      detectAlienAbductions: 'canDetectAlienAbductions',
-      detectAlienHumanContacts: 'canDetectAlienHumanContacts',
-      detectAlienOperations: 'canDetectAlienOperations',
-      estimateAlienThreat: 'canEstimateAlienThreat',
-      detectAlienCouncilors: 'canDirectlyDetectAlienCouncilors',
-      trackInnerSpaceAssets: 'canTrackInnerSpaceAssets',
-      trackSolarSystemSpaceAssets: 'canTrackSolarSystemSpaceAssets'
-    };
     const configuredCapabilities = {};
     for (const [effectId, descriptor] of Object.entries(templateLoader.config.analysis?.effects || {})) {
       const enabled = activeEffects.has(effectId) ||
         (descriptor.defaultProject && finishedProjects.has(descriptor.defaultProject)) ||
         (descriptor.defaultTech && finishedTechs.has(descriptor.defaultTech));
-      const outputKey = capabilityAliases[descriptor.capability] || `can${descriptor.capability[0]?.toUpperCase() || ''}${descriptor.capability.slice(1)}`;
+      const outputKey = descriptor.outputKey || `can${descriptor.capability[0]?.toUpperCase() || ''}${descriptor.capability.slice(1)}`;
       configuredCapabilities[outputKey] = Boolean(configuredCapabilities[outputKey] || enabled);
     }
     const canDetectAlienAbductions = configuredCapabilities.canDetectAlienAbductions === true;
@@ -64,6 +55,24 @@ class CapabilityResolver {
       objectiveNames.DetectXenoforming === 'Completed';
     const canDetectAlienFacilities = (storyState.knownAlienSiteRegionIds || []).length > 0 ||
       (storyState.intel || []).some(entry => entry.typeName?.includes('TIRegionAlienFacilityState'));
+
+    const projectById = new Map(
+      (templateLoader.config.analysis?.strategicProjects || []).map(project => [project.id, project])
+    );
+    const details = {};
+    for (const [effectId, descriptor] of Object.entries(templateLoader.config.analysis?.effects || {})) {
+      const outputKey = descriptor.outputKey || `can${descriptor.capability[0]?.toUpperCase() || ''}${descriptor.capability.slice(1)}`;
+      const project = descriptor.defaultProject ? projectById.get(descriptor.defaultProject) : null;
+      details[descriptor.capability] = {
+        name: descriptor.name || project?.name || descriptor.defaultTech || descriptor.capability,
+        active: configuredCapabilities[outputKey] === true,
+        requiredProject: descriptor.defaultProject || undefined,
+        requiredTech: descriptor.defaultTech || undefined,
+        requiredDisplayName: project?.name || descriptor.defaultTech || descriptor.defaultProject || null,
+        requiredEffect: effectId,
+        description: descriptor.description
+      };
+    }
 
     const capabilities = {
       // Alien ground intelligence
@@ -99,64 +108,10 @@ class CapabilityResolver {
       finishedTechsCount: finishedTechs.size,
       storyMilestones: Array.from(milestones),
 
-      // UI explanation helper map
+      // UI explanation helper map. Effect/project unlock metadata is generated
+      // from the same configuration that drives the capability flags.
       details: {
-        detectAlienAbductions: {
-          name: "Alien Abduction Detection",
-          active: canDetectAlienAbductions,
-          requiredProject: "Project_TheirSignatures",
-          requiredDisplayName: "Alien Signatures",
-          requiredEffect: "Effect_DetectAbductions",
-          description: "Allows detection of alien abductions in surveyed regions."
-        },
-        detectAlienHumanContacts: {
-          name: "Alien Contact & Enthrall Detection",
-          active: canDetectAlienHumanContacts,
-          requiredProject: "Project_TheirMethods",
-          requiredDisplayName: "Alien Methods",
-          requiredEffect: "Effect_DetectEnthralls",
-          description: "Allows detection of alien contact and enthrall activities with human factions."
-        },
-        detectAlienOperations: {
-          name: "Alien Operations Detection",
-          active: canDetectAlienOperations,
-          requiredProject: "Project_TheirOperations",
-          requiredDisplayName: "Alien Operations",
-          requiredEffect: "Effect_DetectAllOperations",
-          description: "Allows tracking of broader alien operational activities across the globe."
-        },
-        estimateAlienThreat: {
-          name: "Alien Threat Assessment Meter",
-          active: canEstimateAlienThreat,
-          requiredProject: "Project_TheirOperations",
-          requiredDisplayName: "Alien Operations",
-          requiredEffect: "Effect_UpdateAlienThreatMeter",
-          description: "Estimates alien hostility and hate levels toward human factions."
-        },
-        detectAlienCouncilors: {
-          name: "Direct Alien Operative Detection",
-          active: canDirectlyDetectAlienCouncilors,
-          requiredProject: "Project_TheirMovements",
-          requiredDisplayName: "Alien Movements",
-          requiredEffect: "Effect_DetectAlienMovements",
-          description: "Directly detects and tracks individual alien operatives (Hydras) operating on Earth."
-        },
-        trackInnerSpaceAssets: {
-          name: "Inner System Space Surveillance",
-          active: canTrackInnerSpaceAssets,
-          requiredTech: "Skywatch",
-          requiredDisplayName: "Skywatch",
-          requiredEffect: "Effect_Skywatch",
-          description: templateLoader.config.analysis?.rules?.spaceAssets?.innerSystemDescription || "Detects and tracks vessels and structures inside Saturn's orbit."
-        },
-        trackSolarSystemSpaceAssets: {
-          name: "Deep Solar System Surveillance",
-          active: canTrackSolarSystemSpaceAssets,
-          requiredTech: "DeepSystemSkywatch",
-          requiredDisplayName: "Deep System Skywatch",
-          requiredEffect: "Effect_DeepSkywatch",
-          description: templateLoader.config.analysis?.rules?.spaceAssets?.deepSystemDescription || "Detects and tracks vessels and structures across the entire Solar System."
-        },
+        ...details,
         detectAlienFacilities: {
           name: 'Alien Facility Discovery',
           active: canDetectAlienFacilities,

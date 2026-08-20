@@ -18,6 +18,7 @@ const LEGACY_KEYS = new Set([
   'defaultObserverFaction', 'powerScoreWeights', 'intelligenceRules',
   'effects', 'strategicProjects'
 ]);
+const warnedLegacyKeys = new Set();
 
 function readJson(filePath, label) {
   if (!filePath || !fs.existsSync(filePath)) return null;
@@ -45,6 +46,8 @@ function merge(base, override) {
 }
 
 function warnLegacy(key) {
+  if (warnedLegacyKeys.has(key)) return;
+  warnedLegacyKeys.add(key);
   process.emitWarning(`config.json key '${key}' is deprecated; use the nested schema in config/defaults.json instead.`, {
     code: 'TI_CONFIG_DEPRECATED'
   });
@@ -53,6 +56,13 @@ function warnLegacy(key) {
 function migrateLegacyConfig(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
   if (input.schemaVersion === 1 && input.paths && input.campaign && input.analysis) return input;
+
+  const nestedSections = new Set(['paths', 'campaign', 'server', 'publishing', 'analysis']);
+  if (Object.keys(input).some(key => nestedSections.has(key))) {
+    const unknown = Object.keys(input).filter(key => !nestedSections.has(key) && key !== 'schemaVersion');
+    if (unknown.length) throw new Error(`Unknown configuration key(s): ${unknown.join(', ')}`);
+    return input;
+  }
 
   const migrated = {};
   const paths = {};

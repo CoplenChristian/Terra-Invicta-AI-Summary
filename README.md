@@ -12,19 +12,17 @@ A PowerShell toolkit for analyzing *Terra Invicta* save files and generating det
 
 1.  **Clone or Download** this repository.
 2.  **Configure Paths**:
-    - Locate `template.config` in the root directory.
-    - Copy it to a new file named `config.json`.
-    - Open `config.json` and update the `SavePath` to point to your Terra Invicta save file.
-    - The `WorkDir` can usually remain `.` (current directory).
+    - Locate `template.config` in the root directory and copy it to a new, ignored file named `config.json`.
+    - Set `paths.savePath` to your Terra Invicta save folder or a specific `.gz`/`.json` save file.
+    - Optional values such as `paths.templatesPath`, campaign defaults, scoring weights, and directive weights live in `config/defaults.json`; override only the values you need in the ignored root `config.json`.
+    - Existing flat keys (`SavePath`, `WorkDir`, and output directory keys) remain supported temporarily and emit deprecation warnings.
 
     ```json
     {
-        "SavePath": "C:/Users/YourUser/Documents/My Games/TerraInvicta/Saves/Again.gz",
-        "WorkDir": ".",
-        "CsvSubDir": "csv",
-        "ShipInfoSubDir": "Ship_Info",
-        "AgainSaveSubDir": "Again_Save",
-        "SnippetPackSubDir": "Again_Save/snippet_pack"
+      "paths": {
+        "savePath": "C:/Users/YourUser/Documents/My Games/TerraInvicta/Saves",
+        "templatesPath": "C:/Program Files (x86)/Steam/steamapps/common/Terra Invicta/TerraInvicta_Data/StreamingAssets/Templates"
+      }
     }
     ```
 

@@ -79,6 +79,8 @@
       "additionalProperties": false,
       "properties": {
         "capability": { "type": "string", "minLength": 1 },
+        "outputKey": { "type": "string", "pattern": "^can[A-Z][A-Za-z0-9]*$" },
+        "name": { "type": "string", "minLength": 1 },
         "category": { "type": "string", "minLength": 1 },
         "description": { "type": "string", "minLength": 1 },
         "defaultProject": { "type": "string" },

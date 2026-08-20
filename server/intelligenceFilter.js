@@ -1,6 +1,7 @@
 const capabilityResolver = require('./capabilityResolver');
 const opportunityScorer = require('./opportunityScorer');
 const snapshotIdentity = require('./snapshotIdentity');
+const { resolveConfig } = require('./config');
 const { buildAlienHateEconomics } = require('./alienHateEconomics');
 const {
   ALIEN_FACTION_DISPLAY_NAME,
@@ -8,8 +9,10 @@ const {
   SERVANTS_DISPLAY_NAME
 } = require('../shared/constants.mjs');
 
+const DEFAULT_OBSERVER_FACTION_ID = resolveConfig().campaign.defaultObserverFactionId;
+
 class IntelligenceFilter {
-  applyFilter(rawSnapshot, mode = 'player', observerFactionId = 4712) {
+  applyFilter(rawSnapshot, mode = 'player', observerFactionId = DEFAULT_OBSERVER_FACTION_ID) {
     const observer = rawSnapshot.factions.find(f => f.ID === observerFactionId) ||
                      rawSnapshot.factions.find(f => f.displayName === INITIATIVE_DISPLAY_NAME) ||
                      rawSnapshot.factions[0];
@@ -98,6 +101,7 @@ class IntelligenceFilter {
         techMatrix: rawSnapshot.techMatrix,
         techTree: rawSnapshot.techTree,
         shipHullStats: rawSnapshot.shipHullStats,
+        miningScarcityWeights: rawSnapshot.miningScarcityWeights,
         isOmniscient: true
       };
     }
@@ -127,7 +131,13 @@ class IntelligenceFilter {
           visibleEstimate: isEnhanced ? (f.assessedAlienHateOfMe || 0).toFixed(2) : 'UNAVAILABLE',
           visibility: isEnhanced ? 'raw_save_only' : 'unavailable',
           status: 'unavailable',
-          requiredProject: 'Alien Operations (Project_TheirOperations)'
+          requiredProject: (() => {
+            const detail = capabilities.details?.estimateAlienThreat || {};
+            if (detail.requiredDisplayName && detail.requiredProject) {
+              return `${detail.requiredDisplayName} (${detail.requiredProject})`;
+            }
+            return detail.requiredDisplayName || detail.requiredProject || 'Alien threat assessment capability';
+          })()
         };
       }
 
@@ -253,32 +263,43 @@ class IntelligenceFilter {
     }
 
     // 3. Alien Intelligence Stage Status
+    const stageFromCapability = (detailKey, outputKey, fallbackName, fallbackDescription, extra = {}) => {
+      const detail = capabilities.details?.[detailKey] || {};
+      const active = capabilities[outputKey] === true;
+      return {
+        ...extra,
+        active,
+        name: detail.requiredDisplayName || detail.name || fallbackName,
+        status: active ? 'AVAILABLE' : 'LOCKED',
+        description: detail.description || fallbackDescription
+      };
+    };
     const alienIntelligenceStage = {
-      abductions: {
-        active: capabilities.canDetectAlienAbductions,
-        name: 'Alien Signatures',
-        status: capabilities.canDetectAlienAbductions ? 'AVAILABLE' : 'LOCKED',
-        description: 'Detects alien abductions in surveyed regions.'
-      },
-      contacts: {
-        active: capabilities.canDetectAlienHumanContacts,
-        name: 'Alien Methods',
-        status: capabilities.canDetectAlienHumanContacts ? 'AVAILABLE' : 'LOCKED',
-        description: 'Detects alien contacts and enthrall activities with human factions.'
-      },
-      operations: {
-        active: capabilities.canDetectAlienOperations,
-        name: 'Alien Operations',
-        status: capabilities.canDetectAlienOperations ? 'AVAILABLE' : 'LOCKED',
-        description: 'Detects worldwide alien operations and updates the threat meter.'
-      },
-      operatives: {
-        active: capabilities.canDirectlyDetectAlienCouncilors,
-        name: 'Alien Movements',
-        status: capabilities.canDirectlyDetectAlienCouncilors ? 'AVAILABLE' : 'LOCKED',
-        detectedCount: capabilities.canDirectlyDetectAlienCouncilors ? detectedAlienCount : null,
-        description: 'Directly detects and tracks individual alien operatives (Hydras).'
-      }
+      abductions: stageFromCapability(
+        'detectAlienAbductions',
+        'canDetectAlienAbductions',
+        'Alien Signatures',
+        'Detects alien abductions in surveyed regions.'
+      ),
+      contacts: stageFromCapability(
+        'detectAlienHumanContacts',
+        'canDetectAlienHumanContacts',
+        'Alien Methods',
+        'Detects alien contacts and enthrall activities with human factions.'
+      ),
+      operations: stageFromCapability(
+        'detectAlienOperations',
+        'canDetectAlienOperations',
+        'Alien Operations',
+        'Detects worldwide alien operations and updates the threat meter.'
+      ),
+      operatives: stageFromCapability(
+        'detectAlienCouncilors',
+        'canDirectlyDetectAlienCouncilors',
+        'Alien Movements',
+        'Directly detects and tracks individual alien operatives (Hydras).',
+        { detectedCount: capabilities.canDirectlyDetectAlienCouncilors ? detectedAlienCount : null }
+      )
     };
 
     // 4. Tech Matrix Filtering
@@ -385,6 +406,7 @@ class IntelligenceFilter {
       techMatrix: filteredTechMatrix,
       techTree: rawSnapshot.techTree,
       shipHullStats: rawSnapshot.shipHullStats,
+      miningScarcityWeights: rawSnapshot.miningScarcityWeights,
       isOmniscient: false
     };
   }

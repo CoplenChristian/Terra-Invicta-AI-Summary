@@ -1,0 +1,6 @@
+[
+  { "dataName": "Project_TheirSignatures", "friendlyName": "Alien Signatures", "researchCost": 1000, "effects": ["Effect_DetectAbductions"] },
+  { "dataName": "Project_TheirMethods", "friendlyName": "Alien Methods", "researchCost": 1000, "effects": ["Effect_DetectEnthralls"] },
+  { "dataName": "Project_TheirOperations", "friendlyName": "Alien Operations", "researchCost": 1000, "effects": ["Effect_DetectAllOperations", "Effect_UpdateAlienThreatMeter"] },
+  { "dataName": "Project_TheirMovements", "friendlyName": "Alien Movements", "researchCost": 1000, "effects": ["Effect_DetectAlienMovements"] }
+]

@@ -1098,8 +1098,8 @@ class SnapshotBuilder {
       priorityTargetFaction: defaultPriorityTarget,
       spaceDetection: {
         saturnOrbitDistanceAU,
-        skywatchRule: templateLoader.config.intelligenceRules?.spaceAssets?.innerSystemDescription || null,
-        deepSystemSkywatchRule: templateLoader.config.intelligenceRules?.spaceAssets?.deepSystemDescription || null
+        skywatchRule: templateLoader.config.analysis?.rules?.spaceAssets?.innerSystemDescription || null,
+        deepSystemSkywatchRule: templateLoader.config.analysis?.rules?.spaceAssets?.deepSystemDescription || null
       },
       techMatrix,
       shipHullStats: this.buildShipHullStats(),

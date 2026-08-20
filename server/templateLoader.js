@@ -308,15 +308,13 @@ class TemplateLoader {
 
   validateIntelligenceMappings() {
     this.validationResults = [];
-    const expected = [
-      { id: 'Project_TheirSignatures', type: 'project', effect: 'Effect_DetectAbductions' },
-      { id: 'Project_TheirMethods', type: 'project', effect: 'Effect_DetectEnthralls' },
-      { id: 'Project_TheirOperations', type: 'project', effect: 'Effect_DetectAllOperations' },
-      { id: 'Project_TheirOperations', type: 'project', effect: 'Effect_UpdateAlienThreatMeter' },
-      { id: 'Project_TheirMovements', type: 'project', effect: 'Effect_DetectAlienMovements' },
-      { id: 'Skywatch', type: 'tech', effect: 'Effect_Skywatch' },
-      { id: 'DeepSystemSkywatch', type: 'tech', effect: 'Effect_DeepSkywatch' }
-    ];
+    const expected = Object.entries(this.config.analysis?.effects || {})
+      .map(([effect, descriptor]) => ({
+        id: descriptor.defaultProject || descriptor.defaultTech,
+        type: descriptor.defaultProject ? 'project' : 'tech',
+        effect
+      }))
+      .filter(entry => entry.id && entry.effect);
 
     for (const exp of expected) {
       const effects = exp.type === 'project'

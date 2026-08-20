@@ -33,42 +33,49 @@
     "effects": {
       "Effect_DetectAbductions": {
         "capability": "detectAlienAbductions",
+        "outputKey": "canDetectAlienAbductions",
         "category": "alien",
         "description": "Allows detection of alien abductions in investigated regions",
         "defaultProject": "Project_TheirSignatures"
       },
       "Effect_DetectEnthralls": {
         "capability": "detectAlienHumanContacts",
+        "outputKey": "canDetectAlienHumanContacts",
         "category": "alien",
         "description": "Allows detection of alien contacts and enthrall activity",
         "defaultProject": "Project_TheirMethods"
       },
       "Effect_DetectAllOperations": {
         "capability": "detectAlienOperations",
+        "outputKey": "canDetectAlienOperations",
         "category": "alien",
         "description": "Allows detection of broader alien operations worldwide",
         "defaultProject": "Project_TheirOperations"
       },
       "Effect_UpdateAlienThreatMeter": {
         "capability": "estimateAlienThreat",
+        "outputKey": "canEstimateAlienThreat",
         "category": "alien",
         "description": "Unlocks and updates the faction alien threat / hate estimation meter",
         "defaultProject": "Project_TheirOperations"
       },
       "Effect_DetectAlienMovements": {
         "capability": "detectAlienCouncilors",
+        "outputKey": "canDirectlyDetectAlienCouncilors",
         "category": "alien",
         "description": "Allows direct detection and tracking of alien operatives (Hydras)",
         "defaultProject": "Project_TheirMovements"
       },
       "Effect_Skywatch": {
         "capability": "trackInnerSpaceAssets",
+        "outputKey": "canTrackInnerSpaceAssets",
         "category": "space",
         "description": "Track alien and hostile vessels/structures within Saturn's orbit",
         "defaultTech": "Skywatch"
       },
       "Effect_DeepSkywatch": {
         "capability": "trackSolarSystemSpaceAssets",
+        "outputKey": "canTrackSolarSystemSpaceAssets",
         "category": "space",
         "description": "Track alien and hostile vessels/structures throughout the Solar System",
         "defaultTech": "DeepSystemSkywatch"

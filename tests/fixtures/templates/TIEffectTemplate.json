@@ -1,0 +1,9 @@
+[
+  { "dataName": "Effect_DetectAbductions", "friendlyName": "Detect Abductions" },
+  { "dataName": "Effect_DetectEnthralls", "friendlyName": "Detect Enthralls" },
+  { "dataName": "Effect_DetectAllOperations", "friendlyName": "Detect Operations" },
+  { "dataName": "Effect_UpdateAlienThreatMeter", "friendlyName": "Alien Threat Meter" },
+  { "dataName": "Effect_DetectAlienMovements", "friendlyName": "Detect Alien Movements" },
+  { "dataName": "Effect_Skywatch", "friendlyName": "Skywatch" },
+  { "dataName": "Effect_DeepSkywatch", "friendlyName": "Deep System Skywatch" }
+]

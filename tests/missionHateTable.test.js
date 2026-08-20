@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { MISSION_SUCCESS_HATE } = require('../server/directiveAdvisor');
+const { resolveConfig } = require('../server/config');
 
 // MISSION_SUCCESS_HATE is hand-maintained, because the mission templates are
 // not among the files templateLoader pulls in. That makes it exactly the kind
@@ -15,10 +16,14 @@ const { MISSION_SUCCESS_HATE } = require('../server/directiveAdvisor');
 // success, which is the outcome a directive is proposing.
 const SUCCESS_SLOT = 4;
 
+const configuredTemplates = resolveConfig().paths.templatesPath;
+const installSuffix = path.join('steamapps', 'common', 'Terra Invicta', 'TerraInvicta_Data', 'StreamingAssets', 'Templates');
 const CANDIDATE_TEMPLATE_DIRS = [
+  configuredTemplates,
   process.env.TI_TEMPLATES_DIR,
-  'F:/SteamLibrary/steamapps/common/Terra Invicta/TerraInvicta_Data/StreamingAssets/Templates',
-  'C:/Program Files (x86)/Steam/steamapps/common/Terra Invicta/TerraInvicta_Data/StreamingAssets/Templates'
+  process.env.STEAM_LIBRARY_PATH && path.join(process.env.STEAM_LIBRARY_PATH, installSuffix),
+  process.env.ProgramFiles && path.join(process.env.ProgramFiles, installSuffix),
+  process.env['ProgramFiles(x86)'] && path.join(process.env['ProgramFiles(x86)'], installSuffix)
 ].filter(Boolean);
 
 // The advisor keys on the names the game shows a player, which are template

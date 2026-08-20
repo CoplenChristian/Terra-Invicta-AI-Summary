@@ -18,6 +18,8 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const { createClient } = require('@supabase/supabase-js');
+const { resolveConfig } = require('../server/config');
+const runtimeConfig = resolveConfig();
 
 function loadEnv() {
   const envPath = path.resolve(__dirname, '..', '.env');
@@ -36,7 +38,7 @@ function loadEnv() {
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {
-    campaignKey: process.env.SUPABASE_CAMPAIGN_KEY || 'initiative',
+    campaignKey: process.env.SUPABASE_CAMPAIGN_KEY || runtimeConfig.campaign.key,
     keep: 3,
     all: false,
     outDir: null

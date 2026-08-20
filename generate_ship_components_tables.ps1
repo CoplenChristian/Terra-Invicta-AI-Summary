@@ -4,11 +4,9 @@ param(
 
 # Load configuration
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$configPath = Join-Path $scriptPath "config.json"
-if (-not (Test-Path $configPath)) {
-    throw "Config file not found at $configPath"
-}
-$config = Get-Content $configPath -Raw | ConvertFrom-Json
+$commonModulePath = Join-Path $scriptPath "TerraInvicta.Common.psm1"
+Import-Module -Name $commonModulePath -Force
+$config = Get-TIConfig -BasePath $scriptPath
 
 if ([string]::IsNullOrEmpty($RootPath)) {
     $RootPath = $config.WorkDir

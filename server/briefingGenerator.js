@@ -705,12 +705,24 @@ class BriefingGenerator {
     const researchSlots = this.getResearchSlots(globalResearch);
     const stages = activeAlienStages || {};
     const hasStageData = Object.keys(stages).length > 0;
+    const effects = this.config.analysis?.effects || {};
+    const projects = new Map(
+      (this.config.analysis?.strategicProjects || []).map(project => [project.id, project])
+    );
+    const unlockLabel = (effectId, fallback) => {
+      const descriptor = effects[effectId] || {};
+      const id = descriptor.defaultProject || descriptor.defaultTech;
+      if (!id) return fallback;
+      const displayName = projects.get(id)?.name || id;
+      const kind = descriptor.defaultTech ? 'Tech' : 'Project';
+      return `${kind} '${displayName}' (${id})`;
+    };
 
     // Research Vector 1: Alien Threat Meter
     if (hasStageData && stages.operations && stages.operations.active === false) {
       directives.push({
         id: 'res-1',
-        title: "Unlock Project 'Alien Operations' (Project_TheirOperations)",
+        title: `Unlock ${unlockLabel('Effect_UpdateAlienThreatMeter', 'the configured alien threat project')}`,
         category: 'STRATEGIC INTEL UNLOCK',
         severity: 'CRITICAL',
         statement: 'Our intelligence command is currently blind to the calibrated Alien Threat Meter and worldwide alien operations.',
@@ -724,7 +736,7 @@ class BriefingGenerator {
     if (hasStageData && stages.operatives && stages.operatives.active === false) {
       directives.push({
         id: 'res-2',
-        title: "Advance Project 'Alien Movements' (Project_TheirMovements)",
+        title: `Advance ${unlockLabel('Effect_DetectAlienMovements', 'the configured alien movement project')}`,
         category: 'TACTICAL RECONNAISSANCE',
         severity: 'HIGH',
         statement: 'Alien Hydra operatives on Earth cannot be directly targeted or unmasked on satellite telemetry without completed xenobiology tracking.',

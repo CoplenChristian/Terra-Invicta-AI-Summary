@@ -7,12 +7,16 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
+const { resolveConfig } = require('./config');
 
 class SupabaseAdapter {
   constructor(config = {}) {
+    const runtimeConfig = resolveConfig();
     this.supabaseUrl = config.supabaseUrl || process.env.SUPABASE_URL;
     this.publishableKey = config.publishableKey || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
-    this.defaultCampaignKey = config.campaignKey || process.env.SUPABASE_CAMPAIGN_KEY || 'initiative';
+    this.defaultCampaignKey = config.campaignKey || process.env.SUPABASE_CAMPAIGN_KEY || runtimeConfig.campaign.key;
+    this.defaultObserverFactionId = Number(config.observerFactionId) ||
+      Number(process.env.SUPABASE_OBSERVER_FACTION_ID) || runtimeConfig.campaign.defaultObserverFactionId;
     this.client = null;
 
     if (this.supabaseUrl && this.publishableKey) {
@@ -50,7 +54,7 @@ class SupabaseAdapter {
     return data;
   }
 
-  async getLatestPlayerSnapshot(observerFactionId = 4712, campaignKey = null) {
+  async getLatestPlayerSnapshot(observerFactionId = null, campaignKey = null) {
     if (!this.client) {
       throw new Error('Supabase client is not configured.');
     }
@@ -64,7 +68,7 @@ class SupabaseAdapter {
       return { found: false, error: `No active save timestamp recorded for campaign '${campaign.campaign_key}'.` };
     }
 
-    const safeObserverId = parseInt(observerFactionId, 10) || 4712;
+    const safeObserverId = parseInt(observerFactionId, 10) || this.defaultObserverFactionId;
 
     const { data: snapshotRow, error } = await this.client
       .from('player_intel_snapshots')
@@ -102,7 +106,7 @@ class SupabaseAdapter {
     };
   }
 
-  async getExportMarkdown(format = 'chatgpt', observerFactionId = 4712, campaignKey = null) {
+  async getExportMarkdown(format = 'chatgpt', observerFactionId = null, campaignKey = null) {
     const result = await this.getLatestPlayerSnapshot(observerFactionId, campaignKey);
     if (!result.found) {
       return { success: false, error: result.error };
