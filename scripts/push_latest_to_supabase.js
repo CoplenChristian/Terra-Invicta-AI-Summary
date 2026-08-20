@@ -26,6 +26,7 @@ const briefingGenerator = require('../server/briefingGenerator');
 const templateLoader = require('../server/templateLoader');
 const snapshotIdentity = require('../server/snapshotIdentity');
 const snapshotDelta = require('../server/snapshotDelta');
+const saveComparison = require('../server/saveComparison');
 const { INTELLIGENCE_MODES, DEFAULT_OBSERVER_FACTION_ID } = require('../shared/constants.mjs');
 const { buildStrategicSnapshot, DEFAULT_HISTORY_POLICY } = require('../shared/strategicSnapshot.mjs');
 
@@ -247,18 +248,33 @@ async function main() {
   snapshotIdentity.attachSnapshotIdentity(rawSnapshot, identity);
   let previousRawSnapshot = null;
   try {
-    const currentPath = path.resolve(targetSave.fullPath).toLowerCase();
-    const previousSave = saveParser.getAvailableSaves().find(candidate => {
-      return path.resolve(candidate.fullPath).toLowerCase() !== currentPath &&
-        new Date(candidate.lastModified).getTime() < new Date(targetSave.lastModified).getTime();
-    });
-    if (previousSave) {
-      previousRawSnapshot = snapshotBuilder.buildRawSnapshot(saveParser.readSaveJson(previousSave.fullPath));
+    // Skip past saves that capture the same in-game moment, otherwise the
+    // published changesSincePrevious is empty whenever the latest save is an
+    // ExitSave written seconds after an Autosave.
+    const parsedCandidates = new Map();
+    const readCandidate = (candidate) => {
+      const key = path.resolve(candidate.fullPath).toLowerCase();
+      if (!parsedCandidates.has(key)) {
+        parsedCandidates.set(key, snapshotBuilder.buildRawSnapshot(saveParser.readSaveJson(candidate.fullPath)));
+      }
+      return parsedCandidates.get(key);
+    };
+
+    const selection = saveComparison.selectComparisonSave(
+      saveParser.getAvailableSaves(),
+      targetSave,
+      rawSnapshot.metadata?.gameTimeString || null,
+      (candidate) => readCandidate(candidate)?.metadata?.gameTimeString || null
+    );
+
+    if (selection?.save) {
+      previousRawSnapshot = readCandidate(selection.save);
       snapshotIdentity.attachSnapshotIdentity(previousRawSnapshot, snapshotIdentity.createSnapshotIdentity(
-        previousSave,
+        selection.save,
         options.campaignKey,
         identity.generatedAt
       ));
+      console.log(`Comparison baseline:  ${selection.save.name}${selection.gameTime ? ` (${selection.gameTime})` : ''}${selection.reason === 'same-game-time-fallback' ? ' — every recent save shares this in-game moment' : ''}`);
     }
   } catch (previousError) {
     console.warn(`[Warning] Previous save comparison unavailable: ${previousError.message}`);
