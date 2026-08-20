@@ -15,6 +15,12 @@
 .PARAMETER CampaignKey
     Optional campaign key override (defaults to 'initiative' or SUPABASE_CAMPAIGN_KEY).
 
+.PARAMETER InlineTechTree
+    Embeds the static tech graph in every published row.
+
+.PARAMETER OmitTechTree
+    Omits the tech graph and publishes an explicit unavailable marker.
+
 .EXAMPLE
     .\push_latest_to_supabase.ps1 -DryRun
 
@@ -26,7 +32,13 @@
 param(
     [switch]$DryRun,
     [string]$Save,
-    [string]$CampaignKey
+    [string]$CampaignKey,
+    [switch]$AllObservers,
+    [int]$Observer,
+    [int]$HistoryRetention,
+    [int]$FullSnapshotRetention,
+    [switch]$InlineTechTree,
+    [switch]$OmitTechTree
 )
 
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -45,5 +57,12 @@ if (-not [string]::IsNullOrWhiteSpace($Save)) {
 if (-not [string]::IsNullOrWhiteSpace($CampaignKey)) {
     $nodeArgs += @("--campaign", $CampaignKey)
 }
+
+if ($AllObservers) { $nodeArgs += "--all-observers" }
+if ($Observer -gt 0) { $nodeArgs += @("--observer", $Observer) }
+if ($HistoryRetention -gt 0) { $nodeArgs += @("--history-retention", $HistoryRetention) }
+if ($FullSnapshotRetention -gt 0) { $nodeArgs += @("--full-snapshot-retention", $FullSnapshotRetention) }
+if ($InlineTechTree) { $nodeArgs += "--inline-tech-tree" }
+if ($OmitTechTree) { $nodeArgs += "--omit-tech-tree" }
 
 node @nodeArgs

@@ -10,13 +10,14 @@
  * Usage:
  *   node scripts/push_latest_to_supabase.js [--dry-run] [--save <path>] [--campaign <key>]
  *     [--full-snapshot-retention <count>] [--history-retention <count>]
- *     [--inline-tech-tree]
+ *     [--inline-tech-tree | --omit-tech-tree]
  */
 
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const { createClient } = require('@supabase/supabase-js');
+const { resolveConfig } = require('../server/config');
 
 const saveParser = require('../server/saveParser');
 const snapshotBuilder = require('../server/snapshotBuilder');
@@ -29,6 +30,7 @@ const snapshotDelta = require('../server/snapshotDelta');
 const saveComparison = require('../server/saveComparison');
 const { INTELLIGENCE_MODES, DEFAULT_OBSERVER_FACTION_ID } = require('../shared/constants.mjs');
 const { buildStrategicSnapshot, DEFAULT_HISTORY_POLICY } = require('../shared/strategicSnapshot.mjs');
+const runtimeConfig = resolveConfig();
 
 // Publishing fan-out policy.
 //
@@ -41,9 +43,9 @@ const { buildStrategicSnapshot, DEFAULT_HISTORY_POLICY } = require('../shared/st
 // not worth 21/24 of the storage budget. Pass --all-observers to restore the
 // old behaviour for a one-off cross-faction analysis.
 const PUBLISH_POLICY = {
-  observerFactionId: DEFAULT_OBSERVER_FACTION_ID,
-  observerModes: INTELLIGENCE_MODES,
-  otherFactionModes: []
+  observerFactionId: runtimeConfig.campaign.defaultObserverFactionId || DEFAULT_OBSERVER_FACTION_ID,
+  observerModes: runtimeConfig.publishing.observerModes || INTELLIGENCE_MODES,
+  otherFactionModes: runtimeConfig.publishing.otherFactionModes || []
 };
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -136,60 +138,135 @@ function validateSnapshotRows(rows, identity, targetSave) {
 }
 
 // Parse CLI Arguments
-function parseArgs() {
-  const args = process.argv.slice(2);
+function usage() {
+  return [
+    'Usage: node scripts/push_latest_to_supabase.js [options]',
+    '',
+    'Options:',
+    '  --dry-run                         Validate without network writes',
+    '  --save <path>                     Publish an explicit .gz/.json save',
+    '  --campaign <key>                  Campaign key',
+    '  --display-name <name>             Campaign display name',
+    '  --private                          Mark campaign non-public',
+    '  --all-observers                    Publish every observer faction',
+    '  --observer <id>                    Observer faction ID',
+    '  --history-retention <count>       Strategic history rows to retain',
+    '  --full-snapshot-retention <count> Full-fidelity saves to retain',
+    '  --inline-tech-tree                Embed the static tech graph in each row',
+    '  --omit-tech-tree                  Omit the tech graph and mark it unavailable',
+    '  --help                             Show this help'
+  ].join('\n');
+}
+
+function parsePositiveInteger(raw, flag) {
+  if (!/^\d+$/.test(String(raw))) throw new Error(`${flag} requires a positive integer.`);
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1) throw new Error(`${flag} requires a positive integer.`);
+  return value;
+}
+
+function parseArgs(argv = process.argv.slice(2), env = process.env) {
+  const args = argv;
   const options = {
+    help: false,
     dryRun: false,
     savePath: null,
-    campaignKey: process.env.SUPABASE_CAMPAIGN_KEY || 'initiative',
-    displayName: process.env.SUPABASE_CAMPAIGN_NAME || 'the Initiative Campaign',
+    campaignKey: env.SUPABASE_CAMPAIGN_KEY || runtimeConfig.campaign.key,
+    displayName: env.SUPABASE_CAMPAIGN_NAME || runtimeConfig.campaign.name,
     isPublic: true,
     allObservers: false,
-    observerFactionId: Number(process.env.SUPABASE_OBSERVER_FACTION_ID)
+    observerFactionId: Number(env.SUPABASE_OBSERVER_FACTION_ID)
       || PUBLISH_POLICY.observerFactionId,
-    historyRetention: Number(process.env.SUPABASE_HISTORY_RETENTION)
-      || DEFAULT_HISTORY_POLICY.retention,
-    fullSnapshotRetention: Number(process.env.SUPABASE_FULL_SNAPSHOT_RETENTION)
-      || 3,
+    historyRetention: Number(env.SUPABASE_HISTORY_RETENTION)
+      || runtimeConfig.publishing.historyRetention || DEFAULT_HISTORY_POLICY.retention,
+    fullSnapshotRetention: Number(env.SUPABASE_FULL_SNAPSHOT_RETENTION)
+      || runtimeConfig.publishing.fullSnapshotRetention || 3,
     // The static half of the tech tree is stored once per campaign and spliced
     // back in by readers, so sharing it is lossless. --inline-tech-tree forces
     // the old per-row copy for a consumer that cannot follow the reference.
-    shareTechGraph: true
+    shareTechGraph: runtimeConfig.publishing.shareTechGraph !== false,
+    omitTechTree: false
   };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === '--dry-run') {
+    if (arg === '--help' || arg === '-h') {
+      options.help = true;
+    } else if (arg === '--dry-run') {
       options.dryRun = true;
-    } else if (arg === '--save' && i + 1 < args.length) {
+    } else if (arg === '--save') {
+      if (i + 1 >= args.length) throw new Error('--save requires a path.');
       options.savePath = args[++i];
-    } else if (arg === '--campaign' && i + 1 < args.length) {
+    } else if (arg === '--campaign') {
+      if (i + 1 >= args.length) throw new Error('--campaign requires a key.');
       options.campaignKey = args[++i];
-    } else if (arg === '--display-name' && i + 1 < args.length) {
+    } else if (arg === '--display-name') {
+      if (i + 1 >= args.length) throw new Error('--display-name requires a value.');
       options.displayName = args[++i];
     } else if (arg === '--private') {
       options.isPublic = false;
     } else if (arg === '--all-observers') {
       options.allObservers = true;
-    } else if (arg === '--observer' && i + 1 < args.length) {
-      options.observerFactionId = Number(args[++i]);
-    } else if (arg === '--history-retention' && i + 1 < args.length) {
-      options.historyRetention = Number(args[++i]);
-    } else if (arg === '--full-snapshot-retention' && i + 1 < args.length) {
-      options.fullSnapshotRetention = Number(args[++i]);
+    } else if (arg === '--observer') {
+      if (i + 1 >= args.length) throw new Error('--observer requires a faction ID.');
+      options.observerFactionId = parsePositiveInteger(args[++i], '--observer');
+    } else if (arg === '--history-retention') {
+      if (i + 1 >= args.length) throw new Error('--history-retention requires a count.');
+      options.historyRetention = parsePositiveInteger(args[++i], '--history-retention');
+    } else if (arg === '--full-snapshot-retention') {
+      if (i + 1 >= args.length) throw new Error('--full-snapshot-retention requires a count.');
+      options.fullSnapshotRetention = parsePositiveInteger(args[++i], '--full-snapshot-retention');
     } else if (arg === '--inline-tech-tree') {
       options.shareTechGraph = false;
+    } else if (arg === '--omit-tech-tree') {
+      options.shareTechGraph = false;
+      options.omitTechTree = true;
+    } else if (arg.startsWith('-')) {
+      throw new Error(`Unknown option '${arg}'. Use --help to list supported options.`);
+    } else {
+      throw new Error(`Unexpected argument '${arg}'. Use --help to list supported options.`);
     }
   }
 
-  options.historyRetention = Math.max(1, Math.floor(Number(options.historyRetention) || DEFAULT_HISTORY_POLICY.retention));
-  options.fullSnapshotRetention = Math.max(1, Math.floor(Number(options.fullSnapshotRetention) || 3));
+  if (options.omitTechTree && args.includes('--inline-tech-tree')) {
+    throw new Error('--omit-tech-tree and --inline-tech-tree are mutually exclusive.');
+  }
+  options.historyRetention = parsePositiveInteger(options.historyRetention, '--history-retention');
+  options.fullSnapshotRetention = parsePositiveInteger(options.fullSnapshotRetention, '--full-snapshot-retention');
 
   return options;
 }
 
+function applyTechTreeMode(modeData, options, fingerprint) {
+  if (options.omitTechTree) {
+    const nodeCount = Array.isArray(modeData?.techTree?.nodes) ? modeData.techTree.nodes.length : 0;
+    const { techTree, ...rest } = modeData || {};
+    return {
+      ...rest,
+      techTreeRef: {
+        omitted: true,
+        nodeCount,
+        reason: 'static template data omitted by --omit-tech-tree'
+      }
+    };
+  }
+  return options.shareTechGraph ? splitTechTree(modeData, fingerprint) : modeData;
+}
+
 async function main() {
-  const options = parseArgs();
+  let options;
+  try {
+    options = parseArgs();
+  } catch (error) {
+    console.error(`[Error] ${error.message}`);
+    console.error(usage());
+    process.exitCode = 2;
+    return;
+  }
+  if (options.help) {
+    console.log(usage());
+    return;
+  }
 
   console.log('========================================================');
   console.log('  TERRA INVICTA // SUPABASE INTELLIGENCE PUBLISHER      ');
@@ -289,7 +366,7 @@ async function main() {
 
   // 3. Discover Observer Factions
   const fallbackFactions = [
-    { ID: 4712, displayName: 'the Initiative' },
+    { ID: runtimeConfig.campaign.defaultObserverFactionId, displayName: runtimeConfig.campaign.defaultObserverFactionName },
     { ID: 4710, displayName: 'the Resistance' },
     { ID: 4711, displayName: 'Humanity First' },
     { ID: 4715, displayName: 'the Academy' },
@@ -308,12 +385,14 @@ async function main() {
   // Enhanced and Omniscient are intentionally enabled for this campaign at the
   // user's request; each remains clearly labeled in storage and every hosted response.
   const snapshotRows = [];
-  const publishedModes = INTELLIGENCE_MODES;
+  const configuredModes = Array.from(new Set(PUBLISH_POLICY.observerModes));
+  const publishedModes = configuredModes.length > 0 ? configuredModes : INTELLIGENCE_MODES;
+  const allObserverModes = INTELLIGENCE_MODES;
 
   // Apply the fan-out policy: publish every mode for the observer faction, and
   // only PUBLISH_POLICY.otherFactionModes for everyone else (empty by default).
   const modesForObserver = (factionId) => {
-    if (options.allObservers) return publishedModes;
+    if (options.allObservers) return allObserverModes;
     return Number(factionId) === Number(options.observerFactionId)
       ? PUBLISH_POLICY.observerModes
       : PUBLISH_POLICY.otherFactionModes;
@@ -372,7 +451,7 @@ async function main() {
         // that row will expose techTreeRef and the hosted tech endpoints will
         // correctly report that the graph is unavailable.
         snapshot: {
-          ...(options.shareTechGraph ? splitTechTree(modeData, techGraphId) : modeData),
+          ...applyTechTreeMode(modeData, options, techGraphId),
           missionControlBriefing
         },
         chatgpt_export: {
@@ -570,7 +649,8 @@ async function main() {
     const compact = buildStrategicSnapshot(rawSnapshot, {
       observerFactionId: options.observerFactionId,
       campaignKey: options.campaignKey,
-      previous: priorRow?.payload || null
+      previous: priorRow?.payload || null,
+      policy: runtimeConfig.analysis.strategicHistory
     });
 
     const compactBytes = Buffer.byteLength(JSON.stringify(compact), 'utf8');
@@ -640,4 +720,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, parseArgs };
+module.exports = { main, parseArgs, usage, applyTechTreeMode };

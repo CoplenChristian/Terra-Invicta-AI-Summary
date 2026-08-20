@@ -97,6 +97,10 @@ async function loadRuntime() {
     const runtime = await res.json();
     if (!runtime.success) return;
     state.runtime = runtime;
+    const configuredObserver = Number(runtime.defaults?.defaultObserverFactionId || runtime.defaultObserverFactionId);
+    if (Number.isSafeInteger(configuredObserver) && configuredObserver > 0) {
+      state.observer = configuredObserver;
+    }
     applyRuntimeCapabilities();
   } catch (err) {
     // The dashboard can still load with its local defaults if the capability

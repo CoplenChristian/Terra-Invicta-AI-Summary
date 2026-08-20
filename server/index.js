@@ -372,7 +372,9 @@ app.get(['/api/intel', '/api/intel/'], (req, res) => {
       observer: `Observer faction ID, e.g. ${runtimeConfig.campaign.defaultObserverFactionId}`,
       mode: 'player | enhanced | omniscient',
       faction: 'Optional faction ID filter',
-      body: 'Optional body/theater filter'
+      body: 'Optional body filter',
+      theater: 'Mining-prospects theater filter (body is accepted as a legacy alias)',
+      limit: 'Mining-prospects result limit from 1 to 100'
     }
   };
   if (req.query.format === 'json' || String(req.get('accept') || '').includes('application/json')) {
@@ -544,7 +546,8 @@ app.get('/api/intel/strategic-delta', async (req, res) => {
         const rawSnapshot = loadOrGetSnapshot(targetPath);
         toDoc = buildStrategicSnapshot(rawSnapshot, {
           observerFactionId: Number(req.query.observer) || runtimeConfig.campaign.defaultObserverFactionId,
-          campaignKey: campaign
+          campaignKey: campaign,
+          policy: runtimeConfig.analysis.strategicHistory
         });
         fromDoc = recent.snapshots[0]?.payload || null;
       } catch (localErr) {

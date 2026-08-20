@@ -4,7 +4,7 @@
 // via require(esm)) and the hosted Cloudflare worker (ESM import). Keep this
 // file free of any runtime-specific imports so it stays usable in both.
 
-import { ALIEN_FACTION_ID, ALIEN_FACTION_DISPLAY_NAME } from './constants.mjs';
+import { ALIEN_FACTION_ID, ALIEN_FACTION_DISPLAY_NAME, DEFAULT_OBSERVER_FACTION_ID } from './constants.mjs';
 import { buildAlienHateEconomics, ALIEN_HATE_WAR_THRESHOLD } from './alienHateEconomics.mjs';
 
 export const SUPPORTED_RESOURCES = new Set([
@@ -1559,4 +1559,131 @@ export const summaryResource = (snapshot) => {
     priorityTargetFaction: snapshot.priorityTargetFaction,
     alienHateEconomics: snapshot.alienHateEconomics ?? null
   };
+};
+
+// One pure projection dispatcher is shared by the local Express adapter and
+// the hosted worker. The adapters are responsible only for request parsing,
+// snapshot retrieval, and response envelopes; resource semantics live here.
+export const buildResourceProjection = (snapshot, resource, {
+  factionId = null,
+  body = null,
+  theater = null,
+  limit = null,
+  destination = null,
+  fleetId = null,
+  designId = null,
+  quantity = 1,
+  status = null,
+  sort = null,
+  previousSnapshot = null,
+  mode = 'player',
+  weights = null
+} = {}) => {
+  const observerId = snapshot.observerFactionId || DEFAULT_OBSERVER_FACTION_ID;
+  if (resource === 'summary') return { count: null, items: [], ...summaryResource(snapshot) };
+  if (resource === 'capabilities') {
+    return {
+      count: 0,
+      items: [],
+      capabilities: snapshot.capabilities || {},
+      activeXenoforming: snapshot.activeXenoforming || [],
+      builtAlienFacilities: snapshot.builtAlienFacilities || []
+    };
+  }
+  if (resource === 'alien') {
+    const alienFaction = findAlienFaction(snapshot);
+    const alienId = alienFaction?.ID;
+    const fleets = asArray(snapshot.fleets).filter(fleet => fleet.factionId === alienId && bodyMatches(fleet, body));
+    const habs = asArray(snapshot.habs).filter(hab => hab.factionId === alienId && bodyMatches(hab, body));
+    const habSites = asArray(snapshot.habSites).filter(site => site.factionId === alienId && bodyMatches(site, body));
+    const councilors = asArray(snapshot.councilors).filter(councilor => councilor.factionId === alienId);
+    return {
+      count: councilors.length + fleets.length + habs.length + habSites.length,
+      items: [],
+      faction: alienFaction ? factionResourceRow(alienFaction) : null,
+      councilors: councilors.map(councilor => councilorResourceRow(councilor, mode)),
+      fleets: fleets.map(fleetResourceRow),
+      habs: habs.map(habResourceRow),
+      habSites: habSites.map(habSiteResourceRow),
+      activeXenoforming: snapshot.activeXenoforming || [],
+      builtAlienFacilities: snapshot.builtAlienFacilities || []
+    };
+  }
+  if (resource === 'logistics') {
+    const log = logisticsResource(snapshot, observerId);
+    return { count: log.resources.length, items: log.resources, ...log };
+  }
+  if (resource === 'construction') {
+    const items = constructionResource(snapshot, factionId, body);
+    return { count: items.length, items };
+  }
+  if (resource === 'transfers') {
+    const items = transfersResource(snapshot, factionId, body, destination);
+    return { count: items.length, items };
+  }
+  if (resource === 'ship-designs') {
+    const items = shipDesignsResource(snapshot, factionId);
+    return { count: items.length, items };
+  }
+  if (resource === 'theaters') {
+    const items = theatersResource(snapshot, observerId);
+    return { count: items.length, items };
+  }
+  if (resource === 'infrastructure') {
+    const items = infrastructureResource(snapshot, factionId, body);
+    return { count: items.length, items };
+  }
+  if (resource === 'alien-threat') {
+    return { count: null, items: [], ...alienThreatResource(snapshot, observerId) };
+  }
+  if (resource === 'delta') {
+    if (snapshot.changesSincePrevious) {
+      return { count: null, items: [], ...snapshot.changesSincePrevious, source: 'published-comparison' };
+    }
+    return { count: null, items: [], ...deltaResource(snapshot, previousSnapshot, observerId) };
+  }
+  if (resource === 'mobility') {
+    const mob = mobilityResource(snapshot, fleetId, observerId);
+    return { count: mob.transfers?.length || 0, items: mob.transfers || [], ...mob };
+  }
+  if (resource === 'production-plan') {
+    return { count: null, items: [], ...productionPlanResource(snapshot, designId, quantity, observerId) };
+  }
+  if (resource === 'mining-prospects') {
+    const prospects = miningProspectsResource(snapshot, {
+      theater: theater || body || null,
+      limit,
+      weights
+    });
+    return { count: prospects.ranked.length, items: prospects.ranked, ...prospects };
+  }
+  if (resource === 'body-status') {
+    return { count: null, items: [], ...bodyStatusResource(snapshot, body || 'Mars', observerId) };
+  }
+
+  let items = [];
+  switch (resource) {
+    case 'factions': items = asArray(snapshot.factions).filter(item => factionMatches(item, factionId)).map(factionResourceRow); break;
+    case 'nations': items = asArray(snapshot.nations).filter(item => factionMatches(item, factionId)).map(nationResourceRow); break;
+    case 'councilors': items = asArray(snapshot.councilors).filter(item => factionMatches(item, factionId)).map(item => councilorResourceRow(item, mode)); break;
+    case 'habs': items = asArray(snapshot.habs).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(habResourceRow); break;
+    case 'hab-sites': items = asArray(snapshot.habSites).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(habSiteResourceRow); break;
+    case 'mining': {
+      const mining = miningAnalysisResource(snapshot, factionId, body, status, sort);
+      return { count: mining.items.length, ...mining };
+    }
+    case 'fleets': items = asArray(snapshot.fleets).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(fleetResourceRow); break;
+    case 'ships': items = shipResourceRows(asArray(snapshot.fleets), factionId, body); break;
+    case 'resources': items = asArray(snapshot.factions).filter(item => factionMatches(item, factionId)).map(factionResourceRow); break;
+    case 'hab-modules': items = asArray(snapshot.habModules).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(habModuleResourceRow); break;
+    case 'shipyards': items = asArray(snapshot.shipyardStations).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(shipyardStationResourceRow); break;
+    case 'shipyard-queues': items = asArray(snapshot.shipyardQueues).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(shipyardResourceRow); break;
+    case 'arrivals': items = asArray(snapshot.fleets).filter(item => item.arrivalDate && factionMatches(item, factionId) && bodyMatches(item, body)).map(item => arrivalResourceRow(item, friendlyStrengthAtDestination(item, snapshot))); break;
+    case 'research': {
+      const research = researchResourceRows(snapshot);
+      return { count: research.rows.length, items: research.rows, finishedGlobalProjects: research.finishedGlobalProjects };
+    }
+    default: break;
+  }
+  return { count: items.length, items };
 };

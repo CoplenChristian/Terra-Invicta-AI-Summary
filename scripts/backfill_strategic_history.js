@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const { buildStrategicSnapshot } = require('../shared/strategicSnapshot.mjs');
+const { resolveConfig } = require('../server/config');
 
 // Prefer the richest available view: omniscient carries full alien detail,
 // player mode redacts it. Recorded per row so the provenance stays honest.
@@ -45,10 +46,12 @@ function campaignDateIso(gameTimeString, fallbackIso) {
 
 function parseArgs() {
   const args = process.argv.slice(2);
+  const config = resolveConfig();
   const options = {
+    config,
     dryRun: false,
-    campaignKey: process.env.SUPABASE_CAMPAIGN_KEY || 'initiative',
-    observerFactionId: 4712,
+    campaignKey: process.env.SUPABASE_CAMPAIGN_KEY || config.campaign.key,
+    observerFactionId: Number(process.env.SUPABASE_OBSERVER_FACTION_ID) || config.campaign.defaultObserverFactionId,
     retention: null
   };
   for (let i = 0; i < args.length; i++) {
@@ -132,7 +135,8 @@ async function main() {
     const doc = buildStrategicSnapshot(snapRow.snapshot, {
       observerFactionId: options.observerFactionId,
       campaignKey: options.campaignKey,
-      previous
+      previous,
+      policy: options.config.analysis.strategicHistory
     });
     // Record provenance: backfilled documents were reduced from an already
     // mode-filtered snapshot, not from the raw save.

@@ -516,3 +516,16 @@ test('WEIGHTS is a single frozen config object', () => {
   assert.strictEqual(typeof WEIGHTS.TOTAL_WAR_SAFETY_MARGIN, 'number');
   assert.strictEqual(typeof WEIGHTS.HATE_CROSSING.crossing200, 'number');
 });
+
+test('directive scoring honors runtime-configured weights', () => {
+  const base = buildWorld({ observerId: 4712, councilors: [enemyCouncilor()] });
+  const tuned = buildWorld({
+    observerId: 4712,
+    councilors: [enemyCouncilor()],
+    directiveWeights: { council: { turn: 100, investigate: 3, proxyTargetBonus: 3 } }
+  });
+  const candidate = generateCouncilCandidates(base).find((entry) => entry.missionType === 'Turn Councilor');
+  const baseScore = scoreCandidates(base, [candidate])[0].score;
+  const tunedScore = scoreCandidates(tuned, [candidate])[0].score;
+  assert.ok(tunedScore > baseScore, `expected tuned score ${tunedScore} to exceed ${baseScore}`);
+});

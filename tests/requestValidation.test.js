@@ -57,3 +57,11 @@ test('parseOptionalNumericQuery and parseBodyQuery guard their inputs', () => {
   assert.throws(() => requestValidation.parseBodyQuery('x'.repeat(100)), RequestValidationError);
   assert.throws(() => requestValidation.parseBodyQuery('bad\u0007name'), RequestValidationError);
 });
+
+test('parseBoundedIntegerQuery validates focused resource limits', () => {
+  assert.equal(requestValidation.parseBoundedIntegerQuery('10', 'limit'), 10);
+  assert.equal(requestValidation.parseBoundedIntegerQuery(undefined, 'limit'), null);
+  assert.throws(() => requestValidation.parseBoundedIntegerQuery('0', 'limit'), RequestValidationError);
+  assert.throws(() => requestValidation.parseBoundedIntegerQuery('101', 'limit'), RequestValidationError);
+  assert.throws(() => requestValidation.parseBoundedIntegerQuery('ten', 'limit'), RequestValidationError);
+});

@@ -8,6 +8,8 @@ const briefingGenerator = require('../server/briefingGenerator');
 const templateLoader = require('../server/templateLoader');
 const snapshotIdentity = require('../server/snapshotIdentity');
 const snapshotDelta = require('../server/snapshotDelta');
+const { resolveConfig, safeRuntimeConfig } = require('../server/config');
+const runtimeConfig = resolveConfig();
 
 const projectRoot = path.resolve(__dirname, '..');
 const publicDir = path.join(projectRoot, 'public');
@@ -21,7 +23,7 @@ if (path.basename(distDir) !== 'dist' || path.dirname(distDir) !== projectRoot) 
 const latestSave = saveParser.getLatestSaveFile();
 const saveData = saveParser.readSaveJson(latestSave.fullPath);
 const rawSnapshot = snapshotBuilder.buildRawSnapshot(saveData);
-const identity = snapshotIdentity.createSnapshotIdentity(latestSave, process.env.SUPABASE_CAMPAIGN_KEY || 'initiative');
+const identity = snapshotIdentity.createSnapshotIdentity(latestSave, runtimeConfig.campaign.key);
 snapshotIdentity.attachSnapshotIdentity(rawSnapshot, identity);
 let previousRawSnapshot = null;
 try {
@@ -33,7 +35,7 @@ try {
     previousRawSnapshot = snapshotBuilder.buildRawSnapshot(saveParser.readSaveJson(previousSave.fullPath));
     snapshotIdentity.attachSnapshotIdentity(previousRawSnapshot, snapshotIdentity.createSnapshotIdentity(
       previousSave,
-      process.env.SUPABASE_CAMPAIGN_KEY || 'initiative',
+      runtimeConfig.campaign.key,
       identity.generatedAt
     ));
   }
@@ -98,6 +100,8 @@ writeJson('effects.json', {
   effectCount: templateLoader.templates.effects.size
 });
 
+writeJson('runtime-config.json', safeRuntimeConfig(runtimeConfig));
+
 writeJson('site-info.json', {
   mode: 'static-player-intel',
   save: rawSnapshot.metadata,
@@ -118,22 +122,38 @@ const embeddedAssetPaths = [
   'js/api.js',
   'js/app.js',
   'data/effects.json',
+  'data/runtime-config.json',
   'v2/index.html',
   'v2/css/mission-control.css',
   'v2/js/shared.js',
   'v2/js/mission-control.js',
+  'v2/js/components/mc-budget.js',
   'v2/js/components/detail-panel.js',
   'v2/js/components/world-map.js',
   'v2/data/world.geojson',
   'v2/js/components/faction-intel.js',
   'v2/js/components/intelligence-library.js',
   'v2/js/components/executive-boards.js',
-  'v2/js/components/alien-hate-economics.js'
+  'v2/js/components/alien-hate-economics.js',
+  'v2/js/components/directive-board.js'
 ];
 const factionLogoDir = path.join(distDir, 'v2', 'assets', 'faction-logos');
 if (fs.existsSync(factionLogoDir)) {
   for (const fileName of fs.readdirSync(factionLogoDir).filter(name => name.toLowerCase().endsWith('.png')).sort()) {
     embeddedAssetPaths.push(`v2/assets/faction-logos/${fileName}`);
+  }
+}
+// Keep the worker's explicit safe asset manifest honest as browser modules
+// are split or added. Every local script/link reference in the v2 shell must
+// be embedded, otherwise the hosted worker serves a page with broken assets.
+const referencedAssets = [
+  ...[...fs.readFileSync(path.join(distDir, 'v2', 'index.html'), 'utf8').matchAll(/(?:src|href)=["'](\/[^"']+)["']/g)]
+    .map(match => match[1].replace(/^\//, ''))
+    .filter(relativePath => relativePath.startsWith('v2/'))
+];
+for (const referenced of referencedAssets) {
+  if (!embeddedAssetPaths.includes(referenced)) {
+    throw new Error(`Hosted asset manifest is missing HTML reference: ${referenced}`);
   }
 }
 const embeddedAssets = Object.fromEntries(
