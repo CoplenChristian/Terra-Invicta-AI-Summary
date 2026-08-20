@@ -100,6 +100,31 @@ Expected hate for Turn is `P(fail) × 3` — so Turn's cost is unstateable witho
 
 **Detain vs Assassinate:** on an alien councilor, Detain gives 10 hate on normal success and **0 on critical**, with no retaliation, plus +3 Alien Activity Investigations vs +2. Prefer it wherever available (`DetainTarget` is story-gated). 10 hate is a fifth of the 50 budget — cheap at 12 hate, self-defeating at 45.
 
+### 4a. Open control points
+
+**Control Nation (`GainInfluence`) is hate-free: `[0,0,0,0,0,0]` on every outcome.** Like Investigate→Turn, taking neutral CPs is expansion that costs nothing against the hate budget — the third pillar of "what to do instead" under escalate-late, and the one that matches Notion 02's "expand aggressively".
+
+The data is already there: each nation carries `controlPoints[]` with `factionId: null` / `factionName: "Neutral"`, plus `isExecutive` and `controlPointType`.
+
+**But a naive "open CPs" board would be 91% noise.** Measured on the live save:
+
+| | Count |
+| --- | --- |
+| Total CPs | 538 |
+| Unclaimed | 136 (25%) |
+| — of which **Executive** | **124** |
+| Genuinely takeable now | **12** |
+
+Notion 09: *Control Nation takes only neutral control points, and the executive CP can only be taken last.* So 124 of the 136 are gated behind holding the rest of their nation. After filtering, the real candidate set is twelve CPs, and they are small: Malawi ($72Bn), Honduras ($71Bn), Madagascar ($70Bn), Namibia ($40Bn), then a tail under $5Bn.
+
+That makes the legality filter the feature, not a footnote. The board should rank the takeable twelve by value-per-CP-cost and say plainly that the remaining 124 are executive-locked — otherwise it reports 136 opportunities that mostly do not exist.
+
+**The capacity gate is not yet computable, and I will not ship a formula that is wrong.** Per wiki `Control Point Capacity` (rev 2026-01-19), capacity comes from each non-detained councilor's Administration + Persuasion + Command, plus Administration Node / Tower / Complex hab modules (+4 / +12 / +30), plus ~9 projects. Summing the observer's six councilors from `resolvedAttributes` gives **232**. But costing the 23 CPs actually held via Notion 09's `(GDP_Bn)^0.6 / 2` gives **2,493** — an order of magnitude apart, so at least one formula is misapplied or the units differ.
+
+The save suggests the mechanic is a maintenance economy rather than a hard ceiling: it carries `controlPointMaintenance`, `controlPointMaintenanceFreebies`, `numControlPoints_unclamped`, and `history_CPCapOverageByDay`. And Crackdown's attack modifiers include `TIMissionModifier_InsufficientCPMaintenance_Defender` — under-maintained CPs are *easier to crack down on*. So overreach has teeth without being forbidden, which is a materially different rule from "you have N slots".
+
+Ships in two parts: the **analysis and legality filter now** (P3), the **"can we hold it" gate once the maintenance model is resolved** (open question 8).
+
 ---
 
 ## 5. Two intelligence gaps
@@ -136,7 +161,7 @@ After:
 | **P1** | World model incl. `hateConfidence`; derive fields that don't exist yet (`mcToPermanentWar`, `estimateOnly`) | Medium |
 | **P2** | Ventability (all three conditions) + min>max clamp; war-at-50 pricing with vent credit; permanent-war MC warning | Medium |
 | **P2a** | Parse spy slots and per-councilor intel depth, or Turn stays conditional | Medium |
-| **P3** | Candidates + mission costs, **with legality filters** (neutral-CP-only, executive-last, Detain gating, total-control checks) | Medium — largest surface |
+| **P3** | Candidates + mission costs, **with legality filters** (neutral-CP-only, executive-last, Detain gating, total-control checks). Includes the open-CP board — the filter is what makes it useful (§4a) | Medium — largest surface |
 | **P3a** | "Capability unlocked, zero sightings" — needs no parsing, only a comparison nobody makes | Low — ship early |
 | **P4** | Rule registry + three-outcome vetoes + estimate-class provenance; existing tests must pass | Medium |
 | **P5** | Scoring; delete the twelve `policyRank` constants | Medium |
@@ -155,6 +180,7 @@ After:
 5. **Are spy slots / intel depth in the save at all?** (§4)
 6. **Does `seenByFactionIds` decay?** Stale sightings would generate candidates for operatives who have moved.
 7. **Should vetoes be overridable?** A player may knowingly cross 50 for a decisive CP.
+8. **Is CP capacity a ceiling or a maintenance economy?** (§4a) Councilor-derived capacity and CP cost are 10× apart, and the save's `controlPointMaintenanceFreebies` / `history_CPCapOverageByDay` / `InsufficientCPMaintenance_Defender` point at upkeep-with-penalty rather than a hard cap. Resolve before gating suggestions on "if they have cap".
 
 ---
 
