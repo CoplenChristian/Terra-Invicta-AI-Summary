@@ -107,16 +107,91 @@ Cost data resolves cleanly and should stop being `UNAVAILABLE`:
 
 ## 4. Getting mission data to the engine
 
-`templateLoader` does not load `TIMissionTemplate`, and the **hosted worker has no template directory at all** — so the engine cannot read templates directly without breaking the deployed site.
+**This is the single unlock.** Every generator downstream becomes data-driven once it lands, instead of one hand-written function per family. It is also the first commit, so it is specified here in full.
 
-Follow the pattern already used for `shipHullStats` and `traitStatMods`: resolve at snapshot-build time, bake into the snapshot, consume downstream.
+### 4.1 Why not read templates directly
 
-1. Add `TIMissionTemplate.json` to `templateLoader`.
-2. Add `buildMissionSpecs()` to `snapshotBuilder`, emitting `missionSpecs` on the snapshot.
-3. `directiveEngine.buildWorld({ missionSpecs })`.
-4. Size check: 50 missions × ~15 fields is a few KB — safe for the strategic-snapshot budget, but measure it, since `strategicSnapshot.mjs` exists precisely because payload size bit before.
+`templateLoader` does not load `TIMissionTemplate.json`, and the **hosted worker has no template directory at all** — `site/worker/` runs on the published snapshot alone. An engine that reads templates at request time works locally and breaks the deployed site.
 
-**This is the single unlock.** Every generator downstream is data-driven once it lands, instead of one hand-written function per family.
+The codebase already solved this twice. `buildShipHullStats()` and `buildTraitStatMods()` resolve template data at snapshot-build time and bake the result onto the snapshot, precisely so `shared/` modules stay free of `fs`-backed imports. `missionSpecs` follows that path exactly.
+
+### 4.2 Loader change
+
+`server/templateLoader.js`, alongside the existing `loadJsonFile` calls:
+
+```js
+this.loadJsonFile('TIMissionTemplate.json', (item) => {
+  const id = item.dataName || item.friendlyName;
+  if (id) this.templates.missions.set(id, item);
+});
+```
+
+Add `missions: new Map()` to the templates object. **Do not add it to `REQUIRED_TEMPLATES`** — that list is the "is this a usable templates directory" probe, and widening it would make previously-working install paths fail the check.
+
+### 4.3 `buildMissionSpecs()`
+
+In `snapshotBuilder`, emitted as `missionSpecs` next to `shipHullStats`. Field mapping, all directly from the template:
+
+| Spec field | Template source |
+| --- | --- |
+| `friendlyName` | `friendlyName` — the name the game shows; `dataName` is the key. They diverge (`Propaganda` → "Public Campaign", `GainInfluence` → "Control Nation") |
+| `successHate` / `criticalHate` | `hate[4]` / `hate[5]` |
+| `failureHate` | `hate[1]`, `hate[2]` — the branch that makes Turn cost anything |
+| `attack` | `resolutionMethod.attackingModifiers[].attackerAttribute` |
+| `defend` | `resolutionMethod.defendingModifiers[].defenderAttribute` |
+| `costResource` / `costKind` / `costAmount` | `cost.resourceType`, `cost.$type`, `cost.value` |
+| `context` | `missionContext` — `EarthOnly` / `Unlimited` / `SpaceOnly` |
+| `targetKind` | `target.$type` minus the `TIMissionTarget_` prefix |
+| `conditions[]` | `conditions[].$type` minus the `TIMissionCondition_` prefix |
+| `utilityScore` | `utilityScore` — the game's own priority hint |
+
+**Store explicit zeros, never `null`, for hate.** A zero-hate mission must serialise as `successHate: 0`, not `hate: null`. Everywhere else in this codebase `null` means *unmeasured*, and the entire hate model depends on that distinction — a compression that saves ~2 KB by conflating "costs nothing" with "unknown" would reintroduce the exact bug class §0 keeps fixing.
+
+Skip `disable: true` rows, and skip the 7 victory missions (`VictoryCondition` in `conditions`). They are endgame triggers, not cycle decisions.
+
+### 4.4 Measured payload
+
+Prototyped against the installed templates:
+
+| | |
+| --- | --- |
+| Missions kept (victory excluded) | **43** |
+| Raw JSON | **12.8 KB** |
+| Gzipped | **1.8 KB** |
+
+Negligible. No dedupe or splitting needed — unlike the tech graph, which needed the static/dynamic split at 959 KB.
+
+**Exclude from `strategicSnapshot.mjs`.** Mission specs are static per game version, so storing them on every history row would be pure repetition. Same reasoning that keeps the tech graph out of strategic history.
+
+### 4.5 Flow-through
+
+- `intelligenceFilter` passes `missionSpecs` through **unfiltered in both modes**, at the same two call sites that carry `shipHullStats` (lines ~105 and ~410). Mission templates are public game rules, not intelligence — nothing about them is observer-dependent.
+- `directiveEngine.buildWorld({ missionSpecs })`, defaulting to `null`.
+- **The engine must degrade, not crash, when `missionSpecs` is absent.** Snapshots published before this change will not have it, and the hosted site serves those. With no specs, mission generators emit nothing and the board reports that the catalogue is unavailable — the existing v1 generators keep working meanwhile.
+
+### 4.6 What this immediately fixes
+
+Nine missions carry exact flat costs, so the blanket `missionCost: 'UNAVAILABLE'` can go on day one:
+
+| Mission | Cost |
+| --- | --- |
+| Defend Interests | 20 Influence |
+| Advise | 10 Influence |
+| Contact Councilor | 10 Influence |
+| Pass Technology | 10 Influence |
+| Set National Policy | 10 Influence |
+| Investigate Alien Activity | 5 Operations |
+| Orbit | 0.1 Boost (`FlatOnEarth`) |
+| Grant Alien Control | 100 Influence *(alien-only)* |
+| Build Facility | 500 Money *(alien-only)* |
+
+### 4.7 Tests
+
+- Every emitted spec traces to a real `dataName`; count matches the template minus disabled and victory rows.
+- Hate values match template rows — extend the existing `missionHateTable.test.js` guard from 6 hand-listed missions to the whole catalogue, so a game patch fails loudly.
+- A zero-hate mission serialises `successHate: 0`, not null.
+- `buildWorld({})` with no `missionSpecs` produces no mission candidates and no throw.
+- Payload stays under a stated ceiling (say 32 KB raw), so a future template change cannot silently bloat the snapshot.
 
 ---
 
@@ -206,7 +281,8 @@ V2-1 through V2-5 is the minimum coherent v2. Everything after deepens it.
 | --- | --- |
 | **Concurrent session** editing the same files | Agree ownership before V2-1. Highest-probability failure here, and it is organisational, not technical |
 | Odds formula unavailable (V2-6) | Degrade to attribute-delta ordinal; never invent a probability |
-| Snapshot bloat from `missionSpecs` | Measure at V2-1; specs are static per campaign, so dedupe like the tech graph if needed |
+| ~~Snapshot bloat from `missionSpecs`~~ | **Resolved** — measured at 12.8 KB raw / 1.8 KB gzipped (§4.4). Excluded from strategic history as static data |
+| Older published snapshots lack `missionSpecs` | Engine degrades to v1 generators and says the catalogue is unavailable (§4.5) — never throws |
 | 60 candidates becomes noise | The allocator is the answer — 6 assignments, the rest benched with reasons. Do not ship V2-1 breadth without V2-2 feasibility |
 | Assignment feels arbitrary | Every assignment carries `why` and `opportunityCost`; benched candidates name what displaced them |
 | Scope drift into an autoplayer | Non-goal is unchanged: recommend and explain, never sequence a turn automatically |
@@ -215,4 +291,14 @@ V2-1 through V2-5 is the minimum coherent v2. Everything after deepens it.
 
 ## 9. First commit
 
-V2-0 plus V2-1 step 1: fix the two Turn tests, add `TIMissionTemplate` to `templateLoader`, add `buildMissionSpecs()` to `snapshotBuilder`, assert the emitted specs against the template rows, and measure the payload delta. Small, verifiable, and it unlocks every phase that follows.
+V2-0 plus §4 in full:
+
+1. Fix the two Turn tests to assert the hate band (V2-0).
+2. `templateLoader` loads `TIMissionTemplate.json` into `templates.missions` — **not** into `REQUIRED_TEMPLATES` (§4.2).
+3. `buildMissionSpecs()` in `snapshotBuilder`, explicit zeros for hate (§4.3).
+4. `intelligenceFilter` passes it through at both `shipHullStats` call sites (§4.5).
+5. `buildWorld({ missionSpecs })`, degrading cleanly when absent.
+6. Exclude from `strategicSnapshot.mjs`.
+7. Tests per §4.7, including the payload ceiling.
+
+No behaviour change — the board renders identically. It only makes the catalogue available, which every later phase needs. That makes it safe to land even while ownership of the engine files is still being sorted out.
