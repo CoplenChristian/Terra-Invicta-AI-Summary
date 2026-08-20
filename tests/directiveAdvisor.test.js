@@ -150,6 +150,57 @@ test('holds proxy offensives near Total War even with a strong fleet', () => {
   assert.ok(posture.holds.some((h) => /irreversible/i.test(h)), JSON.stringify(posture.holds));
 });
 
+// Player mode redacts the save's true hate, leaving only the 5-diamond meter,
+// which saturates at ">= 50". At five diamonds the real figure could be 51 or
+// 199 and the meter reads identically -- so distance to Total War is genuinely
+// unobservable. Reporting that as "clear" would render an absent measurement
+// as a confident safe, which is the failure mode this codebase forbids.
+test('reports Total War proximity as unknown when the meter is saturated', () => {
+  const posture = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: null, currentWarStatus: 'GAME-VISIBLE ESTIMATE' },
+    observer: { ID: 4712, shipsCount: 240, fleetsCount: 18 },
+    observerHate: { pips: 5 },
+    factions: [{ ID: 4717, displayName: 'the Aliens', templateName: 'AlienCouncil', shipsCount: 90 }]
+  });
+
+  assert.strictEqual(posture.spaceFragile, false, 'fleet is strong');
+  assert.strictEqual(posture.totalWarProximity, 'unknown');
+  assert.strictEqual(posture.hateObservable, false);
+  assert.strictEqual(posture.escalateLate, true, 'blind above the war threshold still holds');
+  assert.ok(
+    posture.holds.some((h) => /not observable/i.test(h)),
+    JSON.stringify(posture.holds)
+  );
+});
+
+test('below five diamonds is genuinely clear of Total War', () => {
+  // Under five diamonds hate is below 50, which is comfortably clear of 150.
+  // That much IS knowable from the meter, so it must not report unknown.
+  const posture = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: null },
+    observer: { ID: 4712, shipsCount: 240, fleetsCount: 18 },
+    observerHate: { pips: 3 },
+    factions: [{ ID: 4717, displayName: 'the Aliens', templateName: 'AlienCouncil', shipsCount: 90 }]
+  });
+  assert.strictEqual(posture.totalWarProximity, 'clear');
+  assert.strictEqual(posture.escalateLate, false);
+});
+
+test('an unreadable alien fleet is not counted as zero ships', () => {
+  // A fleet whose size we cannot scout must not make the alien force look
+  // weak; that would invert the fragility check.
+  const posture = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: 30 },
+    observer: { ID: 4712, shipsCount: 40, fleetsCount: 3 },
+    factions: [{ ID: 4717, displayName: 'the Aliens', templateName: 'AlienCouncil' }],
+    fleets: [
+      { factionId: 4717, shipsCount: null },
+      { factionId: 4717, shipsCount: undefined }
+    ]
+  });
+  assert.strictEqual(posture.alienShips, null, 'unknown, not 0');
+});
+
 test('a strong fleet at low hate is free to escalate', () => {
   const posture = assessCampaignPosture({
     alienHateEconomics: { actualAlienHate: 22, currentWarStatus: 'BELOW WAR THRESHOLD' },

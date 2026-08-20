@@ -304,10 +304,17 @@ function countShips(observer = {}, factions = [], fleets = []) {
     const proxy = classifyProxy(faction);
     return proxy.kind === 'aliens';
   });
+  // Mirror the own-ship reduce: a fleet whose size we cannot read must not be
+  // silently counted as zero, or an unscouted alien force reads as a weak one
+  // and the fragility check quietly inverts.
   const alienFromFleets = aliens && Array.isArray(fleets)
     ? fleets
       .filter((fleet) => sameId(fleet.factionId, aliens.ID))
-      .reduce((sum, fleet) => sum + (toFiniteNumber(fleet.shipsCount) || 0), 0)
+      .reduce((sum, fleet) => {
+        const count = toFiniteNumber(fleet.shipsCount);
+        if (count === null) return sum;
+        return (sum === null ? 0 : sum) + count;
+      }, null)
     : null;
   const alienShips = toFiniteNumber(aliens?.shipsCount)
     ?? (alienFromFleets !== null && alienFromFleets > 0 ? alienFromFleets : null);
@@ -360,9 +367,31 @@ function assessCampaignPosture({
     ? null
     : ALIEN_TOTAL_WAR_HATE - actualAlienHate;
   const totalWarActive = totalWarState === 'active';
-  const nearTotalWar = totalWarActive
-    || totalWarState === 'pending'
-    || (actualAlienHate !== null && actualAlienHate >= TOTAL_WAR_APPROACH_HATE);
+
+  // Total War proximity is often UNOBSERVABLE, and saying so matters more than
+  // guessing. In player mode the save's true hate is redacted and all we have
+  // is the 5-diamond meter, which saturates at ">= 50" -- so at five diamonds
+  // the real figure could be 51 or 199 and the meter reads the same. Treating
+  // that as "clear of Total War" is the exact failure this codebase forbids:
+  // an absent measurement rendered as a confident safe.
+  const meterSaturated = pips !== null && pips >= HATE_HOT_PIPS;
+  let totalWarProximity;
+  if (totalWarActive) {
+    totalWarProximity = 'active';
+  } else if (totalWarState === 'pending' || (actualAlienHate !== null && actualAlienHate >= TOTAL_WAR_APPROACH_HATE)) {
+    totalWarProximity = 'near';
+  } else if (actualAlienHate !== null) {
+    totalWarProximity = 'clear';
+  } else if (meterSaturated) {
+    // >= 50 with no upper bound available.
+    totalWarProximity = 'unknown';
+  } else if (pips !== null) {
+    // Below five diamonds means below 50, which is comfortably clear of 150.
+    totalWarProximity = 'clear';
+  } else {
+    totalWarProximity = 'unknown';
+  }
+  const nearTotalWar = totalWarProximity === 'active' || totalWarProximity === 'near';
 
   // Each hold is independently sufficient, and each says why. The Total War
   // gate deliberately ignores fleet strength: a strong fleet changes whether
@@ -379,6 +408,15 @@ function assessCampaignPosture({
       ? 'within reach of'
       : `${totalWarHeadroom.toFixed(1)} hate from`;
     holds.push(`${distance} Total War at ${ALIEN_TOTAL_WAR_HATE}, which is effectively irreversible`);
+  } else if (totalWarProximity === 'unknown' && meterSaturated) {
+    // Blind above the war threshold. The distance to an irreversible
+    // transition is exactly what we cannot measure, so hold and say why
+    // rather than reporting a headroom we do not have.
+    holds.push(
+      `alien hate is at or above ${ALIEN_HATE_WAR_THRESHOLD} and the estimate meter `
+      + `saturates there — distance to Total War at ${ALIEN_TOTAL_WAR_HATE} is not observable `
+      + 'from a player-mode save'
+    );
   }
   const escalateLate = holds.length > 0;
 
@@ -414,6 +452,11 @@ function assessCampaignPosture({
     totalWarHateThreshold: ALIEN_TOTAL_WAR_HATE,
     totalWarHeadroom,
     nearTotalWar,
+    // 'active' | 'near' | 'clear' | 'unknown'. Never collapse 'unknown' to
+    // 'clear': in player mode the meter saturates at the war threshold, so
+    // being blind is the normal case rather than an edge case.
+    totalWarProximity,
+    hateObservable: actualAlienHate !== null,
     totalWarState,
     ...ships,
     reasons
