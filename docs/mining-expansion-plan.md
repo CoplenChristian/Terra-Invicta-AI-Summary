@@ -118,6 +118,29 @@ In the critical case the first 100 water covers most of the emergency, so the se
 
 That is the behaviour to preserve: **a good amount of what is needed, plus value elsewhere, beats a maximum of one thing.**
 
+### 4.2a The need model is only as good as the totals it reads
+
+A live example, found while building this plan and worth stating here because it invalidates the scoring rather than merely annoying a user.
+
+The dashboard's RESEARCH OUTPUT read **2,079/month** against the ~2,900 the game reports. `snapshotBuilder.js:870` sums Earth nation research and **counts no space research at all** — the faction holds 75 research modules producing **775/month**:
+
+| Module | Count | `incomeResearch_month` | Total |
+| --- | --- | --- | --- |
+| XenoscienceResearchCenter | 47 | 10 | 470 |
+| ResearchCampus | 3 | 60 | 180 |
+| XenologyLab | 18 | 5 | 90 |
+| MilitaryScienceLab | 5 | 5 | 25 |
+| SpaceScienceLab | 2 | 5 | 10 |
+
+**Every resource total feeding §4.2 needs the same audit before the scoring is trusted.** If water income is under-counted the way research was, the runway figure is wrong, the need weight is wrong, and the board confidently recommends the wrong sites. A scoring model built on unverified inputs is worse than no model, because it looks authoritative.
+
+Two related traps the research case exposed:
+
+- **Partial control.** Line 870 adds the *full* nation's research wherever the faction holds even one control point. Whether nation output splits by CP share is unresolved — full-sum gives 2,079, share-weighted gives 1,920. The same question applies to any nation-derived resource.
+- **A stated figure beats a derived one.** `faction.monthlyIncome.Research` exists and reads 2,508 — sourced from the save's own 30-day transaction ledger. Where the save reports a quantity directly, prefer it over recomputation, and reconcile rather than assume.
+
+Before M3 ships, reconcile each of the five mined resources against the save's own income figures and record the deltas. Any resource that cannot be reconciled gets its need weight marked low-confidence rather than silently trusted.
+
 ### 4.3 The rest of the value term
 
 ```
@@ -190,6 +213,7 @@ Follow `mc-budget.js` for the component pattern and reuse the existing CSS token
 
 | Phase | Deliverable | Risk |
 | --- | --- | --- |
+| **M0** | **Reconcile the five resource totals against the save's own income figures** (§4.2a) and record the deltas. Research was out by 775/month because space modules were never counted; assume the others need checking too | Low — but it gates M3, since the need model is meaningless on wrong inputs |
 | **M1** | Capacity model — mine limit, usage, quadratic penalty, hate conversion. Reuses `MINE_LIMIT_GRANTS` and `alienHateEconomics` | Low |
 | **M2** | Reachability buckets from completed projects; body → mission-tech map | Medium — the map must come from templates, not be hand-written |
 | **M3** | Need-weighted saturating scoring (§4.1–4.2) — runway per resource, `TARGET` in config, balanced baskets beating spikes | Medium — this is where the board earns its keep |
