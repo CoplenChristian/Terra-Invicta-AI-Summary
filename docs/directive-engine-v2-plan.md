@@ -377,6 +377,143 @@ Investigate Councilor remains valuable for exactly this reason — it converts a
 
 ---
 
+## 4b. The cycle plan — assignment contract
+
+The payoff phase, and everything else is scaffolding for it. Specified here to the same depth as §4 because it was previously three sentences.
+
+### 4b.1 The unit is a pairing, not a candidate
+
+```js
+{
+  candidateId, councilorId,
+  missionType, target,
+  feasibility: 'pass' | 'unknown',      // 'fail' pairings are never built
+  odds: { chance, band: [low, high], basis, assumed, automatic },
+  expectedValue,                         // see 4b.3
+  expectedHate,
+  cost: { resource, amount, kind },
+  opportunityCost,                       // see 4b.4
+  why: [ { ruleId, reason } ]
+}
+```
+
+A pairing is generated for every (surviving candidate × own councilor) combination the feasibility layer does not reject. With ~6 councilors and ~60 candidates that is ~360 pairings — trivial to score exhaustively, so no pruning heuristic is needed and none should be added.
+
+**Who counts as an assignable councilor:** own faction, not detained. A detained councilor has no mission slot at all — this is the same `status === 'detained'` check `councilorAttributes.mjs` already uses to zero org bonuses, and it should share that helper rather than re-implement it.
+
+### 4b.2 Expected value
+
+```
+expectedValue = P(success) × candidateValue
+              − P(failure) × failureCost
+              − expectedHate × hateWeight
+              − resourceCost
+```
+
+`expectedHate` is an outcome-weighted sum, not the success-slot figure:
+
+```
+expectedHate = P(success) × successHate + P(failure) × failureHate
+```
+
+This is the term that makes Turn behave correctly. Turn costs 0 on success and 3 on failure, so **its expected cost rises as its odds fall** — a success-slot reading would rank a 3% Turn as free, which is exactly backwards.
+
+For an `Automatic` mission, `P(success) = 1` and the whole expression collapses to `value − successHate × hateWeight − resourceCost`. Half the catalogue takes that path (§4a.2).
+
+### 4b.3 Selection
+
+Greedy over expected value with a fixed tie-break, then a local-swap pass:
+
+```
+1. Build all feasible pairings, score each.
+2. Sort by expectedValue desc; tie-break on councilorId asc for determinism.
+3. Walk the sorted list, taking a pairing when BOTH its councilor and its
+   candidate are still unclaimed, and the shared budgets still admit it (§4b.5).
+4. Local swap: for each pair of assignments, test whether exchanging their
+   councilors raises the total. Repeat until no swap improves. Bounded at
+   N² per pass and N is ~6.
+```
+
+Greedy plus swaps is not guaranteed optimal. That is accepted deliberately — with six actors the gap is small, and an explainable assignment is worth more here than an optimal one nobody can interrogate. **The tie-break must be deterministic** so the same save produces the same plan twice; a plan that reshuffles on reload reads as broken regardless of quality.
+
+### 4b.4 Opportunity cost
+
+For each assignment, `opportunityCost` = the expected value that councilor would have contributed on their *next-best unclaimed* candidate. It is what makes the plan legible: *"Beth on Investigate Alien Activity, giving up Control Nation in Malawi worth 5.5."*
+
+A **negative** opportunity cost is a signal, not an error — it means this councilor had nothing else worth doing, which is itself worth surfacing.
+
+### 4b.5 Budgets bind the set, not the member
+
+The flaw §5 of the design names. Before accepting a pairing in step 3:
+
+```
+runningHate      + expectedHate(pairing)  <= totalWarHeadroom × safetyMargin
+runningInfluence + influenceCost(pairing) <= influence stock
+runningOps       + opsCost(pairing)       <= operations stock
+runningMoney     + moneyCost(pairing)     <= money stock
+```
+
+A pairing that breaches a pool is **skipped, not vetoed** — the councilor stays available for a cheaper candidate later in the walk. Record it in `budgetDisplaced` with which pool it exceeded and by how much, because *"the fourth action needs 12 more Influence"* is a genuinely useful sentence.
+
+Bonus-cost missions have no fixed amount, so until V2-6 gives a spend→odds curve, treat them as consuming a configurable nominal amount rather than zero. Consuming zero would let the plan recommend six bonus-cost missions on an empty treasury.
+
+### 4b.6 Unassigned councilors
+
+A councilor with no assignment is an **unfilled slot** — a fact, not a scored penalty. v1 treated idleness as a heuristic value adjustment; that conflates "we chose to hold this councilor back" with "we ran out of ideas".
+
+Each unassigned councilor reports one of:
+
+| Reason | Meaning |
+| --- | --- |
+| `no-feasible-candidate` | every candidate failed feasibility for this councilor |
+| `all-candidates-claimed` | better fits took everything |
+| `budget-exhausted` | feasible and unclaimed candidates existed, but no pool could pay |
+
+And in every case the plan should offer the **free actions** — Surveil Location, Protect Councilor, Go To Ground cost no resource and no hate (§4a). An idle slot with a free action available is a planning failure, not a legitimate output.
+
+### 4b.7 Output
+
+```js
+cyclePlan: {
+  assignments: [Pairing],            // ordered by expectedValue desc
+  unassigned:  [{ councilorId, name, reason, suggestedFreeAction }],
+  benched:     [{ candidateId, title, displacedBy, margin }],
+  budgetDisplaced: [{ candidateId, pool, shortfall }],
+  budgets:     { hate: {...}, influence: {...}, ops: {...}, money: {...} },
+  totalExpectedValue
+}
+```
+
+`primary` stays what it is today — the single headline action — and should simply be `assignments[0]`, so the board's headline and the council orders cannot disagree with each other.
+
+### 4b.8 Tests
+
+- Two candidates needing the same councilor: only one is assigned; the other is `benched` with `displacedBy` and a positive `margin`.
+- A detained councilor is never assigned.
+- Three affordable candidates whose costs sum past a pool: the plan contains what fits, and `budgetDisplaced` names the pool and shortfall.
+- Turn's expected hate **rises** as odds fall — the outcome-weighted sum, not the success slot.
+- An `Automatic` mission scores without invoking the roll formula at all.
+- The same world produces byte-identical plans across two runs (determinism).
+- A councilor with no feasible candidate appears in `unassigned` with a `suggestedFreeAction`, never silently dropped.
+- `assignments[0]` and `primary` are the same action.
+
+---
+
+## 4c. Calibrating the objective function
+
+The plan states `score = value − hateCost − resourceCost` and puts the weights in config, but never says how you know the weights are sane. v1 demonstrated the failure: council candidates scored 0 until value rules were added, and afterwards Turn at 9.00 against a control point at 5.52 was an unexamined guess.
+
+**Calibration is a review step with a stated procedure, not a feeling.**
+
+1. **Cross-family comparability.** Dump the top 10 candidates per family against a real save. If one family sweeps the top 10, either that family really is dominant right now — which the posture should explain — or its weights are miscalibrated. Say which.
+2. **Anchor pairs.** Pick two actions whose relative worth is not in dispute and assert the ordering in a test. For example: taking a $70Bn control point should outrank investigating a councilor; converting an unused alien-tracking capability into sightings should outrank a marginal expansion while the fleet cannot absorb retaliation. These are judgement, but they are *reviewable* judgement, and a regression flips them visibly.
+3. **Sensitivity.** Halve and double each weight; if the top recommendation never changes, the weight is inert and should be removed rather than kept as decoration. If it changes constantly, it is doing too much work alone.
+4. **Posture response.** The same save at low hate and near Total War must produce materially different plans. If it does not, the hate ladder is not reaching the objective function.
+
+Record the calibration run's output in the repo alongside the weights, so a later change can be diffed against what the numbers used to look like.
+
+---
+
 ## 5. Phases
 
 Each phase is independently shippable and leaves the engine working.
@@ -394,29 +531,36 @@ The four high-frequency evaluators plus `unknown` for the tail. Needs councilor 
 **Ships:** the ~60 drop to the genuinely available subset, each rejection naming its condition.
 **Test:** a councilor in orbit cannot be offered an `EarthOnly` mission; an unimplemented condition yields `unknown`, never `pass`.
 
-### V2-3 — Pairing `M`
-`candidate × councilor`, attribute matching only, no probabilities. Uses `resolvedAttributes.effective` for ours, `maskedAttributes` for theirs.
-**Ships:** every recommendation names *who runs it* — the single biggest legibility gain before the allocator exists.
-**Test:** the highest-Persuasion councilor is paired to Persuasion missions; masked enemy stats degrade the pairing to `unknown`, not to zero.
+### V2-3 — Pairing + odds `L` — **merged with the former V2-6**
+
+Originally two phases: pairing with attribute matching only, then probabilities later. That seam does not survive promoting odds into the spine — building pairings without odds means building `expectedValue` twice, and the intermediate version would rank a 3% Turn alongside an 89% Crackdown.
+
+Build the pairing contract from §4b.1 with odds included from the start:
+
+- `candidate × councilor` for every feasible combination (~360 on a live save — score them all, no pruning).
+- `chance(diff)` using the **documented per-modifier formulas** of §4a.5, not the bare attribute difference. GDP, population, cohesion and unrest at minimum, since those carry the no-defender missions.
+- `expectedHate` as the outcome-weighted sum (§4b.2), which is what makes Turn's cost rise as its odds fall.
+- Masked enemy attributes get a campaign-calibrated assumption and a label, per §0a — never an abstention.
+
+**Ships:** every recommendation names *who runs it and how likely it is*. Biggest single legibility gain in the plan.
+**Test:** the highest-Persuasion councilor pairs to Persuasion missions; a Persuasion-4 councilor on Malawi reads ~48%, not 82%; an Automatic mission never invokes the roll; masked stats produce a labelled assumption rather than a zero.
 
 ### V2-4 — Portfolio budgets `S`
 Move hate/Influence/Ops/Money from per-candidate to set-level consumption.
 **Ships:** fixes the real v1 flaw — five candidates each individually "within budget" can no longer be recommended together.
 **Test:** three affordable candidates whose sum exceeds the pool produce a plan containing at most what fits, and say what was displaced.
 
-### V2-5 — Assignment `L`
-Greedy by expected value with local swaps, one mission per councilor, subject to V2-4's pools. `cyclePlan` in the output; board renders assignments.
-**Ships:** the reframe. Output stops being a list and becomes a plan.
-**Test:** two candidates needing the same councilor cannot both appear; the displaced one is `benched` with `displacedBy` set; unfilled slots are reported.
+### V2-5 — Assignment `L` — **the payoff phase**
+Implement §4b in full: greedy selection with local swaps, one mission per councilor, budgets binding the set, opportunity cost on every assignment, and unassigned councilors reporting a reason plus a free action.
 
-### V2-6 — Odds `M` — **promote to run alongside V2-3**
-The formula is known and verified (§4a.1), and base difficulty is in the templates, so this is smaller than originally sized and more urgent than originally placed.
+**Ships:** the reframe. Output stops being a list and becomes a plan, and `assignments[0]` becomes `primary` so the headline cannot disagree with the council orders.
+**Test:** §4b.8 in full — determinism included, since a plan that reshuffles on reload reads as broken regardless of quality.
 
-`chance(diff)` with the **documented per-modifier formulas** (§4a.5), not the bare attribute difference — the bare version is badly wrong for every no-defender mission. Rendered as a band with unmodelled modifiers named.
+### V2-6 — Calibration `S`
+Run §4c's four checks against a real save, fix whatever they expose, and commit the calibration output next to the weights so later changes can be diffed against it.
 
-**Ships:** expected value becomes real; `cost.amount` becomes answerable as *"reaches 70% at N Influence"*; Turn's true hate cost `P(fail) × 3` resolves V2-0's test tension.
-**Why it moved:** §4a.4 — without odds the engine will confidently recommend a 5%-success Turn that costs ~2.8 expected hate, i.e. worse than the Crackdown it was meant to replace. Ranking on hate alone is actively wrong once base difficulty is in view.
-**Degrades:** player mode masks the defender's attribute → `unknown`, not a number. 21 Automatic missions need no odds at all (§4a.2).
+**Ships:** confidence that the scores mean something. Cheap, and it is the only phase that tells you whether the previous five produced good advice or merely consistent advice.
+**Why it is a phase and not a chore:** v1 shipped with council candidates scoring 0 against expansion candidates scoring 5.5, and nothing caught it because nothing was looking.
 
 ### V2-7 — Clocks `M`
 `clocks.js`: deadlines, decay, accrual, ramps. Urgency as a multiplier on value, never a standalone score.
@@ -441,15 +585,34 @@ Opponent trajectories: Build Facility totality + abduction accrual, surveillance
 ## 6. Sequencing
 
 ```
-V2-0 → V2-1 → V2-2 → V2-3 ─┬─ V2-6 (odds) ─┬→ V2-5 (assignment)
-                           └─ V2-4 (budgets)┘
-              V2-7, V2-8, V2-9 (independent, any order after V2-5)
-                        V2-10 → delete policyRanks
+V2-0 → V2-1 → V2-2 → V2-3 (pairing + odds) ─┐
+                              V2-4 (budgets)─┴→ V2-5 (assignment) → V2-6 (calibration)
+                     V2-7, V2-8, V2-9 (independent, any order after V2-5)
+                                      V2-10 → delete policyRanks
 ```
 
-**V2-6 moved into the spine.** Originally an optional deepening; §4a.4 shows the engine is actively wrong without it, because ranking on hate cost alone prefers a 5%-success Turn over a Crackdown that is both easier and cheaper in expectation.
+**V2-0 through V2-6 is the minimum coherent v2.** Everything after deepens it.
 
-V2-0 through V2-6 is the minimum coherent v2. Everything after deepens it.
+Two reorderings from the first draft, both driven by findings rather than preference:
+
+- **Odds merged into V2-3 rather than deferred.** Building pairings without odds means building `expectedValue` twice, and the intermediate version ranks a 3% Turn beside an 89% Crackdown. §4a.4 shows that is not a rough edge — it is the wrong recommendation, made confidently.
+- **Calibration became a phase.** It was implicit, which is how v1 shipped with one family scoring zero against another scoring 5.5 and nothing noticing.
+
+### Data gaps, mapped to the phase they bind
+
+Listed in §9 but never sequenced. Each either blocks a phase or degrades one, and the difference matters:
+
+| Gap | Phase | Effect |
+| --- | --- | --- |
+| Spy slots, per-councilor intel depth | V2-3 | **Degrades** — Turn stays a conditional recommendation naming its own unverified preconditions |
+| Public opinion by faction | V2-3 | **Degrades** — the two `PopulationIdeology` modifiers drop out of the odds; band widens, estimate survives |
+| Alliance graph, nation adjacency | V2-3 | **Degrades** — the two `ControlPoints` attack modifiers drop out |
+| `ResourceSpent` curve constants | V2-3 | **Degrades** — bonus-cost `amount` stays null; §4b.5 charges a nominal figure so an empty treasury cannot fund six missions |
+| Abduction counts per region | V2-8 | **Blocks** — Build Facility denial value cannot be computed at all |
+| CP capacity vs maintenance economy | V2-10 | **Blocks** — "can we hold it" gating on expansion |
+| Alien Progression Speed | V2-7 | **Degrades** — year-gated clocks assume the default slider and say so |
+
+Only two gaps genuinely block, and both sit in later phases. **Nothing blocks V2-1 through V2-6.** That is the case for starting.
 
 ---
 
@@ -480,14 +643,16 @@ V2-0 through V2-6 is the minimum coherent v2. Everything after deepens it.
 
 ## 9. First commit
 
-V2-0 plus §4 in full:
+**Partly landed already, and not deliberately.** A concurrent session's commit `09cb74e` absorbed in-progress edits to `templateLoader`, `snapshotBuilder` and `intelligenceFilter` that implement most of §4. That is the §8 concurrency risk happening rather than being anticipated.
 
-1. Fix the two Turn tests to assert the hate band (V2-0).
-2. `templateLoader` loads `TIMissionTemplate.json` into `templates.missions` — **not** into `REQUIRED_TEMPLATES` (§4.2).
-3. `buildMissionSpecs()` in `snapshotBuilder`, explicit zeros for hate (§4.3).
-4. `intelligenceFilter` passes it through at both `shipHullStats` call sites (§4.5).
-5. `buildWorld({ missionSpecs })`, degrading cleanly when absent.
-6. Exclude from `strategicSnapshot.mjs`.
-7. Tests per §4.7, including the payload ceiling.
+So step one is an audit, not a build:
 
-No behaviour change — the board renders identically. It only makes the catalogue available, which every later phase needs. That makes it safe to land even while ownership of the engine files is still being sorted out.
+1. **Verify what actually landed.** Does `missionSpecs` reach the snapshot in both modes? Is the count right (43 after disabled and victory rows)? Is `successHate` an explicit `0` rather than `null` (§4.3)? Does it pass through `intelligenceFilter` at **both** call sites — the two differ in indentation and an earlier pass caught only one?
+2. Add the §4.7 tests, which were never written.
+3. Exclude from `strategicSnapshot.mjs` — almost certainly not done.
+4. Confirm it degrades cleanly when absent, since the hosted site serves snapshots published before the field existed.
+5. Fix the two Turn tests to assert the hate band (V2-0).
+
+Then V2-2 onward as specified.
+
+**Before any of that, settle ownership.** V2-3 restructures `directiveEngine.js` into `server/engine/*`, and the other session has been actively editing that file. §8 lists this as the highest-probability failure and it has already occurred once. It is the only genuine blocker in the plan, and it is organisational rather than technical.
