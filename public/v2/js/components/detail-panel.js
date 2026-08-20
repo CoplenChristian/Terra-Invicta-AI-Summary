@@ -20,7 +20,19 @@
       '#factionIntelScreen:not([hidden]), #intelligenceLibraryScreen:not([hidden]), #mcDetailPanel:not([hidden])'
     ));
     document.querySelector('.init-topbar')?.toggleAttribute('inert', overlayOpen);
-    document.querySelector('main')?.toggleAttribute('inert', overlayOpen);
+    const views = document.querySelectorAll('.init-view');
+    if (views.length > 0) {
+      views.forEach((section) => {
+        if (overlayOpen) {
+          section.setAttribute('inert', '');
+        } else {
+          section.toggleAttribute('inert', section.hidden);
+        }
+      });
+      document.querySelector('main')?.removeAttribute('inert');
+    } else {
+      document.querySelector('main')?.toggleAttribute('inert', overlayOpen);
+    }
   }
 
   function setPanelOpen(panel, open) {

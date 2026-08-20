@@ -87,7 +87,144 @@ function observerFactionRecord() {
   return (state.rawSnapshot?.factions || []).find(f => String(f.ID) === String(state.observer)) || null;
 }
 
+// The grouping principle: COMMAND answers "what do I do this turn", EXPANSION "where do I grow", THREAT "what is coming", RECORDS "what happened".
+// When a new panel is added later, that question decides its view.
+const VIEWS = [
+  {
+    id: 'command',
+    label: 'COMMAND',
+    sectionId: 'view-command',
+    panels: [
+      'councilOrders',
+      'directiveBoard',
+      'sitrepSummary',
+      'directivesStreamList',
+      'btnCopySitrep'
+    ]
+  },
+  {
+    id: 'expansion',
+    label: 'EXPANSION',
+    sectionId: 'view-expansion',
+    panels: [
+      'miningExpansion',
+      'mcBudget',
+      'resourceFlowChart',
+      'holdingsBubbleMatrix'
+    ]
+  },
+  {
+    id: 'threat',
+    label: 'THREAT',
+    sectionId: 'view-threat',
+    panels: [
+      'dualAssetRings',
+      'alienHateEconomics',
+      'powerTrajectoryChart'
+    ]
+  },
+  {
+    id: 'records',
+    label: 'RECORDS',
+    sectionId: 'view-records',
+    panels: [
+      'factionDonutContainer',
+      'researchWatchlist'
+    ]
+  }
+];
+
+function assertViewRegistryIntegrity() {
+  const seenPanels = new Map();
+  const errors = [];
+
+  for (const view of VIEWS) {
+    const section = document.getElementById(view.sectionId);
+    if (!section) {
+      errors.push(`View section #${view.sectionId} for view '${view.id}' does not exist in DOM.`);
+      continue;
+    }
+
+    for (const panelId of view.panels) {
+      if (seenPanels.has(panelId)) {
+        errors.push(`Panel #${panelId} is registered in multiple views ('${seenPanels.get(panelId)}' and '${view.id}').`);
+      }
+      seenPanels.set(panelId, view.id);
+
+      const panelEl = document.getElementById(panelId);
+      if (!panelEl) {
+        errors.push(`Panel #${panelId} in view '${view.id}' does not exist in DOM.`);
+      } else if (!section.contains(panelEl)) {
+        errors.push(`Panel #${panelId} exists but is not contained within view section #${view.sectionId}.`);
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    const message = `[VIEW REGISTRY INTEGRITY ERROR]\n${errors.join('\n')}`;
+    console.error(message);
+    if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+      renderTelemetryUnavailable(`View registry integrity failed: ${errors.join('; ')}`);
+    }
+    throw new Error(message);
+  }
+}
+
+function getActiveViewId() {
+  const hash = (window.location.hash || '').replace(/^#\/?/, '').toLowerCase();
+  const found = VIEWS.find(v => v.id === hash);
+  return found ? found.id : 'command';
+}
+
+function setActiveView(viewId, updateHash = true) {
+  const targetView = VIEWS.find(v => v.id === viewId) || VIEWS[0];
+  state.activeView = targetView.id;
+
+  if (updateHash) {
+    const targetHash = `#/${targetView.id}`;
+    if (window.location.hash !== targetHash) {
+      if (window.location.hash.replace(/^#\/?/, '').toLowerCase() !== targetView.id) {
+        window.location.hash = targetHash;
+      }
+    }
+  }
+
+  VIEWS.forEach(v => {
+    const isActive = v.id === targetView.id;
+    const section = document.getElementById(v.sectionId);
+    if (section) {
+      section.hidden = !isActive;
+      section.toggleAttribute('inert', !isActive);
+      section.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+    }
+    const navBtn = document.querySelector(`.init-nav-btn[data-view="${v.id}"]`);
+    if (navBtn) {
+      navBtn.classList.toggle('init-btn-cyan', isActive);
+      navBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    }
+  });
+
+  window.MissionControlDetailPanel?.syncPageInert?.();
+}
+
+function initViewNavigation() {
+  document.querySelectorAll('.init-nav-btn[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const viewId = btn.dataset.view;
+      if (viewId) setActiveView(viewId, true);
+    });
+  });
+
+  window.addEventListener('hashchange', () => {
+    setActiveView(getActiveViewId(), false);
+  });
+
+  setActiveView(getActiveViewId(), false);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  assertViewRegistryIntegrity();
+  initViewNavigation();
   initEventListeners();
   loadRuntime().finally(loadData);
 });
@@ -502,17 +639,11 @@ function initEventListeners() {
     openLibraryScreen('councilors');
   });
   document.getElementById('hudHateMeter')?.addEventListener('click', () => {
-    const records = document.querySelector('.init-records');
-    if (records && !records.open) records.open = true;
+    setActiveView('threat', true);
     const target = document.getElementById('alienHateEconomics');
     requestAnimationFrame(() => {
       (target?.closest('.tech-card') || target)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-  });
-  document.querySelector('.init-records')?.addEventListener('toggle', (event) => {
-    const grid = event.currentTarget.querySelector('.init-records__grid');
-    grid?.toggleAttribute('inert', !event.currentTarget.open);
-    if (event.currentTarget.open && state.briefing && state.rawSnapshot) renderDashboard();
   });
 }
 
@@ -623,7 +754,7 @@ function renderTelemetryUnavailable(message) {
     banner.id = 'initTelemetryBanner';
     banner.className = 'init-telemetry-banner';
     banner.setAttribute('role', 'status');
-    const main = document.querySelector('.init-grid-layout');
+    const main = document.getElementById('dashboardMain') || document.querySelector('main');
     if (main) main.prepend(banner);
   }
   banner.textContent = `LIVE TELEMETRY UNAVAILABLE — ${message || 'The current snapshot could not be loaded.'} Existing figures may be stale.`;
@@ -1432,3 +1563,11 @@ async function copyText(value) {
   textarea.remove();
   if (!copied) throw new Error('Clipboard access is unavailable in this browser.');
 }
+
+window.MissionControlViews = {
+  VIEWS,
+  assertViewRegistryIntegrity,
+  getActiveViewId,
+  setActiveView
+};
+

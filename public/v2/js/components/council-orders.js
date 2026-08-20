@@ -234,20 +234,15 @@
 
   /**
    * Rows are the compact view; the reasoning lives in the DIRECTIVE ENGINE
-   * card. Clicking a row opens the Supporting-records disclosure and scrolls
-   * to the matching assignment card rather than duplicating its contents here.
+   * card. Clicking a row navigates to the Command view and scrolls
+   * to the matching assignment card.
    */
   function focusDirectiveBoard(index) {
-    const records = document.querySelector('.init-records');
-    const opened = Boolean(records) && !records.open;
-    if (opened) records.open = true;
+    if (window.MissionControlViews?.setActiveView) {
+      window.MissionControlViews.setActiveView('command', true);
+    }
 
-    // Opening the disclosure makes mission-control.js re-render the dashboard,
-    // which replaces the very card this is about to scroll to and highlight.
-    // Reaching for the card in the same frame found the doomed copy and the
-    // highlight vanished with it, so when we did the opening we let that
-    // render land first.
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       const board = document.getElementById('directiveBoard');
       const card = Number.isInteger(index)
         ? board?.querySelector(`.directive-assignment-card[data-assignment-index="${index}"]`)
@@ -259,7 +254,7 @@
         card.classList.add('directive-assignment-card--focused');
         setTimeout(() => card.classList.remove('directive-assignment-card--focused'), 2200);
       }
-    }, opened ? 140 : 0);
+    });
   }
 
   function render(root, payload) {
@@ -269,7 +264,7 @@
     if (!cyclePlan) {
       root.innerHTML = emptyState(
         'Cycle plan unavailable for this snapshot — no per-councilor orders can be stated. '
-        + 'The Directive Engine card in Supporting records explains what the engine could and could not evaluate.'
+        + 'The Directive Engine card explains what the engine could and could not evaluate.'
       );
       return;
     }
@@ -310,7 +305,7 @@
         <p class="council-orders__foot">
           Reasoning, benched alternatives, cycle budgets and clocks are in the
           <button type="button" class="council-orders__link" data-council-orders-open-board>Directive Engine</button>
-          card under Supporting records.
+          card below.
         </p>
       </div>`;
 
