@@ -9,6 +9,7 @@
 const snapshotIdentity = require('./snapshotIdentity');
 const strategicIntelligence = require('./strategicIntelligence');
 const directiveAdvisor = require('./directiveAdvisor');
+const directiveEngine = require('./directiveEngine');
 
 class BriefingGenerator {
   generateMissionControlBriefing(snapshot = {}, rawSnapshot = null) {
@@ -46,6 +47,22 @@ class BriefingGenerator {
       factions,
       fleets
     });
+
+    // v1 rule engine (docs/directive-rule-engine-plan.md). Runs alongside the
+    // policyRank-based directives below rather than replacing them -- it
+    // does not yet cover space, research, or mining, so deleting the ranks
+    // now would drop those directives with no successor (plan §7, P5 note).
+    const engineWorld = directiveEngine.buildWorld({
+      observerId,
+      observerName,
+      posture: campaignPosture,
+      resources: observer.resources,
+      nations,
+      councilors,
+      capabilities,
+      alienIntelligenceStage: snapshot.alienIntelligenceStage || null
+    });
+    const engineResult = directiveEngine.runEngine(engineWorld);
 
     const getPowerOverall = (f) => {
       if (!f) return null;
@@ -175,6 +192,13 @@ class BriefingGenerator {
       theaters: theaterStatus,
       operatives: operativeRoster,
       campaignPosture,
+      engineDirectives: {
+        primary: engineResult.primary,
+        alternatives: engineResult.alternatives,
+        rejected: engineResult.rejected,
+        uncertain: engineResult.uncertain,
+        futureOpportunities: engineResult.futureOpportunities
+      },
       primaryDirective: directiveAdvisor.pickPrimaryDirective({
         geopolitical: geopoliticalDirectives,
         council: councilDirectives,
