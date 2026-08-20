@@ -936,6 +936,26 @@ img.faction-logo {
   line-height: 1.55;
 }
 
+.priority-policy-note {
+  max-width: 560px;
+  margin: 12px 0 0;
+  color: var(--warning);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.priority-hate-band {
+  position: relative;
+  z-index: 1;
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .priority-ops-meta {
   position: relative;
   z-index: 1;
@@ -1088,6 +1108,10 @@ img.faction-logo {
 
 .severity-WATCH {
   color: var(--accent);
+}
+
+.severity-HOLD {
+  color: var(--warning);
 }
 
 .severity-UNKNOWN,

@@ -630,6 +630,7 @@ class BriefingGenerator {
     // Directive 1: Mining Infrastructure
     directives.push({
       id: 'sp-1',
+      policyRank: 20,
       title: `Review Off-World Mining Grid (${ownHabs.length} Habs Visible)`,
       category: 'LOGISTICS & MINING',
       severity: 'HIGH',
@@ -684,7 +685,8 @@ class BriefingGenerator {
         severity: 'CRITICAL',
         statement: 'Our intelligence command is currently blind to the calibrated Alien Threat Meter and worldwide alien operations.',
         action: 'Prioritize faction engineering slots on Alien Operations to unlock real-time alien hate estimation.',
-        successFactor: 'MISSION CRITICAL'
+        successFactor: 'MISSION CRITICAL',
+        policyRank: 55
       });
     }
 
@@ -797,7 +799,7 @@ class BriefingGenerator {
     });
   }
 
-  buildOperativeRoster(councilors, observerId) {
+  buildOperativeRoster(councilors, observerId, campaignPosture = {}) {
     const ownCouncilors = this.asArray(councilors).filter(c => this.isOwnCouncilor(c, observerId));
 
     return ownCouncilors.map(c => {
@@ -814,7 +816,9 @@ class BriefingGenerator {
       if (attrs.Persuasion >= 12) {
         recOrder = 'Deploy to high-GDP nation to run Public Campaign or Defend Interests.';
       } else if (attrs.Espionage >= 12) {
-        recOrder = 'Deploy to hostile territory to execute Crackdown or Sabotage Facilities.';
+        recOrder = campaignPosture?.escalateLate
+          ? 'Do not Crackdown or Purge Servants/Protectorate while alien hate is elevated and the fleet is fragile. Ward own majors or Purge a non-proxy human rival.'
+          : 'Deploy to hostile territory to execute Crackdown or Sabotage Facilities.';
       } else if (attrs.Investigation >= 12) {
         recOrder = 'Conduct Surveil Location or Investigate Councilor to unmask enemy moles.';
       } else if (attrs.Administration >= 12) {

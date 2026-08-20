@@ -410,6 +410,8 @@ function initEventListeners() {
         { label: 'Window', value: directive.window || 'This cycle' },
         { label: 'Preparation', value: directive.preparation || 'UNAVAILABLE' },
         { label: 'Mission cost', value: directive.missionCost || 'UNAVAILABLE' },
+        { label: 'Expected alien hate', value: directive.expectedAlienHate || 'UNAVAILABLE' },
+        { label: 'Why this action', value: directive.policyNote || directive.expectedAlienHateNote || 'No campaign-posture note on this directive.' },
         { label: 'Recommended action', value: directive.action || 'No action specified' },
         { label: 'Success factor', value: directive.successFactor || 'Not assessed' },
         { label: 'Eligible operatives', value: rosterLabel }
@@ -720,6 +722,21 @@ function renderHolographicCore() {
   setMeta('priorityWindow', topDirective.window || 'This cycle');
   setMeta('prioritySuccess', topDirective.successFactor);
   setMeta('priorityMissionCost', topDirective.missionCost || 'UNAVAILABLE');
+
+  const policyNote = document.getElementById('priorityPolicyNote');
+  if (policyNote) {
+    const note = topDirective.policyNote || '';
+    policyNote.hidden = !note;
+    policyNote.textContent = note;
+  }
+  const hateBand = document.getElementById('priorityExpectedHate');
+  if (hateBand) {
+    const label = topDirective.expectedAlienHate
+      ? `Expected alien hate: ${topDirective.expectedAlienHate}`
+      : '';
+    hateBand.hidden = !label;
+    hateBand.textContent = label;
+  }
 
   const roster = document.getElementById('priorityOperatives');
   if (roster) {
