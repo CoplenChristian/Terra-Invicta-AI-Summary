@@ -300,6 +300,68 @@ Ranking becomes a computed score with a visible breakdown, so §1.2's twelve mag
 
 ---
 
+## 3.5 Council candidate families
+
+Added 2026-08-20. All hate figures read from `TIMissionTemplate` (six-slot outcome array, slot 4 = normal success, slot 5 = critical); all preconditions are the template's own `conditions` list.
+
+| Mission | Hate `[.. 4,5]` | Attack | Defence | Cost | Preconditions |
+| --- | --- | --- | --- | --- | --- |
+| Investigate Councilor | `[0,0,0,0,0,0]` | Investigation | Espionage | Ops (bonus) | `AnyCouncilorwithUnknowns` |
+| Turn Councilor | `[0,3,3,0,0,0]` | Persuasion | **Loyalty** | Influence (bonus) | `HasSpySlot`, `TurnableEnemyCouncilor`, `HasIntelOnCouncilorSecrets` |
+| Detain | `[0,1,1,0,2,3]` | Investigation | Security | Ops (bonus) | `DetainTarget` |
+| Assassinate | `[0,5,0,0,10,0]` | Espionage | Security | Ops (bonus) | `EnemyOrTurnedCouncilor`, `BasicCouncilorIntel` |
+
+### 3.5a The zero-hate offensive: Investigate → Turn
+
+**Turn Councilor generates no alien hate on success.** Its array is `[0,3,3,0,0,0]` — 3 hate on the two failure slots, **zero on success and critical success**. Investigate Councilor, which feeds Turn's `HasIntelOnCouncilorSecrets` precondition, is `[0,0,0,0,0,0]` — zero on *every* outcome.
+
+That makes `Investigate → Turn` a **complete offensive chain that costs nothing against the hate budget when it succeeds**, and it is exactly the action the engine should be reaching for under escalate-late. The current advisor never suggests either mission. This is the strongest single answer to "it should suggest something else": when hate forbids Crackdown and Purge, the correct aggression is not to stop attacking — it is to attack along an axis that does not spend hate.
+
+Two consequences for scoring:
+
+- Turn should be **promoted, not merely permitted, when hate headroom is scarce**. Its cost profile inverts the usual relationship: it gets *relatively* better exactly when Crackdown and Purge get worse.
+- The failure branch is the only hate cost, so Turn's expected hate is `P(fail) × 3`, not a flat number. This is a concrete case where §7's withdrawn "no success-chance calculator" non-goal was wrong — without odds, Turn's cost cannot be stated at all.
+
+Turn defends on **Loyalty**, which Notion 09 flags as the commonly-ignored eighth attribute. `shared/councilorAttributes.mjs` already resolves it (excluded from `totalEffectiveSkills` by design, since it is a defence stat). Target selection should rank enemy councilors by *low* Loyalty.
+
+**Blocker: two of four preconditions are not in the snapshot.** Verified against the live councilor record, whose fields are `ID, displayName, personalName, familyName, typeTemplateName, factionId, factionName, isAlien, status, isActiveCouncilor, isIndependent, locationRegionId, locationName, locationType, homeRegionName, attributes, resolvedAttributes, totalSkills, traits, orgs, activeMissionName, activeMissionTarget, priorMissionTemplateName, activeMission, agentForFactionId, agentForFactionName, seenByFactionIds, xp, gender, dateBorn, visibility, investigationConfidence, maskedAttributes`.
+
+There is no spy-slot count and no per-councilor intel-depth field. `investigationConfidence` is not one — it reports the snapshot *mode* (`"OMNISCIENT"` for all 48 records), not what we know about that councilor. So `HasSpySlot` and `HasIntelOnCouncilorSecrets` must be parsed from the save before Turn candidates can be generated legally, or Turn must be emitted as a *conditional* recommendation that names its own unverified preconditions.
+
+### 3.5b Faction intel through a turned councilor
+
+`agentForFactionId` / `agentForFactionName` exist on every councilor record and are **null for all 48** in the current campaign — no moles either way.
+
+`server/intelligenceFilter.js` already honours moles at the councilor level: `isTurnedMole` grants `confirmed` attribute visibility with `source: 'turned_agent'`, on the same footing as our own council. What it does **not** do is widen visibility to the mole's *faction* — resources, completed projects, hate matrix, and space assets stay redacted.
+
+The user's ask is that a mole should unlock that faction's information in player mode. That is correct in principle and is its own workstream:
+
+- **Scope question first.** In-game a mole is not blanket intel-sharing, and the wiki's `Diplomacy` page treats intel sharing as a separate tradeable term. What a mole actually reveals needs verifying against the wiki/templates before the filter is loosened — over-revealing would silently turn player mode into omniscient mode, which is the failure the whole intelligence model exists to prevent.
+- **It interacts with the proxy-share model.** `classifyProxy` collapses its share band to a point only on positive evidence of `Project_HydraDiplomacy`. A mole inside the Servants is exactly the evidence that would collapse it — so mole-derived project visibility feeds directly back into the hate estimate.
+- **It interacts with §6.2.** Human faction hate is already over-redacted; a mole is a second, independent reason to widen it.
+
+Marked as a dependency of, not a blocker for, the engine: the engine should read `hateConfidence` and per-faction visibility from the world model, so improving the filter later improves the advice without touching rules.
+
+### 3.5c Detaining alien councilors — capability is not sighting
+
+Verified on the live save, and the answer is more useful than expected.
+
+Six alien councilors exist (`Xenoform Alfa-6`, `-8`, `-10`, `-11`, …) with known locations — Kinshasa, Villavicencio, Bratislava, in transit. The Initiative **has** `canDirectlyDetectAlienCouncilors: true`, because `Project_TheirMovements` is complete. And yet **zero are visible in player mode**, because `intelligenceFilter` requires `isSeen || isTurnedMole` for alien councilors regardless of capability, and `seenByFactionIds` is empty for all six.
+
+That empty list is *accurate*, not a parsing failure. Control check: **38 of 42 human councilors have populated `seenByFactionIds`**, with plausible varying membership. The field parses and means something. The aliens are genuinely unsighted — they are hard to find, which is the intended mechanic.
+
+So the correct directive is **not** "Detain that alien." It is the gap this reveals:
+
+> **Capability unlocked, zero sightings.** `Project_TheirMovements` grants direct tracking of alien operatives, and we are tracking none. Convert the capability into sightings — Investigate Alien Activity, Surveil Location — before a Detain candidate can exist.
+
+Nothing in the dashboard says this today. `intelligenceFilter` reports `detectedCount`, but a count of zero next to an unlocked capability reads as "nothing out there" rather than "we are not looking."
+
+When a sighting does land, the Detain candidate becomes live and is **budget-gated, not free**. Per wiki `Diplomacy` § "Actions that affect hatred": Detain on an alien councilor gives **10 hate on a normal success and 0 on a critical** — the template's `[0,1,1,0,2,3]` is the human-target case, and alien targets are special-cased. Ten hate against a war threshold of 50 is a fifth of the whole budget. So the user's framing is exactly right: *detain the alien when hate is low.* At 12 hate it is cheap and removes an operative from Earth; at 45 it starts the asset hunt by itself.
+
+Detain remains preferred over Assassinate wherever available — Assassinate is 10 hate on normal success with retaliation, Detain is 10 with **no retaliation at all**, plus +3 Alien Activity Investigations against +2. Note `DetainTarget` is a story-gated availability condition (Notion 07: "detention was not yet available through story progress"), so availability must be checked rather than assumed.
+
+---
+
 ## 4. What this changes for the Japan case
 
 Same save, hate 168, strong fleet.
@@ -308,11 +370,15 @@ Same save, hate 168, strong fleet.
 
 **After:**
 
-> **Ward our own majors — Defend Interests** (20 Influence, flat; 0 template hate).
+> **Turn a Servant councilor — Investigate, then Turn.**
+> Turn costs **no alien hate on success** (`[0,3,3,0,0,0]`); only failure costs 3. Investigate Councilor is 0 hate on every outcome. Target the lowest-Loyalty Servant in range — Loyalty is the defending stat.
+> *Preconditions not yet observable from the save: spy slot, intel on councilor secrets.*
 >
-> *Also available:* Purge the Academy in China — 20.1T GDP, executive CP, no proxy alien-hate share. **Human war cost unmodelled** — the Academy's war threshold against us is 24.6 by the wiki table, and we do not currently read their hate toward us.
+> *Also available:* Ward our own majors — Defend Interests (20 Influence flat, 0 template hate). Purge the Academy in China — 20.1T GDP, executive CP, no proxy alien-hate share, but **human war cost unmodelled**: the Academy's war threshold against us is 24.6 by the wiki table, and we do not currently read their hate toward us.
 >
 > *Considered and rejected:* Crackdown/Purge the Servants in Japan — 32.0 hate from Total War at 200, which venting cannot undo (wiki `Diplomacy` § Alien Total War, rev 2026-08-11). Purge would add ~0.5–1.5.
+
+**Why Turn is the headline.** It is the only option that is *both* offensive and hate-free. Defend Interests spends no hate but takes nothing; Purging a human takes something but opens an unmodelled front. Turn takes a councilor off the Servants' board and puts an agent inside them, and on success the alien hate budget is untouched. Under escalate-late the answer is not "stop attacking" — it is "attack along the axis that does not spend hate."
 
 **Corrected from the first draft (see §0).** The original headline was "Purge the Academy in China", and that was wrong on two counts the critique caught.
 
@@ -335,7 +401,9 @@ Reordered after review. The first draft put the war-at-50 pricing *last*, which 
 | **P0** | Rename the `geo-hold` title so it names the action, not the prohibition. One line, no engine | Low |
 | **P1** | World model, incl. `hateConfidence` and the fields §3.1 named but that do not exist (`mcToPermanentWar`, `estimateOnly`) | **Medium** — new derivation, not just plumbing |
 | **P2** | Ventability (all three Notion 07 conditions) + min>max clamp in `alienHateEconomics`; war-at-50 pricing with its vent counterparty; permanent-war MC warning quoting the applicable rung | Medium |
-| **P3** | Candidate generation + mission costs from templates, **with legality filters** — neutral-CP-only, executive-last, Detain story-gating, total-control checks | **Medium** — largest new surface |
+| **P2a** | Parse the missing council preconditions from the save: spy slots and per-councilor intel depth (§3.5a). Without these, Turn candidates cannot be generated legally | Medium — save-format work |
+| **P3** | Candidate generation + mission costs from templates, **with legality filters** — neutral-CP-only, executive-last, Detain story-gating, total-control checks. Includes the council families in §3.5 | **Medium** — largest new surface |
+| **P3a** | "Capability unlocked, zero sightings" directive (§3.5c) — needs no new parsing, only a comparison the dashboard does not currently make | Low — ship early |
 | **P4** | Rule registry + three-outcome veto engine + estimate-class provenance; port existing vetoes verbatim; PR #5 and `c3d21bc` tests must still pass | Medium — must not regress |
 | **P5** | Scoring with the stated objective function; delete the twelve `policyRank` constants | Medium — ranking shifts; needs before/after review on real saves |
 | **P6** | Selection guarantees a positive primary; "considered and rejected" in the UI | Low |
@@ -351,6 +419,9 @@ Reordered after review. The first draft put the war-at-50 pricing *last*, which 
 3. **Alien Progression Speed is unparsed.** The Total War year axis assumes the default slider and says so. Is it in the save?
 4. **Estimate vs truth.** In player mode only the 5-diamond estimate is available, and the wiki notes it is *not* randomised while actual hate is. Should vetoes fire on the estimate, and if so, with what stated margin?
 5. **Should vetoes ever be overridable?** A player may knowingly want to cross 50 for a decisive CP. Advisory-with-warning, or hard block?
+6. **What does a turned councilor actually reveal?** (§3.5b) The filter already treats a mole as confirmed intel on that *councilor*. Widening it to the mole's whole faction is the ask, but the in-game scope needs verifying against the wiki before loosening the filter — over-revealing silently turns player mode into omniscient mode. Note this also feeds `classifyProxy`: a mole inside the Servants is exactly the evidence that collapses the 1/8–1/4 share band to a point.
+7. **Are spy slots and councilor intel depth in the save at all?** (§3.5a) They are not in the built snapshot. If they are not in the save either, Turn can only ever be a conditional recommendation that names its own unverified preconditions.
+8. **Does `seenByFactionIds` decay?** Sighting drives every enemy-councilor candidate, and a stale sighting would generate candidates for operatives who have since moved. `knowsIveBeenSeenBy` is a point-in-time read; whether the game expires entries is unverified.
 
 ---
 
