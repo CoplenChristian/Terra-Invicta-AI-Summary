@@ -448,3 +448,71 @@ test('the endpoint registry, resource set and examples cannot drift apart', () =
   assert.strictEqual(INTEL_ENDPOINT_INDEX.miningExpansion, '/api/intel/mining-expansion');
   assert.ok(INTEL_ENDPOINT_EXAMPLES.miningExpansion, 'the drift this registry exists to prevent');
 });
+
+// The dispatcher was the THIRD hand-maintained list -- an if/switch chain that
+// a `switch` statement made impossible to derive from the table. It is a
+// per-row `project` handler now, and `projected` is derived from that handler's
+// existence, so an endpoint cannot be advertised as dispatchable without one.
+
+/** Populated enough that every handler has something to project. */
+function dispatchFixture() {
+  return {
+    observerFactionId: OBSERVER,
+    metadata: { gameTimeString: '5/1/2033 12:00:00 AM', difficulty: 'Normal' },
+    factions: [
+      { ID: OBSERVER, displayName: 'the Initiative', resources: { Metals: 10 } },
+      { ID: 4717, displayName: 'the Servants' }
+    ],
+    nations: [{ ID: 1, displayName: 'USA', executiveFactionId: OBSERVER }],
+    councilors: [{ ID: 7, displayName: 'Agent', factionId: OBSERVER }],
+    habs: [{ ID: 2, displayName: 'Anchorage', factionId: OBSERVER, orbitBody: 'Earth' }],
+    habSites: [{
+      ID: 3, displayName: 'Hertha', factionId: null, factionName: 'Unclaimed',
+      parentBodyName: 'Hertha', spaceTheaterKey: 'belt',
+      water: 1, volatiles: 1, metals: 1, nobleMetals: 1, fissiles: 1
+    }],
+    habModules: [{ id: 4, factionId: OBSERVER, habId: 2, isShipyard: true, constructionCompleted: true, orbitBody: 'Earth' }],
+    fleets: [{
+      ID: 5, displayName: 'India-211', factionId: OBSERVER, orbitBody: 'Luna',
+      destination: 'Mars', arrivalDate: '6/1/2033 12:00:00 AM',
+      shipsCount: 1, ships: [{ id: 6, displayName: 'Devilfish' }]
+    }],
+    shipyardQueues: [{ id: 8, factionId: OBSERVER, orbitBody: 'Earth', design: 'playerShipTemplate584', constructionStatus: 'building' }],
+    shipyardStations: [{ id: 9, name: 'Yard', factionId: OBSERVER, orbitBody: 'Earth' }],
+    shipDesigns: [{ dataName: 'playerShipTemplate584', _displayName: 'Devilfish', hullName: 'Escort', factionId: OBSERVER }],
+    globalResearch: { activeSlots: [{ slotNumber: 1, projectId: 'p', displayName: 'P' }], finishedTechsNames: ['MissiontotheAsteroids'] },
+    capabilities: { skywatch: true }
+  };
+}
+
+test('the dispatcher is derived from the endpoint table, not a third list', () => {
+  // Only the endpoints the ADAPTERS serve themselves carry no handler: history
+  // and strategic-delta need snapshot storage, and the tech-graph family needs
+  // shared/techGraph.mjs plus a published techTree payload.
+  const adapterServed = Object.keys(INTEL_ENDPOINT_INDEX)
+    .filter(key => !SUPPORTED_RESOURCES.has(INTEL_ENDPOINT_INDEX[key].replace('/api/intel/', '')));
+  assert.deepStrictEqual(adapterServed, [
+    'history', 'strategicDelta', 'techTree', 'techPath', 'techSearch',
+    'techMilestones', 'techMatrix', 'techOpportunities', 'researchQueue'
+  ], 'every other endpoint must reach a projection handler');
+
+  // The bare two-key envelope is what an UNRECOGNISED resource gets...
+  assert.deepStrictEqual(
+    buildResourceProjection({ factions: [] }, 'no-such-resource', {}),
+    { count: 0, items: [] }
+  );
+
+  // ...so no advertised resource may produce it. A resource that silently fell
+  // out of the dispatch table would land here rather than 404, which is how the
+  // three lists hid their drift in the first place.
+  for (const resource of SUPPORTED_RESOURCES) {
+    const projection = buildResourceProjection(dispatchFixture(), resource, {
+      mode: 'omniscient',
+      fleetId: 5,
+      designId: 'playerShipTemplate584'
+    });
+    assert.ok(projection && typeof projection === 'object', `${resource} must dispatch`);
+    assert.notDeepStrictEqual(projection, { count: 0, items: [] },
+      `${resource} fell through to the unknown-resource fallback`);
+  }
+});
