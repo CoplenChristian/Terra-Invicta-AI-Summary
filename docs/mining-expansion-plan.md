@@ -25,7 +25,9 @@ Per-site fields: `miningProfileName`, `siteDensity`, `parentBodyId/Name`, `space
 
 So resource yields, ownership and location are all present. **Nothing new needs parsing for questions 2 and 3.** Question 1 needs the mine-limit model (§3).
 
-`shared/intelResources.mjs` already has `miningProspectsResource` with `MINING_SCARCITY_WEIGHTS` (nobles 3.0, fissiles 3.0, volatiles 1.5, water 1.0, metals 1.0) and per-resource percentiles. Extend it rather than starting over.
+`shared/intelResources.mjs` already has `miningProspectsResource` with per-resource percentiles — reuse that machinery. But **its `MINING_SCARCITY_WEIGHTS` must not carry over**: they are static global scarcity, and §4.1 shows they are close to backwards for this faction's actual position.
+
+Resource position comes from `faction.resources`, `faction.monthlyIncome` and `faction.monthlyNet`, all already on the snapshot.
 
 ---
 
@@ -76,10 +78,51 @@ if over limit:  penaltyMC = Max(1, Floor(excess² / 2))
 
 ## 4. Scoring a candidate
 
+### 4.1 Static scarcity weights are wrong, and measurably so
+
+`MINING_SCARCITY_WEIGHTS` is a fixed global table — nobles 3.0, fissiles 3.0, volatiles 1.5, water 1.0, metals 1.0. It describes what is rare *in the game*, not what this faction *needs*. Measured against the live save:
+
+| Resource | Stock | Net/mo | **Runway** | Static weight |
+| --- | --- | --- | --- | --- |
+| **Water** | 111 | +34.8 | **0.5 months** | 1.0 |
+| Metals | 1,641 | +51.2 | 5.6 months | 1.0 |
+| NobleMetals | 2,674 | +43.6 | 43.6 months | **3.0** |
+| Volatiles | 8,646 | +221.7 | **100.7 months** | **1.5** |
+| Fissiles | 305 | +0.3 | 127.7 months | **3.0** |
+
+The static table weights **volatiles at 1.5× on a 100-month surplus** and **water at 1.0× on half a month of runway**. It is close to exactly backwards for this position, and would recommend noble-metal sites while the faction runs dry of water.
+
+Runway is the honest need signal: `stock ÷ (income − net)`. It falls out of data already on the snapshot.
+
+### 4.2 Saturating marginal utility
+
+Need-weighting alone is not enough — it tunnels onto the single scarcest resource and recommends a spike. The fix is that utility must **saturate**: once a resource is comfortably supplied, more of it is worth close to nothing, so the tail of a single-resource site is wasted.
+
 ```
-siteValue = Σ (resourceRate × scarcityWeight)      // existing MINING_SCARCITY_WEIGHTS
-          × siteDensity
-          × theaterAccessibility                    // ASSUMPTION, see below
+sufficiency(r)   = (stock_r + net_r × 12) ÷ consumption_r        // months of runway, projected
+U(r)             = min(sufficiency, TARGET) / TARGET             // linear up to sufficiency
+                 + surplus beyond TARGET at a heavily discounted rate
+siteValue        = Σ_r [ U(r after site) − U(r before site) ]
+```
+
+`TARGET` is the runway we call sufficient — 12 months as a starting value, in config, marked `heuristic`.
+
+Verified against the exact case that motivated this. Site A yields +200/mo water; site B yields +100 water, +100 volatiles, +150 metals:
+
+| Position | A (spike) | B (balanced) | Picks |
+| --- | --- | --- | --- |
+| Water critical — today's save | 0.797 | **0.851** | **B** |
+| Water already solved | 0.000 | **0.372** | **B** |
+
+In the critical case the first 100 water covers most of the emergency, so the second 100 is worth less than volatiles and metals alongside it. In the solved case the spike scores **exactly zero** — water is saturated, and a site offering only water offers nothing.
+
+That is the behaviour to preserve: **a good amount of what is needed, plus value elsewhere, beats a maximum of one thing.**
+
+### 4.3 The rest of the value term
+
+```
+siteValue  ×= siteDensity
+           ×= theaterAccessibility     // ASSUMPTION, see below
 ```
 
 Then cost:
@@ -149,7 +192,7 @@ Follow `mc-budget.js` for the component pattern and reuse the existing CSS token
 | --- | --- | --- |
 | **M1** | Capacity model — mine limit, usage, quadratic penalty, hate conversion. Reuses `MINE_LIMIT_GRANTS` and `alienHateEconomics` | Low |
 | **M2** | Reachability buckets from completed projects; body → mission-tech map | Medium — the map must come from templates, not be hand-written |
-| **M3** | Candidate scoring on the existing scarcity weights | Low |
+| **M3** | Need-weighted saturating scoring (§4.1–4.2) — runway per resource, `TARGET` in config, balanced baskets beating spikes | Medium — this is where the board earns its keep |
 | **M4** | `/api/intel/mining-expansion` | Low |
 | **M5** | Frontend card | Low |
 | **M6** | Feed mining candidates into the directive engine's cycle plan as a `space` family | Medium — depends on v2 phases landing |
@@ -165,3 +208,5 @@ M1 alone is worth shipping: *"you are at 18 of 36 mines; the next 18 are free, a
 3. **`theaterAccessibility`** — start as config, but is transfer time derivable from the existing Δv/fleet data well enough to replace the constant?
 4. **Should `/api/intel/mining-prospects` be superseded** or kept alongside? Two endpoints answering overlapping questions is how the v1/v2 frontend split happened.
 5. **Defensibility.** Notion 11 says outer-system sites may be indefensible. Is there a usable signal — alien hab proximity, our fleet coverage — or does this stay a stated caveat?
+6. **What is the right `TARGET` runway?** 12 months is a starting guess. It is the single weight that decides when a resource stops mattering, so it deserves the §4c-style sensitivity check from the directive engine plan: halve and double it, and see whether the top recommendation moves.
+7. **Should consumption be projected rather than current?** Runway uses today's burn rate, but a fleet build or a hab under construction changes it sharply. A site that looks sufficient today may not be once the yard finishes.
