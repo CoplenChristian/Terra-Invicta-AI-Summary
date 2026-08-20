@@ -499,7 +499,92 @@ cyclePlan: {
 
 ---
 
-## 4c. Calibrating the objective function
+## 4b-bis. Persistent assignments — a wrong assumption in §4b
+
+§4b assumes one mission per councilor **per cycle**, with every councilor free again next cycle. That is false for 10 of the 43 missions, and the engine currently acts on the false version.
+
+### The engine is blind to what councilors are already doing
+
+`councilor.activeMissionName` is in the snapshot. **Nothing in `server/engine/` or `directiveEngine.js` reads it.**
+
+Measured on the live save:
+
+| Councilor | Currently doing |
+| --- | --- |
+| Hemaraj Pavanaja | **Advise** |
+| Mahangeet Pakimor | **Advise** |
+| Ngoc Thy Nguyen | **Advise** |
+| Brad Lester | **Advise** |
+| Beth Hofmann | Inspire |
+| Balgovind Manandhar | (prior: Investigate Alien Activity) |
+
+The cycle plan reports "6 ASSIGNED" and hands all six new missions. **Four of those six are being told to abandon an active, ongoing Advise** — and the plan never says so. This is not a gap in coverage; it is confidently bad advice, and it is the most consequential defect found in the engine so far.
+
+### `permanentAssignment` missions
+
+| Mission | Persistent effect |
+| --- | --- |
+| **Advise** | yes |
+| **Surveil Location** | yes |
+| **Protect Councilor** | yes |
+| Control Nation | no |
+| Investigate Councilor | no |
+| Public Campaign | no |
+| Stabilize Nation | no |
+| Increase Unrest | no |
+| Go To Ground | no |
+| Assault Alien Asset | no |
+
+Note **Control Nation and Investigate Councilor are on this list** — the engine's top-ranked expansion action and the Investigate→Turn enabler. So this is not an edge case confined to Advise.
+
+The three with `persistentEffect: true` are the sharpest: their benefit exists *only while the councilor remains assigned*. Reassigning ends the benefit.
+
+### What the assignment model must change
+
+1. **Read `activeMissionName`.** A councilor on a permanent assignment is not free capacity.
+2. **Model reassignment as a cost, not a neutral move.** For a persistent-effect mission the cost is the benefit destroyed — for Advise, the IP the nation loses (§4d).
+3. **Recommending the mission a councilor is already running is a no-op**, and should render as "continue", not as a new order.
+4. **`unavailable[]` needs a third category** beyond detained: *committed to a persistent assignment*. Different from `unassigned` — these councilors are working, not idle.
+
+---
+
+## 4d. Advise — the calculation
+
+Verified. Wiki `Nations` (rev **2026-05-17**, post-1.0), plus the mission template.
+
+**Advise does not boost research directly.** It raises the nation's **Investment Points**, and IP spent on the Knowledge priority is what becomes research. That indirection is why the effect looks larger than the mission description suggests.
+
+```
+base IP = (GDP in billions)^0.35
+        × (1 − max(unrest − 2, 0) / 10)
+        − 0.5 × navies
+        − 0.5 × idle armies in home regions
+        − 1.0 × other armies
+
+n-th advisor on that nation adds  +(advisor Administration / n) %
+```
+
+**It keys off Administration, not Science.** Diminishing per additional advisor on the same nation.
+
+Mission properties: `Automatic` resolution (never fails, no odds needed), **10 Influence flat**, zero hate on every outcome, `permanentAssignment: true`, `persistentEffect: true`, and it requires a control point in the target nation (`ScannableObjectWithMyControlPoints`).
+
+Measured on the live save — we hold a CP in 6 nations, and our Administration values are 25, 25, 25, 24, 24, 11:
+
+| Nation | Base IP | With one Admin-25 advisor |
+| --- | --- | --- |
+| United States | 34.38 | **42.97** (+8.59) |
+| European Union | 26.95 | 33.69 (+6.74) |
+| Mexico | 16.63 | 20.79 (+4.16) |
+| Canada | 16.22 | 20.27 (+4.05) |
+| Poland | 13.82 | 17.28 (+3.46) |
+
+Stacking three Admin-25 advisors on the United States: +25%, then +12.5%, then +8.3% → IP 34.38 → 42.97 → 47.27 → 50.14. The second advisor is worth half the first; judge each against what that councilor could do elsewhere.
+
+**Every input is already in the snapshot** — `nation.GDP`, `nation.unrest`, `nation.armies`, and our councilors' effective Administration. No new parsing needed.
+
+### Why this belongs in the engine
+
+Advise is the clearest case of an action the current model cannot value: it is free of hate, cannot fail, costs a fixed 10 Influence, and produces a large ongoing economic return that compounds through the priority system. Ranking it by the generic value rules would badly understate it — and four councilors are already running it, so the engine's first job is to stop recommending they stop.
 
 The plan states `score = value − hateCost − resourceCost` and puts the weights in config, but never says how you know the weights are sane. v1 demonstrated the failure: council candidates scored 0 until value rules were added, and afterwards Turn at 9.00 against a control point at 5.52 was an unexamined guess.
 
