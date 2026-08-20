@@ -80,6 +80,52 @@ const HATE_HOT_PIPS = 5;
 // this gate does not care how strong the fleet is.
 const TOTAL_WAR_APPROACH_HATE = ALIEN_TOTAL_WAR_HATE - ALIEN_HATE_WAR_THRESHOLD;
 
+// Total War needs BOTH >= ALIEN_TOTAL_WAR_HATE hate AND >= N elapsed campaign
+// years (Normal 20, Veteran 10, Cinematic 25, Brutal 0, each divided by Alien
+// Progression Speed). Hate is only half the precondition, so a proximity check
+// that reads hate alone reports an emergency the rules say cannot happen yet:
+// measured at campaign year 6 on Normal, hate 168 produced "32.0 hate from
+// Total War ... effectively irreversible" while the gate was still 14 in-game
+// years shut.
+//
+// How much lead time counts as "soon" is a judgement call, not a measured
+// constant. Two campaign years is the window used here: short enough that hate
+// added now is plausibly still on the books when the gate opens, long enough
+// that the operator is warned before the gate rather than at it.
+const TOTAL_WAR_GATE_HORIZON_YEARS = 2;
+
+/**
+ * Is the campaign-year half of the Total War precondition satisfied?
+ *
+ * Returns 'open' | 'closed' | 'unknown'. Read off buildTotalWarState's own
+ * states rather than re-deriving the difficulty thresholds, so the two cannot
+ * drift apart. 'unknown' is a real answer: with no campaign start year the
+ * save cannot say how long the clock has run, and the hate-unknown states
+ * ('armed_hate_unknown' / 'safe_hate_unknown') already carry a KNOWN gate with
+ * an unknown hate, which is a different thing entirely.
+ */
+function classifyTotalWarYearGate(totalWarState) {
+  switch (totalWarState) {
+    case 'active':
+    case 'armed':
+    case 'armed_hate_unknown':
+      return 'open';
+    case 'pending':
+    case 'safe':
+    case 'safe_hate_unknown':
+      return 'closed';
+    default:
+      // null, 'unavailable', or a state a newer build added. Never guess.
+      return 'unknown';
+  }
+}
+
+function formatCampaignYears(years) {
+  if (years === null) return null;
+  const rounded = Math.round(years * 10) / 10;
+  return `${rounded.toFixed(1)} campaign year${rounded === 1 ? '' : 's'}`;
+}
+
 function toFiniteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
@@ -342,7 +388,13 @@ function assessCampaignPosture({
   const warExceeded = economics.currentWarStatus === 'WAR THRESHOLD EXCEEDED'
     || (actualAlienHate !== null && actualAlienHate >= ALIEN_HATE_WAR_THRESHOLD)
     || (pips !== null && pips >= HATE_HOT_PIPS);
-  const totalWarState = economics.totalWar?.state || null;
+  const totalWar = economics.totalWar || {};
+  const totalWarState = totalWar.state || null;
+  // The other half of the Total War precondition. buildTotalWarState already
+  // resolved difficulty and Alien Progression Speed into these two fields, so
+  // read them rather than recomputing the thresholds here.
+  const totalWarYearGate = classifyTotalWarYearGate(totalWarState);
+  const totalWarYearsRemaining = toFiniteNumber(totalWar.yearsRemaining);
   const hateHot = warExceeded
     || totalWarState === 'pending'
     || totalWarState === 'active';
@@ -375,11 +427,30 @@ function assessCampaignPosture({
   // that as "clear of Total War" is the exact failure this codebase forbids:
   // an absent measurement rendered as a confident safe.
   const meterSaturated = pips !== null && pips >= HATE_HOT_PIPS;
+
+  // A gate we can SEE is shut, and shut for longer than the horizon, turns
+  // Total War from an emergency into a forecast. An unknown gate does not:
+  // 'unknown' must not read as either open or shut, so it leaves the hold in
+  // place -- an unmeasured precondition cannot clear an irreversible one.
+  const gateDefersTotalWar = totalWarYearGate === 'closed'
+    && totalWarYearsRemaining !== null
+    && totalWarYearsRemaining > TOTAL_WAR_GATE_HORIZON_YEARS;
+  const gateWaitText = formatCampaignYears(totalWarYearsRemaining);
+
+  // Two bands, not one. Below 200 the year gate can demote an approach to a
+  // forecast, because hate added now is still ventable before the gate opens.
+  // At or past 200 -- 'pending' is exactly that state -- the hate half of the
+  // precondition is already breached and the clock is running towards a fixed
+  // date, so the gate changes the wording but never lifts the hold.
+  const hateThresholdMet = totalWarState === 'pending'
+    || (actualAlienHate !== null && actualAlienHate >= ALIEN_TOTAL_WAR_HATE);
+  const hateInApproachBand = actualAlienHate !== null && actualAlienHate >= TOTAL_WAR_APPROACH_HATE;
+
   let totalWarProximity;
   if (totalWarActive) {
     totalWarProximity = 'active';
-  } else if (totalWarState === 'pending' || (actualAlienHate !== null && actualAlienHate >= TOTAL_WAR_APPROACH_HATE)) {
-    totalWarProximity = 'near';
+  } else if (hateThresholdMet || hateInApproachBand) {
+    totalWarProximity = gateDefersTotalWar && !hateThresholdMet ? 'forecast' : 'near';
   } else if (actualAlienHate !== null) {
     totalWarProximity = 'clear';
   } else if (meterSaturated) {
@@ -398,17 +469,38 @@ function assessCampaignPosture({
   // we survive the retaliation cycle, but it does not make crossing 200
   // reversible.
   const holds = [];
+  const totalWarNotes = [];
+  const hatePosition = hateThresholdMet
+    ? `hate is already at or past the Total War line of ${ALIEN_TOTAL_WAR_HATE}`
+    : totalWarHeadroom === null
+      ? `within reach of Total War at ${ALIEN_TOTAL_WAR_HATE}`
+      : `${totalWarHeadroom.toFixed(1)} hate from Total War at ${ALIEN_TOTAL_WAR_HATE}`;
   if (hateElevated && spaceFragile) {
     holds.push('the fleet cannot absorb the retaliation cycle at this hate level');
   }
   if (totalWarActive) {
     holds.push('already at Total War — venting is voided, so added hate has no route back out');
   } else if (nearTotalWar) {
-    const distance = totalWarHeadroom === null
-      ? 'within reach of'
-      : `${totalWarHeadroom.toFixed(1)} hate from`;
-    holds.push(`${distance} Total War at ${ALIEN_TOTAL_WAR_HATE}, which is effectively irreversible`);
-  } else if (totalWarProximity === 'unknown' && meterSaturated) {
+    // The gate is open, about to open, or unobservable. Only the first makes
+    // the transition available right now, so the wording has to say which --
+    // an unqualified "irreversible" at year 6 of a 20-year gate is a claim the
+    // rules contradict.
+    const gateNote = totalWarYearGate === 'open'
+      ? ', which is effectively irreversible — the campaign-year gate has already passed'
+      : totalWarYearGate === 'closed' && gateWaitText !== null
+        ? `, which becomes effectively irreversible when the campaign-year gate opens in ${gateWaitText}`
+        : ', which is effectively irreversible — the campaign-year gate is not observable from this save';
+    holds.push(`${hatePosition}${gateNote}`);
+  } else if (totalWarProximity === 'forecast') {
+    // Hate is in range but the gate is measurably years out, so this is a
+    // forecast, not an emergency: hate added now can still be vented before
+    // the gate opens. Holding proxy action on it would suppress a decade of
+    // play, so it is recorded as a note rather than a hold.
+    totalWarNotes.push(
+      `Total War forecast, not imminent: ${hatePosition}, but the campaign-year gate does not `
+      + `open for ${gateWaitText}`
+    );
+  } else if (totalWarProximity === 'unknown' && meterSaturated && !gateDefersTotalWar) {
     // Blind above the war threshold. The distance to an irreversible
     // transition is exactly what we cannot measure, so hold and say why
     // rather than reporting a headroom we do not have.
@@ -416,6 +508,15 @@ function assessCampaignPosture({
       `alien hate is at or above ${ALIEN_HATE_WAR_THRESHOLD} and the estimate meter `
       + `saturates there — distance to Total War at ${ALIEN_TOTAL_WAR_HATE} is not observable `
       + 'from a player-mode save'
+    );
+  } else if (totalWarProximity === 'unknown' && meterSaturated) {
+    // Same blindness, but the year gate is measurably shut, so the unmeasured
+    // hate cannot produce Total War inside the horizon either way. Still say
+    // what cannot be seen -- it just is not a reason to hold this cycle.
+    totalWarNotes.push(
+      `alien hate is at or above ${ALIEN_HATE_WAR_THRESHOLD} and the estimate meter saturates `
+      + `there, so distance to Total War at ${ALIEN_TOTAL_WAR_HATE} is not observable; the `
+      + `campaign-year gate does not open for ${gateWaitText}`
     );
   }
   const escalateLate = holds.length > 0;
@@ -437,10 +538,17 @@ function assessCampaignPosture({
   for (const hold of holds) {
     reasons.push(`doctrine: escalate late — ${hold}`);
   }
+  // Notes are the things that did NOT justify a hold. They still get reported,
+  // because a deferred Total War is a forecast the operator should see rather
+  // than a fact that quietly disappeared.
+  for (const note of totalWarNotes) {
+    reasons.push(note);
+  }
 
   return {
     escalateLate,
     holds,
+    totalWarNotes,
     hateHot,
     hateElevated,
     spaceFragile,
@@ -452,12 +560,19 @@ function assessCampaignPosture({
     totalWarHateThreshold: ALIEN_TOTAL_WAR_HATE,
     totalWarHeadroom,
     nearTotalWar,
-    // 'active' | 'near' | 'clear' | 'unknown'. Never collapse 'unknown' to
-    // 'clear': in player mode the meter saturates at the war threshold, so
-    // being blind is the normal case rather than an edge case.
+    // 'active' | 'near' | 'forecast' | 'clear' | 'unknown'. Never collapse
+    // 'unknown' to 'clear': in player mode the meter saturates at the war
+    // threshold, so being blind is the normal case rather than an edge case.
+    // 'forecast' means the hate half of the precondition is met but the
+    // campaign-year half is measurably years away -- distinct from 'near',
+    // which is the transition being actually available.
     totalWarProximity,
     hateObservable: actualAlienHate !== null,
     totalWarState,
+    // 'open' | 'closed' | 'unknown' -- the campaign-year half of the Total War
+    // precondition, and how long is left on it when that is measurable.
+    totalWarYearGate,
+    totalWarYearsRemaining,
     ...ships,
     reasons
   };

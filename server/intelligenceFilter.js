@@ -591,6 +591,14 @@ class IntelligenceFilter {
 
     const visibleByFaction = (items, factionId) => items.filter(item => item.factionId === factionId);
 
+    // The faction's headline research figure comes from the save's own income
+    // rate and stays visible, but the hab-module component of the breakdown is
+    // a module manifest -- exactly what habModules withholds in player mode.
+    // Redact it to null (unmeasured), never to zero.
+    const redactHabResearch = (breakdown) => (breakdown
+      ? { ...breakdown, habModules: null, habModuleCount: null, habModulesUnresolved: null }
+      : breakdown);
+
     return factions.map(faction => {
       const visibleFleets = visibleByFaction(visibleAssets.fleets, faction.ID);
       const visibleHabs = visibleByFaction(visibleAssets.habs, faction.ID);
@@ -614,6 +622,7 @@ class IntelligenceFilter {
           shipsCount: null,
           combatPower: null,
           combatPowerAvailable: false,
+          researchBreakdown: redactHabResearch(faction.researchBreakdown),
           spaceVisibility: 'unavailable',
           powerScore: { ...faction.powerScore, overall: null, spaceEconomy: null, fleet: null }
         };
@@ -627,6 +636,7 @@ class IntelligenceFilter {
         shipsCount: visibleShipCount,
         combatPower: visibleCombatPower || null,
         combatPowerAvailable: visibleFleets.some(fleet => fleet.combatPowerAvailable),
+        researchBreakdown: redactHabResearch(faction.researchBreakdown),
         spaceVisibility: 'partial',
         powerScore: {
           ...faction.powerScore,

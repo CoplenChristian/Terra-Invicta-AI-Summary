@@ -698,6 +698,16 @@ function renderDashboard() {
       state.rawSnapshot.alienHateEconomics
     );
   }
+  if (window.MissionControlMiningExpansion?.render) {
+    const miningEl = document.getElementById('miningExpansion');
+    if (miningEl) {
+      window.MissionControlMiningExpansion.fetchMiningExpansion(state.observer, state.mode).then(data => {
+        if (data) {
+          window.MissionControlMiningExpansion.render(miningEl, data);
+        }
+      });
+    }
+  }
   renderOperativeLeaderboard();
   renderHoldingsBubbleMatrix();
   renderResearchWatchlist();

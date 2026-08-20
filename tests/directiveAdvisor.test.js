@@ -12,6 +12,7 @@ const {
   pickPrimaryDirective,
   findHumanNonProxyTarget
 } = require('../server/directiveAdvisor');
+const { buildTotalWarState } = require('../server/alienHateEconomics');
 
 // Shares come from the official wiki, Diplomacy § "Pro-Alien Hate Sharing"
 // (rev 2026-08-11, post-1.0). The rule is conditional, not a flat fraction:
@@ -151,6 +152,202 @@ test('holds proxy offensives near Total War even with a strong fleet', () => {
   assert.strictEqual(posture.escalateLate, true, 'still holds — Total War is irreversible');
   assert.ok(Math.abs(posture.totalWarHeadroom - 32) < 1e-9, String(posture.totalWarHeadroom));
   assert.ok(posture.holds.some((h) => /irreversible/i.test(h)), JSON.stringify(posture.holds));
+  // This snapshot carries no totalWar payload, so the campaign-year half of
+  // the precondition is unknown -- which is why the hold stands. See the
+  // year-gate tests below for what a KNOWN gate does.
+  assert.strictEqual(posture.totalWarYearGate, 'unknown');
+});
+
+// ---------------------------------------------------------------------------
+// Total War year gate
+//
+// Total War needs BOTH >= 200 hate AND >= N elapsed campaign years (Normal 20,
+// Veteran 10, Cinematic 25, Brutal 0, each divided by Alien Progression Speed).
+// Reading hate alone reported an emergency the rules say cannot happen yet:
+// measured at hate 168 on Normal, campaign year 6 produced "32.0 hate from
+// Total War at 200, which is effectively irreversible" with the gate still 14
+// in-game years shut, suppressing proxy offensives for over a decade.
+// ---------------------------------------------------------------------------
+
+const STRONG_FLEET = {
+  observer: { ID: 4712, shipsCount: 240, fleetsCount: 18 },
+  factions: [{ ID: 4717, displayName: 'the Aliens', templateName: 'AlienCouncil', shipsCount: 90 }]
+};
+
+// Built through buildTotalWarState on purpose: the advisor must consume the
+// states that function actually emits, not a hand-rolled approximation.
+const totalWarAt = (yearsElapsed, actualAlienHate = 168) => buildTotalWarState({
+  difficultyKey: 'normal',
+  actualAlienHate,
+  yearsElapsed
+});
+
+test('a closed year gate downgrades Total War proximity to a forecast', () => {
+  const posture = assessCampaignPosture({
+    alienHateEconomics: {
+      actualAlienHate: 168,
+      currentWarStatus: 'WAR THRESHOLD EXCEEDED',
+      totalWar: totalWarAt(6)
+    },
+    ...STRONG_FLEET
+  });
+
+  assert.strictEqual(posture.totalWarYearGate, 'closed');
+  assert.strictEqual(posture.totalWarYearsRemaining, 14);
+  assert.strictEqual(posture.totalWarProximity, 'forecast');
+  assert.strictEqual(posture.nearTotalWar, false);
+  assert.strictEqual(posture.escalateLate, false, 'a gate 14 years out is not this cycle’s emergency');
+
+  // The whole point of the fix: no claim of irreversibility while the rules
+  // say the transition cannot occur for another 14 in-game years.
+  assert.deepStrictEqual(posture.holds, []);
+  for (const text of [...posture.holds, ...posture.reasons]) {
+    assert.ok(!/irreversible/i.test(text), `irreversibility claimed behind a closed gate: ${text}`);
+  }
+
+  // Deferred, not discarded -- the forecast still has to be visible, and it
+  // has to state the years so the operator can see it is a forecast.
+  assert.strictEqual(posture.totalWarNotes.length, 1);
+  assert.match(posture.totalWarNotes[0], /forecast/i);
+  assert.match(posture.totalWarNotes[0], /14\.0 campaign years/);
+  assert.ok(posture.reasons.includes(posture.totalWarNotes[0]), 'the forecast reaches reasons');
+});
+
+test('an open year gate keeps the irreversible Total War hold', () => {
+  const posture = assessCampaignPosture({
+    alienHateEconomics: {
+      actualAlienHate: 168,
+      currentWarStatus: 'WAR THRESHOLD EXCEEDED',
+      totalWar: totalWarAt(22)
+    },
+    ...STRONG_FLEET
+  });
+
+  assert.strictEqual(posture.totalWarState, 'armed');
+  assert.strictEqual(posture.totalWarYearGate, 'open');
+  assert.strictEqual(posture.totalWarProximity, 'near');
+  assert.strictEqual(posture.escalateLate, true);
+  assert.ok(posture.holds.some((h) => /irreversible/i.test(h)), JSON.stringify(posture.holds));
+  assert.ok(
+    posture.holds.some((h) => /gate has already passed/i.test(h)),
+    JSON.stringify(posture.holds)
+  );
+  assert.deepStrictEqual(posture.totalWarNotes, []);
+});
+
+test('a gate about to open still holds, and says how long is left', () => {
+  const posture = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: 168, totalWar: totalWarAt(18.5) },
+    ...STRONG_FLEET
+  });
+
+  assert.strictEqual(posture.totalWarYearsRemaining, 1.5);
+  assert.strictEqual(posture.totalWarProximity, 'near');
+  assert.strictEqual(posture.escalateLate, true);
+  const hold = posture.holds.find((h) => /Total War/i.test(h));
+  assert.match(hold, /1\.5 campaign years/, hold);
+  assert.match(hold, /becomes effectively irreversible/i, hold);
+});
+
+test('hate already past 200 holds regardless of how far out the gate is', () => {
+  // 'pending' is hate >= 200 with the year gate still shut. The hate half of
+  // the precondition is already breached and the clock runs to a fixed date,
+  // so the gate changes the wording, never the hold.
+  const posture = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: 210, totalWar: totalWarAt(6, 210) },
+    ...STRONG_FLEET
+  });
+
+  assert.strictEqual(posture.totalWarState, 'pending');
+  assert.strictEqual(posture.totalWarYearGate, 'closed');
+  assert.strictEqual(posture.totalWarProximity, 'near');
+  assert.strictEqual(posture.escalateLate, true);
+  const hold = posture.holds.find((h) => /Total War/i.test(h));
+  assert.match(hold, /already at or past/i, hold);
+  assert.match(hold, /14\.0 campaign years/, hold);
+  // Negative headroom must never be printed as a distance.
+  assert.ok(!/-\d/.test(hold), hold);
+});
+
+test('an unreadable year gate is not treated as either open or shut', () => {
+  // yearsElapsed is null when the save carries no campaign start year, and
+  // buildTotalWarState reports 'unavailable' rather than guessing. Unknown is
+  // not safe: the hold stands, and the text says the gate is unobservable.
+  const totalWar = buildTotalWarState({
+    difficultyKey: 'normal',
+    actualAlienHate: 168,
+    yearsElapsed: null
+  });
+  assert.strictEqual(totalWar.state, 'unavailable');
+
+  const posture = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: 168, totalWar },
+    ...STRONG_FLEET
+  });
+
+  assert.strictEqual(posture.totalWarYearGate, 'unknown');
+  assert.strictEqual(posture.totalWarYearsRemaining, null, 'absent stays null');
+  assert.strictEqual(posture.totalWarProximity, 'near');
+  assert.strictEqual(posture.escalateLate, true);
+  assert.ok(
+    posture.holds.some((h) => /not observable/i.test(h)),
+    JSON.stringify(posture.holds)
+  );
+});
+
+// Player mode redacts the save's true hate, so the year gate is the only half
+// of the precondition that survives the filter. It must still be honoured, and
+// it must not undo the saturated-meter handling from c3d21bc.
+test('player mode: a saturated meter behind a closed gate is a note, not a hold', () => {
+  const posture = assessCampaignPosture({
+    alienHateEconomics: {
+      actualAlienHate: null,
+      currentWarStatus: 'GAME-VISIBLE ESTIMATE',
+      totalWar: totalWarAt(6, null)
+    },
+    observerHate: { pips: 5 },
+    ...STRONG_FLEET
+  });
+
+  assert.strictEqual(posture.totalWarState, 'safe_hate_unknown');
+  assert.strictEqual(posture.hateObservable, false);
+  // Hate distance stays unknown -- the gate says nothing about the hate meter.
+  assert.strictEqual(posture.totalWarProximity, 'unknown');
+  assert.deepStrictEqual(posture.holds, []);
+  assert.strictEqual(posture.totalWarNotes.length, 1);
+  assert.match(posture.totalWarNotes[0], /not observable/i);
+  assert.match(posture.totalWarNotes[0], /14\.0 campaign years/);
+});
+
+test('player mode: a saturated meter with the gate open or unknown still holds', () => {
+  const gateOpen = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: null, totalWar: totalWarAt(22, null) },
+    observerHate: { pips: 5 },
+    ...STRONG_FLEET
+  });
+  assert.strictEqual(gateOpen.totalWarState, 'armed_hate_unknown');
+  assert.strictEqual(gateOpen.totalWarYearGate, 'open');
+  assert.strictEqual(gateOpen.totalWarProximity, 'unknown');
+  assert.strictEqual(gateOpen.escalateLate, true, 'blind above the war threshold with the gate open holds');
+  assert.ok(gateOpen.holds.some((h) => /not observable/i.test(h)), JSON.stringify(gateOpen.holds));
+
+  const gateUnknown = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: null, currentWarStatus: 'GAME-VISIBLE ESTIMATE' },
+    observerHate: { pips: 5 },
+    ...STRONG_FLEET
+  });
+  assert.strictEqual(gateUnknown.totalWarYearGate, 'unknown');
+  assert.strictEqual(gateUnknown.escalateLate, true, 'c3d21bc: unknown never collapses to safe');
+});
+
+test('player mode: below five diamonds stays clear whatever the gate says', () => {
+  const posture = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: null, totalWar: totalWarAt(22, null) },
+    observerHate: { pips: 3 },
+    ...STRONG_FLEET
+  });
+  assert.strictEqual(posture.totalWarProximity, 'clear');
+  assert.strictEqual(posture.escalateLate, false);
 });
 
 // Player mode redacts the save's true hate, leaving only the 5-diamond meter,
@@ -359,4 +556,75 @@ test('briefing engine does not recommend a future-dated ward as a new defensive 
 
   assert.notEqual(briefing.engineDirectives.primary.id, 'defend-interests:United States');
   assert.equal(briefing.engineDirectives.primary.value?.unprotectedControlPointCount, undefined);
+});
+
+// ---------------------------------------------------------------------------
+// Operative advice must quote the hold that actually fired
+//
+// `escalateLate` is true when ANY hold fires, and the holds stopped being
+// interchangeable once Total War proximity started holding on its own. The
+// roster hard-coded the fragile-fleet wording, so a 240-ship posture whose only
+// hold was Total War proximity produced "while alien hate is elevated and the
+// fleet is fragile" against a measured spaceFragile of false.
+// ---------------------------------------------------------------------------
+
+const ESPIONAGE_COUNCILOR = [{
+  ID: 1,
+  factionId: 4712,
+  displayName: 'Operative',
+  attributes: { Espionage: 15 }
+}];
+
+const rosterAdvice = (posture) =>
+  briefingGenerator.buildOperativeRoster(ESPIONAGE_COUNCILOR, 4712, posture)[0].recommendedOrder;
+
+test('operative advice quotes the Total War hold instead of a fragile fleet', () => {
+  const posture = assessCampaignPosture({
+    alienHateEconomics: {
+      actualAlienHate: 168,
+      currentWarStatus: 'WAR THRESHOLD EXCEEDED',
+      totalWar: buildTotalWarState({ difficultyKey: 'normal', actualAlienHate: 168, yearsElapsed: 22 })
+    },
+    observer: { ID: 4712, shipsCount: 240, fleetsCount: 18 },
+    factions: [{ ID: 4717, displayName: 'the Aliens', templateName: 'AlienCouncil', shipsCount: 90 }]
+  });
+
+  assert.strictEqual(posture.spaceFragile, false, 'precondition: the fleet is NOT fragile');
+  assert.strictEqual(posture.escalateLate, true);
+  assert.strictEqual(posture.holds.length, 1, JSON.stringify(posture.holds));
+
+  const advice = rosterAdvice(posture);
+  assert.ok(advice.includes(posture.holds[0]), advice);
+  assert.ok(!/fleet is fragile/i.test(advice), `advice contradicts spaceFragile: ${advice}`);
+});
+
+test('operative advice still names the fleet when the fleet is the hold', () => {
+  const posture = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: 71.6, currentWarStatus: 'WAR THRESHOLD EXCEEDED' },
+    observer: { ID: 4712, shipsCount: 23, fleetsCount: 2 },
+    factions: [{ ID: 4717, displayName: 'the Aliens', templateName: 'AlienCouncil', shipsCount: 161 }]
+  });
+
+  assert.strictEqual(posture.spaceFragile, true);
+  const advice = rosterAdvice(posture);
+  assert.ok(advice.includes('the fleet cannot absorb the retaliation cycle'), advice);
+});
+
+test('operative advice keeps the offensive order when nothing is holding', () => {
+  const posture = assessCampaignPosture({
+    alienHateEconomics: { actualAlienHate: 22, currentWarStatus: 'BELOW WAR THRESHOLD' },
+    observer: { ID: 4712, shipsCount: 240, fleetsCount: 18 },
+    factions: [{ ID: 4717, displayName: 'the Aliens', templateName: 'AlienCouncil', shipsCount: 90 }]
+  });
+  assert.strictEqual(posture.escalateLate, false);
+  assert.match(rosterAdvice(posture), /Crackdown or Sabotage Facilities/);
+});
+
+test('operative advice invents no hold reason when none was recorded', () => {
+  // A posture asserting escalateLate with an empty holds array is degenerate,
+  // but the advice must not fabricate a specific cause to fill the gap.
+  const advice = rosterAdvice({ escalateLate: true, holds: [] });
+  assert.match(advice, /Ward own majors/);
+  assert.ok(!/fleet is fragile/i.test(advice), advice);
+  assert.ok(!/Total War/i.test(advice), advice);
 });

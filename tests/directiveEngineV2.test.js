@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { MissionCatalogue } = require('../server/engine/missionCatalogue');
 const { evaluatePairingFeasibility, isCouncilorFree } = require('../server/engine/feasibility');
@@ -552,14 +554,38 @@ test('councilors with no id at all still occupy distinct mission slots', () => {
   assert.strictEqual(plan.assignments.length + plan.unassigned.length, councilors.length);
 });
 
-test('the published player snapshot plans for all six councilors', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
+// `dist/` is a generated build artifact and is gitignored, so on a clean
+// checkout -- which is exactly what CI has -- the published snapshot simply is
+// not there. Absent has to read as absent: returning `{}` or an empty
+// councilor list would turn "no artifact" into a passing assertion about a
+// snapshot that was never loaded.
+function readPublishedSnapshot(file) {
+  if (!fs.existsSync(file)) return null;
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+test('an absent published snapshot reads as absent, not as empty data', () => {
+  const missing = path.join(__dirname, '..', 'dist', 'data', 'snapshot-player-does-not-exist.json');
+  assert.strictEqual(fs.existsSync(missing), false, 'guard precondition: the path really is absent');
+  assert.strictEqual(
+    readPublishedSnapshot(missing),
+    null,
+    'a missing build artifact must be reported, never substituted with a stand-in'
+  );
+});
+
+test('the published player snapshot plans for all six councilors', (t) => {
   const snapshotPath = path.join(__dirname, '..', 'dist', 'data', 'snapshot-player-4712.json');
 
   // This snapshot predates `missionSpecs`, which makes it the degrade path:
   // odds must be unavailable AND every councilor must still be planned for.
-  const data = JSON.parse(fs.readFileSync(snapshotPath, 'utf8')).data;
+  const published = readPublishedSnapshot(snapshotPath);
+  if (!published) {
+    t.skip('no published snapshot artifact; run `npm run build:site` to check this path');
+    return;
+  }
+
+  const data = published.data;
   const own = data.councilors.filter((c) => Number(c.factionId) === 4712);
   assert.strictEqual(own.length, 6, 'fixture expectation: the save carries six own councilors');
   assert.ok(!data.missionSpecs, 'fixture expectation: this snapshot carries no mission specs');

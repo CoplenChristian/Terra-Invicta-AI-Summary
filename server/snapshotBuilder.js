@@ -170,6 +170,10 @@ class SnapshotBuilder {
           isExecutive,
           controlPointType: cp.controlPointType || 'Standard',
           benefits: cp.benefits || null,
+          // A crackdown'd or abandoned control point keeps its share of the
+          // nation's output but the owning faction stops receiving it, so the
+          // resource split has to know the difference.
+          benefitsDisabled: typeof cp.benefitsDisabled === 'boolean' ? cp.benefitsDisabled : null,
           // Defend Interests is stateful: keep the save's ward and expiry
           // so the directive engine can distinguish an actionable gap from a
           // holding that is already protected. The filter decides who may
@@ -630,6 +634,12 @@ class SnapshotBuilder {
     const habModules = [];
     const shipyardCountByFaction = new Map();
     const habModuleRowsById = new Map();
+    // Space research. Hab modules carry incomeResearch_month in the installed
+    // templates, and it is a real slice of a faction's output that the Earth
+    // nation sum knows nothing about. Aggregated here, at snapshot-build time,
+    // for the same reason as shipHullStats and missionSpecs: the hosted worker
+    // has no template directory, so anything template-derived must be baked on.
+    const habResearchByFaction = new Map();
     for (const module of rawHabModules) {
       const moduleId = module.ID?.value;
       if (!moduleId || module.archived) continue;
@@ -655,6 +665,24 @@ class SnapshotBuilder {
       const isShipyard = template?.allowsShipConstruction === true ||
         (Array.isArray(template?.specialRules) && template.specialRules.includes('Shipyard'));
 
+      // A module still under construction produces nothing, so only operational
+      // ones are counted. A module whose template cannot be resolved is
+      // unmeasured, not zero -- it is tracked separately so the faction total
+      // reports null rather than quietly losing that module's output.
+      const researchIncomeMonth = this.habModuleResearchIncome(template);
+      if (factionId) {
+        if (!habResearchByFaction.has(factionId)) {
+          habResearchByFaction.set(factionId, { monthly: 0, modules: 0, unresolvedModules: 0 });
+        }
+        const bucket = habResearchByFaction.get(factionId);
+        if (researchIncomeMonth === null) {
+          bucket.unresolvedModules += 1;
+        } else if (researchIncomeMonth > 0 && constructionStatus === 'operational') {
+          bucket.monthly += researchIncomeMonth;
+          bucket.modules += 1;
+        }
+      }
+
       const row = {
         id: moduleId,
         name: template?.friendlyName || module.displayName || module.templateName,
@@ -671,6 +699,7 @@ class SnapshotBuilder {
         spaceTheaterKey: hab?.spaceTheaterKey || null,
         spaceTheaterName: hab?.spaceTheaterName || null,
         isShipyard,
+        researchIncomeMonth,
         constructionStatus,
         constructionCompleted: module.constructionCompleted ?? null,
         powered: module.powered ?? null,
@@ -867,7 +896,49 @@ class SnapshotBuilder {
       const totalGdp = fNations.reduce((acc, n) => acc + (n.GDP || 0), 0);
       const totalPop = fNations.reduce((acc, n) => acc + (n.population || 0), 0);
       const totalBoost = fNations.reduce((acc, n) => acc + (n.boost || 0), 0);
-      const totalResearch = fNations.reduce((acc, n) => acc + (n.research || 0), 0);
+      // A nation's research is split between its control points, not handed
+      // whole to everyone holding one. Official wiki, Nations page (last
+      // edited 2026-05-17): "The research, boost, mc and money (from funding
+      // and spoils) produced by the nation is divided up equally among all of
+      // its control points. Control points that have sustained a Crackdown or
+      // are abandoned still get their share, but the owning faction does not
+      // receive it." So a crackdown'd point stays in the denominator and drops
+      // out of the numerator. Summing each nation whole -- what this did
+      // before -- overstates every faction that shares a nation with a rival.
+      const earthResearch = this.roundNumber(fNations.reduce((acc, n) => {
+        const allCps = Array.isArray(n.controlPoints) ? n.controlPoints : [];
+        if (allCps.length === 0) return acc;
+        const earning = allCps.filter(cp => cp.factionId === factionId && cp.benefitsDisabled !== true).length;
+        return acc + (n.research || 0) * (earning / allCps.length);
+      }, 0), 2);
+
+      // Research output has three candidate readings and they are not equal:
+      //
+      //  - Earth nations alone (what this used to report) omits every orbital
+      //    lab and every org, so it is always short.
+      //  - The 30-day transaction ledger (monthlyIncome.Research below) is a
+      //    trailing realised total, so it lags a changing rate.
+      //  - cachedYearlyRevenue is the game's own current annualised rate: it
+      //    tracks the newest "Daily Income" ledger entry x 365.25 to within
+      //    0.01% on the live save, across every faction. It already includes
+      //    nations, orgs, hab modules and the faction base income.
+      //
+      // A figure the game states beats one we reconstruct, so the reported
+      // rate wins when the save carries it. The recomputed sum is the fallback
+      // for saves that do not, and both are published side by side below.
+      const habResearch = habResearchByFaction.get(factionId) || { monthly: 0, modules: 0, unresolvedModules: 0 };
+      const habResearchMonthly = habResearch.unresolvedModules > 0 ? null : habResearch.monthly;
+      const computedMonthlyResearch = habResearchMonthly === null
+        ? null
+        : this.roundNumber(earthResearch + habResearchMonthly, 2);
+      const reportedYearlyResearch = this.firstNumericOrNull(f.cachedYearlyRevenue?.Research);
+      const reportedMonthlyResearch = reportedYearlyResearch === null
+        ? null
+        : this.roundNumber(reportedYearlyResearch / 12, 2);
+      const totalResearch = reportedMonthlyResearch !== null
+        ? reportedMonthlyResearch
+        : computedMonthlyResearch;
+
       const recent30DayFlow = this.summarizeRecentTransactions(f.Transactions, saveData.gameTimeString, 30);
       const projectedMonthlyIncome = this.scaleResourceMap(f.cachedYearlyRevenue, 1 / 12);
       const monthlyIncome = recent30DayFlow.income;
@@ -877,7 +948,9 @@ class SnapshotBuilder {
       // Power Score Components (0-100 scales)
       const earthEconomyScore = Math.min(100, Math.round((totalGdp / scoreNormalizers.gdp) * 100));
       const earthPoliticsScore = Math.min(100, Math.round((fCPs.length / scoreNormalizers.controlPoints) * 100));
-      const researchPowerScore = Math.min(100, Math.round((totalResearch / scoreNormalizers.research) * 100));
+      const researchPowerScore = totalResearch === null
+        ? null
+        : Math.min(100, Math.round((totalResearch / scoreNormalizers.research) * 100));
       const spaceEconomyScore = Math.min(100, Math.round((fHabs.length / scoreNormalizers.habs) * 100));
       const fleetPowerScore = fCombatPower === null
         ? null
@@ -947,6 +1020,21 @@ class SnapshotBuilder {
         totalPopulation: totalPop,
         totalBoost,
         totalResearch,
+        researchBreakdown: {
+          monthly: totalResearch,
+          source: reportedMonthlyResearch !== null
+            ? "save cachedYearlyRevenue.Research / 12 (the game's own current annualised rate)"
+            : 'computed: Earth control-point share + completed hab module research',
+          reportedMonthly: reportedMonthlyResearch,
+          computedMonthly: computedMonthlyResearch,
+          // Components of the fallback only. The reported rate also carries
+          // org, trait, unused-Mission-Control and passive faction income,
+          // which are not reconstructed here.
+          earthControlPointShare: earthResearch,
+          habModules: habResearchMonthly,
+          habModuleCount: habResearch.modules,
+          habModulesUnresolved: habResearch.unresolvedModules
+        },
         habsCount: fHabs.length,
         fleetsCount: fFleets.length,
         shipsCount: fShipsCount,
@@ -1392,6 +1480,18 @@ class SnapshotBuilder {
       net: this.scaleResourceMap(net, 1),
       source: 'save transaction ledger'
     };
+  }
+
+  // Monthly research produced by one hab module, read from the installed
+  // TIHabModuleTemplate rather than hardcoded. Only the 36 science templates
+  // carry incomeResearch_month, so a template that exists without the key
+  // genuinely produces no research -- that is a measured zero. A template that
+  // could not be resolved at all is unmeasured and returns null, so the
+  // faction total reports null rather than silently dropping the module.
+  habModuleResearchIncome(template) {
+    if (!template) return null;
+    const value = template.incomeResearch_month;
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
   }
 
   moduleConstructionStatus(module) {

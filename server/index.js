@@ -456,7 +456,7 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
     const body = requestValidation.parseBodyQuery(req.query.body);
     const theater = requestValidation.parseBodyQuery(req.query.theater ?? req.query.body);
     const limit = requestValidation.parseBoundedIntegerQuery(
-      req.query.limit ?? (req.params.resource === 'mining-prospects' ? req.query.quantity : undefined),
+      req.query.limit ?? ((req.params.resource === 'mining-prospects' || req.params.resource === 'mining-expansion') ? req.query.quantity : undefined),
       'mining prospects limit'
     );
     const destination = req.query.destination ? String(req.query.destination).trim() : null;

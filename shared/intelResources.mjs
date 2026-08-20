@@ -13,7 +13,8 @@ export const SUPPORTED_RESOURCES = new Set([
   'resources', 'hab-modules', 'shipyards', 'shipyard-queues', 'arrivals', 'transfers',
   'logistics', 'construction', 'ship-designs', 'theaters', 'infrastructure',
   'alien-threat', 'delta', 'mobility', 'production-plan', 'body-status',
-  'mining-prospects'
+  'mining-prospects',
+  'mining-expansion'
 ]);
 
 // Public discovery map shared by the local Express API and hosted worker.
@@ -49,6 +50,7 @@ export const INTEL_ENDPOINT_INDEX = Object.freeze({
   productionPlan: '/api/intel/production-plan',
   bodyStatus: '/api/intel/body-status',
   miningProspects: '/api/intel/mining-prospects',
+  miningExpansion: '/api/intel/mining-expansion',
   history: '/api/intel/history',
   strategicDelta: '/api/intel/strategic-delta',
   techTree: '/api/intel/tech-tree',
@@ -1174,6 +1176,377 @@ export const miningProspectsResource = (snapshot, {
 /**
  * 7. Alien Threat: Precise hate math, minimum-hate floor, and retaliation mechanics.
  */
+const EXPANSION_THEATER_ACCESSIBILITY = Object.freeze({
+  sol: 1.0,
+  mars: 0.9,
+  inner: 0.85,
+  belt: 0.75,
+  jupiter: 0.5,
+  saturn: 0.35,
+  outer: 0.2,
+  unassigned: 0.1
+});
+
+const EXPANSION_MISSION_TECH_NAMES = Object.freeze({
+  MissiontotheMoon: 'Mission to the Moon',
+  MissiontoMars: 'Mission to Mars',
+  MissiontotheInnerPlanets: 'Mission to the Inner Planets',
+  MissiontoVenus: 'Mission to Venus',
+  MissiontotheAsteroids: 'Mission to the Asteroids',
+  MissiontoJupiter: 'Mission to Jupiter',
+  MissiontoSaturn: 'Mission to Saturn',
+  MissiontotheOuterPlanets: 'Mission to the Outer Planets'
+});
+
+const EXPANSION_MINE_LIMIT_GRANTS = Object.freeze({
+  MissiontotheMoon: 3,
+  MissiontotheInnerPlanets: 3,
+  MissiontoMars: 6,
+  MissiontotheAsteroids: 6,
+  MissiontoJupiter: 6,
+  MissiontoSaturn: 6,
+  MissiontotheOuterPlanets: 6,
+  FutureTechSpaceScience: 1,
+  Project_GoldRush: 6
+});
+
+const resolveBodyDestinationTech = (bodyName, spaceTheaterKey) => {
+  const normalized = String(bodyName || '').trim().toLowerCase();
+  if (normalized === 'luna' || normalized === 'moon') return 'MissiontotheMoon';
+  if (normalized === 'mercury') return 'MissiontotheInnerPlanets';
+  if (normalized === 'venus') return 'MissiontoVenus';
+  if (normalized === 'mars' || normalized === 'phobos' || normalized === 'deimos') return 'MissiontoMars';
+
+  const theater = String(spaceTheaterKey || '').toLowerCase();
+  if (theater === 'sol') return 'MissiontotheMoon';
+  if (theater === 'mars') return 'MissiontoMars';
+  if (theater === 'inner') return normalized.includes('venus') ? 'MissiontoVenus' : 'MissiontotheInnerPlanets';
+  if (theater === 'jupiter') return 'MissiontoJupiter';
+  if (theater === 'saturn') return 'MissiontoSaturn';
+  if (theater === 'outer') return 'MissiontotheOuterPlanets';
+  return 'MissiontotheAsteroids';
+};
+
+const evaluateSaturatingUtility = (sufficiency, target = 12, surplusDiscount = 0.05) => {
+  if (sufficiency === null || !Number.isFinite(sufficiency) || sufficiency <= 0) return 0;
+  if (sufficiency <= target) return sufficiency / target;
+  return 1.0 + ((sufficiency - target) * surplusDiscount) / target;
+};
+
+export const miningExpansionResource = (snapshot, {
+  observerId = DEFAULT_OBSERVER_FACTION_ID,
+  limit = null,
+  theater = null,
+  targetRunwayMonths = 12,
+  surplusDiscount = 0.05
+} = {}) => {
+  const factions = asArray(snapshot?.factions);
+  const observer = factions.find(f => Number(f.ID) === Number(observerId)) ||
+                   factions.find(f => String(f.displayName || '').toLowerCase().includes('initiative')) ||
+                   factions[0] || {};
+
+  const completedProjects = asArray(observer.completedProjects || observer.finishedProjectNames);
+  const completedTechs = asArray(snapshot?.techTree?.finishedTechsNames || snapshot?.globalResearch?.finishedTechNames);
+  const completedTechSet = new Set(completedTechs);
+  const completedProjectSet = new Set(completedProjects);
+
+  const difficulty = snapshot?.metadata?.difficulty || 'Normal';
+  const habSites = asArray(snapshot?.habSites);
+
+  // 1. Capacity model (M1)
+  let mineLimit = 0;
+  let hasMissionGrant = false;
+  for (const [id, grant] of Object.entries(EXPANSION_MINE_LIMIT_GRANTS)) {
+    if (completedTechSet.has(id) || completedProjectSet.has(id)) {
+      mineLimit += grant;
+      hasMissionGrant = true;
+    }
+  }
+
+  const observerMines = habSites.filter(site =>
+    site.mineModuleId != null && Number(site.factionId) === Number(observer.ID)
+  );
+  const minesBuilt = observerMines.length;
+  const headroom = Math.max(0, mineLimit - minesBuilt);
+  const overLimit = minesBuilt > mineLimit;
+  const excess = Math.max(0, minesBuilt - mineLimit);
+  const penaltyMC = excess > 0 ? Math.max(1, Math.floor((excess * excess) / 2)) : 0;
+
+  const hateEconomics = buildAlienHateEconomics({
+    observer,
+    difficulty,
+    mode: 'omniscient'
+  });
+  const baseMultiplier = hateEconomics.baseMultiplier ?? (
+    (hateEconomics.difficultyMultiplier ?? 0.3) * (hateEconomics.concealmentMultiplier ?? 1.0)
+  );
+  const penaltyHate = penaltyMC > 0 && baseMultiplier !== null
+    ? Number((penaltyMC * baseMultiplier).toFixed(2))
+    : 0;
+
+  const nextMinesBuilt = minesBuilt + 1;
+  const nextExcess = Math.max(0, nextMinesBuilt - mineLimit);
+  const nextPenaltyMC = nextExcess > 0 ? Math.max(1, Math.floor((nextExcess * nextExcess) / 2)) : 0;
+  const marginalNextMinePenaltyMC = nextPenaltyMC - penaltyMC;
+  const marginalNextMinePenaltyHate = marginalNextMinePenaltyMC > 0 && baseMultiplier !== null
+    ? Number((marginalNextMinePenaltyMC * baseMultiplier).toFixed(2))
+    : 0;
+
+  const mcUsage = Number.isFinite(Number(observer.missionControlUsage))
+    ? Number(observer.missionControlUsage)
+    : null;
+  const mcWarFloor = hateEconomics.mcWarFloor;
+  const mcWarFloorDistance = (mcWarFloor !== null && mcUsage !== null)
+    ? Math.max(0, Number((mcWarFloor - mcUsage).toFixed(1)))
+    : null;
+
+  const capacity = {
+    minesBuilt,
+    mineLimit: hasMissionGrant ? mineLimit : 0,
+    headroom,
+    overLimit,
+    excess,
+    penaltyMC,
+    penaltyHate,
+    marginalNextMinePenaltyMC,
+    marginalNextMinePenaltyHate,
+    mcWarFloorDistance,
+    baseHateMultiplier: baseMultiplier,
+    difficultyMultiplier: hateEconomics.difficultyMultiplier,
+    concealmentMultiplier: hateEconomics.concealmentMultiplier
+  };
+
+  // 2. Resource runways (M3)
+  const stockMap = observer.resources || {};
+  const incomeMap = observer.monthlyIncome || {};
+  const netMap = observer.monthlyNet || {};
+  const resourceRunways = {};
+
+  for (const [key, saveKey] of [
+    ['water', 'Water'],
+    ['volatiles', 'Volatiles'],
+    ['metals', 'Metals'],
+    ['nobleMetals', 'NobleMetals'],
+    ['fissiles', 'Fissiles']
+  ]) {
+    const rawStock = stockMap[saveKey];
+    const rawIncome = incomeMap[saveKey];
+    const rawNet = netMap[saveKey];
+
+    const stock = (rawStock === null || rawStock === undefined || rawStock === '') ? null : (Number.isFinite(Number(rawStock)) ? Number(rawStock) : null);
+    const income = (rawIncome === null || rawIncome === undefined || rawIncome === '') ? null : (Number.isFinite(Number(rawIncome)) ? Number(rawIncome) : null);
+    const net = (rawNet === null || rawNet === undefined || rawNet === '') ? null : (Number.isFinite(Number(rawNet)) ? Number(rawNet) : null);
+
+    let consumption = null;
+    if (income !== null && net !== null) {
+      consumption = Math.max(0, income - net);
+    }
+
+    let runwayMonths = null;
+    let status = 'unknown';
+
+    if (stock === null) {
+      status = 'unmeasured';
+    } else if (consumption === null) {
+      status = 'consumption_unknown';
+    } else if (consumption === 0) {
+      if (stock > 0 || (net !== null && net >= 0)) {
+        status = 'surplus / no net consumption';
+        runwayMonths = null;
+      } else {
+        status = 'depleted';
+        runwayMonths = 0;
+      }
+    } else if (consumption > 0) {
+      runwayMonths = Number((stock / consumption).toFixed(1));
+      if (runwayMonths < 3) status = 'critical';
+      else if (runwayMonths < 12) status = 'tight';
+      else status = 'comfortable';
+    }
+
+    resourceRunways[key] = {
+      key,
+      saveKey,
+      stock,
+      income,
+      net,
+      consumption,
+      runwayMonths,
+      status
+    };
+  }
+
+  // 3. Unowned site scoring & partitioning (M2 + M3)
+  const hasOutpostMineTech = completedProjectSet.has('Project_OutpostMiningComplex') ||
+                             completedProjectSet.has('Project_AutomatedMiningComplex') ||
+                             completedTechSet.has('Project_OutpostMiningComplex');
+
+  const wantTheater = theater ? String(theater).toLowerCase() : null;
+  const unownedSites = habSites.filter(site => {
+    const isUnclaimed = site.factionId === null || site.factionId === undefined ||
+      String(site.factionName || '').toLowerCase() === 'unclaimed';
+    if (!isUnclaimed || site.pendingHab) return false;
+    if (wantTheater === null) return true;
+    return String(site.spaceTheaterKey || '').toLowerCase() === wantTheater ||
+           String(site.spaceTheaterName || '').toLowerCase() === wantTheater;
+  });
+
+  const available = [];
+  const techGatedMap = new Map();
+  const unreachableBodies = {};
+  const unreachableMissingTechs = {};
+  let totalUnreachableSites = 0;
+
+  for (const site of unownedSites) {
+    const theaterKey = String(site.spaceTheaterKey || '').toLowerCase() || 'unassigned';
+    const destTech = resolveBodyDestinationTech(site.parentBodyName, theaterKey);
+    const destTechName = EXPANSION_MISSION_TECH_NAMES[destTech] || destTech;
+    const destTechCompleted = completedTechSet.has(destTech);
+
+    const theaterAccessibility = EXPANSION_THEATER_ACCESSIBILITY[theaterKey] ?? EXPANSION_THEATER_ACCESSIBILITY.unassigned;
+    const siteDensity = Number.isFinite(Number(site.siteDensity)) ? Number(site.siteDensity) : 1.0;
+
+    let totalUtilityGain = 0;
+    const resourceGains = {};
+    const yields = {};
+
+    for (const [key] of [
+      ['water', 'Water'],
+      ['volatiles', 'Volatiles'],
+      ['metals', 'Metals'],
+      ['nobleMetals', 'NobleMetals'],
+      ['fissiles', 'Fissiles']
+    ]) {
+      const dailyRate = Number.isFinite(Number(site[key])) ? Number(site[key]) : 0;
+      const monthlyYield = dailyRate * 30;
+      yields[key] = { daily: Number(dailyRate.toFixed(3)), monthly: Number(monthlyYield.toFixed(1)) };
+
+            const r = resourceRunways[key];
+      if (!r || r.stock === null || r.consumption === null) continue;
+
+      let gain = 0;
+      if (r.consumption > 0) {
+        const currentNet = r.net ?? 0;
+        const currentStock = r.stock ?? 0;
+
+        const suffBefore = Math.max(0, (currentStock + currentNet * 12) / r.consumption);
+        const suffAfter = Math.max(0, (currentStock + (currentNet + monthlyYield) * 12) / r.consumption);
+
+        const uBefore = evaluateSaturatingUtility(suffBefore, targetRunwayMonths, surplusDiscount);
+        const uAfter = evaluateSaturatingUtility(suffAfter, targetRunwayMonths, surplusDiscount);
+        gain = Math.max(0, uAfter - uBefore);
+      } else if (r.consumption === 0) {
+        gain = 0;
+      }
+
+      resourceGains[key] = Number(gain.toFixed(4));
+      totalUtilityGain += gain;
+    }
+
+    const siteValue = Number((totalUtilityGain * siteDensity * theaterAccessibility).toFixed(3));
+    const mcCost = 1;
+    const wouldExceedMineLimit = headroom <= 0;
+
+    let hateCost = 0;
+    if (wouldExceedMineLimit) {
+      hateCost = Number(((marginalNextMinePenaltyMC + mcCost) * baseMultiplier).toFixed(2));
+    } else {
+      hateCost = Number((mcCost * baseMultiplier).toFixed(2));
+    }
+
+    const valuePerHate = hateCost > 0
+      ? Number((siteValue / hateCost).toFixed(3))
+      : siteValue;
+
+    const candidate = {
+      siteId: site.ID,
+      displayName: site.displayName,
+      parentBodyName: site.parentBodyName,
+      spaceTheaterKey: theaterKey,
+      spaceTheaterName: site.spaceTheaterName || site.parentBodyName,
+      siteDensity,
+      yields,
+      resourceGains,
+      siteValue,
+      mcCost,
+      hateCost,
+      wouldExceedMineLimit,
+      valuePerHate,
+      buildTimeDays: site.buildDurationDays || 60
+    };
+
+    if (destTechCompleted && hasOutpostMineTech) {
+      available.push(candidate);
+    } else if (!destTechCompleted) {
+      if (!techGatedMap.has(destTech)) {
+        techGatedMap.set(destTech, {
+          missingTech: destTech,
+          missingTechName: destTechName,
+          siteCount: 0,
+          bestSiteValue: 0,
+          sites: []
+        });
+      }
+      const entry = techGatedMap.get(destTech);
+      entry.siteCount++;
+      entry.bestSiteValue = Math.max(entry.bestSiteValue, candidate.siteValue);
+      entry.sites.push(candidate);
+
+      unreachableBodies[site.parentBodyName] = (unreachableBodies[site.parentBodyName] || 0) + 1;
+      unreachableMissingTechs[destTechName] = (unreachableMissingTechs[destTechName] || 0) + 1;
+      totalUnreachableSites++;
+    } else if (!hasOutpostMineTech) {
+      const missingMod = 'Project_OutpostMiningComplex';
+      const missingModName = 'Outpost Mining Complex';
+      if (!techGatedMap.has(missingMod)) {
+        techGatedMap.set(missingMod, {
+          missingTech: missingMod,
+          missingTechName: missingModName,
+          siteCount: 0,
+          bestSiteValue: 0,
+          sites: []
+        });
+      }
+      const entry = techGatedMap.get(missingMod);
+      entry.siteCount++;
+      entry.bestSiteValue = Math.max(entry.bestSiteValue, candidate.siteValue);
+      entry.sites.push(candidate);
+    }
+  }
+
+  available.sort((a, b) => {
+    if (a.hateCost === 0 && b.hateCost === 0) return b.siteValue - a.siteValue;
+    if (a.hateCost === 0) return -1;
+    if (b.hateCost === 0) return 1;
+    if (b.valuePerHate !== a.valuePerHate) return b.valuePerHate - a.valuePerHate;
+    return b.siteValue - a.siteValue;
+  });
+
+  const rankedAvailable = limit ? available.slice(0, Number(limit)) : available;
+
+  const techGated = Array.from(techGatedMap.values()).map(entry => ({
+    ...entry,
+    sites: entry.sites.sort((a, b) => b.siteValue - a.siteValue)
+  })).sort((a, b) => b.bestSiteValue - a.bestSiteValue);
+
+  return {
+    capacity,
+    resourceRunways,
+    available: rankedAvailable,
+    techGated,
+    unreachable: {
+      totalSites: totalUnreachableSites,
+      byBody: unreachableBodies,
+      missingTech: unreachableMissingTechs
+    },
+    assumptions: [
+      `Target runway is ${targetRunwayMonths} months (heuristic).`,
+      'Theater accessibility multipliers are heuristic based on transfer time and defensibility.',
+      'Rankings prioritize hate-free expansion headroom before sorting by value per unit of alien hate.'
+    ]
+  };
+};
+
 export const alienThreatResource = (snapshot, observerId = 4712) => {
   const observer = asArray(snapshot.factions).find(f => Number(f.ID) === Number(observerId)) || {};
   const difficulty = snapshot.metadata?.difficulty || 'Normal';
@@ -1648,6 +2021,14 @@ export const buildResourceProjection = (snapshot, resource, {
   }
   if (resource === 'production-plan') {
     return { count: null, items: [], ...productionPlanResource(snapshot, designId, quantity, observerId) };
+  }
+  if (resource === 'mining-expansion') {
+    const expansion = miningExpansionResource(snapshot, {
+      observerId,
+      theater: theater || body || null,
+      limit
+    });
+    return { count: expansion.available.length, items: expansion.available, ...expansion };
   }
   if (resource === 'mining-prospects') {
     const prospects = miningProspectsResource(snapshot, {

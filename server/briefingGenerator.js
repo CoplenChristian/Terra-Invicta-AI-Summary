@@ -850,6 +850,18 @@ class BriefingGenerator {
   buildOperativeRoster(councilors, observerId, campaignPosture = {}) {
     const ownCouncilors = this.asArray(councilors).filter(c => this.isOwnCouncilor(c, observerId));
 
+    // `escalateLate` is true when ANY hold fired, and the holds are no longer
+    // interchangeable: Total War proximity holds on its own, with a strong
+    // fleet and hate that is nowhere near the war threshold. Naming the
+    // fragile-fleet case regardless produced advice that contradicted the
+    // measured posture (spaceFragile false, hold text about Total War), so
+    // quote the reason that actually fired instead of assuming one.
+    const holdReasons = this.asArray(campaignPosture?.holds)
+      .filter(hold => typeof hold === 'string' && hold.trim() !== '');
+    const holdClause = holdReasons.length > 0
+      ? holdReasons.join('; ')
+      : 'the campaign posture is holding proxy offensives';
+
     return ownCouncilors.map(c => {
       let readiness = 'READY FOR DEPLOYMENT';
       let readinessColor = '#10b981';
@@ -865,7 +877,7 @@ class BriefingGenerator {
         recOrder = 'Deploy to high-GDP nation to run Public Campaign or Defend Interests.';
       } else if (attrs.Espionage >= 12) {
         recOrder = campaignPosture?.escalateLate
-          ? 'Ward own majors and prepare a non-proxy operation while alien hate is elevated and the fleet is fragile.'
+          ? `Ward own majors and prepare a non-proxy operation. Posture hold: ${holdClause}.`
           : 'Deploy to hostile territory to execute Crackdown or Sabotage Facilities.';
       } else if (attrs.Investigation >= 12) {
         recOrder = 'Conduct Surveil Location or Investigate Councilor to unmask enemy moles.';
@@ -1013,7 +1025,18 @@ class BriefingGenerator {
       controlPoints: hasControlPointData ? controlPoints : null,
       nations: controlled.length > 0 ? controlled.length : null,
       gdp: controlled.length > 0 ? controlled.reduce((sum, nation) => sum + (this.toFiniteNumber(nation.GDP) || 0), 0) : null,
-      research: controlled.length > 0 ? controlled.reduce((sum, nation) => sum + (this.toFiniteNumber(nation.research) || 0), 0) : null
+      // Last-resort fallback for a snapshot with no faction totalResearch. A
+      // nation's research is split equally between its control points (wiki,
+      // Nations, 2026-05-17), so take our share rather than the whole nation.
+      // It still omits space and org research, so it is a floor, not a total.
+      research: controlled.length > 0
+        ? controlled.reduce((sum, nation) => {
+          const nationControlPoints = this.asArray(nation.controlPoints);
+          if (nationControlPoints.length === 0) return sum;
+          const owned = nationControlPoints.filter(cp => this.sameId(cp.factionId, observerId)).length;
+          return sum + (this.toFiniteNumber(nation.research) || 0) * (owned / nationControlPoints.length);
+        }, 0)
+        : null
     };
   }
 

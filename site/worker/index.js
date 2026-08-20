@@ -398,7 +398,7 @@ const validateResourceQuery = (url) => {
       (theater !== null && (theater.length > 80 || /[\u0000-\u001f\u007f]/.test(theater)))) {
     return 'Invalid body filter. Use a short body name such as Ceres.';
   }
-  const isMiningProspects = /\/api(?:\/intel)?\/mining-prospects$/.test(url.pathname);
+  const isMiningProspects = /\/api(?:\/intel)?\/(?:mining-prospects|mining-expansion)$/.test(url.pathname);
   const limit = url.searchParams.get('limit') || (isMiningProspects ? url.searchParams.get('quantity') : null);
   if (limit !== null && (!/^\d+$/.test(limit) || Number(limit) < 1 || Number(limit) > 100)) {
     return 'Invalid mining prospects limit. Use an integer from 1 to 100.';
@@ -442,7 +442,7 @@ const buildIntelResource = (result, resource, url) => {
   const factionId = numericQuery(url.searchParams.get('faction') || url.searchParams.get('factionId'));
   const body = url.searchParams.get('body');
   const theater = url.searchParams.get('theater') || body;
-  const rawLimit = url.searchParams.get('limit') || (resource === 'mining-prospects' ? url.searchParams.get('quantity') : null);
+  const rawLimit = url.searchParams.get('limit') || ((resource === 'mining-prospects' || resource === 'mining-expansion') ? url.searchParams.get('quantity') : null);
   const limit = rawLimit && /^\d+$/.test(rawLimit) ? Number(rawLimit) : null;
   const destination = url.searchParams.get('destination');
   const fleetId = url.searchParams.get('fleet') || url.searchParams.get('fleetId');
