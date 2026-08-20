@@ -195,6 +195,96 @@ Nine missions carry exact flat costs, so the blanket `missionCost: 'UNAVAILABLE'
 
 ---
 
+## 4a. Mission odds — the resolution model
+
+Found, verified, and it changes one of v2's design assumptions.
+
+### 4a.1 The formula
+
+Wiki `Roll`:
+
+```
+diff = offense − defense
+diff >= 0 :  chance = 1 − 0.5 × 0.775^|diff|
+diff <  0 :  chance =     0.5 × 0.775^|diff|
+```
+
+Critical success = `chance / 10`. Critical failure = `(1 − chance) / 10`.
+
+**Verified 13/13 against the wiki's own table** (diff 0→50.0%, 3→76.7%, 5→86.0%, 10→96.1%, 20→99.7%). Reproduce that check in the test suite — it is a two-line guard on the one formula everything else rests on.
+
+**Citation caveat, stated because this project's standard demands it:** `Roll` is rev **2026-01-03**, two days *before* the 1.0 release on 2026-01-05, so it is not strictly a post-1.0 source. It is corroborated by the post-1.0 `Missions` page (rev **2026-02-12**), which independently describes the same curve in prose — *"if the bonuses and maluses add up to zero, the success chance is 50 percent; otherwise, each point in one direction has a decreasingly powerful impact"* — and by the outcome rule *"results that are less than 10% of the success chance mark a critical success"*. Shape and constants agree. Treat as `estimateClass: 'calculated'`, not `'exact'`, until a fully post-1.0 statement of the constants exists.
+
+### 4a.2 Half the catalogue needs no odds at all
+
+| Resolution | Missions |
+| --- | --- |
+| `Automatic` | **21** |
+| `Contested` | **29** |
+
+An Automatic mission always succeeds. Its expected value is just its value, and its hate is the success-slot value with no distribution. **V2-6 is therefore not a prerequisite for over half the action space** — Control Nation, Defend Interests, Surveil Location, Set National Policy and the rest can be scored exactly from V2-1 onward.
+
+### 4a.3 Base difficulty is in the templates
+
+The wiki's "Base Difficulty" column is the defence-side `TIMissionModifier_FlatModifier`. Extracted:
+
+| Mission | Base | Attack | Defence |
+| --- | --- | --- | --- |
+| **Turn Councilor** | **15** | Persuasion | Loyalty |
+| Assassinate | 12 | Espionage | Security |
+| Control Space Asset | 12 | Persuasion | Loyalty |
+| Sabotage Facilities | 12 | Espionage | Security |
+| Enthrall Org | 10 | Persuasion | Science |
+| Hostile Takeover | 10 | Administration | Administration |
+| Coup d'Etat | 8 | Command | Command |
+| Detain Councilor | 8 | Investigation | Security |
+| Extract Councilor | 8 | Command | Security |
+| Sabotage/Steal Project | 6 | Espionage | Security |
+| Dominate Nation | 6 | Persuasion | — |
+| Sabotage Hab Module | 4 | Espionage | Security |
+| Assault Alien Asset | 4 | Command | Command |
+| **Purge** | **3** | Espionage | Administration |
+| Enthrall Elites | 2 | Persuasion | Science |
+| **Crackdown** | **0** | Investigation | Administration |
+
+### 4a.4 This corrects a v2 design assumption
+
+`docs/directive-engine-v2.md` frames Investigate → Turn as the cheap zero-hate offensive. **Turn is hate-cheap, not cheap.** Base difficulty 15 stacks on top of the target's Loyalty, so:
+
+| Our Persuasion | Target Loyalty | diff | Success |
+| --- | --- | --- | --- |
+| 25 | 5 | 25 − 20 = 5 | 86% |
+| 25 | 12 | 25 − 27 = −2 | 30% |
+| 25 | 17 | 25 − 32 = −7 | **8.4%** |
+| 15 | 10 | 15 − 25 = −10 | **3.9%** |
+
+Against a well-defended councilor Turn is close to hopeless, and its expected hate is `P(fail) × 3` — which at 8% success is ~2.8, i.e. **more than a Crackdown**. Crackdown has base 0 and Purge base 3, so the "hate-free axis" is far cheaper in odds than the "hate-bearing" one.
+
+The engine must therefore rank on **expected** value, not on hate alone. A 5% Turn is not a recommendation; it is a way to spend a councilor-turn and gain hate. This is the strongest argument for pulling V2-6 earlier in the order.
+
+### 4a.5 What we can and cannot compute
+
+`ResourceSpent` appears on **all 29** contested missions — the bonus spend converts resources into offence points, which is the mechanism the plan already flagged as making `cost.amount` unfillable without odds. It is also the lever the recommendation should expose: *"this reaches 70% at N Influence."*
+
+But the modifier catalogue is large: ~33 distinct attack modifiers and ~48 defence modifiers. Most are situational and not in the snapshot (`UnhappyElites`, `Warlords`, `RegionPopulationDensity`, `PherocyteResistance`…).
+
+Strategy — compute the **knowable core** and band the rest:
+
+```
+knownDiff = attackerAttribute            (resolvedAttributes.effective)
+          − defenderAttribute            (maskedAttributes; unknown in player mode)
+          − baseDifficulty               (template FlatModifier)
+          + resourceSpentBonus           (the player's lever)
+
+odds = { point: chance(knownDiff), band: [chance(knownDiff − U), chance(knownDiff + U)] }
+```
+
+where `U` is an uncertainty allowance for unmodelled modifiers. Report the band, never the point, and name which modifiers were not accounted for — the same discipline the hate model already uses for its ±20% roll.
+
+In player mode the defender's attribute is masked, so odds degrade to `unknown` rather than to a number. That is a real limit, and it is another reason Investigate Councilor is valuable: it is the mission that turns an unknown defence into a known one.
+
+---
+
 ## 5. Phases
 
 Each phase is independently shippable and leaves the engine working.
@@ -227,10 +317,14 @@ Greedy by expected value with local swaps, one mission per councilor, subject to
 **Ships:** the reframe. Output stops being a list and becomes a plan.
 **Test:** two candidates needing the same councilor cannot both appear; the displaced one is `benched` with `displacedBy` set; unfilled slots are reported.
 
-### V2-6 — Odds `L`
-`P(success)` from attacker vs defender, rendered as a band. Resolves Turn's real hate cost and makes bonus-cost `amount` fillable.
-**Ships:** expected value becomes real; V2-0's test tension resolves properly.
-**Risk:** the roll formula is not in the templates. Ship as `estimateClass: 'calculated'` with a visible band, and if calibration cannot be established, ship the *attribute delta* as an ordinal signal rather than inventing a probability.
+### V2-6 — Odds `M` — **promote to run alongside V2-3**
+The formula is known and verified (§4a.1), and base difficulty is in the templates, so this is smaller than originally sized and more urgent than originally placed.
+
+`chance(diff)` on the knowable core: attacker attribute − defender attribute − base difficulty, plus the `ResourceSpent` lever. Rendered as a band with unmodelled modifiers named.
+
+**Ships:** expected value becomes real; `cost.amount` becomes answerable as *"reaches 70% at N Influence"*; Turn's true hate cost `P(fail) × 3` resolves V2-0's test tension.
+**Why it moved:** §4a.4 — without odds the engine will confidently recommend a 5%-success Turn that costs ~2.8 expected hate, i.e. worse than the Crackdown it was meant to replace. Ranking on hate alone is actively wrong once base difficulty is in view.
+**Degrades:** player mode masks the defender's attribute → `unknown`, not a number. 21 Automatic missions need no odds at all (§4a.2).
 
 ### V2-7 — Clocks `M`
 `clocks.js`: deadlines, decay, accrual, ramps. Urgency as a multiplier on value, never a standalone score.
@@ -255,13 +349,15 @@ Opponent trajectories: Build Facility totality + abduction accrual, surveillance
 ## 6. Sequencing
 
 ```
-V2-0 → V2-1 → V2-2 → V2-3 → V2-5 (core spine)
-                V2-4 ─────────┘
-        V2-6, V2-7, V2-8, V2-9 (independent, any order after V2-3)
+V2-0 → V2-1 → V2-2 → V2-3 ─┬─ V2-6 (odds) ─┬→ V2-5 (assignment)
+                           └─ V2-4 (budgets)┘
+              V2-7, V2-8, V2-9 (independent, any order after V2-5)
                         V2-10 → delete policyRanks
 ```
 
-V2-1 through V2-5 is the minimum coherent v2. Everything after deepens it.
+**V2-6 moved into the spine.** Originally an optional deepening; §4a.4 shows the engine is actively wrong without it, because ranking on hate cost alone prefers a 5%-success Turn over a Crackdown that is both easier and cheaper in expectation.
+
+V2-0 through V2-6 is the minimum coherent v2. Everything after deepens it.
 
 ---
 
@@ -280,7 +376,8 @@ V2-1 through V2-5 is the minimum coherent v2. Everything after deepens it.
 | Risk | Mitigation |
 | --- | --- |
 | **Concurrent session** editing the same files | Agree ownership before V2-1. Highest-probability failure here, and it is organisational, not technical |
-| Odds formula unavailable (V2-6) | Degrade to attribute-delta ordinal; never invent a probability |
+| ~~Odds formula unavailable~~ | **Resolved** — found and verified 13/13 against the wiki table (§4a.1). Residual risk is the ~48 unmodelled defence modifiers, handled by reporting a band and naming what was excluded |
+| `Roll` page predates 1.0 by two days | Corroborated in prose by the post-1.0 `Missions` page; marked `estimateClass: 'calculated'`, never `'exact'` (§4a.1) |
 | ~~Snapshot bloat from `missionSpecs`~~ | **Resolved** — measured at 12.8 KB raw / 1.8 KB gzipped (§4.4). Excluded from strategic history as static data |
 | Older published snapshots lack `missionSpecs` | Engine degrades to v1 generators and says the catalogue is unavailable (§4.5) — never throws |
 | 60 candidates becomes noise | The allocator is the answer — 6 assignments, the rest benched with reasons. Do not ship V2-1 breadth without V2-2 feasibility |
