@@ -22,6 +22,11 @@ class TemplateLoader {
       habModules: new Map(),
       shipHulls: new Map(),
       orgs: new Map(),
+      // Councilor traits carry attribute modifiers -- the augmentation/implant
+      // lines especially (ExecutiveAI +3 Administration, CognitiveEnhancer +3
+      // Science, and so on). Without these a councilor's effective attributes
+      // are understated and org capacity appears to be violated.
+      traits: new Map(),
       weaponModules: new Map(),
       drives: new Map(),
       reactors: new Map(),
@@ -178,6 +183,11 @@ class TemplateLoader {
     this.loadJsonFile('TIOrgTemplate.json', (item) => {
       const id = item.dataName || item.displayName || item.templateName;
       if (id) this.templates.orgs.set(id, item);
+    });
+
+    this.loadJsonFile('TITraitTemplate.json', (item) => {
+      const id = item.dataName || item.friendlyName;
+      if (id) this.templates.traits.set(id, item);
     });
 
     // Component templates used by the tech graph to answer "which project

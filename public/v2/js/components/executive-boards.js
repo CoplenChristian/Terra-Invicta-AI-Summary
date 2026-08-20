@@ -270,10 +270,14 @@
     }
 
     if (resolved?.effective && Object.hasOwn(resolved.effective, skill)) {
+      const orgBonus = numberValue(resolved.orgBonuses?.[skill]) || 0;
+      const traitBonus = numberValue(resolved.traitBonuses?.[skill]) || 0;
       return {
         value: numberValue(resolved.effective[skill]),
         base: numberValue(resolved.base?.[skill]),
-        orgBonus: numberValue(resolved.orgBonuses?.[skill]) || 0,
+        orgBonus,
+        traitBonus,
+        bonus: orgBonus + traitBonus,
         masked: false,
         orgsInactive: resolved.orgsActive === false
       };
@@ -290,8 +294,12 @@
   function skillCell(councilor, skill) {
     const detail = skillDetail(councilor, skill);
     if (detail.value === null) return '<td>—</td>';
-    const bonus = detail.orgBonus > 0
-      ? `<span class="mc-skill-org" title="${escapeHtml(String(detail.base))} base +${escapeHtml(String(detail.orgBonus))} from orgs">+${escapeHtml(String(detail.orgBonus))}</span>`
+    const total = detail.bonus || 0;
+    const parts = [`${detail.base} base`];
+    if (detail.orgBonus) parts.push(`${detail.orgBonus > 0 ? '+' : ''}${detail.orgBonus} orgs`);
+    if (detail.traitBonus) parts.push(`${detail.traitBonus > 0 ? '+' : ''}${detail.traitBonus} traits`);
+    const bonus = total !== 0
+      ? `<span class="mc-skill-org${total < 0 ? ' is-negative' : ''}" title="${escapeHtml(parts.join(', '))}">${total > 0 ? '+' : ''}${escapeHtml(String(total))}</span>`
       : '';
     return `<td class="mc-skill-cell">${escapeHtml(formatNumber(detail.value))}${bonus}</td>`;
   }

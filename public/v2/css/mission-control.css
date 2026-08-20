@@ -4639,3 +4639,7 @@ body.intelligence-library-open {
   font-size: 9px;
   vertical-align: super;
 }
+
+.mc-skill-org.is-negative {
+  color: var(--danger, #d9534f);
+}

@@ -632,10 +632,13 @@ function attrDetail(councilor, attrName) {
   if (resolved?.effective && resolved.effective[attrName] !== undefined) {
     const base = Number(resolved.base?.[attrName]) || 0;
     const orgBonus = Number(resolved.orgBonuses?.[attrName]) || 0;
+    const traitBonus = Number(resolved.traitBonuses?.[attrName]) || 0;
     return {
       value: Number(resolved.effective[attrName]),
       base,
       orgBonus,
+      traitBonus,
+      bonus: orgBonus + traitBonus,
       orgsInactive: resolved.orgsActive === false,
       known: true
     };
@@ -648,6 +651,8 @@ function attrDetail(councilor, attrName) {
     value: Number.isFinite(numeric) ? numeric : null,
     base: Number.isFinite(numeric) ? numeric : null,
     orgBonus: 0,
+    traitBonus: 0,
+    bonus: 0,
     orgsInactive: false,
     known: shown !== '?'
   };
@@ -657,8 +662,13 @@ function attrDetail(councilor, attrName) {
 function formatEffectiveAttr(councilor, attrName) {
   const detail = attrDetail(councilor, attrName);
   if (!detail.known || detail.value === null) return '?';
-  if (detail.orgBonus > 0) {
-    return `${detail.value}<span class="attr-org-bonus" title="${detail.base} base +${detail.orgBonus} from equipped orgs">+${detail.orgBonus}</span>`;
+  if (detail.bonus !== 0) {
+    const parts = [`${detail.base} base`];
+    if (detail.orgBonus) parts.push(`${detail.orgBonus > 0 ? '+' : ''}${detail.orgBonus} from equipped orgs`);
+    if (detail.traitBonus) parts.push(`${detail.traitBonus > 0 ? '+' : ''}${detail.traitBonus} from traits`);
+    const sign = detail.bonus > 0 ? '+' : '';
+    const cls = detail.bonus > 0 ? 'attr-org-bonus' : 'attr-org-bonus is-negative';
+    return `${detail.value}<span class="${cls}" title="${parts.join(', ')}">${sign}${detail.bonus}</span>`;
   }
   return String(detail.value);
 }

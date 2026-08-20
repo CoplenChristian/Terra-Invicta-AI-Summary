@@ -10,9 +10,26 @@ const {
   orgsAreActive
 } = require('../shared/councilorAttributes.mjs');
 
-// The save stores BASE attributes; the game applies org bonuses at resolution
-// time. Reading councilor.attributes directly understates every councilor who
-// holds orgs.
+const OBSERVER = 4712;
+
+// Mirrors what snapshotBuilder derives from TITraitTemplate.json.
+// ManagementAI / CognitiveEnhancer are the augmentation line that actually
+// moves attributes; Indulgent and Transparent are the kinds that cannot be
+// resolved from a councilor record alone.
+const TRAIT_MODS = {
+  ManagementAI: [{ stat: 'Administration', value: 2, operation: 'Additive', conditional: false }],
+  CognitiveEnhancer: [{ stat: 'Science', value: 3, operation: 'Additive', conditional: false }],
+  AwkwardGenius: [
+    { stat: 'Persuasion', value: -3, operation: 'Additive', conditional: false },
+    { stat: 'Science', value: 3, operation: 'Additive', conditional: false }
+  ],
+  Indulgent: [{ stat: 'Loyalty', value: -4, operation: 'Additive', conditional: true }],
+  Transparent: [{ stat: 'ApparentLoyalty', value: 0, operation: 'SetToAnotherAttribute', conditional: false }]
+};
+
+// The save stores BASE attributes; the game applies org and trait bonuses at
+// resolution time. Reading councilor.attributes directly understates every
+// councilor who holds orgs or augmentation traits.
 function councilor(overrides = {}) {
   return {
     ID: 1,
@@ -24,6 +41,7 @@ function councilor(overrides = {}) {
       Administration: 16, Science: 2, Security: 6, Loyalty: 14,
       ApparentLoyalty: 14
     },
+    traits: ['ManagementAI', 'Indulgent', 'Transparent'],
     orgs: [
       { id: 100, displayName: 'Jade Applications', tier: 3, bonusesText: '+1 SCI',
         statBonuses: { adm: 0, per: 0, inv: 0, esp: 0, cmd: 0, sci: 1, sec: 0 } },
@@ -113,13 +131,15 @@ test('per-org breakdown records which orgs grant attributes', () => {
   assert.strictEqual(incomeOnly.contributions[0].grantsAttributes, false);
 });
 
-test('org capacity is reported as context, not enforced', () => {
-  // Trait modifiers also feed Administration, so used tiers legitimately
-  // exceed base+org in real saves. Flagging that as a violation would be wrong.
-  const { orgCapacity } = buildCouncilorAttributes(councilor());
+test('org capacity is one tier per point of effective Administration', () => {
+  // Counting trait modifiers is what makes this coherent: on base+org alone,
+  // 19 of 48 councilors in a real save appear to exceed capacity. With the
+  // augmentation traits counted, none do.
+  const { orgCapacity } = buildCouncilorAttributes(councilor(), { traitStatMods: TRAIT_MODS });
   assert.strictEqual(orgCapacity.usedTiers, 6);
-  assert.strictEqual(orgCapacity.effectiveAdministration, 19);
-  assert.match(orgCapacity.note, /trait/i);
+  assert.strictEqual(orgCapacity.capacity, 21, '16 base + 3 org + 2 ManagementAI');
+  assert.strictEqual(orgCapacity.withinCapacity, true);
+  assert.strictEqual(orgCapacity.spare, 15);
 });
 
 test('states what it does not model', () => {
@@ -162,4 +182,75 @@ test('effectiveAttributes is a shorthand for the resolved block', () => {
     effectiveAttributes(councilor()),
     buildCouncilorAttributes(councilor()).effective
   );
+});
+
+// --- Trait modifiers ---------------------------------------------------------
+// The augmentation/implant traits (ExecutiveAI, CognitiveEnhancer, StealthField
+// and friends) are unconditional additive modifiers on real attributes, so they
+// are computable and belong in `effective`.
+
+test('unconditional trait modifiers are included in effective', () => {
+  const { base, traitBonuses, effective } = buildCouncilorAttributes(
+    councilor({ traits: ['ManagementAI', 'CognitiveEnhancer'] }),
+    { traitStatMods: TRAIT_MODS }
+  );
+  assert.strictEqual(base.Administration, 16);
+  assert.strictEqual(traitBonuses.Administration, 2, 'ManagementAI');
+  assert.strictEqual(traitBonuses.Science, 3, 'CognitiveEnhancer');
+  // 16 base + 3 org + 2 trait
+  assert.strictEqual(effective.Administration, 21);
+});
+
+test('negative trait modifiers reduce the effective value', () => {
+  const { traitBonuses, effective } = buildCouncilorAttributes(
+    councilor({ traits: ['AwkwardGenius'] }),
+    { traitStatMods: TRAIT_MODS }
+  );
+  assert.strictEqual(traitBonuses.Persuasion, -3);
+  assert.strictEqual(effective.Persuasion, 8, '11 base - 3');
+});
+
+test('conditional and overriding trait modifiers are named, not applied', () => {
+  const resolved = buildCouncilorAttributes(
+    councilor({ traits: ['Indulgent', 'Transparent'] }),
+    { traitStatMods: TRAIT_MODS }
+  );
+  // Indulgent is -4 Loyalty but only under a nation condition we cannot see.
+  assert.strictEqual(resolved.traitBonuses.Loyalty, 0);
+  assert.strictEqual(resolved.effective.Loyalty, 14, 'unchanged from base');
+
+  const reasons = resolved.unresolvedTraitMods;
+  assert.ok(reasons.some(r => r.trait === 'Indulgent' && /conditional/.test(r.reason)));
+  assert.ok(reasons.some(r => r.trait === 'Transparent' && /overrides/.test(r.reason)));
+});
+
+test('trait bonuses survive detention, org bonuses do not', () => {
+  // An implant does not stop working because its holder is detained; the wiki
+  // only deactivates equipped orgs.
+  const resolved = buildCouncilorAttributes(
+    councilor({ status: 'Detained', traits: ['ManagementAI'] }),
+    { traitStatMods: TRAIT_MODS }
+  );
+  assert.strictEqual(resolved.orgsActive, false);
+  assert.strictEqual(resolved.orgBonuses.Administration, 0, 'orgs deactivated');
+  assert.strictEqual(resolved.traitBonuses.Administration, 2, 'implant still applies');
+  assert.strictEqual(resolved.effective.Administration, 18, '16 base + 2 trait');
+});
+
+test('a councilor with no trait table falls back to orgs only', () => {
+  // Callers without template access must still get org-inclusive values.
+  const resolved = buildCouncilorAttributes(councilor({ traits: ['ManagementAI'] }));
+  assert.strictEqual(resolved.traitBonuses.Administration, 0);
+  assert.strictEqual(resolved.effective.Administration, 19, '16 base + 3 org');
+});
+
+test('per-trait breakdown records which traits granted what', () => {
+  const { traitContributions } = buildCouncilorAttributes(
+    councilor({ traits: ['ManagementAI', 'CognitiveEnhancer', 'Indulgent'] }),
+    { traitStatMods: TRAIT_MODS }
+  );
+  const byTrait = Object.fromEntries(traitContributions.map(t => [t.trait, t.stats]));
+  assert.deepStrictEqual(byTrait.ManagementAI, { Administration: 2 });
+  assert.deepStrictEqual(byTrait.CognitiveEnhancer, { Science: 3 });
+  assert.ok(!byTrait.Indulgent, 'a conditional-only trait contributes nothing');
 });
