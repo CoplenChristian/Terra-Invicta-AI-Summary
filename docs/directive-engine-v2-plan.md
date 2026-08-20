@@ -328,18 +328,46 @@ So the engine must rank on **expected** value. A 3% Turn is not a recommendation
 
 But the modifier catalogue is large: ~33 distinct attack modifiers and ~48 defence modifiers. Most are situational and not in the snapshot (`UnhappyElites`, `Warlords`, `RegionPopulationDensity`, `PherocyteResistance`…).
 
-Strategy — compute the **knowable core** and band the rest:
+The templates carry only bare `$type` markers with **no coefficients**, which initially looked like a hard wall.
 
-```
-knownDiff = attackerAttribute            (resolvedAttributes.effective)
-          − defenderAttribute            (maskedAttributes; unknown in player mode)
-          − baseDifficulty               (template FlatModifier)
-          + resourceSpentBonus           (the player's lever)
+**It isn't — the formulas are documented.** `Module:MissionLister/Modifier/data` (rev **2026-02-17**, post-1.0) holds a description of every modifier with exact exponents. The module says why they are hand-maintained: *"There is no convenient JSON or EN file to refer to."*
 
-odds = { point: chance(knownDiff), band: [chance(knownDiff − U), chance(knownDiff + U)] }
-```
+Computable **today** from fields the snapshot already carries:
 
-where `U` is an uncertainty allowance for unmodelled modifiers. Report the band, never the point, and name which modifiers were not accounted for — the same discipline the hate model already uses for its ±20% roll.
+| Modifier | Formula | Source field |
+| --- | --- | --- |
+| `TargetNationGDP` | `(GDP in Billions) ^ 0.33333334` | `nation.GDP` |
+| `NationPopulation` | `(population in Millions) ^ 0.4` | `nation.population` |
+| `NationCohesion` | raw cohesion | `nation.cohesion` |
+| `NationUnrest` | raw unrest | `nation.unrest` |
+| `FlatModifier` | flat base difficulty | template |
+| `CouncilorAttack/DefendStat` | attribute value | `resolvedAttributes` |
+| `NationalRivalries` | `0.33333334 × our CPs in rival nations` | `controlPoints` + relations |
+
+Needs data not currently surfaced, but plausibly in the save:
+
+| Modifier | Formula | Missing |
+| --- | --- | --- |
+| `Defender/AttackerPopulationIdeology` | `(10 + democracy) × public-opinion fraction` | per-nation public opinion by faction |
+| `AttackerAllyControlPoints` | `6 × fraction of allies' CPs we own` | alliance graph |
+| `AttackerAdjacentControlPoints` | `6 × fraction of neighbours' CPs we own` | nation adjacency |
+| `ResourceSpent` | "scales logarithmically with amount spent" | the curve's constants |
+
+### Do not ship the bare core
+
+A naive `attack − defence − base` is **systematically biased optimistic for missions with no defender attribute** — and those are exactly the expansion actions the engine most wants to recommend. Control Nation, Public Campaign, Stabilize Nation and Dominate Nation have no defending councilor; their entire difficulty lives in these modifiers.
+
+Measured on the live save, Control Nation's defence is `(GDP_Bn)^(1/3)`:
+
+| Target | GDP | Defence | Persuasion 4 | Persuasion 5 |
+| --- | --- | --- | --- | --- |
+| Malawi | $72.0Bn | 4.16 | **48.0%** *(bare core: 82.0%)* | **59.6%** *(86.0%)* |
+| Honduras | $70.8Bn | 4.14 | 48.3% *(82.0%)* | 59.9% *(86.0%)* |
+| Namibia | $39.8Bn | 3.41 | 56.9% *(82.0%)* | 66.6% *(86.0%)* |
+
+The bare core calls a Persuasion-4 councilor an 82% bet on Malawi. It is a coin flip. Implement the documented per-modifier formulas for at least the GDP, population, cohesion and unrest terms — together they cover the no-defender missions.
+
+Residual uncertainty from still-unmodelled terms is reported as a band with the excluded modifiers named — the same discipline the hate model uses for its ±20% roll.
 
 In player mode the defender's attribute is masked. Per §0a, **estimate rather than abstain**: assume a campaign-typical value for that attribute, compute the odds, and label the assumption. *"~30%, assuming average Loyalty for an unscouted councilor"* is a usable recommendation; `unknown` is not.
 
@@ -384,7 +412,7 @@ Greedy by expected value with local swaps, one mission per councilor, subject to
 ### V2-6 — Odds `M` — **promote to run alongside V2-3**
 The formula is known and verified (§4a.1), and base difficulty is in the templates, so this is smaller than originally sized and more urgent than originally placed.
 
-`chance(diff)` on the knowable core: attacker attribute − defender attribute − base difficulty, plus the `ResourceSpent` lever. Rendered as a band with unmodelled modifiers named.
+`chance(diff)` with the **documented per-modifier formulas** (§4a.5), not the bare attribute difference — the bare version is badly wrong for every no-defender mission. Rendered as a band with unmodelled modifiers named.
 
 **Ships:** expected value becomes real; `cost.amount` becomes answerable as *"reaches 70% at N Influence"*; Turn's true hate cost `P(fail) × 3` resolves V2-0's test tension.
 **Why it moved:** §4a.4 — without odds the engine will confidently recommend a 5%-success Turn that costs ~2.8 expected hate, i.e. worse than the Crackdown it was meant to replace. Ranking on hate alone is actively wrong once base difficulty is in view.
