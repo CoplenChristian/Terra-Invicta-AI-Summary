@@ -809,14 +809,9 @@ class SnapshotBuilder {
 
     // Process Factions Summary & Power Scores
     const factions = [];
-    const scoreWeights = templateLoader.config.powerScoreWeights || {
-      earthEconomy: 0.20,
-      earthPolitics: 0.15,
-      researchPower: 0.20,
-      spaceEconomy: 0.15,
-      fleetPower: 0.20,
-      militaryPower: 0.10
-    };
+    const analysisConfig = templateLoader.config.analysis || {};
+    const scoreWeights = analysisConfig.powerScore?.weights || {};
+    const scoreNormalizers = analysisConfig.powerScore?.normalizers || {};
 
     // FactionHate is stored as a per-faction map in the save. Preserve it as
     // an explicit, shallow relationship list so observer-relative screens can
@@ -874,14 +869,14 @@ class SnapshotBuilder {
       const monthlyNet = recent30DayFlow.net;
 
       // Power Score Components (0-100 scales)
-      const earthEconomyScore = Math.min(100, Math.round((totalGdp / 40e12) * 100));
-      const earthPoliticsScore = Math.min(100, Math.round((fCPs.length / 50) * 100));
-      const researchPowerScore = Math.min(100, Math.round((totalResearch / 5000) * 100));
-      const spaceEconomyScore = Math.min(100, Math.round((fHabs.length / 20) * 100));
+      const earthEconomyScore = Math.min(100, Math.round((totalGdp / scoreNormalizers.gdp) * 100));
+      const earthPoliticsScore = Math.min(100, Math.round((fCPs.length / scoreNormalizers.controlPoints) * 100));
+      const researchPowerScore = Math.min(100, Math.round((totalResearch / scoreNormalizers.research) * 100));
+      const spaceEconomyScore = Math.min(100, Math.round((fHabs.length / scoreNormalizers.habs) * 100));
       const fleetPowerScore = fCombatPower === null
         ? null
-        : Math.min(100, Math.round((fCombatPower / 3000) * 100));
-      const militaryPowerScore = Math.min(100, Math.round((fNations.reduce((acc, n) => acc + (n.nukes || 0), 0) * 20)));
+        : Math.min(100, Math.round((fCombatPower / scoreNormalizers.combatPower) * 100));
+      const militaryPowerScore = Math.min(100, Math.round((fNations.reduce((acc, n) => acc + (n.nukes || 0), 0) * scoreNormalizers.nukes)));
 
       const scoreComponents = [
         [earthEconomyScore, scoreWeights.earthEconomy],
@@ -1023,7 +1018,7 @@ class SnapshotBuilder {
 
     // Seed a default target list for consumers that do not have an observer
     // context yet. The API filter recomputes this for the selected observer.
-    const defaultObserverName = templateLoader.config.defaultObserverFaction || 'the Initiative';
+    const defaultObserverName = templateLoader.config.campaign?.defaultObserverFactionName || 'the Initiative';
     const defaultObserver = factions.find(f => f.displayName === defaultObserverName) || factions[0];
     const defaultPriorityTarget = defaultObserver
       ? opportunityScorer.selectPriorityTargetFaction(factions, nations, defaultObserver.ID)
@@ -1039,22 +1034,7 @@ class SnapshotBuilder {
       : [];
 
     // Key Tech Matrix (Selected strategic projects across all factions)
-    const keyProjects = [
-      'Project_TheirSignatures',
-      'Project_TheirMethods',
-      'Project_TheirOperations',
-      'Project_TheirMovements',
-      'Project_AlienAdministrationTransitionTeam',
-      'Project_BurnerDrive',
-      'Project_FleetCombatants',
-      'Project_ShipsoftheLine',
-      'Project_TitanicSpacecraft',
-      'Project_CoilCannon',
-      'Project_RailCannonMk2',
-      'Project_PointDefenseIonBattery',
-      'Project_PhasedArrayLasers',
-      'Project_ProtiumConverterTorch'
-    ];
+    const keyProjects = (analysisConfig.strategicProjects || []).map(project => project.id);
 
     const techMatrix = keyProjects.map(projId => {
       const projTemplate = templateLoader.getProject(projId);
@@ -1086,6 +1066,7 @@ class SnapshotBuilder {
     });
 
     return {
+      miningScarcityWeights: analysisConfig.miningScarcityWeights,
       metadata: {
         fileName: saveData.fileName,
         fileSizeBytes: saveData.fileSizeBytes,

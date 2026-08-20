@@ -94,6 +94,19 @@ function parseBodyQuery(value) {
   return body;
 }
 
+function parseBoundedIntegerQuery(value, label, { min = 1, max = 100, defaultValue = null } = {}) {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  const raw = String(value);
+  if (!/^\d+$/.test(raw)) {
+    throw new RequestValidationError(`Invalid ${label} '${raw}'. Use an integer from ${min} to ${max}.`);
+  }
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new RequestValidationError(`Invalid ${label} '${raw}'. Use an integer from ${min} to ${max}.`);
+  }
+  return parsed;
+}
+
 module.exports = {
   LOCAL_MODES,
   HOSTED_MODES,
@@ -103,5 +116,6 @@ module.exports = {
   assertKnownObserver,
   resolveSavePath,
   parseOptionalNumericQuery,
-  parseBodyQuery
+  parseBodyQuery,
+  parseBoundedIntegerQuery
 };

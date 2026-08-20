@@ -587,6 +587,17 @@ function renderDashboard() {
   renderResourceFlowChart();
   renderPowerTrajectoryChart();
   renderDualAssetRings();
+  if (window.MissionControlDirectiveBoard?.render) {
+    // The engine guarantees its primary is an action rather than a
+    // prohibition, so this board is the one place the dashboard can promise
+    // "here is what to do", with the vetoes shown as reasoning beside it.
+    window.MissionControlDirectiveBoard.render(
+      document.getElementById('directiveBoard'),
+      // /api/v2/briefing returns { briefing, data }; the engine output rides
+      // on the briefing, not on the raw snapshot.
+      { engineDirectives: state.briefing?.engineDirectives }
+    );
+  }
   if (window.MissionControlMcBudget?.render) {
     // Per-hull Mission Control comes from the game templates via the snapshot;
     // it is what turns the hate floor from a readout into a build decision.

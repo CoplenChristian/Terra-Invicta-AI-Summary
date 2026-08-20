@@ -1,5 +1,7 @@
 const snapshotIdentity = require('./snapshotIdentity');
 const shared = require('../shared/intelResources.mjs');
+const { resolveConfig } = require('./config');
+const runtimeConfig = resolveConfig();
 
 const {
   SUPPORTED_RESOURCES,
@@ -42,6 +44,8 @@ const {
 function buildResource(snapshot, resource, {
   factionId = null,
   body = null,
+  theater = null,
+  limit = null,
   destination = null,
   fleetId = null,
   designId = null,
@@ -54,7 +58,7 @@ function buildResource(snapshot, resource, {
 } = {}) {
   if (!SUPPORTED_RESOURCES.has(resource)) return null;
   const identity = snapshotIdentity.readSnapshotIdentity(snapshot);
-  const query = { faction: factionId, body, destination, fleet: fleetId, design: designId, quantity, status, sort };
+  const query = { faction: factionId, body, theater, limit, destination, fleet: fleetId, design: designId, quantity, status, sort };
   const observerId = snapshot.observerFactionId || 4712;
 
   const base = {
@@ -153,7 +157,11 @@ function buildResource(snapshot, resource, {
     return { ...base, count: null, items: [], ...plan };
   }
   if (resource === 'mining-prospects') {
-    const prospects = miningProspectsResource(snapshot, { theater: body || null, limit: quantity > 1 ? quantity : null });
+    const prospects = miningProspectsResource(snapshot, {
+      theater: theater || body || null,
+      limit,
+      weights: runtimeConfig.analysis.miningScarcityWeights
+    });
     return { ...base, count: prospects.ranked.length, items: prospects.ranked, ...prospects };
   }
   if (resource === 'body-status') {

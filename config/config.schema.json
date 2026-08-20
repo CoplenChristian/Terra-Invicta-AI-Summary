@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://terra-invicta.local/config.schema.json",
+  "title": "Terra Invicta intelligence configuration",
+  "type": "object",
+  "required": ["schemaVersion", "paths", "campaign", "server", "publishing", "analysis"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["savePath", "workDir", "templatesPath", "csvSubDir", "shipInfoSubDir", "againSaveSubDir", "summarySubDir", "snippetPackSubDir"],
+      "properties": {
+        "savePath": { "type": ["string", "null"] },
+        "workDir": { "type": "string", "minLength": 1 },
+        "templatesPath": { "type": ["string", "null"] },
+        "csvSubDir": { "type": "string" },
+        "shipInfoSubDir": { "type": "string" },
+        "againSaveSubDir": { "type": "string" },
+        "summarySubDir": { "type": "string" },
+        "snippetPackSubDir": { "type": "string" }
+      }
+    },
+    "campaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "defaultObserverFactionId", "defaultObserverFactionName"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "defaultObserverFactionId": { "type": "integer", "minimum": 1 },
+        "defaultObserverFactionName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "port", "publishTimeoutMs", "defaultMode"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "publishTimeoutMs": { "type": "integer", "minimum": 1000 },
+        "defaultMode": { "enum": ["player", "enhanced", "omniscient"] }
+      }
+    },
+    "publishing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["historyRetention", "fullSnapshotRetention", "observerModes", "otherFactionModes", "shareTechGraph"],
+      "properties": {
+        "historyRetention": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "fullSnapshotRetention": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "observerModes": { "type": "array", "items": { "enum": ["player", "enhanced", "omniscient"] }, "minItems": 1, "uniqueItems": true },
+        "otherFactionModes": { "type": "array", "items": { "enum": ["player", "enhanced", "omniscient"] }, "uniqueItems": true },
+        "shareTechGraph": { "type": "boolean" }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "required": ["effects", "strategicProjects", "rules", "powerScore", "opportunityScoring", "miningScarcityWeights", "directiveWeights", "strategicHistory"],
+      "additionalProperties": false,
+      "properties": {
+        "effects": { "type": "object", "additionalProperties": { "$ref": "#/$defs/effect" } },
+        "strategicProjects": { "type": "array", "items": { "$ref": "#/$defs/project" }, "uniqueItems": true },
+        "rules": { "type": "object" },
+        "powerScore": { "type": "object", "required": ["weights", "normalizers"], "properties": { "weights": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } }, "normalizers": { "type": "object", "additionalProperties": { "type": "number", "exclusiveMinimum": 0 } } }, "additionalProperties": false },
+        "opportunityScoring": { "type": "object" },
+        "miningScarcityWeights": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } },
+        "directiveWeights": { "type": "object" },
+        "strategicHistory": { "type": "object" }
+      }
+    }
+  },
+  "$defs": {
+    "effect": {
+      "type": "object",
+      "required": ["capability", "category", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "capability": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "defaultProject": { "type": "string" },
+        "defaultTech": { "type": "string" }
+      },
+      "oneOf": [
+        { "required": ["defaultProject"] },
+        { "required": ["defaultTech"] }
+      ]
+    },
+    "project": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "benefit": { "type": "string" },
+        "risk": { "type": "string" }
+      }
+    }
+  }
+}

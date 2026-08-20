@@ -4667,3 +4667,116 @@ body.intelligence-library-open {
 .mc-skill-org.is-negative {
   color: var(--danger, #d9534f);
 }
+
+/* Directive engine board -------------------------------------------------- */
+
+.directive-board-primary {
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.directive-board-primary-title {
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--text);
+  margin: 6px 0 10px;
+}
+
+.directive-board-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.directive-board-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text-muted);
+}
+
+.directive-board-chip--hate { color: var(--warning); border-color: var(--warning); }
+.directive-board-chip--score { color: var(--accent); border-color: var(--accent); }
+
+.directive-board-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.directive-board-row {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.directive-board-row-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.directive-board-score {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  min-width: 44px;
+  text-align: right;
+}
+
+.directive-board-row-title {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.directive-board-row-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 3px 0 0 54px;
+}
+
+/* Reasons and preconditions carry the engine's justification. They are the
+   reason the board is trustworthy, so they are legible rather than tucked
+   behind a disclosure. */
+.directive-board-reasons,
+.directive-board-preconds {
+  list-style: none;
+  margin: 6px 0 0 54px;
+  padding: 0;
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.directive-board-preconds {
+  margin-left: 0;
+  color: var(--warning);
+}
+
+.directive-board-preconds li,
+.directive-board-reasons li { margin-bottom: 4px; }
+
+.directive-board-preconds li::before {
+  content: '! ';
+  font-family: var(--mono);
+}
+
+.directive-board-rule {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  margin-right: 6px;
+}

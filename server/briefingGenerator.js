@@ -10,8 +10,13 @@ const snapshotIdentity = require('./snapshotIdentity');
 const strategicIntelligence = require('./strategicIntelligence');
 const directiveAdvisor = require('./directiveAdvisor');
 const directiveEngine = require('./directiveEngine');
+const { resolveConfig } = require('./config');
 
 class BriefingGenerator {
+  constructor(config = resolveConfig()) {
+    this.config = config;
+  }
+
   generateMissionControlBriefing(snapshot = {}, rawSnapshot = null) {
     const metadata = snapshot.metadata || {};
     const factions = this.asArray(snapshot.factions);
@@ -60,7 +65,8 @@ class BriefingGenerator {
       nations,
       councilors,
       capabilities,
-      alienIntelligenceStage: snapshot.alienIntelligenceStage || null
+      alienIntelligenceStage: snapshot.alienIntelligenceStage || null,
+      directiveWeights: this.config.analysis?.directiveWeights || null
     });
     const engineResult = directiveEngine.runEngine(engineWorld);
 

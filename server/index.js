@@ -5,6 +5,8 @@ const path = require('path');
 // The publish script already loads .env; the server did not, so those routes
 // reported "not configured" locally even when credentials were present.
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
+const { resolveConfig, safeRuntimeConfig } = require('./config');
+const runtimeConfig = resolveConfig();
 const { spawn } = require('child_process');
 const saveParser = require('./saveParser');
 const snapshotBuilder = require('./snapshotBuilder');
@@ -24,14 +26,12 @@ const { buildStrategicDelta } = require('../shared/strategicDelta.mjs');
 
 // Compact strategic history lives in Supabase, not on disk, so these routes
 // degrade cleanly to a clear message when Supabase is not configured locally.
-const strategicHistory = new SupabaseAdapter();
+const strategicHistory = new SupabaseAdapter({ campaignKey: runtimeConfig.campaign.key });
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
-const PUBLISH_TIMEOUT_MS = Number(process.env.PUBLISH_TIMEOUT_MS) > 0
-  ? Number(process.env.PUBLISH_TIMEOUT_MS)
-  : 15 * 60 * 1000;
+const PORT = runtimeConfig.server.port;
+const HOST = runtimeConfig.server.host;
+const PUBLISH_TIMEOUT_MS = runtimeConfig.server.publishTimeoutMs;
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
@@ -95,7 +95,7 @@ function loadOrGetSnapshot(targetSavePath = null) {
   const rawSnapshot = snapshotBuilder.buildRawSnapshot(parsedSave);
   const identity = snapshotIdentity.createSnapshotIdentity(
     { ...saveFile, saveHash: beforeFingerprint.saveHash },
-    process.env.SUPABASE_CAMPAIGN_KEY || 'initiative'
+    runtimeConfig.campaign.key
   );
   snapshotIdentity.attachSnapshotIdentity(rawSnapshot, identity);
 
@@ -127,7 +127,7 @@ function loadOrGetSnapshot(targetSavePath = null) {
       cachedPreviousRawSave = readCandidate(selection.save);
       snapshotIdentity.attachSnapshotIdentity(cachedPreviousRawSave, snapshotIdentity.createSnapshotIdentity(
         selection.save,
-        process.env.SUPABASE_CAMPAIGN_KEY || 'initiative',
+        runtimeConfig.campaign.key,
         identity.generatedAt
       ));
       if (selection.reason === 'same-game-time-fallback') {
@@ -200,11 +200,12 @@ app.get('/api/runtime', (req, res) => {
     environment: process.env.NODE_ENV === 'development' ? 'dev' : 'local',
     canPublish: true,
     canRefresh: true,
-    supportedModes: ['player', 'enhanced', 'omniscient'],
+    supportedModes: runtimeConfig.publishing.observerModes,
     // Local runs parse the save directly, so every faction is selectable.
     // null means "no restriction"; the hosted worker returns a real list.
     availableObservers: null,
-    defaultMode: 'player',
+    defaultMode: runtimeConfig.server.defaultMode,
+    defaults: safeRuntimeConfig(runtimeConfig),
     source: 'express'
   });
 });
@@ -368,7 +369,7 @@ app.get(['/api/intel', '/api/intel/'], (req, res) => {
     endpoints: intelResources.INTEL_ENDPOINT_INDEX,
     examples: intelResources.INTEL_ENDPOINT_EXAMPLES,
     query: {
-      observer: 'Observer faction ID, e.g. 4712',
+      observer: `Observer faction ID, e.g. ${runtimeConfig.campaign.defaultObserverFactionId}`,
       mode: 'player | enhanced | omniscient',
       faction: 'Optional faction ID filter',
       body: 'Optional body/theater filter'
@@ -380,7 +381,7 @@ app.get(['/api/intel', '/api/intel/'], (req, res) => {
   }
 
   const links = Object.entries(payload.endpoints).map(([name, endpoint]) => {
-    const query = payload.examples[name] || '?observer=4712&mode=omniscient';
+    const query = payload.examples[name] || `?observer=${runtimeConfig.campaign.defaultObserverFactionId}&mode=omniscient`;
     const href = `${endpoint}${query}`.replace(/&/g, '&amp;');
     return `<li><span>${name}</span><a href="${href}">${endpoint}${query}</a></li>`;
   }).join('');
@@ -406,6 +407,11 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
       'faction filter'
     );
     const body = requestValidation.parseBodyQuery(req.query.body);
+    const theater = requestValidation.parseBodyQuery(req.query.theater ?? req.query.body);
+    const limit = requestValidation.parseBoundedIntegerQuery(
+      req.query.limit ?? (req.params.resource === 'mining-prospects' ? req.query.quantity : undefined),
+      'mining prospects limit'
+    );
     const destination = req.query.destination ? String(req.query.destination).trim() : null;
     const fleetId = req.query.fleet || req.query.fleetId || null;
     const designId = req.query.design || req.query.designId || req.query.target || null;
@@ -420,6 +426,8 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
     const projection = intelResources.buildResource(filtered, req.params.resource, {
       factionId,
       body,
+      theater,
+      limit,
       destination,
       fleetId,
       designId,
@@ -535,7 +543,7 @@ app.get('/api/intel/strategic-delta', async (req, res) => {
         const { targetPath } = requestContext(req);
         const rawSnapshot = loadOrGetSnapshot(targetPath);
         toDoc = buildStrategicSnapshot(rawSnapshot, {
-          observerFactionId: Number(req.query.observer) || 4712,
+          observerFactionId: Number(req.query.observer) || runtimeConfig.campaign.defaultObserverFactionId,
           campaignKey: campaign
         });
         fromDoc = recent.snapshots[0]?.payload || null;

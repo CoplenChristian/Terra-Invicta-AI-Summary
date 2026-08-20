@@ -82,7 +82,7 @@ test('unformed nations end up in futureOpportunities, not rejected', () => {
   const result = runEngine(world);
   assert.strictEqual(result.futureOpportunities.length, 1);
   assert.strictEqual(result.futureOpportunities[0].target.nation, 'Aceh');
-  assert.ok(!result.rejected.some((r) => r.candidate.target.nation === 'Aceh'));
+  assert.ok(!result.rejected.some((r) => r.target.nation === 'Aceh'));
 });
 
 test('absorbed nations end up in rejected, not futureOpportunities', () => {
@@ -93,7 +93,8 @@ test('absorbed nations end up in rejected, not futureOpportunities', () => {
   });
   const result = runEngine(world);
   assert.strictEqual(result.rejected.length, 1);
-  assert.strictEqual(result.rejected[0].candidate.target.nation, 'Italy');
+  assert.strictEqual(result.rejected[0].target.nation, 'Italy');
+  assert.ok(result.rejected[0].vetoReasons.length > 0, 'a rejected candidate carries its own reasons');
   assert.ok(!result.futureOpportunities.some((c) => c.target.nation === 'Italy'));
 });
 

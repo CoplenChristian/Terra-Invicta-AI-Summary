@@ -89,7 +89,7 @@ export const INTEL_ENDPOINT_EXAMPLES = Object.freeze({
   mobility: '?observer=4712&mode=omniscient',
   productionPlan: '?observer=4712&mode=omniscient&design=playerShipTemplate584&quantity=4',
   bodyStatus: '?observer=4712&mode=omniscient&body=Mars',
-  miningProspects: '?mode=omniscient&theater=belt&limit=10',
+  miningProspects: '?observer=4712&mode=omniscient&theater=belt&limit=10',
   history: '?limit=20',
   strategicDelta: '?observer=4712',
   techTree: '?observer=4712&mode=omniscient&category=all',
@@ -1092,10 +1092,11 @@ const percentileOf = (value, population) => {
 };
 
 export const miningProspectsResource = (snapshot, {
-  weights = MINING_SCARCITY_WEIGHTS,
+  weights = null,
   limit = null,
   theater = null
 } = {}) => {
+  const effectiveWeights = weights || snapshot.miningScarcityWeights || MINING_SCARCITY_WEIGHTS;
   const sites = asArray(snapshot.habSites);
   const rate = (site, key) => {
     const value = Number(site[key]);
@@ -1138,7 +1139,7 @@ export const miningProspectsResource = (snapshot, {
     let score = 0;
     for (const key of MINING_RESOURCE_KEYS) {
       const value = rate(site, key);
-      const weight = weights[key] ?? 1;
+      const weight = effectiveWeights[key] ?? 1;
       score += value * weight;
       resources[key] = {
         perDay: value,
@@ -1162,7 +1163,7 @@ export const miningProspectsResource = (snapshot, {
   const ranked = limit ? scored.slice(0, Number(limit)) : scored;
 
   return {
-    weights,
+    weights: effectiveWeights,
     totalSites: sites.length,
     unownedSites: unowned.length,
     ranked,

@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "paths": {
+    "savePath": null,
+    "workDir": ".",
+    "templatesPath": null,
+    "csvSubDir": "csv",
+    "shipInfoSubDir": "Ship_Info",
+    "againSaveSubDir": "Again_Save",
+    "summarySubDir": "Again_Save/summary",
+    "snippetPackSubDir": ""
+  },
+  "campaign": {
+    "key": "initiative",
+    "name": "the Initiative Campaign",
+    "defaultObserverFactionId": 4712,
+    "defaultObserverFactionName": "the Initiative"
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 3000,
+    "publishTimeoutMs": 120000,
+    "defaultMode": "player"
+  },
+  "publishing": {
+    "historyRetention": 20,
+    "fullSnapshotRetention": 3,
+    "observerModes": ["player", "enhanced", "omniscient"],
+    "otherFactionModes": [],
+    "shareTechGraph": true
+  },
+  "analysis": {
+    "effects": {
+      "Effect_DetectAbductions": {
+        "capability": "detectAlienAbductions",
+        "category": "alien",
+        "description": "Allows detection of alien abductions in investigated regions",
+        "defaultProject": "Project_TheirSignatures"
+      },
+      "Effect_DetectEnthralls": {
+        "capability": "detectAlienHumanContacts",
+        "category": "alien",
+        "description": "Allows detection of alien contacts and enthrall activity",
+        "defaultProject": "Project_TheirMethods"
+      },
+      "Effect_DetectAllOperations": {
+        "capability": "detectAlienOperations",
+        "category": "alien",
+        "description": "Allows detection of broader alien operations worldwide",
+        "defaultProject": "Project_TheirOperations"
+      },
+      "Effect_UpdateAlienThreatMeter": {
+        "capability": "estimateAlienThreat",
+        "category": "alien",
+        "description": "Unlocks and updates the faction alien threat / hate estimation meter",
+        "defaultProject": "Project_TheirOperations"
+      },
+      "Effect_DetectAlienMovements": {
+        "capability": "detectAlienCouncilors",
+        "category": "alien",
+        "description": "Allows direct detection and tracking of alien operatives (Hydras)",
+        "defaultProject": "Project_TheirMovements"
+      },
+      "Effect_Skywatch": {
+        "capability": "trackInnerSpaceAssets",
+        "category": "space",
+        "description": "Track alien and hostile vessels/structures within Saturn's orbit",
+        "defaultTech": "Skywatch"
+      },
+      "Effect_DeepSkywatch": {
+        "capability": "trackSolarSystemSpaceAssets",
+        "category": "space",
+        "description": "Track alien and hostile vessels/structures throughout the Solar System",
+        "defaultTech": "DeepSystemSkywatch"
+      }
+    },
+    "strategicProjects": [
+      { "id": "Project_TheirSignatures", "name": "Alien Signatures", "benefit": "Alien abduction detection" },
+      { "id": "Project_TheirMethods", "name": "Alien Methods", "benefit": "Alien contact and enthrall detection" },
+      { "id": "Project_TheirOperations", "name": "Alien Operations", "benefit": "Alien operations and threat assessment" },
+      { "id": "Project_TheirMovements", "name": "Alien Movements", "benefit": "Direct alien councilor detection" },
+      { "id": "Project_AlienAdministrationTransitionTeam", "name": "Alien Administration Transition Team", "risk": "Alien facility and nation handoff capability enabled" },
+      { "id": "Project_FleetCombatants", "name": "Fleet Combatants", "benefit": "Corvette, Frigate, and Destroyer hulls unlocked" },
+      { "id": "Project_ShipsoftheLine", "name": "Ships of the Line", "benefit": "Cruiser, Battleship, and Dreadnought hulls unlocked" },
+      { "id": "Project_TitanicSpacecraft", "name": "Titanic Spacecraft", "benefit": "Lancer and Titan hulls unlocked" },
+      { "id": "Project_CoilCannon", "name": "Coil Cannon", "benefit": "Mk1 Coil Weaponry unlocked" },
+      { "id": "Project_RailCannonMk2", "name": "Advanced Rail Cannon", "benefit": "Heavy Rail Weaponry unlocked" },
+      { "id": "Project_PointDefenseIonBattery", "name": "Point Defense Ion Battery", "benefit": "High-efficiency missile and kinetic interception" },
+      { "id": "Project_PhasedArrayLasers", "name": "Phased-Array Lasers", "benefit": "Long-range precision laser optics" },
+      { "id": "Project_BurnerDrive", "name": "Burner Drive", "benefit": "Early high-thrust interplanetary drive" },
+      { "id": "Project_ProtiumConverterTorch", "name": "Protium Converter Torch", "benefit": "Late-game high-efficiency fusion torch drive" }
+    ],
+    "rules": {
+      "spaceAssets": {
+        "innerSystemDescription": "Skywatch reveals alien vessels and structures inside Saturn's orbit.",
+        "deepSystemDescription": "Deep System Skywatch reveals alien vessels and habitats throughout the Solar System within detection range.",
+        "deepSystemImmediateReveal": true,
+        "wikiSource": "https://wiki.hoodedhorse.com/Terra_Invicta/Deep_System_Skywatch"
+      },
+      "alienFacilities": {
+        "requiresRegionDiscovery": true,
+        "wikiSource": "https://wiki.hoodedhorse.com/Terra_Invicta/Aliens"
+      },
+      "xenoforming": {
+        "requiresMilestone": "DetectXenoforming",
+        "automaticVisibilityThreshold": 65,
+        "requiresRegionDiscovery": true,
+        "wikiSource": "https://wiki.hoodedhorse.com/Terra_Invicta/Aliens"
+      }
+    },
+    "powerScore": {
+      "weights": {
+        "earthEconomy": 0.2,
+        "earthPolitics": 0.15,
+        "researchPower": 0.2,
+        "spaceEconomy": 0.15,
+        "fleetPower": 0.2,
+        "militaryPower": 0.1
+      },
+      "normalizers": {
+        "gdp": 40000000000000,
+        "controlPoints": 50,
+        "research": 5000,
+        "habs": 20,
+        "combatPower": 3000,
+        "nukes": 20
+      }
+    },
+    "opportunityScoring": {
+      "minimumScore": 20,
+      "scoreCap": 100,
+      "gdp": {
+        "superpowerThresholdTrillion": 5,
+        "superpowerPoints": 35,
+        "majorThresholdTrillion": 1,
+        "majorPoints": 25,
+        "regionalThresholdBillion": 200,
+        "regionalPoints": 15
+      },
+      "targetControl": {
+        "executivePoints": 30,
+        "heldBasePoints": 15,
+        "heldPerControlPoint": 5
+      },
+      "nukes": { "pointsPerBarrage": 5, "pointCap": 30 },
+      "missionControl": { "threshold": 5, "points": 15 },
+      "boost": { "threshold": 2, "points": 10 },
+      "unrest": { "threshold": 5, "points": 10 },
+      "cohesion": { "threshold": 2, "points": 8 },
+      "research": { "threshold": 200, "points": 10 }
+    },
+    "miningScarcityWeights": {
+      "nobleMetals": 3,
+      "fissiles": 3,
+      "volatiles": 1.5,
+      "water": 1,
+      "metals": 1
+    },
+    "directiveWeights": {
+      "totalWarSafetyMargin": 0.5,
+      "hateCrossing": { "staysUnder50": 1, "crossing50": 3, "crossing200": 10 },
+      "hatePoints": 1,
+      "valuePoints": 1,
+      "council": { "turn": 6, "investigate": 3, "proxyTargetBonus": 3 },
+      "unmetPreconditionPenalty": 0.75,
+      "intelligence": { "unblockSightings": 5, "escalateLateBonus": 4, "detainAlien": 7 },
+      "resourcePoints": 1,
+      "topNCouncilTargets": 3
+    },
+    "strategicHistory": {
+      "retention": 20,
+      "friendlyFleetDetail": true,
+      "friendlyShipLedger": true,
+      "hostileContactMinimumShips": 5,
+      "preserveHostileIfTargetingPlayer": true,
+      "preserveHostileIfSameTheater": true,
+      "preserveConstruction": true,
+      "preserveResearchQueues": true,
+      "preserveCouncilors": false,
+      "preserveNations": false,
+      "preserveShipComponents": false,
+      "preserveStaticTechTree": false
+    }
+  }
+}

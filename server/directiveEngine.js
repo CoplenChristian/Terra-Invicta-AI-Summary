@@ -89,6 +89,48 @@ const WEIGHTS = Object.freeze({
   // below for the formula itself.
   VALUE_POINTS: 1,
 
+  // Value for the non-expansion families. Expansion value falls out of a
+  // real formula (GDP density); nothing comparable exists for taking an
+  // enemy councilor off the board or for unblocking the alien-response
+  // axis, so these are calibrated judgement, not derived quantities --
+  // every rule using them is marked estimateClass 'heuristic'.
+  //
+  // Calibration point: on the live save the four takeable control points
+  // score 4.4-5.5, so these are set to make a councilor Turn comparable to
+  // a mid-value CP grab rather than automatically beating or losing to it.
+  // Change them here, not at the call sites.
+  COUNCIL: Object.freeze({
+    // Turn is the payoff -- it removes a councilor from the enemy board and
+    // puts an agent inside their faction, at zero alien hate on success.
+    turn: 6,
+    // Investigate is the enabler, not the prize: it feeds Turn's secrets
+    // precondition and is the only way to read a masked Loyalty. Valued
+    // below Turn so it never outranks the thing it exists to unlock.
+    investigate: 3,
+    // Notion 02: "Protectorate must be treated as a real strategic
+    // adversary." Proxy factions also feed alien hate, so denying them a
+    // councilor is worth more than denying a neutral human faction.
+    proxyTargetBonus: 3
+  }),
+
+  // Per unconfirmable precondition. Small on purpose: these are unverifiable
+  // rather than known-unmet, so this breaks ties toward actions we can
+  // confirm are available without burying a genuinely better option.
+  UNMET_PRECONDITION_PENALTY: 0.75,
+
+  INTELLIGENCE: Object.freeze({
+    // Holding alien-tracking capability with zero sightings blocks every
+    // downstream alien action -- Detain, interception, facility response.
+    // A blocker is worth more than any single action it gates.
+    unblockSightings: 5,
+    // Under escalate-late the fleet cannot absorb what it cannot see, so
+    // the blocker gets worse, not better, the more fragile we are.
+    escalateLateBonus: 4,
+    // Removing an alien operative from Earth, before hate cost is applied
+    // by the hate rules.
+    detainAlien: 7
+  }),
+
   // Scales resourceCost = spend / stock in the objective function.
   RESOURCE_POINTS: 1,
 
@@ -97,6 +139,23 @@ const WEIGHTS = Object.freeze({
   // bounded. Tunable.
   TOP_N_COUNCIL_TARGETS: 3
 });
+
+function getWeights(world) {
+  const configured = world?.directiveWeights;
+  if (!configured) return WEIGHTS;
+  return {
+    ...WEIGHTS,
+    TOTAL_WAR_SAFETY_MARGIN: configured.totalWarSafetyMargin ?? WEIGHTS.TOTAL_WAR_SAFETY_MARGIN,
+    HATE_CROSSING: { ...WEIGHTS.HATE_CROSSING, ...(configured.hateCrossing || {}) },
+    HATE_POINTS: configured.hatePoints ?? WEIGHTS.HATE_POINTS,
+    VALUE_POINTS: configured.valuePoints ?? WEIGHTS.VALUE_POINTS,
+    COUNCIL: { ...WEIGHTS.COUNCIL, ...(configured.council || {}) },
+    UNMET_PRECONDITION_PENALTY: configured.unmetPreconditionPenalty ?? WEIGHTS.UNMET_PRECONDITION_PENALTY,
+    INTELLIGENCE: { ...WEIGHTS.INTELLIGENCE, ...(configured.intelligence || {}) },
+    RESOURCE_POINTS: configured.resourcePoints ?? WEIGHTS.RESOURCE_POINTS,
+    TOP_N_COUNCIL_TARGETS: configured.topNCouncilTargets ?? WEIGHTS.TOP_N_COUNCIL_TARGETS
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Candidate generators
@@ -221,6 +280,17 @@ function generateOpenControlPointCandidates(world) {
  * Turn candidates carry both as unmetPreconditions and say so in the title,
  * per the plan -- "do not pretend they are satisfiable."
  */
+/**
+ * Is this faction one of the alien proxies? Routed through directiveAdvisor
+ * so there is one definition of "proxy" in the codebase -- it already knows
+ * the Servants/Protectorate template names and display-name spellings.
+ */
+function isProxyFaction(factionName) {
+  if (!factionName) return false;
+  const kind = directiveAdvisor.classifyProxy({ displayName: factionName }).kind;
+  return kind === 'servants' || kind === 'protectorate';
+}
+
 function loyaltyOf(councilor) {
   const effective = toFiniteNumber(councilor?.resolvedAttributes?.effective?.Loyalty);
   if (effective !== null) return effective;
@@ -255,7 +325,13 @@ function buildInvestigateCandidate(councilor, loyalty) {
       note: 'TIMissionTemplate Investigate Councilor hate row is [0,0,0,0,0,0] -- zero on every outcome.'
     },
     cost: { resource: 'Operations', amount: null, kind: 'bonus' },
-    value: { targetLoyalty: loyalty },
+    value: {
+      targetLoyalty: loyalty,
+      // Servants and Protectorate both feed alien hate and are the factions
+      // Notion 02 names as real adversaries, so denying them a councilor is
+      // worth more than denying a neutral human faction.
+      targetIsProxy: isProxyFaction(councilor.factionName)
+    },
     score: null,
     provenance: {
       source: 'TIMissionTemplate Investigate Councilor outcome array',
@@ -291,7 +367,13 @@ function buildTurnCandidate(councilor, loyalty) {
     // unfillable without a success-odds calculator (plan §4 / Notion 09,14),
     // which is out of scope for v1. Absent stays null.
     cost: { resource: 'Influence', amount: null, kind: 'bonus' },
-    value: { targetLoyalty: loyalty },
+    value: {
+      targetLoyalty: loyalty,
+      // Servants and Protectorate both feed alien hate and are the factions
+      // Notion 02 names as real adversaries, so denying them a councilor is
+      // worth more than denying a neutral human faction.
+      targetIsProxy: isProxyFaction(councilor.factionName)
+    },
     score: null,
     provenance: {
       source: 'TIMissionTemplate Turn Councilor outcome array, slots 4-5',
@@ -324,7 +406,7 @@ function generateCouncilCandidates(world) {
   if (rankable.length > 0) {
     const ranked = rankable
       .sort((a, b) => a.loyalty - b.loyalty)
-      .slice(0, WEIGHTS.TOP_N_COUNCIL_TARGETS);
+      .slice(0, getWeights(world).TOP_N_COUNCIL_TARGETS);
     for (const { councilor, loyalty } of ranked) {
       candidates.push(buildInvestigateCandidate(councilor, loyalty));
       candidates.push(buildTurnCandidate(councilor, loyalty));
@@ -341,7 +423,7 @@ function generateCouncilCandidates(world) {
   // defending stat and there is no basis for choosing between targets. But
   // Investigate Councilor is precisely the mission that resolves that, and it
   // is free on every outcome. So emit Investigate alone and say why.
-  for (const { councilor } of scored.slice(0, WEIGHTS.TOP_N_COUNCIL_TARGETS)) {
+  for (const { councilor } of scored.slice(0, getWeights(world).TOP_N_COUNCIL_TARGETS)) {
     const candidate = buildInvestigateCandidate(councilor, null);
     candidate.title = `Investigate ${councilor.displayName} (${councilor.factionName}) `
       + '-- Loyalty unreadable, and Turn cannot be targeted without it';
@@ -482,7 +564,7 @@ const RULES = Object.freeze([
       if (proximity === 'unknown' || proximity === null || proximity === undefined) return 'unknown';
       const headroom = world.posture.totalWarHeadroom;
       if (headroom === null || headroom === undefined || !Number.isFinite(headroom)) return 'unknown';
-      const budget = headroom * WEIGHTS.TOTAL_WAR_SAFETY_MARGIN;
+      const budget = headroom * getWeights(world).TOTAL_WAR_SAFETY_MARGIN;
       return high > budget ? 'veto' : 'pass';
     },
     because(world, candidate) {
@@ -494,12 +576,12 @@ const RULES = Object.freeze([
         return 'Distance to Total War (200 hate) is not observable from this save/mode, so the budget check '
           + 'cannot clear this action.';
       }
-      const budget = headroom * WEIGHTS.TOTAL_WAR_SAFETY_MARGIN;
+      const budget = headroom * getWeights(world).TOTAL_WAR_SAFETY_MARGIN;
       return high > budget
         ? `Up to ${high} hate exceeds the safety-margined Total War budget `
-          + `(${headroom.toFixed(1)} headroom × ${WEIGHTS.TOTAL_WAR_SAFETY_MARGIN} = ${budget.toFixed(1)}).`
+          + `(${headroom.toFixed(1)} headroom × ${getWeights(world).TOTAL_WAR_SAFETY_MARGIN} = ${budget.toFixed(1)}).`
         : `Up to ${high} hate is within the safety-margined Total War budget `
-          + `(${headroom.toFixed(1)} headroom × ${WEIGHTS.TOTAL_WAR_SAFETY_MARGIN} = ${budget.toFixed(1)}).`;
+          + `(${headroom.toFixed(1)} headroom × ${getWeights(world).TOTAL_WAR_SAFETY_MARGIN} = ${budget.toFixed(1)}).`;
     },
     source: 'wiki Diplomacy § "Alien Total War" (rev 2026-08-11); headroom from directiveAdvisor.assessCampaignPosture.',
     estimateClass: 'heuristic'
@@ -513,13 +595,13 @@ const RULES = Object.freeze([
       const mid = (low + high) / 2;
       if (!(mid > 0)) return 0;
       const current = world.posture ? world.posture.actualAlienHate : null;
-      let weight = WEIGHTS.HATE_CROSSING.staysUnder50;
+      let weight = getWeights(world).HATE_CROSSING.staysUnder50;
       if (current !== null && current !== undefined && Number.isFinite(current)) {
         const projected = current + high;
         if (current < ALIEN_TOTAL_WAR_HATE && projected >= ALIEN_TOTAL_WAR_HATE) {
-          weight = WEIGHTS.HATE_CROSSING.crossing200;
+          weight = getWeights(world).HATE_CROSSING.crossing200;
         } else if (current < ALIEN_HATE_WAR_THRESHOLD && projected >= ALIEN_HATE_WAR_THRESHOLD) {
-          weight = WEIGHTS.HATE_CROSSING.crossing50;
+          weight = getWeights(world).HATE_CROSSING.crossing50;
         }
       }
       // current === null (redacted player-mode hate) falls through to the
@@ -527,7 +609,7 @@ const RULES = Object.freeze([
       // crossing -- this is a scoring heuristic, not a safety gate (the
       // safety gate is hate/total-war-budget above), so a defensible
       // default is used instead of a three-outcome unknown.
-      return -(mid * weight * WEIGHTS.HATE_POINTS);
+      return -(mid * weight * getWeights(world).HATE_POINTS);
     },
     because(world, candidate) {
       const { low, high } = candidate.hate.toAliens;
@@ -625,7 +707,7 @@ const RULES = Object.freeze([
       const cpCost = gdpBn ** 0.6 / 2;
       if (!(cpCost > 0)) return 0;
       const valueDensity = outputPerCp / cpCost;
-      return valueDensity * WEIGHTS.VALUE_POINTS;
+      return valueDensity * getWeights(world).VALUE_POINTS;
     },
     because(world, candidate) {
       const gdpBn = candidate.value.gdpBn;
@@ -639,6 +721,74 @@ const RULES = Object.freeze([
         + `Value density ${valueDensity.toFixed(3)}.`;
     },
     source: 'Notion 09 -- output ÷ (GDP_Bn^0.6 / 2); docs/directive-rule-engine-plan.md §3, §4a.',
+    estimateClass: 'heuristic'
+  },
+  {
+    id: 'value/counter-councilor',
+    kind: 'score',
+    appliesTo: (candidate) => candidate.family === 'council' && candidate.isFallback !== true,
+    evaluate(world, candidate) {
+      const base = candidate.missionType === 'Turn Councilor'
+        ? getWeights(world).COUNCIL.turn
+        : getWeights(world).COUNCIL.investigate;
+      return base + (candidate.value?.targetIsProxy === true ? getWeights(world).COUNCIL.proxyTargetBonus : 0);
+    },
+    because(world, candidate) {
+      const who = candidate.target?.councilorName || 'this councilor';
+      const proxy = candidate.value?.targetIsProxy === true;
+      const stem = candidate.missionType === 'Turn Councilor'
+        ? `Turning ${who} takes them off the enemy board and puts an agent inside their faction, at zero alien hate on success`
+        : `Investigating ${who} is free on every outcome and unlocks both Turn's secrets precondition and a masked Loyalty`;
+      return proxy
+        ? `${stem}. Their faction is an alien proxy, which both feeds alien hate and is a real strategic adversary (Notion 02).`
+        : `${stem}.`;
+    },
+    source: 'Notion 02 (Protectorate as a real adversary); TIMissionTemplate zero-hate success rows. '
+      + 'Weights are calibrated judgement -- see WEIGHTS.COUNCIL.',
+    estimateClass: 'heuristic'
+  },
+  {
+    id: 'readiness/unmet-preconditions',
+    kind: 'score',
+    appliesTo: (candidate) => Array.isArray(candidate.unmetPreconditions) && candidate.unmetPreconditions.length > 0,
+    evaluate(world, candidate) {
+      // A discount, not a veto: the precondition is unverifiable rather than
+      // known-unmet, so the action may well be available in-game. But
+      // "recommended right now" should prefer something we can confirm is
+      // actionable when values are otherwise close.
+      return -(getWeights(world).UNMET_PRECONDITION_PENALTY * candidate.unmetPreconditions.length);
+    },
+    because(world, candidate) {
+      const n = candidate.unmetPreconditions.length;
+      return `${n} precondition${n === 1 ? '' : 's'} cannot be confirmed from this snapshot, so this ranks `
+        + 'below an equally valuable action we know is available.';
+    },
+    source: 'docs/directive-rule-engine-plan.md §4 -- Turn\'s HasSpySlot and HasIntelOnCouncilorSecrets are '
+      + 'not in the snapshot and must not be presented as satisfiable.',
+    estimateClass: 'heuristic'
+  },
+  {
+    id: 'value/unblock-alien-response',
+    kind: 'score',
+    appliesTo: (candidate) => candidate.family === 'intelligence',
+    evaluate(world, candidate) {
+      if (candidate.value?.capabilityUnlockedUnused === true) {
+        const escalateLate = world.posture?.escalateLate === true;
+        return getWeights(world).INTELLIGENCE.unblockSightings
+          + (escalateLate ? getWeights(world).INTELLIGENCE.escalateLateBonus : 0);
+      }
+      return getWeights(world).INTELLIGENCE.detainAlien;
+    },
+    because(world, candidate) {
+      if (candidate.value?.capabilityUnlockedUnused !== true) {
+        return 'Detaining a sighted alien operative removes them from Earth without triggering retaliation.';
+      }
+      return world.posture?.escalateLate === true
+        ? 'Alien tracking is unlocked and unused, which blocks every downstream alien action. '
+          + 'Escalate-late posture makes that worse: the fleet cannot absorb what it cannot see.'
+        : 'Alien tracking is unlocked and unused, which blocks every downstream alien action.';
+    },
+    source: 'docs/directive-rule-engine-plan.md §5; weights are judgement -- see WEIGHTS.INTELLIGENCE.',
     estimateClass: 'heuristic'
   },
   {
@@ -736,7 +886,7 @@ function computeResourceCost(world, candidate) {
   if (!candidate.cost || candidate.cost.amount === null || candidate.cost.amount === undefined) return 0;
   const stock = world.resources ? toFiniteNumber(world.resources[candidate.cost.resource]) : null;
   if (stock === null || !(stock > 0)) return 0;
-  return (candidate.cost.amount / stock) * WEIGHTS.RESOURCE_POINTS;
+  return (candidate.cost.amount / stock) * getWeights(world).RESOURCE_POINTS;
 }
 
 function scoreCandidates(world, candidates) {
@@ -800,7 +950,8 @@ function buildWorld({
   nations = [],
   councilors = [],
   capabilities = {},
-  alienIntelligenceStage = null
+  alienIntelligenceStage = null,
+  directiveWeights = null
 } = {}) {
   return Object.freeze({
     observerId,
@@ -810,6 +961,7 @@ function buildWorld({
     nations: Array.isArray(nations) ? nations : [],
     councilors: Array.isArray(councilors) ? councilors : [],
     capabilities: capabilities || {},
+    directiveWeights: directiveWeights || null,
     // Survives player-mode filtering when the raw alien councilor list does
     // not, so it is the only signal for "capability on, nothing sighted".
     alienIntelligenceStage: alienIntelligenceStage || null
@@ -851,8 +1003,17 @@ function runEngine(world) {
   }
 
   const scoredSurviving = scoreCandidates(world, surviving.map((e) => e.candidate));
-  const scoredUncertainCandidates = scoreCandidates(world, uncertain.map((e) => e.candidate));
-  const scoredUncertain = uncertain.map((entry, i) => ({ ...entry, candidate: scoredUncertainCandidates[i] }));
+
+  // Every list is a flat array of candidates, and a candidate carries its own
+  // reasons. The alternative -- candidates in some lists and { candidate,
+  // reasons } wrappers in others -- makes every consumer branch on which list
+  // it happens to be reading.
+  const scoredUncertain = scoreCandidates(world, uncertain.map((e) => e.candidate))
+    .map((candidate, i) => ({ ...candidate, uncertaintyReasons: uncertain[i].reasons }));
+  const rejectedCandidates = finalRejected.map((entry) => ({
+    ...entry.candidate,
+    vetoReasons: entry.reasons
+  }));
 
   let primary;
   let alternatives;
@@ -860,14 +1021,14 @@ function runEngine(world) {
     const sorted = [...scoredSurviving].sort((a, b) => b.score - a.score);
     [primary, ...alternatives] = sorted;
   } else {
-    primary = buildNoSafeActionCandidate(world, finalRejected, scoredUncertain);
+    primary = buildNoSafeActionCandidate(world, rejectedCandidates, scoredUncertain);
     alternatives = [];
   }
 
   return {
     primary,
     alternatives,
-    rejected: finalRejected,
+    rejected: rejectedCandidates,
     uncertain: scoredUncertain,
     futureOpportunities
   };

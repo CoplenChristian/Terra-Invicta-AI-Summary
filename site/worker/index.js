@@ -32,6 +32,7 @@ import {
   alienThreatResource,
   deltaResource,
   miningAnalysisResource,
+  miningProspectsResource,
   mobilityResource,
   productionPlanResource,
   bodyStatusResource
@@ -423,8 +424,15 @@ const validateResourceQuery = (url) => {
     return `Invalid faction filter '${faction}'. Use a positive numeric id.`;
   }
   const body = url.searchParams.get('body');
-  if (body !== null && (body.length > 80 || /[\u0000-\u001f\u007f]/.test(body))) {
+  const theater = url.searchParams.get('theater') || body;
+  if ((body !== null && (body.length > 80 || /[\u0000-\u001f\u007f]/.test(body))) ||
+      (theater !== null && (theater.length > 80 || /[\u0000-\u001f\u007f]/.test(theater)))) {
     return 'Invalid body filter. Use a short body name such as Ceres.';
+  }
+  const isMiningProspects = /\/api(?:\/intel)?\/mining-prospects$/.test(url.pathname);
+  const limit = url.searchParams.get('limit') || (isMiningProspects ? url.searchParams.get('quantity') : null);
+  if (limit !== null && (!/^\d+$/.test(limit) || Number(limit) < 1 || Number(limit) > 100)) {
+    return 'Invalid mining prospects limit. Use an integer from 1 to 100.';
   }
   return null;
 };
@@ -462,7 +470,11 @@ const buildIntelResource = (result, resource, url) => {
   const snapshot = result.snapshot || {};
   const factionId = numericQuery(url.searchParams.get('faction') || url.searchParams.get('factionId'));
   const body = url.searchParams.get('body');
-  const query = { faction: factionId, body: body || null };
+  const theater = url.searchParams.get('theater') || body;
+  const isMiningProspects = resource === 'mining-prospects';
+  const rawLimit = url.searchParams.get('limit') || (isMiningProspects ? url.searchParams.get('quantity') : null);
+  const limit = rawLimit && /^\d+$/.test(rawLimit) ? Number(rawLimit) : null;
+  const query = { faction: factionId, body: body || null, theater: theater || null, limit };
 
   if (resource === 'summary') {
     return resourceEnvelope(result, resource, null, query, summaryResource(snapshot));
@@ -602,6 +614,10 @@ const buildIntelResource = (result, resource, url) => {
       const sort = url.searchParams.get('sort');
       const mining = miningAnalysisResource(snapshot, factionId, body, status, sort);
       return resourceEnvelope(result, resource, mining.items, query, mining);
+    }
+    case 'mining-prospects': {
+      const prospects = miningProspectsResource(snapshot, { theater: theater || null, limit });
+      return resourceEnvelope(result, resource, prospects.ranked, query, prospects);
     }
     case 'research': {
       const research = researchResourceRows(snapshot);
