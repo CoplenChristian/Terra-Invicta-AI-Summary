@@ -1,6 +1,6 @@
 # Directive Rule & Hierarchy Engine — Plan
 
-Replace the hand-ranked directive list in `server/briefingGenerator.js` with a rule engine that always recommends a concrete action, explains what it rejected, and prices everything against a hate budget.
+Replace the hand-ranked directive list in `server/briefingGenerator.js` with a rule engine that recommends a concrete, positive action, explains the decision trade-offs separately, and prices everything against a hate budget.
 
 **Status:** proposed. Written 2026-08-19, condensed 2026-08-20 after a critique against all 17 Notion pages.
 
@@ -12,7 +12,7 @@ All mechanics below are verified against `StreamingAssets/Templates` or the offi
 
 Twelve hand-picked `policyRank` constants, none with a stated justification, sorted by rank then severity. Three consequences:
 
-1. **The headline can be a negative.** When a proxy offensive is vetoed, `geo-hold` (rank 100) wins and the dashboard reads *"Hold proxy offensive vs the Servants in Japan."* Nothing structurally guarantees the primary is an action — it holds only because someone tuned the ranks so it does.
+1. **A recommendation should be an action, not a prohibition.** When a proxy offensive is vetoed, the dashboard should recommend a constructive next step such as protecting core holdings, preparing intelligence, or staging a later operation. The reason that the proxy offensive is deferred belongs in a separate explanation section.
 2. **Ranks are unanchored.** Adding a rule means guessing a number that doesn't collide with eleven others.
 3. **Thresholds are binary.** `escalateLate` is a boolean. The real question is *how much hate can I afford, and what does spending it cost.*
 
@@ -62,7 +62,7 @@ World model  ->  Candidates  ->  Rules (veto + score)  ->  Selection
 
 **Rules** — plain data objects carrying a `source` citation *and* an estimate class (exact / calculated / heuristic), per Notion 16. Two kinds: vetoes and scores.
 
-**Selection** — `candidates → vetoes → scored → primary = max(surviving)`. The primary is always drawn from survivors; that's the structural fix for §1.1. If everything is vetoed, an explicit `no-safe-action` directive says so.
+**Selection** — `candidates → vetoes → scored → primary = max(surviving)`. The primary is always drawn from survivors; that's the structural fix for §1.1. If everything is vetoed, the primary is still a positive preparation action rather than a negative "do nothing" suggestion.
 
 **A veto has three outcomes, not two.** `pass` / `veto` / `unknown`. This is the default path, not an edge case: in player mode true hate is redacted, so hate rules are unevaluable unless they work from the 5-diamond meter — which Notion 07 warns is a *different number*. `unknown` means the candidate survives but is confidence-downgraded, with a reason naming what couldn't be measured.
 
@@ -151,7 +151,7 @@ Nothing says this today; `detectedCount: 0` next to an unlocked capability reads
 
 ## 6. What this changes — Japan, hate 168, strong fleet
 
-Today: *"Hold proxy offensive vs the Servants in Japan."*
+Previous headline: *"Hold proxy offensive vs the Servants in Japan."* The revised engine replaces that prohibition with a constructive primary action and explains the trade-off separately.
 
 After:
 
@@ -159,15 +159,25 @@ After:
 >
 > *Also:* Defend Interests on our own majors (20 Influence, 0 hate). Purge the Academy in China — 20.1T GDP, no proxy share, but **human war cost unmodelled**.
 >
-> *Rejected:* Crackdown/Purge the Servants in Japan — 32.0 hate from Total War at 200, which venting cannot undo. Purge would add ~0.5–1.5.
+> *Trade-off considered:* Crackdown/Purge the Servants in Japan — 32.0 hate from Total War at 200, which venting cannot undo. Purge would add ~0.5–1.5.
 
 ---
+
+## 6a. Decision reasoning (new)
+
+The recommendation and its explanation are separate contracts:
+
+- `primary` and `alternatives` contain only constructive actions the operator can take or prepare.
+- `decisionReasoning` explains why the primary won: the scoring method, positive factors, trade-offs, confidence, source citations, and counts of rejected/uncertain/future candidates.
+- `rejected`, `uncertain`, and `futureOpportunities` are evidence for that explanation, not suggestions. Their vetoes and unknowns remain visible so a player can understand what would change the recommendation.
+
+The dashboard presents **RECOMMENDED ACTION** first, followed by **WHY THIS ACTION** and then the supporting trade-offs. A fallback says what to prepare next; it never presents a prohibition as the headline.
 
 ## 7. Phases
 
 | Phase | Deliverable | Risk |
 | --- | --- | --- |
-| **P0** | Rename `geo-hold`'s title to name the action, not the prohibition. One line | Low |
+| **P0** | Make every primary title/action constructive; move vetoes and uncertainty into the decision-reasoning section | Low |
 | **P1** | World model incl. `hateConfidence`; derive fields that don't exist yet (`mcToPermanentWar`, `estimateOnly`) | Medium |
 | **P2** | Ventability (all three conditions) + min>max clamp; war-at-50 pricing with vent credit; permanent-war MC warning | Medium |
 | **P2a** | Parse spy slots and per-councilor intel depth, or Turn stays conditional | Medium |
@@ -175,7 +185,7 @@ After:
 | **P3a** | "Capability unlocked, zero sightings" — needs no parsing, only a comparison nobody makes | Low — ship early |
 | **P4** | Rule registry + three-outcome vetoes + estimate-class provenance; existing tests must pass | Medium |
 | **P5** | Scoring; delete the twelve `policyRank` constants | Medium |
-| **P6** | Positive primary guaranteed; "considered and rejected" in UI | Low |
+| **P6** | Positive primary guaranteed; decision reasoning and trade-offs in UI | Low |
 
 **P5 cannot delete the ranks until P3 covers space, research, and mining.** Otherwise `sp-2` (the fleet directive that *is* escalate-late doctrine), `sp-1`, and `res-1..3` vanish with no successor — and the permanent-war MC veto has nothing to veto, since nothing generates an MC-spending action.
 

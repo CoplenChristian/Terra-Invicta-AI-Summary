@@ -15,6 +15,12 @@ const DEFAULT_CONFIG_PATH = path.join(PROJECT_ROOT, 'config.json');
 const LEGACY_KEYS = new Set([
   'SavePath', 'WorkDir', 'TemplatesPath', 'CsvSubDir', 'ShipInfoSubDir',
   'AgainSaveSubDir', 'SummarySubDir', 'SnippetPackSubDir',
+  // Metadata from the removed intelligence-capabilities file is intentionally
+  // accepted and ignored during migration. It described the file rather than
+  // configuring runtime behavior.
+  'version', 'description',
+  // The old file used camelCase path names while config.json used PascalCase.
+  'templatesPath',
   'defaultObserverFaction', 'powerScoreWeights', 'intelligenceRules',
   'effects', 'strategicProjects'
 ]);
@@ -70,6 +76,7 @@ function migrateLegacyConfig(input) {
   const analysis = {};
   const pathMap = {
     SavePath: 'savePath', WorkDir: 'workDir', TemplatesPath: 'templatesPath',
+    templatesPath: 'templatesPath',
     CsvSubDir: 'csvSubDir', ShipInfoSubDir: 'shipInfoSubDir',
     AgainSaveSubDir: 'againSaveSubDir', SummarySubDir: 'summarySubDir',
     SnippetPackSubDir: 'snippetPackSubDir'
@@ -78,9 +85,14 @@ function migrateLegacyConfig(input) {
   for (const [legacyKey, nestedKey] of Object.entries(pathMap)) {
     if (Object.prototype.hasOwnProperty.call(input, legacyKey)) {
       warnLegacy(legacyKey);
-      paths[nestedKey] = input[legacyKey] === '' ? null : input[legacyKey];
+      const value = input[legacyKey];
+      paths[nestedKey] = value === '' && ['savePath', 'templatesPath'].includes(nestedKey)
+        ? null
+        : value;
     }
   }
+  // The retired capability map used `version`/`description` metadata and a
+  // lowercase `templatesPath`; those are migration inputs, not unknown keys.
   if (Object.keys(paths).length) migrated.paths = paths;
 
   if (Object.prototype.hasOwnProperty.call(input, 'defaultObserverFaction')) {
@@ -128,8 +140,34 @@ function applyEnvironment(config, env = process.env) {
   if (env.PORT) config.server.port = Number(env.PORT);
   if (env.PUBLISH_TIMEOUT_MS) config.server.publishTimeoutMs = Number(env.PUBLISH_TIMEOUT_MS);
   if (env.TI_DEFAULT_MODE) config.server.defaultMode = env.TI_DEFAULT_MODE;
-  if (env.SUPABASE_HISTORY_RETENTION) config.publishing.historyRetention = Number(env.SUPABASE_HISTORY_RETENTION);
+  if (env.SUPABASE_HISTORY_RETENTION) {
+    const retention = Number(env.SUPABASE_HISTORY_RETENTION);
+    config.publishing.historyRetention = retention;
+    config.analysis.strategicHistory.retention = retention;
+  }
   if (env.SUPABASE_FULL_SNAPSHOT_RETENTION) config.publishing.fullSnapshotRetention = Number(env.SUPABASE_FULL_SNAPSHOT_RETENTION);
+  return config;
+}
+
+function configuredHistoryRetention(source) {
+  if (!source || typeof source !== 'object') return undefined;
+  // The strategic-history setting is canonical. publishing.historyRetention
+  // remains a compatibility alias for older config files and scripts.
+  return source.analysis?.strategicHistory?.retention
+    ?? source.publishing?.historyRetention;
+}
+
+function synchronizeHistoryRetention(config, { userConfig, cliOverrides, env } = {}) {
+  const environmentRetention = env?.SUPABASE_HISTORY_RETENTION !== undefined && env.SUPABASE_HISTORY_RETENTION !== ''
+    ? Number(env.SUPABASE_HISTORY_RETENTION)
+    : undefined;
+  const retention = environmentRetention
+    ?? configuredHistoryRetention(cliOverrides)
+    ?? configuredHistoryRetention(userConfig);
+  if (retention !== undefined) {
+    config.publishing.historyRetention = retention;
+    config.analysis.strategicHistory.retention = retention;
+  }
   return config;
 }
 
@@ -165,6 +203,7 @@ function resolveConfig({ configPath = DEFAULT_CONFIG_PATH, env = process.env, cl
   if (userConfig?.schemaVersion === 1) merge(resolved, userConfig);
   applyEnvironment(resolved, env);
   merge(resolved, cliOverrides);
+  synchronizeHistoryRetention(resolved, { userConfig, cliOverrides, env });
   if (validateConfig) validate(resolved);
   return resolved;
 }
@@ -189,6 +228,7 @@ module.exports = {
   readJson,
   migrateLegacyConfig,
   resolveConfig,
+  synchronizeHistoryRetention,
   safeRuntimeConfig,
   validate
 };

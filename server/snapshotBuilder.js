@@ -876,7 +876,9 @@ class SnapshotBuilder {
       const fleetPowerScore = fCombatPower === null
         ? null
         : Math.min(100, Math.round((fCombatPower / scoreNormalizers.combatPower) * 100));
-      const militaryPowerScore = Math.min(100, Math.round((fNations.reduce((acc, n) => acc + (n.nukes || 0), 0) * scoreNormalizers.nukes)));
+      const militaryPowerScore = Math.min(100, Math.round(
+        (fNations.reduce((acc, n) => acc + (n.nukes || 0), 0) / scoreNormalizers.nukes) * 100
+      ));
 
       const scoreComponents = [
         [earthEconomyScore, scoreWeights.earthEconomy],

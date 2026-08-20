@@ -22,7 +22,8 @@ const state = {
   },
   runtime: {
     supportedModes: ['player', 'enhanced', 'omniscient'],
-    defaultMode: 'player'
+    defaultMode: 'player',
+    publishToken: null
   }
 };
 
@@ -258,7 +259,10 @@ function initEventListeners() {
       try {
         const publishResponse = await fetch('/api/publish', {
           method: 'POST',
-          headers: { Accept: 'application/json' }
+          headers: {
+            Accept: 'application/json',
+            ...(state.runtime.publishToken ? { 'X-TI-Publish-Token': state.runtime.publishToken } : {})
+          }
         });
         const publishPayload = await publishResponse.json().catch(() => ({}));
         if (!publishResponse.ok || publishPayload.success === false) {

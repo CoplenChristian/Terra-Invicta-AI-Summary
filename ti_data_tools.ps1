@@ -29,7 +29,7 @@ Import-Module -Name $commonModulePath -Force
 $config = Get-TIConfig -BasePath $scriptPath
 
 $WorkDir = $config.WorkDir
-if ($WorkDir -eq ".") { $WorkDir = $scriptPath }
+if (-not [IO.Path]::IsPathRooted($WorkDir)) { $WorkDir = Join-Path $scriptPath $WorkDir }
 
 $script:TIConfig = [ordered]@{
     # Root folder for this campaign
@@ -37,6 +37,10 @@ $script:TIConfig = [ordered]@{
 
     # Default export folder for latest CSVs
     ExportFolder    = $config.CsvSubDir
+
+    # Component templates live beside the configured export folder, not at a
+    # campaign-specific Ship_Info path.
+    ShipInfoFolder  = $config.paths.shipInfoSubDir
 
     # Path to summary Boost helper (already created)
     BoostHelperPath = "summarize_boost_income.ps1"
@@ -52,7 +56,8 @@ function Set-TIDataConfig {
     #>
     param(
         [string]$RootPath,
-        [string]$ExportFolder
+        [string]$ExportFolder,
+        [string]$ShipInfoFolder
     )
 
     if ($PSBoundParameters.ContainsKey('RootPath')) {
@@ -60,6 +65,9 @@ function Set-TIDataConfig {
     }
     if ($PSBoundParameters.ContainsKey('ExportFolder')) {
         $script:TIConfig.ExportFolder = $ExportFolder
+    }
+    if ($PSBoundParameters.ContainsKey('ShipInfoFolder')) {
+        $script:TIConfig.ShipInfoFolder = $ShipInfoFolder
     }
 }
 
@@ -311,7 +319,7 @@ function Get-TIShipComponentJson {
         [string]$FileName
     )
 
-    $relative = Join-Path "Ship_Info/raw_json" $FileName
+    $relative = Join-Path (Join-Path $script:TIConfig.ShipInfoFolder 'raw_json') $FileName
     $path = Get-TIDataPath -RelativePath $relative
     if (-not (Test-Path $path)) {
         Write-Verbose ("[Get-TIShipComponentJson] Missing file {0}" -f $path)

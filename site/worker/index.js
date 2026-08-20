@@ -83,7 +83,7 @@ const observerFile = (observerId, suffix) => {
 
 const corsHeaders = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-allow-headers': 'Content-Type, Authorization',
   'access-control-max-age': '86400'
 };
@@ -478,6 +478,8 @@ const buildIntelResource = (result, resource, url) => {
   return resourceEnvelope(result, resource, projection.items, query, projection);
 };
 
+const productionPlanPaths = new Set(['/api/intel/production-plan', '/api/production-plan']);
+
 const readRuntimeDefaults = async (env, request) => {
   const fallback = {
     campaignKey: env?.SUPABASE_CAMPAIGN_KEY || 'initiative',
@@ -826,8 +828,45 @@ export default {
 
     // Flat resource endpoints are designed for external analysis tools. Each
     // call returns one focused collection instead of the entire nested snapshot.
+    if (request.method === 'POST' && productionPlanPaths.has(url.pathname)) {
+      if (!isSupabaseConfigured) {
+        return jsonResponse({ success: false, error: 'Hosted Supabase is not configured.' }, 503);
+      }
+      let body = {};
+      try {
+        body = await request.json();
+      } catch (err) {
+        return jsonResponse({ success: false, error: 'Production-plan POST body must be valid JSON.' }, 400);
+      }
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return jsonResponse({ success: false, error: 'Production-plan POST body must be a JSON object.' }, 400);
+      }
+      const requestUrl = new URL(url.toString());
+      const design = body.designId || body.design || body.target;
+      if (design && !requestUrl.searchParams.has('design') && !requestUrl.searchParams.has('designId')) {
+        requestUrl.searchParams.set('design', String(design));
+      }
+      if (body.quantity !== undefined && !requestUrl.searchParams.has('quantity')) {
+        requestUrl.searchParams.set('quantity', String(body.quantity));
+      }
+      const quantity = Number(requestUrl.searchParams.get('quantity') || 1);
+      if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000) {
+        return jsonResponse({ success: false, error: 'Production quantity must be an integer from 1 to 1000.' }, 400);
+      }
+      try {
+        const result = await fetchFromSupabase(env, observerId, mode);
+        if (!result.found) return jsonResponse({ success: false, error: result.error }, result.status);
+        return jsonResponse(buildIntelResource(result, 'production-plan', requestUrl));
+      } catch (err) {
+        return jsonResponse({ success: false, error: err.message }, 500);
+      }
+    }
+
     const resource = intelResource(url.pathname);
     if (resource) {
+      if (request.method !== 'GET') {
+        return jsonResponse({ success: false, error: 'This intelligence resource accepts GET requests only.' }, 405);
+      }
       const queryError = validateResourceQuery(url);
       if (queryError) return jsonResponse({ success: false, error: queryError }, 400);
       if (!isSupabaseConfigured) {
@@ -889,8 +928,8 @@ export default {
           return jsonResponse({ success: false, error: err.message }, 500);
         }
       }
-      if (mode === 'omniscient') {
-        return jsonResponse({ success: false, error: 'Omniscient snapshots require the published Supabase backend.' }, 503);
+      if (mode !== 'player') {
+        return jsonResponse({ success: false, error: `${mode[0].toUpperCase()}${mode.slice(1)} snapshots require the published Supabase backend.` }, 503);
       }
       // Fallback to static Player Intel asset if Supabase is not configured.
       return asset(env, request, observerFile(observerId, 'snapshot'));
@@ -954,8 +993,8 @@ export default {
           return jsonResponse({ success: false, error: err.message }, 500);
         }
       }
-      if (mode === 'omniscient') {
-        return jsonResponse({ success: false, error: 'Omniscient exports require the published Supabase backend.' }, 503);
+      if (mode !== 'player') {
+        return jsonResponse({ success: false, error: `${mode[0].toUpperCase()}${mode.slice(1)} exports require the published Supabase backend.` }, 503);
       }
       const fileSuffix = format === 'full' ? 'export-full' : 'export-chatgpt';
       return asset(env, request, observerFile(observerId, fileSuffix));

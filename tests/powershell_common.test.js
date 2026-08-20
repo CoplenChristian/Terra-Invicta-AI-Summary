@@ -25,3 +25,26 @@ test('PowerShell common module loads central config and selects the newest save'
   if (probe.error?.code === 'ENOENT') return;
   assert.equal(probe.status, 0, probe.stderr || probe.stdout);
 });
+
+test('PowerShell common module merges the documented nested config shape', () => {
+  const root = path.resolve(__dirname, '..');
+  const probe = spawnSync('pwsh', ['-NoProfile', '-Command', `
+    $ErrorActionPreference = 'Stop'
+    Import-Module '${path.join(root, 'TerraInvicta.Common.psm1')}' -Force
+    $root = '${root}'
+    $folder = Join-Path ([IO.Path]::GetTempPath()) ('ti-powershell-config-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $folder | Out-Null
+    try {
+      $configPath = Join-Path $folder 'config.json'
+      '{"paths":{"savePath":"C:/configured/saves","shipInfoSubDir":"components"},"analysis":{"directiveWeights":{"topNCouncilTargets":5}}}' | Set-Content -LiteralPath $configPath
+      $config = Get-TIConfig -BasePath $root -ConfigPath $configPath
+      if ($config.paths.savePath -ne 'C:/configured/saves') { throw 'nested savePath was not merged' }
+      if ($config.paths.shipInfoSubDir -ne 'components') { throw 'nested shipInfoSubDir was not merged' }
+      if ($config.analysis.directiveWeights.topNCouncilTargets -ne 5) { throw 'nested directive weight was not merged' }
+    } finally {
+      Remove-Item -LiteralPath $folder -Recurse -Force
+    }
+  `], { encoding: 'utf8' });
+  if (probe.error?.code === 'ENOENT') return;
+  assert.equal(probe.status, 0, probe.stderr || probe.stdout);
+});

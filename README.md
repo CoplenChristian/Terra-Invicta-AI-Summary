@@ -33,7 +33,15 @@ Run the exporter to parse your save file and generate CSVs.
 ```powershell
 .\export_factions.ps1
 ```
-*This will create/update files in the `csv/` directory.*
+The exporter selects the newest `.gz` or `.json` save by default and writes to
+the configured CSV folder. Use `.\export_factions.ps1 -Latest` explicitly in
+automation, or `.\export_factions.ps1 -SaveNumber 2` for a numbered historical
+lookup. This will create/update files in the `csv/` directory.
+
+The standalone parsers (`parse_*.ps1`) use the same central configuration and
+selection rules. Values that are likely to change—paths, scoring weights,
+directive weights, capability mappings, and retention—belong in the nested
+JSON config; the defaults file documents the complete shape.
 
 ### 2. Load the Toolbox
 Load the analysis functions into your PowerShell session.

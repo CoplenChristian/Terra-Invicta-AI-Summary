@@ -4706,6 +4706,49 @@ body.intelligence-library-open {
 .directive-board-chip--hate { color: var(--warning); border-color: var(--warning); }
 .directive-board-chip--score { color: var(--accent); border-color: var(--accent); }
 
+.directive-board-reasoning {
+  border-left: 2px solid var(--accent);
+  padding-left: 12px;
+}
+
+.directive-board-reasoning-method {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.directive-board-reasoning-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.directive-board-reasoning-label {
+  color: var(--accent-strong);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.directive-board-reasoning-counts {
+  margin-top: 10px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.directive-board-reasoning-sources {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .directive-board-list {
   list-style: none;
   margin: 8px 0 0;

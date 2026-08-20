@@ -49,7 +49,7 @@
       "additionalProperties": false,
       "required": ["historyRetention", "fullSnapshotRetention", "observerModes", "otherFactionModes", "shareTechGraph"],
       "properties": {
-        "historyRetention": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "historyRetention": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "Compatibility alias; analysis.strategicHistory.retention is canonical and the loader keeps both values synchronized." },
         "fullSnapshotRetention": { "type": "integer", "minimum": 1, "maximum": 100 },
         "observerModes": { "type": "array", "items": { "enum": ["player", "enhanced", "omniscient"] }, "minItems": 1, "uniqueItems": true },
         "otherFactionModes": { "type": "array", "items": { "enum": ["player", "enhanced", "omniscient"] }, "uniqueItems": true },
@@ -63,12 +63,197 @@
       "properties": {
         "effects": { "type": "object", "additionalProperties": { "$ref": "#/$defs/effect" } },
         "strategicProjects": { "type": "array", "items": { "$ref": "#/$defs/project" }, "uniqueItems": true },
-        "rules": { "type": "object" },
-        "powerScore": { "type": "object", "required": ["weights", "normalizers"], "properties": { "weights": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } }, "normalizers": { "type": "object", "additionalProperties": { "type": "number", "exclusiveMinimum": 0 } } }, "additionalProperties": false },
-        "opportunityScoring": { "type": "object" },
-        "miningScarcityWeights": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } },
-        "directiveWeights": { "type": "object" },
-        "strategicHistory": { "type": "object" }
+        "rules": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["spaceAssets", "alienFacilities", "xenoforming"],
+          "properties": {
+            "spaceAssets": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["innerSystemDescription", "deepSystemDescription", "deepSystemImmediateReveal", "wikiSource"],
+              "properties": {
+                "innerSystemDescription": { "type": "string", "minLength": 1 },
+                "deepSystemDescription": { "type": "string", "minLength": 1 },
+                "deepSystemImmediateReveal": { "type": "boolean" },
+                "wikiSource": { "type": "string", "minLength": 1 }
+              }
+            },
+            "alienFacilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["requiresRegionDiscovery", "wikiSource"],
+              "properties": {
+                "requiresRegionDiscovery": { "type": "boolean" },
+                "wikiSource": { "type": "string", "minLength": 1 }
+              }
+            },
+            "xenoforming": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["requiresMilestone", "automaticVisibilityThreshold", "requiresRegionDiscovery", "wikiSource"],
+              "properties": {
+                "requiresMilestone": { "type": "string", "minLength": 1 },
+                "automaticVisibilityThreshold": { "type": "number", "minimum": 0 },
+                "requiresRegionDiscovery": { "type": "boolean" },
+                "wikiSource": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
+        "powerScore": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["weights", "normalizers"],
+          "properties": {
+            "weights": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["earthEconomy", "earthPolitics", "researchPower", "spaceEconomy", "fleetPower", "militaryPower"],
+              "properties": {
+                "earthEconomy": { "type": "number", "minimum": 0 },
+                "earthPolitics": { "type": "number", "minimum": 0 },
+                "researchPower": { "type": "number", "minimum": 0 },
+                "spaceEconomy": { "type": "number", "minimum": 0 },
+                "fleetPower": { "type": "number", "minimum": 0 },
+                "militaryPower": { "type": "number", "minimum": 0 }
+              }
+            },
+            "normalizers": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["gdp", "controlPoints", "research", "habs", "combatPower", "nukes"],
+              "properties": {
+                "gdp": { "type": "number", "exclusiveMinimum": 0 },
+                "controlPoints": { "type": "number", "exclusiveMinimum": 0 },
+                "research": { "type": "number", "exclusiveMinimum": 0 },
+                "habs": { "type": "number", "exclusiveMinimum": 0 },
+                "combatPower": { "type": "number", "exclusiveMinimum": 0 },
+                "nukes": { "type": "number", "exclusiveMinimum": 0 }
+              }
+            }
+          }
+        },
+        "opportunityScoring": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minimumScore", "scoreCap", "gdp", "targetControl", "nukes", "missionControl", "boost", "unrest", "cohesion", "research"],
+          "properties": {
+            "minimumScore": { "type": "number", "minimum": 0 },
+            "scoreCap": { "type": "number", "minimum": 0 },
+            "gdp": {
+              "type": "object", "additionalProperties": false,
+              "required": ["superpowerThresholdTrillion", "superpowerPoints", "majorThresholdTrillion", "majorPoints", "regionalThresholdBillion", "regionalPoints"],
+              "properties": {
+                "superpowerThresholdTrillion": { "type": "number", "minimum": 0 }, "superpowerPoints": { "type": "number", "minimum": 0 },
+                "majorThresholdTrillion": { "type": "number", "minimum": 0 }, "majorPoints": { "type": "number", "minimum": 0 },
+                "regionalThresholdBillion": { "type": "number", "minimum": 0 }, "regionalPoints": { "type": "number", "minimum": 0 }
+              }
+            },
+            "targetControl": {
+              "type": "object", "additionalProperties": false,
+              "required": ["executivePoints", "heldBasePoints", "heldPerControlPoint"],
+              "properties": {
+                "executivePoints": { "type": "number", "minimum": 0 }, "heldBasePoints": { "type": "number", "minimum": 0 }, "heldPerControlPoint": { "type": "number", "minimum": 0 }
+              }
+            },
+            "nukes": {
+              "type": "object", "additionalProperties": false,
+              "required": ["pointsPerBarrage", "pointCap"],
+              "properties": { "pointsPerBarrage": { "type": "number", "minimum": 0 }, "pointCap": { "type": "number", "minimum": 0 } }
+            },
+            "missionControl": {
+              "type": "object", "additionalProperties": false,
+              "required": ["threshold", "points"],
+              "properties": { "threshold": { "type": "number", "minimum": 0 }, "points": { "type": "number", "minimum": 0 } }
+            },
+            "boost": {
+              "type": "object", "additionalProperties": false,
+              "required": ["threshold", "points"],
+              "properties": { "threshold": { "type": "number", "minimum": 0 }, "points": { "type": "number", "minimum": 0 } }
+            },
+            "unrest": {
+              "type": "object", "additionalProperties": false,
+              "required": ["threshold", "points"],
+              "properties": { "threshold": { "type": "number", "minimum": 0 }, "points": { "type": "number", "minimum": 0 } }
+            },
+            "cohesion": {
+              "type": "object", "additionalProperties": false,
+              "required": ["threshold", "points"],
+              "properties": { "threshold": { "type": "number", "minimum": 0 }, "points": { "type": "number", "minimum": 0 } }
+            },
+            "research": {
+              "type": "object", "additionalProperties": false,
+              "required": ["threshold", "points"],
+              "properties": { "threshold": { "type": "number", "minimum": 0 }, "points": { "type": "number", "minimum": 0 } }
+            }
+          }
+        },
+        "miningScarcityWeights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["nobleMetals", "fissiles", "volatiles", "water", "metals"],
+          "properties": {
+            "nobleMetals": { "type": "number", "minimum": 0 },
+            "fissiles": { "type": "number", "minimum": 0 },
+            "volatiles": { "type": "number", "minimum": 0 },
+            "water": { "type": "number", "minimum": 0 },
+            "metals": { "type": "number", "minimum": 0 }
+          }
+        },
+        "directiveWeights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["totalWarSafetyMargin", "hateCrossing", "hatePoints", "valuePoints", "council", "unmetPreconditionPenalty", "intelligence", "resourcePoints", "topNCouncilTargets"],
+          "properties": {
+            "totalWarSafetyMargin": { "type": "number", "minimum": 0, "maximum": 1 },
+            "hateCrossing": {
+              "type": "object", "additionalProperties": false,
+              "required": ["staysUnder50", "crossing50", "crossing200"],
+              "properties": {
+                "staysUnder50": { "type": "number", "minimum": 0 }, "crossing50": { "type": "number", "minimum": 0 }, "crossing200": { "type": "number", "minimum": 0 }
+              }
+            },
+            "hatePoints": { "type": "number", "minimum": 0 },
+            "valuePoints": { "type": "number", "minimum": 0 },
+            "council": {
+              "type": "object", "additionalProperties": false,
+              "required": ["turn", "investigate", "proxyTargetBonus"],
+              "properties": {
+                "turn": { "type": "number", "minimum": 0 }, "investigate": { "type": "number", "minimum": 0 }, "proxyTargetBonus": { "type": "number", "minimum": 0 }
+              }
+            },
+            "unmetPreconditionPenalty": { "type": "number", "minimum": 0 },
+            "intelligence": {
+              "type": "object", "additionalProperties": false,
+              "required": ["unblockSightings", "escalateLateBonus", "detainAlien"],
+              "properties": {
+                "unblockSightings": { "type": "number", "minimum": 0 }, "escalateLateBonus": { "type": "number", "minimum": 0 }, "detainAlien": { "type": "number", "minimum": 0 }
+              }
+            },
+            "resourcePoints": { "type": "number", "minimum": 0 },
+            "topNCouncilTargets": { "type": "integer", "minimum": 1, "maximum": 100 }
+          }
+        },
+        "strategicHistory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["retention", "friendlyFleetDetail", "friendlyShipLedger", "hostileContactMinimumShips", "preserveHostileIfTargetingPlayer", "preserveHostileIfSameTheater", "preserveConstruction", "preserveResearchQueues", "preserveCouncilors", "preserveNations", "preserveShipComponents", "preserveStaticTechTree"],
+          "properties": {
+            "retention": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "Canonical strategic history retention. publishing.historyRetention is synchronized as a compatibility alias." },
+            "friendlyFleetDetail": { "type": "boolean" },
+            "friendlyShipLedger": { "type": "boolean" },
+            "hostileContactMinimumShips": { "type": "integer", "minimum": 0 },
+            "preserveHostileIfTargetingPlayer": { "type": "boolean" },
+            "preserveHostileIfSameTheater": { "type": "boolean" },
+            "preserveConstruction": { "type": "boolean" },
+            "preserveResearchQueues": { "type": "boolean" },
+            "preserveCouncilors": { "type": "boolean" },
+            "preserveNations": { "type": "boolean" },
+            "preserveShipComponents": { "type": "boolean" },
+            "preserveStaticTechTree": { "type": "boolean" }
+          }
+        }
       }
     }
   },

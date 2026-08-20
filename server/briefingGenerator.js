@@ -203,7 +203,8 @@ class BriefingGenerator {
         alternatives: engineResult.alternatives,
         rejected: engineResult.rejected,
         uncertain: engineResult.uncertain,
-        futureOpportunities: engineResult.futureOpportunities
+        futureOpportunities: engineResult.futureOpportunities,
+        decisionReasoning: engineResult.decisionReasoning
       },
       primaryDirective: directiveAdvisor.pickPrimaryDirective({
         geopolitical: geopoliticalDirectives,
@@ -386,7 +387,7 @@ class BriefingGenerator {
         id: 'geo',
         severity: holdProxy ? 'HOLD' : (targetEntries.length && targetFactionName ? 'CRITICAL' : 'WATCH'),
         title: holdProxy
-          ? `Hold proxy offensive vs ${targetFactionName}`
+          ? `Protect core holdings and stage the ${targetFactionName} operation`
           : targetEntries.length && targetFactionName
             ? `${targetFactionName} in ${targetEntries[0].nationName || 'an unidentified nation'}`
             : 'Priority theater',
@@ -463,12 +464,12 @@ class BriefingGenerator {
       directives.push({
         id: 'geo-hold',
         policyRank: 100,
-        title: `Hold proxy offensive vs ${targetFactionName} in ${t.nationName}`,
+        title: `Protect core holdings while preparing the ${targetFactionName} operation in ${t.nationName}`,
         category: 'ESCALATE LATE',
         severity: 'CRITICAL',
         target: t.nationName,
         statement: `${targetFactionName} still hold ${t.nationName || 'the identified nation'} ($${this.formatTargetGdp(t)}T GDP), but Crackdown/Purge against them feeds alien hate (${proxy.shareLabel}). Current posture: ${campaignPosture.reasons.join('; ')}. A Purge success would add ${purgeHate.label}; Crackdown ${crackdownHate.label}.`,
-        action: 'Do not Crackdown or Purge this proxy holding this cycle. Ward own majors with Defend Interests (0 template hate) and preserve the fleet until retaliation is survivable.',
+        action: `Assign Defend Interests to own majors, keep ${t.nationName} on the watch list, and prepare the proxy operation for the next survivable window.`,
         successFactor: 'SURVIVAL FIRST',
         missionType: 'Defend Interests',
         preparation: 'Assign Administration or Persuasion to executive nations. Leave the proxy holding on watch.',
@@ -483,15 +484,15 @@ class BriefingGenerator {
       directives.push(this.attachHateEstimate({
         id: 'geo-1',
         policyRank: 25,
-        title: `Watch ${targetFactionName} holding in ${t.nationName}`,
+        title: `Monitor ${targetFactionName} holding in ${t.nationName} and prepare a later operation`,
         category: 'DEFERRED — PROXY HATE',
         severity: 'WATCH',
         target: t.nationName,
         statement: `${t.nationName} remains a scored ${targetFactionName} holding, including ${t.isExecutiveTarget ? 'executive authority' : 'non-executive CPs'}. Offensive action is deferred while alien hate is elevated and the fleet is fragile.`,
-        action: 'Do not authorize Crackdown or Purge against this proxy until hate is ventable and the fleet can absorb retaliation.',
+        action: 'Prepare the target dossier and stage Crackdown or Purge for a window when hate is ventable and the fleet can absorb retaliation.',
         successFactor: 'DEFERRED',
         missionType: 'Crackdown / Purge',
-        preparation: 'Keep the target on the watch list; do not stage an Espionage offensive this cycle.',
+        preparation: 'Maintain the target watch list and build the dossier for the next survivable operation window.',
         window: 'Deferred',
         missionCost: 'UNAVAILABLE',
         policyNote: `${proxy.shareLabel}. ${purgeHate.note}`,
@@ -611,7 +612,7 @@ class BriefingGenerator {
       const attrs = agent.attributes || {};
       const holdProxy = campaignPosture?.escalateLate === true;
       const specialty = holdProxy
-        ? (attrs.Persuasion > 10 ? 'Public Campaign or Defend Interests' : 'Defend Interests / Advise Nation — do not Crackdown proxy factions while alien hate is elevated')
+        ? (attrs.Persuasion > 10 ? 'Public Campaign or Defend Interests' : 'Defend Interests / Advise Nation, then prepare a proxy operation for a survivable window')
         : (attrs.Persuasion > 10 ? 'Public Campaign' : (attrs.Espionage > 10 ? 'Crackdown / Sabotage' : 'Advise Nation'));
       directives.push({
         id: 'c-idle',
@@ -689,7 +690,7 @@ class BriefingGenerator {
         ? `Visible fleet combat power for ${observerLabel} is ${this.formatPower(fleetPower)} across ${ownFleets.length} fleet group${ownFleets.length === 1 ? '' : 's'}. ${escalateLate ? 'Doctrine is escalate late: ship count is not combat capability, but this force cannot be assumed to survive the retaliation cycle if proxy actions add more alien hate.' : ''}`
         : 'No own fleet groups are visible in this filtered snapshot; fleet posture cannot be confirmed.',
       action: escalateLate
-        ? 'Do not pick a fight you cannot survive afterward. Preserve experienced hulls, avoid growing used Mission Control, and do not feed Servants/Protectorate proxy hate.'
+        ? 'Prioritize fleet preservation: keep experienced hulls intact, limit new Mission Control, and stage proxy operations for a survivable window.'
         : ownFleets.length > 0
           ? 'Maintain a defensive patrol in a relevant inner-system orbit and assign intercept orders when a confirmed threat is identified.'
           : 'Obtain current fleet telemetry before issuing an orbital defense order.',
@@ -859,7 +860,7 @@ class BriefingGenerator {
         recOrder = 'Deploy to high-GDP nation to run Public Campaign or Defend Interests.';
       } else if (attrs.Espionage >= 12) {
         recOrder = campaignPosture?.escalateLate
-          ? 'Do not Crackdown or Purge Servants/Protectorate while alien hate is elevated and the fleet is fragile. Ward own majors or Purge a non-proxy human rival.'
+          ? 'Ward own majors and prepare a non-proxy operation while alien hate is elevated and the fleet is fragile.'
           : 'Deploy to hostile territory to execute Crackdown or Sabotage Facilities.';
       } else if (attrs.Investigation >= 12) {
         recOrder = 'Conduct Surveil Location or Investigate Councilor to unmask enemy moles.';

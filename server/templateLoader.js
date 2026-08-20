@@ -72,7 +72,14 @@ class TemplateLoader {
       process.env['ProgramFiles(x86)'],
       process.env.SystemDrive ? path.join(process.env.SystemDrive, 'SteamLibrary') : null
     ].filter(Boolean);
-    for (const root of steamRoots) candidates.push(path.join(root, installSuffix));
+    for (const root of steamRoots) {
+      // `STEAM_LIBRARY_PATH` is commonly the library root, while
+      // ProgramFiles/ProgramFiles(x86) usually points at the parent of the
+      // Steam installation. Probe both layouts without assuming a developer's
+      // drive letter.
+      candidates.push(path.join(root, installSuffix));
+      candidates.push(path.join(root, 'Steam', installSuffix));
+    }
 
     // Steam libraries are often installed on a secondary drive. Probe the
     // conventional library directory without baking a developer's drive into

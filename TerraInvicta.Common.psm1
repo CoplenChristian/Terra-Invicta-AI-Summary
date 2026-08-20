@@ -1,5 +1,16 @@
 Set-StrictMode -Version Latest
 
+function Test-TIConfigObject {
+    param([AllowNull()] $Value)
+
+    if ($null -eq $Value -or $Value -is [Array] -or
+        ($Value -isnot [pscustomobject] -and $Value -isnot [hashtable])) { return $false }
+    # ConvertFrom-Json returns PSCustomObject values. Enumerating the property
+    # collection is deliberate: under StrictMode the collection itself does not
+    # reliably expose a .Count property on every supported PowerShell build.
+    return @($Value.PSObject.Properties).Count -gt 0
+}
+
 function Merge-TIConfigObject {
     param(
         [Parameter(Mandatory)] $Base,
@@ -8,9 +19,9 @@ function Merge-TIConfigObject {
 
     foreach ($property in $Override.PSObject.Properties) {
         $existing = $Base.PSObject.Properties[$property.Name]
-        if ($null -ne $existing -and $null -ne $property.Value -and
-            $property.Value -isnot [Array] -and $property.Value.PSObject.Properties.Count -gt 0 -and
-            $existing.Value -isnot [Array] -and $existing.Value.PSObject.Properties.Count -gt 0) {
+        if ($null -ne $existing -and
+            (Test-TIConfigObject $property.Value) -and
+            (Test-TIConfigObject $existing.Value)) {
             Merge-TIConfigObject -Base $existing.Value -Override $property.Value
         } else {
             if ($null -ne $existing) {
@@ -43,6 +54,10 @@ function Get-TIConfig {
     }
 
     if ($null -ne $user) {
+        # The retired config/intelligence_capabilities.json shape may be passed
+        # explicitly as -ConfigPath. Its version/description metadata is
+        # intentionally ignored; its lowercase templatesPath is handled by
+        # PowerShell's case-insensitive property lookup below.
         $legacyMap = @{
             SavePath = @('paths', 'savePath'); WorkDir = @('paths', 'workDir');
             TemplatesPath = @('paths', 'templatesPath'); CsvSubDir = @('paths', 'csvSubDir');
@@ -54,7 +69,9 @@ function Get-TIConfig {
             if ($null -ne $property) {
                 Write-Warning "config.json key '$legacy' is deprecated; use the nested configuration shape."
                 $section = $defaults.PSObject.Properties[$legacyMap[$legacy][0]].Value
-                $section.($legacyMap[$legacy][1]) = if ([string]::IsNullOrWhiteSpace([string]$property.Value)) { $null } else { $property.Value }
+                $nestedKey = $legacyMap[$legacy][1]
+                $section.$nestedKey = if ([string]::IsNullOrWhiteSpace([string]$property.Value) -and
+                    $nestedKey -in @('savePath', 'templatesPath')) { $null } else { $property.Value }
             }
         }
         $nestedNames = @('paths', 'campaign', 'server', 'publishing', 'analysis')

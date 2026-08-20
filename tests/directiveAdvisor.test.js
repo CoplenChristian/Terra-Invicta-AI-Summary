@@ -293,7 +293,7 @@ test('briefing primary directive holds a Servant crackdown when hate is hot and 
   assert.ok(!/crackdown/i.test(briefing.primaryDirective.title), briefing.primaryDirective.title);
   assert.ok(!/severance/i.test(briefing.primaryDirective.title), briefing.primaryDirective.title);
   assert.equal(briefing.primaryDirective.missionType, 'Defend Interests');
-  assert.ok(/hold proxy/i.test(briefing.primaryDirective.title));
+  assert.ok(/protect core holdings/i.test(briefing.primaryDirective.title));
   assert.ok(briefing.directives.geopolitical.some((d) => d.id === 'geo-1' && d.severity === 'WATCH'));
   assert.match(briefing.directives.council[0].action, /Defend Interests/i);
 });

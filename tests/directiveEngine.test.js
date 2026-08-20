@@ -390,7 +390,7 @@ test('primary is never a prohibition and never null; live-shaped open-CP data pi
   assert.ok(!/^do not|^hold\b|^watch\b/i.test(result.primary.title) || result.primary.isFallback);
 });
 
-test('primary is the explicit no-safe-action candidate when everything generated is vetoed', () => {
+test('primary is the explicit positive preparation action when everything is blocked', () => {
   const cp = { id: 1, factionId: null, isExecutive: false, controlPointType: 'MassMedia' };
   const world = buildWorld({
     observerId: 4712,
@@ -399,7 +399,7 @@ test('primary is the explicit no-safe-action candidate when everything generated
     nations: [nation({ displayName: 'Italy', GDP: 1.4e9, population: 58.9, regionsCount: 0, controlPoints: [cp] })]
   });
   const result = runEngine(world);
-  assert.strictEqual(result.primary.id, 'no-safe-action');
+  assert.strictEqual(result.primary.id, 'prepare-next-action');
   assert.strictEqual(result.primary.isFallback, true);
   assert.notStrictEqual(result.primary, null);
   assert.ok(!/^do not/i.test(result.primary.title));
@@ -408,7 +408,7 @@ test('primary is the explicit no-safe-action candidate when everything generated
 test('primary is drawn from surviving, never from uncertain', () => {
   // One candidate the total-war-budget rule cannot measure (uncertain), and
   // no other candidates at all -- the engine must not promote the uncertain
-  // one to primary; it must fall back to no-safe-action.
+  // one to primary; it must fall back to a positive preparation action.
   const world = buildWorld({ observerId: 4712, posture: { totalWarProximity: 'unknown' } });
   const uncertainCandidate = {
     id: 'synthetic-uncertain',
@@ -528,4 +528,15 @@ test('directive scoring honors runtime-configured weights', () => {
   const baseScore = scoreCandidates(base, [candidate])[0].score;
   const tunedScore = scoreCandidates(tuned, [candidate])[0].score;
   assert.ok(tunedScore > baseScore, `expected tuned score ${tunedScore} to exceed ${baseScore}`);
+});
+
+test('fallback recommendation remains a positive preparation action with reasoning', () => {
+  const result = runEngine(buildWorld({
+    observerId: 4712,
+    nations: [nation({ displayName: 'Unformed', population: 0, regionsCount: 0, controlPoints: [{ id: 1, factionId: null, isExecutive: false, controlPointType: 'Executive' }] })]
+  }));
+  assert.equal(result.primary.id, 'prepare-next-action');
+  assert.match(result.primary.title, /prepare|protect/i);
+  assert.ok(result.decisionReasoning);
+  assert.match(result.decisionReasoning.summary, /positive preparation/i);
 });

@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 // Supabase-backed routes (strategic history) need SUPABASE_URL and a key.
 // The publish script already loads .env; the server did not, so those routes
@@ -54,6 +55,32 @@ let cachedSaveStatKey = null;
 let cachedPreviousRawSave = null;
 const filteredSnapshotCache = new Map();
 let activePublisherProcess = null;
+// A per-process token turns the local publish route into an explicit local
+// capability. The browser obtains it through the same-origin runtime probe;
+// a cross-origin form cannot set the custom header, so it cannot trigger the
+// service-role-backed publisher.
+const publishToken = crypto.randomBytes(32).toString('hex');
+
+function sameOrigin(req) {
+  const origin = req.get('origin');
+  if (origin) {
+    const expected = `${req.protocol}://${req.get('host')}`;
+    if (origin !== expected) return false;
+  }
+  const fetchSite = req.get('sec-fetch-site');
+  return !fetchSite || fetchSite === 'same-origin' || fetchSite === 'same-site' || fetchSite === 'none';
+}
+
+function hasValidPublishToken(req) {
+  const supplied = req.get('x-ti-publish-token') || '';
+  const expected = Buffer.from(publishToken, 'utf8');
+  const actual = Buffer.from(supplied, 'utf8');
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+function isPublishAuthorized(req) {
+  return sameOrigin(req) && hasValidPublishToken(req);
+}
 
 function requestContext(req) {
   const mode = requestValidation.parseMode(req.query.mode);
@@ -206,6 +233,7 @@ app.get('/api/runtime', (req, res) => {
     availableObservers: null,
     defaultMode: runtimeConfig.server.defaultMode,
     defaults: safeRuntimeConfig(runtimeConfig),
+    publishToken,
     source: 'express'
   });
 });
@@ -214,6 +242,12 @@ app.get('/api/runtime', (req, res) => {
 // push_latest_to_supabase.ps1. This endpoint exists only in the local
 // Express server; the hosted worker explicitly rejects it.
 app.post('/api/publish', (req, res) => {
+  if (!isPublishAuthorized(req)) {
+    return res.status(403).json({
+      success: false,
+      error: 'Publishing requires a same-origin request with the current local publish token.'
+    });
+  }
   if (activePublisherProcess) {
     return res.status(409).json({
       success: false,

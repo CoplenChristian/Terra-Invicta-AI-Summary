@@ -10,6 +10,8 @@ const {
 } = require('../shared/constants.mjs');
 
 const DEFAULT_OBSERVER_FACTION_ID = resolveConfig().campaign.defaultObserverFactionId;
+const RUNTIME_CONFIG = resolveConfig();
+const POWER_NORMALIZERS = RUNTIME_CONFIG.analysis.powerScore.normalizers;
 
 class IntelligenceFilter {
   applyFilter(rawSnapshot, mode = 'player', observerFactionId = DEFAULT_OBSERVER_FACTION_ID) {
@@ -565,14 +567,8 @@ class IntelligenceFilter {
 
   filterFactionSpaceMetrics(factions, rawSnapshot, visibleAssets, observerFactionId, capabilities, isEnhanced) {
     const alienFactionId = rawSnapshot.factions.find(f => f.displayName === ALIEN_FACTION_DISPLAY_NAME)?.ID;
-    const weights = rawSnapshot.factions.find(f => f.ID === observerFactionId)?.powerScore?.weights || {
-      earthEconomy: 0.20,
-      earthPolitics: 0.15,
-      researchPower: 0.20,
-      spaceEconomy: 0.15,
-      fleetPower: 0.20,
-      militaryPower: 0.10
-    };
+    const weights = rawSnapshot.factions.find(f => f.ID === observerFactionId)?.powerScore?.weights ||
+      RUNTIME_CONFIG.analysis.powerScore.weights;
     const hasFullSpaceVisibility = (factionId) =>
       isEnhanced || factionId === observerFactionId ||
       (factionId === alienFactionId && capabilities.canTrackSolarSystemSpaceAssets);
@@ -619,8 +615,8 @@ class IntelligenceFilter {
         powerScore: {
           ...faction.powerScore,
           overall: null,
-          spaceEconomy: Math.min(100, Math.round((visibleHabs.length / 20) * 100)),
-          fleet: Math.min(100, Math.round((visibleCombatPower / 3000) * 100))
+          spaceEconomy: Math.min(100, Math.round((visibleHabs.length / POWER_NORMALIZERS.habs) * 100)),
+          fleet: Math.min(100, Math.round((visibleCombatPower / POWER_NORMALIZERS.combatPower) * 100))
         },
         visibilityNote: 'Visible assets only; total faction strength is unknown.'
       };
@@ -631,7 +627,8 @@ class IntelligenceFilter {
     if (isEnhanced) return activeXenoforming.map(item => ({ ...item, visibility: 'enhanced telemetry' }));
     if (!capabilities.canDetectXenoforming) return [];
 
-    const threshold = capabilities.xenoformingAutomaticVisibilityThreshold || 65;
+    const threshold = capabilities.xenoformingAutomaticVisibilityThreshold ??
+      RUNTIME_CONFIG.analysis.rules.xenoforming.automaticVisibilityThreshold;
     return activeXenoforming
       .filter(item => !capabilities.xenoformingRequiresRegionDiscovery ||
         this.knownRegion(observerIntelligence, item.regionId) ||

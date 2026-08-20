@@ -75,6 +75,10 @@ class CapabilityResolver {
     }
 
     const capabilities = {
+      // Preserve every configured output key, including capabilities added by
+      // a campaign config that this resolver did not know when it was written.
+      // The built-in aliases below remain for backwards-compatible consumers.
+      ...configuredCapabilities,
       // Alien ground intelligence
       canDetectAlienAbductions,
       canDetectAlienHumanContacts,
@@ -129,7 +133,18 @@ class CapabilityResolver {
   }
 
   getDefaultCapabilities() {
+    const rules = templateLoader.config.analysis?.rules || {};
+    const xenoformingRule = rules.xenoforming || {};
+    const facilityRule = rules.alienFacilities || {};
+    const configuredDefaults = Object.fromEntries(
+      Object.values(templateLoader.config.analysis?.effects || {})
+        .map(descriptor => [
+          descriptor.outputKey || `can${descriptor.capability?.[0]?.toUpperCase() || ''}${descriptor.capability?.slice(1) || ''}`,
+          false
+        ])
+    );
     return {
+      ...configuredDefaults,
       canDetectAlienAbductions: false,
       canDetectAlienHumanContacts: false,
       canDetectAlienOperations: false,
@@ -140,9 +155,9 @@ class CapabilityResolver {
       canIdentifyHumanMissions: true,
       canDetectAlienFacilities: false,
       canDetectXenoforming: false,
-      xenoformingAutomaticVisibilityThreshold: 65,
-      facilityRequiresRegionDiscovery: true,
-      xenoformingRequiresRegionDiscovery: true,
+      xenoformingAutomaticVisibilityThreshold: xenoformingRule.automaticVisibilityThreshold ?? 65,
+      facilityRequiresRegionDiscovery: facilityRule.requiresRegionDiscovery !== false,
+      xenoformingRequiresRegionDiscovery: xenoformingRule.requiresRegionDiscovery !== false,
       canTrackInnerSpaceAssets: false,
       canTrackSolarSystemSpaceAssets: false,
       canInspectEnemyHabs: false,

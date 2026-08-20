@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const { createClient } = require('@supabase/supabase-js');
 const { resolveConfig } = require('../server/config');
@@ -85,15 +86,26 @@ function splitTechTree(modeData, fingerprint) {
 }
 
 function techGraphFingerprint(techTree) {
-  const nodes = Array.isArray(techTree?.nodes) ? techTree.nodes : [];
-  // Cheap, stable identity: node count plus a rolling hash of the ids. Enough
-  // to detect a game-template change without hashing a megabyte of payload.
-  let hash = 0x811c9dc5;
-  for (const node of nodes) {
-    const id = String(node?.id || '');
-    for (let i = 0; i < id.length; i++) hash = Math.imul(hash ^ id.charCodeAt(i), 0x01000193) >>> 0;
-  }
-  return `tg:${nodes.length}:${hash.toString(16)}`;
+  const canonicalize = (value) => {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalize(value[key])]));
+    }
+    return value;
+  };
+  const graph = {
+    nodes: Array.isArray(techTree?.nodes)
+      ? [...techTree.nodes].sort((left, right) => String(left?.id || '').localeCompare(String(right?.id || '')))
+      : [],
+    categories: techTree?.categories || {},
+    unlockClasses: techTree?.unlockClasses || {}
+  };
+  // Include all graph content, not just IDs. Prerequisites, costs, effects,
+  // categories, and unlock classes can change in a template patch while the
+  // node set remains identical.
+  const serialized = JSON.stringify(canonicalize(graph));
+  const digest = crypto.createHash('sha256').update(serialized, 'utf8').digest('hex').slice(0, 32);
+  return `tg:sha256:${digest}`;
 }
 
 async function withSupabaseRetry(label, operation, attempts = 4) {
@@ -178,6 +190,7 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
     observerFactionId: Number(env.SUPABASE_OBSERVER_FACTION_ID)
       || PUBLISH_POLICY.observerFactionId,
     historyRetention: Number(env.SUPABASE_HISTORY_RETENTION)
+      || runtimeConfig.analysis.strategicHistory.retention
       || runtimeConfig.publishing.historyRetention || DEFAULT_HISTORY_POLICY.retention,
     fullSnapshotRetention: Number(env.SUPABASE_FULL_SNAPSHOT_RETENTION)
       || runtimeConfig.publishing.fullSnapshotRetention || 3,
@@ -720,4 +733,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, parseArgs, usage, applyTechTreeMode };
+module.exports = { main, parseArgs, usage, applyTechTreeMode, techGraphFingerprint };

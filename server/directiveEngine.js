@@ -25,8 +25,9 @@
  *               shared/alienHateEconomics.mjs for the same discipline).
  *
  * `primary` is always drawn from `surviving` candidates, so it is always an
- * action. If every generated candidate is vetoed, `no-safe-action` is
- * returned explicitly -- never null, never an empty state.
+ * action. If every generated candidate is vetoed, a positive preparation
+ * action is returned explicitly -- never a negative prohibition. Rejected and
+ * uncertain candidates remain explanatory evidence under decisionReasoning.
  *
  * Pure module: no I/O, no network, no filesystem. Only requires
  * ./directiveAdvisor, ./alienHateEconomics, and node builtins, so the same
@@ -875,7 +876,9 @@ function applyRules(world, candidates) {
  * value and hateCost come from the applicable 'score' rules; resourceCost is
  * computed directly here from candidate.cost, since none of the six named
  * rules cover it and it is a straightforward ratio rather than a judgement
- * ladder. A candidate whose cost amount is unfillable (Turn/Investigate's
+ * ladder. It is recorded as a calculated breakdown entry so the explanation
+ * can show the cost that lowered a recommendation's score. A candidate whose
+ * cost amount is unfillable (Turn/Investigate's
  * bonus cost, per plan §4) or whose stock is unmeasured contributes 0 to
  * resourceCost -- score-neutral, not a claim that the cost is actually zero
  * (the safety-relevant version of "can we afford this" is the
@@ -895,43 +898,85 @@ function scoreCandidates(world, candidates) {
     const breakdown = scoreRules.map((rule) => ({
       ruleId: rule.id,
       contribution: rule.evaluate(world, candidate),
-      reason: rule.because(world, candidate)
+      reason: rule.because(world, candidate),
+      source: rule.source,
+      estimateClass: rule.estimateClass
     }));
     const resourceCost = computeResourceCost(world, candidate);
-    const total = breakdown.reduce((sum, entry) => sum + (Number.isFinite(entry.contribution) ? entry.contribution : 0), 0)
-      - resourceCost;
+    if (resourceCost > 0) {
+      breakdown.push({
+        ruleId: 'resource-cost',
+        contribution: -resourceCost,
+        reason: `Consumes ${resourceCost.toFixed(2)} configured resource-cost points.`,
+        source: 'directiveEngine objective function',
+        estimateClass: 'calculated'
+      });
+    }
+    const total = breakdown.reduce((sum, entry) => sum + (Number.isFinite(entry.contribution) ? entry.contribution : 0), 0);
     return { ...candidate, score: total, scoreBreakdown: breakdown, resourceCost };
   });
 }
 
 /**
  * The explicit fallback when every generated candidate is vetoed. Never
- * null, never an empty state, and its title names an action (hold and
- * preserve posture) rather than reading as a bare prohibition -- the same
- * structural fix the plan describes for the old geo-hold directive.
+ * null, never an empty state, and its title names a preparation action rather
+ * than reading as a bare prohibition -- the same structural fix the plan
+ * describes for the old geo-hold directive.
  *
  * `family` doesn't fit the normal expansion/council/intelligence split; it
  * is tagged 'council' as the closest fit (this is posture-level advice, not
  * a specific mission), and callers can key off `isFallback` instead of
  * `family` if they need to distinguish it.
  */
-function buildNoSafeActionCandidate(world, rejected, uncertain) {
+function buildPreparationFallbackCandidate(world, rejected, uncertain) {
   return {
-    id: 'no-safe-action',
+    id: 'prepare-next-action',
     family: 'council',
-    missionType: 'Hold',
-    title: 'No safe action survives this cycle -- hold and preserve posture',
+    missionType: 'Prepare',
+    title: 'Protect strategic posture and prepare the next actionable move',
+    recommendation: 'Maintain defensive coverage, resolve the missing intelligence, and revisit the highest-value operation next cycle.',
     target: { kind: 'none', nation: null, faction: null, controlPointType: null, isExecutive: null },
     hate: { toAliens: { low: 0, high: 0 }, note: 'Holding spends no hate.' },
     cost: null,
     value: { rejectedCount: rejected.length, uncertainCount: uncertain.length },
     score: null,
     provenance: {
-      source: 'directiveEngine fallback -- every generated candidate this cycle was vetoed or is unmeasurable',
+      source: 'directiveEngine preparation fallback -- every generated candidate this cycle was vetoed or is unmeasurable',
       estimateClass: 'exact'
     },
     unmetPreconditions: [],
     isFallback: true
+  };
+}
+
+function buildDecisionReasoning(primary, alternatives, rejected, uncertain, futureOpportunities, candidateCount) {
+  const breakdown = Array.isArray(primary?.scoreBreakdown) ? primary.scoreBreakdown : [];
+  const factors = breakdown.filter(entry => Number(entry.contribution) > 0);
+  const tradeoffs = breakdown.filter(entry => Number(entry.contribution) < 0);
+  const sources = [...new Set([
+    primary?.provenance?.source,
+    ...breakdown.map(entry => entry.source),
+    ...((primary?.provenance?.confidenceDowngradedBy || []).map(String))
+  ].filter(Boolean))];
+  const counts = {
+    generated: candidateCount,
+    recommended: primary && !primary.isFallback ? 1 : 0,
+    alternatives: alternatives.length,
+    uncertain: uncertain.length,
+    rejected: rejected.length,
+    future: futureOpportunities.length
+  };
+  return {
+    heading: 'Why this action',
+    summary: primary?.isFallback
+      ? 'No mission could be fully cleared from the available evidence, so the recommendation is a positive preparation step: protect the current posture and resolve the blockers.'
+      : `${primary.title} ranks highest among the candidates that cleared the available safety and legality checks.`,
+    selectionMethod: 'The engine combines configured value, alien-hate exposure, resource cost, and readiness. Rejected or unmeasurable candidates are shown as trade-offs, never as recommendations.',
+    factors,
+    tradeoffs,
+    counts,
+    confidence: primary?.provenance?.confidenceDowngradedBy?.length ? 'conditional' : 'supported',
+    sources
   };
 }
 
@@ -1021,7 +1066,7 @@ function runEngine(world) {
     const sorted = [...scoredSurviving].sort((a, b) => b.score - a.score);
     [primary, ...alternatives] = sorted;
   } else {
-    primary = buildNoSafeActionCandidate(world, rejectedCandidates, scoredUncertain);
+    primary = buildPreparationFallbackCandidate(world, rejectedCandidates, scoredUncertain);
     alternatives = [];
   }
 
@@ -1030,7 +1075,15 @@ function runEngine(world) {
     alternatives,
     rejected: rejectedCandidates,
     uncertain: scoredUncertain,
-    futureOpportunities
+    futureOpportunities,
+    decisionReasoning: buildDecisionReasoning(
+      primary,
+      alternatives,
+      rejectedCandidates,
+      scoredUncertain,
+      futureOpportunities,
+      candidates.length
+    )
   };
 }
 
@@ -1045,6 +1098,7 @@ module.exports = {
   applyRules,
   scoreCandidates,
   runEngine,
+  buildDecisionReasoning,
   // Exposed for tests and for callers (e.g. a future UI) that want the
   // shared posture formatter without re-deriving it.
   formatShipPosture: directiveAdvisor.formatShipPosture

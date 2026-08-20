@@ -103,7 +103,12 @@ async function main() {
   }
 
   const saves = [...bySave.entries()].sort((a, b) => new Date(a[0]) - new Date(b[0]));
-  const retention = options.retention || Math.max(saves.length, 20);
+  const configuredRetention = options.config.analysis?.strategicHistory?.retention
+    ?? options.config.publishing?.historyRetention;
+  if (!Number.isInteger(configuredRetention) || configuredRetention < 1) {
+    throw new Error('Strategic history retention is missing from configuration. Set analysis.strategicHistory.retention.');
+  }
+  const retention = options.retention || Math.max(saves.length, configuredRetention);
   console.log(`Found ${saves.length} save(s). Retention for this run: ${retention}.\n`);
 
   let previous = null;

@@ -1,8 +1,26 @@
 param(
-    [string]$ProjectsCsvPath = "csv/Again_Resistance_Projects.csv",
-    [string]$JsonDir = "Ship_Info/raw_json",
-    [string]$OutputPath = "csv/Again_Unlocked_Ship_Components.csv"
+    [string]$ProjectsCsvPath = $null,
+    [string]$JsonDir = $null,
+    [string]$OutputPath = $null
 )
+
+$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+Import-Module (Join-Path $scriptPath 'TerraInvicta.Common.psm1') -Force
+$config = Get-TIConfig -BasePath $scriptPath
+$workDir = if ([IO.Path]::IsPathRooted($config.paths.workDir)) {
+    $config.paths.workDir
+} else {
+    Join-Path $scriptPath $config.paths.workDir
+}
+$ProjectsCsvPath = if ($ProjectsCsvPath) { $ProjectsCsvPath } else {
+    Join-Path $workDir (Join-Path $config.paths.csvSubDir 'Again_Resistance_Projects.csv')
+}
+$JsonDir = if ($JsonDir) { $JsonDir } else {
+    Join-Path $workDir (Join-Path $config.paths.shipInfoSubDir 'raw_json')
+}
+$OutputPath = if ($OutputPath) { $OutputPath } else {
+    Join-Path $workDir (Join-Path $config.paths.csvSubDir 'Again_Unlocked_Ship_Components.csv')
+}
 
 Write-Host "Reading projects from $ProjectsCsvPath..."
 $completedProjects = @{}

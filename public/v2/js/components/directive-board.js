@@ -3,16 +3,15 @@
  * ---------------
  * Renders the rule engine's output (server/directiveEngine.js).
  *
- * The point of the board is that the headline is always an ACTION. The old
- * priority directive could surface "Hold proxy offensive vs the Servants in
- * Japan" -- a prohibition standing in for a recommendation. Here the engine
- * guarantees the primary is drawn from candidates that survived every veto,
- * and what was vetoed is shown separately, with the rule that killed it and
- * that rule's source.
+ * The point of the board is that the headline is always a constructive ACTION.
+ * The reason an attractive alternative was deferred is shown separately as
+ * decision reasoning, with the rule that changed its ranking and that rule's
+ * source.
  *
  * Three lists, and the distinction between them is the whole design:
- *   - REJECTED   a veto fired. We know this is not available or not wise.
- *   - UNCERTAIN  a veto could not be evaluated. Not the same as safe, so
+ *   - TRADE-OFFS a veto fired. This is evidence for the explanation, not a
+ *                negative recommendation.
+ *   - MORE DATA  a veto could not be evaluated. Not the same as safe, so
  *                these never become the recommendation, but they are shown
  *                rather than dropped.
  *   - FUTURE     unformed nations. Real opportunities that do not exist yet.
@@ -83,7 +82,6 @@
     if (!candidate) {
       return '<div class="alien-hate-econ-empty">NO ENGINE OUTPUT</div>';
     }
-    const breakdown = Array.isArray(candidate.scoreBreakdown) ? candidate.scoreBreakdown : [];
     return `
       <div class="directive-board-primary">
         <div class="alien-hate-econ-eyebrow">RECOMMENDED ACTION</div>
@@ -96,9 +94,36 @@
           <span class="directive-board-chip directive-board-chip--score">score ${scoreLabel(candidate)}</span>
         </div>
         ${renderPreconditions(candidate)}
-        ${breakdown.length ? `<ul class="directive-board-reasons">${
-          breakdown.map(b => `<li><span class="directive-board-rule">${escapeHtml(b.ruleId)}</span> ${escapeHtml(b.reason)}</li>`).join('')
-        }</ul>` : ''}
+      </div>`;
+  }
+
+  function renderDecisionReasoning(reasoning) {
+    if (!reasoning) return '';
+    const factors = Array.isArray(reasoning.factors) ? reasoning.factors : [];
+    const tradeoffs = Array.isArray(reasoning.tradeoffs) ? reasoning.tradeoffs : [];
+    const sources = Array.isArray(reasoning.sources) ? reasoning.sources : [];
+    const counts = reasoning.counts || {};
+    const factorRows = factors.map(entry => `<li><span class="directive-board-rule">${escapeHtml(entry.ruleId)}</span> ${escapeHtml(entry.reason || 'Positive contribution')}</li>`).join('');
+    const tradeoffRows = tradeoffs.map(entry => `<li><span class="directive-board-rule">${escapeHtml(entry.ruleId)}</span> ${escapeHtml(entry.reason || 'Trade-off')}</li>`).join('');
+    const countText = [
+      `${counts.generated ?? 0} considered`,
+      `${counts.alternatives ?? 0} other actions available`,
+      `${counts.uncertain ?? 0} needing more data`,
+      `${counts.rejected ?? 0} trade-offs`,
+      `${counts.future ?? 0} future opportunities`
+    ].join(' · ');
+    const sourceRows = sources.map(source => `<li>${escapeHtml(source)}</li>`).join('');
+    return `
+      <div class="alien-hate-econ-section directive-board-reasoning">
+        <div class="alien-hate-econ-section-heading">${escapeHtml(reasoning.heading || 'WHY THIS ACTION')}</div>
+        <div class="alien-hate-econ-note">${escapeHtml(reasoning.summary || '')}</div>
+        <div class="directive-board-reasoning-method">${escapeHtml(reasoning.selectionMethod || '')}</div>
+        <div class="directive-board-reasoning-grid">
+          ${factorRows ? `<div><div class="directive-board-reasoning-label">SUPPORTING FACTORS</div><ul class="directive-board-reasons">${factorRows}</ul></div>` : ''}
+          ${tradeoffRows ? `<div><div class="directive-board-reasoning-label">TRADE-OFFS IN THE SCORE</div><ul class="directive-board-reasons">${tradeoffRows}</ul></div>` : ''}
+        </div>
+        <div class="directive-board-reasoning-counts">${escapeHtml(countText)} · confidence: ${escapeHtml(reasoning.confidence || 'unknown')}</div>
+        ${sourceRows ? `<div class="directive-board-reasoning-sources"><div class="directive-board-reasoning-label">RULE SOURCES</div><ul class="directive-board-reasons">${sourceRows}</ul></div>` : ''}
       </div>`;
   }
 
@@ -148,14 +173,15 @@
     root.innerHTML = `
       <div class="directive-board">
         ${renderPrimary(result.primary)}
+        ${renderDecisionReasoning(result.decisionReasoning)}
         ${altRows ? renderSection('ALSO AVAILABLE', null, altRows) : ''}
         ${uncertainRows ? renderSection(
-          'CANNOT BE CLEARED',
-          'A veto could not be evaluated from this save. Unknown is not the same as safe, so these are never recommended — but they are not hidden either.',
+          'MORE DATA WOULD UNLOCK THESE ACTIONS',
+          'A safety check needs information this save does not expose. These are not negative recommendations; they are opportunities to revisit after the missing evidence is available.',
           uncertainRows
         ) : ''}
         ${rejectedRows ? renderSection(
-          'CONSIDERED AND REJECTED',
+          'TRADE-OFFS CONSIDERED',
           rejected.length > 6 ? `Showing 6 of ${rejected.length}.` : null,
           rejectedRows
         ) : ''}
