@@ -272,12 +272,16 @@
     if (resolved?.effective && Object.hasOwn(resolved.effective, skill)) {
       const orgBonus = numberValue(resolved.orgBonuses?.[skill]) || 0;
       const traitBonus = numberValue(resolved.traitBonuses?.[skill]) || 0;
+      // Realized increase, which the 0-25 cap can clip below org+trait.
+      const applied = resolved.appliedBonus?.[skill];
       return {
         value: numberValue(resolved.effective[skill]),
         base: numberValue(resolved.base?.[skill]),
         orgBonus,
         traitBonus,
-        bonus: orgBonus + traitBonus,
+        bonus: typeof applied === 'number' ? applied : orgBonus + traitBonus,
+        capped: resolved.capped?.[skill] === true,
+        uncapped: numberValue(resolved.uncapped?.[skill]),
         masked: false,
         orgsInactive: resolved.orgsActive === false
       };
@@ -298,6 +302,7 @@
     const parts = [`${detail.base} base`];
     if (detail.orgBonus) parts.push(`${detail.orgBonus > 0 ? '+' : ''}${detail.orgBonus} orgs`);
     if (detail.traitBonus) parts.push(`${detail.traitBonus > 0 ? '+' : ''}${detail.traitBonus} traits`);
+    if (detail.capped) parts.push(`capped at 25 (would be ${detail.uncapped})`);
     const bonus = total !== 0
       ? `<span class="mc-skill-org${total < 0 ? ' is-negative' : ''}" title="${escapeHtml(parts.join(', '))}">${total > 0 ? '+' : ''}${escapeHtml(String(total))}</span>`
       : '';

@@ -54,6 +54,16 @@ export const ORG_STAT_TO_ATTRIBUTE = Object.freeze({
   sec: 'Security'
 });
 
+// Councilor attributes run on a 0-25 scale. The wiki states the limit
+// explicitly ("the usual stat limitation of being between 0 and 25"), and the
+// save bears it out: no base attribute exceeds 25, and although raw
+// base+org+trait sums reach 31, no councilor anywhere holds more than 25 org
+// tiers -- which is what capacity would allow if Administration ran past 25.
+export const ATTRIBUTE_MIN = 0;
+export const ATTRIBUTE_MAX = 25;
+
+const clampAttribute = (value) => Math.min(ATTRIBUTE_MAX, Math.max(ATTRIBUTE_MIN, value));
+
 const zeroed = () => ATTRIBUTE_NAMES.reduce((acc, name) => {
   acc[name] = 0;
   return acc;
@@ -183,9 +193,21 @@ export function buildCouncilorAttributes(councilor, { traitStatMods = null } = {
   const traitResult = sumTraitBonuses(councilor?.traits, traitStatMods);
   const traitBonuses = traitResult.totals;
 
+  // Sum, then clamp to the 0-25 scale. Both are kept: `effective` is what the
+  // game acts on and what anything ranking or ordering councilors must use,
+  // while `uncapped` preserves how much bonus was nominally available so a
+  // clamped councilor is distinguishable from one sitting exactly at the cap.
+  const uncapped = zeroed();
   const effective = zeroed();
+  const appliedBonus = zeroed();
+  const capped = {};
   for (const name of ATTRIBUTE_NAMES) {
-    effective[name] = base[name] + orgBonuses[name] + traitBonuses[name];
+    uncapped[name] = base[name] + orgBonuses[name] + traitBonuses[name];
+    effective[name] = clampAttribute(uncapped[name]);
+    // The realized increase, which is what a display should show: a councilor
+    // at 20 base with +8 of orgs gains 5, not 8.
+    appliedBonus[name] = effective[name] - base[name];
+    capped[name] = uncapped[name] !== effective[name];
   }
 
   const usedTiers = orgs.reduce((sum, org) => sum + (num(org?.tier) ?? 0), 0);
@@ -196,6 +218,16 @@ export function buildCouncilorAttributes(councilor, { traitStatMods = null } = {
     orgBonuses,
     traitBonuses,
     effective,
+    uncapped,
+    appliedBonus,
+    capped,
+    attributeMax: ATTRIBUTE_MAX,
+    // Sum of the seven mission attributes (Loyalty is a defence stat, not a
+    // mission one) using effective values, so any "total skills" ranking
+    // matches the per-attribute figures shown beside it.
+    totalEffectiveSkills: ATTRIBUTE_NAMES
+      .filter(name => name !== 'Loyalty')
+      .reduce((sum, name) => sum + effective[name], 0),
     orgsActive: active,
     orgCount: orgs.length,
     orgCapacity: {

@@ -254,3 +254,75 @@ test('per-trait breakdown records which traits granted what', () => {
   assert.deepStrictEqual(byTrait.CognitiveEnhancer, { Science: 3 });
   assert.ok(!byTrait.Indulgent, 'a conditional-only trait contributes nothing');
 });
+
+// --- The 0-25 attribute scale -----------------------------------------------
+// The wiki states the limit ("the usual stat limitation of being between 0 and
+// 25"), and the save agrees: no base attribute exceeds 25, and although raw
+// base+org+trait sums reach 31, no councilor holds more than 25 org tiers --
+// which capacity would allow if Administration ran past 25.
+
+test('effective attributes are clamped to the 0-25 scale', () => {
+  const maxed = buildCouncilorAttributes(councilor({
+    attributes: { Administration: 20 },
+    traits: [],
+    orgs: [{ id: 1, tier: 3, statBonuses: { adm: 8 } }]
+  }));
+  assert.strictEqual(maxed.uncapped.Administration, 28, 'nominal sum is preserved');
+  assert.strictEqual(maxed.effective.Administration, 25, 'clamped to the scale');
+  assert.strictEqual(maxed.capped.Administration, true);
+});
+
+test('the displayed bonus is the realized increase, not the nominal one', () => {
+  // 20 base with +8 of orgs gains 5, not 8. Showing 8 would claim a gain the
+  // councilor never receives and misorder rankings against an uncapped peer.
+  const { appliedBonus, orgBonuses } = buildCouncilorAttributes(councilor({
+    attributes: { Administration: 20 },
+    traits: [],
+    orgs: [{ id: 1, tier: 3, statBonuses: { adm: 8 } }]
+  }));
+  assert.strictEqual(orgBonuses.Administration, 8, 'nominal');
+  assert.strictEqual(appliedBonus.Administration, 5, 'realized');
+});
+
+test('negative modifiers cannot push an attribute below zero', () => {
+  const floored = buildCouncilorAttributes(
+    councilor({ attributes: { Persuasion: 1 }, traits: ['AwkwardGenius'], orgs: [] }),
+    { traitStatMods: TRAIT_MODS }
+  );
+  assert.strictEqual(floored.uncapped.Persuasion, -2);
+  assert.strictEqual(floored.effective.Persuasion, 0);
+  assert.strictEqual(floored.capped.Persuasion, true);
+});
+
+test('an uncapped attribute reports no clamping', () => {
+  const { capped, uncapped, effective, appliedBonus } = buildCouncilorAttributes(councilor());
+  assert.strictEqual(capped.Science, false);
+  assert.strictEqual(uncapped.Science, effective.Science);
+  assert.strictEqual(appliedBonus.Science, 1, 'org bonus applied in full');
+});
+
+test('total skills sum effective values and exclude Loyalty', () => {
+  // The snapshot's own totalSkills is a base-only sum; ranking on it while
+  // showing org-inclusive per-attribute values labels and orders differently.
+  const resolved = buildCouncilorAttributes(councilor({ traits: [], orgs: [] }));
+  const expected = ['Persuasion', 'Investigation', 'Espionage', 'Command',
+    'Administration', 'Science', 'Security']
+    .reduce((sum, name) => sum + resolved.effective[name], 0);
+  assert.strictEqual(resolved.totalEffectiveSkills, expected);
+  assert.ok(resolved.totalEffectiveSkills < expected + resolved.effective.Loyalty,
+    'Loyalty is a defence stat, not a mission one');
+});
+
+test('ranking respects the cap', () => {
+  // Two councilors whose nominal sums differ but who both clamp to 25 must tie
+  // on effective rather than being ordered by unreachable nominal values.
+  const roster = [
+    councilor({ ID: 1, displayName: 'Nominally 31', attributes: { Science: 23 }, traits: [],
+      orgs: [{ id: 1, tier: 3, statBonuses: { sci: 8 } }] }),
+    councilor({ ID: 2, displayName: 'Nominally 26', attributes: { Science: 24 }, traits: [],
+      orgs: [{ id: 2, tier: 3, statBonuses: { sci: 2 } }] })
+  ];
+  const ranked = rankByAttribute(roster, 'Science', { factionId: 4712 });
+  assert.strictEqual(ranked[0].effective, 25);
+  assert.strictEqual(ranked[1].effective, 25, 'both clamp to the same ceiling');
+});

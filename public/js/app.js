@@ -633,12 +633,18 @@ function attrDetail(councilor, attrName) {
     const base = Number(resolved.base?.[attrName]) || 0;
     const orgBonus = Number(resolved.orgBonuses?.[attrName]) || 0;
     const traitBonus = Number(resolved.traitBonuses?.[attrName]) || 0;
+    // The realized increase, which differs from org+trait wherever the 0-25
+    // cap clips it. Showing the nominal sum would claim a gain the councilor
+    // never actually receives.
+    const applied = resolved.appliedBonus?.[attrName];
     return {
       value: Number(resolved.effective[attrName]),
       base,
       orgBonus,
       traitBonus,
-      bonus: orgBonus + traitBonus,
+      bonus: typeof applied === 'number' ? applied : orgBonus + traitBonus,
+      capped: resolved.capped?.[attrName] === true,
+      uncapped: Number(resolved.uncapped?.[attrName]),
       orgsInactive: resolved.orgsActive === false,
       known: true
     };
@@ -666,11 +672,24 @@ function formatEffectiveAttr(councilor, attrName) {
     const parts = [`${detail.base} base`];
     if (detail.orgBonus) parts.push(`${detail.orgBonus > 0 ? '+' : ''}${detail.orgBonus} from equipped orgs`);
     if (detail.traitBonus) parts.push(`${detail.traitBonus > 0 ? '+' : ''}${detail.traitBonus} from traits`);
+    if (detail.capped) parts.push(`capped at 25 (would be ${detail.uncapped})`);
     const sign = detail.bonus > 0 ? '+' : '';
     const cls = detail.bonus > 0 ? 'attr-org-bonus' : 'attr-org-bonus is-negative';
     return `${detail.value}<span class="${cls}" title="${parts.join(', ')}">${sign}${detail.bonus}</span>`;
   }
   return String(detail.value);
+}
+
+/**
+ * Sum of the seven mission attributes using effective values. The snapshot's
+ * totalSkills is a base-only sum, so ranking on it while displaying
+ * org-inclusive per-attribute values labels councilors with one metric and
+ * orders them by another.
+ */
+function effectiveTotalSkills(councilor) {
+  const resolved = councilor?.resolvedAttributes;
+  if (typeof resolved?.totalEffectiveSkills === 'number') return resolved.totalEffectiveSkills;
+  return Number(councilor?.totalSkills) || 0;
 }
 
 /** Numeric effective value for sorting. -1 keeps unknowns at the bottom. */
@@ -768,7 +787,7 @@ function renderCouncilorsScreen() {
   councilors.sort((a, b) => {
     let cmp = 0;
     if (sortKey === 'totalSkills' || sortKey === 'total') {
-      cmp = (b.totalSkills || 0) - (a.totalSkills || 0);
+      cmp = effectiveTotalSkills(b) - effectiveTotalSkills(a);
     } else if (sortKey === 'persuasion' || sortKey === 'per') {
       cmp = getRawAttr(b, 'Persuasion') - getRawAttr(a, 'Persuasion');
     } else if (sortKey === 'investigation' || sortKey === 'inv') {
@@ -874,7 +893,7 @@ function renderCouncilorsMainCards(councilors) {
         <div style="margin-top: auto; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 11px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <span style="color: var(--text-muted);">Active Skills Sum:</span>
-            <strong style="color: var(--color-initiative); font-family: var(--font-mono); font-size: 12px;">${c.totalSkills || 0}</strong>
+            <strong style="color: var(--color-initiative); font-family: var(--font-mono); font-size: 12px;">${effectiveTotalSkills(c)}</strong>
           </div>
 
           ${c.traits && c.traits.length > 0 ? `
@@ -935,7 +954,7 @@ function renderCouncilorsMainTable(councilors) {
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Science')}</td>
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Security')}</td>
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Loyalty')}</td>
-        <td style="text-align: center; font-family: var(--font-mono); font-weight: 700; color: var(--color-initiative);">${c.totalSkills || 0}</td>
+        <td style="text-align: center; font-family: var(--font-mono); font-weight: 700; color: var(--color-initiative);">${effectiveTotalSkills(c)}</td>
         <td style="text-align: center;" title="${(c.orgs || []).map(o => escapeHtml(o.displayName)).join(', ')}">${c.orgs?.length || 0}</td>
         <td title="${(c.traits || []).map(escapeHtml).join(', ')}">${(c.traits || []).slice(0, 2).map(escapeHtml).join(', ')}${c.traits?.length > 2 ? '...' : ''}</td>
       </tr>
@@ -1006,7 +1025,7 @@ function openCouncilorModal(councilorId) {
     <div style="margin-bottom: 20px;">
       <div style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--color-initiative); margin-bottom: 10px; display: flex; justify-content: space-between;">
         <span>SKILLS & ATTRIBUTES (0 - 25 SCALE)</span>
-        <span>Total Active Skills: ${c.totalSkills || 0}</span>
+        <span>Total Active Skills: ${effectiveTotalSkills(c)}</span>
       </div>
       <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-dim); border-radius: 6px; padding: 12px;">
         ${renderBar('Administration', 'Administration', '#00e5ff')}

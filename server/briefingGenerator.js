@@ -8,6 +8,7 @@
 
 const snapshotIdentity = require('./snapshotIdentity');
 const strategicIntelligence = require('./strategicIntelligence');
+const directiveAdvisor = require('./directiveAdvisor');
 
 class BriefingGenerator {
   generateMissionControlBriefing(snapshot = {}, rawSnapshot = null) {
@@ -38,6 +39,13 @@ class BriefingGenerator {
     const capabilities = snapshot.capabilities || {};
     const identity = snapshotIdentity.readSnapshotIdentity(rawSnapshot || snapshot);
     const strategic = strategicIntelligence.build(snapshot, observerId);
+    const campaignPosture = directiveAdvisor.assessCampaignPosture({
+      alienHateEconomics: snapshot.alienHateEconomics,
+      observer,
+      observerHate: observer.alienHate,
+      factions,
+      fleets
+    });
 
     const getPowerOverall = (f) => {
       if (!f) return null;
@@ -106,7 +114,8 @@ class BriefingGenerator {
       councilors,
       habs,
       fleets,
-      habSites
+      habSites,
+      campaignPosture
     });
 
     // 2. Department Directives (Actionable Statements)
@@ -117,10 +126,11 @@ class BriefingGenerator {
       observer,
       observerName,
       councilors,
-      observerId
+      observerId,
+      { campaignPosture, factions, targetFaction }
     );
-    const councilDirectives = this.buildCouncilDirectives(councilors, observerId);
-    const spaceDirectives = this.buildSpaceDirectives(habs, fleets, habSites, observer, observerName);
+    const councilDirectives = this.buildCouncilDirectives(councilors, observerId, campaignPosture);
+    const spaceDirectives = this.buildSpaceDirectives(habs, fleets, habSites, observer, observerName, campaignPosture);
     const researchDirectives = this.buildResearchDirectives(globalResearch, observer, activeAlienStages, {
       mode,
       capabilities
@@ -138,7 +148,7 @@ class BriefingGenerator {
     );
 
     // 4. Operative Roster with Tactical Recommendations
-    const operativeRoster = this.buildOperativeRoster(councilors, observerId);
+    const operativeRoster = this.buildOperativeRoster(councilors, observerId, campaignPosture);
 
     return {
       ...identity,
@@ -164,7 +174,13 @@ class BriefingGenerator {
       },
       theaters: theaterStatus,
       operatives: operativeRoster,
-      primaryDirective: geopoliticalDirectives[0] || councilDirectives[0] || spaceDirectives[0] || researchDirectives[0] || null,
+      campaignPosture,
+      primaryDirective: directiveAdvisor.pickPrimaryDirective({
+        geopolitical: geopoliticalDirectives,
+        council: councilDirectives,
+        space: spaceDirectives,
+        research: researchDirectives
+      }),
       strategic,
       changesSincePrevious: snapshot.changesSincePrevious || { available: false, message: 'No previous snapshot comparison is available.' }
     };
@@ -195,7 +211,9 @@ class BriefingGenerator {
       councilors = [],
       habs = [],
       fleets = [],
-      habSites = []
+      habSites = [],
+      campaignPosture = null,
+      targetFaction = null
     } = ctx;
 
     const visibleCouncilors = this.asArray(councilors);
@@ -332,14 +350,19 @@ class BriefingGenerator {
 
     const idleOwn = ownCouncilors.filter(c => this.isIdleCouncilor(c)).length;
     const observerShort = String(observerLabel || '').replace(/^the\s+/i, '');
+    const holdProxy = campaignPosture?.escalateLate === true && targetEntries.length > 0 && targetFactionName;
     const threatCards = [
       {
         id: 'geo',
-        severity: targetEntries.length && targetFactionName ? 'CRITICAL' : 'WATCH',
-        title: targetEntries.length && targetFactionName
-          ? `${targetFactionName} in ${targetEntries[0].nationName || 'an unidentified nation'}`
-          : 'Priority theater',
-        statement: p2.replace(/^PRIORITY THEATER (ALERT|STATUS):\s*/i, '')
+        severity: holdProxy ? 'HOLD' : (targetEntries.length && targetFactionName ? 'CRITICAL' : 'WATCH'),
+        title: holdProxy
+          ? `Hold proxy offensive vs ${targetFactionName}`
+          : targetEntries.length && targetFactionName
+            ? `${targetFactionName} in ${targetEntries[0].nationName || 'an unidentified nation'}`
+            : 'Priority theater',
+        statement: holdProxy
+          ? `Crackdown/Purge vs ${targetFactionName} would feed alien hate (${directiveAdvisor.classifyProxy(targetFaction || { displayName: targetFactionName }).shareLabel}) while ${directiveAdvisor.formatShipPosture(campaignPosture)}. ${campaignPosture.reasons[0]}.`
+          : p2.replace(/^PRIORITY THEATER (ALERT|STATUS):\s*/i, '')
       },
       {
         id: 'alien',
@@ -382,44 +405,120 @@ class BriefingGenerator {
     };
   }
 
-  buildGeopoliticalDirectives(servantTargets, nations, targetFactionName, observer, observerName = null, councilors = [], observerId = null) {
+  attachHateEstimate(directive, missionType, proxy) {
+    const estimate = directiveAdvisor.expectedAlienHate(missionType, proxy);
+    return {
+      ...directive,
+      expectedAlienHate: estimate.label,
+      expectedAlienHateNote: estimate.note,
+      policyNote: estimate.feedsProxyHate ? estimate.note : (directive.policyNote || null)
+    };
+  }
+
+  buildGeopoliticalDirectives(servantTargets, nations, targetFactionName, observer, observerName = null, councilors = [], observerId = null, context = {}) {
     const directives = [];
     const targets = this.asArray(servantTargets);
     const factionLabel = targetFactionName || 'the selected opposing faction';
     const observerLabel = observerName || observer?.displayName || 'the selected faction';
     const resolvedObserverId = observerId ?? observer?.ID;
+    const campaignPosture = context.campaignPosture || {};
+    const targetFaction = context.targetFaction || { displayName: targetFactionName };
+    const proxy = directiveAdvisor.classifyProxy(targetFaction);
+    const escalateLate = campaignPosture.escalateLate === true && proxy.share > 0 && proxy.share < 1;
+    const purgeHate = directiveAdvisor.expectedAlienHate('Purge', proxy);
+    const crackdownHate = directiveAdvisor.expectedAlienHate('Crackdown', proxy);
 
-    // Target 1: Top visible opposing holding
-    if (targets.length > 0 && targetFactionName) {
+    if (escalateLate && targets.length > 0 && targetFactionName) {
+      const t = targets[0];
+      directives.push({
+        id: 'geo-hold',
+        policyRank: 100,
+        title: `Hold proxy offensive vs ${targetFactionName} in ${t.nationName}`,
+        category: 'ESCALATE LATE',
+        severity: 'CRITICAL',
+        target: t.nationName,
+        statement: `${targetFactionName} still hold ${t.nationName || 'the identified nation'} ($${this.formatTargetGdp(t)}T GDP), but Crackdown/Purge against them feeds alien hate (${proxy.shareLabel}). Current posture: ${campaignPosture.reasons.join('; ')}. A Purge success would add ${purgeHate.label}; Crackdown ${crackdownHate.label}.`,
+        action: 'Do not Crackdown or Purge this proxy holding this cycle. Ward own majors with Defend Interests (0 template hate) and preserve the fleet until retaliation is survivable.',
+        successFactor: 'SURVIVAL FIRST',
+        missionType: 'Defend Interests',
+        preparation: 'Assign Administration or Persuasion to executive nations. Leave the proxy holding on watch.',
+        window: 'Until fleet posture can survive open war',
+        missionCost: 'UNAVAILABLE',
+        expectedAlienHate: 'none (Defend Interests)',
+        expectedAlienHateNote: 'Defend Interests success-slot hate is 0. Crackdown/Purge vs this proxy is deferred because it feeds alien hate.',
+        policyNote: campaignPosture.reasons.join(' · '),
+        eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Administration', 'Persuasion', 'Security'])
+      });
+
+      directives.push(this.attachHateEstimate({
+        id: 'geo-1',
+        policyRank: 25,
+        title: `Watch ${targetFactionName} holding in ${t.nationName}`,
+        category: 'DEFERRED — PROXY HATE',
+        severity: 'WATCH',
+        target: t.nationName,
+        statement: `${t.nationName} remains a scored ${targetFactionName} holding, including ${t.isExecutiveTarget ? 'executive authority' : 'non-executive CPs'}. Offensive action is deferred while alien hate is elevated and the fleet is fragile.`,
+        action: 'Do not authorize Crackdown or Purge against this proxy until hate is ventable and the fleet can absorb retaliation.',
+        successFactor: 'DEFERRED',
+        missionType: 'Crackdown / Purge',
+        preparation: 'Keep the target on the watch list; do not stage an Espionage offensive this cycle.',
+        window: 'Deferred',
+        missionCost: 'UNAVAILABLE',
+        policyNote: `${proxy.shareLabel}. ${purgeHate.note}`,
+        eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Espionage', 'Investigation'])
+      }, 'Crackdown / Purge', proxy));
+
+      const alt = directiveAdvisor.findHumanNonProxyTarget(nations, context.factions, resolvedObserverId);
+      if (alt) {
+        directives.push(this.attachHateEstimate({
+          id: 'geo-human',
+          policyRank: 70,
+          title: `Optional human target: ${alt.nationName} (${alt.executiveFactionName})`,
+          category: 'NON-PROXY PURGE',
+          severity: 'HIGH',
+          target: alt.nationName,
+          statement: `${alt.nationName} ($${(alt.gdpTrillion).toFixed(1)}T GDP) is held by ${alt.executiveFactionName}, which does not share hate with the aliens the way ${proxy.label} do.`,
+          action: `If an Earth offensive is still required this cycle, Purge ${alt.executiveFactionName} in ${alt.nationName} rather than ${proxy.label}.`,
+          successFactor: 'NO PROXY HATE SHARE',
+          missionType: 'Purge',
+          preparation: 'Confirm the executive CP and assign Espionage. Influence cost remains UNAVAILABLE.',
+          window: 'This cycle, only if a councilor is free after warding own majors',
+          missionCost: 'UNAVAILABLE',
+          eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Espionage'])
+        }, 'Purge', alt.proxy));
+      }
+    } else if (targets.length > 0 && targetFactionName) {
       const t = targets[0];
       const targetCpCount = this.firstAvailableNumber(t.targetCPCount, t.servantCPCount);
       const unrest = this.toFiniteNumber(t.unrest);
-      directives.push({
+      directives.push(this.attachHateEstimate({
         id: 'geo-1',
+        policyRank: 90,
         title: `Authorize Operation 'Severance' in ${t.nationName}`,
         category: 'CRACKDOWN & PURGE',
         severity: 'CRITICAL',
         target: t.nationName,
-        statement: `${t.nationName || 'The identified nation'} ($${this.formatTargetGdp(t)}T GDP) holds ${targetCpCount === null ? 'an unknown number of' : targetCpCount} ${targetFactionName} control point${targetCpCount === 1 ? '' : 's'}${t.isExecutiveTarget ? ', including Executive authority' : ''}. Stability data is ${unrest === null ? 'unavailable' : unrest > 4 ? 'degraded (Unrest: ' + unrest + ')' : 'not critically degraded'}.`,
+        statement: `${t.nationName || 'The identified nation'} ($${this.formatTargetGdp(t)}T GDP) holds ${targetCpCount === null ? 'an unknown number of' : targetCpCount} ${targetFactionName} control point${targetCpCount === 1 ? '' : 's'}${t.isExecutiveTarget ? ', including Executive authority' : ''}. Stability data is ${unrest === null ? 'unavailable' : unrest > 4 ? 'degraded (Unrest: ' + unrest + ')' : 'not critically degraded'}. ${proxy.share > 0 ? `Expected alien hate from a Purge success: ${purgeHate.label}.` : ''}`,
         action: `Deploy a suitable ${observerLabel} operative to investigate the holding and execute a visible crackdown or purge only when the current target data supports it.`,
         successFactor: unrest !== null && unrest > 4 ? 'HIGH (Vulnerable to subversion)' : 'MODERATE',
         missionType: 'Crackdown / Purge',
         preparation: 'Confirm executive control, then assign an idle Espionage or Investigation operative in-theater.',
         window: unrest !== null && unrest > 4 ? 'This cycle — unrest is already degraded' : 'This cycle',
         missionCost: 'UNAVAILABLE',
+        policyNote: proxy.share > 0 ? purgeHate.note : null,
         eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Espionage', 'Investigation', 'Command'])
-      });
+      }, 'Crackdown / Purge', proxy));
     }
 
-    // Target 2: Secondary visible holding
     if (targets.length > 1 && targetFactionName) {
       const t2 = targets[1];
       const targetCpCount = this.firstAvailableNumber(t2.targetCPCount, t2.servantCPCount);
-      directives.push({
+      directives.push(this.attachHateEstimate({
         id: 'geo-2',
+        policyRank: escalateLate ? 45 : 60,
         title: `Containment Sweep in ${t2.nationName}`,
         category: 'PUBLIC CAMPAIGN',
-        severity: 'HIGH',
+        severity: escalateLate ? 'WATCH' : 'HIGH',
         target: t2.nationName,
         statement: `${targetFactionName} maintain${targetCpCount === 1 ? 's' : ''} ${targetCpCount === null ? 'an unknown number of' : targetCpCount} control point${targetCpCount === 1 ? '' : 's'} in ${t2.nationName || 'the identified nation'} ($${this.formatTargetGdp(t2)}T GDP).`,
         action: `Deploy a high-Persuasion ${observerLabel} councilor on a visible Public Campaign mission if the current intelligence picture confirms the opportunity.`,
@@ -429,15 +528,15 @@ class BriefingGenerator {
         window: 'This cycle',
         missionCost: 'UNAVAILABLE',
         eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Persuasion', 'Administration'])
-      });
+      }, 'Public Campaign', proxy));
     }
 
-    // General defense / data-quality directive
-    directives.push({
+    directives.push(this.attachHateEstimate({
       id: 'geo-3',
+      policyRank: escalateLate ? 75 : 40,
       title: `Protect ${observerLabel} Core Holdings`,
       category: 'DEFEND INTERESTS',
-      severity: 'STANDARD',
+      severity: escalateLate ? 'HIGH' : 'STANDARD',
       target: 'Core National Holdings',
       statement: targetFactionName
         ? `Unprotected control points in high-GDP nations remain susceptible to rival operations, including ${factionLabel} activity where visible.`
@@ -446,15 +545,15 @@ class BriefingGenerator {
       successFactor: 'GUARANTEED PROTECTION',
       missionType: 'Defend Interests',
       preparation: 'Confirm executive nations, then assign an Administration or Persuasion operative to ward them.',
-      window: 'Standing order',
+      window: escalateLate ? 'This cycle — first Earth action' : 'Standing order',
       missionCost: 'UNAVAILABLE',
       eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Administration', 'Persuasion', 'Security'])
-    });
+    }, 'Defend Interests', { share: 0, label: observerLabel }));
 
     return directives;
   }
 
-  buildCouncilDirectives(councilors, observerId) {
+  buildCouncilDirectives(councilors, observerId, campaignPosture = {}) {
     const directives = [];
     const visibleCouncilors = this.asArray(councilors);
     const ownCouncilors = visibleCouncilors.filter(c => this.isOwnCouncilor(c, observerId));
@@ -470,7 +569,8 @@ class BriefingGenerator {
         severity: 'CRITICAL',
         statement: `Turned operative ${m.displayName} remains embedded inside ${m.factionName} hierarchy at location ${m.locationName}. Current mission telemetry: ${m.activeMissionName || 'Standby'}.`,
         action: 'Maintain intelligence surveillance stream. Use known enemy movement schedules to preempt hostile council actions.',
-        successFactor: 'CONFIRMED STREAM'
+        successFactor: 'CONFIRMED STREAM',
+        policyRank: 95
       });
     }
 
@@ -479,14 +579,22 @@ class BriefingGenerator {
     if (idleAgents.length > 0) {
       const agent = idleAgents[0];
       const attrs = agent.attributes || {};
+      const holdProxy = campaignPosture?.escalateLate === true;
+      const specialty = holdProxy
+        ? (attrs.Persuasion > 10 ? 'Public Campaign or Defend Interests' : 'Defend Interests / Advise Nation — do not Crackdown proxy factions while alien hate is elevated')
+        : (attrs.Persuasion > 10 ? 'Public Campaign' : (attrs.Espionage > 10 ? 'Crackdown / Sabotage' : 'Advise Nation'));
       directives.push({
         id: 'c-idle',
+        policyRank: holdProxy ? 50 : 55,
         title: `Assign Mission Orders to ${agent.displayName} (${agent.typeTemplateName})`,
         category: 'OPERATIVE ASSIGNMENT',
         severity: 'HIGH',
         statement: `${agent.displayName} is currently stationed in ${agent.locationName || 'an unknown location'} with no active operations queued (Skills: ADM ${attrs.Administration ?? 'UNAVAILABLE'}, PER ${attrs.Persuasion ?? 'UNAVAILABLE'}, ESP ${attrs.Espionage ?? 'UNAVAILABLE'}).`,
-        action: `Deploy on a priority mission matched to specialty: ${attrs.Persuasion > 10 ? 'Public Campaign' : (attrs.Espionage > 10 ? 'Crackdown / Sabotage' : 'Advise Nation')}.`,
-        successFactor: 'IMMEDIATE'
+        action: `Deploy on a priority mission matched to specialty: ${specialty}.`,
+        successFactor: 'IMMEDIATE',
+        missionType: holdProxy ? 'Defend Interests' : (attrs.Persuasion > 10 ? 'Public Campaign' : (attrs.Espionage > 10 ? 'Crackdown / Purge' : 'Advise')),
+        missionCost: 'UNAVAILABLE',
+        expectedAlienHate: holdProxy ? 'none (Defend Interests)' : 'depends on target'
       });
     }
 
@@ -500,14 +608,15 @@ class BriefingGenerator {
         severity: 'STANDARD',
         statement: `${masterAgent.displayName} (${masterAgent.typeTemplateName}) possesses our highest operational skill rating with ${masterAgent.orgs?.length || 0} assigned organizations.`,
         action: `Assign to spearhead critical superpower acquisition or council turn operations.`,
-        successFactor: 'PEAK EFFICIENCY'
+        successFactor: 'PEAK EFFICIENCY',
+        policyRank: 15
       });
     }
 
     return directives;
   }
 
-  buildSpaceDirectives(habs, fleets, habSites, observer, observerName = null) {
+  buildSpaceDirectives(habs, fleets, habSites, observer, observerName = null, campaignPosture = {}) {
     const directives = [];
     const visibleHabs = this.asArray(habs);
     const visibleFleets = this.asArray(fleets);
@@ -536,18 +645,25 @@ class BriefingGenerator {
     });
 
     // Directive 2: Orbital Fleet Readiness
+    const escalateLate = campaignPosture?.escalateLate === true;
     directives.push({
       id: 'sp-2',
-      title: `Orbital Defense Squadron Posture (${ownFleets.length} Fleets Active)`,
+      policyRank: escalateLate ? 85 : 35,
+      title: escalateLate
+        ? `Preserve the fleet — escalate late (${directiveAdvisor.formatShipPosture(campaignPosture)})`
+        : `Orbital Defense Squadron Posture (${ownFleets.length} Fleets Active)`,
       category: 'SPACE DEFENSE',
-      severity: 'STANDARD',
+      severity: escalateLate ? 'CRITICAL' : 'STANDARD',
       statement: ownFleets.length > 0
-        ? `Visible fleet combat power for ${observerLabel} is ${this.formatPower(fleetPower)} across ${ownFleets.length} fleet group${ownFleets.length === 1 ? '' : 's'}.`
+        ? `Visible fleet combat power for ${observerLabel} is ${this.formatPower(fleetPower)} across ${ownFleets.length} fleet group${ownFleets.length === 1 ? '' : 's'}. ${escalateLate ? 'Doctrine is escalate late: ship count is not combat capability, but this force cannot be assumed to survive the retaliation cycle if proxy actions add more alien hate.' : ''}`
         : 'No own fleet groups are visible in this filtered snapshot; fleet posture cannot be confirmed.',
-      action: ownFleets.length > 0
-        ? 'Maintain a defensive patrol in a relevant inner-system orbit and assign intercept orders when a confirmed threat is identified.'
-        : 'Obtain current fleet telemetry before issuing an orbital defense order.',
-      successFactor: ownFleets.length > 0 ? 'DETERRENCE' : 'INTELLIGENCE REQUIRED'
+      action: escalateLate
+        ? 'Do not pick a fight you cannot survive afterward. Preserve experienced hulls, avoid growing used Mission Control, and do not feed Servants/Protectorate proxy hate.'
+        : ownFleets.length > 0
+          ? 'Maintain a defensive patrol in a relevant inner-system orbit and assign intercept orders when a confirmed threat is identified.'
+          : 'Obtain current fleet telemetry before issuing an orbital defense order.',
+      successFactor: escalateLate ? 'SURVIVAL FIRST' : (ownFleets.length > 0 ? 'DETERRENCE' : 'INTELLIGENCE REQUIRED'),
+      policyNote: escalateLate ? campaignPosture.reasons.join(' · ') : null
     });
 
     return directives;
