@@ -14,6 +14,28 @@ Written 2026-08-20 against commit `16050e2`.
 
 ---
 
+## 0a. Scope: estimate, don't abstain
+
+**The engine does not need to be deterministic. It needs to suggest the best course of action it can calculate.** That is a deliberate relaxation and it changes several decisions below.
+
+The distinction that matters is **facts versus recommendations**:
+
+| | Rule |
+| --- | --- |
+| **Displayed facts** | Never fabricated. Unmeasured hate is `null`, not `0`. This discipline stays absolute — it is what the `c3d21bc` and `countShips` defects were both about |
+| **Recommendations** | May be built on estimates and stated assumptions. A labelled estimate beats an honest refusal to answer |
+
+Consequences:
+
+- **`unknown` no longer benches a candidate.** In v1 an unevaluable veto moved a candidate to `uncertain`, which could never be recommended. v2 keeps `unknown` as a *confidence* signal but still lets the candidate be recommended, with the unmeasured term named. Reserve hard vetoes for **irreversible** consequences — crossing Total War, illegal actions — where being wrong cannot be undone.
+- **Unmodelled modifiers get assumed values, not infinite bands.** §4a.5's uncertainty allowance should be a stated typical value, not a band so wide it says nothing.
+- **Masked enemy attributes get an estimate.** Player mode hides a defender's Loyalty; assume a campaign-typical value, label it as assumed, and recommend anyway. "Roughly 30%, assuming average Loyalty" is more useful than "unknown".
+- **Weights do not need derivation.** They are judgement, they live in config, they are marked heuristic, and that is sufficient. Stop treating their unprovenness as a blocker.
+
+What this does **not** license: presenting an estimate as a measurement, or hiding that an assumption was made. Every estimated term names itself in the reasoning.
+
+---
+
 ## 1. Module structure
 
 v1 is one file doing generation, rules, scoring and selection. v2 needs that split, because the assignment layer has to see all candidates at once.
@@ -258,9 +280,47 @@ The wiki's "Base Difficulty" column is the defence-side `TIMissionModifier_FlatM
 | 25 | 17 | 25 − 32 = −7 | **8.4%** |
 | 15 | 10 | 15 − 25 = −10 | **3.9%** |
 
-Against a well-defended councilor Turn is close to hopeless, and its expected hate is `P(fail) × 3` — which at 8% success is ~2.8, i.e. **more than a Crackdown**. Crackdown has base 0 and Purge base 3, so the "hate-free axis" is far cheaper in odds than the "hate-bearing" one.
+### Measured against the live campaign
 
-The engine must therefore rank on **expected** value, not on hate alone. A 5% Turn is not a recommendation; it is a way to spend a councilor-turn and gain hate. This is the strongest argument for pulling V2-6 earlier in the order.
+Enemy attribute medians across all **36** enemy councilors (omniscient mode, so these are real values, not assumptions):
+
+| Attribute | Median | Mean | Range |
+| --- | --- | --- | --- |
+| Loyalty | **11** | 9.3 | 0–20 |
+| Administration | **14** | 16.0 | 6–25 |
+| Security | 8 | 8.1 | 0–22 |
+| Espionage | 7 | 8.5 | 1–19 |
+| Science | 4 | 5.1 | 0–17 |
+| Command | 5 | 5.1 | 1–14 |
+
+Turn against a median target: defence is `11 Loyalty + 15 base = 26`.
+
+| Our Persuasion | diff | Turn success |
+| --- | --- | --- |
+| 15 | −11 | **3.0%** |
+| 20 | −6 | **10.8%** |
+| 25 *(our best)* | −1 | **38.8%** |
+
+Crackdown against a median target: defence is `14 Administration + 0 base = 14`.
+
+| Our Investigation | diff | Crackdown success |
+| --- | --- | --- |
+| 15 | +1 | 61.3% |
+| 20 | +6 | **89.2%** |
+| 25 | +11 | **97.0%** |
+
+### The conclusion inverts the design
+
+Expected faction hate, which then proxy-shares to the aliens at the same 1/8–1/4 either way:
+
+| | Success | Expected hate | Outcome on success |
+| --- | --- | --- | --- |
+| **Turn** (Pers 25) | 38.8% | `0.612 × 3` = **1.84** | councilor turned |
+| **Crackdown** (Inv 20) | 89.2% | `0.892 × 2` = **1.78** | control point taken |
+
+**Crackdown costs the same hate and lands 2.3× as often.** The v2 design frames Investigate → Turn as the escalate-late answer; against campaign-typical targets it is strictly worse than the Crackdown it was meant to replace. Turn only earns its place against a genuinely low-Loyalty target — the tail of that 0–20 range, not the median.
+
+So the engine must rank on **expected** value. A 3% Turn is not a recommendation; it is a way to spend a councilor-turn and generate hate for nothing. This is the strongest argument for pulling V2-6 into the spine, and it is also why V2-3's pairing matters: *which* councilor runs Turn changes it from 3% to 38.8%.
 
 ### 4a.5 What we can and cannot compute
 
@@ -281,7 +341,11 @@ odds = { point: chance(knownDiff), band: [chance(knownDiff − U), chance(knownD
 
 where `U` is an uncertainty allowance for unmodelled modifiers. Report the band, never the point, and name which modifiers were not accounted for — the same discipline the hate model already uses for its ±20% roll.
 
-In player mode the defender's attribute is masked, so odds degrade to `unknown` rather than to a number. That is a real limit, and it is another reason Investigate Councilor is valuable: it is the mission that turns an unknown defence into a known one.
+In player mode the defender's attribute is masked. Per §0a, **estimate rather than abstain**: assume a campaign-typical value for that attribute, compute the odds, and label the assumption. *"~30%, assuming average Loyalty for an unscouted councilor"* is a usable recommendation; `unknown` is not.
+
+Investigate Councilor remains valuable for exactly this reason — it converts an assumed defence into a measured one, which narrows the estimate rather than creating it.
+
+**Calibration source for the assumed values:** omniscient mode on the live save exposes every enemy attribute, so campaign-typical distributions can be measured directly rather than guessed. Do that once and bake the medians in as the assumption, with a note that they are campaign-derived.
 
 ---
 

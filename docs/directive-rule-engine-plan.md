@@ -98,7 +98,7 @@ Expected hate for Turn is `P(fail) × 3` — so Turn's cost is unstateable witho
 
 **Blocker:** `HasSpySlot` and `HasIntelOnCouncilorSecrets` are not in the snapshot. `investigationConfidence` is not a substitute — it reports the snapshot *mode*, not per-councilor intel depth.
 
-**Detain vs Assassinate:** on an alien councilor, Detain gives 10 hate on normal success and **0 on critical**, with no retaliation, plus +3 Alien Activity Investigations vs +2. Prefer it wherever available (`DetainTarget` is story-gated). 10 hate is a fifth of the 50 budget — cheap at 12 hate, self-defeating at 45.
+**Detain vs Assassinate:** on an alien councilor, Detain gives 10 hate on normal success and **0 on critical**, with no retaliation, plus +3 Alien Activity Investigations vs +2. Prefer it wherever available (`CaptureAHydra` is `Unlocked`/`Completed`, or the `AccessLiveHydra` milestone is present — the verified story gate). 10 hate is a fifth of the 50 budget — cheap at 12 hate, self-defeating at 45.
 
 ### 4a. Open control points
 
