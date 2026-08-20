@@ -759,3 +759,68 @@ test('Defend Interests skips holdings with active future-dated wards and reopens
   assert.strictEqual(reopened.length, 1);
   assert.strictEqual(reopened[0].value.unprotectedControlPointCount, 2);
 });
+
+// The rule bodies live in server/engine/rules/{hate,legality,value,readiness,
+// portfolio}.js and the registry in rules/index.js assembles them. The
+// assembled ORDER is load-bearing and is NOT grouped by family: applyRules
+// collects veto reasons in registry order and scoreCandidates emits
+// scoreBreakdown in registry order, so both appear in a briefing in exactly
+// this sequence, with readiness/unmet-preconditions sitting in the middle of
+// the value rules. A reordering would silently reshuffle every explanation.
+test('the rule registry preserves its exact order and each rule keeps its kind', () => {
+  assert.deepStrictEqual(RULES.map((rule) => rule.id), [
+    'hate/total-war-budget',
+    'hate/war-threshold-crossing',
+    'legality/executive-last',
+    'legality/no-territory',
+    'legality/story-gate',
+    'value/gdp-per-cp-cost',
+    'value/defend-interests',
+    'value/counter-councilor',
+    'readiness/unmet-preconditions',
+    'value/unblock-alien-response',
+    'value/advisory-potential',
+    'cost/affordability'
+  ]);
+
+  assert.deepStrictEqual(RULES.map((rule) => rule.kind), [
+    'veto', 'score', 'veto', 'veto', 'veto', 'score',
+    'score', 'score', 'score', 'score', 'score', 'veto'
+  ]);
+
+  for (const rule of RULES) {
+    assert.strictEqual(typeof rule.appliesTo, 'function', `${rule.id} appliesTo`);
+    assert.strictEqual(typeof rule.evaluate, 'function', `${rule.id} evaluate`);
+    assert.strictEqual(typeof rule.because, 'function', `${rule.id} because`);
+    assert.strictEqual(typeof rule.source, 'string', `${rule.id} source`);
+    assert.ok(['exact', 'heuristic', 'calculated'].includes(rule.estimateClass), `${rule.id} estimateClass`);
+  }
+});
+
+// The barrel re-exports the SAME function objects the engine modules define,
+// rather than wrapping them. A wrapper would still pass every behavioural test
+// while allowing the barrel and the implementation to drift apart.
+test('directiveEngine re-exports the engine modules without wrapping them', () => {
+  assert.strictEqual(engine.WEIGHTS, require('../server/engine/weights').WEIGHTS);
+  assert.strictEqual(engine.RULES, require('../server/engine/rules').RULES);
+  assert.strictEqual(engine.generateCandidates, require('../server/engine/candidates').generateCandidates);
+  assert.strictEqual(engine.applyRules, require('../server/engine/selection').applyRules);
+  assert.strictEqual(engine.scoreCandidates, require('../server/engine/selection').scoreCandidates);
+  assert.strictEqual(engine.buildDecisionReasoning, require('../server/engine/selection').buildDecisionReasoning);
+  assert.strictEqual(
+    engine.generateOpenControlPointCandidates,
+    require('../server/engine/candidates/controlPoints').generateOpenControlPointCandidates
+  );
+  assert.strictEqual(
+    engine.generateDefendInterestsCandidates,
+    require('../server/engine/candidates/defense').generateDefendInterestsCandidates
+  );
+  assert.strictEqual(
+    engine.generateCouncilCandidates,
+    require('../server/engine/candidates/council').generateCouncilCandidates
+  );
+  assert.strictEqual(
+    engine.generateIntelligenceCandidates,
+    require('../server/engine/candidates/intelligence').generateIntelligenceCandidates
+  );
+});
