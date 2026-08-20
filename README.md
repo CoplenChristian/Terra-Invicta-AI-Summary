@@ -42,6 +42,9 @@ The standalone parsers (`parse_*.ps1`) use the same central configuration and
 selection rules. Values that are likely to change—paths, scoring weights,
 directive weights, capability mappings, and retention—belong in the nested
 JSON config; the defaults file documents the complete shape.
+Both the Node loader and the PowerShell common module validate the resolved
+configuration against `config/config.schema.json`, so type and range errors are
+reported before analysis starts.
 
 ### 2. Load the Toolbox
 Load the analysis functions into your PowerShell session.

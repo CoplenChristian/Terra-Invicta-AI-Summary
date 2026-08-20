@@ -47,6 +47,25 @@ test('buildRawSnapshot captures nations, councilors and control points', () => {
   assert.strictEqual(own.attributes.Persuasion, 10);
 });
 
+test('buildRawSnapshot preserves control-point defense state and expiry', () => {
+  const save = makeSaveData();
+  const controlPoints = save.gamestates['PavonisInteractive.TerraInvicta.TIControlPoint'];
+  controlPoints[0].Value.defended = true;
+  controlPoints[0].Value.defendExpiration = {
+    year: 2032,
+    month: 12,
+    day: 31,
+    hour: 23,
+    minute: 59,
+    second: 0,
+    millisecond: 0
+  };
+  const raw = snapshotBuilder.buildRawSnapshot(save);
+  const ownCp = raw.nations.find(n => n.ID === 1).controlPoints.find(cp => cp.id === 11);
+  assert.strictEqual(ownCp.defended, true);
+  assert.deepStrictEqual(ownCp.defendExpiration, controlPoints[0].Value.defendExpiration);
+});
+
 test('buildRawSnapshot resolves space assets and theater classification', () => {
   const raw = snapshotBuilder.buildRawSnapshot(makeSaveData({ ships: 2 }));
   assert.strictEqual(raw.fleets.length, 1);

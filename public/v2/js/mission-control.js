@@ -146,6 +146,62 @@ const MODE_CAPTIONS = {
 };
 
 function primaryDirective() {
+  const enginePrimary = state.briefing?.engineDirectives?.primary;
+  if (enginePrimary) {
+    const hateObj = enginePrimary.hate?.toAliens;
+    let expectedAlienHate = 'none';
+    if (hateObj) {
+      if (hateObj.high === 0) {
+        expectedAlienHate = '0';
+      } else if (hateObj.low === hateObj.high) {
+        expectedAlienHate = `${hateObj.low}`;
+      } else {
+        expectedAlienHate = `${hateObj.low}–${hateObj.high}`;
+      }
+    }
+    const costObj = enginePrimary.cost;
+    let missionCost = 'UNAVAILABLE';
+    if (costObj) {
+      if (costObj.amount !== null && costObj.amount !== undefined) {
+        missionCost = `${costObj.amount} ${costObj.resource || ''}`.trim();
+      } else if (costObj.kind === 'bonus') {
+        missionCost = `${costObj.resource || 'Resource'} (Bonus)`;
+      }
+    }
+
+    const whyNote = (enginePrimary.scoreBreakdown || [])
+      .map((b) => b.reason)
+      .filter(Boolean)
+      .join(' · ') || enginePrimary.provenance?.source || null;
+
+    return {
+      id: enginePrimary.id,
+      title: enginePrimary.title,
+      statement: enginePrimary.recommendation || enginePrimary.title,
+      missionType: enginePrimary.missionType,
+      category: enginePrimary.family ? enginePrimary.family.toUpperCase() : 'COUNCIL',
+      severity: enginePrimary.isFallback ? 'WATCH' : 'RECOMMENDED',
+      action: enginePrimary.recommendation || enginePrimary.title,
+      window: 'This cycle',
+      missionCost,
+      expectedAlienHate,
+      expectedAlienHateNote: enginePrimary.hate?.note || null,
+      policyNote: whyNote,
+      successFactor: enginePrimary.score !== null && enginePrimary.score !== undefined
+        ? `Score: ${Number(enginePrimary.score).toFixed(2)}`
+        : 'RECOMMENDED',
+      score: enginePrimary.score,
+      scoreBreakdown: enginePrimary.scoreBreakdown,
+      // Engine candidates do not yet pair missions with councilors. Do not
+      // borrow the legacy primary's roster: its skill filters may describe a
+      // different mission than the engine-selected action.
+      eligibleOperatives: [],
+      unmetPreconditions: enginePrimary.unmetPreconditions || [],
+      provenance: enginePrimary.provenance,
+      isEnginePrimary: true
+    };
+  }
+
   const directives = state.briefing?.directives || {};
   return state.briefing?.primaryDirective
     || directives.geopolitical?.[0]
@@ -406,24 +462,33 @@ function initEventListeners() {
     const operatives = Array.isArray(directive.eligibleOperatives) ? directive.eligibleOperatives : [];
     const rosterLabel = operatives.length
       ? operatives.map((op) => `${op.name} (${op.available ? 'idle' : op.mission || 'assigned'}${op.matchSkill ? `, ${op.matchSkill} ${op.matchValue ?? ''}` : ''})`).join('; ')
-      : 'No eligible observer councilors are visible in this intelligence picture.';
+      : directive.isEnginePrimary
+        ? 'Operative pairing is not yet calculated; open the roster to choose or stage one.'
+        : 'No eligible observer councilors are visible in this intelligence picture.';
+    const facts = [
+      { label: 'Department', value: directive.category || 'Unassigned' },
+      { label: 'Severity', value: directive.severity || 'Unspecified' },
+      { label: 'Mission', value: directive.missionType || 'UNAVAILABLE' },
+      { label: 'Window', value: directive.window || 'This cycle' },
+      { label: 'Preparation', value: directive.preparation || (directive.isEnginePrimary ? 'Review mission requirements and stage operative.' : 'UNAVAILABLE') },
+      { label: 'Mission cost', value: directive.missionCost || 'UNAVAILABLE' },
+      { label: 'Expected alien hate', value: directive.expectedAlienHate || 'UNAVAILABLE' },
+      { label: 'Why this action', value: directive.policyNote || directive.expectedAlienHateNote || 'No campaign-posture note on this directive.' },
+      { label: 'Recommended action', value: directive.action || 'No action specified' },
+      { label: 'Success factor', value: directive.successFactor || 'Not assessed' },
+      { label: 'Eligible operatives', value: rosterLabel }
+    ];
+    if (directive.isEnginePrimary && Array.isArray(directive.unmetPreconditions) && directive.unmetPreconditions.length > 0) {
+      facts.push({ label: 'Preconditions', value: directive.unmetPreconditions.join(' · ') });
+    }
+    if (directive.isEnginePrimary && directive.score !== null && directive.score !== undefined) {
+      facts.push({ label: 'Rule Engine Score', value: `${Number(directive.score).toFixed(2)} pts` });
+    }
     window.MissionControlDetailPanel.open({
       eyebrow: 'PRIMARY DIRECTIVE',
       title: directive.title,
       summary: directive.statement,
-      facts: [
-        { label: 'Department', value: directive.category || 'Unassigned' },
-        { label: 'Severity', value: directive.severity || 'Unspecified' },
-        { label: 'Mission', value: directive.missionType || 'UNAVAILABLE' },
-        { label: 'Window', value: directive.window || 'This cycle' },
-        { label: 'Preparation', value: directive.preparation || 'UNAVAILABLE' },
-        { label: 'Mission cost', value: directive.missionCost || 'UNAVAILABLE' },
-        { label: 'Expected alien hate', value: directive.expectedAlienHate || 'UNAVAILABLE' },
-        { label: 'Why this action', value: directive.policyNote || directive.expectedAlienHateNote || 'No campaign-posture note on this directive.' },
-        { label: 'Recommended action', value: directive.action || 'No action specified' },
-        { label: 'Success factor', value: directive.successFactor || 'Not assessed' },
-        { label: 'Eligible operatives', value: rosterLabel }
-      ],
+      facts,
       actions: [
         { label: 'Open councilor roster', primary: true, onClick: () => openLibraryScreen('councilors') }
       ]
@@ -761,7 +826,10 @@ function renderHolographicCore() {
   if (roster) {
     const operatives = Array.isArray(topDirective.eligibleOperatives) ? topDirective.eligibleOperatives.slice(0, 3) : [];
     if (!operatives.length) {
-      roster.innerHTML = '<p class="since-save-empty">No eligible observer councilors are visible. Open the roster to inspect the current picture.</p>';
+      const emptyMessage = topDirective.isEnginePrimary
+        ? 'Operative pairing is not yet calculated; open the roster to choose or stage one.'
+        : 'No eligible observer councilors are visible. Open the roster to inspect the current picture.';
+      roster.innerHTML = `<p class="since-save-empty">${emptyMessage}</p>`;
     } else {
       roster.innerHTML = operatives.map((op) => `
         <button class="priority-op ${op.available ? 'is-ready' : ''}" type="button" data-open-roster="${escapeHtml(op.id)}">

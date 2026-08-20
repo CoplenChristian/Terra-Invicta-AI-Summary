@@ -204,7 +204,7 @@
         "directiveWeights": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["totalWarSafetyMargin", "hateCrossing", "hatePoints", "valuePoints", "council", "unmetPreconditionPenalty", "intelligence", "resourcePoints", "topNCouncilTargets"],
+          "required": ["totalWarSafetyMargin", "hateCrossing", "hatePoints", "valuePoints", "council", "unmetPreconditionPenalty", "intelligence", "defense", "resourcePoints", "topNCouncilTargets"],
           "properties": {
             "totalWarSafetyMargin": { "type": "number", "minimum": 0, "maximum": 1 },
             "hateCrossing": {
@@ -229,6 +229,15 @@
               "required": ["unblockSightings", "escalateLateBonus", "detainAlien"],
               "properties": {
                 "unblockSightings": { "type": "number", "minimum": 0 }, "escalateLateBonus": { "type": "number", "minimum": 0 }, "detainAlien": { "type": "number", "minimum": 0 }
+              }
+            },
+            "defense": {
+              "type": "object", "additionalProperties": false,
+              "required": ["base", "gdpDensityPoints", "escalateLateBonus"],
+              "properties": {
+                "base": { "type": "number", "minimum": 0 },
+                "gdpDensityPoints": { "type": "number", "minimum": 0 },
+                "escalateLateBonus": { "type": "number", "minimum": 0 }
               }
             },
             "resourcePoints": { "type": "number", "minimum": 0 },

@@ -171,6 +171,7 @@
       "council": { "turn": 6, "investigate": 3, "proxyTargetBonus": 3 },
       "unmetPreconditionPenalty": 0.75,
       "intelligence": { "unblockSightings": 5, "escalateLateBonus": 4, "detainAlien": 7 },
+      "defense": { "base": 5, "gdpDensityPoints": 0.2, "escalateLateBonus": 3 },
       "resourcePoints": 1,
       "topNCouncilTargets": 3
     },

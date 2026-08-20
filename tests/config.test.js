@@ -18,6 +18,7 @@ test('central defaults validate and expose only safe runtime settings', () => {
   const resolved = config.resolveConfig({ configPath: path.join(os.tmpdir(), 'ti-config-does-not-exist.json'), env: {} });
   assert.equal(resolved.schemaVersion, 1);
   assert.equal(resolved.analysis.powerScore.normalizers.gdp, 40000000000000);
+  assert.equal(resolved.analysis.directiveWeights.defense.gdpDensityPoints, 0.2);
   const runtime = config.safeRuntimeConfig(resolved);
   assert.equal(runtime.defaultObserverFactionId, 4712);
   assert.equal(Object.hasOwn(runtime, 'savePath'), false);

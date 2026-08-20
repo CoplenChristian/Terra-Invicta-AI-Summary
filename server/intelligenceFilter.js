@@ -23,6 +23,16 @@ class IntelligenceFilter {
     const identity = snapshotIdentity.readSnapshotIdentity(rawSnapshot);
     const observerIntelligence = rawSnapshot.factionIntelligence?.[actualObserverId] || {};
     const isEnhanced = mode === 'enhanced';
+    const visibleNations = (rawSnapshot.nations || []).map((nation) => ({
+      ...nation,
+      controlPoints: (nation.controlPoints || []).map((controlPoint) => {
+        const belongsToObserver = actualObserverId !== null && actualObserverId !== undefined &&
+          String(controlPoint.factionId) === String(actualObserverId);
+        if (isEnhanced || belongsToObserver) return controlPoint;
+        const { defended, defendExpiration, ...publicControlPoint } = controlPoint;
+        return publicControlPoint;
+      })
+    }));
 
     const capabilities = capabilityResolver.resolveCapabilities(
       observer,
@@ -103,6 +113,10 @@ class IntelligenceFilter {
         techMatrix: rawSnapshot.techMatrix,
         techTree: rawSnapshot.techTree,
         shipHullStats: rawSnapshot.shipHullStats,
+        // Mission rules are public game data, not intelligence -- nothing
+        // about them is observer-dependent, so they pass through unfiltered
+        // in both modes.
+        missionSpecs: rawSnapshot.missionSpecs,
         miningScarcityWeights: rawSnapshot.miningScarcityWeights,
         isOmniscient: true
       };
@@ -389,7 +403,7 @@ class IntelligenceFilter {
       metadata: rawSnapshot.metadata,
       factions: visibleFactions,
       factionRelationships,
-      nations: rawSnapshot.nations,
+      nations: visibleNations,
       councilors: filteredCouncilors,
       fleets: visibleSpaceAssets.fleets,
       habs: visibleSpaceAssets.habs,
@@ -408,6 +422,8 @@ class IntelligenceFilter {
       techMatrix: filteredTechMatrix,
       techTree: rawSnapshot.techTree,
       shipHullStats: rawSnapshot.shipHullStats,
+      // Public game rules, not intelligence -- unfiltered in player mode too.
+      missionSpecs: rawSnapshot.missionSpecs,
       miningScarcityWeights: rawSnapshot.miningScarcityWeights,
       isOmniscient: false
     };

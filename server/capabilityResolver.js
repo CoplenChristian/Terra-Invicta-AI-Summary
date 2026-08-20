@@ -49,6 +49,14 @@ class CapabilityResolver {
     const canTrackSolarSystemSpaceAssets = configuredCapabilities.canTrackSolarSystemSpaceAssets === true;
     const milestones = new Set(storyState.milestones || []);
     const objectiveNames = storyState.objectiveNames || {};
+    const objectiveAvailable = (name) => {
+      const status = objectiveNames[name];
+      if (status === true) return true;
+      return typeof status === 'string' && ['unlocked', 'completed'].includes(status.trim().toLowerCase());
+    };
+    const canDetainAlienCouncilors = configuredCapabilities.canDetainAlienCouncilors === true ||
+      milestones.has('AccessLiveHydra') ||
+      objectiveAvailable('CaptureAHydra');
     const xenoformingRule = templateLoader.config.analysis?.rules?.xenoforming || {};
     const facilityRule = templateLoader.config.analysis?.rules?.alienFacilities || {};
     const canDetectXenoforming = milestones.has(xenoformingRule.requiresMilestone || 'DetectXenoforming') ||
@@ -85,6 +93,7 @@ class CapabilityResolver {
       canDetectAlienOperations,
       canEstimateAlienThreat,
       canDirectlyDetectAlienCouncilors,
+      canDetainAlienCouncilors,
 
       // Human councilors & operations
       canDetectHumanCouncilors: true,
@@ -150,6 +159,7 @@ class CapabilityResolver {
       canDetectAlienOperations: false,
       canEstimateAlienThreat: false,
       canDirectlyDetectAlienCouncilors: false,
+      canDetainAlienCouncilors: false,
       canDetectHumanCouncilors: true,
       canInvestigateHumanCouncilors: true,
       canIdentifyHumanMissions: true,

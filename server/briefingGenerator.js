@@ -61,6 +61,7 @@ class BriefingGenerator {
       observerId,
       observerName,
       posture: campaignPosture,
+      campaignDate: snapshot.metadata?.gameTimeString || null,
       resources: observer.resources,
       nations,
       councilors,
@@ -388,9 +389,9 @@ class BriefingGenerator {
         severity: holdProxy ? 'HOLD' : (targetEntries.length && targetFactionName ? 'CRITICAL' : 'WATCH'),
         title: holdProxy
           ? `Protect core holdings and stage the ${targetFactionName} operation`
-          : targetEntries.length && targetFactionName
+          : (targetEntries.length && targetFactionName
             ? `${targetFactionName} in ${targetEntries[0].nationName || 'an unidentified nation'}`
-            : 'Priority theater',
+            : 'Priority theater'),
         statement: holdProxy
           ? `Crackdown/Purge vs ${targetFactionName} would feed alien hate (${directiveAdvisor.classifyProxy(targetFaction || { displayName: targetFactionName }).shareLabel}) while ${directiveAdvisor.formatShipPosture(campaignPosture)}. ${campaignPosture.reasons[0]}.`
           : p2.replace(/^PRIORITY THEATER (ALERT|STATUS):\s*/i, '')
@@ -474,7 +475,7 @@ class BriefingGenerator {
         missionType: 'Defend Interests',
         preparation: 'Assign Administration or Persuasion to executive nations. Leave the proxy holding on watch.',
         window: 'Until fleet posture can survive open war',
-        missionCost: 'UNAVAILABLE',
+        missionCost: '20 Influence',
         expectedAlienHate: 'none (Defend Interests)',
         expectedAlienHateNote: 'Defend Interests success-slot hate is 0. Crackdown/Purge vs this proxy is deferred because it feeds alien hate.',
         policyNote: campaignPosture.reasons.join(' · '),
@@ -577,7 +578,7 @@ class BriefingGenerator {
       missionType: 'Defend Interests',
       preparation: 'Confirm executive nations, then assign an Administration or Persuasion operative to ward them.',
       window: escalateLate ? 'This cycle — first Earth action' : 'Standing order',
-      missionCost: 'UNAVAILABLE',
+      missionCost: '20 Influence',
       eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Administration', 'Persuasion', 'Security'])
     }, 'Defend Interests', { share: 0, label: observerLabel }));
 

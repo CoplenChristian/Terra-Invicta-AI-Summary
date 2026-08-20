@@ -29,6 +29,12 @@ class TemplateLoader {
       // Science, and so on). Without these a councilor's effective attributes
       // are understated and org capacity appears to be violated.
       traits: new Map(),
+      // Mission templates carry the attack/defence attribute pairing, base
+      // difficulty, hate-by-outcome and cost for every mission. Deliberately
+      // NOT in REQUIRED_TEMPLATES: that list is the "is this directory
+      // usable" probe, and widening it would make install paths that work
+      // today start failing the check.
+      missions: new Map(),
       weaponModules: new Map(),
       drives: new Map(),
       reactors: new Map(),
@@ -197,6 +203,11 @@ class TemplateLoader {
     this.loadJsonFile('TITraitTemplate.json', (item) => {
       const id = item.dataName || item.friendlyName;
       if (id) this.templates.traits.set(id, item);
+    });
+
+    this.loadJsonFile('TIMissionTemplate.json', (item) => {
+      const id = item.dataName || item.friendlyName;
+      if (id) this.templates.missions.set(id, item);
     });
 
     // Component templates used by the tech graph to answer "which project

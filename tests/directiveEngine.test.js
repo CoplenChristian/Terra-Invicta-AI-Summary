@@ -7,12 +7,14 @@ const {
   RULES,
   buildWorld,
   generateOpenControlPointCandidates,
+  generateDefendInterestsCandidates,
   generateCouncilCandidates,
   generateIntelligenceCandidates,
   generateCandidates,
   applyRules,
   scoreCandidates,
-  runEngine
+  runEngine,
+  buildDecisionReasoning
 } = engine;
 
 const noTerritoryRule = RULES.find((r) => r.id === 'legality/no-territory');
@@ -20,6 +22,8 @@ const executiveLastRule = RULES.find((r) => r.id === 'legality/executive-last');
 const totalWarBudgetRule = RULES.find((r) => r.id === 'hate/total-war-budget');
 const warThresholdCrossingRule = RULES.find((r) => r.id === 'hate/war-threshold-crossing');
 const affordabilityRule = RULES.find((r) => r.id === 'cost/affordability');
+const storyGateRule = RULES.find((r) => r.id === 'legality/story-gate');
+const defendInterestsRule = RULES.find((r) => r.id === 'value/defend-interests');
 
 function nation(overrides = {}) {
   return {
@@ -172,24 +176,38 @@ test('Turn candidate carries its unmet preconditions rather than claiming to be 
   assert.ok(/pending/i.test(turn.title), 'title says so, not pretending the action is unconditionally ready');
 });
 
-test("Turn's expected hate is 0 on success and is not penalised by the hate rules", () => {
+test("Turn prices the failure-hate branch [0,3,3,0,0,0] as { low: 0, high: 3 }", () => {
+  const world = buildWorld({
+    observerId: 4712,
+    councilors: [enemyCouncilor()],
+    posture: { totalWarProximity: 'safe', actualAlienHate: 10, totalWarHeadroom: 100 }
+  });
+  const turn = generateCouncilCandidates(world).find((c) => c.missionType === 'Turn Councilor');
+  assert.deepStrictEqual(turn.hate.toAliens, { low: 0, high: 3 });
+
+  // With headroom = 100 (budget = 50), high-end hate 3 is within budget -> pass
+  assert.strictEqual(totalWarBudgetRule.evaluate(world, turn), 'pass');
+  // Midpoint is 1.5; staying under 50 hate applies 1x weight -> score contribution -1.5
+  assert.strictEqual(warThresholdCrossingRule.evaluate(world, turn), -1.5);
+
+  const { surviving, uncertain, rejected } = applyRules(world, [turn]);
+  assert.strictEqual(surviving.length, 1);
+  assert.strictEqual(uncertain.length, 0);
+  assert.strictEqual(rejected.length, 0);
+});
+
+test("Turn is marked uncertain when Total War proximity/headroom is unmeasurable", () => {
   const world = buildWorld({
     observerId: 4712,
     councilors: [enemyCouncilor()],
     posture: { totalWarProximity: 'unknown', actualAlienHate: null, totalWarHeadroom: null }
   });
   const turn = generateCouncilCandidates(world).find((c) => c.missionType === 'Turn Councilor');
-  assert.deepStrictEqual(turn.hate.toAliens, { low: 0, high: 0 });
-
-  // Even with Total War proximity unmeasurable, zero exposure must never be
-  // downgraded to 'unknown' -- there is nothing to be uncertain about.
-  assert.strictEqual(totalWarBudgetRule.evaluate(world, turn), 'pass');
-  assert.strictEqual(warThresholdCrossingRule.evaluate(world, turn), 0);
-
+  // Turn carries high-end hate of 3, so unmeasurable headroom makes the budget check unknown
+  assert.strictEqual(totalWarBudgetRule.evaluate(world, turn), 'unknown');
   const { surviving, uncertain, rejected } = applyRules(world, [turn]);
-  assert.strictEqual(surviving.length, 1);
-  assert.strictEqual(uncertain.length, 0);
-  assert.strictEqual(rejected.length, 0);
+  assert.strictEqual(surviving.length, 0);
+  assert.strictEqual(uncertain.length, 1);
 });
 
 test('Investigate Councilor carries zero hate and no unmet preconditions', () => {
@@ -530,6 +548,26 @@ test('directive scoring honors runtime-configured weights', () => {
   assert.ok(tunedScore > baseScore, `expected tuned score ${tunedScore} to exceed ${baseScore}`);
 });
 
+test('Defend Interests scoring honors runtime-configured defense weights', () => {
+  const worldOptions = {
+    observerId: 4712,
+    nations: [nation({
+      displayName: 'United States',
+      GDP: 20e12,
+      controlPoints: [{ id: 'us-1', factionId: 4712, isExecutive: true, controlPointType: 'Executive' }]
+    })]
+  };
+  const base = buildWorld(worldOptions);
+  const tuned = buildWorld({
+    ...worldOptions,
+    directiveWeights: { defense: { base: 50, escalateLateBonus: 3 } }
+  });
+  const candidate = generateDefendInterestsCandidates(base)[0];
+  const baseScore = scoreCandidates(base, [candidate])[0].score;
+  const tunedScore = scoreCandidates(tuned, [candidate])[0].score;
+  assert.equal(tunedScore - baseScore, 45);
+});
+
 test('fallback recommendation remains a positive preparation action with reasoning', () => {
   const result = runEngine(buildWorld({
     observerId: 4712,
@@ -539,4 +577,185 @@ test('fallback recommendation remains a positive preparation action with reasoni
   assert.match(result.primary.title, /prepare|protect/i);
   assert.ok(result.decisionReasoning);
   assert.match(result.decisionReasoning.summary, /positive preparation/i);
+  assert.ok(result.decisionReasoning.sources.some((source) => /preparation fallback/i.test(source)));
+});
+
+test('decision reasoning marks a primary with unresolved prerequisites as conditional', () => {
+  const reasoning = buildDecisionReasoning(
+    {
+      title: 'Defend Interests in Testland',
+      unmetPreconditions: ['Defense state is not observable for one control point.'],
+      provenance: { source: 'test candidate' },
+      scoreBreakdown: []
+    },
+    [],
+    [],
+    [],
+    [],
+    1
+  );
+  assert.equal(reasoning.confidence, 'conditional');
+});
+
+// ---------------------------------------------------------------------------
+// Story-Gating on CaptureAHydra / AccessLiveHydra (Finding 2)
+// ---------------------------------------------------------------------------
+
+test('Detain on alien councilor passes legality/story-gate when canDetainAlienCouncilors is true', () => {
+  const alien = { ID: 1, isAlien: true, displayName: 'Hydra Operative', seenByFactionIds: [4712] };
+  const world = buildWorld({
+    observerId: 4712,
+    councilors: [alien],
+    capabilities: { canDirectlyDetectAlienCouncilors: true, canDetainAlienCouncilors: true },
+    posture: { totalWarProximity: 'safe', totalWarHeadroom: 100 }
+  });
+  const candidates = generateIntelligenceCandidates(world);
+  const detain = candidates.find((c) => c.missionType === 'Detain');
+  assert.ok(detain);
+  assert.strictEqual(storyGateRule.evaluate(world, detain), 'pass');
+  assert.strictEqual(detain.unmetPreconditions.length, 0);
+});
+
+test('Detain on alien councilor is vetoed by legality/story-gate when canDetainAlienCouncilors is false', () => {
+  const alien = { ID: 1, isAlien: true, displayName: 'Hydra Operative', seenByFactionIds: [4712] };
+  const world = buildWorld({
+    observerId: 4712,
+    councilors: [alien],
+    capabilities: { canDirectlyDetectAlienCouncilors: true, canDetainAlienCouncilors: false },
+    posture: { totalWarProximity: 'safe', totalWarHeadroom: 100 }
+  });
+  const candidates = generateIntelligenceCandidates(world);
+  const detain = candidates.find((c) => c.missionType === 'Detain');
+  assert.ok(detain);
+  assert.strictEqual(storyGateRule.evaluate(world, detain), 'veto');
+  assert.ok(detain.unmetPreconditions.some((p) => /story-locked/i.test(p)));
+  const { rejected, surviving } = applyRules(world, [detain]);
+  assert.strictEqual(rejected.length, 1);
+  assert.strictEqual(surviving.length, 0);
+});
+
+test('Detain on alien councilor is marked uncertain when canDetainAlienCouncilors is undefined', () => {
+  const alien = { ID: 1, isAlien: true, displayName: 'Hydra Operative', seenByFactionIds: [4712] };
+  const world = buildWorld({
+    observerId: 4712,
+    councilors: [alien],
+    capabilities: { canDirectlyDetectAlienCouncilors: true },
+    posture: { totalWarProximity: 'safe', totalWarHeadroom: 100 }
+  });
+  const candidates = generateIntelligenceCandidates(world);
+  const detain = candidates.find((c) => c.missionType === 'Detain');
+  assert.strictEqual(storyGateRule.evaluate(world, detain), 'unknown');
+  const { uncertain, surviving } = applyRules(world, [detain]);
+  assert.strictEqual(uncertain.length, 1);
+  assert.strictEqual(surviving.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Redacted Hate Threshold Crossing (Finding 4)
+// ---------------------------------------------------------------------------
+
+test('redacted hate scores at 3x when pips >= 4 or elevated/hot, and 1x when pips < 4', () => {
+  const candidate = {
+    id: 'test-hate',
+    hate: { toAliens: { low: 0, high: 2 } }
+  };
+  const lowPipsWorld = buildWorld({
+    observerId: 4712,
+    posture: { actualAlienHate: null, pips: 2 }
+  });
+  // mid = 1 * 1x weight = -1
+  assert.strictEqual(warThresholdCrossingRule.evaluate(lowPipsWorld, candidate), -1);
+
+  const highPipsWorld = buildWorld({
+    observerId: 4712,
+    posture: { actualAlienHate: null, pips: 4 }
+  });
+  // mid = 1 * 3x weight = -3
+  assert.strictEqual(warThresholdCrossingRule.evaluate(highPipsWorld, candidate), -3);
+
+  const totalWarWorld = buildWorld({
+    observerId: 4712,
+    posture: { actualAlienHate: null, totalWarProximity: 'near' }
+  });
+  // mid = 1 * 10x weight = -10
+  assert.strictEqual(warThresholdCrossingRule.evaluate(totalWarWorld, candidate), -10);
+});
+
+// ---------------------------------------------------------------------------
+// Rule Citations in scoreBreakdown & decisionReasoning (Finding 5)
+// ---------------------------------------------------------------------------
+
+test('scoreBreakdown entries include source and estimateClass citations', () => {
+  const world = buildWorld({
+    observerId: 4712,
+    councilors: [enemyCouncilor()],
+    posture: { actualAlienHate: 10, totalWarHeadroom: 100 }
+  });
+  const turn = generateCouncilCandidates(world).find((c) => c.missionType === 'Turn Councilor');
+  const [scored] = scoreCandidates(world, [turn]);
+  assert.ok(Array.isArray(scored.scoreBreakdown));
+  for (const entry of scored.scoreBreakdown) {
+    assert.ok(entry.source, `Entry ${entry.ruleId} must have a source citation`);
+    assert.ok(entry.estimateClass, `Entry ${entry.ruleId} must have an estimateClass`);
+  }
+  const result = runEngine(world);
+  assert.ok(result.decisionReasoning);
+  assert.ok(Array.isArray(result.decisionReasoning.sources));
+  assert.ok(result.decisionReasoning.sources.length > 0);
+});
+
+// ---------------------------------------------------------------------------
+// Defend Interests Candidates & Affordability (Finding 6)
+// ---------------------------------------------------------------------------
+
+test('generateDefendInterestsCandidates creates candidates for observer-held nations', () => {
+  const world = buildWorld({
+    observerId: 4712,
+    observerName: 'the Initiative',
+    resources: { Influence: 100 },
+    nations: [
+      nation({
+        displayName: 'United States',
+        GDP: 20e12,
+        regionsCount: 50,
+        controlPoints: [
+          { id: 'us-1', factionId: 4712, isExecutive: true, controlPointType: 'Executive' },
+          { id: 'us-2', factionId: 4712, isExecutive: false, controlPointType: 'Legislature' }
+        ]
+      })
+    ]
+  });
+  const candidates = generateDefendInterestsCandidates(world);
+  assert.strictEqual(candidates.length, 1);
+  const def = candidates[0];
+  assert.strictEqual(def.missionType, 'Defend Interests');
+  assert.deepStrictEqual(def.cost, { resource: 'Influence', amount: 20, kind: 'flat' });
+  assert.deepStrictEqual(def.hate.toAliens, { low: 0, high: 0 });
+  assert.strictEqual(affordabilityRule.evaluate(world, def), 'pass');
+  assert.ok(defendInterestsRule.evaluate(world, def) > 0);
+});
+
+test('Defend Interests skips holdings with active future-dated wards and reopens expired wards', () => {
+  const controlPoints = [
+    { id: 1, factionId: 4712, isExecutive: true, controlPointType: 'Executive', defended: true,
+      defendExpiration: { year: 2032, month: 12, day: 31, hour: 23, minute: 59 } },
+    { id: 2, factionId: 4712, isExecutive: false, controlPointType: 'Legislature', defended: true,
+      defendExpiration: { year: 2032, month: 12, day: 31, hour: 23, minute: 59 } }
+  ];
+  const nationData = nation({ displayName: 'Wardland', GDP: 20e12, controlPoints });
+  const activeWorld = buildWorld({
+    observerId: 4712,
+    campaignDate: '2032-08-16T12:00:00Z',
+    nations: [nationData]
+  });
+  assert.deepStrictEqual(generateDefendInterestsCandidates(activeWorld), []);
+
+  const expiredWorld = buildWorld({
+    observerId: 4712,
+    campaignDate: '2033-01-01T00:00:00Z',
+    nations: [nationData]
+  });
+  const reopened = generateDefendInterestsCandidates(expiredWorld);
+  assert.strictEqual(reopened.length, 1);
+  assert.strictEqual(reopened[0].value.unprotectedControlPointCount, 2);
 });

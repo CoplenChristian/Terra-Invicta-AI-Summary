@@ -2,6 +2,9 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const briefingGenerator = require('../server/briefingGenerator');
+const snapshotBuilder = require('../server/snapshotBuilder');
+const intelligenceFilter = require('../server/intelligenceFilter');
+const { makeSaveData } = require('./fixtures/syntheticSave');
 const {
   classifyProxy,
   expectedAlienHate,
@@ -342,4 +345,18 @@ test('pickPrimaryDirective ranks HOLD above a deferred crackdown', () => {
     council: [{ id: 'c-idle', policyRank: 50, severity: 'HIGH', title: 'Assign' }]
   });
   assert.equal(primary.id, 'geo-hold');
+});
+
+test('briefing engine does not recommend a future-dated ward as a new defensive action', () => {
+  const raw = snapshotBuilder.buildRawSnapshot(makeSaveData({ gameTimeString: '2025-01-01T00:00:00Z' }));
+  const ownNation = raw.nations.find(n => n.ID === 1);
+  for (const controlPoint of ownNation.controlPoints) {
+    controlPoint.defended = true;
+    controlPoint.defendExpiration = { year: 2025, month: 12, day: 31, hour: 23, minute: 59 };
+  }
+  const filtered = intelligenceFilter.applyFilter(raw, 'player', 4712);
+  const briefing = briefingGenerator.generateMissionControlBriefing(filtered);
+
+  assert.notEqual(briefing.engineDirectives.primary.id, 'defend-interests:United States');
+  assert.equal(briefing.engineDirectives.primary.value?.unprotectedControlPointCount, undefined);
 });

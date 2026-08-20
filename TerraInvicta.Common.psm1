@@ -5,10 +5,225 @@ function Test-TIConfigObject {
 
     if ($null -eq $Value -or $Value -is [Array] -or
         ($Value -isnot [pscustomobject] -and $Value -isnot [hashtable])) { return $false }
-    # ConvertFrom-Json returns PSCustomObject values. Enumerating the property
-    # collection is deliberate: under StrictMode the collection itself does not
-    # reliably expose a .Count property on every supported PowerShell build.
-    return @($Value.PSObject.Properties).Count -gt 0
+    # Empty JSON objects are still mergeable objects. Treating them as scalar
+    # values would replace an entire default section with {}, unlike the JS
+    # loader's deep merge behavior.
+    return $true
+}
+
+function Assert-TIConfigKeys {
+    param(
+        [AllowNull()] $Value,
+        [AllowNull()] $Default,
+        [Parameter(Mandatory)] [string]$Path,
+        [string[]]$AllowedKeys = @()
+    )
+
+    if ($null -eq $Value) { return }
+    if ($Value -is [Array]) {
+        # Only strategicProjects is an array of configurable objects. Other
+        # arrays in the schema contain scalar enum values and need no key walk.
+        if ($Path -eq 'config.analysis.strategicProjects') {
+            foreach ($item in $Value) {
+                Assert-TIConfigKeys -Value $item -Default $null -Path "$Path[]" -AllowedKeys @('id', 'name', 'benefit', 'risk')
+            }
+        }
+        return
+    }
+    if (-not (Test-TIConfigObject $Value)) { return }
+
+    # Effects are a map keyed by game effect ID, so the map keys themselves are
+    # intentionally open while each descriptor has a closed set of properties.
+    if ($Path -eq 'config.analysis.effects') {
+        foreach ($effect in $Value.PSObject.Properties) {
+            Assert-TIConfigKeys -Value $effect.Value -Default $null -Path "$Path.$($effect.Name)" -AllowedKeys @('capability', 'outputKey', 'name', 'category', 'description', 'defaultProject', 'defaultTech')
+        }
+        return
+    }
+
+    foreach ($property in $Value.PSObject.Properties) {
+        if ($AllowedKeys.Count -gt 0) {
+            if ($property.Name -notin $AllowedKeys) {
+                throw "Unknown configuration key '$Path.$($property.Name)'."
+            }
+            # Descriptor/project-item objects have an intentionally explicit
+            # key list but no single default object to compare against. Their
+            # Scalar values are validated by the schema-driven pass after the
+            # partial configuration has been merged with defaults.
+            continue
+        }
+        $defaultProperty = if (Test-TIConfigObject $Default) {
+            $Default.PSObject.Properties[$property.Name]
+        } else { $null }
+        if ($null -eq $defaultProperty) {
+            throw "Unknown configuration key '$Path.$($property.Name)'."
+        }
+        Assert-TIConfigKeys -Value $property.Value -Default $defaultProperty.Value -Path "$Path.$($property.Name)"
+    }
+}
+
+function Get-TIJsonType {
+    param([AllowNull()] $Value)
+
+    if ($null -eq $Value) { return 'null' }
+    if ($Value -is [Array]) { return 'array' }
+    if ($Value -is [bool]) { return 'boolean' }
+    if ($Value -is [string]) { return 'string' }
+    if ($Value -is [byte] -or $Value -is [sbyte] -or
+        $Value -is [int16] -or $Value -is [uint16] -or
+        $Value -is [int32] -or $Value -is [uint32] -or
+        $Value -is [int64] -or $Value -is [uint64] -or
+        $Value -is [single] -or $Value -is [double] -or $Value -is [decimal]) { return 'number' }
+    if (Test-TIConfigObject $Value) { return 'object' }
+    return 'unknown'
+}
+
+function Test-TIJsonValueEqual {
+    param($Left, $Right)
+
+    $leftJson = ConvertTo-Json -InputObject $Left -Compress -Depth 20
+    $rightJson = ConvertTo-Json -InputObject $Right -Compress -Depth 20
+    return $leftJson -eq $rightJson
+}
+
+function Resolve-TIConfigSchemaRef {
+    param(
+        [Parameter(Mandatory)] $Root,
+        [Parameter(Mandatory)] [string]$Reference
+    )
+
+    if ($Reference -notmatch '^#\/\$defs\/(?<name>.+)$') {
+        throw "Unsupported configuration schema reference '$Reference'."
+    }
+    $definition = $Root.'$defs'.PSObject.Properties[$Matches.name]
+    if ($null -eq $definition) { throw "Configuration schema definition '$($Matches.name)' was not found." }
+    return $definition.Value
+}
+
+function Get-TIConfigSchemaProperty {
+    param(
+        [Parameter(Mandatory)] $Schema,
+        [Parameter(Mandatory)] [string]$Name
+    )
+
+    $property = $Schema.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
+function Assert-TIConfigSchema {
+    <#
+      Validate the resolved configuration against the checked-in JSON Schema.
+      This is deliberately schema-driven so PowerShell does not maintain a
+      second list of numeric ranges and required fields that could drift from
+      the Node loader. Key validation above runs before merge to give partial
+      config files useful typo errors; this pass validates the complete result.
+    #>
+    param(
+        [AllowNull()] $Value,
+        [Parameter(Mandatory)] $Schema,
+        [Parameter(Mandatory)] $Root,
+        [Parameter(Mandatory)] [string]$Path
+    )
+
+    $reference = Get-TIConfigSchemaProperty -Schema $Schema -Name '$ref'
+    if ($null -ne $reference) {
+        $Schema = Resolve-TIConfigSchemaRef -Root $Root -Reference $reference
+    }
+
+    $oneOf = Get-TIConfigSchemaProperty -Schema $Schema -Name 'oneOf'
+    if ($null -ne $oneOf) {
+        $alternativeMatches = 0
+        foreach ($branch in @($oneOf)) {
+            try {
+                Assert-TIConfigSchema -Value $Value -Schema $branch -Root $Root -Path $Path
+                $alternativeMatches++
+            } catch { }
+        }
+        if ($alternativeMatches -ne 1) { throw "Configuration at '$Path' must match exactly one schema alternative." }
+    }
+
+    $constant = Get-TIConfigSchemaProperty -Schema $Schema -Name 'const'
+    if ($null -ne $constant -and -not (Test-TIJsonValueEqual $Value $constant)) {
+        throw "Configuration value at '$Path' must equal '$constant'."
+    }
+
+    $actualType = Get-TIJsonType $Value
+    $typeSchema = Get-TIConfigSchemaProperty -Schema $Schema -Name 'type'
+    $allowedTypes = @()
+    if ($null -ne $typeSchema) {
+        $allowedTypes = @($typeSchema)
+        $typeMatches = $actualType -in $allowedTypes
+        if ($actualType -eq 'integer' -and 'number' -in $allowedTypes) { $typeMatches = $true }
+        if ($actualType -eq 'number' -and 'integer' -in $allowedTypes -and [math]::Truncate([double]$Value) -eq [double]$Value) { $typeMatches = $true }
+        if (-not $typeMatches) {
+            throw "Configuration value at '$Path' must be type $($allowedTypes -join ' or '), got $actualType."
+        }
+    }
+
+    $enum = Get-TIConfigSchemaProperty -Schema $Schema -Name 'enum'
+    if ($null -ne $enum) {
+        $allowed = @(@($enum) | Where-Object { Test-TIJsonValueEqual $Value $_ })
+        if ($allowed.Count -eq 0) { throw "Configuration value at '$Path' is not an allowed value." }
+    }
+
+    $minLength = Get-TIConfigSchemaProperty -Schema $Schema -Name 'minLength'
+    if ($null -ne $minLength -and ([string]$Value).Length -lt [int]$minLength) {
+        throw "Configuration value at '$Path' is shorter than the minimum length."
+    }
+    $pattern = Get-TIConfigSchemaProperty -Schema $Schema -Name 'pattern'
+    if ($null -ne $pattern -and -not [regex]::IsMatch([string]$Value, [string]$pattern)) {
+        throw "Configuration value at '$Path' does not match the required pattern."
+    }
+
+    $minimum = Get-TIConfigSchemaProperty -Schema $Schema -Name 'minimum'
+    $maximum = Get-TIConfigSchemaProperty -Schema $Schema -Name 'maximum'
+    $exclusiveMinimum = Get-TIConfigSchemaProperty -Schema $Schema -Name 'exclusiveMinimum'
+    $exclusiveMaximum = Get-TIConfigSchemaProperty -Schema $Schema -Name 'exclusiveMaximum'
+    if ($actualType -in @('number', 'integer')) {
+        $number = [double]$Value
+        if ($null -ne $minimum -and $number -lt [double]$minimum) { throw "Configuration value at '$Path' is below the minimum." }
+        if ($null -ne $maximum -and $number -gt [double]$maximum) { throw "Configuration value at '$Path' is above the maximum." }
+        if ($null -ne $exclusiveMinimum -and $number -le [double]$exclusiveMinimum) { throw "Configuration value at '$Path' must be greater than the exclusive minimum." }
+        if ($null -ne $exclusiveMaximum -and $number -ge [double]$exclusiveMaximum) { throw "Configuration value at '$Path' must be less than the exclusive maximum." }
+        if ('integer' -in $allowedTypes -and [math]::Truncate($number) -ne $number) { throw "Configuration value at '$Path' must be an integer." }
+    }
+
+    $minItems = Get-TIConfigSchemaProperty -Schema $Schema -Name 'minItems'
+    $uniqueItems = Get-TIConfigSchemaProperty -Schema $Schema -Name 'uniqueItems'
+    $items = Get-TIConfigSchemaProperty -Schema $Schema -Name 'items'
+    if ($actualType -eq 'array') {
+        if ($null -ne $minItems -and $Value.Count -lt [int]$minItems) { throw "Configuration array at '$Path' has too few items." }
+        if ($uniqueItems -eq $true) {
+            $serialized = @($Value | ForEach-Object { ConvertTo-Json -InputObject $_ -Compress -Depth 20 })
+            $uniqueSerialized = @($serialized | Select-Object -Unique)
+            if ($uniqueSerialized.Count -ne $serialized.Count) { throw "Configuration array at '$Path' must contain unique items." }
+        }
+        if ($null -ne $items) {
+            foreach ($item in $Value) { Assert-TIConfigSchema -Value $item -Schema $items -Root $Root -Path "$Path[]" }
+        }
+    }
+
+    if ($actualType -eq 'object') {
+        $requiredKeys = Get-TIConfigSchemaProperty -Schema $Schema -Name 'required'
+        if ($null -ne $requiredKeys) {
+            foreach ($required in @($requiredKeys)) {
+                if ($null -eq $Value.PSObject.Properties[$required]) { throw "Configuration key '$Path.$required' is required." }
+            }
+        }
+        $properties = Get-TIConfigSchemaProperty -Schema $Schema -Name 'properties'
+        $additionalProperties = Get-TIConfigSchemaProperty -Schema $Schema -Name 'additionalProperties'
+        foreach ($property in $Value.PSObject.Properties) {
+            $propertySchema = if ($null -ne $properties) { $properties.PSObject.Properties[$property.Name] } else { $null }
+            if ($null -ne $propertySchema) {
+                Assert-TIConfigSchema -Value $property.Value -Schema $propertySchema.Value -Root $Root -Path "$Path.$($property.Name)"
+            } elseif ($additionalProperties -eq $false) {
+                throw "Unknown configuration key '$Path.$($property.Name)'."
+            } elseif ($null -ne $additionalProperties -and $additionalProperties -ne $true) {
+                Assert-TIConfigSchema -Value $property.Value -Schema $additionalProperties -Root $Root -Path "$Path.$($property.Name)"
+            }
+        }
+    }
 }
 
 function Merge-TIConfigObject {
@@ -64,6 +279,19 @@ function Get-TIConfig {
             ShipInfoSubDir = @('paths', 'shipInfoSubDir'); AgainSaveSubDir = @('paths', 'againSaveSubDir');
             SummarySubDir = @('paths', 'summarySubDir'); SnippetPackSubDir = @('paths', 'snippetPackSubDir')
         }
+        $legacyNames = @($legacyMap.Keys + 'version', 'description',
+            'defaultObserverFaction', 'powerScoreWeights', 'intelligenceRules',
+            'effects', 'strategicProjects')
+        $nestedNames = @('paths', 'campaign', 'server', 'publishing', 'analysis')
+        $hasNested = @($user.PSObject.Properties.Name | Where-Object { $_ -in $nestedNames }).Count -gt 0
+        if ($hasNested) {
+            Assert-TIConfigKeys -Value $user -Default $defaults -Path 'config'
+        } else {
+            $unknownLegacy = @($user.PSObject.Properties.Name | Where-Object { $_ -notin $legacyNames })
+            if ($unknownLegacy.Count -gt 0) {
+                throw "Unknown configuration key(s): $($unknownLegacy -join ', ')"
+            }
+        }
         foreach ($legacy in $legacyMap.Keys) {
             $property = $user.PSObject.Properties[$legacy]
             if ($null -ne $property) {
@@ -74,8 +302,6 @@ function Get-TIConfig {
                     $nestedKey -in @('savePath', 'templatesPath')) { $null } else { $property.Value }
             }
         }
-        $nestedNames = @('paths', 'campaign', 'server', 'publishing', 'analysis')
-        $hasNested = @($user.PSObject.Properties.Name | Where-Object { $_ -in $nestedNames }).Count -gt 0
         if ($hasNested) {
             Merge-TIConfigObject -Base $defaults -Override $user | Out-Null
         } else {
@@ -95,6 +321,36 @@ function Get-TIConfig {
     if ($env:TI_TEMPLATES_DIR) { $defaults.paths.templatesPath = $env:TI_TEMPLATES_DIR }
     if ($env:SUPABASE_CAMPAIGN_KEY) { $defaults.campaign.key = $env:SUPABASE_CAMPAIGN_KEY }
     if ($env:SUPABASE_OBSERVER_FACTION_ID) { $defaults.campaign.defaultObserverFactionId = [int]$env:SUPABASE_OBSERVER_FACTION_ID }
+
+    # strategicHistory.retention is canonical. Keep the publishing alias in
+    # sync for older scripts, with environment > canonical nested > alias
+    # precedence matching the Node configuration loader.
+    $retention = $null
+    if ($env:SUPABASE_HISTORY_RETENTION) {
+        $retention = [int]$env:SUPABASE_HISTORY_RETENTION
+    } elseif ($null -ne $user) {
+        $userAnalysis = $user.PSObject.Properties['analysis']
+        $userHistory = if ($null -ne $userAnalysis) { $userAnalysis.Value.PSObject.Properties['strategicHistory'] } else { $null }
+        $canonicalRetention = if ($null -ne $userHistory) { $userHistory.Value.PSObject.Properties['retention'] } else { $null }
+        if ($null -ne $canonicalRetention -and $null -ne $canonicalRetention.Value) {
+            $retention = $canonicalRetention.Value
+        } else {
+            $userPublishing = $user.PSObject.Properties['publishing']
+            $aliasRetention = if ($null -ne $userPublishing) { $userPublishing.Value.PSObject.Properties['historyRetention'] } else { $null }
+            if ($null -ne $aliasRetention) { $retention = $aliasRetention.Value }
+        }
+    }
+    if ($null -ne $retention) {
+        $defaults.publishing.historyRetention = $retention
+        $defaults.analysis.strategicHistory.retention = $retention
+    }
+
+    $schemaPath = Join-Path $BasePath "config/config.schema.json"
+    if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) {
+        throw "Configuration schema not found at $schemaPath"
+    }
+    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
+    Assert-TIConfigSchema -Value $defaults -Schema $schema -Root $schema -Path 'config'
 
     # Compatibility projection for the existing standalone scripts. New code
     # should read the nested properties above.

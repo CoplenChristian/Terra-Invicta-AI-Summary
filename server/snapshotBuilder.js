@@ -169,7 +169,13 @@ class SnapshotBuilder {
           nationId,
           isExecutive,
           controlPointType: cp.controlPointType || 'Standard',
-          benefits: cp.benefits || null
+          benefits: cp.benefits || null,
+          // Defend Interests is stateful: keep the save's ward and expiry
+          // so the directive engine can distinguish an actionable gap from a
+          // holding that is already protected. The filter decides who may
+          // see these fields in player mode.
+          defended: typeof cp.defended === 'boolean' ? cp.defended : null,
+          defendExpiration: cp.defendExpiration || null
         };
 
         controlPointsById.set(cpId, cpData);
@@ -1105,6 +1111,7 @@ class SnapshotBuilder {
       },
       techMatrix,
       shipHullStats: this.buildShipHullStats(),
+      missionSpecs: this.buildMissionSpecs(),
       techTree: this.buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions)
     };
   }
@@ -1136,6 +1143,74 @@ class SnapshotBuilder {
       if (entries.length > 0) mods[name] = entries;
     }
     return mods;
+  }
+
+  // Mission rules, read from the installed templates so the engine never has
+  // to hardcode them. Carries the attack/defence attribute pairing, the base
+  // difficulty that stacks on the defender's stat, hate by outcome, and cost.
+  //
+  // Exposed on the snapshot for the same reason as shipHullStats: the hosted
+  // worker has no template directory, so anything that reads templates at
+  // request time works locally and breaks the deployed site.
+  //
+  // Measured at ~12.8 KB raw / 1.8 KB gzipped for 43 missions, so no dedupe
+  // or static/dynamic split is needed the way the tech graph required one.
+  buildMissionSpecs() {
+    const specs = {};
+    for (const mission of templateLoader.templates.missions.values()) {
+      const dataName = mission.dataName || mission.friendlyName;
+      if (!dataName || mission.disable === true) continue;
+
+      const resolution = mission.resolutionMethod || {};
+      const conditions = (Array.isArray(mission.conditions) ? mission.conditions : [])
+        .map(c => String(c?.$type || '').replace('TIMissionCondition_', ''))
+        .filter(Boolean);
+
+      // Victory missions are endgame triggers, not cycle decisions.
+      if (conditions.includes('VictoryCondition')) continue;
+
+      const attacking = Array.isArray(resolution.attackingModifiers) ? resolution.attackingModifiers : [];
+      const defending = Array.isArray(resolution.defendingModifiers) ? resolution.defendingModifiers : [];
+      const attack = attacking.find(m => m?.attackerAttribute)?.attackerAttribute || null;
+      const defend = defending.find(m => m?.defenderAttribute)?.defenderAttribute || null;
+
+      // The wiki's "Base Difficulty" column is a defence-side FlatModifier.
+      // It stacks on top of the defender's attribute and is wildly uneven --
+      // Turn Councilor carries 15, Crackdown 0 -- so omitting it makes every
+      // odds estimate wrong in the direction that matters.
+      const flat = defending.find(m => String(m?.$type || '').includes('FlatModifier'));
+      const baseDifficulty = flat
+        ? (Object.entries(flat).find(([key]) => key !== '$type')?.[1] ?? null)
+        : 0;
+
+      const hate = Array.isArray(mission.hate) ? mission.hate : [];
+      const cost = mission.cost || {};
+
+      specs[dataName] = {
+        friendlyName: mission.friendlyName || dataName,
+        // Explicit zeros, never null. Everywhere else in this codebase null
+        // means unmeasured, and the hate model depends on that distinction --
+        // "costs nothing" and "unknown" must not share a value.
+        successHate: typeof hate[4] === 'number' ? hate[4] : 0,
+        criticalHate: typeof hate[5] === 'number' ? hate[5] : 0,
+        failureHate: Math.max(
+          typeof hate[1] === 'number' ? hate[1] : 0,
+          typeof hate[2] === 'number' ? hate[2] : 0
+        ),
+        attack,
+        defend,
+        baseDifficulty: typeof baseDifficulty === 'number' ? baseDifficulty : 0,
+        contested: String(resolution.$type || '').includes('Contested'),
+        costResource: cost.resourceType || null,
+        costKind: String(cost.$type || '').replace('TIMissionCost_', '') || null,
+        costAmount: typeof cost.value === 'number' ? cost.value : null,
+        context: mission.missionContext || null,
+        targetKind: String(mission.target?.$type || '').replace('TIMissionTarget_', '') || null,
+        conditions,
+        utilityScore: typeof mission.utilityScore === 'number' ? mission.utilityScore : null
+      };
+    }
+    return specs;
   }
 
   buildShipHullStats() {

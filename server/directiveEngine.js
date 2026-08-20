@@ -5,9 +5,9 @@
  * candidates, using data-driven rules instead of the hand-tuned policyRank
  * ladder in briefingGenerator.js. See docs/directive-rule-engine-plan.md for
  * the full design; this module implements the P3/P4/P5 subset described
- * there: open-control-point expansion, the zero-hate Investigate->Turn
- * council axis, the "capability without sighting" intelligence gap, and the
- * six named rules in the plan's rule table.
+ * there: open-control-point expansion, defensive holdings, the zero-hate
+ * Investigate->Turn council axis, the "capability without sighting"
+ * intelligence gap, and the named rules in the plan's rule table.
  *
  * Architecture (plan §3):
  *   world -> generateCandidates -> applyRules -> scoreCandidates -> primary
@@ -37,6 +37,7 @@
 
 const directiveAdvisor = require('./directiveAdvisor');
 const { ALIEN_HATE_WAR_THRESHOLD, ALIEN_TOTAL_WAR_HATE } = require('./alienHateEconomics');
+const ALIEN_DETAIN_STORY_GATE = 'CaptureAHydra objective (Unlocked/Completed) / AccessLiveHydra milestone';
 
 function toFiniteNumber(value) {
   // Number(null) and Number('') both evaluate to 0, so a bare Number.isFinite
@@ -51,6 +52,32 @@ function toFiniteNumber(value) {
 function sameId(left, right) {
   if (left === null || left === undefined || right === null || right === undefined) return false;
   return String(left) === String(right);
+}
+
+function parseCampaignDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'object' && Number.isFinite(Number(value.year)) && Number.isFinite(Number(value.month)) && Number.isFinite(Number(value.day))) {
+    const date = new Date(Date.UTC(
+      Number(value.year),
+      Number(value.month) - 1,
+      Number(value.day),
+      Number(value.hour) || 0,
+      Number(value.minute) || 0,
+      Number(value.second) || 0,
+      Number(value.millisecond) || 0
+    ));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function defenseIsActive(controlPoint, campaignDate) {
+  if (controlPoint?.defended !== true) return false;
+  const expiry = parseCampaignDate(controlPoint.defendExpiration);
+  const now = parseCampaignDate(campaignDate);
+  return !expiry || !now || expiry.getTime() > now.getTime();
 }
 
 /**
@@ -132,6 +159,13 @@ const WEIGHTS = Object.freeze({
     detainAlien: 7
   }),
 
+  // Core holding defense (Defend Interests).
+  DEFENSE: Object.freeze({
+    base: 5,
+    gdpDensityPoints: 0.2,
+    escalateLateBonus: 3
+  }),
+
   // Scales resourceCost = spend / stock in the objective function.
   RESOURCE_POINTS: 1,
 
@@ -153,6 +187,7 @@ function getWeights(world) {
     COUNCIL: { ...WEIGHTS.COUNCIL, ...(configured.council || {}) },
     UNMET_PRECONDITION_PENALTY: configured.unmetPreconditionPenalty ?? WEIGHTS.UNMET_PRECONDITION_PENALTY,
     INTELLIGENCE: { ...WEIGHTS.INTELLIGENCE, ...(configured.intelligence || {}) },
+    DEFENSE: { ...WEIGHTS.DEFENSE, ...(configured.defense || {}) },
     RESOURCE_POINTS: configured.resourcePoints ?? WEIGHTS.RESOURCE_POINTS,
     TOP_N_COUNCIL_TARGETS: configured.topNCouncilTargets ?? WEIGHTS.TOP_N_COUNCIL_TARGETS
   };
@@ -359,10 +394,10 @@ function buildTurnCandidate(councilor, loyalty) {
       loyalty
     },
     hate: {
-      toAliens: { low: 0, high: 0 },
-      note: 'TIMissionTemplate Turn Councilor hate row is [0,3,3,0,0,0] -- zero on the normal- and '
-        + 'critical-success slots (index 4-5). The two failure slots cost 3 each; this candidate scores the '
-        + 'expected-success outcome, not the failure branch.'
+      toAliens: { low: 0, high: 3 },
+      note: 'TIMissionTemplate Turn Councilor hate row is [0,3,3,0,0,0] -- zero on normal and critical '
+        + 'success (slots 4-5), 3 on failure (slots 1-2). Without success odds, the failure-risk branch '
+        + 'carries up to 3 alien hate.'
     },
     // Bonus-cost mission: the amount scales with the roll and is genuinely
     // unfillable without a success-odds calculator (plan §4 / Notion 09,14),
@@ -377,7 +412,7 @@ function buildTurnCandidate(councilor, loyalty) {
     },
     score: null,
     provenance: {
-      source: 'TIMissionTemplate Turn Councilor outcome array, slots 4-5',
+      source: 'TIMissionTemplate Turn Councilor outcome array, slots 1-2 & 4-5',
       estimateClass: 'exact'
     },
     unmetPreconditions: [
@@ -386,6 +421,78 @@ function buildTurnCandidate(councilor, loyalty) {
         + 'snapshot MODE (e.g. OMNISCIENT), not per-councilor secret depth, and is not a substitute.'
     ]
   };
+}
+
+function generateDefendInterestsCandidates(world) {
+  const candidates = [];
+  const observerId = world.observerId;
+  if (observerId === null || observerId === undefined) return candidates;
+
+  const ownNations = [];
+  for (const nation of world.nations) {
+    const cps = Array.isArray(nation.controlPoints) ? nation.controlPoints : [];
+    const ownCps = cps.filter((cp) => sameId(cp.factionId, observerId));
+    if (ownCps.length > 0) {
+      const activeDefenses = ownCps.filter((cp) => defenseIsActive(cp, world.campaignDate));
+      const defenseUnknownCount = ownCps.filter((cp) => cp.defended !== true && cp.defended !== false).length;
+      // A future-dated ward already protects every owned CP in this nation;
+      // do not turn a maintenance state into a duplicate action. Unknown
+      // fields remain actionable so older/filtered snapshots stay useful.
+      if (activeDefenses.length === ownCps.length && defenseUnknownCount === 0) continue;
+      const gdpRaw = toFiniteNumber(nation.GDP);
+      const gdpBn = gdpRaw === null ? null : gdpRaw / 1e9;
+      ownNations.push({
+        nation,
+        ownCps,
+        gdpBn: gdpBn ?? 0,
+        activeDefenseCount: activeDefenses.length,
+        defenseUnknownCount
+      });
+    }
+  }
+
+  // Sort by highest GDP to defend major holdings first (Notion 09)
+  const ranked = ownNations.sort((a, b) => b.gdpBn - a.gdpBn).slice(0, 3);
+  for (const { nation, ownCps, gdpBn, activeDefenseCount, defenseUnknownCount } of ranked) {
+    const execCp = ownCps.find((c) => c.isExecutive) || ownCps[0];
+    const unprotectedCount = ownCps.length - activeDefenseCount;
+    candidates.push({
+      id: `defend-interests:${nation.displayName}`,
+      family: 'council',
+      missionType: 'Defend Interests',
+      title: `Defend Interests in ${nation.displayName}`,
+      recommendation: `Deploy an Administration or Persuasion operative on Defend Interests in ${nation.displayName} (protects core GDP against Crackdown/Purge at 0 alien hate).`,
+      target: {
+        kind: 'controlPoint',
+        nation: nation.displayName,
+        faction: world.observerName || 'Observer',
+        controlPointType: execCp?.controlPointType || 'Executive',
+        isExecutive: execCp?.isExecutive === true
+      },
+      hate: {
+        toAliens: { low: 0, high: 0 },
+        note: 'TIMissionTemplate Defend Interests hate row is [0,0,0,0,0,0] -- zero on every outcome.'
+      },
+      cost: { resource: 'Influence', amount: 20, kind: 'flat' },
+      value: {
+        gdpBn,
+        nationName: nation.displayName,
+        isDefendInterests: true,
+        defendedControlPointCount: activeDefenseCount,
+        unprotectedControlPointCount: unprotectedCount,
+        defenseUnknownCount
+      },
+      score: null,
+      provenance: {
+        source: 'TIMissionTemplate Defend Interests (flat 20 Influence, 0 alien hate); Notion 09',
+        estimateClass: 'exact'
+      },
+      unmetPreconditions: defenseUnknownCount > 0
+        ? ['Existing Defend Interests coverage is not fully observable for this holding.']
+        : []
+    });
+  }
+  return candidates;
 }
 
 function generateCouncilCandidates(world) {
@@ -454,7 +561,9 @@ function generateCouncilCandidates(world) {
  * Detain against an alien is special-cased in the wiki (Diplomacy §
  * "Actions that affect hatred"): 10 hate on normal success, 0 on critical --
  * the TIMissionTemplate [0,1,1,0,2,3] Detain row is the human-target case
- * and does not apply here. Budget-gated by hate/total-war-budget below.
+ * and does not apply here. Budget-gated by hate/total-war-budget below and
+ * story-gated by legality/story-gate (CaptureAHydra Unlocked/Completed or
+ * AccessLiveHydra).
  */
 function generateIntelligenceCandidates(world) {
   const candidates = [];
@@ -501,12 +610,24 @@ function generateIntelligenceCandidates(world) {
     });
   }
 
+  const canDetain = world.capabilities?.canDetainAlienCouncilors;
   for (const alien of visibleAliens) {
+    const storyGateKnown = canDetain !== undefined && canDetain !== null;
+    const storyGatePassed = canDetain === true;
+    const unmet = [];
+    if (!storyGateKnown) {
+      unmet.push(`${ALIEN_DETAIN_STORY_GATE} cannot be confirmed from this snapshot.`);
+    } else if (!storyGatePassed) {
+      unmet.push(`${ALIEN_DETAIN_STORY_GATE} is not available -- Detain mission against aliens is story-locked.`);
+    }
+
     candidates.push({
       id: `detain-alien:${alien.ID}`,
       family: 'intelligence',
       missionType: 'Detain',
-      title: `Detain ${alien.displayName} -- alien operative sighted`,
+      title: storyGatePassed
+        ? `Detain ${alien.displayName} -- alien operative sighted`
+        : `Detain ${alien.displayName} -- pending ${ALIEN_DETAIN_STORY_GATE}`,
       target: {
         kind: 'alienCouncilor',
         nation: null,
@@ -523,13 +644,13 @@ function generateIntelligenceCandidates(world) {
           + '[0,1,1,0,2,3] Detain row is the human-target case and does not apply to an alien target.'
       },
       cost: { resource: 'Operations', amount: null, kind: 'bonus' },
-      value: { alienCouncilorId: alien.ID },
+      value: { alienCouncilorId: alien.ID, storyGatePassed, storyGateKnown },
       score: null,
       provenance: {
-        source: 'wiki Diplomacy § "Actions that affect hatred" (post-1.0)',
+        source: `wiki Diplomacy § "Actions that affect hatred" (post-1.0); ${ALIEN_DETAIN_STORY_GATE} story gate`,
         estimateClass: 'exact'
       },
-      unmetPreconditions: []
+      unmetPreconditions: unmet
     });
   }
 
@@ -539,6 +660,7 @@ function generateIntelligenceCandidates(world) {
 function generateCandidates(world) {
   return [
     ...generateOpenControlPointCandidates(world),
+    ...generateDefendInterestsCandidates(world),
     ...generateCouncilCandidates(world),
     ...generateIntelligenceCandidates(world)
   ];
@@ -604,12 +726,20 @@ const RULES = Object.freeze([
         } else if (current < ALIEN_HATE_WAR_THRESHOLD && projected >= ALIEN_HATE_WAR_THRESHOLD) {
           weight = getWeights(world).HATE_CROSSING.crossing50;
         }
+      } else {
+        // Redacted hate in player mode: evaluate using visible estimate and posture
+        const pips = toFiniteNumber(world.posture?.pips);
+        const totalWarProx = world.posture?.totalWarProximity;
+        if (totalWarProx === 'active' || totalWarProx === 'near') {
+          weight = getWeights(world).HATE_CROSSING.crossing200;
+        } else if (world.posture?.warExceeded || world.posture?.hateHot || world.posture?.hateElevated || (pips !== null && pips >= 4)) {
+          weight = getWeights(world).HATE_CROSSING.crossing50;
+        } else if (pips !== null && pips < 4) {
+          weight = getWeights(world).HATE_CROSSING.staysUnder50;
+        } else {
+          weight = getWeights(world).HATE_CROSSING.crossing50;
+        }
       }
-      // current === null (redacted player-mode hate) falls through to the
-      // conservative staysUnder50 (1x) weight rather than guessing a
-      // crossing -- this is a scoring heuristic, not a safety gate (the
-      // safety gate is hate/total-war-budget above), so a defensible
-      // default is used instead of a three-outcome unknown.
       return -(mid * weight * getWeights(world).HATE_POINTS);
     },
     because(world, candidate) {
@@ -618,8 +748,18 @@ const RULES = Object.freeze([
       if (!(mid > 0)) return 'No expected alien hate from this action.';
       const current = world.posture ? world.posture.actualAlienHate : null;
       if (current === null || current === undefined || !Number.isFinite(current)) {
-        return 'Alien hate is unobservable this cycle; scored at the default 1x (stays-under-50) weight '
-          + 'rather than guessing a crossing.';
+        const pips = toFiniteNumber(world.posture?.pips);
+        const totalWarProx = world.posture?.totalWarProximity;
+        if (totalWarProx === 'active' || totalWarProx === 'near') {
+          return `Alien hate is unobservable but Total War proximity is ${totalWarProx} -- scored at 10x crossing200.`;
+        }
+        if (world.posture?.warExceeded || world.posture?.hateHot || world.posture?.hateElevated || (pips !== null && pips >= 4)) {
+          return `Alien hate is unobservable but visible estimate is ${pips !== null ? pips + '/5 diamonds' : 'elevated'} -- scored at 3x crossing50.`;
+        }
+        if (pips !== null && pips < 4) {
+          return `Visible hate meter ${pips}/5 diamonds is below threshold -- scored at 1x stays-under-50.`;
+        }
+        return 'Alien hate is unobservable; scored conservatively at 3x crossing50.';
       }
       const projected = current + high;
       if (current < ALIEN_TOTAL_WAR_HATE && projected >= ALIEN_TOTAL_WAR_HATE) {
@@ -692,6 +832,25 @@ const RULES = Object.freeze([
     estimateClass: 'exact'
   },
   {
+    id: 'legality/story-gate',
+    kind: 'veto',
+    appliesTo: (candidate) => candidate.missionType === 'Detain' && candidate.target?.kind === 'alienCouncilor',
+    evaluate(world, candidate) {
+      const canDetain = world.capabilities?.canDetainAlienCouncilors;
+      if (canDetain === true) return 'pass';
+      if (canDetain === false) return 'veto';
+      return 'unknown';
+    },
+    because(world, candidate) {
+      const canDetain = world.capabilities?.canDetainAlienCouncilors;
+      if (canDetain === true) return `${ALIEN_DETAIN_STORY_GATE} is available, so Detain against alien councilors is unlocked.`;
+      if (canDetain === false) return `${ALIEN_DETAIN_STORY_GATE} is not available -- Detain mission against aliens is story-locked.`;
+      return `${ALIEN_DETAIN_STORY_GATE} status is not observable in this snapshot -- cannot verify whether Detain on aliens is unlocked.`;
+    },
+    source: `Game story gates (${ALIEN_DETAIN_STORY_GATE} required for alien councilor detention).`,
+    estimateClass: 'exact'
+  },
+  {
     id: 'value/gdp-per-cp-cost',
     kind: 'score',
     appliesTo: (candidate) => candidate.family === 'expansion' && Number.isFinite(candidate.value?.gdpBn),
@@ -725,9 +884,38 @@ const RULES = Object.freeze([
     estimateClass: 'heuristic'
   },
   {
+    id: 'value/defend-interests',
+    kind: 'score',
+    appliesTo: (candidate) => candidate.missionType === 'Defend Interests' && candidate.value?.isDefendInterests === true,
+    evaluate(world, candidate) {
+      const gdpBn = toFiniteNumber(candidate.value?.gdpBn) || 0;
+      const gdpDensity = gdpBn > 0
+        ? (gdpBn / (gdpBn ** 0.6 / 2)) * getWeights(world).DEFENSE.gdpDensityPoints
+        : 0;
+      const escalateLateBonus = world.posture?.escalateLate === true ? getWeights(world).DEFENSE.escalateLateBonus : 0;
+      return getWeights(world).DEFENSE.base + gdpDensity + escalateLateBonus;
+    },
+    because(world, candidate) {
+      const nation = candidate.target?.nation || 'core holding';
+      const escalateLate = world.posture?.escalateLate === true;
+      const unprotected = candidate.value?.unprotectedControlPointCount;
+      const unknown = candidate.value?.defenseUnknownCount;
+      const coverage = unknown > 0
+        ? `${unknown} control point${unknown === 1 ? '' : 's'} have unmeasured existing coverage`
+        : unprotected === 0
+          ? 'the current ward is approaching renewal'
+          : `${unprotected} control point${unprotected === 1 ? '' : 's'} need${unprotected === 1 ? 's' : ''} coverage`;
+      return escalateLate
+        ? `Defending ${nation} (${coverage}) wards core GDP at 0 alien hate while offensive operations are deferred under escalate-late doctrine.`
+        : `Defending ${nation} (${coverage}) wards core GDP at 0 alien hate against rival subversion.`;
+    },
+    source: 'Notion 09 (Defend Interests protects majors); TIMissionTemplate flat 20 Influence cost.',
+    estimateClass: 'heuristic'
+  },
+  {
     id: 'value/counter-councilor',
     kind: 'score',
-    appliesTo: (candidate) => candidate.family === 'council' && candidate.isFallback !== true,
+    appliesTo: (candidate) => candidate.family === 'council' && candidate.isFallback !== true && candidate.missionType !== 'Defend Interests',
     evaluate(world, candidate) {
       const base = candidate.missionType === 'Turn Councilor'
         ? getWeights(world).COUNCIL.turn
@@ -953,10 +1141,18 @@ function buildDecisionReasoning(primary, alternatives, rejected, uncertain, futu
   const breakdown = Array.isArray(primary?.scoreBreakdown) ? primary.scoreBreakdown : [];
   const factors = breakdown.filter(entry => Number(entry.contribution) > 0);
   const tradeoffs = breakdown.filter(entry => Number(entry.contribution) < 0);
+  const confidenceDowngraded = primary?.isFallback
+    ? uncertain.length > 0
+    : Boolean(
+      primary?.provenance?.confidenceDowngradedBy?.length
+      || primary?.unmetPreconditions?.length
+    );
   const sources = [...new Set([
     primary?.provenance?.source,
     ...breakdown.map(entry => entry.source),
-    ...((primary?.provenance?.confidenceDowngradedBy || []).map(String))
+    ...((primary?.provenance?.confidenceDowngradedBy || []).map(String)),
+    ...rejected.flatMap(entry => (entry.vetoReasons || []).map(reason => reason.source)),
+    ...uncertain.flatMap(entry => (entry.uncertaintyReasons || []).map(reason => reason.source))
   ].filter(Boolean))];
   const counts = {
     generated: candidateCount,
@@ -975,7 +1171,7 @@ function buildDecisionReasoning(primary, alternatives, rejected, uncertain, futu
     factors,
     tradeoffs,
     counts,
-    confidence: primary?.provenance?.confidenceDowngradedBy?.length ? 'conditional' : 'supported',
+    confidence: confidenceDowngraded ? 'conditional' : 'supported',
     sources
   };
 }
@@ -991,6 +1187,7 @@ function buildWorld({
   observerId = null,
   observerName = null,
   posture = null,
+  campaignDate = null,
   resources = null,
   nations = [],
   councilors = [],
@@ -1002,6 +1199,7 @@ function buildWorld({
     observerId,
     observerName,
     posture: posture || {},
+    campaignDate,
     resources: resources || null,
     nations: Array.isArray(nations) ? nations : [],
     councilors: Array.isArray(councilors) ? councilors : [],
@@ -1092,6 +1290,7 @@ module.exports = {
   RULES,
   buildWorld,
   generateOpenControlPointCandidates,
+  generateDefendInterestsCandidates,
   generateCouncilCandidates,
   generateIntelligenceCandidates,
   generateCandidates,
