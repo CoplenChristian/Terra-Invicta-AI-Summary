@@ -660,6 +660,15 @@ function renderDashboard() {
   renderResourceFlowChart();
   renderPowerTrajectoryChart();
   renderDualAssetRings();
+  if (window.MissionControlCouncilOrders?.render) {
+    // The same cycle plan the Directive Engine card renders, reduced to one
+    // row per councilor and mounted beside the Priority Brief. The full card
+    // stays where it is: this is the answer, that is the reasoning.
+    window.MissionControlCouncilOrders.render(
+      document.getElementById('councilOrders'),
+      { engineDirectives: state.briefing?.engineDirectives }
+    );
+  }
   if (window.MissionControlDirectiveBoard?.render) {
     // The engine guarantees its primary is an action rather than a
     // prohibition, so this board is the one place the dashboard can promise
@@ -668,7 +677,7 @@ function renderDashboard() {
       document.getElementById('directiveBoard'),
       // /api/v2/briefing returns { briefing, data }; the engine output rides
       // on the briefing, not on the raw snapshot.
-      { engineDirectives: state.briefing?.engineDirectives }
+      { engineDirectives: state.briefing?.engineDirectives, briefing: state.briefing }
     );
   }
   if (window.MissionControlMcBudget?.render) {

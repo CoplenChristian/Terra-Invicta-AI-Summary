@@ -67,7 +67,10 @@ class BriefingGenerator {
       councilors,
       capabilities,
       alienIntelligenceStage: snapshot.alienIntelligenceStage || null,
-      directiveWeights: this.config.analysis?.directiveWeights || null
+      directiveWeights: this.config.analysis?.directiveWeights || null,
+      missionSpecs: snapshot.missionSpecs || null,
+      alienHate: observer.alienHate || snapshot.alienThreat?.hate || null,
+      alienThreat: snapshot.alienThreat || null
     });
     const engineResult = directiveEngine.runEngine(engineWorld);
 
@@ -205,6 +208,7 @@ class BriefingGenerator {
         rejected: engineResult.rejected,
         uncertain: engineResult.uncertain,
         futureOpportunities: engineResult.futureOpportunities,
+        cyclePlan: engineResult.cyclePlan,
         decisionReasoning: engineResult.decisionReasoning
       },
       primaryDirective: directiveAdvisor.pickPrimaryDirective({

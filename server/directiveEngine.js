@@ -37,6 +37,11 @@
 
 const directiveAdvisor = require('./directiveAdvisor');
 const { ALIEN_HATE_WAR_THRESHOLD, ALIEN_TOTAL_WAR_HATE } = require('./alienHateEconomics');
+const { MissionCatalogue } = require('./engine/missionCatalogue');
+const { allocateCyclePlan } = require('./engine/assignment');
+const { computeStrategicClocks } = require('./engine/clocks');
+const { generateMissionCandidatesFromSpecs } = require('./engine/candidates/missions');
+
 const ALIEN_DETAIN_STORY_GATE = 'CaptureAHydra objective (Unlocked/Completed) / AccessLiveHydra milestone';
 
 function toFiniteNumber(value) {
@@ -643,6 +648,11 @@ function generateIntelligenceCandidates(world) {
           + 'success, no retaliation (wiki Diplomacy § "Actions that affect hatred"). The TIMissionTemplate '
           + '[0,1,1,0,2,3] Detain row is the human-target case and does not apply to an alien target.'
       },
+      // Consumed by generateCandidates below: this candidate has already said
+      // in its own hate note why the Detain TIMissionTemplate row does not
+      // describe it, so the row must not be attached back onto it by the
+      // generic spec lookup.
+      templateApplies: false,
       cost: { resource: 'Operations', amount: null, kind: 'bonus' },
       value: { alienCouncilorId: alien.ID, storyGatePassed, storyGateKnown },
       score: null,
@@ -658,12 +668,41 @@ function generateIntelligenceCandidates(world) {
 }
 
 function generateCandidates(world) {
-  return [
+  const existing = [
     ...generateOpenControlPointCandidates(world),
     ...generateDefendInterestsCandidates(world),
     ...generateCouncilCandidates(world),
     ...generateIntelligenceCandidates(world)
   ];
+
+  if (world.missionSpecs && typeof world.missionSpecs === 'object') {
+    const catalogue = new MissionCatalogue(world.missionSpecs);
+
+    // The hand-written generators name their mission but carry none of its
+    // rules, so the odds layer saw no spec and reported odds unavailable even
+    // on a snapshot shipping all 43 templates. The catalogue indexes by
+    // friendlyName as well as dataName, which is what `missionType` holds.
+    //
+    // Defend Interests is the case that shows why this matters: its spec says
+    // `contested: false`, which is the difference between "100%, automatic"
+    // and "there is no roll here to compute".
+    for (const candidate of existing) {
+      if (candidate.missionSpec || candidate.templateApplies === false) continue;
+      const spec = catalogue.get(candidate.missionType);
+      if (spec) candidate.missionSpec = spec;
+    }
+
+    const generic = generateMissionCandidatesFromSpecs(world, catalogue);
+    const existingIds = new Set(existing.map((c) => c.id));
+    for (const g of generic) {
+      if (!existingIds.has(g.id)) {
+        existing.push(g);
+        existingIds.add(g.id);
+      }
+    }
+  }
+
+  return existing;
 }
 
 // ---------------------------------------------------------------------------
@@ -1193,7 +1232,10 @@ function buildWorld({
   councilors = [],
   capabilities = {},
   alienIntelligenceStage = null,
-  directiveWeights = null
+  directiveWeights = null,
+  missionSpecs = null,
+  alienHate = null,
+  alienThreat = null
 } = {}) {
   return Object.freeze({
     observerId,
@@ -1207,7 +1249,10 @@ function buildWorld({
     directiveWeights: directiveWeights || null,
     // Survives player-mode filtering when the raw alien councilor list does
     // not, so it is the only signal for "capability on, nothing sighted".
-    alienIntelligenceStage: alienIntelligenceStage || null
+    alienIntelligenceStage: alienIntelligenceStage || null,
+    missionSpecs: missionSpecs || null,
+    alienHate: alienHate || null,
+    alienThreat: alienThreat || null
   });
 }
 
@@ -1258,9 +1303,22 @@ function runEngine(world) {
     vetoReasons: entry.reasons
   }));
 
+  const ownCouncilors = Array.isArray(world.councilors)
+    ? world.councilors.filter((c) => !world.observerId || sameId(c.factionId, world.observerId) || c.isObserver)
+    : [];
+
+  const cyclePlan = allocateCyclePlan(scoredSurviving, ownCouncilors, world);
+
   let primary;
   let alternatives;
-  if (scoredSurviving.length > 0) {
+  if (cyclePlan.assignments.length > 0) {
+    primary = {
+      ...cyclePlan.assignments[0].candidate,
+      assignedCouncilor: cyclePlan.assignments[0].councilor,
+      assignment: cyclePlan.assignments[0]
+    };
+    alternatives = cyclePlan.assignments.slice(1).map((a) => a.candidate);
+  } else if (scoredSurviving.length > 0) {
     const sorted = [...scoredSurviving].sort((a, b) => b.score - a.score);
     [primary, ...alternatives] = sorted;
   } else {
@@ -1274,6 +1332,7 @@ function runEngine(world) {
     rejected: rejectedCandidates,
     uncertain: scoredUncertain,
     futureOpportunities,
+    cyclePlan,
     decisionReasoning: buildDecisionReasoning(
       primary,
       alternatives,

@@ -35,6 +35,17 @@ const HOST = runtimeConfig.server.host;
 const PUBLISH_TIMEOUT_MS = runtimeConfig.server.publishTimeoutMs;
 
 app.use(express.json({ limit: '5mb' }));
+
+// Mission Control (v2) is the dashboard. Serve its shell at both the site root
+// and /v2/ so either path renders the same live UI and existing /v2/ links keep
+// working without a redirect. This is registered ahead of express.static so the
+// root is answered by an explicit route rather than by directory-index
+// behaviour over public/, which is what used to surface the legacy v1 shell.
+const missionControlShell = path.join(__dirname, '../public/v2/index.html');
+app.get(['/', '/v2'], (req, res) => {
+  res.sendFile(missionControlShell);
+});
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 if (require.main === module) {
@@ -720,11 +731,6 @@ app.get(['/api/snapshot/compact', '/api/snapshot/full', '/latest-snapshot.json',
   } catch (err) {
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
   }
-});
-
-// 7. Route /v2 to Mission Control interface
-app.get('/v2', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/v2/index.html'));
 });
 
 // Start Server
