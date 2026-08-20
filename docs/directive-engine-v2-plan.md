@@ -552,19 +552,26 @@ The three with `persistentEffect: true` are the sharpest: their benefit exists *
 
 Verified. Wiki `Nations` (rev **2026-05-17**, post-1.0), plus the mission template.
 
-**Advise does not boost research directly.** It raises the nation's **Investment Points**, and IP spent on the Knowledge priority is what becomes research. That indirection is why the effect looks larger than the mission description suggests.
+**Advise applies three attributes at once**, and it works on habs as well as nations. From the rendered `Advise` page, which the `MissionList` template generates from game data:
+
+> *Applies the Acting Councilor's Administration, Science, and Command Attributes to the Target in the form of bonuses **for the rest of the turn**.*
+
+| Target | Administration | Science | Command |
+| --- | --- | --- | --- |
+| **Nation** | +(Adm)% to **IP production** | +(Sci)% to **Research output** | +(Cmd / 100) to **Miltech** |
+| **Hab** | +(Adm)% to Money, Water, Volatiles, Metals, Noble Metals and Fissiles | +(Sci)% to **Research output** | +(Cmd)% to Marine Assault Combat Value |
+
+> *Multiple Advisors on the same target give diminishing returns, with the **x-th advisor giving only 1/x** of their bonus.*
+
+The Administration→IP half is corroborated on the `Nations` page (rev 2026-05-17), which also gives the IP base it multiplies:
 
 ```
 base IP = (GDP in billions)^0.35
         × (1 − max(unrest − 2, 0) / 10)
-        − 0.5 × navies
-        − 0.5 × idle armies in home regions
-        − 1.0 × other armies
-
-n-th advisor on that nation adds  +(advisor Administration / n) %
+        − 0.5 × navies − 0.5 × idle armies at home − 1.0 × other armies
 ```
 
-**It keys off Administration, not Science.** Diminishing per additional advisor on the same nation.
+Because the bonuses are re-applied per turn while the councilor stays assigned, and all three land at once, a single Advise assignment is simultaneously an economic, research and military decision.
 
 Mission properties: `Automatic` resolution (never fails, no odds needed), **10 Influence flat**, zero hate on every outcome, `permanentAssignment: true`, `persistentEffect: true`, and it requires a control point in the target nation (`ScannableObjectWithMyControlPoints`).
 
@@ -580,11 +587,32 @@ Measured on the live save — we hold a CP in 6 nations, and our Administration 
 
 Stacking three Admin-25 advisors on the United States: +25%, then +12.5%, then +8.3% → IP 34.38 → 42.97 → 47.27 → 50.14. The second advisor is worth half the first; judge each against what that councilor could do elsewhere.
 
-**Every input is already in the snapshot** — `nation.GDP`, `nation.unrest`, `nation.armies`, and our councilors' effective Administration. No new parsing needed.
+### The research term is the larger one
+
+Our council's attributes pull in different directions, which makes *who advises where* a real optimisation rather than a formality:
+
+| Councilor | Adm | Sci | Cmd | Currently |
+| --- | --- | --- | --- | --- |
+| Brad Lester | 25 | **13** | 5 | Advise |
+| Beth Hofmann | 24 | 7 | 1 | Inspire |
+| Mahangeet Pakimor | 25 | 6 | 0 | Advise |
+| Ngoc Thy Nguyen | 25 | 4 | **18** | Advise |
+| Hemaraj Pavanaja | 24 | 2 | 4 | Advise |
+| Balgovind Manandhar | 11 | 1 | 5 | — |
+
+Research across the six nations we can advise totals **2,318.9**, of which the United States alone is **1,317.6**.
+
+**Brad Lester (Science 13) advising the United States yields +171.3 research** — set against a faction output of roughly 2,000, that single placement is worth more than most research decisions the dashboard currently surfaces.
+
+Note the misallocation risk this creates. Ngoc Thy Nguyen has Command 18 and Science 4; Brad Lester has Science 13 and Command 5. Swapping which nation each advises changes the research yield by a wide margin while the Administration term barely moves, since all three of our top advisors sit at 24–25 Administration. **The Administration term is nearly flat across our council; the Science and Command terms are not.** That is where the optimisation lives.
+
+**Every input is already in the snapshot** — `nation.GDP`, `nation.unrest`, `nation.research`, `nation.armies`, and our councilors' effective Administration, Science and Command. No new parsing needed.
 
 ### Why this belongs in the engine
 
-Advise is the clearest case of an action the current model cannot value: it is free of hate, cannot fail, costs a fixed 10 Influence, and produces a large ongoing economic return that compounds through the priority system. Ranking it by the generic value rules would badly understate it — and four councilors are already running it, so the engine's first job is to stop recommending they stop.
+Advise is the clearest case of an action the current model cannot value: hate-free, cannot fail, fixed 10 Influence, and it pays out across three separate axes at once, every turn, for as long as the councilor stays on it.
+
+Ranking it by the generic value rules would badly understate it. And the engine's first job is narrower than valuing it well — four councilors are already running Advise, and it must stop telling them to stop.
 
 The plan states `score = value − hateCost − resourceCost` and puts the weights in config, but never says how you know the weights are sane. v1 demonstrated the failure: council candidates scored 0 until value rules were added, and afterwards Turn at 9.00 against a control point at 5.52 was an unexamined guess.
 
