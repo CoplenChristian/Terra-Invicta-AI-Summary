@@ -3,6 +3,69 @@ const opportunityScorer = require('./opportunityScorer');
 const spaceTheater = require('./spaceTheater');
 const { buildCouncilorAttributes } = require('../shared/councilorAttributes.mjs');
 const techGraph = require('../shared/techGraph.mjs');
+const { MS_PER_DAY, METERS_PER_AU } = require('../shared/util.mjs');
+const {
+  INITIATIVE_DISPLAY_NAME,
+  SERVANTS_DISPLAY_NAME,
+  ALIEN_FACTION_DISPLAY_NAME
+} = require('../shared/constants.mjs');
+
+// Terra Invicta campaigns begin in 2022. The save's TIMetadataState does not
+// record the start year (verified against the live save, 2026-08-20), so this
+// is an assumption rather than a measurement and every consumer is told so via
+// `metadata.campaignStartYearSource`.
+const ASSUMED_CAMPAIGN_START_YEAR = 2022;
+
+/**
+ * Tolerance added to Saturn's orbital distance when deciding whether an asset
+ * counts as inside Saturn orbit (the Skywatch capability boundary).
+ *
+ * Saturn's own distance moves along its orbit, so an asset parked at a Saturn
+ * moon can read fractionally further out than the planet itself. A judgement
+ * call in this repo, not a game constant -- it is here so the two call sites
+ * cannot drift apart.
+ */
+const SATURN_ORBIT_TOLERANCE_AU = 0.25;
+
+/**
+ * Indices into a TIMissionTemplate `hate` array (6 slots, one per mission
+ * outcome). Read from the installed templates, not the wiki:
+ *   DominateNation [0, 30, 20, 0, 5, 5]  -- slot 1 is worse than slot 2, which
+ *     is what identifies them as critical-failure and failure respectively.
+ *   Detain         [0, 1, 1, 0, 2, 3]    -- slots 4 and 5 rise together, the
+ *     success and critical-success pair.
+ * Slots 0 and 3 are unused by every mission in TIMissionTemplate.json
+ * (verified 2026-08-20 against the 1.0 templates). `server/directiveAdvisor.js`
+ * cites the same slot 4 for its success-hate figures.
+ */
+const MISSION_HATE_SLOT = Object.freeze({
+  criticalFailure: 1,
+  failure: 2,
+  success: 4,
+  criticalSuccess: 5
+});
+
+/**
+ * Faction accent colours, keyed by the save's own display names.
+ *
+ * A presentation choice this repo makes, not a value read from the game. It
+ * was buried inside the accessor as a re-created object literal, so it could
+ * not be referenced or tested; the frontend keeps its own copy in
+ * `public/js/app.js` (`getFactionColorByName`) and that pair is still
+ * unlinked -- see the report accompanying this refactor.
+ */
+const FACTION_COLORS = Object.freeze({
+  [INITIATIVE_DISPLAY_NAME]: '#00e5ff',
+  'the Resistance': '#2979ff',
+  'Humanity First': '#ff1744',
+  'the Academy': '#ffd600',
+  'Project Exodus': '#ff9100',
+  'the Protectorate': '#78909c',
+  [SERVANTS_DISPLAY_NAME]: '#d500f9',
+  [ALIEN_FACTION_DISPLAY_NAME]: '#00e676'
+});
+
+const UNKNOWN_FACTION_COLOR = '#b0bec5';
 
 class SnapshotBuilder {
   constructor() {
@@ -97,7 +160,7 @@ class SnapshotBuilder {
       if (!b.ID?.value || !b.globalPosition) continue;
       const p = b.globalPosition;
       const distanceMeters = Math.sqrt((p.x || 0) ** 2 + (p.y || 0) ** 2 + (p.z || 0) ** 2);
-      bodyDistanceAUById.set(b.ID.value, distanceMeters / 149597870700);
+      bodyDistanceAUById.set(b.ID.value, distanceMeters / METERS_PER_AU);
     }
     const saturnBody = rawSpaceBodies.find(b => b.displayName === 'Saturn');
     const saturnOrbitDistanceAU = saturnBody?.ID?.value
@@ -165,7 +228,7 @@ class SnapshotBuilder {
         const cpData = {
           id: cpId,
           factionId,
-          factionName: factionId ? (factionsById.get(factionId)?.displayName || 'Unknown') : 'Neutral',
+          factionName: this.resolveFactionName(factionsById, factionId, 'Unknown', 'Neutral'),
           nationId,
           isExecutive,
           controlPointType: cp.controlPointType || 'Standard',
@@ -213,8 +276,12 @@ class SnapshotBuilder {
       const unrest = n.unrest || 0;
       const nukes = n.nuclearWeapons || n.nukes || (n.historyNuclearWeapons?.length ? n.historyNuclearWeapons[n.historyNuclearWeapons.length - 1] : 0);
       const armies = Array.isArray(n.armies) ? n.armies.length : 0;
-      const currentMissionControl = Number(n.missionControl);
-      const mc = Number.isFinite(currentMissionControl)
+      // Number(null) is 0, so the current reading has to be probed for
+      // presence before it is coerced -- otherwise a nation whose save record
+      // omits missionControl reports a confident 0 MC and never falls through
+      // to its history. Both sources absent stays null.
+      const currentMissionControl = this.firstNumericOrNull(n.missionControl);
+      const mc = currentMissionControl !== null
         ? currentMissionControl
         : this.lastFiniteNumber(n.historyMissionControl);
 
@@ -261,7 +328,7 @@ class SnapshotBuilder {
       // presented as an active faction operative.
       if (!isActiveCouncilor || isIndependent) continue;
 
-      const isAlien = !!(c.typeTemplateName && c.typeTemplateName.toLowerCase().includes('alien')) || factionName === 'the Aliens';
+      const isAlien = !!(c.typeTemplateName && c.typeTemplateName.toLowerCase().includes('alien')) || factionName === ALIEN_FACTION_DISPLAY_NAME;
 
       const locationId = c.location?.value || c.location || null;
       const locationRegion = locationId ? regionsById.get(locationId) : null;
@@ -392,7 +459,7 @@ class SnapshotBuilder {
       if (!fleetId) continue;
 
       const factionId = f.faction?.value || null;
-      const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Unknown') : 'Unknown';
+      const factionName = this.resolveFactionName(factionsById, factionId, 'Unknown');
 
       const shipRefs = Array.isArray(f.ships) ? f.ships : [];
       const shipList = [];
@@ -464,7 +531,7 @@ class SnapshotBuilder {
         spaceTheaterName: theater.name,
         orbitBodyDistanceAU,
         insideSaturnOrbit: saturnOrbitDistanceAU !== null && orbitBodyDistanceAU !== null
-          ? orbitBodyDistanceAU <= saturnOrbitDistanceAU + 0.25
+          ? orbitBodyDistanceAU <= saturnOrbitDistanceAU + SATURN_ORBIT_TOLERANCE_AU
           : null,
         mission: f.currentOperations?.[0]?.templateName || (f.inCombat ? 'Combat' : (trajectory ? 'Transfer' : 'Stationary / Patrol')),
         destination: destination.name,
@@ -491,7 +558,7 @@ class SnapshotBuilder {
       if (!habId) continue;
 
       const factionId = h.faction?.value || null;
-      const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Unknown') : 'Unknown';
+      const factionName = this.resolveFactionName(factionsById, factionId, 'Unknown');
       const orbitBody = this.resolveOrbitBody(h, bodiesById, orbitsById);
       const theater = spaceTheater.theaterForBody(orbitBody);
       const orbitBodyDistanceAU = this.resolveOrbitBodyDistanceAU(h, bodiesById, orbitsById, bodyDistanceAUById);
@@ -508,7 +575,7 @@ class SnapshotBuilder {
         spaceTheaterName: theater.name,
         orbitBodyDistanceAU,
         insideSaturnOrbit: saturnOrbitDistanceAU !== null && orbitBodyDistanceAU !== null
-          ? orbitBodyDistanceAU <= saturnOrbitDistanceAU + 0.25
+          ? orbitBodyDistanceAU <= saturnOrbitDistanceAU + SATURN_ORBIT_TOLERANCE_AU
           : null,
         inEarthLEO: !!h.inEarthLEO,
         templateName: h.templateName || h.habSchematicTemplateName,
@@ -532,7 +599,7 @@ class SnapshotBuilder {
       const habId = hs.hab?.value || null;
       const hab = habId ? rawHabs.find(x => x.ID?.value === habId) : null;
       const factionId = hab?.faction?.value || null;
-      const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Unclaimed') : 'Unclaimed';
+      const factionName = this.resolveFactionName(factionsById, factionId, 'Unclaimed');
 
       // Mining state lives on the hab's sector/module records. Resolve the
       // active mining complex so the API can distinguish an operational mine
@@ -567,22 +634,19 @@ class SnapshotBuilder {
       const completionDate = module?.completionDate || null;
       const gameDate = saveData.gameTimeString ? new Date(saveData.gameTimeString) : null;
       const moduleCompletion = completionDate ? new Date(completionDate) : null;
-      const hasValidDates = gameDate && !Number.isNaN(gameDate.getTime()) &&
-        moduleCompletion && !Number.isNaN(moduleCompletion.getTime());
 
-      let constructionStatus = 'not-installed';
+      // A site with no mine module at all is not "building" -- it has nothing
+      // installed, or its hab has not been founded yet. Those two states are
+      // this reducer's own; the four module states come from the shared
+      // classifier the hab-module reducer uses.
+      let constructionStatus;
       if (module) {
-        if (module.destroyed) constructionStatus = 'destroyed';
-        else if (module.decommissioning) constructionStatus = 'decommissioning';
-        else if (module.constructionCompleted) constructionStatus = 'operational';
-        else constructionStatus = 'building';
-      } else if (hs.pendingHab) {
-        constructionStatus = 'pending-hab';
+        constructionStatus = this.moduleConstructionStatus(module);
+      } else {
+        constructionStatus = hs.pendingHab ? 'pending-hab' : 'not-installed';
       }
 
-      const daysRemaining = constructionStatus === 'building' && hasValidDates
-        ? Math.max(0, Math.round(((moduleCompletion - gameDate) / 86400000) * 10) / 10)
-        : constructionStatus === 'operational' ? 0 : null;
+      const daysRemaining = this.daysRemainingForStatus(constructionStatus, gameDate, moduleCompletion);
 
       // Join the site's mining profile from the game templates. The save omits
       // it on unclaimed sites, but it is what determines yields -- without it
@@ -591,6 +655,8 @@ class SnapshotBuilder {
       const siteTemplate = templateLoader.templates.habSites.get(hs.templateName)
         || templateLoader.templates.habSites.get(hs.displayName)
         || null;
+
+      const siteResourceRates = this.readSiteResourceRates(hs);
 
       habSites.push({
         ID: siteId,
@@ -619,11 +685,13 @@ class SnapshotBuilder {
         daysRemaining,
         // Current saves store production as *_day. Keep legacy aliases as
         // fallbacks for older save formats.
-        water: this.firstNumeric(hs.water_day, hs.water, hs.waterDailyRate),
-        volatiles: this.firstNumeric(hs.volatiles_day, hs.volatiles, hs.volatilesDailyRate),
-        metals: this.firstNumeric(hs.metals_day, hs.metals, hs.metalsDailyRate),
-        nobleMetals: this.firstNumeric(hs.nobles_day, hs.nobleMetals, hs.nobleMetalsDailyRate),
-        fissiles: this.firstNumeric(hs.fissiles_day, hs.fissiles, hs.fissilesDailyRate),
+        //
+        // An absent rate is NOT a zero rate. A site the save has not measured
+        // (an unsurveyed body, an older save format, a modded site) must not
+        // be reported as barren -- that is the difference between "this rock
+        // yields nothing" and "we have not looked". `unmeasuredResourceRates`
+        // names which of the five were absent so a consumer can say so.
+        ...siteResourceRates,
         resourceRateUnit: 'per day'
       });
     }
@@ -651,17 +719,14 @@ class SnapshotBuilder {
       const location = habModuleLocationById.get(moduleId);
       const hab = location?.habId ? habs.find(item => item.ID === location.habId) : null;
       const factionId = hab?.factionId || null;
-      const factionName = factionId ? (factionsById.get(factionId)?.displayName || 'Unknown') : null;
+      const factionName = this.resolveFactionName(factionsById, factionId, 'Unknown', null);
       const constructionStatus = this.moduleConstructionStatus(module);
       const moduleType = this.classifyHabModule(module, template);
       const completionDate = this.dateValueToIso(module.completionDate);
       const startBuildDate = this.dateValueToIso(module.startBuildDate);
       const moduleCompletion = completionDate ? new Date(completionDate) : null;
       const gameDate = saveData.gameTimeString ? new Date(saveData.gameTimeString) : null;
-      const daysRemaining = constructionStatus === 'building' && gameDate && moduleCompletion &&
-        !Number.isNaN(gameDate.getTime()) && !Number.isNaN(moduleCompletion.getTime())
-        ? Math.max(0, this.roundNumber((moduleCompletion - gameDate) / 86400000, 1))
-        : constructionStatus === 'operational' ? 0 : null;
+      const daysRemaining = this.daysRemainingForStatus(constructionStatus, gameDate, moduleCompletion);
       const isShipyard = template?.allowsShipConstruction === true ||
         (Array.isArray(template?.specialRules) && template.specialRules.includes('Shipyard'));
 
@@ -730,12 +795,12 @@ class SnapshotBuilder {
           const startDate = this.dateValueToIso(entry?.startDate);
           const daysToCompletion = this.firstNumericOrNull(entry?.daysToCompletion);
           const completionDate = startDate && daysToCompletion !== null
-            ? new Date(new Date(startDate).getTime() + daysToCompletion * 86400000).toISOString()
+            ? new Date(new Date(startDate).getTime() + daysToCompletion * MS_PER_DAY).toISOString()
             : null;
           shipyardQueues.push({
             id: `${factionId}:${shipyardId || 'unknown'}:${index}`,
             factionId,
-            factionName: factionsById.get(factionId)?.displayName || 'Unknown',
+            factionName: this.resolveFactionName(factionsById, factionId, 'Unknown'),
             shipyardId,
             shipyardName: shipyard?.name || null,
             habId: shipyard?.habId || null,
@@ -804,9 +869,12 @@ class SnapshotBuilder {
 
     const activeGlobalSlots = techProgress.map((slot, index) => {
       const techTemplate = templateLoader.getTech(slot.techTemplateName);
-      const totalCost = techTemplate?.researchCost || 10000;
-      const accumulated = slot.accumulatedResearch || 0;
-      const percent = Math.min(100, Math.round((accumulated / totalCost) * 1000) / 10);
+      // An unresolved tech template has no known cost. Substituting a round
+      // 10000 produced a completion percentage that looked measured and was
+      // invented, so an unknown cost now yields an unknown percentage.
+      const totalCost = this.firstNumericOrNull(techTemplate?.researchCost);
+      const accumulated = this.firstNumericOrNull(slot.accumulatedResearch) ?? 0;
+      const percent = this.completionPercent(accumulated, totalCost);
 
       const contributions = [];
       let leadFactionId = null;
@@ -834,6 +902,10 @@ class SnapshotBuilder {
         category: techTemplate?.techCategory || 'General',
         accumulatedResearch: Math.round(accumulated),
         totalCost,
+        totalCostAvailable: totalCost !== null,
+        totalCostSource: totalCost !== null
+          ? 'game template researchCost'
+          : 'unavailable: tech template not resolved',
         percent,
         contributions,
         leadFactionId,
@@ -945,19 +1017,22 @@ class SnapshotBuilder {
       const monthlyExpense = recent30DayFlow.expense;
       const monthlyNet = recent30DayFlow.net;
 
-      // Power Score Components (0-100 scales)
-      const earthEconomyScore = Math.min(100, Math.round((totalGdp / scoreNormalizers.gdp) * 100));
-      const earthPoliticsScore = Math.min(100, Math.round((fCPs.length / scoreNormalizers.controlPoints) * 100));
-      const researchPowerScore = totalResearch === null
-        ? null
-        : Math.min(100, Math.round((totalResearch / scoreNormalizers.research) * 100));
-      const spaceEconomyScore = Math.min(100, Math.round((fHabs.length / scoreNormalizers.habs) * 100));
-      const fleetPowerScore = fCombatPower === null
-        ? null
-        : Math.min(100, Math.round((fCombatPower / scoreNormalizers.combatPower) * 100));
-      const militaryPowerScore = Math.min(100, Math.round(
-        (fNations.reduce((acc, n) => acc + (n.nukes || 0), 0) / scoreNormalizers.nukes) * 100
-      ));
+      // Power Score Components (0-100 scales).
+      //
+      // Every one of these divides by a configured normalizer. A missing or
+      // zero normalizer used to produce Infinity -> Math.min(100, Infinity) ->
+      // a fabricated *perfect* 100, or NaN, depending on the numerator. A
+      // score that cannot be computed is reported as null and is then dropped
+      // from the weighted composite below rather than scored as excellent.
+      const earthEconomyScore = this.normalizedScore(totalGdp, scoreNormalizers.gdp);
+      const earthPoliticsScore = this.normalizedScore(fCPs.length, scoreNormalizers.controlPoints);
+      const researchPowerScore = this.normalizedScore(totalResearch, scoreNormalizers.research);
+      const spaceEconomyScore = this.normalizedScore(fHabs.length, scoreNormalizers.habs);
+      const fleetPowerScore = this.normalizedScore(fCombatPower, scoreNormalizers.combatPower);
+      const militaryPowerScore = this.normalizedScore(
+        fNations.reduce((acc, n) => acc + (n.nukes || 0), 0),
+        scoreNormalizers.nukes
+      );
 
       const scoreComponents = [
         [earthEconomyScore, scoreWeights.earthEconomy],
@@ -977,14 +1052,21 @@ class SnapshotBuilder {
 
       const currentProjects = (Array.isArray(f.currentProjectProgress) ? f.currentProjectProgress : []).map(p => {
         const projT = templateLoader.getProject(p.projectTemplateName);
-        const cost = projT?.researchCost || 5000;
-        const acc = p.accumulatedResearch || 0;
+        // Same rule as the global tech slots above: an unresolved project
+        // template has an unknown cost, not a default one, and an unknown
+        // cost cannot produce a completion percentage.
+        const cost = this.firstNumericOrNull(projT?.researchCost);
+        const acc = this.firstNumericOrNull(p.accumulatedResearch) ?? 0;
         return {
           projectId: p.projectTemplateName,
           displayName: projT?.friendlyName || p.projectTemplateName,
           accumulatedResearch: Math.round(acc),
           totalCost: cost,
-          percent: Math.min(100, Math.round((acc / cost) * 1000) / 10)
+          totalCostAvailable: cost !== null,
+          totalCostSource: cost !== null
+            ? 'game template researchCost'
+            : 'unavailable: project template not resolved',
+          percent: this.completionPercent(acc, cost)
         };
       });
 
@@ -1013,7 +1095,11 @@ class SnapshotBuilder {
           projectedMonthlyIncomeSource: 'cachedYearlyRevenue / 12',
           recent30Days: recent30DayFlow
         },
-        assessedAlienHateOfMe: f.assessedAlienHateOfMe ?? 0,
+        // Unknown alien hate is NOT zero hate. Defaulting an unmeasured
+        // faction to 0 reports the single most reassuring value the field can
+        // take -- "the aliens have no grievance with you" -- from no evidence
+        // at all, and every downstream war/veto check then reads safe.
+        assessedAlienHateOfMe: this.firstNumericOrNull(f.assessedAlienHateOfMe),
         controlPointsCount: fCPs.length,
         nationsCount: fNations.length,
         totalGdp,
@@ -1060,9 +1146,11 @@ class SnapshotBuilder {
         // Mission Control capacity is useful context, but it is deliberately
         // kept separate from missionControlUsage because only used MC affects
         // the alien minimum-hate floor.
-        missionControlCapacity: fNations.length
-          ? fNations.reduce((sum, nation) => sum + (Number(nation.missionControl) || 0), 0)
-          : null,
+        //
+        // A nation whose Mission Control the save does not carry contributes
+        // an unknown amount, not zero, so the whole sum becomes unknown rather
+        // than a total that silently understates capacity.
+        missionControlCapacity: this.sumOrNull(fNations.map(nation => nation.missionControl)),
         shipyardCount: shipyardCountByFaction.get(factionId) || 0,
         shipyardQueueCount: shipyardQueues.filter(queue => queue.factionId === factionId).length,
         shipDesigns: fShipDesigns
@@ -1100,21 +1188,26 @@ class SnapshotBuilder {
 
     const builtAlienFacilities = [];
     for (const af of rawAlienFacilities) {
-      if (af.built || (af.currentHP || 0) > 0) {
+      const currentHP = this.firstNumericOrNull(af.currentHP);
+      if (af.built || (currentHP !== null && currentHP > 0)) {
         const regionId = af.region?.value;
         const reg = regionId ? regionsById.get(regionId) : null;
         builtAlienFacilities.push({
           id: af.ID?.value,
           regionId,
           regionName: reg?.displayName || 'Unknown Region',
-          currentHP: af.currentHP || 100
+          // A facility whose HP the save does not carry is not a pristine
+          // 100 HP facility. Inventing full health understates how close it
+          // is to destruction just as badly as inventing zero would overstate.
+          currentHP,
+          currentHPAvailable: currentHP !== null
         });
       }
     }
 
     // Seed a default target list for consumers that do not have an observer
     // context yet. The API filter recomputes this for the selected observer.
-    const defaultObserverName = templateLoader.config.campaign?.defaultObserverFactionName || 'the Initiative';
+    const defaultObserverName = templateLoader.config.campaign?.defaultObserverFactionName || INITIATIVE_DISPLAY_NAME;
     const defaultObserver = factions.find(f => f.displayName === defaultObserverName) || factions[0];
     const defaultPriorityTarget = defaultObserver
       ? opportunityScorer.selectPriorityTargetFaction(factions, nations, defaultObserver.ID)
@@ -1168,8 +1261,25 @@ class SnapshotBuilder {
         fileSizeBytes: saveData.fileSizeBytes,
         lastModified: saveData.lastModified,
         gameTimeString: saveData.gameTimeString,
-        difficulty: saveData.difficulty,
-        campaignStartYear: saveData.campaignStartYear
+        // Null when the save's TIMetadataState omits the field. Difficulty
+        // selects the alien minimum-hate floor multiplier, so a silent
+        // 'Normal' default was a wrong answer presented as a measured one.
+        difficulty: saveData.difficulty ?? null,
+        // Derived from the value actually being published, so the flag cannot
+        // disagree with the field it describes.
+        difficultyAvailable: typeof saveData.difficulty === 'string' && saveData.difficulty.trim() !== '',
+        // Verified against the live save on 2026-08-20: TIMetadataState does
+        // not carry campaignStartYear at all, so the previous `|| 2022`
+        // fabricated an elapsed-campaign measurement for every save. The
+        // measured field now stays null; the 2022 series start is offered
+        // separately as an explicitly labelled assumption, following the same
+        // pattern the hate model already uses for `progressionSpeedAssumed`.
+        campaignStartYear: saveData.campaignStartYear ?? null,
+        campaignStartYearAvailable: saveData.campaignStartYear !== null && saveData.campaignStartYear !== undefined,
+        assumedCampaignStartYear: ASSUMED_CAMPAIGN_START_YEAR,
+        campaignStartYearSource: saveData.campaignStartYear !== null && saveData.campaignStartYear !== undefined
+          ? 'save metadata'
+          : `assumed ${ASSUMED_CAMPAIGN_START_YEAR} (Terra Invicta campaign start; not present in save metadata)`
       },
       factions,
       factionRelationships,
@@ -1279,11 +1389,13 @@ class SnapshotBuilder {
         // Explicit zeros, never null. Everywhere else in this codebase null
         // means unmeasured, and the hate model depends on that distinction --
         // "costs nothing" and "unknown" must not share a value.
-        successHate: typeof hate[4] === 'number' ? hate[4] : 0,
-        criticalHate: typeof hate[5] === 'number' ? hate[5] : 0,
+        successHate: typeof hate[MISSION_HATE_SLOT.success] === 'number' ? hate[MISSION_HATE_SLOT.success] : 0,
+        criticalHate: typeof hate[MISSION_HATE_SLOT.criticalSuccess] === 'number' ? hate[MISSION_HATE_SLOT.criticalSuccess] : 0,
+        // The worse of the two failure branches, so an unread branch never
+        // makes a mission look cheaper than its worst outcome.
         failureHate: Math.max(
-          typeof hate[1] === 'number' ? hate[1] : 0,
-          typeof hate[2] === 'number' ? hate[2] : 0
+          typeof hate[MISSION_HATE_SLOT.criticalFailure] === 'number' ? hate[MISSION_HATE_SLOT.criticalFailure] : 0,
+          typeof hate[MISSION_HATE_SLOT.failure] === 'number' ? hate[MISSION_HATE_SLOT.failure] : 0
         ),
         attack,
         defend,
@@ -1295,7 +1407,9 @@ class SnapshotBuilder {
         context: mission.missionContext || null,
         targetKind: String(mission.target?.$type || '').replace('TIMissionTarget_', '') || null,
         conditions,
-        utilityScore: typeof mission.utilityScore === 'number' ? mission.utilityScore : null
+        utilityScore: typeof mission.utilityScore === 'number' ? mission.utilityScore : null,
+        permanentAssignment: Boolean(mission.permanentAssignment),
+        persistentEffect: Boolean(mission.persistentEffect)
       };
     }
     return specs;
@@ -1390,6 +1504,71 @@ class SnapshotBuilder {
     return null;
   }
 
+  // Sum of a list where every entry must be present. Returns null if the list
+  // is empty or if any entry is unmeasured, because a partial sum reads as a
+  // complete one and understates the total without saying so.
+  sumOrNull(values) {
+    if (!Array.isArray(values) || values.length === 0) return null;
+    let total = 0;
+    for (const value of values) {
+      const number = Number(value);
+      if (value === null || value === undefined || value === '' || !Number.isFinite(number)) return null;
+      total += number;
+    }
+    return total;
+  }
+
+  // Research completion as a percentage of total cost. Returns null when
+  // either side is unmeasured or the cost is zero: progress/0 is Infinity (or
+  // NaN when progress is 0 too), and Math.min(100, NaN) is NaN, not 100, so
+  // an unguarded divide leaks NaN into the payload.
+  completionPercent(progress, totalCost) {
+    const done = Number(progress);
+    const cost = Number(totalCost);
+    if (progress === null || progress === undefined || !Number.isFinite(done)) return null;
+    if (totalCost === null || totalCost === undefined || !Number.isFinite(cost) || cost <= 0) return null;
+    return Math.min(100, Math.round((done / cost) * 1000) / 10);
+  }
+
+  // A 0-100 power-score component. Returns null -- not 0, and not a fabricated
+  // 100 -- when either the measured value or its configured normalizer is
+  // missing, non-finite or non-positive, because x/0 is Infinity and
+  // Math.min(100, Infinity) silently reports a maximum score.
+  normalizedScore(value, normalizer) {
+    const measured = Number(value);
+    const scale = Number(normalizer);
+    if (value === null || value === undefined || !Number.isFinite(measured)) return null;
+    if (!Number.isFinite(scale) || scale <= 0) return null;
+    return Math.min(100, Math.round((measured / scale) * 100));
+  }
+
+  // The five mined resource rates for one hab site, with absence preserved.
+  // Returns the rates plus `resourceRatesAvailable` (false when the save
+  // carried none of them) and `unmeasuredResourceRates` (the names that were
+  // absent), so a renderer can print "unavailable" instead of a confident 0.
+  readSiteResourceRates(site) {
+    const fields = [
+      ['water', ['water_day', 'water', 'waterDailyRate']],
+      ['volatiles', ['volatiles_day', 'volatiles', 'volatilesDailyRate']],
+      ['metals', ['metals_day', 'metals', 'metalsDailyRate']],
+      ['nobleMetals', ['nobles_day', 'nobleMetals', 'nobleMetalsDailyRate']],
+      ['fissiles', ['fissiles_day', 'fissiles', 'fissilesDailyRate']]
+    ];
+
+    const rates = {};
+    const unmeasured = [];
+    for (const [key, aliases] of fields) {
+      const value = this.firstNumericOrNull(...aliases.map(alias => site?.[alias]));
+      rates[key] = value;
+      if (value === null) unmeasured.push(key);
+    }
+
+    rates.unmeasuredResourceRates = unmeasured;
+    rates.resourceRatesAvailable = unmeasured.length < fields.length;
+    rates.resourceRatesComplete = unmeasured.length === 0;
+    return rates;
+  }
+
   roundResourceMap(resources = {}) {
     const names = [
       'Money', 'Influence', 'Operations', 'Research', 'Projects', 'Boost',
@@ -1449,7 +1628,7 @@ class SnapshotBuilder {
   summarizeRecentTransactions(transactions, gameTimeString, days = 30) {
     const gameDate = gameTimeString ? new Date(gameTimeString) : null;
     const endMs = gameDate && !Number.isNaN(gameDate.getTime()) ? gameDate.getTime() : null;
-    const startMs = endMs === null ? null : endMs - days * 86400000;
+    const startMs = endMs === null ? null : endMs - days * MS_PER_DAY;
     const income = {};
     const expense = {};
     if (!transactions || typeof transactions !== 'object') {
@@ -1499,6 +1678,43 @@ class SnapshotBuilder {
     if (module?.decommissioning) return 'decommissioning';
     if (module?.constructionCompleted) return 'operational';
     return 'building';
+  }
+
+  /**
+   * Owning faction's display name, from the id map built once per snapshot.
+   *
+   * Six call sites wrote this out by hand and they do NOT agree on the two
+   * fallback strings -- an unowned control point is 'Neutral', an unclaimed
+   * hab site is 'Unclaimed', a hab module with no owner is `null`. Passing
+   * them in keeps every existing answer while removing the chance of a seventh
+   * copy inventing a seventh spelling.
+   *
+   * @param {Map}    factionsById
+   * @param {*}      factionId
+   * @param {string} unresolved Name for an id that is not in the map.
+   * @param {*}      absent     Value for no faction id at all.
+   */
+  resolveFactionName(factionsById, factionId, unresolved, absent = unresolved) {
+    if (!factionId) return absent;
+    return factionsById.get(factionId)?.displayName || unresolved;
+  }
+
+  /**
+   * Days until a module's completion date.
+   *
+   * Two reducers (hab sites and hab modules) computed this from the same three
+   * inputs and had already drifted into different rounding expressions for the
+   * same one-decimal result. `null` is the honest answer for a status that is
+   * neither building nor operational, and for a building module whose dates do
+   * not parse -- never 0, which would read as "finishing today".
+   */
+  daysRemainingForStatus(constructionStatus, gameDate, completionDate) {
+    if (constructionStatus === 'operational') return 0;
+    if (constructionStatus !== 'building') return null;
+    const datesUsable = gameDate && !Number.isNaN(gameDate.getTime()) &&
+      completionDate && !Number.isNaN(completionDate.getTime());
+    if (!datesUsable) return null;
+    return Math.max(0, this.roundNumber((completionDate - gameDate) / MS_PER_DAY, 1));
   }
 
   classifyHabModule(module, template) {
@@ -1557,20 +1773,22 @@ class SnapshotBuilder {
     return { type: 'transfer', id: null, name: 'In Transit' };
   }
 
-  firstNumeric(...values) {
-    for (const value of values) {
-      if (typeof value === 'number' && Number.isFinite(value)) return value;
-    }
-    return 0;
-  }
+  // `firstNumeric` used to return 0 when every candidate was absent, which made
+  // an unmeasured value indistinguishable from a measured zero. It has been
+  // removed in favour of `firstNumericOrNull`; absent stays null.
 
+  // Most recent measured entry in a history array, or null if it holds none.
+  // `Number(null) === 0` and `Number('') === 0` are both finite, so a history
+  // padded with nulls would otherwise report a confident zero.
   lastFiniteNumber(values) {
-    if (!Array.isArray(values)) return 0;
+    if (!Array.isArray(values)) return null;
     for (let index = values.length - 1; index >= 0; index -= 1) {
-      const value = Number(values[index]);
+      const entry = values[index];
+      if (entry === null || entry === undefined || entry === '') continue;
+      const value = Number(entry);
       if (Number.isFinite(value)) return value;
     }
-    return 0;
+    return null;
   }
 
   readShipCombatPower(ship) {
@@ -1701,17 +1919,7 @@ class SnapshotBuilder {
   }
 
   getFactionColor(displayName) {
-    const map = {
-      'the Initiative': '#00e5ff',
-      'the Resistance': '#2979ff',
-      'Humanity First': '#ff1744',
-      'the Academy': '#ffd600',
-      'Project Exodus': '#ff9100',
-      'the Protectorate': '#78909c',
-      'the Servants': '#d500f9',
-      'the Aliens': '#00e676'
-    };
-    return map[displayName] || '#b0bec5';
+    return FACTION_COLORS[displayName] || UNKNOWN_FACTION_COLOR;
   }
 
   getCollection(gamestates, className) {

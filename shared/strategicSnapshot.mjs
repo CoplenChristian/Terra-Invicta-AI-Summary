@@ -15,6 +15,9 @@
 // import it alongside the local server.
 
 import { buildAlienHateEconomics } from './alienHateEconomics.mjs';
+import { deriveStructuredEvents } from './strategicDelta.mjs';
+import { DEFAULT_OBSERVER_FACTION_ID } from './constants.mjs';
+import { asArray, toFiniteNumber as num, round, sameId, resolveObserverFaction } from './util.mjs';
 
 export const STRATEGIC_SNAPSHOT_SCHEMA = 'strategic_snapshot_v1';
 export const STRATEGIC_SNAPSHOT_VERSION = 1;
@@ -49,6 +52,45 @@ export const MINE_LIMIT_GRANTS = Object.freeze({
   Project_GoldRush: 6
 });
 
+// Hab-module capability families, verified against the installed 1.0 templates
+// at TerraInvicta_Data/StreamingAssets/Templates/TIHabModuleTemplate.json
+// (file mtime 2026-08-14, read 2026-08-20).
+//
+// The two families are DISJOINT in 1.0 -- zero overlap across all 156 module
+// templates -- so counting a shipyard as a construction module too was a
+// miscategorisation, not a deliberate dual count:
+//
+//   * exactly 6 templates carry `allowsShipConstruction: true`
+//     (SpaceDock/Shipyard/Spaceworks + the three alien equivalents). These
+//     build SHIPS. ConstructionModule has `allowsShipConstruction: false`.
+//   * exactly 6 templates carry a `CanFoundTierNHabs` special rule
+//     (ConstructionModule/Nanofactory/NanofacturingComplex + alien
+//     equivalents). These found HABS and speed module construction.
+//
+// The old /Construction|Shipyard|Spaceworks|Dock/ name regex was wrong in both
+// directions: it double-counted every shipyard as construction, and it missed
+// Nanofactory / NanofacturingComplex / AlienAssembler entirely -- so a hab
+// whose construction capacity came from a tier-2 or tier-3 module reported
+// `construction: 0`. On the live save that inflated the observer's
+// construction count from 1 to 12.
+export const SHIP_CONSTRUCTION_MODULES = Object.freeze([
+  'SpaceDock', 'Shipyard', 'Spaceworks',
+  'AlienSpacedock', 'AlienShipyard', 'AlienSpaceworks'
+]);
+
+export const HAB_CONSTRUCTION_MODULES = Object.freeze([
+  'ConstructionModule', 'Nanofactory', 'NanofacturingComplex',
+  'AlienAssembler', 'AlienNanofactory', 'AlienNanofacturingComplex'
+]);
+
+const SHIP_CONSTRUCTION_SET = new Set(SHIP_CONSTRUCTION_MODULES.map(n => n.toLowerCase()));
+const HAB_CONSTRUCTION_SET = new Set(HAB_CONSTRUCTION_MODULES.map(n => n.toLowerCase()));
+
+// Fallback for module names a future patch may add. Deliberately excludes the
+// shipyard vocabulary so an unrecognised yard cannot leak back into the
+// construction bucket.
+const HAB_CONSTRUCTION_PATTERN = /Construction|Nanofact|Assembler/i;
+
 const RESOURCE_KEYS = Object.freeze([
   ['water', 'Water'],
   ['volatiles', 'Volatiles'],
@@ -58,22 +100,6 @@ const RESOURCE_KEYS = Object.freeze([
   ['antimatter', 'Antimatter'],
   ['exotics', 'Exotics']
 ]);
-
-const asArray = (value) => (Array.isArray(value) ? value : []);
-// Number(null) is 0 and Number('') is 0, so a bare Number.isFinite guard would
-// silently turn a redacted or absent field into a confident zero.
-const num = (value) => {
-  if (value === null || value === undefined || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-};
-
-const round = (value, places = 2) => {
-  const n = num(value);
-  if (n === null) return null;
-  const f = 10 ** places;
-  return Math.round(n * f) / f;
-};
 
 // Small, stable, dependency-free digest. Used only to detect that a completed
 // set changed between snapshots -- not for security.
@@ -104,11 +130,14 @@ const compactWeaponMix = (breakdown) => {
 };
 
 const factionSummary = (faction) => {
+  // Absent stays null. A faction row published by an older parser, or one whose
+  // counts were redacted, must not report a confident "0 ships" -- the delta
+  // would then narrate a fleet that vanished and never existed.
   const row = {
     id: num(faction.ID),
-    habs: num(faction.habsCount) ?? 0,
-    fleets: num(faction.fleetsCount) ?? 0,
-    ships: num(faction.shipsCount) ?? 0
+    habs: num(faction.habsCount),
+    fleets: num(faction.fleetsCount),
+    ships: num(faction.shipsCount)
   };
   // Earth-side metrics are meaningless for the aliens; omit rather than zero.
   if (num(faction.controlPointsCount)) row.cp = num(faction.controlPointsCount);
@@ -132,7 +161,7 @@ const buildEconomy = (observer, habSites, completed) => {
 
   // Guard on presence, not truthiness: a module id of 0 is a valid id.
   const mineCount = habSites.filter(
-    (site) => site.mineModuleId != null && Number(site.factionId) === Number(observer.ID)
+    (site) => site.mineModuleId != null && sameId(site.factionId, observer.ID)
   ).length;
 
   let mineLimit = 0;
@@ -144,9 +173,20 @@ const buildEconomy = (observer, habSites, completed) => {
     }
   }
 
-  const excess = limitResolved ? Math.max(0, mineCount - mineLimit) : 0;
   // Wiki Habs: MC penalty past the mine limit is Max(1, Floor(excess^2 / 2)).
-  const minePenalty = excess > 0 ? Math.max(1, Math.floor((excess * excess) / 2)) : 0;
+  //
+  // An unresolved limit is NOT a zero penalty. When no mine-limit grant could
+  // be read (an older snapshot, or a missing globalResearch block) while mines
+  // are standing, the penalty is unknown and must say so; reporting 0 would
+  // claim a verified "no mission-control penalty" that was never measured.
+  // Zero mines is the one case that is answerable without the limit.
+  let minePenalty = null;
+  if (mineCount === 0) {
+    minePenalty = 0;
+  } else if (limitResolved) {
+    const excess = Math.max(0, mineCount - mineLimit);
+    minePenalty = excess > 0 ? Math.max(1, Math.floor((excess * excess) / 2)) : 0;
+  }
 
   const money = num(observer.resources?.Money);
   return {
@@ -163,16 +203,33 @@ const buildEconomy = (observer, habSites, completed) => {
 };
 
 const buildAlienThreat = (raw, observer, campaignYear) => {
-  const economics = buildAlienHateEconomics({
-    observer,
-    difficulty: raw.metadata?.difficulty,
-    mode: 'omniscient'
-  });
-
-  const startYear = num(raw.metadata?.campaignStartYear);
+  // TIMetadataState does not carry a campaign start year, so snapshotBuilder
+  // reports the measured field as null and offers `assumedCampaignStartYear`
+  // separately as an explicitly labelled assumption. Total war needs the
+  // elapsed-years gate, so use the assumption when there is no measurement --
+  // but carry `yearsElapsedAssumed` alongside it, so a reader can tell a
+  // measured campaign age from a presumed one rather than being handed a
+  // confident number. Without this the state would be permanently
+  // 'unavailable' and the most consequential event in a campaign would never
+  // announce itself.
+  const measuredStartYear = num(raw.metadata?.campaignStartYear);
+  const assumedStartYear = num(raw.metadata?.assumedCampaignStartYear);
+  const startYear = measuredStartYear ?? assumedStartYear;
   const yearsElapsed = startYear !== null && campaignYear !== null
     ? campaignYear - startYear
     : null;
+  const yearsElapsedAssumed = yearsElapsed !== null && measuredStartYear === null;
+
+  // yearsElapsed must be supplied here: total war needs BOTH the campaign-year
+  // gate and 200 hate, and buildTotalWarState reports 'unavailable' without it.
+  // Omitting it is what left `alienThreat.totalWar` absent from every published
+  // snapshot, which in turn made the delta's total-war narration unreachable.
+  const economics = buildAlienHateEconomics({
+    observer,
+    difficulty: raw.metadata?.difficulty,
+    mode: 'omniscient',
+    yearsElapsed
+  });
 
   return {
     hate: round(economics.actualAlienHate, 2),
@@ -185,7 +242,21 @@ const buildAlienThreat = (raw, observer, campaignYear) => {
       economics.actualAlienHate === null
         ? null
         : economics.actualAlienHate >= economics.warThreshold,
-    yearsElapsed
+    yearsElapsed,
+    yearsElapsedAssumed,
+    // Total war is a distinct, far more consequential state than crossing the
+    // hate-50 war threshold, and it is what strategicDelta reads to decide
+    // whether to announce a declaration. Carrying the state string rather than
+    // a boolean preserves the difference between "not at total war" and
+    // "cannot tell" (hate redacted after the year gate opened).
+    totalWar: {
+      state: economics.totalWar.state,
+      hateThreshold: economics.totalWar.hateThreshold,
+      yearsThreshold: economics.totalWar.yearsThreshold,
+      yearsRemaining: economics.totalWar.yearsRemaining,
+      hateRemaining: round(economics.totalWar.hateRemaining, 2),
+      yearsElapsedAssumed
+    }
   };
 };
 
@@ -202,10 +273,27 @@ const buildResearch = (raw, observer) => {
     Math.round(num(p.totalCost) ?? 0)
   ]);
 
+  // The completed-project ledger, sorted for a stable diff. The hashes alone
+  // could only say THAT the set changed, never WHICH projects finished, so the
+  // delta's "projects completed this period" list was permanently empty --
+  // nothing in the codebase ever produced the `completedSincePrior` it read.
+  //
+  // Storing the ids costs ~4 KB on the live save (140 projects) against a
+  // 100 KB target, and unlike a since-prior list it is exact for ANY pair of
+  // retained snapshots rather than only adjacent ones. Absent stays absent:
+  // when the raw save has no completed-project array, the field is null so the
+  // delta reports "unknown" instead of "nothing was completed".
+  const completedProjects = Array.isArray(observer.completedProjects)
+    ? [...new Set(observer.completedProjects.map(String))].sort()
+    : null;
+
+  const monthlyResearch = num(observer.monthlyNet?.Research);
+
   return {
-    monthly: Math.round(num(observer.monthlyNet?.Research) ?? 0),
+    monthly: monthlyResearch === null ? null : Math.round(monthlyResearch),
     global,
     projects,
+    completedProjects,
     completedTechHash: digest(raw.globalResearch?.finishedTechsNames),
     completedProjectHash: digest(observer.completedProjects)
   };
@@ -246,7 +334,7 @@ const buildTheaters = (raw) => {
 const buildFriendlyFleets = (raw, observerId, policy) => {
   if (!policy.friendlyFleetDetail) return [];
   return asArray(raw.fleets)
-    .filter((f) => Number(f.factionId) === Number(observerId))
+    .filter((f) => sameId(f.factionId, observerId))
     .map((fleet) => {
       const designs = new Map();
       for (const ship of asArray(fleet.ships)) {
@@ -274,7 +362,7 @@ const buildShipLedger = (raw, observerId, policy) => {
   if (!policy.friendlyShipLedger) return [];
   const ledger = [];
   for (const fleet of asArray(raw.fleets)) {
-    if (Number(fleet.factionId) !== Number(observerId)) continue;
+    if (!sameId(fleet.factionId, observerId)) continue;
     for (const ship of asArray(fleet.ships)) {
       ledger.push([num(ship.id), ship.hullName || null, num(fleet.ID)]);
     }
@@ -285,21 +373,21 @@ const buildShipLedger = (raw, observerId, policy) => {
 const buildHostileContacts = (raw, observerId, policy) => {
   const ourBodies = new Set();
   for (const hab of asArray(raw.habs)) {
-    if (Number(hab.factionId) === Number(observerId) && hab.orbitBody) ourBodies.add(hab.orbitBody);
+    if (sameId(hab.factionId, observerId) && hab.orbitBody) ourBodies.add(hab.orbitBody);
   }
   for (const fleet of asArray(raw.fleets)) {
-    if (Number(fleet.factionId) === Number(observerId) && fleet.orbitBody) ourBodies.add(fleet.orbitBody);
+    if (sameId(fleet.factionId, observerId) && fleet.orbitBody) ourBodies.add(fleet.orbitBody);
   }
 
   const ourHabIds = new Set(
     asArray(raw.habs)
-      .filter((h) => Number(h.factionId) === Number(observerId))
+      .filter((h) => sameId(h.factionId, observerId))
       .map((h) => Number(h.ID))
   );
 
   return asArray(raw.fleets)
     .filter((fleet) => {
-      if (Number(fleet.factionId) === Number(observerId)) return false;
+      if (sameId(fleet.factionId, observerId)) return false;
       const ships = num(fleet.shipsCount) ?? 0;
       const targetsUs =
         policy.preserveHostileIfTargetingPlayer &&
@@ -327,7 +415,7 @@ const buildHostileContacts = (raw, observerId, policy) => {
 const buildInfrastructure = (raw, observerId) => {
   const byHab = new Map();
   for (const hab of asArray(raw.habs)) {
-    if (Number(hab.factionId) !== Number(observerId)) continue;
+    if (!sameId(hab.factionId, observerId)) continue;
     byHab.set(Number(hab.ID), {
       id: Number(hab.ID),
       body: hab.orbitBody || null,
@@ -344,10 +432,17 @@ const buildInfrastructure = (raw, observerId) => {
     const entry = byHab.get(Number(module.habId));
     if (!entry || module.destroyed || module.constructionStatus !== 'operational') continue;
     const template = String(module.templateName || '');
-    if (module.isShipyard) entry.yards += 1;
+    const key = template.toLowerCase();
+    // Ship construction and hab construction are separate capabilities in the
+    // 1.0 templates (see SHIP_CONSTRUCTION_MODULES above), so a module counts
+    // toward exactly one of `yards` and `construction`.
+    const isYard = module.isShipyard === true || SHIP_CONSTRUCTION_SET.has(key);
+    if (isYard) entry.yards += 1;
     if (/Mining/i.test(template)) entry.mine += 1;
     if (/Defense|Battery|Laser|Gun|Missile/i.test(template)) entry.defense += 1;
-    if (/Construction|Shipyard|Spaceworks|Dock/i.test(template)) entry.construction += 1;
+    if (!isYard && (HAB_CONSTRUCTION_SET.has(key) || HAB_CONSTRUCTION_PATTERN.test(template))) {
+      entry.construction += 1;
+    }
     if (/Lab|Research|Science/i.test(template)) entry.research += 1;
   }
 
@@ -356,14 +451,14 @@ const buildInfrastructure = (raw, observerId) => {
 
 const buildMines = (raw, observerId) =>
   asArray(raw.habSites)
-    .filter((site) => site.mineModuleId != null && Number(site.factionId) === Number(observerId))
+    .filter((site) => site.mineModuleId != null && sameId(site.factionId, observerId))
     .map((site) => [site.displayName, Number(site.factionId), num(site.mineTier) ?? 0]);
 
 const buildConstruction = (raw, observerId, policy) => {
   if (!policy.preserveConstruction) return [];
   const rows = [];
   for (const queue of asArray(raw.shipyardQueues)) {
-    if (Number(queue.factionId) !== Number(observerId)) continue;
+    if (!sameId(queue.factionId, observerId)) continue;
     rows.push({
       id: `ship-${queue.id}`,
       type: 'ship',
@@ -373,7 +468,7 @@ const buildConstruction = (raw, observerId, policy) => {
     });
   }
   for (const module of asArray(raw.habModules)) {
-    if (Number(module.factionId) !== Number(observerId)) continue;
+    if (!sameId(module.factionId, observerId)) continue;
     if (module.constructionCompleted || module.destroyed) continue;
     rows.push({
       id: `module-${module.id}`,
@@ -392,19 +487,19 @@ const buildConstruction = (raw, observerId, policy) => {
 const buildTransfers = (raw, observerId) => {
   const ourBodies = new Set(
     asArray(raw.habs)
-      .filter((h) => Number(h.factionId) === Number(observerId) && h.orbitBody)
+      .filter((h) => sameId(h.factionId, observerId) && h.orbitBody)
       .map((h) => h.orbitBody)
   );
   const ourHabIds = new Set(
     asArray(raw.habs)
-      .filter((h) => Number(h.factionId) === Number(observerId))
+      .filter((h) => sameId(h.factionId, observerId))
       .map((h) => Number(h.ID))
   );
 
   return asArray(raw.fleets)
     .filter((fleet) => {
       if (!fleet.destination || fleet.destination === fleet.orbitBody) return false;
-      if (Number(fleet.factionId) === Number(observerId)) return true;
+      if (sameId(fleet.factionId, observerId)) return true;
       return ourHabIds.has(Number(fleet.destinationId)) || ourBodies.has(fleet.destination);
     })
     .map((fleet) => {
@@ -417,7 +512,7 @@ const buildTransfers = (raw, observerId) => {
         arrival: fleet.arrivalDate || null
       };
       if (fleet.destinationId) row.target = num(fleet.destinationId);
-      if (Number(fleet.factionId) === Number(observerId)) row.ours = true;
+      if (sameId(fleet.factionId, observerId)) row.ours = true;
       return row;
     });
 };
@@ -425,70 +520,17 @@ const buildTransfers = (raw, observerId) => {
 /**
  * Derive material events by comparing against the previous compact snapshot.
  * Cheap to store and far more useful to an analyst than two raw numbers.
+ *
+ * This used to be a second, independent implementation of the same diff that
+ * strategicDelta already performed -- ship losses, hab changes, project
+ * transitions, completed-set comparison and hate-threshold crossing were all
+ * written twice. The two copies had already drifted apart, which is how the
+ * total-war and completed-project signals ended up dead on the delta side.
+ * There is now one diff; this entry point only chooses the structured-object
+ * rendering of it, while `buildStrategicDelta` chooses the narration strings.
  */
 export function deriveEvents(previous, current) {
-  const events = [];
-  if (!previous) return events;
-
-  const prevShips = new Map(asArray(previous.ships).map(([id, design]) => [id, design]));
-  const currShips = new Set(asArray(current.ships).map(([id]) => id));
-  const lostByDesign = new Map();
-  for (const [id, design] of prevShips.entries()) {
-    if (!currShips.has(id)) {
-      const key = design || 'unknown';
-      lostByDesign.set(key, (lostByDesign.get(key) || 0) + 1);
-    }
-  }
-  if (lostByDesign.size > 0) {
-    events.push({
-      type: 'ship_loss',
-      faction: current.summary?.observerFactionId ?? null,
-      count: [...lostByDesign.values()].reduce((a, b) => a + b, 0),
-      designs: [...lostByDesign.entries()]
-    });
-  }
-
-  const prevHabs = new Set(asArray(previous.infrastructure).map((h) => h.id));
-  const currHabs = new Set(asArray(current.infrastructure).map((h) => h.id));
-  for (const hab of asArray(previous.infrastructure)) {
-    if (!currHabs.has(hab.id)) {
-      events.push({ type: 'hab_lost', faction: current.summary?.observerFactionId ?? null, body: hab.body, id: hab.id });
-    }
-  }
-  for (const hab of asArray(current.infrastructure)) {
-    if (!prevHabs.has(hab.id)) {
-      events.push({ type: 'hab_gained', body: hab.body, id: hab.id });
-    }
-  }
-
-  const prevProjects = new Set(asArray(previous.research?.projects).map(([id]) => id));
-  for (const [id] of asArray(current.research?.projects)) {
-    // A project that was in progress and is no longer in progress completed.
-    if (!prevProjects.has(id)) events.push({ type: 'project_started', id });
-  }
-  for (const id of prevProjects) {
-    const stillActive = asArray(current.research?.projects).some(([pid]) => pid === id);
-    if (!stillActive) events.push({ type: 'project_resolved', id });
-  }
-
-  if (previous.research?.completedProjectHash !== current.research?.completedProjectHash) {
-    events.push({ type: 'completed_projects_changed' });
-  }
-
-  // Crossing the alien war threshold is the single most consequential discrete
-  // state change in a campaign, so make it first-class rather than inferred.
-  const from = previous.alienThreat?.hate;
-  const to = current.alienThreat?.hate;
-  const threshold = current.alienThreat?.warThreshold ?? 50;
-  if (num(from) !== null && num(to) !== null) {
-    if (from < threshold && to >= threshold) {
-      events.push({ type: 'hate_threshold_crossed', from, to, threshold, direction: 'up' });
-    } else if (from >= threshold && to < threshold) {
-      events.push({ type: 'hate_threshold_crossed', from, to, threshold, direction: 'down' });
-    }
-  }
-
-  return events;
+  return deriveStructuredEvents(previous, current);
 }
 
 /**
@@ -502,14 +544,17 @@ export function deriveEvents(previous, current) {
  * @param {object} [opts.previous] Previous compact snapshot, for event derivation
  */
 export function buildStrategicSnapshot(raw, {
-  observerFactionId = 4712,
+  observerFactionId = DEFAULT_OBSERVER_FACTION_ID,
   campaignKey = null,
   policy = {},
   previous = null
 } = {}) {
   const merged = { ...DEFAULT_HISTORY_POLICY, ...policy };
   const factions = asArray(raw.factions);
-  const observer = factions.find((f) => Number(f.ID) === Number(observerFactionId)) || {};
+  // No name or first-faction fallback here by design: a compact history
+  // document that silently described a different faction would poison every
+  // delta computed against it.
+  const observer = resolveObserverFaction(factions, observerFactionId) || {};
 
   const campaignDate = raw.metadata?.gameTimeString || null;
   const campaignYear = campaignDate ? num(String(campaignDate).match(/\/(\d{4})\b/)?.[1]) : null;

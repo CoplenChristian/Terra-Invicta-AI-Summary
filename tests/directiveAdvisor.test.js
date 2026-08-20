@@ -493,7 +493,16 @@ test('briefing primary directive holds a Servant crackdown when hate is hot and 
   assert.ok(!/crackdown/i.test(briefing.primaryDirective.title), briefing.primaryDirective.title);
   assert.ok(!/severance/i.test(briefing.primaryDirective.title), briefing.primaryDirective.title);
   assert.equal(briefing.primaryDirective.missionType, 'Defend Interests');
-  assert.ok(/protect core holdings/i.test(briefing.primaryDirective.title));
+  // Hold Ground (plan §4f) now leads this board. It is the same decision the
+  // geo-hold made -- do not feed proxy hate while the fleet cannot survive the
+  // retaliation cycle -- stated as an action instead of a deferral, so it
+  // outranks it. The geo-hold itself still fires and is still present.
+  assert.equal(briefing.primaryDirective.id, 'hold-ground');
+  assert.ok(/^hold ground/i.test(briefing.primaryDirective.title), briefing.primaryDirective.title);
+  assert.ok(
+    briefing.directives.geopolitical.some((d) => d.id === 'geo-hold' && /protect core holdings/i.test(d.title)),
+    'the deferred-crackdown hold still fires beneath it'
+  );
   assert.ok(briefing.directives.geopolitical.some((d) => d.id === 'geo-1' && d.severity === 'WATCH'));
   assert.match(briefing.directives.council[0].action, /Defend Interests/i);
 });

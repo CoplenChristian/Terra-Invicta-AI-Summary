@@ -158,3 +158,120 @@ test('falls back to wall clock when campaign dates are unusable', () => {
   const to = doc({ meta: { campaignDate: null, saveLastModified: '2026-08-11T00:00:00Z' } });
   assert.strictEqual(buildStrategicDelta(from, to).period.days, 10);
 });
+
+// --- Alien total war ---------------------------------------------------------
+// buildAlienThreat now emits `totalWar` as the state object buildTotalWarState
+// produces. Nothing in the codebase ever emitted the bare boolean this module
+// used to read, so `totalWarDeclared` was permanently false and the
+// 'ALIEN TOTAL WAR DECLARED' narration was unreachable.
+
+const threat = (overrides = {}) => ({
+  hate: 71.61, minimumHate: 18, warThreshold: 50, ...overrides
+});
+
+test('a total war declaration in the state object fires the narration', () => {
+  const peace = doc({ alienThreat: threat({ totalWar: { state: 'armed' } }) });
+  const war = doc({ hate: 240, alienThreat: threat({ hate: 240, totalWar: { state: 'active' } }) });
+
+  const delta = buildStrategicDelta(peace, war);
+  assert.strictEqual(delta.hate.totalWarDeclared, true);
+  assert.strictEqual(delta.hate.totalWarActive, true);
+  assert.deepStrictEqual(delta.hate.totalWarState, { from: 'armed', to: 'active' });
+  assert.ok(delta.events.includes('ALIEN TOTAL WAR DECLARED'),
+    'the single most consequential event in a campaign must announce itself');
+});
+
+test('an already-declared total war is not re-announced as a declaration', () => {
+  const war = doc({ alienThreat: threat({ totalWar: { state: 'active' } }) });
+  const delta = buildStrategicDelta(war, war);
+  assert.strictEqual(delta.hate.totalWarDeclared, false);
+  assert.ok(!delta.events.includes('ALIEN TOTAL WAR DECLARED'));
+  assert.ok(delta.events.includes('Alien total war remains in effect'));
+});
+
+test('total war before the year gate is provably inactive even with hate redacted', () => {
+  // safe_hate_unknown means the campaign-year gate is CLOSED, so total war is
+  // impossible regardless of hate. That is knowable, not unknown.
+  const early = doc({ alienThreat: threat({ hate: null, totalWar: { state: 'safe_hate_unknown' } }) });
+  const delta = buildStrategicDelta(early, early);
+  assert.strictEqual(delta.hate.totalWarActive, false);
+  assert.ok(!delta.events.some(e => /UNAVAILABLE/.test(e)));
+});
+
+test('total war after the year gate with hate redacted reports unknown, never safe', () => {
+  const armed = doc({ alienThreat: threat({ hate: null, totalWar: { state: 'armed_hate_unknown' } }) });
+  const delta = buildStrategicDelta(doc({ alienThreat: threat({ totalWar: { state: 'armed' } }) }), armed);
+  assert.strictEqual(delta.hate.totalWarActive, null, 'unknown is not the same as safe');
+  assert.strictEqual(delta.hate.totalWarDeclared, false, 'we cannot claim a declaration we cannot see');
+  assert.ok(delta.events.some(e => /total war status UNAVAILABLE/.test(e)));
+});
+
+test('a snapshot with no total war field at all reports unknown', () => {
+  const silent = doc({ alienThreat: threat() });
+  const delta = buildStrategicDelta(silent, silent);
+  assert.strictEqual(delta.hate.totalWarActive, null);
+  assert.strictEqual(delta.hate.totalWarState.to, null);
+});
+
+test('the first-generation boolean total war field is still understood', () => {
+  const peace = doc({ alienThreat: threat({ totalWar: false }) });
+  const war = doc({ alienThreat: threat({ totalWar: true }) });
+  assert.strictEqual(buildStrategicDelta(peace, war).hate.totalWarDeclared, true);
+  assert.strictEqual(buildStrategicDelta(war, war).hate.totalWarDeclared, false);
+});
+
+// --- Completed projects ------------------------------------------------------
+
+const research = (overrides = {}) => ({
+  monthly: 2022,
+  projects: [['Project_FleetCombatants', 2567, 6000]],
+  completedProjects: ['Project_A', 'Project_B'],
+  completedProjectHash: 'fnv:aaaa:2',
+  ...overrides
+});
+
+test('completed projects are named from the ledger, for any pair of snapshots', () => {
+  const from = doc({ research: research() });
+  const to = doc({
+    research: research({
+      projects: [['Project_NanotubeArmor', 100, 5000]],
+      completedProjects: ['Project_A', 'Project_B', 'Project_FleetCombatants'],
+      completedProjectHash: 'fnv:bbbb:3'
+    })
+  });
+
+  const delta = buildStrategicDelta(from, to);
+  assert.deepStrictEqual(delta.research.completed, ['Project_FleetCombatants']);
+  assert.strictEqual(delta.research.completedSource, 'completed-project-ledger');
+  assert.deepStrictEqual(delta.research.resolved, ['Project_FleetCombatants']);
+  assert.deepStrictEqual(delta.research.started, ['Project_NanotubeArmor']);
+  assert.ok(delta.events.includes('Completed Project_FleetCombatants'));
+});
+
+test('a project abandoned rather than finished is resolved but not completed', () => {
+  const from = doc({ research: research() });
+  const to = doc({
+    research: research({ projects: [], completedProjectHash: 'fnv:aaaa:2' })
+  });
+  const delta = buildStrategicDelta(from, to);
+  assert.deepStrictEqual(delta.research.resolved, ['Project_FleetCombatants']);
+  assert.deepStrictEqual(delta.research.completed, [], 'the ledger did not grow, so nothing finished');
+});
+
+test('an unrecorded completed set reports unknown, not an empty list', () => {
+  // Rows published before the ledger existed can only say THAT the set moved.
+  const from = doc({ research: { monthly: 1, projects: [], completedProjectHash: 'fnv:aaaa:2' } });
+  const to = doc({ research: { monthly: 1, projects: [], completedProjectHash: 'fnv:cccc:4' } });
+  const delta = buildStrategicDelta(from, to);
+  assert.strictEqual(delta.research.completed, null, 'unknown is not an empty list');
+  assert.strictEqual(delta.research.completedSource, 'unavailable');
+  assert.strictEqual(delta.research.completedSetChanged, true);
+  assert.ok(delta.events.some(e => /do not record which/.test(e)));
+});
+
+test('identical completed-set hashes prove nothing was completed', () => {
+  const from = doc({ research: { monthly: 1, projects: [], completedProjectHash: 'fnv:aaaa:2' } });
+  const delta = buildStrategicDelta(from, from);
+  assert.deepStrictEqual(delta.research.completed, []);
+  assert.strictEqual(delta.research.completedSource, 'hash-unchanged');
+});

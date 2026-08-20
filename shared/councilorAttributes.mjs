@@ -32,6 +32,8 @@
 // Keep this file free of runtime-specific imports so the hosted worker can use
 // it alongside the local server.
 
+import { asArray, toFiniteNumber as num } from './util.mjs';
+
 export const ATTRIBUTE_NAMES = Object.freeze([
   'Persuasion',
   'Investigation',
@@ -68,14 +70,6 @@ const zeroed = () => ATTRIBUTE_NAMES.reduce((acc, name) => {
   acc[name] = 0;
   return acc;
 }, {});
-
-const asArray = (value) => (Array.isArray(value) ? value : []);
-
-const num = (value) => {
-  if (value === null || value === undefined || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
 
 /** Detained councilors have their equipped orgs deactivated. */
 export const orgsAreActive = (councilor) =>
@@ -176,10 +170,23 @@ export function sumTraitBonuses(traitNames, traitStatMods) {
  * @returns {object} base / orgBonuses / traitBonuses / effective, plus provenance
  */
 export function buildCouncilorAttributes(councilor, { traitStatMods = null } = {}) {
+  // In player mode an observed enemy carries `maskedAttributes`, not
+  // `attributes`, so their base stats are legitimately unknown. `?? 0` read
+  // that as "genuinely zero skill", which is materially wrong for any pairing
+  // or ranking decision: an unknown operative looked like the worst possible
+  // one. Unknown bases are kept as 0 for arithmetic (so nothing downstream
+  // becomes NaN) but are named in `unmeasuredAttributes`, and `baseMeasured`
+  // says per attribute whether the number came from the save.
   const base = zeroed();
+  const baseMeasured = {};
+  const unmeasuredAttributes = [];
   for (const name of ATTRIBUTE_NAMES) {
-    base[name] = num(councilor?.attributes?.[name]) ?? 0;
+    const measured = num(councilor?.attributes?.[name]);
+    baseMeasured[name] = measured !== null;
+    if (measured === null) unmeasuredAttributes.push(name);
+    base[name] = measured ?? 0;
   }
+  const baseAttributesAvailable = unmeasuredAttributes.length < ATTRIBUTE_NAMES.length;
 
   const orgs = asArray(councilor?.orgs);
   const active = orgsAreActive(councilor);
@@ -210,11 +217,33 @@ export function buildCouncilorAttributes(councilor, { traitStatMods = null } = {
     capped[name] = uncapped[name] !== effective[name];
   }
 
-  const usedTiers = orgs.reduce((sum, org) => sum + (num(org?.tier) ?? 0), 0);
+  // An org whose tier the save omits contributes an unknown number of tiers,
+  // not zero -- counting it as zero makes an over-capacity councilor look
+  // compliant. The measured tiers are still summed, and the unmeasured ones
+  // are counted so `withinCapacity` can report unknown instead of true.
+  let usedTiers = 0;
+  let untieredOrgs = 0;
+  for (const org of orgs) {
+    const tier = num(org?.tier);
+    if (tier === null) untieredOrgs += 1;
+    else usedTiers += tier;
+  }
   const capacity = effective.Administration;
+  // Capacity is only knowable if Administration was measured. `withinCapacity`
+  // must not fall through to "fine" when it cannot be evaluated.
+  const capacityEvaluable = baseMeasured.Administration && untieredOrgs === 0;
 
   return {
     base,
+    // Per-attribute provenance for `base`, so a consumer can render
+    // "unknown" instead of a confident 0 for a masked enemy councilor.
+    baseMeasured,
+    unmeasuredAttributes,
+    baseAttributesAvailable,
+    // False when the save carried none of the eight base attributes: every
+    // number below is then a floor derived from org and trait bonuses alone,
+    // not a measurement.
+    attributesComplete: unmeasuredAttributes.length === 0,
     orgBonuses,
     traitBonuses,
     effective,
@@ -228,17 +257,25 @@ export function buildCouncilorAttributes(councilor, { traitStatMods = null } = {
     totalEffectiveSkills: ATTRIBUTE_NAMES
       .filter(name => name !== 'Loyalty')
       .reduce((sum, name) => sum + effective[name], 0),
+    // A total built partly from unknown bases is a lower bound, not a total.
+    totalEffectiveSkillsComplete: ATTRIBUTE_NAMES
+      .filter(name => name !== 'Loyalty')
+      .every(name => baseMeasured[name]),
     orgsActive: active,
     orgCount: orgs.length,
     orgCapacity: {
       usedTiers,
+      untieredOrgs,
       // One org tier per point of Administration. With trait modifiers counted
       // this holds across every councilor in a real save; without them it
       // appears violated by 40% of them.
       capacity,
       effectiveAdministration: capacity,
-      withinCapacity: usedTiers <= capacity,
-      spare: capacity - usedTiers
+      capacityEvaluable,
+      // Unknown is not the same as compliant: null when Administration or any
+      // org tier is unmeasured.
+      withinCapacity: capacityEvaluable ? usedTiers <= capacity : null,
+      spare: capacityEvaluable ? capacity - usedTiers : null
     },
     contributions,
     traitContributions: traitResult.contributions,
@@ -275,13 +312,22 @@ export function rankByAttribute(councilors, attribute, { factionId = null, limit
       return {
         councilorId: c?.ID ?? null,
         name: c?.displayName || 'Unknown',
-        base: resolved.base[attribute],
+        // `base` is null, not 0, when the save did not carry this attribute
+        // -- a masked enemy councilor in player mode. `effective` stays a
+        // number so the ranking still orders, but `baseMeasured` marks it as
+        // a floor derived from bonuses rather than a measured skill.
+        base: resolved.baseMeasured[attribute] ? resolved.base[attribute] : null,
+        baseMeasured: resolved.baseMeasured[attribute],
         orgBonus: resolved.orgBonuses[attribute],
         effective: resolved.effective[attribute],
+        effectiveIsLowerBound: !resolved.baseMeasured[attribute],
         orgsActive: resolved.orgsActive
       };
     })
-    .sort((a, b) => b.effective - a.effective || b.base - a.base);
+    // Tiebreak on base only when both bases were measured; `number - null`
+    // coerces to the number and would order an unknown base as a zero.
+    .sort((a, b) => (b.effective - a.effective)
+      || ((a.baseMeasured && b.baseMeasured) ? b.base - a.base : 0));
 
   return limit ? ranked.slice(0, Number(limit)) : ranked;
 }

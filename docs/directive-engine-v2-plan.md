@@ -733,6 +733,168 @@ For the reassign case, say it out loud: *"Moving Brad Lester off Advise (United 
 
 ---
 
+## 4f. Hold Ground — the affirmative posture directive
+
+### The gap
+
+The advisor already detects this exact condition. `assessCampaignPosture` computes
+`hateElevated && spaceFragile` and pushes the hold *"the fleet cannot absorb the
+retaliation cycle at this hate level"* (`server/directiveAdvisor.js:478`).
+
+But a hold is a **suppression**, not a recommendation. The engine knows how to say
+"don't crackdown Japan"; it has no way to say **"do this instead."** When the vetoes
+fire hard the broad-actions panel degrades toward empty — and an empty panel reads as
+"no information", when the truth is a specific, correct, and *actionable* posture.
+
+Holding is not the absence of a move. War ends when hate vents back below 50, so
+declining to add hate is the mechanism that ends the war. That deserves to be a
+first-class directive with its own reasoning, not a silence left behind by vetoes.
+
+### The trigger
+
+Two independent halves, each with its own unknown state. Both must be `true` to
+recommend; either `unknown` during war degrades to recommend-with-caveat, never to
+"you're fine."
+
+**Half 1 — at war.** Hate ≥ `ALIEN_HATE_WAR_THRESHOLD` (50).
+
+Player mode cannot measure this. Verified on the live save (2026-08-20):
+
+| | `warExceeded` | hate | headroom |
+| :-- | :-- | :-- | :-- |
+| player | `true` | `null`, pips 5/5 | `null` |
+| omniscient | `false` | 49.56 | **0.44** |
+
+The 5/5 meter saturates at ≥45, so player mode cannot distinguish "at war" from
+"one action away from war". Both resolve to the same recommendation, so the
+directive fires in both — but the *wording* must differ, and player mode must not
+claim war is confirmed. This is the same saturated-meter handling already used for
+`totalWarProximity`.
+
+**Half 2 — cannot contest.** The existing `spaceFragile` is ship-count only
+(`ownShips < 30 || ownShips < alienShips × 0.2`). Count alone is the wrong test:
+240 obsolete hulls lose to 20 modern ones. Replace it with a capability ratio.
+
+`combatPower` is **unusable** — verified `combatPowerSource: "not present in save"`,
+`combatPowerAvailable: false` for every fleet in both modes. Do not build on it.
+
+What *is* populated, in both modes, for both sides (verified live):
+
+| signal | player fleet | alien fleet | ratio |
+| :-- | --: | --: | --: |
+| `shipsCount` | 28 | 348 | 12.4× |
+| `armorMedian` | 2.5 | 10.75 | 4.3× |
+| `lowestDeltaVKps` | 14.07 | 691.22 | **49.1×** |
+| `dominantWeaponType` | Mixed | Laser | — |
+
+ΔV is the load-bearing one. At a 49× gap the aliens choose every engagement and
+disengage at will — the player can neither force nor refuse a battle. That is the
+mechanical definition of "cannot contest", and unlike `combatPower` it is measured,
+not inferred.
+
+### Absent stays null, and unknown is not safe
+
+- Alien fleets are visible in player mode only through a detection capability —
+  the live save carries `visibility: "Deep System Skywatch"`. **Without it there are
+  no alien fleets to compare against.** Zero visible alien fleets must resolve to
+  `unknown`, never to "no threat". This is the highest-risk failure mode in the
+  whole directive: absent detection would otherwise read as an empty sky.
+- Any of `shipsCount` / `armorMedian` / `lowestDeltaVKps` absent on either side →
+  that sub-ratio is `null` and is excluded from the verdict, with the exclusion named.
+- All three absent → `canContest: 'unknown'`, and the directive says the comparison
+  could not be made rather than assuming either outcome.
+
+### What it actually recommends
+
+Not "do nothing". The directive names the non-hate-generating work that remains
+available, ranked by what closes the capability gap that triggered it:
+
+1. **Research toward the measured gap** — drives first when ΔV is the dominant
+   deficit, armor/weapons when those dominate. The gap analysis picks the axis; it
+   is not a fixed list.
+2. **Advise** — economy and research boosts generate zero alien hate (`successHate: 0`),
+   so they are strictly available during a hold. §4d already prices these.
+3. **Defend Interests / consolidation** — protects what retaliation targets.
+4. **Explicitly deferred:** every vetoed hate-generating action, listed with the
+   hate it would have added and the headroom it would have consumed, so the hold is
+   legible as a *choice* rather than an absence of options.
+
+The directive must state the exit condition — hate vents below 50 — and, where
+measurable, the venting rate and estimated time. Where it is not measurable
+(player mode), say so rather than estimating.
+
+### Acceptance
+
+- Fires on the current live save in **both** modes, with different wording and the
+  same recommendation.
+- Player-mode copy never asserts war is confirmed when the meter is saturated.
+- Zero visible alien fleets ⇒ `unknown`, never "clear".
+- Ranks the research axis from the *measured* dominant deficit; a save where armor
+  is the gap and ΔV is fine must not recommend drives.
+- Never the top directive when `canContest` is `true` — being able to fight is a
+  reason not to hold.
+- Never suppresses zero-hate actions; a hold that also silences Advise is wrong.
+
+### As built (2026-08-20)
+
+`server/directiveAdvisor.js`
+- `summarizeFleetCapability()` → `{ canContest: true | false | 'unknown', axes,
+  excludedAxes, rankedDeficits, dominantDeficit, alienFleetsVisible,
+  detectionSources }`. Three axes in tie-break order (`CAPABILITY_AXES`):
+  ΔV, armour, hull count. Each side's figure is a **median** — per-ship
+  `armorMedian`, fleet `lowestDeltaVKps` — not the first fleet's row, so one
+  outlier hull cannot set the verdict.
+- `DECISIVE_CAPABILITY_RATIO = 3`, applied **per axis**: a decisive deficit
+  anywhere means the fleet cannot contest. Being out-ranged is not cancelled by
+  having more hulls, which is the same reasoning that made count-only wrong.
+  Flagged in-source as a judgement call — the templates publish no "you lose"
+  ratio.
+- `classifyWarPressure()` → `'at-war' | 'on-the-line' | 'saturated' | 'clear' |
+  'unknown'`. `'on-the-line'` is measured, not tuned: it fires when the measured
+  headroom is smaller than the cheapest hate-generating mission at the low end of
+  the 0.8–1.2 roll (Crackdown 2 × 0.8 = 1.6 > 0.44).
+- `buildHoldGround()` assembles the directive. Fires on pressure ∈ {at-war,
+  on-the-line, saturated} **and** `canContest !== true`.
+- `spaceFragile` is now `canContest === false || countFragile`, where
+  `countFragile` is the old ship-count test kept as an absolute floor. This is a
+  strict superset, so no hold that used to fire stopped firing.
+- `MISSION_SUCCESS_HATE` gained `Advise: 0` (verified against
+  TIMissionTemplate), so the hold can *name* the work that stays available
+  rather than reporting it as "hate UNAVAILABLE".
+
+`server/directiveEngine.js` — `runEngine()` returns
+`heldHateBearingByMission`, tallied **before** the transport caps so the hold
+reports a total, not a 25-entry slice. No rule, veto or candidate changed.
+
+`server/briefingGenerator.js` — `readObserverHateTrend()` is gated on
+`posture.hateObservable`, because `changesSincePrevious` carries the observer's
+raw "Assessed alien hate" row, which is the figure player mode redacts. The
+directive lands at the head of `directives.geopolitical` with
+`policyRank: 105` (above the deferred-crackdown hold at 100), and the full
+structured assessment is exposed at `briefing.holdGround`.
+
+`public/v2/` — the board renders a full-width detail block under the pill:
+fleet comparison, what holding consists of, what was deferred and at what hate,
+and how the hold ends.
+
+Measured on the live save (7/16/2033, both modes):
+
+| | player | omniscient |
+| :-- | :-- | :-- |
+| hate | `null`, pips 5/5 | 49.08 |
+| `warPressure` | `saturated` | `on-the-line` (0.92 headroom) |
+| `canContest` | `false` | `false` |
+| headline | "the alien hate meter is saturated…" | "0.92 hate from the alien war threshold…" |
+| top recommendation | drive and propulsion research | drive and propulsion research |
+| venting rate | "not measurable in player mode" | "+0.16 over 15.5 campaign days" |
+
+Not carried out of scope: the recommendation names a research **axis**, not a
+concrete project. `techIntel`'s `tech-milestones` (categories `drive`, `armor`,
+`weapon`) could name the next unlock on that axis; that integration is not part
+of this change.
+
+---
+
 ## 5. Phases
 
 Each phase is independently shippable and leaves the engine working.

@@ -2198,6 +2198,152 @@ img.faction-logo {
   letter-spacing: 0.1em;
 }
 
+/* Hold Ground ------------------------------------------------------------
+   The affirmative posture directive (docs/directive-engine-v2-plan.md §4f).
+   It carries a measured fleet comparison, the zero-hate work that stays
+   available, what was deferred and at what hate, and how the hold ends -- so
+   it gets a full-width detail block under the normal two-column pill row
+   rather than being squeezed into the statement line. */
+
+.directive-pill-card--hold {
+  align-items: start;
+  padding-bottom: 18px;
+}
+
+.directive-pill-card--hold .directive-title-row {
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.directive-pill-card--hold .directive-title-row strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.hold-ground-detail {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--danger);
+  background: var(--surface-inset);
+}
+
+.hold-ground-block {
+  min-width: 0;
+}
+
+.hold-ground-heading {
+  margin-bottom: 7px;
+  color: var(--accent-strong) !important;
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.hold-ground-axis {
+  display: grid;
+  grid-template-columns: minmax(0, 68px) minmax(0, 1fr) minmax(0, 84px);
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px dotted var(--line);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.hold-ground-axis__label {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hold-ground-axis__value {
+  min-width: 0;
+  color: var(--text-soft);
+}
+
+.hold-ground-axis__verdict {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  text-align: right;
+}
+
+.hold-ground-axis--decisive .hold-ground-axis__verdict {
+  color: var(--danger) !important;
+  font-weight: 700;
+}
+
+.hold-ground-axis--decisive .hold-ground-axis__value {
+  color: var(--text) !important;
+}
+
+.hold-ground-note {
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.hold-ground-note--warn {
+  color: var(--warning) !important;
+}
+
+.hold-ground-list {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.hold-ground-list li {
+  margin-bottom: 6px;
+}
+
+.hold-ground-list strong {
+  display: block;
+  color: var(--text) !important;
+  font-size: 11px !important;
+}
+
+.hold-ground-list span {
+  color: var(--text-dim) !important;
+  font-size: 10.5px;
+}
+
+.hold-ground-deferred {
+  padding: 4px 0;
+  border-bottom: 1px dotted var(--line);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.hold-ground-deferred__mission {
+  margin-right: 8px;
+  color: var(--text) !important;
+  font-weight: 700;
+}
+
+.hold-ground-deferred__hate {
+  color: var(--warning) !important;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.hold-ground-deferred__effect {
+  display: block;
+  color: var(--text-dim) !important;
+  font-size: 10.5px;
+}
+
 .mc-toast {
   position: fixed;
   right: 22px;
@@ -5920,11 +6066,34 @@ button.council-orders__row:focus-visible {
   background: rgba(0, 229, 255, 0.05);
 }
 
+/* Unmeasured is its own state -- it must not borrow the "safe" colour. */
+.mining-runway-pill.is-neutral {
+  border-style: dashed;
+  color: var(--text-dim);
+}
+
 .mining-war-floor-pill {
   margin-left: auto;
   font-family: var(--mono);
   font-size: 10px;
   color: var(--text-dim);
+}
+
+.mining-war-floor-pill.is-unknown strong {
+  font-style: italic;
+  color: var(--text-dim);
+}
+
+.mining-unavailable-banner {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px dashed var(--warning);
+  border-radius: 4px;
+  background: rgba(255, 170, 0, 0.08);
+  color: var(--warning);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
 }
 
 .mining-section-title {
@@ -6004,9 +6173,30 @@ button.council-orders__row:focus-visible {
   font-size: 10.5px;
 }
 
+.mining-yields-text.is-partial {
+  color: var(--text-dim);
+  border-bottom: 1px dotted var(--line);
+}
+
 .mining-density {
   color: var(--text-dim);
   font-size: 9.5px;
+}
+
+/* An assumed density is not a measured one; it reads as an assumption. */
+.mining-density.is-assumed {
+  font-style: italic;
+  color: var(--warning);
+}
+
+.mining-assumed-flag {
+  margin-left: 4px;
+  padding: 0 3px;
+  border: 1px dotted var(--warning);
+  border-radius: 2px;
+  color: var(--warning);
+  font-size: 8.5px;
+  text-transform: uppercase;
 }
 
 .mining-value-score {
@@ -6015,6 +6205,11 @@ button.council-orders__row:focus-visible {
   font-family: var(--mono);
   font-size: 13px;
   font-weight: 700;
+}
+
+.mining-value-score.is-unmeasured {
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 .mining-value-label {
@@ -6042,6 +6237,13 @@ button.council-orders__row:focus-visible {
   background: rgba(255, 68, 68, 0.15);
   color: var(--danger);
   border: 1px solid var(--danger);
+}
+
+/* Unknown cost is not free cost -- it never uses the FREE styling. */
+.mining-tag--unknown {
+  background: rgba(255, 170, 0, 0.12);
+  color: var(--warning);
+  border: 1px dashed var(--warning);
 }
 
 .mining-mc-cost {

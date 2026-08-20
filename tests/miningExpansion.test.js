@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const miningExpansionModule = require('../server/miningExpansion');
 const {
   buildMiningCapacity,
   buildResourceRunways,
@@ -7,8 +8,14 @@ const {
   scoreSiteCandidate,
   buildMiningExpansion,
   getDestinationTechForBody
-} = require('../server/miningExpansion');
-const { miningExpansionResource } = require('../shared/intelResources.mjs');
+} = miningExpansionModule;
+const sharedIntel = require('../shared/intelResources.mjs');
+const {
+  miningExpansionResource,
+  miningResourceRow,
+  habSiteResourceRow,
+  alienThreatResource
+} = sharedIntel;
 const { loadSnapshot, loadFilteredSnapshot, queryIntel } = require('../server/snapshotLoader');
 
 test('Mining Capacity model computes headroom and quadratic MC penalties correctly', () => {

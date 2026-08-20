@@ -6,6 +6,7 @@ const path = require('path');
 // time -- which took down the server and three test files. The 2020 build
 // is the one that knows it.
 const Ajv = require('ajv/dist/2020');
+const { resolveSupabaseReadKey } = require('../shared/apiSurface.mjs');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DEFAULTS_PATH = path.join(PROJECT_ROOT, 'config', 'defaults.json');
@@ -57,6 +58,46 @@ function warnLegacy(key) {
   process.emitWarning(`config.json key '${key}' is deprecated; use the nested schema in config/defaults.json instead.`, {
     code: 'TI_CONFIG_DEPRECATED'
   });
+}
+
+/**
+ * True only when an environment variable was actually supplied. `Number(null)`
+ * and `Number('')` are both 0, so presence has to be established before any
+ * coercion: an unset variable must leave the configured default alone rather
+ * than becoming a confident zero.
+ *
+ * An empty string counts as absent, matching how the other `set()` overrides in
+ * this file treat it and how `.env` files spell "not configured". Whitespace is
+ * deliberately NOT trimmed away here: `FOO="  "` is a value that cannot be
+ * evaluated, and the parser below reports it rather than treating it as unset.
+ */
+function envPresent(value) {
+  return value !== undefined && value !== null && value !== '';
+}
+
+/**
+ * Strict integer parsing for environment overrides.
+ *
+ * `Number('4712x')` is NaN and `Number(x) || fallback` silently swallows it.
+ * A NaN faction id used to flow all the way into publishing, and a malformed
+ * retention value would silently prune a different number of snapshot rows than
+ * the operator intended -- that one is data loss, so a typo has to be rejected
+ * at load time instead of being papered over with a default.
+ *
+ * The message keeps the "Configuration validation failed" prefix used by schema
+ * errors: this is the same class of failure, just caught earlier and named more
+ * precisely than the schema can name it.
+ */
+function parseIntegerEnv(rawValue, variableName, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const raw = String(rawValue).trim();
+  const parsed = /^[+-]?\d+$/.test(raw) ? Number(raw) : NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(
+      `Configuration validation failed: environment variable ${variableName}='${rawValue}' is not a valid integer ` +
+      `(expected a whole number from ${min} to ${max === Number.MAX_SAFE_INTEGER ? 'the safe-integer limit' : max}).`
+    );
+  }
+  return parsed;
 }
 
 function migrateLegacyConfig(input) {
@@ -133,19 +174,33 @@ function applyEnvironment(config, env = process.env) {
   set(config.paths, 'templatesPath', env.TI_TEMPLATES_DIR);
   set(config.campaign, 'key', env.SUPABASE_CAMPAIGN_KEY);
   set(config.campaign, 'name', env.SUPABASE_CAMPAIGN_NAME);
-  if (env.SUPABASE_OBSERVER_FACTION_ID !== undefined && env.SUPABASE_OBSERVER_FACTION_ID !== '') {
-    config.campaign.defaultObserverFactionId = Number(env.SUPABASE_OBSERVER_FACTION_ID);
+  if (envPresent(env.SUPABASE_OBSERVER_FACTION_ID)) {
+    config.campaign.defaultObserverFactionId = parseIntegerEnv(
+      env.SUPABASE_OBSERVER_FACTION_ID,
+      'SUPABASE_OBSERVER_FACTION_ID',
+      { min: 1 }
+    );
   }
   set(config.server, 'host', env.HOST);
-  if (env.PORT) config.server.port = Number(env.PORT);
-  if (env.PUBLISH_TIMEOUT_MS) config.server.publishTimeoutMs = Number(env.PUBLISH_TIMEOUT_MS);
-  if (env.TI_DEFAULT_MODE) config.server.defaultMode = env.TI_DEFAULT_MODE;
-  if (env.SUPABASE_HISTORY_RETENTION) {
-    const retention = Number(env.SUPABASE_HISTORY_RETENTION);
-    config.publishing.historyRetention = retention;
-    config.analysis.strategicHistory.retention = retention;
+  if (envPresent(env.PORT)) {
+    config.server.port = parseIntegerEnv(env.PORT, 'PORT', { min: 1, max: 65535 });
   }
-  if (env.SUPABASE_FULL_SNAPSHOT_RETENTION) config.publishing.fullSnapshotRetention = Number(env.SUPABASE_FULL_SNAPSHOT_RETENTION);
+  if (envPresent(env.PUBLISH_TIMEOUT_MS)) {
+    config.server.publishTimeoutMs = parseIntegerEnv(env.PUBLISH_TIMEOUT_MS, 'PUBLISH_TIMEOUT_MS', { min: 1000 });
+  }
+  if (env.TI_DEFAULT_MODE) config.server.defaultMode = env.TI_DEFAULT_MODE;
+  // SUPABASE_HISTORY_RETENTION is deliberately NOT applied here. It used to be
+  // mapped twice -- once here with a truthiness gate and again in
+  // synchronizeHistoryRetention with a presence gate -- and the two spellings
+  // disagreed on 0 and on a numeric-zero env value. synchronizeHistoryRetention
+  // runs after CLI overrides are merged and is now the only path.
+  if (envPresent(env.SUPABASE_FULL_SNAPSHOT_RETENTION)) {
+    config.publishing.fullSnapshotRetention = parseIntegerEnv(
+      env.SUPABASE_FULL_SNAPSHOT_RETENTION,
+      'SUPABASE_FULL_SNAPSHOT_RETENTION',
+      { min: 1, max: 100 }
+    );
+  }
   return config;
 }
 
@@ -158,8 +213,11 @@ function configuredHistoryRetention(source) {
 }
 
 function synchronizeHistoryRetention(config, { userConfig, cliOverrides, env } = {}) {
-  const environmentRetention = env?.SUPABASE_HISTORY_RETENTION !== undefined && env.SUPABASE_HISTORY_RETENTION !== ''
-    ? Number(env.SUPABASE_HISTORY_RETENTION)
+  // The single mapping for SUPABASE_HISTORY_RETENTION. Precedence is
+  // environment > CLI override > user config; the two aliases below are then
+  // written from one resolved value so they can never disagree.
+  const environmentRetention = envPresent(env?.SUPABASE_HISTORY_RETENTION)
+    ? parseIntegerEnv(env.SUPABASE_HISTORY_RETENTION, 'SUPABASE_HISTORY_RETENTION', { min: 1, max: 1000 })
     : undefined;
   const retention = environmentRetention
     ?? configuredHistoryRetention(cliOverrides)
@@ -208,6 +266,32 @@ function resolveConfig({ configPath = DEFAULT_CONFIG_PATH, env = process.env, cl
   return resolved;
 }
 
+/**
+ * Resolves the public Supabase read key with explicit precedence.
+ *
+ * CLAUDE.md documents SUPABASE_PUBLISHABLE_KEY as the supported name.
+ * SUPABASE_ANON_KEY names the same public anon key and is still honoured, but
+ * it is deprecated and now reported once per process through the same
+ * TI_CONFIG_DEPRECATED channel the legacy config.json keys use.
+ *
+ * This deliberately never touches SUPABASE_SERVICE_ROLE_KEY: that key is local
+ * only, is read directly by the publisher, and must never reach a resolution
+ * path shared with browser or worker code. Only the variable name is ever
+ * emitted -- the key value is never logged.
+ */
+function resolvePublishableKey(env = process.env) {
+  const resolved = resolveSupabaseReadKey(env);
+  if (resolved.deprecated && !warnedLegacyKeys.has('SUPABASE_ANON_KEY')) {
+    warnedLegacyKeys.add('SUPABASE_ANON_KEY');
+    process.emitWarning(
+      'Environment variable SUPABASE_ANON_KEY is deprecated; rename it to SUPABASE_PUBLISHABLE_KEY. ' +
+      'Both name the same public anon key, and SUPABASE_PUBLISHABLE_KEY wins when both are set.',
+      { code: 'TI_CONFIG_DEPRECATED' }
+    );
+  }
+  return resolved;
+}
+
 function safeRuntimeConfig(config = resolveConfig()) {
   return {
     campaignKey: config.campaign.key,
@@ -230,5 +314,8 @@ module.exports = {
   resolveConfig,
   synchronizeHistoryRetention,
   safeRuntimeConfig,
+  parseIntegerEnv,
+  envPresent,
+  resolvePublishableKey,
   validate
 };

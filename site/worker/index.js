@@ -1,5 +1,16 @@
 import { staticAssets } from './static-assets.js';
-import { SUPPORTED_MODES } from '../shared/constants.mjs';
+import {
+  SUPPORTED_MODES,
+  DEFAULT_OBSERVER_FACTION_ID,
+  INITIATIVE_DISPLAY_NAME
+} from '../shared/constants.mjs';
+import {
+  DEFAULT_CAMPAIGN_KEY,
+  buildIntelApiIndex,
+  renderIntelApiIndexHtml,
+  selectExportMarkdown,
+  resolveSupabaseReadKey
+} from '../shared/apiSurface.mjs';
 import {
   SUPPORTED_RESOURCES,
   INTEL_ENDPOINT_INDEX,
@@ -61,6 +72,21 @@ const embeddedAsset = (pathname) => {
   });
 };
 
+// Only headers a static asset lookup can actually act on are forwarded.
+// Passing the whole inbound header set handed the assets binding the caller's
+// cookie, authorization and x-forwarded-* headers, none of which it needs and
+// any of which could end up in an upstream cache key or log line.
+const ASSET_REQUEST_HEADERS = ['accept', 'accept-encoding', 'accept-language', 'if-none-match', 'if-modified-since', 'range'];
+
+const assetRequestHeaders = (request) => {
+  const headers = new Headers();
+  for (const name of ASSET_REQUEST_HEADERS) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  return headers;
+};
+
 const asset = async (env, request, pathname) => {
   const url = new URL(request.url);
   const assetPath = pathname === '/v2' ? '/v2/index.html' : pathname;
@@ -69,7 +95,7 @@ const asset = async (env, request, pathname) => {
   if (env?.ASSETS?.fetch) {
     const response = await env.ASSETS.fetch(new Request(url.toString(), {
       method: 'GET',
-      headers: request.headers
+      headers: assetRequestHeaders(request)
     }));
     if (response.status !== 404) return response;
   }
@@ -81,10 +107,19 @@ const observerFile = (observerId, suffix) => {
   return `/data/${suffix}-player-${observerId}.json`;
 };
 
+// This site deliberately publishes read-only Player / Enhanced / Omniscient
+// intel, and CLAUDE.md documents /api/intel/* as the surface external analysis
+// clients call cross-origin. A wildcard origin is therefore the intended policy
+// and is NOT tightened here: an allowlist would silently break those documented
+// readers. What is tightened is everything that does not serve them --
+// credentials are never allowed (and are incompatible with '*' anyway), and the
+// advertised request headers are narrowed to what the endpoints actually read.
+// No route inspects Authorization, so advertising it only invited callers to
+// send credentials to a public endpoint.
 const corsHeaders = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
-  'access-control-allow-headers': 'Content-Type, Authorization',
+  'access-control-allow-headers': 'Content-Type',
   'access-control-max-age': '86400'
 };
 
@@ -105,9 +140,17 @@ const jsonResponse = (body, status = 200) => {
   });
 };
 
+// The hosted worker only ever holds the public anon key. SUPABASE_PUBLISHABLE_KEY
+// is the documented name and wins; SUPABASE_ANON_KEY is the deprecated spelling
+// of the same key and is still accepted. SUPABASE_SERVICE_ROLE_KEY is local-only
+// and is deliberately never read here.
+const supabaseReadKey = (env) => resolveSupabaseReadKey(env).key;
+
+const isSupabaseReady = (env) => Boolean(env?.SUPABASE_URL && supabaseReadKey(env));
+
 async function querySupabase(env, pathWithParams) {
   const supabaseUrl = env.SUPABASE_URL;
-  const anonKey = env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY;
+  const anonKey = supabaseReadKey(env);
 
   const url = `${supabaseUrl}/rest/v1/${pathWithParams}`;
   const response = await fetch(url, {
@@ -191,7 +234,7 @@ const consistencyError = (message) => ({
 });
 
 async function fetchFromSupabase(env, observerId, requestedMode = 'player') {
-  const campaignKey = env.SUPABASE_CAMPAIGN_KEY || 'initiative';
+  const campaignKey = env.SUPABASE_CAMPAIGN_KEY || DEFAULT_CAMPAIGN_KEY;
   const safeObserverId = String(observerId);
   const mode = requestedMode;
 
@@ -345,10 +388,7 @@ const resultIdentity = (result) => {
 
 const snapshotEnvelope = (result, format = 'compact') => {
   const row = result.row;
-  const exports = result.chatgptExport || {};
-  const markdown = format === 'full'
-    ? (exports.full || exports.compact || '')
-    : (exports.compact || exports.full || '');
+  const markdown = selectExportMarkdown(result.chatgptExport, format);
 
   return {
     success: true,
@@ -480,11 +520,35 @@ const buildIntelResource = (result, resource, url) => {
 
 const productionPlanPaths = new Set(['/api/intel/production-plan', '/api/production-plan']);
 
+// Strict positive-integer parsing. `Number(x) || fallback` accepted a typo in
+// a deployment variable and silently answered about the default faction. The
+// worker cannot fail a deployment at startup -- refusing every request over a
+// misconfigured variable would be worse than serving the documented default --
+// so a malformed value is reported to the worker log instead of hidden.
+const positiveIntegerOr = (value, fallback, label) => {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback;
+  const raw = String(value).trim();
+  const parsed = /^\d+$/.test(raw) ? Number(raw) : NaN;
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    // The value can come from a query string, so it is truncated and stripped
+    // of control characters before it reaches the log: a caller must not be
+    // able to forge log lines or flood them.
+    const safe = raw.replace(/[\u0000-\u001f\u007f]/g, '?').slice(0, 40);
+    console.warn(`[Worker] Ignoring malformed ${label}='${safe}'; falling back to ${fallback}.`);
+    return fallback;
+  }
+  return parsed;
+};
+
 const readRuntimeDefaults = async (env, request) => {
   const fallback = {
-    campaignKey: env?.SUPABASE_CAMPAIGN_KEY || 'initiative',
-    defaultObserverFactionId: Number(env?.SUPABASE_OBSERVER_FACTION_ID) || 4712,
-    defaultObserverFactionName: 'the Initiative',
+    campaignKey: env?.SUPABASE_CAMPAIGN_KEY || DEFAULT_CAMPAIGN_KEY,
+    defaultObserverFactionId: positiveIntegerOr(
+      env?.SUPABASE_OBSERVER_FACTION_ID,
+      DEFAULT_OBSERVER_FACTION_ID,
+      'SUPABASE_OBSERVER_FACTION_ID'
+    ),
+    defaultObserverFactionName: INITIATIVE_DISPLAY_NAME,
     defaultMode: 'player',
     supportedModes: Array.from(HOSTED_MODES)
   };
@@ -512,7 +576,11 @@ const techIntelResource = (pathName) => {
 const buildTechIntelResource = (result, resource, snapshot, url) => {
   const row = result.row;
   const identity = resultIdentity(result);
-  const observerId = Number(url.searchParams.get('observer') || row.observer_faction_id || 4712);
+  const observerId = positiveIntegerOr(
+    url.searchParams.get('observer') || row.observer_faction_id,
+    DEFAULT_OBSERVER_FACTION_ID,
+    'observer faction id'
+  );
   const mode = result.mode || row.visibility || 'player';
 
   let projection;
@@ -567,7 +635,11 @@ export default {
     }
 
     const runtimeDefaults = await readRuntimeDefaults(env, request);
-    const defaultObserverId = Number(runtimeDefaults.defaultObserverFactionId) || 4712;
+    const defaultObserverId = positiveIntegerOr(
+      runtimeDefaults.defaultObserverFactionId,
+      DEFAULT_OBSERVER_FACTION_ID,
+      'runtime default observer faction id'
+    );
     const observerId = url.searchParams.get('observer') || String(defaultObserverId);
     if (!/^\d+$/.test(observerId) || !Number.isSafeInteger(Number(observerId)) || Number(observerId) <= 0) {
       return jsonResponse({ success: false, error: `Invalid observer faction '${observerId}'.` }, 400);
@@ -577,7 +649,7 @@ export default {
       return jsonResponse({ success: false, error: `Unsupported hosted intelligence mode '${requestedMode}'. Use player, enhanced, or omniscient.` }, 400);
     }
     const mode = requestedMode;
-    const isSupabaseConfigured = !!(env.SUPABASE_URL && (env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY));
+    const isSupabaseConfigured = isSupabaseReady(env);
 
     // The browser uses this capability check to decide whether to show the
     // local publisher control. Hosted deployments are intentionally read-only:
@@ -589,7 +661,7 @@ export default {
       // unpublished observer returns 404 and clears the dashboard.
       let availableObservers = null;
       try {
-        const campaign = await readPublicCampaign(env, env.SUPABASE_CAMPAIGN_KEY || runtimeDefaults.campaignKey || 'initiative');
+        const campaign = await readPublicCampaign(env, env.SUPABASE_CAMPAIGN_KEY || runtimeDefaults.campaignKey || DEFAULT_CAMPAIGN_KEY);
         if (Array.isArray(campaign?.published_observers) && campaign.published_observers.length > 0) {
           availableObservers = campaign.published_observers;
         }
@@ -618,38 +690,22 @@ export default {
       }, 404);
     }
 
+    // The payload and directory page come from shared/apiSurface.mjs, the same
+    // module the local Express server uses, so a route added to
+    // INTEL_ENDPOINT_INDEX appears in both runtimes from one edit instead of
+    // requiring the page to be written out twice.
     if (url.pathname === '/api/intel' || url.pathname === '/api/intel/') {
-      const payload = {
-        success: true,
+      const payload = buildIntelApiIndex({
         source: 'hosted-worker',
-        name: 'Terra Invicta Strategic Intelligence API',
         endpoints: INTEL_ENDPOINT_INDEX,
         examples: INTEL_ENDPOINT_EXAMPLES,
-        query: {
-          observer: 'Observer faction ID, e.g. 4712',
-          mode: 'player | enhanced | omniscient',
-          faction: 'Optional faction ID filter',
-          body: 'Optional body filter',
-          theater: 'Mining-prospects theater filter (body is accepted as a legacy alias)',
-          limit: 'Mining-prospects result limit from 1 to 100'
-        }
-      };
+        defaultObserverFactionId: defaultObserverId
+      });
       if (url.searchParams.get('format') === 'json' || request.headers.get('accept')?.includes('application/json')) {
         return jsonResponse(payload);
       }
 
-      const links = Object.entries(payload.endpoints).map(([name, endpoint]) => {
-        const query = payload.examples[name] || '?observer=4712&mode=omniscient';
-        const href = `${endpoint}${query}`.replace(/&/g, '&amp;');
-        return `<li><span>${name}</span><a href="${href}">${endpoint}${query}</a></li>`;
-      }).join('');
-      return new Response(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="index,follow">
-<title>Terra Invicta Strategic Intelligence API</title></head><body>
-<main><h1>Terra Invicta Strategic Intelligence API</h1>
-<p>Machine-readable endpoint directory. Add or change observer, mode, faction, body, and other filters as needed.</p>
-<p><a href="/api/intel?format=json">JSON index</a> · <a href="/v2/">Command Center</a></p>
-<ul>${links}</ul></main></body></html>`, {
+      return new Response(renderIntelApiIndexHtml(payload, { defaultObserverFactionId: defaultObserverId }), {
         status: 200,
         headers: {
           ...corsHeaders,
@@ -669,7 +725,7 @@ export default {
         return jsonResponse({ success: false, error: 'Hosted Supabase is not configured.' }, 503);
       }
       try {
-        const campaignKey = url.searchParams.get('campaign') || env.SUPABASE_CAMPAIGN_KEY || 'initiative';
+        const campaignKey = url.searchParams.get('campaign') || env.SUPABASE_CAMPAIGN_KEY || DEFAULT_CAMPAIGN_KEY;
         const result = await readStrategicHistory(env, campaignKey, {
           limit: boundedHistoryLimit(url.searchParams.get('limit'))
         });
@@ -696,7 +752,7 @@ export default {
         if (!saveLastModified) {
           return jsonResponse({ success: false, error: 'A save_last_modified timestamp is required.' }, 400);
         }
-        const campaignKey = url.searchParams.get('campaign') || env.SUPABASE_CAMPAIGN_KEY || 'initiative';
+        const campaignKey = url.searchParams.get('campaign') || env.SUPABASE_CAMPAIGN_KEY || DEFAULT_CAMPAIGN_KEY;
         const result = await readStrategicHistory(env, campaignKey, {
           saveLastModified,
           limit: 1,
@@ -725,7 +781,7 @@ export default {
         return jsonResponse({ success: false, error: 'Hosted Supabase is not configured.' }, 503);
       }
       try {
-        const campaignKey = url.searchParams.get('campaign') || env.SUPABASE_CAMPAIGN_KEY || 'initiative';
+        const campaignKey = url.searchParams.get('campaign') || env.SUPABASE_CAMPAIGN_KEY || DEFAULT_CAMPAIGN_KEY;
         const fromStamp = url.searchParams.get('from');
         const toStamp = url.searchParams.get('to');
         let fromRow = null;
@@ -973,10 +1029,7 @@ export default {
           if (!result.found) {
             return jsonResponse({ success: false, error: result.error }, result.status);
           }
-          const exp = result.chatgptExport || {};
-          const markdown = format === 'full'
-            ? (exp.full || exp.compact || '')
-            : (exp.compact || exp.full || '');
+          const markdown = selectExportMarkdown(result.chatgptExport, format);
           return jsonResponse({
             success: true,
             markdown,
@@ -1009,7 +1062,7 @@ export default {
     if (url.pathname === '/api/saves') {
       if (isSupabaseConfigured) {
         try {
-          const campaignKey = env.SUPABASE_CAMPAIGN_KEY || 'initiative';
+          const campaignKey = env.SUPABASE_CAMPAIGN_KEY || DEFAULT_CAMPAIGN_KEY;
           const campaigns = await querySupabase(
             env,
             `campaigns?campaign_key=eq.${encodeURIComponent(campaignKey)}&is_public=eq.true&select=campaign_key,current_save_last_modified,current_game_time,current_save_filename,published_observers`

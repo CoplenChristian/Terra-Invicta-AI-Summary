@@ -577,25 +577,40 @@ test('an absent published snapshot reads as absent, not as empty data', () => {
 test('the published player snapshot plans for all six councilors', (t) => {
   const snapshotPath = path.join(__dirname, '..', 'dist', 'data', 'snapshot-player-4712.json');
 
-  // This snapshot predates `missionSpecs`, which makes it the degrade path:
-  // odds must be unavailable AND every councilor must still be planned for.
+  // The degrade path: a snapshot with no `missionSpecs` must still plan for
+  // every councilor, with odds honestly reported as unavailable.
+  //
+  // This used to assert that the published artifact happened to carry no
+  // missionSpecs, which made the test a hostage to whenever `npm run
+  // build:site` last ran -- re-publishing from a spec-carrying save turned it
+  // red without anything in the engine changing. The degrade condition is now
+  // constructed here instead of hoped for.
   const published = readPublishedSnapshot(snapshotPath);
   if (!published) {
     t.skip('no published snapshot artifact; run `npm run build:site` to check this path');
     return;
   }
 
-  const data = published.data;
+  const { missionSpecs, ...data } = published.data;
   const own = data.councilors.filter((c) => Number(c.factionId) === 4712);
   assert.strictEqual(own.length, 6, 'fixture expectation: the save carries six own councilors');
-  assert.ok(!data.missionSpecs, 'fixture expectation: this snapshot carries no mission specs');
+  assert.ok(!data.missionSpecs, 'the degrade path under test is a snapshot with no mission specs');
 
   const plan = briefingGenerator.generateMissionControlBriefing(data).engineDirectives.cyclePlan;
 
+  // Counted as DISTINCT councilors, not as a sum of list lengths: a councilor
+  // whose persistent mission the plan re-affirms appears both in `assignments`
+  // (as 'continue') and in `committed`, so the lengths deliberately overlap.
+  const planned = new Set([
+    ...plan.assignments.map((a) => String(a.councilorId)),
+    ...plan.unassigned.map((u) => String(u.councilorId)),
+    ...plan.committed.map((c) => String(c.councilorId)),
+    ...plan.unavailable.map((u) => String(u.councilorId))
+  ]);
   assert.strictEqual(
-    plan.assignments.length + plan.unassigned.length,
+    planned.size,
     own.length,
-    'assignments + unassigned must equal the own councilor count'
+    'every own councilor must be accounted for exactly once across the plan'
   );
 
   for (const assignment of plan.assignments) {
@@ -603,3 +618,114 @@ test('the published player snapshot plans for all six councilors', (t) => {
     assert.match(assignment.odds.basis, /unavailable/i);
   }
 });
+
+// ---------------------------------------------------------------------------
+// 9. Persistent Assignments (Advise, Prior parsing, Opportunity Cost)
+// ---------------------------------------------------------------------------
+
+test('Prior: GainInfluence is not read as active persistent assignment', () => {
+  const councilor = {
+    ID: 10,
+    displayName: 'Balgovind Manandhar',
+    status: 'Active',
+    locationType: 'earth',
+    activeMissionName: 'Prior: GainInfluence',
+    resolvedAttributes: { effective: { Persuasion: 20 } }
+  };
+
+  const candidates = [{
+    id: 'op-1',
+    title: 'Control Nation Malawi',
+    missionType: 'GainInfluence',
+    missionSpec: { friendlyName: 'Control Nation', contested: false },
+    baseValue: 5.0,
+    cost: { resource: 'Influence', amount: 10 }
+  }];
+
+  const world = { resources: { influence: 100 } };
+  const plan = allocateCyclePlan(candidates, [councilor], world);
+
+  assert.strictEqual(plan.committed.length, 0, 'Prior: mission is not committed');
+  assert.strictEqual(plan.assignments.length, 1);
+  assert.strictEqual(plan.assignments[0].assignmentType, 'new');
+});
+
+test('councilor on Advise appears as committed and continues with zero switching cost', () => {
+  const councilor = {
+    ID: 20,
+    displayName: 'Brad Lester',
+    status: 'Active',
+    locationType: 'earth',
+    activeMissionName: 'Advise',
+    activeMissionTarget: 'United States',
+    resolvedAttributes: { effective: { Administration: 25, Science: 13, Command: 5 } }
+  };
+
+  const adviseCandidate = {
+    id: 'advise-usa',
+    title: 'Advise Government: United States',
+    missionType: 'Advise',
+    friendlyName: 'Advise',
+    target: { type: 'nation', name: 'United States', gdp: 30000, research: 1300 },
+    missionSpec: { friendlyName: 'Advise', contested: false },
+    baseValue: 6.0,
+    cost: { resource: 'Influence', amount: 10 }
+  };
+
+  const world = {
+    resources: { influence: 100 },
+    nations: [{ name: 'United States', gdp: 30000, research: 1300 }]
+  };
+
+  const plan = allocateCyclePlan([adviseCandidate], [councilor], world);
+
+  assert.strictEqual(plan.committed.length, 1, 'appears in committed roster');
+  assert.strictEqual(plan.committed[0].name, 'Brad Lester');
+  assert.strictEqual(plan.assignments.length, 1);
+  assert.strictEqual(plan.assignments[0].assignmentType, 'continue');
+  assert.strictEqual(plan.assignments[0].isContinue, true);
+  assert.match(plan.assignments[0].opportunityCost, /Continues active persistent assignment/);
+});
+
+test('reassigning off Advise explicitly prices ongoing research/turn destroyed', () => {
+  const councilor = {
+    ID: 20,
+    displayName: 'Brad Lester',
+    status: 'Active',
+    locationType: 'earth',
+    activeMissionName: 'Advise',
+    activeMissionTarget: 'United States',
+    resolvedAttributes: { effective: { Administration: 25, Science: 13, Command: 5, Persuasion: 25 } }
+  };
+
+  // Higher one-shot candidate that displaces Advise.
+  //
+  // Advising this fixture's United States is worth ~300 value/turn, so the
+  // switching penalty is ~30. The value here must genuinely clear that. It
+  // used to read 25.0 with a comment claiming it was "high enough" -- it was
+  // not, and the test only passed because the allocator floored a
+  // value-destroying switch at expectedValue 0 and assigned it anyway.
+  const highPriorityOp = {
+    id: 'critical-op',
+    title: 'Take Executive Superpower',
+    missionType: 'GainInfluence',
+    target: { type: 'nation', name: 'Superpower' },
+    missionSpec: { friendlyName: 'Control Nation', contested: false },
+    baseValue: 60.0,
+    cost: { resource: 'Influence', amount: 10 }
+  };
+
+  const world = {
+    resources: { influence: 100 },
+    nations: [{ name: 'United States', gdp: 30000, research: 1300 }]
+  };
+
+  const plan = allocateCyclePlan([highPriorityOp], [councilor], world);
+
+  assert.strictEqual(plan.assignments.length, 1);
+  assert.strictEqual(plan.assignments[0].assignmentType, 'reassign');
+  assert.strictEqual(plan.assignments[0].isReassign, true);
+  assert.match(plan.assignments[0].opportunityCost, /Moving Brad Lester off Advise/);
+  assert.match(plan.assignments[0].opportunityCost, /research\/turn/);
+});
+

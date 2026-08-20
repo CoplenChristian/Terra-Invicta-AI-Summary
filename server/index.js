@@ -20,10 +20,11 @@ const snapshotDelta = require('./snapshotDelta');
 const intelResources = require('./intelResources');
 const techIntel = require('./techIntel');
 const requestValidation = require('./requestValidation');
-const saveComparison = require('./saveComparison');
 const SupabaseAdapter = require('./supabaseAdapter');
+const snapshotLoader = require('./snapshotLoader');
 const { buildStrategicSnapshot } = require('../shared/strategicSnapshot.mjs');
 const { buildStrategicDelta } = require('../shared/strategicDelta.mjs');
+const { buildIntelApiIndex, renderIntelApiIndexHtml } = require('../shared/apiSurface.mjs');
 
 // Compact strategic history lives in Supabase, not on disk, so these routes
 // degrade cleanly to a clear message when Supabase is not configured locally.
@@ -62,7 +63,7 @@ if (require.main === module) {
 // In-memory snapshot cache
 let cachedRawSave = null;
 let cachedSavePath = null;
-let cachedSaveStatKey = null;
+let cachedSaveFingerprintKey = null;
 let cachedPreviousRawSave = null;
 const filteredSnapshotCache = new Map();
 let activePublisherProcess = null;
@@ -113,16 +114,21 @@ function loadOrGetSnapshot(targetSavePath = null) {
 
   const stats = fs.statSync(saveFile.fullPath);
   if (!saveFile.lastModified) saveFile.lastModified = stats.mtime;
-  const statKey = `${stats.size}:${stats.mtimeMs}`;
-  if (cachedRawSave && cachedSavePath === saveFile.fullPath && cachedSaveStatKey === statKey) {
+
+  // Key the cache on the same content fingerprint (size:mtimeMs:sha256) the
+  // mid-write stability check uses. size:mtimeMs alone can repeat for a save
+  // restored from a backup or copied over an older one, which served parsed
+  // data from a different game state. The hash is a few milliseconds on a 3 MB
+  // save and is reused for the stability check below, so a cache miss does no
+  // extra work.
+  const beforeFingerprint = snapshotIdentity.createFileFingerprint(saveFile.fullPath);
+  if (cachedRawSave && cachedSavePath === saveFile.fullPath &&
+    cachedSaveFingerprintKey === beforeFingerprint.key) {
     return cachedRawSave;
   }
 
   // Parse the save and verify it did not change while it was being read.
-  // The fingerprint is computed only on a cache miss; a stat comparison is
-  // sufficient for cache hits because the game's writes always bump mtime.
   console.log(`[Server] Parsing save ${saveFile.name}...`);
-  const beforeFingerprint = snapshotIdentity.createFileFingerprint(saveFile.fullPath);
   const parsedSave = saveParser.readSaveJson(saveFile.fullPath);
   const afterFingerprint = snapshotIdentity.createFileFingerprint(saveFile.fullPath);
   if (afterFingerprint.key !== beforeFingerprint.key) {
@@ -138,50 +144,35 @@ function loadOrGetSnapshot(targetSavePath = null) {
   snapshotIdentity.attachSnapshotIdentity(rawSnapshot, identity);
 
   // Keep the immediately older save available for a truthful “since last
-  // save” comparison. A failed historical parse should not block the current
-  // dashboard; it simply makes the delta panel explicitly unavailable.
-  cachedPreviousRawSave = null;
-  try {
-    // Walk back past saves that capture the same in-game moment (an ExitSave
-    // written seconds after an Autosave, for instance) so the comparison has
-    // something to report. Parsed candidates are reused, not re-read.
-    const parsedCandidates = new Map();
-    const readCandidate = (candidate) => {
-      const key = path.resolve(candidate.fullPath).toLowerCase();
-      if (!parsedCandidates.has(key)) {
-        parsedCandidates.set(key, snapshotBuilder.buildRawSnapshot(saveParser.readSaveJson(candidate.fullPath)));
-      }
-      return parsedCandidates.get(key);
-    };
-
-    const selection = saveComparison.selectComparisonSave(
-      saveParser.getAvailableSaves(),
-      saveFile,
-      rawSnapshot.metadata?.gameTimeString || null,
-      (candidate) => readCandidate(candidate)?.metadata?.gameTimeString || null
-    );
-
-    if (selection?.save) {
-      cachedPreviousRawSave = readCandidate(selection.save);
-      snapshotIdentity.attachSnapshotIdentity(cachedPreviousRawSave, snapshotIdentity.createSnapshotIdentity(
-        selection.save,
-        runtimeConfig.campaign.key,
-        identity.generatedAt
-      ));
-      if (selection.reason === 'same-game-time-fallback') {
-        console.log(`[Server] Every recent save shares in-game date ${rawSnapshot.metadata?.gameTimeString}; comparing against ${selection.save.name} anyway.`);
-      } else if (selection.probed > 1) {
-        console.log(`[Server] Comparing against ${selection.save.name} (${selection.gameTime}); skipped ${selection.probed - 1} save(s) from the same in-game moment.`);
-      }
+  // save” comparison, walking back past saves that capture the same in-game
+  // moment (an ExitSave written seconds after an Autosave, for instance) so the
+  // comparison has something to report. A failed historical parse should not
+  // block the current dashboard; it simply makes the delta panel explicitly
+  // unavailable. The selection itself lives in snapshotLoader so the server,
+  // the loader and the publisher cannot drift apart.
+  const previous = snapshotLoader.selectPreviousRawSnapshot({
+    saveFile,
+    rawSnapshot,
+    campaignKey: runtimeConfig.campaign.key,
+    generatedAt: identity.generatedAt,
+    onError: (previousError) => {
+      console.warn(`[Server] Previous save comparison unavailable: ${previousError.message}`);
     }
-  } catch (previousError) {
-    console.warn(`[Server] Previous save comparison unavailable: ${previousError.message}`);
+  });
+  cachedPreviousRawSave = previous?.snapshot || null;
+  if (previous) {
+    const selection = previous.selection;
+    if (selection.reason === 'same-game-time-fallback') {
+      console.log(`[Server] Every recent save shares in-game date ${rawSnapshot.metadata?.gameTimeString}; comparing against ${selection.save.name} anyway.`);
+    } else if (selection.probed > 1) {
+      console.log(`[Server] Comparing against ${selection.save.name} (${selection.gameTime}); skipped ${selection.probed - 1} save(s) from the same in-game moment.`);
+    }
   }
   rawSnapshot.previousRawSnapshot = cachedPreviousRawSave;
 
   cachedRawSave = rawSnapshot;
   cachedSavePath = saveFile.fullPath;
-  cachedSaveStatKey = statKey;
+  cachedSaveFingerprintKey = beforeFingerprint.key;
   filteredSnapshotCache.clear();
 
   return rawSnapshot;
@@ -365,7 +356,7 @@ app.post('/api/refresh', (req, res) => {
   try {
     cachedRawSave = null;
     cachedSavePath = null;
-    cachedSaveStatKey = null;
+    cachedSaveFingerprintKey = null;
     cachedPreviousRawSave = null;
     filteredSnapshotCache.clear();
 
@@ -406,39 +397,24 @@ app.get('/api/export', (req, res) => {
 
 // Focused resource routes keep local Express and the hosted worker on the
 // same shallow contract for external analysis clients and lazy library views.
+// The payload and the directory page are built by shared/apiSurface.mjs so the
+// hosted worker and this server cannot drift; a route added to
+// INTEL_ENDPOINT_INDEX now surfaces in both runtimes from one edit.
 app.get(['/api/intel', '/api/intel/'], (req, res) => {
-  const payload = {
-    success: true,
+  const defaultObserverFactionId = runtimeConfig.campaign.defaultObserverFactionId;
+  const payload = buildIntelApiIndex({
     source: 'local',
-    name: 'Terra Invicta Strategic Intelligence API',
     endpoints: intelResources.INTEL_ENDPOINT_INDEX,
     examples: intelResources.INTEL_ENDPOINT_EXAMPLES,
-    query: {
-      observer: `Observer faction ID, e.g. ${runtimeConfig.campaign.defaultObserverFactionId}`,
-      mode: 'player | enhanced | omniscient',
-      faction: 'Optional faction ID filter',
-      body: 'Optional body filter',
-      theater: 'Mining-prospects theater filter (body is accepted as a legacy alias)',
-      limit: 'Mining-prospects result limit from 1 to 100'
-    }
-  };
+    defaultObserverFactionId
+  });
   if (req.query.format === 'json' || String(req.get('accept') || '').includes('application/json')) {
     res.set('Cache-Control', 'no-store').json(payload);
     return;
   }
 
-  const links = Object.entries(payload.endpoints).map(([name, endpoint]) => {
-    const query = payload.examples[name] || `?observer=${runtimeConfig.campaign.defaultObserverFactionId}&mode=omniscient`;
-    const href = `${endpoint}${query}`.replace(/&/g, '&amp;');
-    return `<li><span>${name}</span><a href="${href}">${endpoint}${query}</a></li>`;
-  }).join('');
-  res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="index,follow">
-<title>Terra Invicta Strategic Intelligence API</title></head><body>
-<main><h1>Terra Invicta Strategic Intelligence API</h1>
-<p>Machine-readable endpoint directory. Add or change observer, mode, faction, body, and other filters as needed.</p>
-<p><a href="/api/intel?format=json">JSON index</a> · <a href="/v2/">Command Center</a></p>
-<ul>${links}</ul></main></body></html>`);
+  res.set('Cache-Control', 'no-store').type('html')
+    .send(renderIntelApiIndexHtml(payload, { defaultObserverFactionId }));
 });
 
 app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
@@ -530,7 +506,14 @@ app.get('/api/intel/history', async (req, res) => {
     return res.status(503).json({ error: 'Strategic history requires Supabase configuration (SUPABASE_URL + key).' });
   }
   try {
-    const result = await strategicHistory.listStrategicSnapshots(req.query.campaign || null, req.query.limit || 25);
+    // A malformed ?limit used to fall through to 25 silently. Reject it with a
+    // 400 instead of quietly answering a different question.
+    const limit = requestValidation.parseBoundedIntegerQuery(
+      req.query.limit,
+      'history limit',
+      { min: 1, max: 100, defaultValue: 25 }
+    );
+    const result = await strategicHistory.listStrategicSnapshots(req.query.campaign || null, limit);
     if (!result.found) return res.status(404).json({ error: result.error || 'Strategic history unavailable for this campaign.' });
     res.json({
       schema: 'strategic_snapshot_v1',
@@ -539,7 +522,7 @@ app.get('/api/intel/history', async (req, res) => {
       history: result.history
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 
@@ -586,11 +569,18 @@ app.get('/api/intel/strategic-delta', async (req, res) => {
       if (!recent.found) return res.status(404).json({ error: recent.error || 'No strategic history available.' });
       if (recent.snapshots.length === 0) return res.status(404).json({ error: 'No strategic history stored yet.' });
 
+      // Validate the request outside the fallback below. parseObserverId
+      // rejects a malformed id instead of coercing it to NaN and falling back
+      // to the configured observer, which would silently build the delta for a
+      // different faction -- and the fallback catch would have hidden the
+      // rejection as "no local save available".
+      const observerFactionId = requestValidation.parseObserverId(req.query.observer);
+      const { targetPath } = requestContext(req);
+
       try {
-        const { targetPath } = requestContext(req);
         const rawSnapshot = loadOrGetSnapshot(targetPath);
         toDoc = buildStrategicSnapshot(rawSnapshot, {
-          observerFactionId: Number(req.query.observer) || runtimeConfig.campaign.defaultObserverFactionId,
+          observerFactionId,
           campaignKey: campaign,
           policy: runtimeConfig.analysis.strategicHistory
         });
@@ -605,7 +595,7 @@ app.get('/api/intel/strategic-delta', async (req, res) => {
 
     res.json(buildStrategicDelta(fromDoc, toDoc));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 

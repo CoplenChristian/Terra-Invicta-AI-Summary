@@ -1,5 +1,40 @@
 const templateLoader = require('./templateLoader');
 
+/**
+ * The output key a capability descriptor writes to.
+ *
+ * Written out three times before -- twice in resolveCapabilities and once in
+ * getDefaultCapabilities -- and the copies had already diverged: two used
+ * `descriptor.capability[0]`, which throws on a descriptor with no
+ * `capability`, and one used the optional-chained form. This is the defensive
+ * form; for every descriptor in the shipped config the three produced the same
+ * key, so the only difference is that a malformed config now yields a junk key
+ * instead of a TypeError.
+ */
+const capabilityOutputKey = (descriptor) => descriptor?.outputKey ||
+  `can${descriptor?.capability?.[0]?.toUpperCase() || ''}${descriptor?.capability?.slice(1) || ''}`;
+
+/**
+ * Intelligence a faction always has about other humans. Constant true in both
+ * the resolved and the default capability sets; listed once so the two cannot
+ * disagree about what "no capabilities at all" still includes.
+ */
+const ALWAYS_AVAILABLE_HUMAN_CAPABILITIES = Object.freeze({
+  canDetectHumanCouncilors: true,
+  canInvestigateHumanCouncilors: true,
+  canIdentifyHumanMissions: true // when investigated or turned
+});
+
+/**
+ * Discovery-gating rules, read from config identically in both capability
+ * sets. Emitted as a group so the three keys keep their existing order.
+ */
+const discoveryRuleFields = (xenoformingRule, facilityRule) => ({
+  xenoformingAutomaticVisibilityThreshold: xenoformingRule.automaticVisibilityThreshold ?? 65,
+  facilityRequiresRegionDiscovery: facilityRule.requiresRegionDiscovery !== false,
+  xenoformingRequiresRegionDiscovery: xenoformingRule.requiresRegionDiscovery !== false
+});
+
 class CapabilityResolver {
   constructor() {
     templateLoader.load();
@@ -37,7 +72,7 @@ class CapabilityResolver {
       const enabled = activeEffects.has(effectId) ||
         (descriptor.defaultProject && finishedProjects.has(descriptor.defaultProject)) ||
         (descriptor.defaultTech && finishedTechs.has(descriptor.defaultTech));
-      const outputKey = descriptor.outputKey || `can${descriptor.capability[0]?.toUpperCase() || ''}${descriptor.capability.slice(1)}`;
+      const outputKey = capabilityOutputKey(descriptor);
       configuredCapabilities[outputKey] = Boolean(configuredCapabilities[outputKey] || enabled);
     }
     const canDetectAlienAbductions = configuredCapabilities.canDetectAlienAbductions === true;
@@ -69,7 +104,7 @@ class CapabilityResolver {
     );
     const details = {};
     for (const [effectId, descriptor] of Object.entries(templateLoader.config.analysis?.effects || {})) {
-      const outputKey = descriptor.outputKey || `can${descriptor.capability[0]?.toUpperCase() || ''}${descriptor.capability.slice(1)}`;
+      const outputKey = capabilityOutputKey(descriptor);
       const project = descriptor.defaultProject ? projectById.get(descriptor.defaultProject) : null;
       details[descriptor.capability] = {
         name: descriptor.name || project?.name || descriptor.defaultTech || descriptor.capability,
@@ -96,18 +131,14 @@ class CapabilityResolver {
       canDetainAlienCouncilors,
 
       // Human councilors & operations
-      canDetectHumanCouncilors: true,
-      canInvestigateHumanCouncilors: true,
-      canIdentifyHumanMissions: true, // when investigated or turned
+      ...ALWAYS_AVAILABLE_HUMAN_CAPABILITIES,
 
       // Facilities and xenoforming are both discovery-gated at the region/entity
       // level. These booleans describe whether the observer has the prerequisite
       // story/intel state; the filter still checks each saved entity.
       canDetectAlienFacilities,
       canDetectXenoforming,
-      xenoformingAutomaticVisibilityThreshold: xenoformingRule.automaticVisibilityThreshold ?? 65,
-      facilityRequiresRegionDiscovery: facilityRule.requiresRegionDiscovery !== false,
-      xenoformingRequiresRegionDiscovery: xenoformingRule.requiresRegionDiscovery !== false,
+      ...discoveryRuleFields(xenoformingRule, facilityRule),
 
       // Space intelligence
       canTrackInnerSpaceAssets,
@@ -147,10 +178,7 @@ class CapabilityResolver {
     const facilityRule = rules.alienFacilities || {};
     const configuredDefaults = Object.fromEntries(
       Object.values(templateLoader.config.analysis?.effects || {})
-        .map(descriptor => [
-          descriptor.outputKey || `can${descriptor.capability?.[0]?.toUpperCase() || ''}${descriptor.capability?.slice(1) || ''}`,
-          false
-        ])
+        .map(descriptor => [capabilityOutputKey(descriptor), false])
     );
     return {
       ...configuredDefaults,
@@ -160,14 +188,10 @@ class CapabilityResolver {
       canEstimateAlienThreat: false,
       canDirectlyDetectAlienCouncilors: false,
       canDetainAlienCouncilors: false,
-      canDetectHumanCouncilors: true,
-      canInvestigateHumanCouncilors: true,
-      canIdentifyHumanMissions: true,
+      ...ALWAYS_AVAILABLE_HUMAN_CAPABILITIES,
       canDetectAlienFacilities: false,
       canDetectXenoforming: false,
-      xenoformingAutomaticVisibilityThreshold: xenoformingRule.automaticVisibilityThreshold ?? 65,
-      facilityRequiresRegionDiscovery: facilityRule.requiresRegionDiscovery !== false,
-      xenoformingRequiresRegionDiscovery: xenoformingRule.requiresRegionDiscovery !== false,
+      ...discoveryRuleFields(xenoformingRule, facilityRule),
       canTrackInnerSpaceAssets: false,
       canTrackSolarSystemSpaceAssets: false,
       canInspectEnemyHabs: false,

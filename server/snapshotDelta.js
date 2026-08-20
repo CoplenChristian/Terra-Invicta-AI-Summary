@@ -1,5 +1,6 @@
 const spaceTheater = require('./spaceTheater');
 const { ALIEN_FACTION_ID, ALIEN_FACTION_DISPLAY_NAME } = require('../shared/constants.mjs');
+const { asArray, sameId, MS_PER_DAY } = require('../shared/util.mjs');
 
 const RESOURCE_FIELDS = [
   ['Money', 'Money'],
@@ -13,14 +14,6 @@ const RESOURCE_FIELDS = [
   ['Fissiles', 'Fissiles'],
   ['Exotics', 'Exotics']
 ];
-
-function asArray(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function sameId(left, right) {
-  return left !== undefined && left !== null && right !== undefined && right !== null && String(left) === String(right);
-}
 
 function numeric(value) {
   const parsed = Number(value);
@@ -214,7 +207,7 @@ function build(previous, current, observerId) {
   const previousDate = gameDate(previous);
   const currentDate = gameDate(current);
   const elapsedGameDays = previousDate && currentDate
-    ? Number(((currentDate.getTime() - previousDate.getTime()) / 86400000).toFixed(1))
+    ? Number(((currentDate.getTime() - previousDate.getTime()) / MS_PER_DAY).toFixed(1))
     : null;
   const previousObserver = findFaction(previous, observerId);
   const currentObserver = findFaction(current, observerId);

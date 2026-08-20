@@ -9,6 +9,8 @@
 //   into a dependency graph, then overlay the current save's completion /
 //   progress state on top of it.
 
+import { asArray, toFiniteNumber } from './util.mjs';
+
 export const UNLOCK_CLASSES = [
   'ship_hull', 'weapon', 'missile', 'point_defense', 'drive', 'reactor',
   'battery', 'radiator', 'armor', 'utility', 'hab_module', 'mine', 'shipyard',
@@ -56,7 +58,23 @@ const CLASS_FROM_COMPONENT_TYPE = {
   hab_module: 'hab_module'
 };
 
-export const asArray = (value) => (Array.isArray(value) ? value : []);
+// Definitions live in shared/util.mjs; re-exported so existing importers of
+// `techGraph.asArray` keep working.
+export { asArray } from './util.mjs';
+
+// Absent stays null. `Number(null) === 0` and `Number('') === 0`, so presence
+// is checked before coercion.
+const numOrNull = toFiniteNumber;
+
+// Research completion as a percentage. `Math.min(100, NaN)` is NaN, not 100,
+// so an unguarded progress/cost with a zero or absent cost leaked NaN into
+// researchPercent. An unknown percentage is reported as null.
+const percentOrNull = (progress, cost) => {
+  const done = numOrNull(progress);
+  const total = numOrNull(cost);
+  if (done === null || total === null || total <= 0) return null;
+  return Math.min(100, Math.round((done / total) * 1000) / 10);
+};
 
 // Component "stats" extraction, keyed per component type. Kept conservative:
 // only fields that exist across the templates are surfaced so the payload stays
@@ -211,9 +229,13 @@ export function buildTechGraph(templates, saveState = {}) {
       type: 'global_tech',
       category,
       subcategory: template.AI_techRole || null,
-      researchCost: template.researchCost || 0,
+      // `|| 0` turned an unresolved cost into a zero cost, and a zero cost
+      // makes progress/cost either Infinity or NaN downstream. Absent stays
+      // null; researchPercent then reports null rather than NaN.
+      researchCost: numOrNull(template.researchCost),
       researchProgress: 0,
-      researchPercent: 0,
+      // 0% only means something against a known cost.
+      researchPercent: percentOrNull(0, template.researchCost),
       contributors: [],
       prerequisites: prereqRefs,
       effects: asArray(template.effects).map(eid => effectRecord(eid, effects[eid], componentByEffect)),
@@ -271,9 +293,10 @@ export function buildTechGraph(templates, saveState = {}) {
       type: 'faction_project',
       category,
       subcategory: template.AI_projectRole || template.AI_techRole || null,
-      researchCost: template.researchCost || 0,
+      // See techNode above: an unresolved cost is unknown, not zero.
+      researchCost: numOrNull(template.researchCost),
       researchProgress: 0,
-      researchPercent: 0,
+      researchPercent: percentOrNull(0, template.researchCost),
       repeatable: !!template.repeatable,
       oneTimeGlobally: !!template.oneTimeGlobally,
       // Availability is a monthly RNG gate, not a queue position. A project
@@ -352,15 +375,15 @@ export function applySaveState(graph, saveState = {}) {
       } else {
         const active = globalActive.get(node.id);
         if (active) {
-          const cost = active.totalCost || node.researchCost;
-          const progress = active.accumulatedResearch || 0;
+          const cost = numOrNull(active.totalCost) ?? node.researchCost;
+          const progress = numOrNull(active.accumulatedResearch) ?? 0;
           overlay.status = 'researching';
           overlay.researching = true;
           overlay.available = true;
           overlay.locked = false;
           overlay.researchCost = cost;
           overlay.researchProgress = progress;
-          overlay.researchPercent = Math.min(100, Math.round((progress / cost) * 1000) / 10);
+          overlay.researchPercent = percentOrNull(progress, cost);
           overlay.contributors = asArray(active.contributors);
         } else {
           overlay.status = 'available';
@@ -379,15 +402,15 @@ export function applySaveState(graph, saveState = {}) {
       } else {
         const active = activeProjects.get(node.id);
         if (active) {
-          const cost = active.totalCost || node.researchCost;
-          const progress = active.accumulatedResearch || 0;
+          const cost = numOrNull(active.totalCost) ?? node.researchCost;
+          const progress = numOrNull(active.accumulatedResearch) ?? 0;
           overlay.status = 'researching';
           overlay.researching = true;
           overlay.available = true;
           overlay.locked = false;
           overlay.researchCost = cost;
           overlay.researchProgress = progress;
-          overlay.researchPercent = Math.min(100, Math.round((progress / cost) * 1000) / 10);
+          overlay.researchPercent = percentOrNull(progress, cost);
         } else if (availableProjects.has(node.id)) {
           overlay.status = 'available';
           overlay.available = true;
@@ -453,10 +476,14 @@ export function collectRemainingPath(graph, byId, targetNode, includeSelf = true
   return remaining;
 }
 
-// Computes remaining research cost for a node, accounting for current progress.
+// Computes remaining research cost for a node, accounting for current
+// progress. Returns null when the node's cost is unknown -- `|| 0` reported an
+// unresolved node as costing nothing more to finish, which understates every
+// path total that contains one.
 function remainingCost(node) {
-  const cost = node.researchCost || 0;
-  const progress = node.researchProgress || 0;
+  const cost = numOrNull(node?.researchCost);
+  if (cost === null) return null;
+  const progress = numOrNull(node?.researchProgress) ?? 0;
   return Math.max(0, cost - progress);
 }
 
@@ -499,10 +526,19 @@ export function buildTechPath(graph, byId, targets) {
     }
   }
 
+  // A path containing a node whose cost could not be resolved has an unknown
+  // total, not a smaller one. The measured part is still reported, alongside
+  // the nodes that could not be costed, so the figure is never mistaken for a
+  // complete one.
   let remainingGlobalResearchCost = 0;
   let remainingFactionResearchCost = 0;
+  const uncostedNodes = [];
   for (const item of remainingPath) {
     const cost = remainingCost(graph.byId.get(item.id));
+    if (cost === null) {
+      uncostedNodes.push(item.id);
+      continue;
+    }
     if (item.type === 'global_tech') remainingGlobalResearchCost += cost;
     else remainingFactionResearchCost += cost;
   }
@@ -513,7 +549,9 @@ export function buildTechPath(graph, byId, targets) {
     remainingPath,
     remainingGlobalResearchCost,
     remainingFactionResearchCost,
-    totalRemainingResearchCost: remainingGlobalResearchCost + remainingFactionResearchCost
+    totalRemainingResearchCost: remainingGlobalResearchCost + remainingFactionResearchCost,
+    uncostedNodes,
+    researchCostComplete: uncostedNodes.length === 0
   };
   if (single) {
     return {
@@ -574,10 +612,12 @@ export function buildTechMilestones(graph, byId, category = null) {
         status: node.status,
         unlockProject: node.id,
         unlockProjectName: node.displayName,
-        researchable: node.researchCost > 0,
+        // An unresolved cost makes researchability unknown, not false.
+        researchable: node.researchCost === null ? null : node.researchCost > 0,
+        researchCostAvailable: node.researchCost !== null,
         remainingResearchCost: node.status === 'completed' || node.status === 'researching'
           ? 0
-          : (node.researchCost > 0 ? Math.max(0, node.researchCost - (node.researchProgress || 0)) : null)
+          : (node.researchCost > 0 ? Math.max(0, node.researchCost - (numOrNull(node.researchProgress) ?? 0)) : null)
       });
     }
   }

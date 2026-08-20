@@ -30,12 +30,13 @@
  * uncertain candidates remain explanatory evidence under decisionReasoning.
  *
  * Pure module: no I/O, no network, no filesystem. Only requires
- * ./directiveAdvisor, ./alienHateEconomics, and node builtins, so the same
- * logic runs identically in tests, the local server, and any future export
- * path.
+ * ./directiveAdvisor, ./alienHateEconomics, ../shared/util.mjs, and node
+ * builtins, so the same logic runs identically in tests, the local server, and
+ * any future export path.
  */
 
 const directiveAdvisor = require('./directiveAdvisor');
+const { toFiniteNumber, sameId } = require('../shared/util.mjs');
 const { ALIEN_HATE_WAR_THRESHOLD, ALIEN_TOTAL_WAR_HATE } = require('./alienHateEconomics');
 const { MissionCatalogue } = require('./engine/missionCatalogue');
 const { allocateCyclePlan } = require('./engine/assignment');
@@ -44,20 +45,15 @@ const { generateMissionCandidatesFromSpecs } = require('./engine/candidates/miss
 
 const ALIEN_DETAIN_STORY_GATE = 'CaptureAHydra objective (Unlocked/Completed) / AccessLiveHydra milestone';
 
-function toFiniteNumber(value) {
-  // Number(null) and Number('') both evaluate to 0, so a bare Number.isFinite
-  // check would silently turn an absent measurement into a confident zero.
-  // That is the single most-repeated bug class in this repo's history --
-  // guard on presence first.
-  if (value === null || value === undefined || value === '') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function sameId(left, right) {
-  if (left === null || left === undefined || right === null || right === undefined) return false;
-  return String(left) === String(right);
-}
+/**
+ * How many entries of each explanatory list (`rejected`, `uncertain`,
+ * `futureOpportunities`) the engine result carries. These lists exist to show
+ * a reader WHY something was not recommended; several hundred near-identical
+ * entries do not explain better than the highest-scoring few plus a count, and
+ * they cost megabytes on the wire. Every capped list is emitted alongside its
+ * true total and the number omitted -- a bounded view, not a quiet truncation.
+ */
+const EXPLANATORY_LIST_LIMIT = 25;
 
 function parseCampaignDate(value) {
   if (!value) return null;
@@ -78,11 +74,30 @@ function parseCampaignDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function defenseIsActive(controlPoint, campaignDate) {
-  if (controlPoint?.defended !== true) return false;
+/**
+ * Four outcomes, never collapsed to a boolean:
+ *   'none'    - the control point is not warded (defended === false)
+ *   'active'  - warded, and the ward's expiry is measurably in the future
+ *   'expired' - warded, and the ward has measurably lapsed
+ *   'unknown' - the ward cannot be evaluated from this snapshot
+ *
+ * The old boolean returned `!expiry || !now || expiry > now`, so an
+ * unparseable campaign date made EVERY owned warded control point read as
+ * actively defended -- and generateDefendInterestsCandidates skips a nation
+ * whose CPs are all active, so the entire Defend Interests axis silently
+ * disappeared. That is an absent measurement rendered as a confident "safe",
+ * the failure mode this module exists to avoid. An unevaluable ward now
+ * reports 'unknown' and the caller surfaces it as an unmet precondition
+ * instead of treating the holding as protected.
+ */
+function defenseStatus(controlPoint, campaignDate) {
+  if (controlPoint?.defended === false) return 'none';
+  if (controlPoint?.defended !== true) return 'unknown';
   const expiry = parseCampaignDate(controlPoint.defendExpiration);
+  if (!expiry) return 'unknown';
   const now = parseCampaignDate(campaignDate);
-  return !expiry || !now || expiry.getTime() > now.getTime();
+  if (!now) return 'unknown';
+  return expiry.getTime() > now.getTime() ? 'active' : 'expired';
 }
 
 /**
@@ -171,6 +186,20 @@ const WEIGHTS = Object.freeze({
     escalateLateBonus: 3
   }),
 
+  // Advise (persistent output mission). The exact value is computed per
+  // councilor in server/engine/adviseEconomics.js; these only rank advisory
+  // candidates against each other before a councilor is chosen. ASSUMPTION --
+  // calibrated to sit near a mid-value CP grab (4.4-5.5 on the live save)
+  // rather than to dominate or be dominated by one.
+  ADVISORY: Object.freeze({
+    base: 4,
+    // Per point of the target's MEASURED research/turn.
+    researchPoints: 0.002,
+    // Ceiling on the research term so one superpower cannot crowd out every
+    // other axis on the board.
+    researchCap: 3
+  }),
+
   // Scales resourceCost = spend / stock in the objective function.
   RESOURCE_POINTS: 1,
 
@@ -193,6 +222,7 @@ function getWeights(world) {
     UNMET_PRECONDITION_PENALTY: configured.unmetPreconditionPenalty ?? WEIGHTS.UNMET_PRECONDITION_PENALTY,
     INTELLIGENCE: { ...WEIGHTS.INTELLIGENCE, ...(configured.intelligence || {}) },
     DEFENSE: { ...WEIGHTS.DEFENSE, ...(configured.defense || {}) },
+    ADVISORY: { ...WEIGHTS.ADVISORY, ...(configured.advisory || {}) },
     RESOURCE_POINTS: configured.resourcePoints ?? WEIGHTS.RESOURCE_POINTS,
     TOP_N_COUNCIL_TARGETS: configured.topNCouncilTargets ?? WEIGHTS.TOP_N_COUNCIL_TARGETS
   };
@@ -240,7 +270,11 @@ function buildControlNationCandidate(nation, cp, allCpsInNation, world) {
     : hasTerritory
       ? 'real'
       : (population !== null && population > 0 ? 'absorbed' : 'unformed');
-  const otherCps = allCpsInNation.filter((c) => c.id !== cp.id);
+  // sameId, not `!==`: strict inequality between a string id and a numeric one
+  // marks a control point as "other" when it is in fact this same one, and two
+  // absent ids collapse every CP in the nation onto this one -- which then
+  // makes `allOtherCpsOwnedByObserver` a confident `true` over an empty list.
+  const otherCps = allCpsInNation.filter((c) => !sameId(c.id, cp.id));
   const allOtherCpsOwnedByObserver = world.observerId === null || world.observerId === undefined
     ? null
     : otherCps.every((c) => sameId(c.factionId, world.observerId));
@@ -433,24 +467,31 @@ function generateDefendInterestsCandidates(world) {
   const observerId = world.observerId;
   if (observerId === null || observerId === undefined) return candidates;
 
+  // A campaign date we cannot parse makes every ward expiry unevaluable. Say
+  // so once, here, rather than letting each control point quietly resolve to
+  // "protected".
+  const campaignDateReadable = parseCampaignDate(world.campaignDate) !== null;
+
   const ownNations = [];
   for (const nation of world.nations) {
     const cps = Array.isArray(nation.controlPoints) ? nation.controlPoints : [];
     const ownCps = cps.filter((cp) => sameId(cp.factionId, observerId));
     if (ownCps.length > 0) {
-      const activeDefenses = ownCps.filter((cp) => defenseIsActive(cp, world.campaignDate));
-      const defenseUnknownCount = ownCps.filter((cp) => cp.defended !== true && cp.defended !== false).length;
+      const statuses = ownCps.map((cp) => defenseStatus(cp, world.campaignDate));
+      const activeDefenseCount = statuses.filter((s) => s === 'active').length;
+      const defenseUnknownCount = statuses.filter((s) => s === 'unknown').length;
       // A future-dated ward already protects every owned CP in this nation;
-      // do not turn a maintenance state into a duplicate action. Unknown
-      // fields remain actionable so older/filtered snapshots stay useful.
-      if (activeDefenses.length === ownCps.length && defenseUnknownCount === 0) continue;
+      // do not turn a maintenance state into a duplicate action. Only a
+      // MEASURED full-coverage state suppresses the candidate -- an unknown
+      // ward keeps the holding actionable and carries its uncertainty forward.
+      if (activeDefenseCount === ownCps.length) continue;
       const gdpRaw = toFiniteNumber(nation.GDP);
       const gdpBn = gdpRaw === null ? null : gdpRaw / 1e9;
       ownNations.push({
         nation,
         ownCps,
         gdpBn: gdpBn ?? 0,
-        activeDefenseCount: activeDefenses.length,
+        activeDefenseCount,
         defenseUnknownCount
       });
     }
@@ -463,7 +504,12 @@ function generateDefendInterestsCandidates(world) {
     const unprotectedCount = ownCps.length - activeDefenseCount;
     candidates.push({
       id: `defend-interests:${nation.displayName}`,
-      family: 'council',
+      // 'defense', not 'council': Defend Interests is a holding-protection
+      // mission, not a councilor-targeted operation. It used to share the
+      // 'council' family with Investigate/Turn, which forced
+      // value/counter-councilor to carry a `missionType !== 'Defend Interests'`
+      // exclusion to keep from scoring it as a councilor takedown.
+      family: 'defense',
       missionType: 'Defend Interests',
       title: `Defend Interests in ${nation.displayName}`,
       recommendation: `Deploy an Administration or Persuasion operative on Defend Interests in ${nation.displayName} (protects core GDP against Crackdown/Purge at 0 alien hate).`,
@@ -492,9 +538,16 @@ function generateDefendInterestsCandidates(world) {
         source: 'TIMissionTemplate Defend Interests (flat 20 Influence, 0 alien hate); Notion 09',
         estimateClass: 'exact'
       },
-      unmetPreconditions: defenseUnknownCount > 0
-        ? ['Existing Defend Interests coverage is not fully observable for this holding.']
-        : []
+      unmetPreconditions: [
+        ...(defenseUnknownCount > 0
+          ? [`Existing Defend Interests coverage is not fully observable for this holding `
+            + `(${defenseUnknownCount} of ${ownCps.length} control point wards could not be evaluated).`]
+          : []),
+        ...(campaignDateReadable
+          ? []
+          : ['The campaign date is not readable from this snapshot, so no ward expiry could be '
+            + 'compared against it -- existing coverage is unknown, not absent.'])
+      ]
     });
   }
   return candidates;
@@ -667,7 +720,155 @@ function generateIntelligenceCandidates(world) {
   return candidates;
 }
 
-function generateCandidates(world) {
+// ---------------------------------------------------------------------------
+// Candidate schema normalisation
+// ---------------------------------------------------------------------------
+
+/**
+ * The canonical candidate families. Every rule's `appliesTo` keys off one of
+ * these, so a generator inventing its own spelling silently opts its
+ * candidates out of the rules that were supposed to govern them.
+ *
+ *   expansion    - taking or denying a control point (Control Nation, Purge)
+ *   defense      - protecting a holding we already own (Defend Interests)
+ *   council      - councilor-targeted operations (Investigate, Turn)
+ *   intelligence - alien-facing intelligence (sightings, Detain an alien)
+ *   advisory     - persistent output missions (Advise)
+ */
+const CANDIDATE_FAMILIES = Object.freeze(['expansion', 'defense', 'council', 'intelligence', 'advisory']);
+
+function looksUnresolved(value) {
+  if (value === null || value === undefined) return true;
+  const text = String(value).trim();
+  if (text === '') return true;
+  // `${nation.id || nation.name}` on a record carrying neither stringifies to
+  // "undefined", which is a perfectly valid Set key -- so 295 distinct nations
+  // collapsed onto one entry and 294 candidates vanished into the dedupe.
+  return /(^|[:\-/])(undefined|null|NaN)([:\-/]|$)/.test(text);
+}
+
+/**
+ * Reduces the template's three hate outcome slots to the {low, high} envelope
+ * the hate rules read. Returns null when NO slot is measurable -- and null
+ * here means unknown, which the hate rules turn into an 'unknown' outcome,
+ * not into a pass. A slot that is absent is skipped rather than counted as 0.
+ */
+function hateEnvelopeFromSlots(slots) {
+  const measured = slots.filter((slot) => typeof slot === 'number' && Number.isFinite(slot));
+  if (measured.length === 0) return null;
+  return {
+    low: Math.min(...measured),
+    high: Math.max(...measured),
+    measuredSlots: measured.length,
+    totalSlots: slots.length
+  };
+}
+
+/**
+ * One schema for every candidate, whatever generator produced it.
+ *
+ * Before this existed the hand-written generators emitted `value.*`,
+ * `hate.toAliens`, and lower-case `cost.kind`, while the catalogue generator
+ * emitted `baseValue`, flat `successHate`/`failureHate`, and capitalised
+ * `cost.kind` -- so `hate/total-war-budget`, `hate/war-threshold-crossing`
+ * and `cost/affordability` all had `appliesTo` predicates that were false for
+ * every catalogue candidate. Three safety vetoes silently did not run.
+ *
+ * The fix belongs here rather than in each rule: a rule that has to accept two
+ * shapes will be missed by the next generator someone adds.
+ */
+function normalizeCandidate(candidate) {
+  const spec = candidate.missionSpec || null;
+
+  // --- mission naming -------------------------------------------------
+  // The catalogue keys missions by dataName ('DefendInterests') while every
+  // rule, clock and roster comparison in this codebase uses the friendly name
+  // ('Defend Interests'). Normalise to the friendly name.
+  const missionType = (spec && spec.friendlyName) || candidate.missionType || null;
+
+  // --- hate ------------------------------------------------------------
+  const templateApplies = candidate.templateApplies !== false;
+  const slots = [
+    candidate.successHate ?? (templateApplies ? spec?.successHate : undefined),
+    candidate.criticalHate ?? (templateApplies ? spec?.criticalHate : undefined),
+    candidate.failureHate ?? (templateApplies ? spec?.failureHate : undefined)
+  ];
+  let hate;
+  if (candidate.hate && candidate.hate.toAliens
+    && typeof candidate.hate.toAliens.low === 'number'
+    && typeof candidate.hate.toAliens.high === 'number') {
+    // An explicitly measured envelope always wins -- Detain against an alien
+    // is special-cased in the wiki and its candidate says so in its own note,
+    // so the human-target template row must not be folded back over it.
+    hate = candidate.hate;
+  } else {
+    const envelope = hateEnvelopeFromSlots(slots);
+    hate = envelope
+      ? { toAliens: envelope, note: candidate.hate?.note || (spec ? `TIMissionTemplate ${missionType} outcome hate slots.` : null) }
+      : { toAliens: null, note: candidate.hate?.note || `Alien-hate exposure for ${missionType || 'this mission'} is not in this snapshot.` };
+  }
+
+  // Flat slots for the pairing layer, which weights success/failure hate by
+  // the odds. Null stays null: pairing must not read an unmeasured slot as 0.
+  const successHate = typeof slots[0] === 'number' ? slots[0] : null;
+  const criticalHate = typeof slots[1] === 'number' ? slots[1] : null;
+  const failureHate = typeof slots[2] === 'number' ? slots[2] : null;
+
+  // --- cost -------------------------------------------------------------
+  let cost = null;
+  const rawCost = candidate.cost || null;
+  const resource = rawCost?.resource ?? spec?.costResource ?? null;
+  const kindRaw = rawCost?.kind ?? spec?.costKind ?? null;
+  const amountRaw = rawCost && rawCost.amount !== undefined
+    ? rawCost.amount
+    : (typeof spec?.costAmount === 'number' ? spec.costAmount : null);
+  if (resource || kindRaw) {
+    cost = {
+      resource: resource || null,
+      kind: kindRaw ? String(kindRaw).toLowerCase() : null,
+      amount: typeof amountRaw === 'number' && Number.isFinite(amountRaw) ? amountRaw : null
+    };
+  }
+
+  // --- value / provenance / preconditions -------------------------------
+  const value = (candidate.value && typeof candidate.value === 'object' && !Array.isArray(candidate.value))
+    ? candidate.value
+    : {};
+  const provenance = (candidate.provenance && typeof candidate.provenance === 'object')
+    ? candidate.provenance
+    : { source: candidate.provenance ? String(candidate.provenance) : 'unattributed generator', estimateClass: 'heuristic' };
+
+  const target = candidate.target && typeof candidate.target === 'object' ? { ...candidate.target } : {};
+  if (target.kind === undefined && target.type !== undefined) target.kind = target.type;
+  if (target.type === undefined && target.kind !== undefined) target.type = target.kind;
+
+  return {
+    ...candidate,
+    missionType,
+    friendlyName: candidate.friendlyName || missionType,
+    family: candidate.family || null,
+    target,
+    hate,
+    successHate,
+    criticalHate,
+    failureHate,
+    cost,
+    value,
+    provenance,
+    unmetPreconditions: Array.isArray(candidate.unmetPreconditions) ? candidate.unmetPreconditions : [],
+    baseValue: typeof candidate.baseValue === 'number' && Number.isFinite(candidate.baseValue)
+      ? candidate.baseValue
+      : null
+  };
+}
+
+/**
+ * @param {object} world
+ * @param {Array} [diagnostics] optional sink recording every candidate dropped
+ *   before the rules ran, and why. Surfaced on the engine result as
+ *   `droppedCandidates` so a dropped target is visible rather than absent.
+ */
+function generateCandidates(world, diagnostics = null) {
   const existing = [
     ...generateOpenControlPointCandidates(world),
     ...generateDefendInterestsCandidates(world),
@@ -692,17 +893,33 @@ function generateCandidates(world) {
       if (spec) candidate.missionSpec = spec;
     }
 
-    const generic = generateMissionCandidatesFromSpecs(world, catalogue);
-    const existingIds = new Set(existing.map((c) => c.id));
-    for (const g of generic) {
-      if (!existingIds.has(g.id)) {
-        existing.push(g);
-        existingIds.add(g.id);
-      }
-    }
+    existing.push(...generateMissionCandidatesFromSpecs(world, catalogue, diagnostics));
   }
 
-  return existing;
+  // Normalise first, then dedupe. An id is the dedupe key, so a candidate
+  // whose identity did not resolve must be DROPPED with a reason rather than
+  // colliding with every other candidate that failed to resolve the same way.
+  const seenIds = new Set();
+  const normalized = [];
+  for (const raw of existing) {
+    const candidate = normalizeCandidate(raw);
+    if (looksUnresolved(candidate.id)) {
+      if (Array.isArray(diagnostics)) {
+        diagnostics.push({
+          missionType: candidate.missionType,
+          reason: 'unresolvable-candidate-id',
+          detail: `Candidate id ${JSON.stringify(candidate.id)} did not resolve to a real target identity, `
+            + 'so it cannot be deduplicated or referenced. Dropped rather than merged with other unresolved targets.'
+        });
+      }
+      continue;
+    }
+    if (seenIds.has(candidate.id)) continue;
+    seenIds.add(candidate.id);
+    normalized.push(candidate);
+  }
+
+  return normalized;
 }
 
 // ---------------------------------------------------------------------------
@@ -712,10 +929,26 @@ function generateCandidates(world) {
 const RULES = Object.freeze([
   {
     id: 'hate/total-war-budget',
+    // Applies to EVERY candidate, including one whose hate exposure is not in
+    // the snapshot at all. The old predicate required `candidate.hate` to be
+    // present with a non-null `toAliens`, so any generator that did not emit
+    // that exact shape opted its candidates out of the Total War budget check
+    // entirely -- a missing measurement silently bought a pass. Absence is now
+    // an 'unknown' outcome inside evaluate, where it is recorded and
+    // confidence-downgraded.
     kind: 'veto',
-    appliesTo: (candidate) => Boolean(candidate.hate) && candidate.hate.toAliens !== null,
+    appliesTo: (candidate) => candidate.isFallback !== true,
     evaluate(world, candidate) {
-      const high = candidate.hate.toAliens.high;
+      const envelope = candidate.hate?.toAliens;
+      if (!envelope || !Number.isFinite(envelope.high)) return 'unknown';
+      // A partially-populated outcome row cannot bound the exposure: knowing
+      // success costs 0 says nothing about the failure slot we never read.
+      if (Number.isFinite(envelope.measuredSlots)
+        && Number.isFinite(envelope.totalSlots)
+        && envelope.measuredSlots < envelope.totalSlots) {
+        return 'unknown';
+      }
+      const high = envelope.high;
       // Zero measured exposure can never breach a budget, regardless of
       // whether the budget itself is observable -- this is what keeps
       // Control Nation / Investigate / Turn candidates from being
@@ -730,7 +963,18 @@ const RULES = Object.freeze([
       return high > budget ? 'veto' : 'pass';
     },
     because(world, candidate) {
-      const high = candidate.hate?.toAliens?.high;
+      const envelope = candidate.hate?.toAliens;
+      if (!envelope || !Number.isFinite(envelope.high)) {
+        return `Alien-hate exposure for ${candidate.missionType || 'this action'} is not recorded in this `
+          + 'snapshot, so the Total War budget check could not be evaluated -- unknown, not zero.';
+      }
+      if (Number.isFinite(envelope.measuredSlots)
+        && Number.isFinite(envelope.totalSlots)
+        && envelope.measuredSlots < envelope.totalSlots) {
+        return `Only ${envelope.measuredSlots} of ${envelope.totalSlots} alien-hate outcome slots are recorded `
+          + 'for this mission, so its worst branch cannot be bounded.';
+      }
+      const high = envelope.high;
       if (!(high > 0)) return 'This action carries no measured alien-hate exposure.';
       const proximity = world.posture ? world.posture.totalWarProximity : null;
       const headroom = world.posture ? world.posture.totalWarHeadroom : null;
@@ -751,7 +995,12 @@ const RULES = Object.freeze([
   {
     id: 'hate/war-threshold-crossing',
     kind: 'score',
-    appliesTo: (candidate) => Boolean(candidate.hate) && candidate.hate.toAliens !== null,
+    // A complete measured envelope, in the one canonical shape every
+    // generator now emits (see normalizeCandidate). Candidates whose hate is
+    // unmeasured are handled by hate/total-war-budget above, which routes them
+    // to `uncertain` -- they are never scored as if their exposure were zero.
+    appliesTo: (candidate) => Number.isFinite(candidate.hate?.toAliens?.low)
+      && Number.isFinite(candidate.hate?.toAliens?.high),
     evaluate(world, candidate) {
       const { low, high } = candidate.hate.toAliens;
       const mid = (low + high) / 2;
@@ -766,7 +1015,21 @@ const RULES = Object.freeze([
           weight = getWeights(world).HATE_CROSSING.crossing50;
         }
       } else {
-        // Redacted hate in player mode: evaluate using visible estimate and posture
+        // Redacted hate in player mode: evaluate using visible estimate and posture.
+        //
+        // `totalWarProximity` can also be 'forecast'
+        // (server/directiveAdvisor.js:453), which is deliberately NOT handled
+        // here. 'forecast' is only reachable via `hateInApproachBand`, which
+        // itself requires `actualAlienHate !== null` -- so a 'forecast'
+        // posture always takes the measured branch above and never reaches
+        // this one. Adding a 'forecast' arm here would be dead code that reads
+        // as though it does something.
+        //
+        // 'active' DOES reach here in player mode: directiveAdvisor derives
+        // `totalWarActive` from `totalWarState === 'active'`, which is
+        // independent of whether hate itself is visible. So once Total War is
+        // declared, the 10x crossing200 weight applies even with hate
+        // redacted. Pinned by a regression test -- do not "simplify" it away.
         const pips = toFiniteNumber(world.posture?.pips);
         const totalWarProx = world.posture?.totalWarProximity;
         if (totalWarProx === 'active' || totalWarProx === 'near') {
@@ -818,7 +1081,12 @@ const RULES = Object.freeze([
   {
     id: 'legality/executive-last',
     kind: 'veto',
-    appliesTo: (candidate) => candidate.family === 'expansion' && candidate.target?.isExecutive === true,
+    // Scoped to Control Nation, not to the whole expansion family. The rule is
+    // a constraint on TAKING the executive seat -- every other control point in
+    // the nation must be ours first. Purge removes a rival from a control point
+    // and is not governed by it, so applying it there parked every
+    // executive-seat Purge in `uncertain` for a reason that does not apply.
+    appliesTo: (candidate) => candidate.missionType === 'Control Nation' && candidate.target?.isExecutive === true,
     evaluate(world, candidate) {
       const cpCount = toFiniteNumber(candidate.value?.cpCountInNation);
       if (cpCount === null) return 'unknown';
@@ -925,7 +1193,7 @@ const RULES = Object.freeze([
   {
     id: 'value/defend-interests',
     kind: 'score',
-    appliesTo: (candidate) => candidate.missionType === 'Defend Interests' && candidate.value?.isDefendInterests === true,
+    appliesTo: (candidate) => candidate.family === 'defense',
     evaluate(world, candidate) {
       const gdpBn = toFiniteNumber(candidate.value?.gdpBn) || 0;
       const gdpDensity = gdpBn > 0
@@ -954,7 +1222,7 @@ const RULES = Object.freeze([
   {
     id: 'value/counter-councilor',
     kind: 'score',
-    appliesTo: (candidate) => candidate.family === 'council' && candidate.isFallback !== true && candidate.missionType !== 'Defend Interests',
+    appliesTo: (candidate) => candidate.family === 'council' && candidate.isFallback !== true,
     evaluate(world, candidate) {
       const base = candidate.missionType === 'Turn Councilor'
         ? getWeights(world).COUNCIL.turn
@@ -1020,8 +1288,49 @@ const RULES = Object.freeze([
     estimateClass: 'heuristic'
   },
   {
+    // Advise is a persistent output mission, so its real worth depends on the
+    // councilor's Admin/Science/Command -- which the engine does not know at
+    // candidate-scoring time. server/engine/pairing.js prices it exactly, per
+    // councilor, via adviseEconomics. This rule exists only so an advisory
+    // candidate carries a ranking signal into `surviving` instead of scoring a
+    // flat zero, and it is deliberately built from a MEASURED field
+    // (the target's research output) rather than a placeholder.
+    id: 'value/advisory-potential',
+    kind: 'score',
+    appliesTo: (candidate) => candidate.family === 'advisory',
+    evaluate(world, candidate) {
+      const research = toFiniteNumber(candidate.value?.targetResearch);
+      if (research === null) return getWeights(world).ADVISORY.base;
+      return getWeights(world).ADVISORY.base
+        + Math.min(getWeights(world).ADVISORY.researchCap, research * getWeights(world).ADVISORY.researchPoints);
+    },
+    because(world, candidate) {
+      const label = candidate.value?.nationName || candidate.value?.habName || candidate.target?.name || 'this target';
+      const research = toFiniteNumber(candidate.value?.targetResearch);
+      if (research === null) {
+        return `Advising ${label} applies the operative's Administration, Science and Command every turn. `
+          + 'This target\'s research output is not in this snapshot, so only the base advisory value is scored; '
+          + 'the exact per-turn gain is computed per councilor at pairing time.';
+      }
+      return `Advising ${label} applies the operative's Administration, Science and Command every turn against a `
+        + `measured ${research} research/turn base. The exact per-turn gain is computed per councilor at pairing time.`;
+    },
+    source: 'TIMissionTemplate Advise (persistentEffect, flat 10 Influence, 0 alien hate); per-councilor value '
+      + 'from server/engine/adviseEconomics.js. Weights are judgement -- see WEIGHTS.ADVISORY.',
+    estimateClass: 'heuristic'
+  },
+  {
     id: 'cost/affordability',
     kind: 'veto',
+    // `kind` is lower-cased by normalizeCandidate. The game templates spell it
+    // 'Flat'/'Bonus' and the hand-written generators spell it 'flat'/'bonus',
+    // and this predicate only ever matched the lower-case spelling -- so every
+    // catalogue-derived candidate skipped the affordability veto. The
+    // comparison stays strict; the normalisation is what makes it correct.
+    //
+    // Bonus costs are deliberately out of scope: their amount scales with the
+    // roll and is not a fixed number this snapshot could carry, so there is no
+    // affordability question to answer rather than an unanswered one.
     appliesTo: (candidate) => candidate.cost !== null && candidate.cost !== undefined && candidate.cost.kind === 'flat',
     evaluate(world, candidate) {
       const amount = toFiniteNumber(candidate.cost.amount);
@@ -1230,12 +1539,25 @@ function buildWorld({
   resources = null,
   nations = [],
   councilors = [],
+  // Advise applies to owned habs as well as nations (+Adm% resource outputs,
+  // +Sci% research, +Cmd% marine combat). This parameter did not exist, and
+  // briefingGenerator did not pass it, so `advise-hab:*` candidates were
+  // unreachable on a live save and the "councilor is currently advising a hab"
+  // commitment could never be priced -- both paths were unit-tested only.
+  habs = [],
   capabilities = {},
   alienIntelligenceStage = null,
   directiveWeights = null,
   missionSpecs = null,
   alienHate = null,
-  alienThreat = null
+  alienThreat = null,
+  // The computed hate economics block. It carries the measured minimum-hate
+  // FLOOR (and used/available Mission Control) even in player mode, where the
+  // raw assessed hate is redacted -- without it the cycle hate budget had no
+  // measured input at all in the mode the dashboard defaults to.
+  alienHateEconomics = null,
+  usedMC = null,
+  mcCapacity = null
 } = {}) {
   return Object.freeze({
     observerId,
@@ -1245,6 +1567,7 @@ function buildWorld({
     resources: resources || null,
     nations: Array.isArray(nations) ? nations : [],
     councilors: Array.isArray(councilors) ? councilors : [],
+    habs: Array.isArray(habs) ? habs : [],
     capabilities: capabilities || {},
     directiveWeights: directiveWeights || null,
     // Survives player-mode filtering when the raw alien councilor list does
@@ -1252,7 +1575,10 @@ function buildWorld({
     alienIntelligenceStage: alienIntelligenceStage || null,
     missionSpecs: missionSpecs || null,
     alienHate: alienHate || null,
-    alienThreat: alienThreat || null
+    alienThreat: alienThreat || null,
+    alienHateEconomics: alienHateEconomics || null,
+    usedMC: usedMC === null || usedMC === undefined ? null : usedMC,
+    mcCapacity: mcCapacity === null || mcCapacity === undefined ? null : mcCapacity
   });
 }
 
@@ -1270,7 +1596,11 @@ function buildWorld({
  * for good, there is no future project that un-absorbs them.
  */
 function runEngine(world) {
-  const candidates = generateCandidates(world);
+  // Anything dropped before the rules ran is recorded, not silently absent --
+  // a target the engine could not identify is a gap in the board, and a gap
+  // the reader cannot see reads as "there was nothing there".
+  const droppedCandidates = [];
+  const candidates = generateCandidates(world, droppedCandidates);
   const { surviving, rejected, uncertain } = applyRules(world, candidates);
 
   const finalRejected = [];
@@ -1326,12 +1656,50 @@ function runEngine(world) {
     alternatives = [];
   }
 
+  // Correct candidate ids took the board from 5 catalogue candidates to ~400,
+  // and in player mode every hate-bearing one lands in `uncertain` for the
+  // same reason (Total War proximity is unobservable there). Emitting all of
+  // them verbatim pushed the briefing payload past 1.3 MB of near-identical
+  // entries. The lists are capped for transport; the FULL counts stay in
+  // decisionReasoning.counts and in the explicit `*OmittedCount` fields, so
+  // this is a bounded view of a known total, never a silently shortened one.
+  // Tallied BEFORE the transport caps are applied, because the caps exist to
+  // bound the payload, not to change the count. A Hold Ground directive that
+  // says "3 Purge candidates deferred" when 41 were held would be reporting a
+  // slice as a total -- the same defect class as fabricating the number.
+  // Only hate-bearing candidates count: deferring a zero-hate mission is not
+  // something a hate hold did.
+  const heldHateBearingByMission = {};
+  for (const entry of [...rejectedCandidates, ...scoredUncertain]) {
+    const high = entry?.hate?.toAliens?.high;
+    if (!(typeof high === 'number' && Number.isFinite(high) && high > 0)) continue;
+    const key = entry.missionType || 'Unattributed mission';
+    heldHateBearingByMission[key] = (heldHateBearingByMission[key] || 0) + 1;
+  }
+
+  const byScoreDesc = (a, b) => (Number.isFinite(b.score) ? b.score : -Infinity)
+    - (Number.isFinite(a.score) ? a.score : -Infinity);
+  const cappedUncertain = [...scoredUncertain].sort(byScoreDesc).slice(0, EXPLANATORY_LIST_LIMIT);
+  const cappedRejected = rejectedCandidates.slice(0, EXPLANATORY_LIST_LIMIT);
+  const cappedFuture = futureOpportunities.slice(0, EXPLANATORY_LIST_LIMIT);
+
   return {
     primary,
     alternatives,
-    rejected: rejectedCandidates,
-    uncertain: scoredUncertain,
-    futureOpportunities,
+    rejected: cappedRejected,
+    rejectedTotalCount: rejectedCandidates.length,
+    rejectedOmittedCount: rejectedCandidates.length - cappedRejected.length,
+    uncertain: cappedUncertain,
+    uncertainTotalCount: scoredUncertain.length,
+    uncertainOmittedCount: scoredUncertain.length - cappedUncertain.length,
+    futureOpportunities: cappedFuture,
+    futureOpportunitiesTotalCount: futureOpportunities.length,
+    futureOpportunitiesOmittedCount: futureOpportunities.length - cappedFuture.length,
+    droppedCandidates,
+    // missionType -> how many hate-bearing candidates the rules held back this
+    // cycle (rejected or unmeasurable). Uncapped; a mission with none held gets
+    // no key rather than a 0.
+    heldHateBearingByMission,
     cyclePlan,
     decisionReasoning: buildDecisionReasoning(
       primary,

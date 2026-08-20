@@ -11,6 +11,22 @@ const strategicIntelligence = require('./strategicIntelligence');
 const directiveAdvisor = require('./directiveAdvisor');
 const directiveEngine = require('./directiveEngine');
 const { resolveConfig } = require('./config');
+const {
+  asArray,
+  strictFiniteNumber,
+  sameId,
+  resolveObserverFaction
+} = require('../shared/util.mjs');
+
+// Trillions. GDP is quoted in dollars throughout the save.
+const ONE_TRILLION = 1e12;
+
+/**
+ * The attribute score at which a councilor is called out by that skill in the
+ * operative roster. Repeated five times as a bare `12` in one if/else ladder.
+ * A judgement call in this repo's own presentation layer, not a game rule.
+ */
+const NOTABLE_SKILL_THRESHOLD = 12;
 
 class BriefingGenerator {
   constructor(config = resolveConfig()) {
@@ -21,9 +37,12 @@ class BriefingGenerator {
     const metadata = snapshot.metadata || {};
     const factions = this.asArray(snapshot.factions);
     const requestedObserverId = this.toFiniteNumber(snapshot.observerFactionId);
-    const observer = (requestedObserverId !== null
-      ? factions.find(f => this.sameId(f.ID, requestedObserverId))
-      : null) || factions[0] || {};
+    // No display-name step here on purpose: this briefing is written about
+    // whichever faction the snapshot was already filtered for, so falling back
+    // to a faction named "the Initiative" would describe a different one.
+    const observer = resolveObserverFaction(factions, requestedObserverId, {
+      fallbackToFirst: true
+    }) || {};
     const observerId = observer.ID ?? snapshot.observerFactionId ?? null;
     const observerName = observer.displayName || snapshot.observerFactionName || 'the selected faction';
     const councilors = this.asArray(snapshot.councilors);
@@ -65,14 +84,39 @@ class BriefingGenerator {
       resources: observer.resources,
       nations,
       councilors,
+      // Owned habs, joined to their mining sites so the Advise economics has
+      // real monthly outputs to scale. Without this the engine could never
+      // generate an `advise-hab:*` candidate on a live save, and a councilor
+      // already advising a hab could not have their commitment priced.
+      habs: this.buildAdvisableHabs(habs, habSites, observerId),
       capabilities,
       alienIntelligenceStage: snapshot.alienIntelligenceStage || null,
       directiveWeights: this.config.analysis?.directiveWeights || null,
       missionSpecs: snapshot.missionSpecs || null,
       alienHate: observer.alienHate || snapshot.alienThreat?.hate || null,
-      alienThreat: snapshot.alienThreat || null
+      alienThreat: snapshot.alienThreat || null,
+      // The cycle hate budget needs a measured hate figure. In player mode the
+      // raw assessed hate is redacted, but the minimum-hate FLOOR is still
+      // computed, so without this block the budget pool had nothing to read
+      // and silently fell back to treating hate as zero.
+      alienHateEconomics: snapshot.alienHateEconomics || null,
+      usedMC: this.toFiniteNumber(observer.missionControlUsage),
+      mcCapacity: this.toFiniteNumber(observer.missionControlCapacity)
     });
     const engineResult = directiveEngine.runEngine(engineWorld);
+
+    // Hold Ground (docs/directive-engine-v2-plan.md §4f). The affirmative
+    // counterpart to the vetoes: when hate is at the war line and the fleet
+    // cannot contest, holding IS the move, and the panel should say so rather
+    // than degrading toward empty. Built here because it needs both the
+    // posture and what the engine actually held back this cycle.
+    const holdGround = directiveAdvisor.buildHoldGround({
+      posture: campaignPosture,
+      alienHateEconomics: snapshot.alienHateEconomics || {},
+      hateTrend: this.readObserverHateTrend(snapshot, observerId, campaignPosture),
+      deferredCounts: engineResult.heldHateBearingByMission || null,
+      observerName
+    });
 
     const getPowerOverall = (f) => {
       if (!f) return null;
@@ -154,7 +198,7 @@ class BriefingGenerator {
       observerName,
       councilors,
       observerId,
-      { campaignPosture, factions, targetFaction }
+      { campaignPosture, factions, targetFaction, holdGround }
     );
     const councilDirectives = this.buildCouncilDirectives(councilors, observerId, campaignPosture);
     const spaceDirectives = this.buildSpaceDirectives(habs, fleets, habSites, observer, observerName, campaignPosture);
@@ -202,12 +246,31 @@ class BriefingGenerator {
       theaters: theaterStatus,
       operatives: operativeRoster,
       campaignPosture,
+      // The full structured posture assessment behind the Hold Ground
+      // directive: the measured fleet comparison, the ranked capability
+      // deficit, the zero-hate work that stays available, what was deferred
+      // and at what hate, and the exit condition. Carried whether or not it
+      // fires, so a caller can see the stand-down reason too.
+      holdGround,
       engineDirectives: {
         primary: engineResult.primary,
         alternatives: engineResult.alternatives,
+        // `rejected` / `uncertain` / `futureOpportunities` are CAPPED for
+        // transport (the uncapped player-mode payload was 1.3 MB of
+        // near-identical entries). Forwarding the arrays without their totals
+        // made a 25-entry slice read as the complete set, which is the same
+        // defect class as fabricating data. The true totals and the omitted
+        // counts travel with them.
         rejected: engineResult.rejected,
+        rejectedTotalCount: engineResult.rejectedTotalCount,
+        rejectedOmittedCount: engineResult.rejectedOmittedCount,
         uncertain: engineResult.uncertain,
+        uncertainTotalCount: engineResult.uncertainTotalCount,
+        uncertainOmittedCount: engineResult.uncertainOmittedCount,
         futureOpportunities: engineResult.futureOpportunities,
+        futureOpportunitiesTotalCount: engineResult.futureOpportunitiesTotalCount,
+        futureOpportunitiesOmittedCount: engineResult.futureOpportunitiesOmittedCount,
+        droppedCandidates: engineResult.droppedCandidates,
         cyclePlan: engineResult.cyclePlan,
         decisionReasoning: engineResult.decisionReasoning
       },
@@ -451,6 +514,87 @@ class BriefingGenerator {
     };
   }
 
+  /**
+   * The observer's alien-hate movement since the previous save, or null.
+   *
+   * GUARDED ON MODE ON PURPOSE. `changesSincePrevious` carries an "Assessed
+   * alien hate" row for the observer, and that row is the SAVE's raw figure --
+   * the one player mode redacts everywhere else. Reading it unguarded would
+   * both leak the redacted value and produce a rate that silently disappears
+   * the moment the leak is closed. `hateObservable` is exactly "the true hate
+   * is legitimately readable in this mode", so gate on that and nothing else.
+   */
+  readObserverHateTrend(snapshot = {}, observerId = null, posture = {}) {
+    if (posture?.hateObservable !== true) return null;
+    const changes = snapshot.changesSincePrevious;
+    if (!changes || changes.available !== true) return null;
+    const elapsedGameDays = this.toFiniteNumber(changes.elapsedGameDays);
+    if (elapsedGameDays === null || !(elapsedGameDays > 0)) return null;
+    const entry = this.asArray(changes.factions).find(f => this.sameId(f.factionId, observerId));
+    const change = this.asArray(entry?.changes)
+      .find(c => /alien hate/i.test(String(c?.metric || '')));
+    const delta = this.toFiniteNumber(change?.delta);
+    if (delta === null) return null;
+    return {
+      delta,
+      from: this.toFiniteNumber(change.from),
+      to: this.toFiniteNumber(change.to),
+      elapsedGameDays
+    };
+  }
+
+  /**
+   * Hold Ground as a first-class directive (plan §4f).
+   *
+   * It is ranked above the deferred-crackdown hold because it is the same
+   * decision stated affirmatively AND it fires on posture alone -- including
+   * the case the old hold could not reach, where there is no proxy target at
+   * all and the board would otherwise degrade toward empty.
+   */
+  buildHoldGroundDirective(holdGround, councilors, observerId, observerName) {
+    if (!holdGround || holdGround.fires !== true) return null;
+    const dominant = holdGround.comparison?.axes?.find(axis => axis.decisive) || null;
+    const gapText = holdGround.canContest === 'unknown'
+      ? 'the alien fleet comparison could not be made'
+      : dominant
+        ? `the widest measured gap is ${dominant.label} (${dominant.text})`
+        : 'the capability gap is recorded in the comparison below';
+    return {
+      id: 'hold-ground',
+      // Above the deferred-crackdown hold (100): when both fire they say the
+      // same thing, and this one says it as an action.
+      policyRank: 105,
+      title: holdGround.headline,
+      category: 'HOLD GROUND',
+      severity: 'CRITICAL',
+      target: 'Campaign posture',
+      statement: holdGround.statement,
+      action: holdGround.action,
+      successFactor: 'ZERO HATE ADDED',
+      // The concrete zero-hate mission this posture spends the cycle on.
+      missionType: 'Defend Interests',
+      preparation: `Keep councilors on Advise and Defend Interests, and push research at `
+        + `${holdGround.recommendations?.[0]?.label || 'the measured capability gap'}.`,
+      window: `Until alien hate vents below ${holdGround.exit?.threshold ?? 50} and the capability gap narrows`,
+      // Never a bare number here: the point of the hold is that the cost is
+      // zero hate, and the influence side depends on which order is issued.
+      missionCost: '0 alien hate — influence cost depends on the order issued',
+      expectedAlienHate: '0 (every recommended action has a template success-slot hate of 0)',
+      expectedAlienHateNote: holdGround.deferredNote,
+      policyNote: `${holdGround.warLine} ${holdGround.capabilityLine}`,
+      eligibleOperatives: this.eligibleOperatives(
+        councilors,
+        observerId,
+        ['Administration', 'Persuasion', 'Science', 'Security']
+      ),
+      // Structured payload for the board. The pill card renders flat text; the
+      // sections below let the panel show the comparison, the ranked
+      // recommendations, what was deferred and at what hate, and the exit.
+      holdGround,
+      summaryLine: `${observerName || 'This faction'}: hold — ${gapText}.`
+    };
+  }
+
   buildGeopoliticalDirectives(servantTargets, nations, targetFactionName, observer, observerName = null, councilors = [], observerId = null, context = {}) {
     const directives = [];
     const targets = this.asArray(servantTargets);
@@ -463,6 +607,17 @@ class BriefingGenerator {
     const escalateLate = campaignPosture.escalateLate === true && proxy.share > 0 && proxy.share < 1;
     const purgeHate = directiveAdvisor.expectedAlienHate('Purge', proxy);
     const crackdownHate = directiveAdvisor.expectedAlienHate('Crackdown', proxy);
+
+    // Leads the board when it fires. Holding is the cycle's action, so it goes
+    // first -- and it is the only directive here that does not need a proxy
+    // target to exist, which is exactly the case the old holds could not cover.
+    const holdGroundDirective = this.buildHoldGroundDirective(
+      context.holdGround,
+      councilors,
+      resolvedObserverId,
+      observerLabel
+    );
+    if (holdGroundDirective) directives.push(holdGroundDirective);
 
     if (escalateLate && targets.length > 0 && targetFactionName) {
       const t = targets[0];
@@ -799,7 +954,7 @@ class BriefingGenerator {
     return theaters.map(t => {
       const matchedNations = visibleNations.filter(n => t.nations.includes(n.displayName));
       const totalGdp = matchedNations.reduce((sum, n) => sum + (n.GDP || 0), 0);
-      const totalGdpTrillion = (totalGdp / 1e12).toFixed(1);
+      const totalGdpTrillion = (totalGdp / ONE_TRILLION).toFixed(1);
 
       const hostileCount = hasTarget
         ? matchedNations.filter(n => targetFactionId !== null && targetFactionId !== undefined
@@ -839,7 +994,7 @@ class BriefingGenerator {
         keyNations: matchedNations.slice(0, 4).map(n => ({
           name: n.displayName,
           executive: n.executiveFactionName || 'UNAVAILABLE',
-          gdpTrillion: ((n.GDP || 0) / 1e12).toFixed(1),
+          gdpTrillion: ((n.GDP || 0) / ONE_TRILLION).toFixed(1),
           nukes: n.nukes || 0,
           unrest: (n.unrest || 0).toFixed(1)
         }))
@@ -873,17 +1028,17 @@ class BriefingGenerator {
       // Determine Tactical Recommendation
       let recOrder = 'Maintain current patrol and intelligence sweep.';
       const attrs = c.attributes || {};
-      if (attrs.Persuasion >= 12) {
+      if (attrs.Persuasion >= NOTABLE_SKILL_THRESHOLD) {
         recOrder = 'Deploy to high-GDP nation to run Public Campaign or Defend Interests.';
-      } else if (attrs.Espionage >= 12) {
+      } else if (attrs.Espionage >= NOTABLE_SKILL_THRESHOLD) {
         recOrder = campaignPosture?.escalateLate
           ? `Ward own majors and prepare a non-proxy operation. Posture hold: ${holdClause}.`
           : 'Deploy to hostile territory to execute Crackdown or Sabotage Facilities.';
-      } else if (attrs.Investigation >= 12) {
+      } else if (attrs.Investigation >= NOTABLE_SKILL_THRESHOLD) {
         recOrder = 'Conduct Surveil Location or Investigate Councilor to unmask enemy moles.';
-      } else if (attrs.Administration >= 12) {
+      } else if (attrs.Administration >= NOTABLE_SKILL_THRESHOLD) {
         recOrder = 'Manage assigned organizations, advise executive nations, or conduct Hostile Takeover.';
-      } else if (attrs.Command >= 12) {
+      } else if (attrs.Command >= NOTABLE_SKILL_THRESHOLD) {
         recOrder = 'Lead military assault, suppress unrest, or organize orbital defense.';
       }
 
@@ -906,22 +1061,77 @@ class BriefingGenerator {
     });
   }
 
+  // Thin delegates to shared/util.mjs, kept as methods because `this.asArray`
+  // / `this.toFiniteNumber` / `this.sameId` are called from ~200 places in this
+  // class and from its tests. The definitions themselves are no longer copies.
   asArray(value) {
-    return Array.isArray(value) ? value : [];
+    return asArray(value);
   }
 
-  toFiniteNumber(value) {
-    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-    if (typeof value === 'string' && value.trim() !== '') {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
+  /**
+   * Owned habs, enriched with the monthly resource output the directive
+   * engine's Advise economics needs.
+   *
+   * A hab record in the snapshot carries identity and posture but no output
+   * figures at all, so passing it straight through would give every hab five
+   * absent inputs. The mined output IS derivable: hab sites join to their hab
+   * by `habId` and carry per-day rates. 30x each measured rate is the monthly
+   * output Advise scales by Administration.
+   *
+   * `research`, `money` and marine combat are NOT in the snapshot. They stay
+   * null rather than being filled with a plausible-looking number, and a hab
+   * left with nothing measurable is dropped by the candidate generator with a
+   * recorded reason.
+   */
+  buildAdvisableHabs(habs, habSites, observerId) {
+    const sitesByHab = new Map();
+    for (const site of this.asArray(habSites)) {
+      const habId = site?.habId;
+      if (habId === null || habId === undefined) continue;
+      const key = String(habId);
+      if (!sitesByHab.has(key)) sitesByHab.set(key, []);
+      sitesByHab.get(key).push(site);
     }
-    return null;
+
+    const RESOURCE_KEYS = ['water', 'volatiles', 'metals', 'nobleMetals', 'fissiles'];
+
+    return this.asArray(habs)
+      .filter(hab => this.sameId(hab.factionId, observerId))
+      .map(hab => {
+        const sites = sitesByHab.get(String(hab.ID)) || [];
+        const monthly = {};
+        for (const key of RESOURCE_KEYS) {
+          let total = null;
+          for (const site of sites) {
+            const rate = this.toFiniteNumber(site[key]);
+            if (rate === null) continue;
+            total = (total ?? 0) + rate * 30;
+          }
+          monthly[key] = total === null ? null : Number(total.toFixed(2));
+        }
+        return {
+          ...hab,
+          ...monthly,
+          resourceOutputSource: sites.length > 0
+            ? `${sites.length} joined hab site(s), daily rate x30`
+            : 'no hab site joins to this hab',
+          // Explicitly absent rather than absent by omission.
+          research: this.toFiniteNumber(hab.research),
+          money: this.toFiniteNumber(hab.money),
+          marineCombatValue: this.toFiniteNumber(hab.marineCombatValue ?? hab.combatValue)
+        };
+      });
+  }
+
+  // The STRICT variant: this class reads arbitrary snapshot fields that may
+  // hold a boolean or an array, and `Number(true)` is 1 while `Number([])` is
+  // 0. See shared/util.mjs for why the two coercions are named separately.
+  toFiniteNumber(value) {
+    return strictFiniteNumber(value);
   }
 
   sameId(left, right) {
-    if (left === null || left === undefined || right === null || right === undefined) return false;
-    return String(left) === String(right);
+    return sameId(left, right);
   }
 
   firstAvailableNumber(...values) {
@@ -1042,7 +1252,7 @@ class BriefingGenerator {
 
   formatFactionGdp(observer, fallbackGdp = null) {
     const totalGdp = this.firstAvailableNumber(observer?.totalGdp, fallbackGdp);
-    if (totalGdp !== null) return (totalGdp / 1e12).toFixed(1);
+    if (totalGdp !== null) return (totalGdp / ONE_TRILLION).toFixed(1);
     const alreadyTrillion = this.toFiniteNumber(observer?.gdpTrillion);
     return alreadyTrillion === null ? 'UNAVAILABLE' : alreadyTrillion.toFixed(1);
   }
@@ -1051,7 +1261,7 @@ class BriefingGenerator {
     const targetGdpTrillion = this.toFiniteNumber(target?.gdpTrillion);
     if (targetGdpTrillion !== null) return targetGdpTrillion.toFixed(2);
     const rawGdp = this.toFiniteNumber(target?.GDP);
-    return rawGdp === null ? 'UNAVAILABLE' : (rawGdp / 1e12).toFixed(2);
+    return rawGdp === null ? 'UNAVAILABLE' : (rawGdp / ONE_TRILLION).toFixed(2);
   }
 
   getFleetCombatPower(observer, ownFleets) {

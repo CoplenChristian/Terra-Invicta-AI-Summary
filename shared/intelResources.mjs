@@ -4,106 +4,135 @@
 // via require(esm)) and the hosted Cloudflare worker (ESM import). Keep this
 // file free of any runtime-specific imports so it stays usable in both.
 
-import { ALIEN_FACTION_ID, ALIEN_FACTION_DISPLAY_NAME, DEFAULT_OBSERVER_FACTION_ID } from './constants.mjs';
+import {
+  ALIEN_FACTION_ID,
+  ALIEN_FACTION_DISPLAY_NAME,
+  DEFAULT_OBSERVER_FACTION_ID,
+  INITIATIVE_DISPLAY_NAME
+} from './constants.mjs';
 import { buildAlienHateEconomics, ALIEN_HATE_WAR_THRESHOLD } from './alienHateEconomics.mjs';
+import {
+  asArray,
+  toFiniteNumber as toFinite,
+  sameId,
+  resolveObserverFaction,
+  MS_PER_DAY
+} from './util.mjs';
 
-export const SUPPORTED_RESOURCES = new Set([
-  'summary', 'factions', 'nations', 'councilors', 'habs', 'hab-sites',
-  'mining', 'fleets', 'ships', 'research', 'capabilities', 'alien',
-  'resources', 'hab-modules', 'shipyards', 'shipyard-queues', 'arrivals', 'transfers',
-  'logistics', 'construction', 'ship-designs', 'theaters', 'infrastructure',
-  'alien-threat', 'delta', 'mobility', 'production-plan', 'body-status',
-  'mining-prospects',
-  'mining-expansion'
-]);
+// Re-exported so existing importers of these names keep working. The
+// definitions themselves moved to shared/util.mjs, where they are shared with
+// strategicSnapshot / strategicDelta / techGraph / councilorAttributes and the
+// server modules instead of being copied into each.
+export { asArray, toFinite, sameId };
+
+// ---------------------------------------------------------------------------
+// One endpoint registry, three derived views.
+//
+// SUPPORTED_RESOURCES, INTEL_ENDPOINT_INDEX and the dispatcher below used to be
+// three separately hand-maintained lists of the same endpoints, and they had
+// already drifted: `mining-expansion` reached the dispatcher and the discovery
+// index but never the examples map. Everything is now derived from this table,
+// so adding a row is the only edit an endpoint needs.
+//
+//   key       camelCase discovery-index key.
+//   route     REST path segment; ALSO the dispatcher's resource name.
+//             Derived from `key`, so the two can no longer disagree.
+//   projected true when buildResourceProjection in this file answers it.
+//             false for endpoints the adapters serve themselves (history,
+//             strategic-delta, the tech-graph family).
+//   example   query string shown by the discovery index.
+// ---------------------------------------------------------------------------
+const kebab = (key) => key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+
+// Built from the configured default so the published examples cannot drift
+// away from the observer the endpoints actually default to.
+const OMNISCIENT = `?observer=${DEFAULT_OBSERVER_FACTION_ID}&mode=omniscient`;
+const OMNISCIENT_OWN = `${OMNISCIENT}&faction=${DEFAULT_OBSERVER_FACTION_ID}`;
+const OBSERVER_ONLY = `?observer=${DEFAULT_OBSERVER_FACTION_ID}`;
+
+const INTEL_ENDPOINTS = Object.freeze([
+  { key: 'summary', projected: true, example: OMNISCIENT },
+  { key: 'factions', projected: true, example: OMNISCIENT },
+  { key: 'nations', projected: true, example: OMNISCIENT_OWN },
+  { key: 'councilors', projected: true, example: OMNISCIENT_OWN },
+  { key: 'habs', projected: true, example: OMNISCIENT_OWN },
+  { key: 'habSites', projected: true, example: `${OMNISCIENT}&body=Ceres` },
+  { key: 'mining', projected: true, example: `${OMNISCIENT}&body=Ceres&sort=water` },
+  { key: 'fleets', projected: true, example: `${OMNISCIENT}&faction=4717` },
+  { key: 'ships', projected: true, example: `${OMNISCIENT}&faction=4717` },
+  { key: 'research', projected: true, example: OMNISCIENT },
+  { key: 'capabilities', projected: true, example: OMNISCIENT },
+  { key: 'alien', projected: true, example: OMNISCIENT },
+  { key: 'resources', projected: true, example: OMNISCIENT_OWN },
+  { key: 'habModules', projected: true, example: OMNISCIENT_OWN },
+  { key: 'shipyards', projected: true, example: OMNISCIENT_OWN },
+  { key: 'shipyardQueues', projected: true, example: OMNISCIENT_OWN },
+  { key: 'arrivals', projected: true, example: OMNISCIENT },
+  { key: 'transfers', projected: true, example: `${OMNISCIENT}&destination=Mars` },
+  { key: 'logistics', projected: true, example: OMNISCIENT },
+  { key: 'construction', projected: true, example: OMNISCIENT_OWN },
+  { key: 'shipDesigns', projected: true, example: OMNISCIENT_OWN },
+  { key: 'theaters', projected: true, example: OMNISCIENT },
+  { key: 'infrastructure', projected: true, example: `${OMNISCIENT}&body=Mars` },
+  { key: 'alienThreat', projected: true, example: OMNISCIENT },
+  { key: 'delta', projected: true, example: OMNISCIENT },
+  { key: 'mobility', projected: true, example: `${OMNISCIENT}&fleet=<fleetId>` },
+  { key: 'productionPlan', projected: true, example: `${OMNISCIENT}&design=playerShipTemplate584&quantity=4` },
+  { key: 'bodyStatus', projected: true, example: `${OMNISCIENT}&body=Mars` },
+  { key: 'miningProspects', projected: true, example: `${OMNISCIENT}&theater=belt&limit=10` },
+  { key: 'miningExpansion', projected: true, example: `${OMNISCIENT}&theater=belt&limit=10` },
+  { key: 'history', projected: false, example: '?limit=20' },
+  { key: 'strategicDelta', projected: false, example: OBSERVER_ONLY },
+  { key: 'techTree', projected: false, example: `${OMNISCIENT}&category=all` },
+  { key: 'techPath', projected: false, example: `${OMNISCIENT}&target=Project_RailCannonMk3` },
+  { key: 'techSearch', projected: false, example: `${OMNISCIENT}&q=battlecruiser` },
+  { key: 'techMilestones', projected: false, example: `${OMNISCIENT}&category=ship_hull` },
+  { key: 'techMatrix', projected: false, example: OMNISCIENT },
+  { key: 'techOpportunities', projected: false, example: OMNISCIENT },
+  { key: 'researchQueue', projected: false, example: OMNISCIENT }
+].map(entry => Object.freeze({ ...entry, route: kebab(entry.key) })));
+
+/** Resource names `buildResourceProjection` understands. */
+export const SUPPORTED_RESOURCES = new Set(
+  INTEL_ENDPOINTS.filter(entry => entry.projected).map(entry => entry.route)
+);
 
 // Public discovery map shared by the local Express API and hosted worker.
 // Keep these as path-only links so external analysis clients can discover the
 // focused routes before adding observer/mode/faction filters themselves.
-export const INTEL_ENDPOINT_INDEX = Object.freeze({
-  summary: '/api/intel/summary',
-  factions: '/api/intel/factions',
-  nations: '/api/intel/nations',
-  councilors: '/api/intel/councilors',
-  habs: '/api/intel/habs',
-  habSites: '/api/intel/hab-sites',
-  mining: '/api/intel/mining',
-  fleets: '/api/intel/fleets',
-  ships: '/api/intel/ships',
-  research: '/api/intel/research',
-  capabilities: '/api/intel/capabilities',
-  alien: '/api/intel/alien',
-  resources: '/api/intel/resources',
-  habModules: '/api/intel/hab-modules',
-  shipyards: '/api/intel/shipyards',
-  shipyardQueues: '/api/intel/shipyard-queues',
-  arrivals: '/api/intel/arrivals',
-  transfers: '/api/intel/transfers',
-  logistics: '/api/intel/logistics',
-  construction: '/api/intel/construction',
-  shipDesigns: '/api/intel/ship-designs',
-  theaters: '/api/intel/theaters',
-  infrastructure: '/api/intel/infrastructure',
-  alienThreat: '/api/intel/alien-threat',
-  delta: '/api/intel/delta',
-  mobility: '/api/intel/mobility',
-  productionPlan: '/api/intel/production-plan',
-  bodyStatus: '/api/intel/body-status',
-  miningProspects: '/api/intel/mining-prospects',
-  miningExpansion: '/api/intel/mining-expansion',
-  history: '/api/intel/history',
-  strategicDelta: '/api/intel/strategic-delta',
-  techTree: '/api/intel/tech-tree',
-  techPath: '/api/intel/tech-path',
-  techSearch: '/api/intel/tech-search',
-  techMilestones: '/api/intel/tech-milestones',
-  techMatrix: '/api/intel/tech-matrix',
-  techOpportunities: '/api/intel/tech-opportunities',
-  researchQueue: '/api/intel/research-queue'
-});
+export const INTEL_ENDPOINT_INDEX = Object.freeze(
+  Object.fromEntries(INTEL_ENDPOINTS.map(entry => [entry.key, `/api/intel/${entry.route}`]))
+);
 
-export const INTEL_ENDPOINT_EXAMPLES = Object.freeze({
-  summary: '?observer=4712&mode=omniscient',
-  factions: '?observer=4712&mode=omniscient',
-  nations: '?observer=4712&mode=omniscient&faction=4712',
-  councilors: '?observer=4712&mode=omniscient&faction=4712',
-  habs: '?observer=4712&mode=omniscient&faction=4712',
-  habSites: '?observer=4712&mode=omniscient&body=Ceres',
-  mining: '?observer=4712&mode=omniscient&body=Ceres&sort=water',
-  fleets: '?observer=4712&mode=omniscient&faction=4717',
-  ships: '?observer=4712&mode=omniscient&faction=4717',
-  research: '?observer=4712&mode=omniscient',
-  capabilities: '?observer=4712&mode=omniscient',
-  alien: '?observer=4712&mode=omniscient',
-  resources: '?observer=4712&mode=omniscient&faction=4712',
-  habModules: '?observer=4712&mode=omniscient&faction=4712',
-  shipyards: '?observer=4712&mode=omniscient&faction=4712',
-  shipyardQueues: '?observer=4712&mode=omniscient&faction=4712',
-  arrivals: '?observer=4712&mode=omniscient',
-  transfers: '?observer=4712&mode=omniscient&destination=Mars',
-  logistics: '?observer=4712&mode=omniscient',
-  construction: '?observer=4712&mode=omniscient&faction=4712',
-  shipDesigns: '?observer=4712&mode=omniscient&faction=4712',
-  theaters: '?observer=4712&mode=omniscient',
-  infrastructure: '?observer=4712&mode=omniscient&body=Mars',
-  alienThreat: '?observer=4712&mode=omniscient',
-  delta: '?observer=4712&mode=omniscient',
-  mobility: '?observer=4712&mode=omniscient',
-  productionPlan: '?observer=4712&mode=omniscient&design=playerShipTemplate584&quantity=4',
-  bodyStatus: '?observer=4712&mode=omniscient&body=Mars',
-  miningProspects: '?observer=4712&mode=omniscient&theater=belt&limit=10',
-  history: '?limit=20',
-  strategicDelta: '?observer=4712',
-  techTree: '?observer=4712&mode=omniscient&category=all',
-  techPath: '?observer=4712&mode=omniscient&target=Project_RailCannonMk3',
-  techSearch: '?observer=4712&mode=omniscient&q=battlecruiser',
-  techMilestones: '?observer=4712&mode=omniscient&category=ship_hull',
-  techMatrix: '?observer=4712&mode=omniscient',
-  techOpportunities: '?observer=4712&mode=omniscient',
-  researchQueue: '?observer=4712&mode=omniscient'
-});
+export const INTEL_ENDPOINT_EXAMPLES = Object.freeze(
+  Object.fromEntries(INTEL_ENDPOINTS.map(entry => [entry.key, entry.example]))
+);
 
-export const asArray = (value) => (Array.isArray(value) ? value : []);
+/**
+ * The one mining/economy resource table for this file.
+ *
+ * The same five resources previously appeared as three separate inline tables
+ * plus a bare key array, under three different spellings of noble metals:
+ *   key     -- the hab-site rate field   (`site.nobleMetals`)
+ *   saveKey -- the faction stockpile key (`faction.resources.NobleMetals`)
+ *   alias   -- the reported output name  (`nobles`)
+ * Reading one spelling out of a structure that uses another returns undefined,
+ * which then coerces to 0 -- a silent, confident, wrong answer.
+ */
+export const MINING_RESOURCES = Object.freeze([
+  Object.freeze({ key: 'water', saveKey: 'Water', alias: 'water', label: 'Water' }),
+  Object.freeze({ key: 'volatiles', saveKey: 'Volatiles', alias: 'volatiles', label: 'Volatiles' }),
+  Object.freeze({ key: 'metals', saveKey: 'Metals', alias: 'metals', label: 'Metals' }),
+  Object.freeze({ key: 'nobleMetals', saveKey: 'NobleMetals', alias: 'nobles', label: 'Noble metals' }),
+  Object.freeze({ key: 'fissiles', saveKey: 'Fissiles', alias: 'fissiles', label: 'Fissiles' })
+]);
+
+/**
+ * A fresh accumulator keyed by the save's own stockpile spelling, in table
+ * order. Written out twice as a literal before, which is how a resource key
+ * gets added to one accumulator and forgotten in the other.
+ */
+const zeroedBySaveKey = () => Object.fromEntries(MINING_RESOURCES.map(({ saveKey }) => [saveKey, 0]));
 
 export const normalizeBody = (value) => String(value || '')
   .trim()
@@ -281,11 +310,15 @@ export const habSiteResourceRow = (site) => ({
   spaceTheaterKey: site.spaceTheaterKey,
   spaceTheaterName: site.spaceTheaterName,
   visibility: site.visibility || null,
-  water: site.water ?? 0,
-  volatiles: site.volatiles ?? 0,
-  metals: site.metals ?? 0,
-  nobleMetals: site.nobleMetals ?? 0,
-  fissiles: site.fissiles ?? 0,
+  // `?? 0` here reported a confident "this site yields no water" for a site
+  // whose rate the snapshot simply does not carry. Absent stays null; the
+  // caller can tell an unmeasured rate from a genuinely barren one.
+  water: toFinite(site.water),
+  volatiles: toFinite(site.volatiles),
+  metals: toFinite(site.metals),
+  nobleMetals: toFinite(site.nobleMetals),
+  fissiles: toFinite(site.fissiles),
+  resourceRatesMeasured: MINING_RESOURCES.every(({ key }) => toFinite(site[key]) !== null),
   resourceRateUnit: site.resourceRateUnit,
   habName: site.habName,
   habTier: site.habTier,
@@ -299,7 +332,31 @@ export const habSiteResourceRow = (site) => ({
   daysRemaining: site.daysRemaining
 });
 
-export const miningResourceRow = (site) => ({
+// Total monthly yield across the five mined resources.
+//
+// A site with no measured rates at all is UNMEASURED, not a zero producer:
+// `(site.water || 0) + ...` used to report a confident 0 t/month for a site
+// whose rates were simply absent from the snapshot, which is indistinguishable
+// in the output from a genuinely barren site. Partial coverage is summed but
+// labelled, so a caller can tell a complete reading from a partial one.
+export const siteMonthlyOutput = (site) => {
+  const measured = MINING_RESOURCES
+    .map(({ key }) => toFinite(site?.[key]))
+    .filter(value => value !== null);
+  if (measured.length === 0) {
+    return { total: null, measuredResources: 0, complete: false };
+  }
+  const total = measured.reduce((sum, value) => sum + value, 0) * rateMultiplier(site);
+  return {
+    total: Number(total.toFixed(1)),
+    measuredResources: measured.length,
+    complete: measured.length === MINING_RESOURCES.length
+  };
+};
+
+export const miningResourceRow = (site) => {
+  const output = siteMonthlyOutput(site);
+  return {
   site: site.displayName,
   owner: site.factionName,
   siteId: site.ID,
@@ -310,12 +367,18 @@ export const miningResourceRow = (site) => ({
   spaceTheaterKey: site.spaceTheaterKey,
   spaceTheaterName: site.spaceTheaterName,
   visibility: site.visibility || null,
-  water: site.water ?? 0,
-  volatiles: site.volatiles ?? 0,
-  metals: site.metals ?? 0,
-  nobles: site.nobleMetals ?? 0,
-  fissiles: site.fissiles ?? 0,
-  effectiveMonthlyOutput: Number((((site.water || 0) + (site.volatiles || 0) + (site.metals || 0) + (site.nobleMetals || 0) + (site.fissiles || 0)) * rateMultiplier(site)).toFixed(1)),
+  // Per-resource columns follow the same rule as effectiveMonthlyOutput:
+  // absent stays null. `?? 0` printed `water: 0, metals: 0` for a site whose
+  // rates were never measured, which is indistinguishable in the output from
+  // a site that was measured and found barren.
+  water: toFinite(site.water),
+  volatiles: toFinite(site.volatiles),
+  metals: toFinite(site.metals),
+  nobles: toFinite(site.nobleMetals),
+  fissiles: toFinite(site.fissiles),
+  effectiveMonthlyOutput: output.total,
+  effectiveMonthlyOutputMeasured: output.complete,
+  measuredResourceCount: output.measuredResources,
   resourceRateUnit: site.resourceRateUnit,
   mineTier: site.mineTier,
   mineModule: site.mineModuleTemplate,
@@ -323,7 +386,8 @@ export const miningResourceRow = (site) => ({
   daysRemaining: site.daysRemaining,
   completionDate: site.completionDate,
   buildDurationDays: site.buildDurationDays
-});
+  };
+};
 
 export const fleetResourceRow = (fleet) => ({
   id: fleet.ID,
@@ -469,14 +533,14 @@ export const friendlyStrengthAtDestination = (fleet, snapshot) => {
   const observerFactionId = snapshot?.observerFactionId;
   if (observerFactionId === null || observerFactionId === undefined) return null;
   const friendlyFleets = asArray(snapshot.fleets).filter(other =>
-    other.factionId === observerFactionId && normalizeBody(other.orbitBody) === destinationBody
+    sameId(other.factionId, observerFactionId) && normalizeBody(other.orbitBody) === destinationBody
   );
   const currentShips = friendlyFleets.reduce((sum, other) => sum + (Number(other.shipsCount) || 0), 0);
   const combatValues = friendlyFleets
     .map(other => other.combatPower)
     .filter(value => typeof value === 'number' && Number.isFinite(value));
   const completingShips = asArray(snapshot.shipyardQueues).filter(queue =>
-    queue.factionId === observerFactionId && normalizeBody(queue.orbitBody) === destinationBody
+    sameId(queue.factionId, observerFactionId) && normalizeBody(queue.orbitBody) === destinationBody
   ).length;
   return {
     currentShips,
@@ -551,7 +615,7 @@ export const researchResourceRows = (snapshot) => {
 
 export const findAlienFaction = (snapshot) => {
   const factions = asArray(snapshot.factions);
-  return factions.find(faction => faction.ID === ALIEN_FACTION_ID || faction.displayName === ALIEN_FACTION_DISPLAY_NAME) || null;
+  return factions.find(faction => sameId(faction.ID, ALIEN_FACTION_ID) || faction.displayName === ALIEN_FACTION_DISPLAY_NAME) || null;
 };
 
 // =============================================================================
@@ -562,26 +626,32 @@ export const findAlienFaction = (snapshot) => {
  * 1. Logistics: Exposes the actual war economy, gross vs net resource flows,
  * committed queues, and production by body/site.
  */
-export const logisticsResource = (snapshot, observerId = 4712) => {
+export const logisticsResource = (snapshot, observerId = DEFAULT_OBSERVER_FACTION_ID) => {
   const factions = asArray(snapshot.factions);
-  const observer = factions.find(f => Number(f.ID) === Number(observerId)) ||
-                   factions.find(f => f.displayName === 'the Initiative') ||
-                   factions[0] || {};
+  const observer = resolveObserverFaction(factions, observerId, {
+    fallbackDisplayName: INITIATIVE_DISPLAY_NAME,
+    fallbackToFirst: true
+  }) || {};
   const actualObsId = observer.ID || observerId;
   const stock = observer.resources || {};
-  const sites = asArray(snapshot.habSites).filter(s => Number(s.factionId) === Number(actualObsId));
+  const sites = asArray(snapshot.habSites).filter(s => sameId(s.factionId, actualObsId));
 
-  const resourceKeys = [
-    { key: 'Water', alias: 'water', label: 'Water' },
-    { key: 'Volatiles', alias: 'volatiles', label: 'Volatiles' },
-    { key: 'Metals', alias: 'metals', label: 'Metals' },
-    { key: 'NobleMetals', alias: 'nobles', label: 'Noble metals' },
-    { key: 'Fissiles', alias: 'fissiles', label: 'Fissiles' }
-  ];
+  // The one MINING_RESOURCES table, read here through its stockpile spelling.
+  // `saveKeyLower` reproduces the lookup order this reducer has always used on
+  // a hab site: the lower-cased stockpile key first (matches water / volatiles
+  // / metals / fissiles verbatim), then the reported alias, then the site's own
+  // rate field -- which is the only spelling that resolves noble metals.
+  const resourceKeys = MINING_RESOURCES.map(({ key, saveKey, alias, label }) => ({
+    key: saveKey,
+    saveKeyLower: saveKey.toLowerCase(),
+    siteKey: key,
+    alias,
+    label
+  }));
 
   // Upkeep from operational modules
-  const ownModules = asArray(snapshot.habModules).filter(m => Number(m.factionId) === Number(actualObsId) && m.constructionCompleted && m.powered !== false);
-  const upkeepByResource = { Water: 0, Volatiles: 0, Metals: 0, NobleMetals: 0, Fissiles: 0, Money: 0 };
+  const ownModules = asArray(snapshot.habModules).filter(m => sameId(m.factionId, actualObsId) && m.constructionCompleted && m.powered !== false);
+  const upkeepByResource = { ...zeroedBySaveKey(), Money: 0 };
   for (const mod of ownModules) {
     if (mod.resourceUpkeep) {
       for (const [k, v] of Object.entries(mod.resourceUpkeep)) {
@@ -591,8 +661,8 @@ export const logisticsResource = (snapshot, observerId = 4712) => {
   }
 
   // Committed resources in active build queues
-  const committedByResource = { Water: 0, Volatiles: 0, Metals: 0, NobleMetals: 0, Fissiles: 0 };
-  const ownQueues = asArray(snapshot.shipyardQueues).filter(q => Number(q.factionId) === Number(actualObsId) && q.constructionStatus !== 'operational');
+  const committedByResource = zeroedBySaveKey();
+  const ownQueues = asArray(snapshot.shipyardQueues).filter(q => sameId(q.factionId, actualObsId) && q.constructionStatus !== 'operational');
   for (const q of ownQueues) {
     for (const cost of asArray(q.resourcesCost)) {
       const resName = cost.resource || cost.name;
@@ -601,7 +671,7 @@ export const logisticsResource = (snapshot, observerId = 4712) => {
       }
     }
   }
-  const ownBuildingModules = asArray(snapshot.habModules).filter(m => Number(m.factionId) === Number(actualObsId) && m.constructionStatus === 'building');
+  const ownBuildingModules = asArray(snapshot.habModules).filter(m => sameId(m.factionId, actualObsId) && m.constructionStatus === 'building');
   for (const m of ownBuildingModules) {
     for (const cost of asArray(m.buildCost)) {
       const resName = cost.resource || cost.name;
@@ -617,34 +687,33 @@ export const logisticsResource = (snapshot, observerId = 4712) => {
   for (const s of sites) {
     const body = s.parentBodyName || 'Unknown';
     if (!productionByBody[body]) {
-      productionByBody[body] = { water: 0, volatiles: 0, metals: 0, nobles: 0, fissiles: 0, sitesCount: 0 };
+      productionByBody[body] = {
+        ...Object.fromEntries(MINING_RESOURCES.map(({ alias }) => [alias, 0])),
+        sitesCount: 0
+      };
     }
     const mult = rateMultiplier(s);
-    const w = (Number(s.water) || 0) * mult;
-    const v = (Number(s.volatiles) || 0) * mult;
-    const m = (Number(s.metals) || 0) * mult;
-    const n = (Number(s.nobleMetals) || 0) * mult;
-    const f = (Number(s.fissiles) || 0) * mult;
+    // Reads each rate through the site's own spelling (`nobleMetals`) and
+    // reports it under the output alias (`nobles`). The `|| 0` coercion is the
+    // one this reducer has always applied to a gross-production roll-up; only
+    // the hand-written five-name table is gone.
+    const yields = MINING_RESOURCES.map(({ key, alias }) => ({
+      alias,
+      value: (Number(s[key]) || 0) * mult
+    }));
+    const monthlyTotal = yields.reduce((sum, entry) => sum + entry.value, 0);
 
-    productionByBody[body].water += w;
-    productionByBody[body].volatiles += v;
-    productionByBody[body].metals += m;
-    productionByBody[body].nobles += n;
-    productionByBody[body].fissiles += f;
+    for (const { alias, value } of yields) productionByBody[body][alias] += value;
     productionByBody[body].sitesCount += 1;
 
-    if (s.mineModuleName && (w + v + m + n + f > 0)) {
+    if (s.mineModuleName && monthlyTotal > 0) {
       topSites.push({
         site: s.displayName,
         body,
-        monthlyTotal: Number((w + v + m + n + f).toFixed(1)),
-        yields: {
-          water: Number(w.toFixed(1)),
-          volatiles: Number(v.toFixed(1)),
-          metals: Number(m.toFixed(1)),
-          nobles: Number(n.toFixed(1)),
-          fissiles: Number(f.toFixed(1))
-        }
+        monthlyTotal: Number(monthlyTotal.toFixed(1)),
+        yields: Object.fromEntries(
+          yields.map(({ alias, value }) => [alias, Number(value.toFixed(1))])
+        )
       });
     }
   }
@@ -657,9 +726,10 @@ export const logisticsResource = (snapshot, observerId = 4712) => {
   }
   topSites.sort((a, b) => b.monthlyTotal - a.monthlyTotal);
 
-  const resources = resourceKeys.map(({ key, alias, label }) => {
+  const resources = resourceKeys.map(({ key, saveKeyLower, siteKey, alias, label }) => {
     const stockpile = Number((Number(stock[key]) || 0).toFixed(1));
-    const grossDaily = sites.filter(s => s.mineModuleName).reduce((sum, s) => sum + (Number(s[key.toLowerCase()] || s[alias] || (key === 'NobleMetals' ? s.nobleMetals : 0)) || 0), 0);
+    const grossDaily = sites.filter(s => s.mineModuleName)
+      .reduce((sum, s) => sum + (Number(s[saveKeyLower] || s[alias] || s[siteKey]) || 0), 0);
     const grossMonthly = Number((grossDaily * 30).toFixed(1));
     const upkeepMonthly = Number((-1 * (upkeepByResource[key] || 0)).toFixed(1));
     const netMonthly = Number((grossMonthly + upkeepMonthly).toFixed(1));
@@ -790,7 +860,7 @@ export const transfersResource = (snapshot, factionId = null, body = null, desti
     if (arrivalDate && gameDate && !Number.isNaN(gameDate.getTime())) {
       const arr = new Date(arrivalDate);
       if (!Number.isNaN(arr.getTime())) {
-        daysRemaining = Math.max(0, Math.round((arr - gameDate) / 86400000));
+        daysRemaining = Math.max(0, Math.round((arr - gameDate) / MS_PER_DAY));
       }
     }
 
@@ -886,8 +956,15 @@ export const shipDesignsResource = (snapshot, factionId = null) => {
         cruiseAccelerationMps2: d.cruiseAccelerationMps2 ?? null,
         combatAccelerationMps2: d.combatAccelerationMps2 ?? null,
         turnRate: d.turnRate ?? null,
-        constructionCost: normalizeCostObject(d.constructionCost || { water: 120, volatiles: 60, metals: 250, nobleMetals: 40, fissiles: 10 }),
-        isEstimatedCost: !d.constructionCost,
+        // Never fabricate the bill of materials. The save records a design as a
+        // component list, not a resource cost, so `d.constructionCost` is
+        // absent for every design on a real save -- and the old fallback then
+        // quoted the SAME invented 120/60/250/40/10 for a Gunship and a
+        // Dreadnought alike, flagged only as "estimated", which it was not:
+        // it was a constant. An honest null is the only defensible answer.
+        constructionCost: d.constructionCost ? normalizeCostObject(d.constructionCost) : null,
+        constructionCostAvailable: Boolean(d.constructionCost),
+        isEstimatedCost: false,
         // Real per-hull values from the game templates where available.
         // Mission Control varies by hull (Escort 1 ... Lancer 4) and is the
         // only input to the alien hate floor, so never flatten it to 1.
@@ -905,7 +982,7 @@ export const shipDesignsResource = (snapshot, factionId = null) => {
 /**
  * 5. Theaters: Synthesized body-by-body military posture and threat assessment.
  */
-export const theatersResource = (snapshot, observerId = 4712) => {
+export const theatersResource = (snapshot, observerId = DEFAULT_OBSERVER_FACTION_ID) => {
   const bodies = ['Earth', 'Luna', 'Mars', 'Ceres', 'Vesta', 'Mercury', 'Venus', 'Ganymede', 'Callisto', 'Europa', 'Io', 'Titan'];
   const fleets = asArray(snapshot.fleets);
   const habs = asArray(snapshot.habs);
@@ -1000,7 +1077,7 @@ export const infrastructureResource = (snapshot, factionId = null, body = null) 
   return asArray(snapshot.habs)
     .filter(h => factionMatches(h, factionId) && bodyMatches(h, body))
     .map(h => {
-      const habModules = asArray(snapshot.habModules).filter(m => m.habId === h.ID);
+      const habModules = asArray(snapshot.habModules).filter(m => sameId(m.habId, h.ID));
       const operational = habModules.filter(m => m.constructionCompleted && !m.destroyed);
 
       const moduleSummary = {
@@ -1022,7 +1099,7 @@ export const infrastructureResource = (snapshot, factionId = null, body = null) 
       if (moduleSummary.mines > 0) strategicCapabilities.push('mining');
       if (moduleSummary.labs > 0) strategicCapabilities.push('research');
 
-      const site = asArray(snapshot.habSites).find(s => s.habId === h.ID);
+      const site = asArray(snapshot.habSites).find(s => sameId(s.habId, h.ID));
 
       return {
         habId: h.ID,
@@ -1049,12 +1126,15 @@ export const infrastructureResource = (snapshot, factionId = null, body = null) 
           metals: 4,
           money: 15
         },
+        // `Number(site.water) || 0` turned an absent rate into a confident
+        // "0 t/month mined here". Absent stays null, and `measured` says
+        // whether all five rates were readable.
         mineOutput: site ? {
-          water: Number(((Number(site.water) || 0) * 30).toFixed(1)),
-          volatiles: Number(((Number(site.volatiles) || 0) * 30).toFixed(1)),
-          metals: Number(((Number(site.metals) || 0) * 30).toFixed(1)),
-          nobles: Number(((Number(site.nobleMetals) || 0) * 30).toFixed(1)),
-          fissiles: Number(((Number(site.fissiles) || 0) * 30).toFixed(1))
+          ...Object.fromEntries(MINING_RESOURCES.map(({ key, alias }) => {
+            const rate = toFinite(site[key]);
+            return [alias, rate === null ? null : Number((rate * 30).toFixed(1))];
+          })),
+          measured: MINING_RESOURCES.every(({ key }) => toFinite(site[key]) !== null)
         } : null,
         constructionStatus: h.inCombat ? 'in-combat' : 'operational'
       };
@@ -1082,7 +1162,9 @@ export const MINING_SCARCITY_WEIGHTS = Object.freeze({
   metals: 1.0
 });
 
-const MINING_RESOURCE_KEYS = Object.freeze(['water', 'volatiles', 'metals', 'nobleMetals', 'fissiles']);
+// Derived from the one MINING_RESOURCES table so the site-rate field names can
+// never drift from the stockpile keys they are compared against.
+const MINING_RESOURCE_KEYS = Object.freeze(MINING_RESOURCES.map(r => r.key));
 
 const percentileOf = (value, population) => {
   if (!Number.isFinite(value) || population.length === 0) return null;
@@ -1176,7 +1258,7 @@ export const miningProspectsResource = (snapshot, {
 /**
  * 7. Alien Threat: Precise hate math, minimum-hate floor, and retaliation mechanics.
  */
-const EXPANSION_THEATER_ACCESSIBILITY = Object.freeze({
+export const EXPANSION_THEATER_ACCESSIBILITY = Object.freeze({
   sol: 1.0,
   mars: 0.9,
   inner: 0.85,
@@ -1187,7 +1269,7 @@ const EXPANSION_THEATER_ACCESSIBILITY = Object.freeze({
   unassigned: 0.1
 });
 
-const EXPANSION_MISSION_TECH_NAMES = Object.freeze({
+export const EXPANSION_MISSION_TECH_NAMES = Object.freeze({
   MissiontotheMoon: 'Mission to the Moon',
   MissiontoMars: 'Mission to Mars',
   MissiontotheInnerPlanets: 'Mission to the Inner Planets',
@@ -1198,7 +1280,7 @@ const EXPANSION_MISSION_TECH_NAMES = Object.freeze({
   MissiontotheOuterPlanets: 'Mission to the Outer Planets'
 });
 
-const EXPANSION_MINE_LIMIT_GRANTS = Object.freeze({
+export const EXPANSION_MINE_LIMIT_GRANTS = Object.freeze({
   MissiontotheMoon: 3,
   MissiontotheInnerPlanets: 3,
   MissiontoMars: 6,
@@ -1210,50 +1292,64 @@ const EXPANSION_MINE_LIMIT_GRANTS = Object.freeze({
   Project_GoldRush: 6
 });
 
-const resolveBodyDestinationTech = (bodyName, spaceTheaterKey) => {
+/**
+ * Destination mission tech required to reach a body, with the evidence that
+ * produced the answer. `source` matters: the last branch is a HEURISTIC --
+ * every body the theater table does not name (the ~100 numbered main-belt
+ * asteroids in a live save, e.g. "18 Melpomene") falls through to
+ * MissiontotheAsteroids. That is right for a main-belt rock and wrong for
+ * anything else that lands there, so it is labelled rather than silently
+ * presented as a template-derived fact.
+ */
+export const resolveBodyDestinationTech = (bodyName, spaceTheaterKey) => {
   const normalized = String(bodyName || '').trim().toLowerCase();
-  if (normalized === 'luna' || normalized === 'moon') return 'MissiontotheMoon';
-  if (normalized === 'mercury') return 'MissiontotheInnerPlanets';
-  if (normalized === 'venus') return 'MissiontoVenus';
-  if (normalized === 'mars' || normalized === 'phobos' || normalized === 'deimos') return 'MissiontoMars';
+  if (normalized === 'luna' || normalized === 'moon') return { tech: 'MissiontotheMoon', source: 'body name' };
+  if (normalized === 'mercury') return { tech: 'MissiontotheInnerPlanets', source: 'body name' };
+  if (normalized === 'venus') return { tech: 'MissiontoVenus', source: 'body name' };
+  if (normalized === 'mars' || normalized === 'phobos' || normalized === 'deimos') {
+    return { tech: 'MissiontoMars', source: 'body name' };
+  }
 
   const theater = String(spaceTheaterKey || '').toLowerCase();
-  if (theater === 'sol') return 'MissiontotheMoon';
-  if (theater === 'mars') return 'MissiontoMars';
-  if (theater === 'inner') return normalized.includes('venus') ? 'MissiontoVenus' : 'MissiontotheInnerPlanets';
-  if (theater === 'jupiter') return 'MissiontoJupiter';
-  if (theater === 'saturn') return 'MissiontoSaturn';
-  if (theater === 'outer') return 'MissiontotheOuterPlanets';
-  return 'MissiontotheAsteroids';
+  if (theater === 'sol') return { tech: 'MissiontotheMoon', source: 'space theater' };
+  if (theater === 'mars') return { tech: 'MissiontoMars', source: 'space theater' };
+  if (theater === 'inner') {
+    return {
+      tech: normalized.includes('venus') ? 'MissiontoVenus' : 'MissiontotheInnerPlanets',
+      source: 'space theater'
+    };
+  }
+  if (theater === 'jupiter') return { tech: 'MissiontoJupiter', source: 'space theater' };
+  if (theater === 'saturn') return { tech: 'MissiontoSaturn', source: 'space theater' };
+  if (theater === 'outer') return { tech: 'MissiontotheOuterPlanets', source: 'space theater' };
+  if (theater === 'belt') return { tech: 'MissiontotheAsteroids', source: 'space theater' };
+  return { tech: 'MissiontotheAsteroids', source: 'assumed main belt (body not in the theater table)' };
 };
 
-const evaluateSaturatingUtility = (sufficiency, target = 12, surplusDiscount = 0.05) => {
+export const evaluateSaturatingUtility = (sufficiency, target = 12, surplusDiscount = 0.05) => {
   if (sufficiency === null || !Number.isFinite(sufficiency) || sufficiency <= 0) return 0;
   if (sufficiency <= target) return sufficiency / target;
   return 1.0 + ((sufficiency - target) * surplusDiscount) / target;
 };
 
-export const miningExpansionResource = (snapshot, {
-  observerId = DEFAULT_OBSERVER_FACTION_ID,
-  limit = null,
-  theater = null,
-  targetRunwayMonths = 12,
-  surplusDiscount = 0.05
+/**
+ * Mine capacity, the quadratic over-limit MC penalty, and its alien-hate cost.
+ *
+ * The hate terms depend on the difficulty multiplier (Cinematic 0.05 / Normal
+ * 0.30 / Veteran 0.60 / Brutal 1.00). An absent difficulty makes them UNKNOWN,
+ * not free: `?? 0.3` invented Normal here and could be wrong by 20x, and a
+ * penalty reported as 0 tells the player an over-limit mine is costless.
+ */
+export const buildMiningCapacity = ({
+  observer = {},
+  completedProjects = [],
+  completedTechs = [],
+  difficulty = null,
+  habSites = []
 } = {}) => {
-  const factions = asArray(snapshot?.factions);
-  const observer = factions.find(f => Number(f.ID) === Number(observerId)) ||
-                   factions.find(f => String(f.displayName || '').toLowerCase().includes('initiative')) ||
-                   factions[0] || {};
+  const completedTechSet = new Set(asArray(completedTechs));
+  const completedProjectSet = new Set(asArray(completedProjects));
 
-  const completedProjects = asArray(observer.completedProjects || observer.finishedProjectNames);
-  const completedTechs = asArray(snapshot?.techTree?.finishedTechsNames || snapshot?.globalResearch?.finishedTechNames);
-  const completedTechSet = new Set(completedTechs);
-  const completedProjectSet = new Set(completedProjects);
-
-  const difficulty = snapshot?.metadata?.difficulty || 'Normal';
-  const habSites = asArray(snapshot?.habSites);
-
-  // 1. Capacity model (M1)
   let mineLimit = 0;
   let hasMissionGrant = false;
   for (const [id, grant] of Object.entries(EXPANSION_MINE_LIMIT_GRANTS)) {
@@ -1263,44 +1359,46 @@ export const miningExpansionResource = (snapshot, {
     }
   }
 
-  const observerMines = habSites.filter(site =>
+  const sites = asArray(habSites);
+  const minesBuilt = sites.filter(site =>
     site.mineModuleId != null && Number(site.factionId) === Number(observer.ID)
-  );
-  const minesBuilt = observerMines.length;
+  ).length;
+
   const headroom = Math.max(0, mineLimit - minesBuilt);
   const overLimit = minesBuilt > mineLimit;
   const excess = Math.max(0, minesBuilt - mineLimit);
+  // Wiki: MC penalty past the limit is Max(1, Floor(excess^2 / 2)).
   const penaltyMC = excess > 0 ? Math.max(1, Math.floor((excess * excess) / 2)) : 0;
 
-  const hateEconomics = buildAlienHateEconomics({
-    observer,
-    difficulty,
-    mode: 'omniscient'
-  });
-  const baseMultiplier = hateEconomics.baseMultiplier ?? (
-    (hateEconomics.difficultyMultiplier ?? 0.3) * (hateEconomics.concealmentMultiplier ?? 1.0)
+  const hateEconomics = buildAlienHateEconomics({ observer, difficulty, mode: 'omniscient' });
+  const difficultyMultiplier = toFinite(hateEconomics.difficultyMultiplier);
+  const concealmentMultiplier = toFinite(hateEconomics.concealmentMultiplier);
+  const baseMultiplier = toFinite(hateEconomics.baseMultiplier) ?? (
+    difficultyMultiplier !== null && concealmentMultiplier !== null
+      ? difficultyMultiplier * concealmentMultiplier
+      : null
   );
-  const penaltyHate = penaltyMC > 0 && baseMultiplier !== null
-    ? Number((penaltyMC * baseMultiplier).toFixed(2))
-    : 0;
 
-  const nextMinesBuilt = minesBuilt + 1;
-  const nextExcess = Math.max(0, nextMinesBuilt - mineLimit);
+  const penaltyHate = baseMultiplier === null
+    ? null
+    : (penaltyMC > 0 ? Number((penaltyMC * baseMultiplier).toFixed(2)) : 0);
+
+  const nextExcess = Math.max(0, (minesBuilt + 1) - mineLimit);
   const nextPenaltyMC = nextExcess > 0 ? Math.max(1, Math.floor((nextExcess * nextExcess) / 2)) : 0;
   const marginalNextMinePenaltyMC = nextPenaltyMC - penaltyMC;
-  const marginalNextMinePenaltyHate = marginalNextMinePenaltyMC > 0 && baseMultiplier !== null
-    ? Number((marginalNextMinePenaltyMC * baseMultiplier).toFixed(2))
-    : 0;
+  const marginalNextMinePenaltyHate = baseMultiplier === null
+    ? null
+    : (marginalNextMinePenaltyMC > 0
+      ? Number((marginalNextMinePenaltyMC * baseMultiplier).toFixed(2))
+      : 0);
 
-  const mcUsage = Number.isFinite(Number(observer.missionControlUsage))
-    ? Number(observer.missionControlUsage)
-    : null;
-  const mcWarFloor = hateEconomics.mcWarFloor;
+  const mcUsage = toFinite(observer.missionControlUsage);
+  const mcWarFloor = toFinite(hateEconomics.mcWarFloor);
   const mcWarFloorDistance = (mcWarFloor !== null && mcUsage !== null)
     ? Math.max(0, Number((mcWarFloor - mcUsage).toFixed(1)))
     : null;
 
-  const capacity = {
+  return {
     minesBuilt,
     mineLimit: hasMissionGrant ? mineLimit : 0,
     headroom,
@@ -1312,35 +1410,31 @@ export const miningExpansionResource = (snapshot, {
     marginalNextMinePenaltyHate,
     mcWarFloorDistance,
     baseHateMultiplier: baseMultiplier,
-    difficultyMultiplier: hateEconomics.difficultyMultiplier,
-    concealmentMultiplier: hateEconomics.concealmentMultiplier
+    hateCostAvailable: baseMultiplier !== null,
+    difficulty: hateEconomics.difficulty ?? null,
+    difficultyMeasured: difficultyMultiplier !== null,
+    difficultyMultiplier,
+    concealmentMultiplier
   };
+};
 
-  // 2. Resource runways (M3)
+/**
+ * Stock / income / net / consumption and the resulting runway per mined
+ * resource. Every term is null when the save does not carry it, and `status`
+ * distinguishes `unmeasured` and `consumption_unknown` from a real reading.
+ */
+export const buildMiningResourceRunways = (observer = {}) => {
   const stockMap = observer.resources || {};
   const incomeMap = observer.monthlyIncome || {};
   const netMap = observer.monthlyNet || {};
-  const resourceRunways = {};
+  const runways = {};
 
-  for (const [key, saveKey] of [
-    ['water', 'Water'],
-    ['volatiles', 'Volatiles'],
-    ['metals', 'Metals'],
-    ['nobleMetals', 'NobleMetals'],
-    ['fissiles', 'Fissiles']
-  ]) {
-    const rawStock = stockMap[saveKey];
-    const rawIncome = incomeMap[saveKey];
-    const rawNet = netMap[saveKey];
+  for (const { key, saveKey } of MINING_RESOURCES) {
+    const stock = toFinite(stockMap[saveKey]);
+    const income = toFinite(incomeMap[saveKey]);
+    const net = toFinite(netMap[saveKey]);
 
-    const stock = (rawStock === null || rawStock === undefined || rawStock === '') ? null : (Number.isFinite(Number(rawStock)) ? Number(rawStock) : null);
-    const income = (rawIncome === null || rawIncome === undefined || rawIncome === '') ? null : (Number.isFinite(Number(rawIncome)) ? Number(rawIncome) : null);
-    const net = (rawNet === null || rawNet === undefined || rawNet === '') ? null : (Number.isFinite(Number(rawNet)) ? Number(rawNet) : null);
-
-    let consumption = null;
-    if (income !== null && net !== null) {
-      consumption = Math.max(0, income - net);
-    }
+    const consumption = (income !== null && net !== null) ? Math.max(0, income - net) : null;
 
     let runwayMonths = null;
     let status = 'unknown';
@@ -1357,24 +1451,215 @@ export const miningExpansionResource = (snapshot, {
         status = 'depleted';
         runwayMonths = 0;
       }
-    } else if (consumption > 0) {
+    } else {
       runwayMonths = Number((stock / consumption).toFixed(1));
       if (runwayMonths < 3) status = 'critical';
       else if (runwayMonths < 12) status = 'tight';
       else status = 'comfortable';
     }
 
-    resourceRunways[key] = {
-      key,
-      saveKey,
-      stock,
-      income,
-      net,
-      consumption,
-      runwayMonths,
-      status
-    };
+    runways[key] = { key, saveKey, stock, income, net, consumption, runwayMonths, status };
   }
+
+  return runways;
+};
+
+/**
+ * Need-weighted saturating marginal utility for one unowned site.
+ *
+ * Two absent-vs-zero hazards live here and both have bitten before:
+ *  - `Number.isFinite(Number(site.siteDensity))` is TRUE for null, so an
+ *    explicitly-null density collapsed the whole site value to 0 while an
+ *    absent one scored at full value. The 1.0 fallback is now applied
+ *    deliberately and labelled as an assumption.
+ *  - an absent daily rate coerced to a confident 0 t/day. It now reports
+ *    unmeasured and is named in `unmeasuredResources`, so a partially scored
+ *    site is distinguishable from a fully scored one.
+ */
+export const scoreMiningSiteCandidate = (site, runways, capacity, config = {}) => {
+  const target = toFinite(config.targetRunwayMonths) ?? 12;
+  const surplusDiscount = toFinite(config.surplusDiscount) ?? 0.05;
+  const theaterKey = String(site.spaceTheaterKey || '').toLowerCase() || 'unassigned';
+  const theaterAccessibility = EXPANSION_THEATER_ACCESSIBILITY[theaterKey]
+    ?? EXPANSION_THEATER_ACCESSIBILITY.unassigned;
+
+  const measuredDensity = toFinite(site.siteDensity);
+  const siteDensity = measuredDensity ?? 1.0;
+
+  let totalUtilityGain = 0;
+  const resourceGains = {};
+  const yields = {};
+  const unmeasuredResources = [];
+
+  for (const { key } of MINING_RESOURCES) {
+    const dailyRate = toFinite(site[key]);
+    if (dailyRate === null) {
+      yields[key] = { daily: null, monthly: null, measured: false };
+      unmeasuredResources.push(key);
+      continue;
+    }
+    const monthlyYield = dailyRate * 30;
+    yields[key] = {
+      daily: Number(dailyRate.toFixed(3)),
+      monthly: Number(monthlyYield.toFixed(1)),
+      measured: true
+    };
+
+    const r = runways?.[key];
+    // A measured consumption implies a measured net, but the net check stays
+    // explicit so a future change to buildMiningResourceRunways cannot slip a
+    // `?? 0` net back in -- that would read as "this faction burns nothing".
+    if (!r || r.stock === null || r.consumption === null || (r.consumption > 0 && r.net === null)) {
+      unmeasuredResources.push(key);
+      continue;
+    }
+
+    let gain = 0;
+    if (r.consumption > 0) {
+      const suffBefore = Math.max(0, (r.stock + r.net * 12) / r.consumption);
+      const suffAfter = Math.max(0, (r.stock + (r.net + monthlyYield) * 12) / r.consumption);
+      gain = Math.max(0, evaluateSaturatingUtility(suffAfter, target, surplusDiscount)
+        - evaluateSaturatingUtility(suffBefore, target, surplusDiscount));
+    }
+
+    resourceGains[key] = Number(gain.toFixed(4));
+    totalUtilityGain += gain;
+  }
+
+  // A site where NOTHING could be evaluated -- no rate readable, or no runway
+  // to weigh it against -- has an unknown value, not a value of zero. Zero
+  // reads as "measured and worthless" and sorts it beside genuinely barren
+  // rock. A PARTIAL evaluation still scores, on the part that was measured,
+  // and carries `scoreInputsComplete: false`.
+  const nothingEvaluated = unmeasuredResources.length >= MINING_RESOURCES.length;
+  const siteValue = nothingEvaluated
+    ? null
+    : Number((totalUtilityGain * siteDensity * theaterAccessibility).toFixed(3));
+
+  const mcCost = 1; // Outpost Mining Complex + Outpost Core base MC.
+  const wouldExceedMineLimit = (toFinite(capacity?.headroom) ?? 0) <= 0;
+  const baseMultiplier = toFinite(capacity?.baseHateMultiplier);
+  const marginalPenaltyMC = toFinite(capacity?.marginalNextMinePenaltyMC) ?? 0;
+
+  let hateCost = null;
+  if (baseMultiplier !== null) {
+    hateCost = wouldExceedMineLimit
+      ? Number(((marginalPenaltyMC + mcCost) * baseMultiplier).toFixed(2))
+      : Number((mcCost * baseMultiplier).toFixed(2));
+  }
+
+  const valuePerHate = (hateCost === null || siteValue === null)
+    ? null
+    : (hateCost > 0 ? Number((siteValue / hateCost).toFixed(3)) : siteValue);
+
+  return {
+    siteId: site.ID ?? null,
+    displayName: site.displayName ?? null,
+    parentBodyName: site.parentBodyName ?? null,
+    spaceTheaterKey: theaterKey,
+    spaceTheaterName: site.spaceTheaterName || site.parentBodyName || null,
+    siteDensity,
+    siteDensityMeasured: measuredDensity !== null,
+    siteDensityAssumed: measuredDensity === null,
+    siteDensitySource: measuredDensity === null
+      ? 'assumed 1.0 (site template Density not resolved)'
+      : 'site template Density',
+    yields,
+    resourceGains,
+    unmeasuredResources,
+    scoreInputsComplete: unmeasuredResources.length === 0,
+    siteValue,
+    siteValueMeasured: siteValue !== null,
+    mcCost,
+    hateCost,
+    hateCostAvailable: hateCost !== null,
+    wouldExceedMineLimit,
+    valuePerHate,
+    // Unowned sites have no mine under construction, so the save carries no
+    // build duration for them. Null, never 0 -- "instant" would be a lie.
+    buildTimeDays: toFinite(site.buildDurationDays)
+  };
+};
+
+/**
+ * Ordering: hate-free sites first, then value per unit of hate. A site whose
+ * hate cost could NOT be evaluated sorts last on that key rather than being
+ * compared as though it were free -- `null - number` coerces to 0 and would
+ * otherwise rank an unassessable site alongside a costless one.
+ */
+export const compareMiningCandidates = (a, b) => {
+  // Null never enters the arithmetic: `null - 5` is -5, which would rank an
+  // unassessable site as though it were a measured zero.
+  const byValue = (left, right) => {
+    const lv = toFinite(left.siteValue);
+    const rv = toFinite(right.siteValue);
+    if (lv === null && rv === null) return 0;
+    if (lv === null) return 1;
+    if (rv === null) return -1;
+    return rv - lv;
+  };
+
+  const aCostKnown = toFinite(a.hateCost) !== null;
+  const bCostKnown = toFinite(b.hateCost) !== null;
+  if (aCostKnown !== bCostKnown) return aCostKnown ? -1 : 1;
+  if (!aCostKnown) return byValue(a, b);
+  if (a.hateCost === 0 && b.hateCost === 0) return byValue(a, b);
+  if (a.hateCost === 0) return -1;
+  if (b.hateCost === 0) return 1;
+
+  const aPer = toFinite(a.valuePerHate);
+  const bPer = toFinite(b.valuePerHate);
+  if (aPer === null && bPer !== null) return 1;
+  if (bPer === null && aPer !== null) return -1;
+  if (aPer !== null && bPer !== null && aPer !== bPer) return bPer - aPer;
+  return byValue(a, b);
+};
+
+export const miningExpansionResource = (snapshot, {
+  observerId = DEFAULT_OBSERVER_FACTION_ID,
+  limit = null,
+  theater = null,
+  targetRunwayMonths = 12,
+  surplusDiscount = 0.05
+} = {}) => {
+  const factions = asArray(snapshot?.factions);
+  const observer = resolveObserverFaction(factions, observerId, {
+    // Substring, not exact: this board is reached with a bare 'initiative'
+    // observer often enough that the looser match is the behaviour it has
+    // always had. Kept distinct from logisticsResource's exact-name step
+    // rather than silently unified.
+    fallbackDisplayName: 'initiative',
+    fallbackMatch: 'contains',
+    fallbackToFirst: true
+  }) || {};
+
+  const completedProjects = asArray(observer.completedProjects || observer.finishedProjectNames);
+  const completedTechs = asArray(snapshot?.techTree?.finishedTechsNames || snapshot?.globalResearch?.finishedTechNames);
+  const completedTechSet = new Set(completedTechs);
+  const completedProjectSet = new Set(completedProjects);
+
+  // `|| 'Normal'` re-invented the difficulty the save did not carry, and with
+  // it the entire alien-hate cost side of this board (the floor multiplier is
+  // Cinematic 0.05 / Normal 0.30 / Veteran 0.60 / Brutal 1.00). Absent stays
+  // null and the hate terms report unavailable.
+  const rawDifficulty = snapshot?.metadata?.difficulty;
+  const difficulty = typeof rawDifficulty === 'string' && rawDifficulty.trim() !== ''
+    ? rawDifficulty
+    : null;
+  const habSites = asArray(snapshot?.habSites);
+
+  // 1. Capacity model (M1)
+  const capacity = buildMiningCapacity({
+    observer,
+    completedProjects,
+    completedTechs,
+    difficulty,
+    habSites
+  });
+  const { headroom, baseHateMultiplier: baseMultiplier } = capacity;
+
+  // 2. Resource runways (M3)
+  const resourceRunways = buildMiningResourceRunways(observer);
 
   // 3. Unowned site scoring & partitioning (M2 + M3)
   const hasOutpostMineTech = completedProjectSet.has('Project_OutpostMiningComplex') ||
@@ -1397,142 +1682,95 @@ export const miningExpansionResource = (snapshot, {
   const unreachableMissingTechs = {};
   let totalUnreachableSites = 0;
 
+  // `Math.max(0, null)` is 0, so folding an unassessable site into a group's
+  // best value used to publish a confident 0 for it. Unmeasured sites are
+  // counted separately and never move the best value.
+  const addToGatedGroup = (techId, techLabel, candidate) => {
+    if (!techGatedMap.has(techId)) {
+      techGatedMap.set(techId, {
+        missingTech: techId,
+        missingTechName: techLabel,
+        siteCount: 0,
+        unmeasuredSiteCount: 0,
+        bestSiteValue: null,
+        sites: []
+      });
+    }
+    const entry = techGatedMap.get(techId);
+    entry.siteCount++;
+    const value = toFinite(candidate.siteValue);
+    if (value === null) {
+      entry.unmeasuredSiteCount++;
+    } else {
+      entry.bestSiteValue = entry.bestSiteValue === null ? value : Math.max(entry.bestSiteValue, value);
+    }
+    entry.sites.push(candidate);
+    return entry;
+  };
+
   for (const site of unownedSites) {
-    const theaterKey = String(site.spaceTheaterKey || '').toLowerCase() || 'unassigned';
-    const destTech = resolveBodyDestinationTech(site.parentBodyName, theaterKey);
+    const destination = resolveBodyDestinationTech(
+      site.parentBodyName,
+      String(site.spaceTheaterKey || '').toLowerCase() || 'unassigned'
+    );
+    const destTech = destination.tech;
     const destTechName = EXPANSION_MISSION_TECH_NAMES[destTech] || destTech;
     const destTechCompleted = completedTechSet.has(destTech);
 
-    const theaterAccessibility = EXPANSION_THEATER_ACCESSIBILITY[theaterKey] ?? EXPANSION_THEATER_ACCESSIBILITY.unassigned;
-    const siteDensity = Number.isFinite(Number(site.siteDensity)) ? Number(site.siteDensity) : 1.0;
-
-    let totalUtilityGain = 0;
-    const resourceGains = {};
-    const yields = {};
-
-    for (const [key] of [
-      ['water', 'Water'],
-      ['volatiles', 'Volatiles'],
-      ['metals', 'Metals'],
-      ['nobleMetals', 'NobleMetals'],
-      ['fissiles', 'Fissiles']
-    ]) {
-      const dailyRate = Number.isFinite(Number(site[key])) ? Number(site[key]) : 0;
-      const monthlyYield = dailyRate * 30;
-      yields[key] = { daily: Number(dailyRate.toFixed(3)), monthly: Number(monthlyYield.toFixed(1)) };
-
-            const r = resourceRunways[key];
-      if (!r || r.stock === null || r.consumption === null) continue;
-
-      let gain = 0;
-      if (r.consumption > 0) {
-        const currentNet = r.net ?? 0;
-        const currentStock = r.stock ?? 0;
-
-        const suffBefore = Math.max(0, (currentStock + currentNet * 12) / r.consumption);
-        const suffAfter = Math.max(0, (currentStock + (currentNet + monthlyYield) * 12) / r.consumption);
-
-        const uBefore = evaluateSaturatingUtility(suffBefore, targetRunwayMonths, surplusDiscount);
-        const uAfter = evaluateSaturatingUtility(suffAfter, targetRunwayMonths, surplusDiscount);
-        gain = Math.max(0, uAfter - uBefore);
-      } else if (r.consumption === 0) {
-        gain = 0;
-      }
-
-      resourceGains[key] = Number(gain.toFixed(4));
-      totalUtilityGain += gain;
-    }
-
-    const siteValue = Number((totalUtilityGain * siteDensity * theaterAccessibility).toFixed(3));
-    const mcCost = 1;
-    const wouldExceedMineLimit = headroom <= 0;
-
-    let hateCost = 0;
-    if (wouldExceedMineLimit) {
-      hateCost = Number(((marginalNextMinePenaltyMC + mcCost) * baseMultiplier).toFixed(2));
-    } else {
-      hateCost = Number((mcCost * baseMultiplier).toFixed(2));
-    }
-
-    const valuePerHate = hateCost > 0
-      ? Number((siteValue / hateCost).toFixed(3))
-      : siteValue;
-
+    const scored = scoreMiningSiteCandidate(site, resourceRunways, capacity, {
+      targetRunwayMonths,
+      surplusDiscount
+    });
     const candidate = {
-      siteId: site.ID,
-      displayName: site.displayName,
-      parentBodyName: site.parentBodyName,
-      spaceTheaterKey: theaterKey,
-      spaceTheaterName: site.spaceTheaterName || site.parentBodyName,
-      siteDensity,
-      yields,
-      resourceGains,
-      siteValue,
-      mcCost,
-      hateCost,
-      wouldExceedMineLimit,
-      valuePerHate,
-      buildTimeDays: site.buildDurationDays || 60
+      ...scored,
+      destinationTech: destTech,
+      destinationTechName: destTechName,
+      destinationTechSource: destination.source
     };
 
     if (destTechCompleted && hasOutpostMineTech) {
       available.push(candidate);
     } else if (!destTechCompleted) {
-      if (!techGatedMap.has(destTech)) {
-        techGatedMap.set(destTech, {
-          missingTech: destTech,
-          missingTechName: destTechName,
-          siteCount: 0,
-          bestSiteValue: 0,
-          sites: []
-        });
-      }
-      const entry = techGatedMap.get(destTech);
-      entry.siteCount++;
-      entry.bestSiteValue = Math.max(entry.bestSiteValue, candidate.siteValue);
-      entry.sites.push(candidate);
+      addToGatedGroup(destTech, destTechName, candidate);
 
       unreachableBodies[site.parentBodyName] = (unreachableBodies[site.parentBodyName] || 0) + 1;
       unreachableMissingTechs[destTechName] = (unreachableMissingTechs[destTechName] || 0) + 1;
       totalUnreachableSites++;
     } else if (!hasOutpostMineTech) {
-      const missingMod = 'Project_OutpostMiningComplex';
-      const missingModName = 'Outpost Mining Complex';
-      if (!techGatedMap.has(missingMod)) {
-        techGatedMap.set(missingMod, {
-          missingTech: missingMod,
-          missingTechName: missingModName,
-          siteCount: 0,
-          bestSiteValue: 0,
-          sites: []
-        });
-      }
-      const entry = techGatedMap.get(missingMod);
-      entry.siteCount++;
-      entry.bestSiteValue = Math.max(entry.bestSiteValue, candidate.siteValue);
-      entry.sites.push(candidate);
+      addToGatedGroup('Project_OutpostMiningComplex', 'Outpost Mining Complex', candidate);
     }
   }
 
-  available.sort((a, b) => {
-    if (a.hateCost === 0 && b.hateCost === 0) return b.siteValue - a.siteValue;
-    if (a.hateCost === 0) return -1;
-    if (b.hateCost === 0) return 1;
-    if (b.valuePerHate !== a.valuePerHate) return b.valuePerHate - a.valuePerHate;
-    return b.siteValue - a.siteValue;
-  });
+  available.sort(compareMiningCandidates);
 
   const rankedAvailable = limit ? available.slice(0, Number(limit)) : available;
+  const assumedDestinationCount = [...available, ...Array.from(techGatedMap.values()).flatMap(e => e.sites)]
+    .filter(c => c.destinationTechSource && c.destinationTechSource.startsWith('assumed')).length;
 
+  const descByValue = (a, b) => {
+    const av = toFinite(a);
+    const bv = toFinite(b);
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    return bv - av;
+  };
   const techGated = Array.from(techGatedMap.values()).map(entry => ({
     ...entry,
-    sites: entry.sites.sort((a, b) => b.siteValue - a.siteValue)
-  })).sort((a, b) => b.bestSiteValue - a.bestSiteValue);
+    sites: entry.sites.sort((a, b) => descByValue(a.siteValue, b.siteValue))
+  })).sort((a, b) => descByValue(a.bestSiteValue, b.bestSiteValue));
+
+  const unmeasuredAvailableCount = available.filter(c => c.siteValue === null).length;
 
   return {
     capacity,
     resourceRunways,
     available: rankedAvailable,
+    availableTotalCount: available.length,
+    availableOmittedCount: available.length - rankedAvailable.length,
+    // Sites the runway model could not evaluate at all. Their siteValue is
+    // null, not 0, so they are not silently ranked as worthless.
+    availableUnmeasuredCount: unmeasuredAvailableCount,
     techGated,
     unreachable: {
       totalSites: totalUnreachableSites,
@@ -1542,22 +1780,94 @@ export const miningExpansionResource = (snapshot, {
     assumptions: [
       `Target runway is ${targetRunwayMonths} months (heuristic).`,
       'Theater accessibility multipliers are heuristic based on transfer time and defensibility.',
-      'Rankings prioritize hate-free expansion headroom before sorting by value per unit of alien hate.'
+      'Rankings prioritize hate-free expansion headroom before sorting by value per unit of alien hate.',
+      capacity.hateCostAvailable
+        ? `Alien-hate costs use the ${capacity.difficulty || 'measured'} floor multiplier ${capacity.baseHateMultiplier}.`
+        : 'Alien-hate costs are UNAVAILABLE: the save carries no readable difficulty, and the floor multiplier '
+          + '(Cinematic 0.05 / Normal 0.30 / Veteran 0.60 / Brutal 1.00) is what converts Mission Control into hate.',
+      assumedDestinationCount > 0
+        ? `${assumedDestinationCount} site(s) sit on bodies the space-theater table does not name; their destination `
+          + 'tech is ASSUMED to be Mission to the Asteroids (correct for a numbered main-belt rock, a guess otherwise).'
+        : 'Every scored site resolved its destination tech from a named body or a classified space theater.'
     ]
   };
 };
 
-export const alienThreatResource = (snapshot, observerId = 4712) => {
-  const observer = asArray(snapshot.factions).find(f => Number(f.ID) === Number(observerId)) || {};
-  const difficulty = snapshot.metadata?.difficulty || 'Normal';
+export const alienThreatResource = (snapshot, observerId = DEFAULT_OBSERVER_FACTION_ID, { mode = null } = {}) => {
+  const observer = resolveObserverFaction(snapshot.factions, observerId) || {};
+  // `|| 'Normal'` here was not cosmetic: difficulty selects the hate floor
+  // multiplier (0.05/0.30/0.60/1.00), so defaulting it publishes a wrong
+  // minimum-hate figure as if it were measured. Absent stays null, and
+  // buildAlienHateEconomics then reports the floor as UNAVAILABLE.
+  const rawDifficulty = snapshot.metadata?.difficulty;
+  const difficulty = typeof rawDifficulty === 'string' && rawDifficulty.trim() !== ''
+    ? rawDifficulty
+    : null;
+
+  // ---------------------------------------------------------------------
+  // Defence in depth on the raw alien hate.
+  //
+  // This used to read `observer.assessedAlienHateOfMe` through
+  // buildAlienHateEconomics with a hard-coded `mode: 'omniscient'`, on the
+  // stated assumption that callers hand in an already intel-filtered
+  // snapshot. The assumption was false: intelligenceFilter stripped that raw
+  // field from every faction EXCEPT the observer's own, so /api/intel/alien-
+  // threat published the exact save value (49.6) in Player Intel mode -- the
+  // documented, hosted, default-player endpoint -- while
+  // `alienHateEconomics.actualAlienHate` from the same snapshot was null.
+  //
+  // So the mode rule is re-applied here rather than trusted:
+  //   1. an explicitly requested player mode redacts, whatever the snapshot
+  //      happens to carry;
+  //   2. otherwise the filter's own structured `alienHate` object wins, since
+  //      that is the mode-aware representation (`actual` is null when
+  //      redacted) and it cannot disagree with itself;
+  //   3. only a snapshot with neither signal -- a hand-built fixture, never a
+  //      filtered one -- falls back to the raw field.
+  // A value that is withheld is reported as null with a stated reason. It is
+  // never replaced with an estimate, a floor, or a zero.
+  // ---------------------------------------------------------------------
+  const requestedMode = typeof mode === 'string' && mode.trim() !== '' ? mode.trim().toLowerCase() : null;
+  const snapshotMode = typeof snapshot.mode === 'string' && snapshot.mode.trim() !== ''
+    ? snapshot.mode.trim().toLowerCase()
+    : (snapshot.isOmniscient === true ? 'omniscient' : null);
+  const redactsRawHate = requestedMode === 'player' || snapshotMode === 'player';
+  const structuredHate = observer.alienHate && typeof observer.alienHate === 'object'
+    ? observer.alienHate
+    : null;
+
+  let actualHateStatus;
+  let actualHateSource;
+  let resolvedHate = null;
+  if (redactsRawHate) {
+    actualHateStatus = 'redacted';
+    actualHateSource = 'redacted: Player Intel mode does not expose the save\'s raw alien hate; '
+      + 'the player-legitimate reading is the visible estimate meter';
+  } else if (structuredHate) {
+    resolvedHate = toFinite(structuredHate.actual);
+    actualHateStatus = resolvedHate === null ? 'unavailable' : 'available';
+    actualHateSource = resolvedHate === null
+      ? `unavailable: filtered snapshot reports alienHate.visibility='${structuredHate.visibility || 'unknown'}'`
+      : `measured: filtered snapshot alienHate.actual (visibility='${structuredHate.visibility || 'unknown'}')`;
+  } else {
+    resolvedHate = toFinite(observer.assessedAlienHateOfMe);
+    actualHateStatus = resolvedHate === null ? 'unavailable' : 'available';
+    actualHateSource = resolvedHate === null
+      ? 'unavailable: assessedAlienHateOfMe not present in this snapshot'
+      : 'measured: raw save assessedAlienHateOfMe (unfiltered snapshot)';
+  }
 
   // Do NOT reimplement the hate floor here. buildAlienHateEconomics is the
   // single source of truth and is what the dashboard card renders: difficulty
   // multipliers are 0.05/0.30/0.60/1.00, and each completed concealment
   // project multiplies the floor by 0.8 (they compound, they do not add).
-  // This resource reports raw save values; callers pass an already
-  // intel-filtered snapshot, so read the actual hate rather than masking it.
-  const economics = buildAlienHateEconomics({ observer, difficulty, mode: 'omniscient' });
+  // It is handed the resolved hate rather than the observer object, so a raw
+  // field that survives filtering cannot reach the derived figures either.
+  const economics = buildAlienHateEconomics({
+    observer: { ...observer, assessedAlienHateOfMe: resolvedHate },
+    difficulty,
+    mode: 'omniscient'
+  });
 
   const round1 = (value) => (value === null ? null : Number(Number(value).toFixed(1)));
   const projectKey = (id) => {
@@ -1586,10 +1896,31 @@ export const alienThreatResource = (snapshot, observerId = 4712) => {
     ? investigations.length
     : Number.isFinite(Number(investigations)) ? Number(investigations) : null;
 
+  // What the player legitimately knows about alien hate is the in-game 5-pip
+  // estimate meter, which the intelligence filter already builds on
+  // `faction.alienHate`. Surfacing it here means redacting the float leaves the
+  // endpoint with the real reading rather than a hole -- and it is a label, not
+  // a number, so it cannot be mistaken for the value it replaces.
+  const rawVisibleEstimate = structuredHate ? structuredHate.visibleEstimate : null;
+  const visibleEstimate = typeof rawVisibleEstimate === 'string' &&
+    rawVisibleEstimate.trim() !== '' &&
+    rawVisibleEstimate !== 'UNKNOWN' &&
+    rawVisibleEstimate !== 'UNAVAILABLE'
+    ? rawVisibleEstimate
+    : null;
+
   return {
     actualHate: round1(actualHate),
+    // 'available' | 'redacted' | 'unavailable'. A withheld value is null with a
+    // stated reason -- never a fabricated stand-in, and never a confident 0.
+    actualHateStatus,
+    actualHateSource,
+    visibleEstimate,
+    visibleEstimatePips: structuredHate ? toFinite(structuredHate.pips) : null,
+    visibleEstimateMaxPips: structuredHate ? toFinite(structuredHate.maxPips) : null,
     usedMC: economics.usedMissionControl,
     difficulty,
+    difficultyMeasured: difficulty !== null && economics.difficultyMultiplier !== null,
     difficultyMultiplier: economics.difficultyMultiplier,
     projects,
     minimumHate: round1(economics.minimumAlienHate),
@@ -1614,9 +1945,14 @@ export const alienThreatResource = (snapshot, observerId = 4712) => {
     // so any delta derived from these values carries at least +/-20% error.
     hateModifierVariance: { min: 0.8, max: 1.2 },
     retaliation: {
+      // Null, never false. A threshold check that cannot be evaluated is
+      // unknown; reporting it as "no retaliation" is the reassuring direction
+      // to be wrong in and is exactly how the Total War veto went inert.
       retaliationActive: atWar,
       retaliationReason: atWar === null
-        ? 'UNAVAILABLE — alien hate not exposed in this snapshot'
+        ? (actualHateStatus === 'redacted'
+          ? 'UNKNOWN — alien hate is redacted in Player Intel mode, so the war threshold cannot be evaluated'
+          : 'UNAVAILABLE — alien hate not exposed in this snapshot')
         : atWar
           ? `Alien hate crossed the war threshold (${ALIEN_HATE_WAR_THRESHOLD})`
           : 'None',
@@ -1636,8 +1972,8 @@ export const alienThreatResource = (snapshot, observerId = 4712) => {
 /**
  * 8. Delta: Turn-to-turn changes between snapshots.
  */
-export const deltaResource = (snapshot, previousSnapshot, observerId = 4712) => {
-  const currentObs = asArray(snapshot.factions).find(f => Number(f.ID) === Number(observerId)) || {};
+export const deltaResource = (snapshot, previousSnapshot, observerId = DEFAULT_OBSERVER_FACTION_ID) => {
+  const currentObs = resolveObserverFaction(snapshot.factions, observerId) || {};
   const currentAlien = findAlienFaction(snapshot) || {};
   const curDate = snapshot.metadata?.gameTimeString ? new Date(snapshot.metadata.gameTimeString) : new Date();
 
@@ -1652,28 +1988,62 @@ export const deltaResource = (snapshot, previousSnapshot, observerId = 4712) => 
     };
   }
 
-  const prevObs = asArray(previousSnapshot?.factions).find(f => Number(f.ID) === Number(observerId)) || {};
+  const prevObs = resolveObserverFaction(previousSnapshot?.factions, observerId) || {};
   const prevAlien = findAlienFaction(previousSnapshot || {}) || {};
   const prevDate = previousSnapshot?.metadata?.gameTimeString ? new Date(previousSnapshot.metadata.gameTimeString) : null;
   const gameDaysElapsed = prevDate && !Number.isNaN(prevDate.getTime())
-    ? Math.max(0, Math.round((curDate - prevDate) / 86400000))
+    ? Math.max(0, Math.round((curDate - prevDate) / MS_PER_DAY))
     : null;
 
-  const curShips = currentObs.shipsCount ?? 0;
-  const prevShips = prevObs.shipsCount ?? curShips;
-  const curAlienShips = currentAlien.shipsCount ?? 0;
-  const prevAlienShips = prevAlien.shipsCount ?? curAlienShips;
-  const curHate = currentObs.assessedAlienHateOfMe ?? 0;
-  const prevHate = prevObs.assessedAlienHateOfMe ?? curHate;
+  // Absent stays null on BOTH sides.
+  //
+  // `assessedAlienHateOfMe ?? 0` was the worst offender in this file: player
+  // mode redacts that field, so every player-mode delta reported alien hate as
+  // a confident 0 -- an unmeasured value rendered as "no threat at all", the
+  // most dangerous direction to be wrong in. `shipsCount ?? 0` then paired a
+  // fabricated 0 with `prev ?? cur`, so a missing previous count produced a
+  // fabricated "no change" instead of an honest "cannot compare".
+  const measure = (from, to) => {
+    const a = toFinite(from);
+    const b = toFinite(to);
+    return {
+      from: a === null ? null : Number(a.toFixed(1)),
+      to: b === null ? null : Number(b.toFixed(1)),
+      diff: a === null || b === null ? null : Number((b - a).toFixed(1)),
+      available: a !== null && b !== null
+    };
+  };
 
   const curRes = currentObs.resources || {};
   const prevRes = prevObs.resources || {};
 
+  const changes = {
+    initiativeShips: measure(prevObs.shipsCount, currentObs.shipsCount),
+    alienShips: measure(prevAlien.shipsCount, currentAlien.shipsCount),
+    alienHate: measure(prevObs.assessedAlienHateOfMe, currentObs.assessedAlienHateOfMe)
+  };
+  for (const { saveKey, alias } of MINING_RESOURCES) {
+    changes[alias] = measure(prevRes[saveKey], curRes[saveKey]);
+  }
+
   const events = [];
-  if (curShips > prevShips) events.push(`Initiative commissioned ${curShips - prevShips} new ship(s)`);
-  if (curAlienShips > prevAlienShips) events.push(`Aliens deployed ${curAlienShips - prevAlienShips} new ship(s)`);
-  if (curHate > prevHate) events.push(`Alien hate increased by ${(curHate - prevHate).toFixed(1)}`);
-  else if (curHate < prevHate) events.push(`Alien hate decreased by ${(prevHate - curHate).toFixed(1)}`);
+  const ships = changes.initiativeShips;
+  if (ships.diff !== null && ships.diff > 0) events.push(`Initiative commissioned ${ships.diff} new ship(s)`);
+  else if (ships.diff !== null && ships.diff < 0) events.push(`Initiative lost ${Math.abs(ships.diff)} ship(s)`);
+
+  const alienShips = changes.alienShips;
+  if (alienShips.diff !== null && alienShips.diff > 0) events.push(`Aliens deployed ${alienShips.diff} new ship(s)`);
+
+  const hate = changes.alienHate;
+  if (hate.diff === null) {
+    // Never fall through to "hate unchanged" -- an unevaluable check must say so.
+    events.push('Alien hate change UNAVAILABLE — hate is not exposed in this intel mode.');
+  } else if (hate.diff > 0) {
+    events.push(`Alien hate increased by ${hate.diff.toFixed(1)}`);
+  } else if (hate.diff < 0) {
+    events.push(`Alien hate decreased by ${Math.abs(hate.diff).toFixed(1)}`);
+  }
+
   if (events.length === 0) events.push('Campaign operational status sustained without major strategic losses.');
 
   return {
@@ -1681,16 +2051,7 @@ export const deltaResource = (snapshot, previousSnapshot, observerId = 4712) => 
     gameDaysElapsed,
     previousDate: previousSnapshot?.metadata?.gameTimeString || null,
     currentDate: snapshot.metadata?.gameTimeString || null,
-    changes: {
-      initiativeShips: { from: prevShips, to: curShips, diff: curShips - prevShips },
-      alienShips: { from: prevAlienShips, to: curAlienShips, diff: curAlienShips - prevAlienShips },
-      alienHate: { from: Number(prevHate.toFixed(1)), to: Number(curHate.toFixed(1)), diff: Number((curHate - prevHate).toFixed(1)) },
-      water: { from: prevRes.Water || 0, to: curRes.Water || 0, diff: (curRes.Water || 0) - (prevRes.Water || 0) },
-      volatiles: { from: prevRes.Volatiles || 0, to: curRes.Volatiles || 0, diff: (curRes.Volatiles || 0) - (prevRes.Volatiles || 0) },
-      metals: { from: prevRes.Metals || 0, to: curRes.Metals || 0, diff: (curRes.Metals || 0) - (prevRes.Metals || 0) },
-      nobles: { from: prevRes.NobleMetals || 0, to: curRes.NobleMetals || 0, diff: (curRes.NobleMetals || 0) - (prevRes.NobleMetals || 0) },
-      fissiles: { from: prevRes.Fissiles || 0, to: curRes.Fissiles || 0, diff: (curRes.Fissiles || 0) - (prevRes.Fissiles || 0) }
-    },
+    changes,
     events
   };
 };
@@ -1731,16 +2092,50 @@ export const miningAnalysisResource = (snapshot, factionId = null, body = null, 
 /**
  * 10. Mobility: Fleet transfer feasibility and travel-time estimates.
  */
-export const mobilityResource = (snapshot, fleetId, observerId = 4712) => {
-  const fleet = asArray(snapshot.fleets).find(f => String(f.ID) === String(fleetId)) ||
-                asArray(snapshot.fleets).find(f => Number(f.factionId) === Number(observerId)) ||
-                asArray(snapshot.fleets)[0];
+export const mobilityResource = (snapshot, fleetId, observerId = DEFAULT_OBSERVER_FACTION_ID) => {
+  const fleets = asArray(snapshot.fleets);
 
-  if (!fleet) return { error: 'Fleet not found', items: [] };
+  // A fleet id that does not resolve is an ERROR, not an invitation to answer
+  // about some other fleet. The previous fallback chain silently substituted
+  // the first observer fleet -- and then the first fleet in the snapshot --
+  // so `?fleet=<typo>` returned confident delta-V, travel times and arrival
+  // dates for a fleet the caller had never heard of, labelled with that
+  // fleet's own id so the substitution was invisible.
+  if (fleetId === null || fleetId === undefined || String(fleetId).trim() === '') {
+    return {
+      error: 'A fleet id is required. Mobility is fleet-specific; there is no meaningful default.',
+      requestedFleetId: null,
+      fleetId: null,
+      availableFleetIds: fleets
+        .filter(f => sameId(f.factionId, observerId))
+        .map(f => f.ID),
+      transfers: [],
+      items: []
+    };
+  }
 
-  const currentBody = fleet.orbitBody || 'Earth';
-  const fleetDv = fleet.lowestDeltaVKps || 25.0;
-  const fleetAccel = fleet.lowestCombatAccelerationMps2 || 1.2;
+  const fleet = fleets.find(f => sameId(f.ID, fleetId));
+  if (!fleet) {
+    return {
+      error: `Fleet ${fleetId} not found in this snapshot.`,
+      requestedFleetId: fleetId,
+      fleetId: null,
+      availableFleetIds: fleets
+        .filter(f => sameId(f.factionId, observerId))
+        .map(f => f.ID),
+      transfers: [],
+      items: []
+    };
+  }
+
+  const currentBody = fleet.orbitBody || null;
+
+  // Absent stays null. `fleet.lowestDeltaVKps || 25.0` invented a 25 km/s
+  // budget for an unmeasured fleet, and the feasibility verdict below is a
+  // direct comparison against it -- an unknown fleet would have been declared
+  // capable of reaching Titan.
+  const fleetDv = toFinite(fleet.lowestDeltaVKps);
+  const fleetAccel = toFinite(fleet.lowestCombatAccelerationMps2);
 
   const destinations = [
     { name: 'Earth', baseDv: 6.5, baseDays: 75 },
@@ -1758,15 +2153,29 @@ export const mobilityResource = (snapshot, fleetId, observerId = 4712) => {
   const gameDate = snapshot.metadata?.gameTimeString ? new Date(snapshot.metadata.gameTimeString) : new Date();
 
   const transferOptions = destinations
-    .filter(d => normalizeBody(d.name) !== normalizeBody(currentBody))
+    .filter(d => !currentBody || normalizeBody(d.name) !== normalizeBody(currentBody))
     .map(d => {
       const dvRequired = Number(d.baseDv.toFixed(1));
-      const travelDays = Math.round(d.baseDays / Math.max(0.5, Math.min(2.0, fleetAccel)));
-      const arrivalDate = new Date(gameDate.getTime() + travelDays * 86400000).toISOString().split('T')[0];
-      const feasible = fleetDv >= dvRequired;
+      // Travel time scales with acceleration; without it the duration is
+      // unknown rather than "the book value".
+      const travelDays = fleetAccel === null
+        ? null
+        : Math.round(d.baseDays / Math.max(0.5, Math.min(2.0, fleetAccel)));
+      const arrivalDate = travelDays === null
+        ? null
+        : new Date(gameDate.getTime() + travelDays * MS_PER_DAY).toISOString().split('T')[0];
+
+      // Tri-state: true / false / null. A check that cannot be evaluated must
+      // report unknown, never fall through to "feasible".
+      const feasible = fleetDv === null ? null : fleetDv >= dvRequired;
       let warning = null;
-      if (!feasible) warning = `insufficient delta-V (${fleetDv.toFixed(1)} km/s available vs ${dvRequired} required)`;
-      else if (travelDays > 365) warning = 'strategically impractical — long transfer duration';
+      if (feasible === null) {
+        warning = 'delta-V UNAVAILABLE for this fleet — feasibility cannot be evaluated';
+      } else if (!feasible) {
+        warning = `insufficient delta-V (${fleetDv.toFixed(1)} km/s available vs ${dvRequired} required)`;
+      } else if (travelDays !== null && travelDays > 365) {
+        warning = 'strategically impractical — long transfer duration';
+      }
 
       return {
         destination: d.name,
@@ -1781,10 +2190,13 @@ export const mobilityResource = (snapshot, fleetId, observerId = 4712) => {
 
   return {
     fleetId: fleet.ID,
+    requestedFleetId: fleetId,
     fleetName: fleet.displayName,
+    factionId: fleet.factionId,
     currentLocation: currentBody,
     fleetDeltaVKps: fleetDv,
     fleetCombatAccelerationMps2: fleetAccel,
+    performanceMeasured: fleetDv !== null && fleetAccel !== null,
     isEstimate: true,
     transfers: transferOptions
   };
@@ -1793,77 +2205,184 @@ export const mobilityResource = (snapshot, fleetId, observerId = 4712) => {
 /**
  * 11. Production Plan: Deterministic procurement calculation.
  */
-export const productionPlanResource = (snapshot, designId, quantity = 1, observerId = 4712) => {
-  const observer = asArray(snapshot.factions).find(f => Number(f.ID) === Number(observerId)) || {};
-  const designs = asArray(snapshot.shipDesigns || asArray(snapshot.factions).flatMap(f => f.shipDesigns || []));
-  const design = designs.find(d => String(d.dataName || d.id || d._displayName || d.displayName).toLowerCase() === String(designId).toLowerCase()) ||
-                 designs[0] || {
-                   _displayName: 'Battlecruiser Standard',
-                   dataName: designId || 'Battlecruiser_Standard',
-                   hullName: 'Battlecruiser',
-                   constructionCost: { water: 180, volatiles: 90, metals: 410, nobleMetals: 102, fissiles: 20 }
-                 };
+const designIdentifiers = (design) => [
+  design?.dataName, design?.id, design?.ID, design?._displayName, design?.displayName, design?.friendlyName
+].filter(value => value !== null && value !== undefined && value !== '').map(String);
 
-  const qty = Math.max(1, parseInt(quantity, 10) || 1);
-  const unitCost = normalizeCostObject(design.constructionCost || { water: 180, volatiles: 90, metals: 410, nobleMetals: 102, fissiles: 20 });
-  const totalCost = {};
-  for (const [k, v] of Object.entries(unitCost)) {
-    totalCost[k] = Number(((Number(v) || 0) * qty).toFixed(1));
-  }
+const designLabel = (design) =>
+  design?._displayName || design?.displayName || design?.friendlyName || design?.dataName || null;
 
-  const stock = observer.resources || {};
-  let canAffordNow = true;
-  let maxAffordable = 999;
-  let bottleneck = null;
+/** The 5 resources a hull's construction cost is quoted in, in report spelling. */
+const CONSTRUCTION_COST_KEYS = Object.freeze(MINING_RESOURCES.map(r => r.alias));
 
-  for (const [resKey, costVal] of Object.entries(unitCost)) {
-    if (costVal <= 0) continue;
-    const stockVal = Number(stock[resKey] || stock[resKey.charAt(0).toUpperCase() + resKey.slice(1)] || (resKey === 'nobles' ? stock.NobleMetals : 0) || 0);
-    const affordable = Math.floor(stockVal / Math.max(1, costVal));
-    if (affordable < maxAffordable) {
-      maxAffordable = affordable;
-      bottleneck = resKey;
-    }
-    if (stockVal < (totalCost[resKey] || 0)) {
-      canAffordNow = false;
-    }
-  }
+export const productionPlanResource = (snapshot, designId, quantity = 1, observerId = DEFAULT_OBSERVER_FACTION_ID) => {
+  const observer = resolveObserverFaction(snapshot.factions, observerId) || {};
+  const designs = asArray(snapshot.shipDesigns).length > 0
+    ? asArray(snapshot.shipDesigns)
+    : asArray(snapshot.factions).flatMap(f => asArray(f.shipDesigns));
 
   const shipyards = asArray(snapshot.habModules).filter(m =>
-    Number(m.factionId) === Number(observerId) && m.isShipyard && m.constructionCompleted && !m.destroyed
+    sameId(m.factionId, observerId) && m.isShipyard && m.constructionCompleted && !m.destroyed
   );
+  const shipyardRows = shipyards.map(y => ({ hab: y.habName, body: y.orbitBody, tier: toFinite(y.habTier) }));
 
-  const buildTimeDays = design.buildTimeDays || 60;
-  const numYards = Math.max(1, shipyards.length);
-  const earliestCompletionDays = Math.ceil(qty / numYards) * buildTimeDays;
+  const catalogue = () => designs.slice(0, 200).map(d => ({
+    designId: d.dataName ?? null,
+    designName: designLabel(d),
+    hull: d.hullName ?? null
+  }));
 
-  const remainingStockpile = {};
-  for (const [resKey, stockVal] of Object.entries(stock)) {
-    const cost = totalCost[resKey] || totalCost[resKey.toLowerCase()] || (resKey === 'NobleMetals' ? totalCost.nobles : 0) || 0;
-    remainingStockpile[resKey] = Math.max(0, Number((Number(stockVal) - cost).toFixed(1)));
+  // A design id that does not resolve is an ERROR.
+  //
+  // This endpoint previously fell back to `designs[0]`, and then -- if the
+  // snapshot carried no designs at all -- to a hard-coded "Battlecruiser
+  // Standard" whose invented cost table was stamped with the REQUESTED id. So
+  // `?design=<anything>` returned a confident, authoritative-looking
+  // procurement plan for a ship that does not exist, with no marker saying so,
+  // from a documented external-analysis endpoint.
+  if (designId === null || designId === undefined || String(designId).trim() === '') {
+    return {
+      error: 'A design id is required. Costs are design-specific; there is no meaningful default design.',
+      requestedDesignId: null,
+      designId: null,
+      designAvailable: false,
+      availableDesignCount: designs.length,
+      availableDesigns: catalogue(),
+      availableShipyardsCount: shipyards.length,
+      availableShipyards: shipyardRows
+    };
   }
 
+  const wanted = String(designId).toLowerCase();
+  const design = designs.find(d => designIdentifiers(d).some(value => value.toLowerCase() === wanted));
+
+  if (!design) {
+    return {
+      error: `Ship design "${designId}" not found in this snapshot.`,
+      requestedDesignId: designId,
+      designId: null,
+      designAvailable: false,
+      availableDesignCount: designs.length,
+      availableDesigns: catalogue(),
+      availableShipyardsCount: shipyards.length,
+      availableShipyards: shipyardRows
+    };
+  }
+
+  const qty = Math.max(1, parseInt(quantity, 10) || 1);
+  const stock = observer.resources || {};
+
+  // Construction cost is NOT fabricated when the snapshot does not carry it.
+  //
+  // The save's ship-design records describe a hull, drive, reactor and module
+  // list, not a resource bill; resolving the bill needs the game templates,
+  // which this runtime-agnostic module deliberately cannot load. The previous
+  // code papered over that with a fixed 180/90/410/102/20 table, so EVERY
+  // production plan -- including ones for correctly-resolved designs -- quoted
+  // the same invented cost and derived affordability, bottleneck and remaining
+  // stockpile from it.
+  const costAvailable = design.constructionCost !== null && design.constructionCost !== undefined;
+  const unitCost = costAvailable ? normalizeCostObject(design.constructionCost) : null;
+
+  let totalCost = null;
+  let canAffordNow = null;
+  let maxAffordable = null;
+  let bottleneck = null;
+  let remainingStockpile = null;
+
+  if (costAvailable) {
+    totalCost = {};
+    for (const [k, v] of Object.entries(unitCost)) {
+      totalCost[k] = Number(((toFinite(v) ?? 0) * qty).toFixed(1));
+    }
+
+    const stockFor = (alias) => {
+      const entry = MINING_RESOURCES.find(r => r.alias === alias);
+      const candidates = entry ? [entry.saveKey, entry.key, entry.alias] : [alias, alias.charAt(0).toUpperCase() + alias.slice(1)];
+      for (const candidate of candidates) {
+        const value = toFinite(stock[candidate]);
+        if (value !== null) return value;
+      }
+      return null;
+    };
+
+    canAffordNow = true;
+    for (const [alias, costVal] of Object.entries(unitCost)) {
+      if (costVal <= 0) continue;
+      const stockVal = stockFor(alias);
+      if (stockVal === null) {
+        // Unknown stock is not enough stock, and it is not zero stock either.
+        canAffordNow = canAffordNow === false ? false : null;
+        continue;
+      }
+      const affordable = Math.floor(stockVal / costVal);
+      if (maxAffordable === null || affordable < maxAffordable) {
+        maxAffordable = affordable;
+        bottleneck = alias;
+      }
+      if (stockVal < (totalCost[alias] || 0)) canAffordNow = false;
+    }
+
+    remainingStockpile = {};
+    for (const [saveKey, stockVal] of Object.entries(stock)) {
+      const entry = MINING_RESOURCES.find(r => r.saveKey === saveKey || r.key === saveKey || r.alias === saveKey);
+      const cost = entry ? (totalCost[entry.alias] ?? 0) : (totalCost[saveKey.toLowerCase()] ?? 0);
+      const current = toFinite(stockVal);
+      remainingStockpile[saveKey] = current === null ? null : Math.max(0, Number((current - cost).toFixed(1)));
+    }
+  }
+
+  // Build time comes from the design when present, otherwise from the hull's
+  // measured `baseConstructionTimeDays` in the game-template hull stats -- the
+  // same source shipDesignsResource uses. A flat `|| 60` was a fabricated
+  // schedule: real hulls range from 60 (Gunship) to far longer, so one constant
+  // was wrong for every hull but one.
+  const hullStats = (snapshot.shipHullStats || {})[design.hullName] || null;
+  const buildTimeDays = toFinite(design.buildTimeDays) ?? toFinite(hullStats?.baseConstructionTimeDays);
+  const buildTimeSource = buildTimeDays === null
+    ? 'unavailable'
+    : (toFinite(design.buildTimeDays) !== null ? 'design' : 'hull-template');
+  const numYards = Math.max(1, shipyards.length);
+  const earliestCompletionDays = buildTimeDays === null
+    ? null
+    : Math.ceil(qty / numYards) * buildTimeDays;
+
+  const unavailableFields = [];
+  if (!costAvailable) unavailableFields.push('unitCost', 'totalCost', 'canAffordNow', 'maxAffordableNow', 'bottleneckResource', 'expectedRemainingStockpile');
+  if (buildTimeDays === null) unavailableFields.push('earliestCompletionDays');
+
   return {
-    designId: design.dataName || designId,
-    designName: design._displayName || design.displayName || design.hullName,
-    hull: design.hullName,
+    designId: design.dataName ?? designId,
+    requestedDesignId: designId,
+    designName: designLabel(design),
+    hull: design.hullName ?? null,
+    designAvailable: true,
     requestedQuantity: qty,
+    costAvailable,
+    costUnavailableReason: costAvailable
+      ? null
+      : 'This snapshot records ship designs as component lists, not resource bills. Construction cost is UNAVAILABLE rather than estimated.',
+    costResourceKeys: CONSTRUCTION_COST_KEYS,
     unitCost,
     totalCost,
     canAffordNow,
     maxAffordableNow: maxAffordable,
     bottleneckResource: bottleneck,
     availableShipyardsCount: shipyards.length,
-    availableShipyards: shipyards.map(y => ({ hab: y.habName, body: y.orbitBody, tier: y.habTier || 2 })),
+    availableShipyards: shipyardRows,
+    buildTimeDays,
+    buildTimeSource,
+    missionControlPerShip: toFinite(hullStats?.missionControl),
     earliestCompletionDays,
-    expectedRemainingStockpile: remainingStockpile
+    expectedRemainingStockpile: remainingStockpile,
+    unavailableFields
   };
 };
 
 /**
  * 12. Body Status: Complete single-body briefing across all domains.
  */
-export const bodyStatusResource = (snapshot, bodyName = 'Mars', observerId = 4712) => {
+export const bodyStatusResource = (snapshot, bodyName = 'Mars', observerId = DEFAULT_OBSERVER_FACTION_ID) => {
   const norm = normalizeBody(bodyName);
   const habs = asArray(snapshot.habs).filter(h => normalizeBody(h.orbitBody) === norm);
   const fleets = asArray(snapshot.fleets).filter(f => normalizeBody(f.orbitBody) === norm);
@@ -1897,8 +2416,14 @@ export const bodyStatusResource = (snapshot, bodyName = 'Mars', observerId = 471
 export const summaryResource = (snapshot) => {
   const factions = asArray(snapshot.factions);
   const alienFaction = findAlienFaction(snapshot);
-  const alienFleets = asArray(snapshot.fleets).filter(fleet => fleet.factionId === alienFaction?.ID);
-  const alienHabs = asArray(snapshot.habs).filter(hab => hab.factionId === alienFaction?.ID);
+  // Numeric id equality, not ===: a string/number mismatch here would report
+  // an alien order of battle of zero fleets and zero habs rather than failing.
+  const alienFleets = alienFaction
+    ? asArray(snapshot.fleets).filter(fleet => sameId(fleet.factionId, alienFaction.ID))
+    : [];
+  const alienHabs = alienFaction
+    ? asArray(snapshot.habs).filter(hab => sameId(hab.factionId, alienFaction.ID))
+    : [];
   const fleetsByBody = {};
   for (const fleet of alienFleets) {
     const body = fleet.orbitBody || 'Deep Space';
@@ -1926,7 +2451,9 @@ export const summaryResource = (snapshot) => {
       fleetsByBody,
       weaponMix,
       earthMarsHabs: alienHabs.filter(hab => /earth|mars/i.test(hab.orbitBody || '') || hab.inEarthLEO).length,
-      councilors: asArray(snapshot.councilors).filter(councilor => councilor.factionId === alienFaction?.ID).length
+      councilors: alienFaction
+        ? asArray(snapshot.councilors).filter(councilor => sameId(councilor.factionId, alienFaction.ID)).length
+        : 0
     },
     capabilities: snapshot.capabilities,
     priorityTargetFaction: snapshot.priorityTargetFaction,
@@ -1966,13 +2493,17 @@ export const buildResourceProjection = (snapshot, resource, {
   if (resource === 'alien') {
     const alienFaction = findAlienFaction(snapshot);
     const alienId = alienFaction?.ID;
-    const fleets = asArray(snapshot.fleets).filter(fleet => fleet.factionId === alienId && bodyMatches(fleet, body));
-    const habs = asArray(snapshot.habs).filter(hab => hab.factionId === alienId && bodyMatches(hab, body));
-    const habSites = asArray(snapshot.habSites).filter(site => site.factionId === alienId && bodyMatches(site, body));
-    const councilors = asArray(snapshot.councilors).filter(councilor => councilor.factionId === alienId);
+    // Numeric id equality: a string/number mismatch on `alienId` would return
+    // an empty alien dossier that is indistinguishable from "no alien presence".
+    const belongsToAliens = (item) => alienFaction != null && sameId(item.factionId, alienId);
+    const fleets = asArray(snapshot.fleets).filter(fleet => belongsToAliens(fleet) && bodyMatches(fleet, body));
+    const habs = asArray(snapshot.habs).filter(hab => belongsToAliens(hab) && bodyMatches(hab, body));
+    const habSites = asArray(snapshot.habSites).filter(site => belongsToAliens(site) && bodyMatches(site, body));
+    const councilors = asArray(snapshot.councilors).filter(belongsToAliens);
     return {
       count: councilors.length + fleets.length + habs.length + habSites.length,
       items: [],
+      alienFactionResolved: alienFaction != null,
       faction: alienFaction ? factionResourceRow(alienFaction) : null,
       councilors: councilors.map(councilor => councilorResourceRow(councilor, mode)),
       fleets: fleets.map(fleetResourceRow),
@@ -2007,7 +2538,9 @@ export const buildResourceProjection = (snapshot, resource, {
     return { count: items.length, items };
   }
   if (resource === 'alien-threat') {
-    return { count: null, items: [], ...alienThreatResource(snapshot, observerId) };
+    // The requested mode travels with the query, so the resource can re-apply
+    // the redaction rule instead of trusting that the snapshot was scrubbed.
+    return { count: null, items: [], ...alienThreatResource(snapshot, observerId, { mode }) };
   }
   if (resource === 'delta') {
     if (snapshot.changesSincePrevious) {

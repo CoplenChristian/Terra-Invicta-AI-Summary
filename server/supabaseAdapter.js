@@ -7,16 +7,47 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-const { resolveConfig } = require('./config');
+const { resolveConfig, resolvePublishableKey } = require('./config');
+const { selectExportMarkdown } = require('../shared/apiSurface.mjs');
+
+/**
+ * Strict optional-integer parsing for caller-supplied ids and limits.
+ *
+ * `parseInt(x, 10) || fallback` accepted a typo and silently answered about a
+ * different faction, or silently changed a row limit. Absent still means "use
+ * the default"; present-but-malformed is now an error rather than a default.
+ */
+function requireOptionalInteger(value, label, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  const raw = String(value).trim();
+  const parsed = /^[+-]?\d+$/.test(raw) ? Number(raw) : NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`Invalid ${label} '${value}'. Use a whole number from ${min} to ${max}.`);
+  }
+  return parsed;
+}
 
 class SupabaseAdapter {
   constructor(config = {}) {
     const runtimeConfig = resolveConfig();
     this.supabaseUrl = config.supabaseUrl || process.env.SUPABASE_URL;
-    this.publishableKey = config.publishableKey || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
+    // Explicit precedence: an injected key, then the documented
+    // SUPABASE_PUBLISHABLE_KEY, then the deprecated SUPABASE_ANON_KEY spelling
+    // (which emits a one-time deprecation warning). This adapter only ever
+    // holds the public anon key; the service role key is local-publisher-only.
+    const resolvedKey = config.publishableKey
+      ? { key: config.publishableKey, source: 'config.publishableKey' }
+      : resolvePublishableKey(process.env);
+    this.publishableKey = resolvedKey.key || null;
+    this.publishableKeySource = this.publishableKey ? resolvedKey.source : null;
     this.defaultCampaignKey = config.campaignKey || process.env.SUPABASE_CAMPAIGN_KEY || runtimeConfig.campaign.key;
-    this.defaultObserverFactionId = Number(config.observerFactionId) ||
-      Number(process.env.SUPABASE_OBSERVER_FACTION_ID) || runtimeConfig.campaign.defaultObserverFactionId;
+    // resolveConfig() has already applied and validated
+    // SUPABASE_OBSERVER_FACTION_ID, so the configured value is the resolved
+    // default. A caller-supplied override is validated rather than coerced.
+    this.defaultObserverFactionId = requireOptionalInteger(
+      config.observerFactionId,
+      'observer faction id'
+    ) ?? runtimeConfig.campaign.defaultObserverFactionId;
     this.client = null;
 
     if (this.supabaseUrl && this.publishableKey) {
@@ -68,7 +99,11 @@ class SupabaseAdapter {
       return { found: false, error: `No active save timestamp recorded for campaign '${campaign.campaign_key}'.` };
     }
 
-    const safeObserverId = parseInt(observerFactionId, 10) || this.defaultObserverFactionId;
+    // Absent means "use the configured observer". Present-but-malformed is
+    // rejected: silently answering about a different faction is the exact
+    // failure the HTTP path already returns a hard error for.
+    const safeObserverId = requireOptionalInteger(observerFactionId, 'observer faction id')
+      ?? this.defaultObserverFactionId;
 
     const { data: snapshotRow, error } = await this.client
       .from('player_intel_snapshots')
@@ -112,10 +147,7 @@ class SupabaseAdapter {
       return { success: false, error: result.error };
     }
 
-    const exportObj = result.chatgptExport || {};
-    const markdown = format === 'full'
-      ? (exportObj.full || exportObj.compact || '')
-      : (exportObj.compact || exportObj.full || '');
+    const markdown = selectExportMarkdown(result.chatgptExport, format);
 
     return {
       success: true,
@@ -141,7 +173,7 @@ class SupabaseAdapter {
       .select('save_last_modified, save_filename, game_time, campaign_date, schema_version, created_at')
       .eq('campaign_key', campaign.campaign_key)
       .order('save_last_modified', { ascending: false })
-      .limit(Number(limit) || 25);
+      .limit(requireOptionalInteger(limit, 'history limit', { min: 1, max: 100 }) ?? 25);
 
     if (error) return { found: false, error: error.message };
     return { found: true, campaignKey: campaign.campaign_key, history: data || [] };
@@ -184,7 +216,7 @@ class SupabaseAdapter {
       .select('save_last_modified, game_time, campaign_date, payload')
       .eq('campaign_key', campaign.campaign_key)
       .order('save_last_modified', { ascending: false })
-      .limit(Number(count) || 2);
+      .limit(requireOptionalInteger(count, 'strategic snapshot count', { min: 1, max: 100 }) ?? 2);
 
     if (error) return { found: false, error: error.message };
     return { found: true, snapshots: data || [] };
@@ -192,3 +224,4 @@ class SupabaseAdapter {
 }
 
 module.exports = SupabaseAdapter;
+module.exports.requireOptionalInteger = requireOptionalInteger;

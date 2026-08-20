@@ -5,6 +5,12 @@ const path = require('node:path');
 
 const { MISSION_SUCCESS_HATE } = require('../server/directiveAdvisor');
 const { resolveConfig } = require('../server/config');
+// templateLoader probes mounted Steam libraries when nothing is configured, and
+// on this machine that is the ONLY candidate that resolves -- config's
+// paths.templatesPath is null and no TI_TEMPLATES_DIR is set, so without this
+// the guard silently skipped on a machine that has the install. A rot check
+// that never runs is not a rot check.
+const templateLoader = require('../server/templateLoader');
 
 // MISSION_SUCCESS_HATE is hand-maintained, because the mission templates are
 // not among the files templateLoader pulls in. That makes it exactly the kind
@@ -21,6 +27,7 @@ const installSuffix = path.join('steamapps', 'common', 'Terra Invicta', 'TerraIn
 const CANDIDATE_TEMPLATE_DIRS = [
   configuredTemplates,
   process.env.TI_TEMPLATES_DIR,
+  templateLoader.templatesPath,
   process.env.STEAM_LIBRARY_PATH && path.join(process.env.STEAM_LIBRARY_PATH, installSuffix),
   process.env.ProgramFiles && path.join(process.env.ProgramFiles, installSuffix),
   process.env['ProgramFiles(x86)'] && path.join(process.env['ProgramFiles(x86)'], installSuffix)

@@ -102,8 +102,20 @@ class SaveParser {
       lastModified: saveStats.mtime,
       parseTimeMs,
       gameTimeString: metaObj.gameTimeString || null,
-      difficulty: metaObj.difficulty || 'Normal',
-      campaignStartYear: metaObj.campaignStartYear || 2022,
+      // Difficulty is not cosmetic: it selects the alien minimum-hate floor
+      // multiplier (Cinematic 0.05 / Normal 0.30 / Veteran 0.60 / Brutal
+      // 1.00). Silently defaulting an unreadable save to 'Normal' produces a
+      // hate floor that is wrong by up to 20x with nothing to indicate it, so
+      // an absent difficulty stays null and the consumer reports unknown.
+      difficulty: typeof metaObj.difficulty === 'string' && metaObj.difficulty.trim() !== ''
+        ? metaObj.difficulty
+        : null,
+      difficultyAvailable: typeof metaObj.difficulty === 'string' && metaObj.difficulty.trim() !== '',
+      // Campaign start year drives elapsed-years gating. An invented 2022
+      // silently shifts every elapsed-time calculation.
+      campaignStartYear: Number.isFinite(Number(metaObj.campaignStartYear)) && metaObj.campaignStartYear !== null && metaObj.campaignStartYear !== ''
+        ? Number(metaObj.campaignStartYear)
+        : null,
       gamestates: json.gamestates || {}
     };
   }

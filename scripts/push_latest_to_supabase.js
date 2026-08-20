@@ -18,7 +18,7 @@ const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const { createClient } = require('@supabase/supabase-js');
-const { resolveConfig } = require('../server/config');
+const { resolveConfig, parseIntegerEnv, envPresent } = require('../server/config');
 
 const saveParser = require('../server/saveParser');
 const snapshotBuilder = require('../server/snapshotBuilder');
@@ -28,8 +28,14 @@ const briefingGenerator = require('../server/briefingGenerator');
 const templateLoader = require('../server/templateLoader');
 const snapshotIdentity = require('../server/snapshotIdentity');
 const snapshotDelta = require('../server/snapshotDelta');
-const saveComparison = require('../server/saveComparison');
-const { INTELLIGENCE_MODES, DEFAULT_OBSERVER_FACTION_ID } = require('../shared/constants.mjs');
+const snapshotLoader = require('../server/snapshotLoader');
+const {
+  INTELLIGENCE_MODES,
+  DEFAULT_OBSERVER_FACTION_ID,
+  ALIEN_FACTION_ID,
+  ALIEN_FACTION_DISPLAY_NAME,
+  SERVANTS_DISPLAY_NAME
+} = require('../shared/constants.mjs');
 const { buildStrategicSnapshot, DEFAULT_HISTORY_POLICY } = require('../shared/strategicSnapshot.mjs');
 const runtimeConfig = resolveConfig();
 
@@ -48,6 +54,20 @@ const PUBLISH_POLICY = {
   observerModes: runtimeConfig.publishing.observerModes || INTELLIGENCE_MODES,
   otherFactionModes: runtimeConfig.publishing.otherFactionModes || []
 };
+
+const MEGABYTE = 1024 * 1024;
+
+/**
+ * Payload limits, hoisted so they can be found and tuned in one place.
+ *
+ * MAX_SNAPSHOT_ROW_BYTES is a pre-flight sanity ceiling on a single generated
+ * row; the batching limits below keep an upsert request comfortably under the
+ * hosted REST payload limit. All three are operational policy, not measured
+ * values -- there is no published Supabase figure they are derived from.
+ */
+const MAX_SNAPSHOT_ROW_BYTES = 12 * MEGABYTE;
+const MAX_UPSERT_BATCH_BYTES = 3 * MEGABYTE;
+const MAX_UPSERT_BATCH_ROWS = 8;
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -130,7 +150,7 @@ function validateSnapshotRows(rows, identity, targetSave) {
     throw new Error('No snapshot rows were generated; refusing to publish an empty campaign.');
   }
 
-  const maxBytes = 12 * 1024 * 1024;
+  const maxBytes = MAX_SNAPSHOT_ROW_BYTES;
   for (const row of rows) {
     const snapshot = row.snapshot || {};
     if (snapshot.snapshotId !== identity.snapshotId ||
@@ -177,6 +197,20 @@ function parsePositiveInteger(raw, flag) {
   return value;
 }
 
+// Environment overrides are parsed strictly, not with `Number(x) || default`.
+// A typo used to fall back silently, and 0 was unrepresentable. For the two
+// retention values that silence was data loss: a malformed count pruned a
+// different number of snapshot rows than the operator asked for.
+//
+// The defaults come from config/defaults.json via resolveConfig(), which is
+// also what already applies and validates these same environment variables --
+// so the values below are only a strict re-read for a caller that injects its
+// own `env`, never a second copy of the defaults.
+function retentionFromEnv(env, name, configured, { min = 1, max = 1000 } = {}) {
+  if (envPresent(env[name])) return parseIntegerEnv(env[name], name, { min, max });
+  return configured;
+}
+
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
   const args = argv;
   const options = {
@@ -187,13 +221,26 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
     displayName: env.SUPABASE_CAMPAIGN_NAME || runtimeConfig.campaign.name,
     isPublic: true,
     allObservers: false,
-    observerFactionId: Number(env.SUPABASE_OBSERVER_FACTION_ID)
-      || PUBLISH_POLICY.observerFactionId,
-    historyRetention: Number(env.SUPABASE_HISTORY_RETENTION)
-      || runtimeConfig.analysis.strategicHistory.retention
-      || runtimeConfig.publishing.historyRetention || DEFAULT_HISTORY_POLICY.retention,
-    fullSnapshotRetention: Number(env.SUPABASE_FULL_SNAPSHOT_RETENTION)
-      || runtimeConfig.publishing.fullSnapshotRetention || 3,
+    observerFactionId: envPresent(env.SUPABASE_OBSERVER_FACTION_ID)
+      ? parseIntegerEnv(env.SUPABASE_OBSERVER_FACTION_ID, 'SUPABASE_OBSERVER_FACTION_ID', { min: 1 })
+      : PUBLISH_POLICY.observerFactionId,
+    historyRetention: retentionFromEnv(
+      env,
+      'SUPABASE_HISTORY_RETENTION',
+      // analysis.strategicHistory.retention is canonical; config.js keeps
+      // publishing.historyRetention synchronized with it.
+      runtimeConfig.analysis.strategicHistory.retention
+        ?? runtimeConfig.publishing.historyRetention
+        ?? DEFAULT_HISTORY_POLICY.retention,
+      { min: 1, max: 1000 }
+    ),
+    fullSnapshotRetention: retentionFromEnv(
+      env,
+      'SUPABASE_FULL_SNAPSHOT_RETENTION',
+      // config/defaults.json owns this default (publishing.fullSnapshotRetention).
+      runtimeConfig.publishing.fullSnapshotRetention,
+      { min: 1, max: 100 }
+    ),
     // The static half of the tech tree is stored once per campaign and spliced
     // back in by readers, so sharing it is lossless. --inline-tech-tree forces
     // the old per-row copy for a consumer that cannot follow the reference.
@@ -336,38 +383,24 @@ async function main() {
   const rawSnapshot = snapshotBuilder.buildRawSnapshot(parsedSave);
   const identity = snapshotIdentity.createSnapshotIdentity(targetSave, options.campaignKey);
   snapshotIdentity.attachSnapshotIdentity(rawSnapshot, identity);
-  let previousRawSnapshot = null;
-  try {
-    // Skip past saves that capture the same in-game moment, otherwise the
-    // published changesSincePrevious is empty whenever the latest save is an
-    // ExitSave written seconds after an Autosave.
-    const parsedCandidates = new Map();
-    const readCandidate = (candidate) => {
-      const key = path.resolve(candidate.fullPath).toLowerCase();
-      if (!parsedCandidates.has(key)) {
-        parsedCandidates.set(key, snapshotBuilder.buildRawSnapshot(saveParser.readSaveJson(candidate.fullPath)));
-      }
-      return parsedCandidates.get(key);
-    };
-
-    const selection = saveComparison.selectComparisonSave(
-      saveParser.getAvailableSaves(),
-      targetSave,
-      rawSnapshot.metadata?.gameTimeString || null,
-      (candidate) => readCandidate(candidate)?.metadata?.gameTimeString || null
-    );
-
-    if (selection?.save) {
-      previousRawSnapshot = readCandidate(selection.save);
-      snapshotIdentity.attachSnapshotIdentity(previousRawSnapshot, snapshotIdentity.createSnapshotIdentity(
-        selection.save,
-        options.campaignKey,
-        identity.generatedAt
-      ));
-      console.log(`Comparison baseline:  ${selection.save.name}${selection.gameTime ? ` (${selection.gameTime})` : ''}${selection.reason === 'same-game-time-fallback' ? ' — every recent save shares this in-game moment' : ''}`);
+  // Skip past saves that capture the same in-game moment, otherwise the
+  // published changesSincePrevious is empty whenever the latest save is an
+  // ExitSave written seconds after an Autosave. The selection itself lives in
+  // server/snapshotLoader.js so the publisher, the local server and the loader
+  // share one implementation instead of three copies that can drift.
+  const previousSelection = snapshotLoader.selectPreviousRawSnapshot({
+    saveFile: targetSave,
+    rawSnapshot,
+    campaignKey: options.campaignKey,
+    generatedAt: identity.generatedAt,
+    onError: (previousError) => {
+      console.warn(`[Warning] Previous save comparison unavailable: ${previousError.message}`);
     }
-  } catch (previousError) {
-    console.warn(`[Warning] Previous save comparison unavailable: ${previousError.message}`);
+  });
+  const previousRawSnapshot = previousSelection?.snapshot || null;
+  if (previousSelection) {
+    const selection = previousSelection.selection;
+    console.log(`Comparison baseline:  ${selection.save.name}${selection.gameTime ? ` (${selection.gameTime})` : ''}${selection.reason === 'same-game-time-fallback' ? ' — every recent save shares this in-game moment' : ''}`);
   }
 
   const saveMtimeIso = new Date(targetSave.lastModified).toISOString();
@@ -378,6 +411,13 @@ async function main() {
   console.log(`Campaign Difficulty: ${rawSnapshot.metadata.difficulty}`);
 
   // 3. Discover Observer Factions
+  //
+  // Last-resort roster, used ONLY when the parsed save lists no factions at
+  // all. The ids are the stock campaign's; a modded or renamed campaign would
+  // publish under the wrong labels, which is why the discovered list always
+  // wins. Only the two ids that shared/constants.mjs actually names are
+  // referenced -- inventing six more constants for a fallback nothing reads in
+  // a healthy save would be churn.
   const fallbackFactions = [
     { ID: runtimeConfig.campaign.defaultObserverFactionId, displayName: runtimeConfig.campaign.defaultObserverFactionName },
     { ID: 4710, displayName: 'the Resistance' },
@@ -385,8 +425,8 @@ async function main() {
     { ID: 4715, displayName: 'the Academy' },
     { ID: 4716, displayName: 'Project Exodus' },
     { ID: 4714, displayName: 'the Protectorate' },
-    { ID: 4713, displayName: 'the Servants' },
-    { ID: 4717, displayName: 'the Aliens' }
+    { ID: 4713, displayName: SERVANTS_DISPLAY_NAME },
+    { ID: ALIEN_FACTION_ID, displayName: ALIEN_FACTION_DISPLAY_NAME }
   ];
 
   const discoveredFactions = (rawSnapshot.factions || []).filter(f => f.ID !== undefined);
@@ -577,8 +617,8 @@ async function main() {
   // driven by actual payload bytes, not a fixed row count, so large rows can
   // never push a single request over the limit.
   console.log(`Upserting ${snapshotRows.length} published snapshot rows...`);
-  const maxBatchBytes = 3 * 1024 * 1024;
-  const maxBatchRows = 8;
+  const maxBatchBytes = MAX_UPSERT_BATCH_BYTES;
+  const maxBatchRows = MAX_UPSERT_BATCH_ROWS;
   const snapshotBatches = [];
   let currentBatch = [];
   let currentBatchBytes = 0;

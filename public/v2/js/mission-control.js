@@ -1249,6 +1249,92 @@ function renderHoldingsBubbleMatrix() {
   }).join('');
 }
 
+/**
+ * Hold Ground detail (docs/directive-engine-v2-plan.md §4f).
+ *
+ * A hold is only legible as a CHOICE if the board shows what was measured, what
+ * is still available at zero hate, what was set aside and at what cost, and how
+ * the hold ends. Every string here is built server-side and is always a
+ * sentence -- nothing is coerced, so an unmeasured figure arrives as an
+ * explicit "not measurable" line rather than as a null rendered into the page.
+ */
+function renderHoldGroundDetail(hold) {
+  if (!hold || hold.fires !== true) return '';
+
+  const axes = Array.isArray(hold.comparison?.axes) ? hold.comparison.axes : [];
+  const excluded = Array.isArray(hold.comparison?.excludedAxes) ? hold.comparison.excludedAxes : [];
+  const recommendations = Array.isArray(hold.recommendations) ? hold.recommendations : [];
+  const deferred = Array.isArray(hold.deferred) ? hold.deferred : [];
+  const detection = Array.isArray(hold.comparison?.detectionSources) ? hold.comparison.detectionSources : [];
+  const alienFleets = toFiniteNumber(hold.comparison?.alienFleetsVisible);
+
+  const comparisonRows = axes.length
+    ? axes.map(axis => `
+        <div class="hold-ground-axis ${axis.decisive ? 'hold-ground-axis--decisive' : ''}">
+          <span class="hold-ground-axis__label">${escapeHtml(axis.label)}</span>
+          <span class="hold-ground-axis__value">${escapeHtml(axis.text)}</span>
+          <span class="hold-ground-axis__verdict">${axis.decisive ? 'DECISIVE GAP' : 'within reach'}</span>
+        </div>`).join('')
+    : '<div class="hold-ground-note">No capability axis could be read for both sides in this snapshot.</div>';
+
+  const excludedRow = excluded.length
+    ? `<div class="hold-ground-note">Excluded from the verdict: ${escapeHtml(excluded.map(e => e.reason).join('; '))}.</div>`
+    : '';
+
+  // The highest-risk reading on this whole board: zero visible alien fleets is
+  // a detection gap, never an empty sky. Say which it is, explicitly.
+  const detectionRow = alienFleets === null
+    ? ''
+    : alienFleets === 0
+      ? '<div class="hold-ground-note hold-ground-note--warn">No alien fleet is visible. Alien fleets reach this picture only through a detection capability, so this is an intelligence gap, not an empty sky.</div>'
+      : `<div class="hold-ground-note">${alienFleets} alien fleet${alienFleets === 1 ? '' : 's'} visible${detection.length ? ` via ${escapeHtml(detection.join(', '))}` : ''}.</div>`;
+
+  return `
+    <div class="hold-ground-detail">
+      <div class="hold-ground-block">
+        <div class="hold-ground-heading">FLEET COMPARISON — CAN WE CONTEST?</div>
+        ${comparisonRows}
+        ${detectionRow}
+        ${excludedRow}
+        <div class="hold-ground-note">${escapeHtml(hold.comparison?.combatPowerExcluded || '')}</div>
+      </div>
+
+      <div class="hold-ground-block">
+        <div class="hold-ground-heading">WHAT HOLDING CONSISTS OF</div>
+        <ol class="hold-ground-list">
+          ${recommendations.map(rec => `
+            <li>
+              <strong>${escapeHtml(rec.label)}</strong>
+              <span>${escapeHtml(rec.detail)}</span>
+            </li>`).join('')}
+        </ol>
+      </div>
+
+      <div class="hold-ground-block">
+        <div class="hold-ground-heading">DEFERRED THIS CYCLE — AND WHAT IT WOULD HAVE COST</div>
+        ${deferred.length ? deferred.map(entry => `
+          <div class="hold-ground-deferred">
+            <span class="hold-ground-deferred__mission">${escapeHtml(entry.missionType)}</span>
+            <span class="hold-ground-deferred__hate">${escapeHtml(entry.hateBand)} alien hate</span>
+            <span class="hold-ground-deferred__effect">${escapeHtml(entry.headroomEffect)}${
+              toFiniteNumber(entry.heldCandidates) !== null
+                ? ` · ${toFiniteNumber(entry.heldCandidates)} candidate${toFiniteNumber(entry.heldCandidates) === 1 ? '' : 's'} held`
+                : ''
+            }</span>
+          </div>`).join('') : '<div class="hold-ground-note">No hate-generating mission is listed in the local template table.</div>'}
+        <div class="hold-ground-note">${escapeHtml(hold.deferredNote || '')}</div>
+      </div>
+
+      <div class="hold-ground-block">
+        <div class="hold-ground-heading">HOW THE HOLD ENDS</div>
+        <div class="hold-ground-note">${escapeHtml(hold.exit?.condition || '')}</div>
+        <div class="hold-ground-note">${escapeHtml(hold.exit?.floorNote || '')}</div>
+        ${hold.exit?.trendText ? `<div class="hold-ground-note">${escapeHtml(hold.exit.trendText)}</div>` : ''}
+        ${hold.exit?.estimateText ? `<div class="hold-ground-note">${escapeHtml(hold.exit.estimateText)}</div>` : ''}
+      </div>
+    </div>`;
+}
+
 function renderDirectivesStream() {
   const container = document.getElementById('directivesStreamList');
   renderExecutiveSitrep();
@@ -1261,9 +1347,10 @@ function renderDirectivesStream() {
     let badgeClass = 'badge-standard';
     if (d.severity === 'CRITICAL') badgeClass = 'badge-critical';
     else if (d.severity === 'HIGH') badgeClass = 'badge-high';
+    const holdDetail = renderHoldGroundDetail(d.holdGround);
 
     return `
-      <div class="directive-pill-card">
+      <div class="directive-pill-card${holdDetail ? ' directive-pill-card--hold' : ''}">
         <div class="directive-left">
           <div class="directive-title-row">
             <span class="directive-badge ${badgeClass}">${escapeHtml(d.severity)}</span>
@@ -1276,6 +1363,7 @@ function renderDirectivesStream() {
           <div>EXECUTIVE DIRECTIVE</div>
           <div>${escapeHtml(d.action)}</div>
         </div>
+        ${holdDetail}
       </div>
     `;
   }).join('');

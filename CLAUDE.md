@@ -30,6 +30,19 @@ Check both modes, every time.
 
 Related: a check that cannot be evaluated must report `unknown`, never fall through to "safe". And never fabricate data for a UI fallback — an honest "unavailable" state beats mock content that looks real.
 
+## The save uses `ID`, not `id`
+
+Save-derived objects carry **`ID`** (capital) and `displayName`. They do **not** have `id` or `name`. Verified nation keys: `ID, displayName, templateName, GDP, population, boost, research, milTech, democracy, cohesion, unrest, nukes, armies, missionControl, controlPoints, executiveFactionId, executiveFactionName, regionsCount`.
+
+Writing `obj.id || obj.name` therefore yields `undefined`, and inside a template literal it becomes the **string** `"undefined"` — which silently collides instead of throwing. When that string is a dedupe key, every record after the first is dropped.
+
+This has now happened twice:
+
+- `server/engine/assignment.js` — the allocator keyed on `councilor.id`, so the first assignment poisoned the dedupe `Set` and `has(undefined)` dropped five of six councilors.
+- `server/engine/candidates/missions.js` — every candidate id collapsed to `advise-nation-undefined` / `purge-undefined-0`. Only **1 of 303** candidates survived. The user-visible result was the engine recommending a councilor abandon a −25.8 research/turn Advise post, because "keep advising the USA" did not exist as a candidate.
+
+Check the real object shape before choosing a field name, and never let an unresolvable identity become a string — drop the record with a recorded reason instead.
+
 ## Sources
 
 Game mechanics are verified against the installed templates at

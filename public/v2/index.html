@@ -333,6 +333,23 @@
             </div>
           </div>
         </div>
+
+        <!--
+          The mining expansion board's component and its script tag shipped
+          without this mount point, so mission-control.js looked up
+          `#miningExpansion`, found nothing, and skipped the render entirely.
+        -->
+        <div class="tech-card init-records__span">
+          <div class="tech-card-header">
+            <div class="tech-card-title">MINING EXPANSION BOARD</div>
+            <span>CAPACITY, RUNWAYS &amp; SITE VALUE PER UNIT OF HATE</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="miningExpansion" aria-live="polite">
+              <div class="alien-hate-econ-empty">LOADING MINING EXPANSION…</div>
+            </div>
+          </div>
+        </div>
         <div class="tech-card tech-card--quiet">
           <div class="tech-card-header">
             <div class="tech-card-title">NATION ACTION QUEUE</div>

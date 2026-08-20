@@ -2,6 +2,8 @@
 // Mission Control. Keep this pure so the local server, hosted worker, exports,
 // and tests all agree on the same calculation.
 
+import { toFiniteNumber } from './util.mjs';
+
 export const DIFFICULTY_MULTIPLIERS = Object.freeze({
   cinematic: 0.05,
   normal: 0.30,
@@ -44,15 +46,18 @@ export const ALIEN_HATE_REDUCTION_PROJECTS = Object.freeze([
   Object.freeze({ id: 'Project_OperationalSecurity', label: 'Operational Security', appliesTo: 'resistance' })
 ]);
 
-const toFiniteNumber = (value) => {
-  // Number(null) and Number('') are both 0, so guarding on Number.isFinite
-  // alone would turn an absent or redacted field into a confident zero --
-  // e.g. reporting "alien hate: 0" for a player-mode snapshot that simply
-  // does not expose it.
-  if (value === null || value === undefined || value === '') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-};
+/**
+ * Each completed hate-reduction project multiplies the Mission Control hate
+ * floor by this factor -- a 20% cut, stacking multiplicatively across the
+ * projects listed above.
+ *
+ * Verified against the wiki's Alien Hate / Concealment material for 1.0
+ * (shipped 2026-01-05), same source as ALIEN_TOTAL_WAR_HATE above. Previously
+ * written out as a bare `0.8` in two places: the per-project `reductionFactor`
+ * reported to callers, and the `0.8 ** completed` multiplier actually applied.
+ * Two copies of one game constant is exactly how those two silently disagree.
+ */
+export const ALIEN_HATE_CONCEALMENT_FACTOR = 0.8;
 
 const normalizeDifficulty = (difficulty) => String(difficulty || '')
   .trim()
@@ -168,12 +173,12 @@ export function buildAlienHateEconomics({
       label: project.label,
       applicable: projectApplicable,
       completed: projectApplicable && completedProjectIds.has(project.id),
-      reductionFactor: projectApplicable ? 0.8 : null
+      reductionFactor: projectApplicable ? ALIEN_HATE_CONCEALMENT_FACTOR : null
     };
   });
 
   const completedReductionProjects = reductionProjects.filter(project => project.completed);
-  const concealmentMultiplier = 0.8 ** completedReductionProjects.length;
+  const concealmentMultiplier = ALIEN_HATE_CONCEALMENT_FACTOR ** completedReductionProjects.length;
   const usedMissionControl = toFiniteNumber(observer.missionControlUsage);
   const missionControlCapacity = toFiniteNumber(observer.missionControlCapacity);
   const actualRaw = toFiniteNumber(observer.assessedAlienHateOfMe);

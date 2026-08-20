@@ -284,3 +284,187 @@ test('redacted alien hate reports unknown, not zero', () => {
   // The floor is still computable from used MC alone.
   assert.strictEqual(alienThreat.minimumHate, 20.1);
 });
+
+// --- Total war state ---------------------------------------------------------
+// Nothing used to emit `alienThreat.totalWar`, so strategicDelta's total-war
+// check was reading a field that never existed and its narration was dead code.
+
+const { buildStrategicDelta } = require('../shared/strategicDelta.mjs');
+
+test('the compact snapshot records total war state, not just hate', () => {
+  const { alienThreat } = build();
+  assert.ok(alienThreat.totalWar, 'the field the delta reads must actually be emitted');
+  // Normal difficulty gates total war at 20 years; the fixture is 10 years in
+  // with 34.67 hate, so both conditions are unmet.
+  assert.strictEqual(alienThreat.totalWar.state, 'safe');
+  assert.strictEqual(alienThreat.totalWar.yearsThreshold, 20);
+  assert.strictEqual(alienThreat.totalWar.yearsRemaining, 10);
+  assert.strictEqual(alienThreat.totalWar.hateThreshold, 200);
+  assert.strictEqual(alienThreat.yearsElapsedAssumed, false, 'the fixture measures its start year');
+});
+
+test('a declaration between two real snapshots reaches the narration', () => {
+  const before = build();
+  const base = rawSnapshot();
+  const after = build({
+    metadata: { ...base.metadata, gameTimeString: '6/1/2045 12:00:00 AM' },
+    factions: [{ ...base.factions[0], assessedAlienHateOfMe: 240 }, base.factions[1]]
+  });
+
+  assert.strictEqual(after.alienThreat.totalWar.state, 'active',
+    '23 years elapsed and 240 hate clears both gates');
+  const delta = buildStrategicDelta(before, after);
+  assert.strictEqual(delta.hate.totalWarDeclared, true);
+  assert.ok(delta.events.includes('ALIEN TOTAL WAR DECLARED'));
+});
+
+test('an unmeasured campaign start year is used but labelled, not silently trusted', () => {
+  // TIMetadataState carries no campaignStartYear; snapshotBuilder reports the
+  // measured field as null and offers an explicitly assumed value. Refusing to
+  // use it would leave total war permanently unevaluable; using it unlabelled
+  // would present an assumption as a measurement.
+  const base = rawSnapshot();
+  const { alienThreat } = build({
+    metadata: { ...base.metadata, campaignStartYear: null, assumedCampaignStartYear: 2022 }
+  });
+  assert.strictEqual(alienThreat.yearsElapsed, 10);
+  assert.strictEqual(alienThreat.yearsElapsedAssumed, true);
+  assert.strictEqual(alienThreat.totalWar.yearsElapsedAssumed, true);
+  assert.strictEqual(alienThreat.totalWar.state, 'safe');
+});
+
+test('no start year at all leaves total war unevaluable rather than safe', () => {
+  const base = rawSnapshot();
+  const { alienThreat } = build({
+    metadata: { ...base.metadata, campaignStartYear: null }
+  });
+  assert.strictEqual(alienThreat.yearsElapsed, null);
+  assert.strictEqual(alienThreat.totalWar.state, 'unavailable', 'unknown is not safe');
+});
+
+// --- Completed project ledger -----------------------------------------------
+
+test('the snapshot records which projects are complete, not only a hash', () => {
+  const base = rawSnapshot();
+  const observer = { ...base.factions[0], completedProjects: ['Project_B', 'Project_A', 'Project_A'] };
+  const { research } = build({ factions: [observer, base.factions[1]] });
+  assert.deepStrictEqual(research.completedProjects, ['Project_A', 'Project_B'],
+    'deduplicated and sorted for a stable diff');
+  assert.ok(research.completedProjectHash, 'the cheap change check is kept too');
+});
+
+test('an absent completed-project array stays absent rather than becoming empty', () => {
+  const base = rawSnapshot();
+  const observer = { ...base.factions[0] };
+  delete observer.completedProjects;
+  const { research } = build({ factions: [observer, base.factions[1]] });
+  assert.strictEqual(research.completedProjects, null,
+    'null lets the delta say "unknown"; [] would claim "nothing completed"');
+});
+
+test('a completed project is named in the snapshot events', () => {
+  const base = rawSnapshot();
+  const previous = build();
+  const current = build(
+    { factions: [{ ...base.factions[0], completedProjects: ['Project_Exodus'] }, base.factions[1]] },
+    { previous }
+  );
+  const completed = current.events.filter((e) => e.type === 'project_completed');
+  assert.deepStrictEqual(completed, [{ type: 'project_completed', id: 'Project_Exodus' }]);
+});
+
+// --- One diff, two renderings ------------------------------------------------
+
+test('snapshot events and delta narration are derived from the same diff', () => {
+  // deriveEvents used to re-implement the whole diff. The two copies drifted,
+  // which is how total war and completed projects ended up dead on one side.
+  const base = rawSnapshot();
+  const previous = build();
+  const current = build({
+    fleets: [{ ID: 900, factionId: OBSERVER, shipsCount: 1, orbitBody: 'Mars',
+               ships: [{ id: 1, hullName: 'Patapsco' }] }],
+    habs: [{ ID: 700, factionId: OBSERVER, orbitBody: 'Mars', tier: 2 }, base.habs[2]]
+  });
+
+  const structured = deriveEvents(previous, current);
+  const narrated = buildStrategicDelta(previous, current).events;
+
+  const loss = structured.find((e) => e.type === 'ship_loss');
+  assert.strictEqual(loss.count, 2);
+  assert.ok(narrated.some((line) => /Lost 1x Cimarron/.test(line)));
+
+  assert.ok(structured.some((e) => e.type === 'hab_lost' && e.id === 701));
+  assert.ok(narrated.some((line) => /Lost hab 701/.test(line)));
+
+  // Structured events stay objects; narration stays strings. The two contracts
+  // are deliberately different and must not bleed into each other.
+  assert.ok(structured.every((e) => typeof e === 'object' && typeof e.type === 'string'));
+  assert.ok(narrated.every((line) => typeof line === 'string'));
+});
+
+// --- Shipyards are not construction modules ---------------------------------
+
+test('a shipyard counts as a yard and not also as a construction module', () => {
+  // Verified against TIHabModuleTemplate.json in the installed 1.0 templates
+  // (read 2026-08-20): exactly six modules carry `allowsShipConstruction`
+  // (SpaceDock/Shipyard/Spaceworks + alien equivalents) and six different ones
+  // carry a `CanFoundTierNHabs` rule (ConstructionModule/Nanofactory/
+  // NanofacturingComplex + alien equivalents). The two sets do not overlap.
+  const modules = [
+    { id: 1, habId: 700, factionId: OBSERVER, templateName: 'Shipyard', isShipyard: true,
+      constructionStatus: 'operational', constructionCompleted: true },
+    { id: 2, habId: 700, factionId: OBSERVER, templateName: 'Spaceworks', isShipyard: true,
+      constructionStatus: 'operational', constructionCompleted: true },
+    { id: 3, habId: 700, factionId: OBSERVER, templateName: 'ConstructionModule',
+      constructionStatus: 'operational', constructionCompleted: true }
+  ];
+  const mars = build({ habModules: modules }).infrastructure.find((h) => h.id === 700);
+  assert.strictEqual(mars.yards, 2, 'Shipyard and Spaceworks build ships');
+  assert.strictEqual(mars.construction, 1, 'only ConstructionModule founds habs');
+});
+
+test('tier-2 and tier-3 construction modules are counted at all', () => {
+  // The old name regex matched only /Construction|Shipyard|Spaceworks|Dock/,
+  // so a hab whose construction capacity came from a Nanofactory or a
+  // NanofacturingComplex reported construction: 0.
+  const modules = ['Nanofactory', 'NanofacturingComplex', 'AlienAssembler'].map((templateName, i) => ({
+    id: i + 1, habId: 700, factionId: OBSERVER, templateName,
+    constructionStatus: 'operational', constructionCompleted: true
+  }));
+  const mars = build({ habModules: modules }).infrastructure.find((h) => h.id === 700);
+  assert.strictEqual(mars.construction, 3);
+  assert.strictEqual(mars.yards, 0);
+});
+
+// --- Absent stays null -------------------------------------------------------
+
+test('an unknown mine limit is not reported as a zero penalty', () => {
+  // Mines standing with no readable mine-limit grant means the mission-control
+  // penalty is UNKNOWN. Reporting 0 would claim a verified "no penalty".
+  const base = rawSnapshot();
+  const { economy } = build({ globalResearch: { finishedTechsNames: [], activeSlots: [] } });
+  assert.strictEqual(economy.mines.limit, null);
+  assert.strictEqual(economy.mines.count, 1);
+  assert.strictEqual(economy.mc.minePenalty, null, 'unknown, not "no penalty"');
+
+  // Zero mines is answerable without the limit.
+  const noMines = build({
+    globalResearch: { finishedTechsNames: [], activeSlots: [] },
+    habSites: [base.habSites[1]]
+  });
+  assert.strictEqual(noMines.economy.mc.minePenalty, 0);
+});
+
+test('an absent faction ship count stays null in the summary rows', () => {
+  const base = rawSnapshot();
+  const alien = { ...base.factions[1] };
+  delete alien.shipsCount;
+  const doc = build({ factions: [base.factions[0], alien] });
+  const row = doc.summary.factions.find((f) => f.id === 4717);
+  assert.strictEqual(row.ships, null, 'absent stays null');
+  assert.strictEqual(doc.summary.factions.find((f) => f.id === OBSERVER).ships, 3);
+
+  // And the delta must not invent a fleet that vanished.
+  const delta = buildStrategicDelta(doc, build());
+  assert.strictEqual(delta.military.alienShips.delta, null);
+});

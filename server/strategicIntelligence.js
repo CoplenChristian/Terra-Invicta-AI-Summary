@@ -1,17 +1,10 @@
-function asArray(value) {
-  return Array.isArray(value) ? value : [];
-}
-
 const spaceTheater = require('./spaceTheater');
 const { ALIEN_FACTION_ID, ALIEN_FACTION_DISPLAY_NAME } = require('../shared/constants.mjs');
+const { asArray, sameId } = require('../shared/util.mjs');
 
 function numeric(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function sameId(left, right) {
-  return left !== undefined && left !== null && right !== undefined && right !== null && String(left) === String(right);
 }
 
 function factionFor(snapshot, factionId) {

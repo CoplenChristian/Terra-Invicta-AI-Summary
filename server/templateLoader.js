@@ -2,6 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const { resolveConfig } = require('./config');
 
+// Resolving the templates directory used to walk A: through Z: on every
+// construction, and TemplateLoader is constructed by the server, the publisher,
+// the static-site build and several tests. Probing a removable or disconnected
+// network drive can block for seconds each time, so the outcome is memoized per
+// distinct set of configured candidates for the life of the process.
+const resolvedTemplatesPathCache = new Map();
+
 class TemplateLoader {
   // Without these a candidate directory cannot produce a tech graph, so it
   // must not be selected just because the path exists.
@@ -70,8 +77,34 @@ class TemplateLoader {
   }
 
   resolveTemplatesPath() {
+    // An explicitly configured path is authoritative and is checked before any
+    // probing happens. When it is usable nothing else is even stat'ed.
+    const configured = [this.config.paths?.templatesPath, process.env.TI_TEMPLATES_DIR].filter(Boolean);
+    for (const candidate of configured) {
+      if (this.isUsableTemplatesDir(candidate)) return candidate;
+      if (fs.existsSync(candidate)) {
+        console.warn(`[TemplateLoader] Skipping ${candidate}: missing required template files (${TemplateLoader.REQUIRED_TEMPLATES.join(', ')}).`);
+      } else {
+        console.warn(`[TemplateLoader] Configured templates path does not exist: ${candidate}.`);
+      }
+    }
+
+    // Nothing configured resolved, so fall back to discovery. Memoize the
+    // discovery result: the candidate list depends only on the environment,
+    // which does not change within a process, and the previous implementation
+    // repeated the whole probe for every TemplateLoader instance.
+    const cacheKey = configured.join('|');
+    if (resolvedTemplatesPathCache.has(cacheKey)) {
+      return resolvedTemplatesPathCache.get(cacheKey);
+    }
+    const discovered = this.discoverTemplatesPath();
+    resolvedTemplatesPathCache.set(cacheKey, discovered);
+    return discovered;
+  }
+
+  discoverTemplatesPath() {
     const installSuffix = path.join('steamapps', 'common', 'Terra Invicta', 'TerraInvicta_Data', 'StreamingAssets', 'Templates');
-    const candidates = [this.config.paths?.templatesPath, process.env.TI_TEMPLATES_DIR];
+    const candidates = [];
     const steamRoots = [
       process.env.STEAM_LIBRARY_PATH,
       process.env.ProgramFiles,
@@ -89,10 +122,20 @@ class TemplateLoader {
 
     // Steam libraries are often installed on a secondary drive. Probe the
     // conventional library directory without baking a developer's drive into
-    // the repository. An explicit TI_TEMPLATES_DIR always takes precedence.
+    // the repository. Only drives that are actually mounted are considered, so
+    // an unmapped or disconnected letter costs one stat instead of four.
     if (process.platform === 'win32') {
-      for (let code = 65; code <= 90; code++) {
-        candidates.push(`${String.fromCharCode(code)}:/SteamLibrary/${installSuffix.replace(/\\/g, '/')}`);
+      const suffix = installSuffix.replace(/\\/g, '/');
+      // A: and B: are floppy letters; probing them is pure latency.
+      for (let code = 67; code <= 90; code++) {
+        const drive = `${String.fromCharCode(code)}:/`;
+        let mounted = false;
+        try {
+          mounted = fs.existsSync(`${drive}SteamLibrary`);
+        } catch (err) {
+          mounted = false;
+        }
+        if (mounted) candidates.push(`${drive}SteamLibrary/${suffix}`);
       }
     }
 

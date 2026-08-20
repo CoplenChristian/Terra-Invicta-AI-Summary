@@ -115,46 +115,93 @@ writeJson('site-info.json', {
 // Sites deployments may not mount the static asset binding for this
 // non-vinext worker. Embed the small dashboard shell and metadata assets in a
 // generated module so the worker can still serve the UI and effects endpoint.
-const embeddedAssetPaths = [
-  'index.html',
-  'css/main.css',
-  'css/components.css',
-  'js/api.js',
-  'js/app.js',
+//
+// The v2 entries are DERIVED from the shell's own <script>/<link> tags, not
+// hand-listed beside them. A parallel hand-maintained list is exactly what
+// broke this build: `v2/js/components/mining-expansion.js` and
+// `v2/js/components/council-orders.js` were added to public/v2/index.html and
+// never added here, so `npm run build:site` failed on the manifest check --
+// and before that check existed, the hosted worker would simply have served a
+// page missing those components. Adding a <script> tag is now the only edit a
+// new browser module needs.
+const ASSET_EXTENSIONS = /\.(html|css|js|mjs|json|geojson|png|svg|webp|woff2?)$/i;
+
+// Local file references in one HTML shell, normalised to dist-relative paths.
+// Skips absolute URLs, protocol-relative URLs, data: URIs, fragments, API
+// routes and bare directory links such as href="/v2" -- only things that name
+// a real file with an asset extension survive.
+const readReferencedAssets = (htmlRelativePath, baseDir) => {
+  const html = fs.readFileSync(path.join(distDir, htmlRelativePath), 'utf8');
+  return [...new Set(
+    [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)]
+      .map(match => match[1].trim())
+      .filter(reference => reference && !/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(reference))
+      .map(reference => reference.split(/[?#]/)[0])
+      .filter(reference => ASSET_EXTENSIONS.test(reference))
+      .map(reference => (reference.startsWith('/')
+        ? reference.replace(/^\/+/, '')
+        : `${baseDir}${reference}`).replace(/\\/g, '/'))
+  )].filter(relativePath => {
+    const absolute = path.join(distDir, relativePath);
+    return fs.existsSync(absolute) && fs.statSync(absolute).isFile();
+  });
+};
+
+// Assets no HTML tag references because a script fetches them at runtime.
+// These stay explicit -- there is no tag to derive them from.
+const runtimeFetchedAssets = [
   'data/effects.json',
   'data/runtime-config.json',
-  'v2/index.html',
-  'v2/css/mission-control.css',
-  'v2/js/shared.js',
-  'v2/js/mission-control.js',
-  'v2/js/components/mc-budget.js',
-  'v2/js/components/detail-panel.js',
-  'v2/js/components/world-map.js',
-  'v2/data/world.geojson',
-  'v2/js/components/faction-intel.js',
-  'v2/js/components/intelligence-library.js',
-  'v2/js/components/executive-boards.js',
-  'v2/js/components/alien-hate-economics.js',
-  'v2/js/components/directive-board.js'
+  'v2/data/world.geojson'
 ];
+
+const embeddedAssetPaths = [];
+const addAsset = (relativePath) => {
+  if (!embeddedAssetPaths.includes(relativePath)) embeddedAssetPaths.push(relativePath);
+};
+
+// v1 shell (public/index.html) and v2 shell (public/v2/index.html).
+addAsset('index.html');
+for (const asset of readReferencedAssets('index.html', '')) addAsset(asset);
+addAsset('v2/index.html');
+for (const asset of readReferencedAssets('v2/index.html', 'v2/')) addAsset(asset);
+for (const asset of runtimeFetchedAssets) addAsset(asset);
+
+
 const factionLogoDir = path.join(distDir, 'v2', 'assets', 'faction-logos');
 if (fs.existsSync(factionLogoDir)) {
   for (const fileName of fs.readdirSync(factionLogoDir).filter(name => name.toLowerCase().endsWith('.png')).sort()) {
-    embeddedAssetPaths.push(`v2/assets/faction-logos/${fileName}`);
+    addAsset(`v2/assets/faction-logos/${fileName}`);
   }
 }
-// Keep the worker's explicit safe asset manifest honest as browser modules
-// are split or added. Every local script/link reference in the v2 shell must
-// be embedded, otherwise the hosted worker serves a page with broken assets.
-const referencedAssets = [
-  ...[...fs.readFileSync(path.join(distDir, 'v2', 'index.html'), 'utf8').matchAll(/(?:src|href)=["'](\/[^"']+)["']/g)]
-    .map(match => match[1].replace(/^\//, ''))
-    .filter(relativePath => relativePath.startsWith('v2/'))
-];
-for (const referenced of referencedAssets) {
-  if (!embeddedAssetPaths.includes(referenced)) {
-    throw new Error(`Hosted asset manifest is missing HTML reference: ${referenced}`);
+
+// The derivation above cannot drift from the shell, but `readReferencedAssets`
+// drops a reference whose file is missing on disk. That has to be loud: a
+// broken <script src> would otherwise leave the hosted page silently short a
+// component, which is the failure mode the manifest check exists to prevent.
+for (const [shell, baseDir] of [['index.html', ''], ['v2/index.html', 'v2/']]) {
+  const html = fs.readFileSync(path.join(distDir, shell), 'utf8');
+  const localReferences = [...new Set(
+    [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)]
+      .map(match => match[1].trim())
+      .filter(reference => reference && !/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(reference))
+      .map(reference => reference.split(/[?#]/)[0])
+      .filter(reference => ASSET_EXTENSIONS.test(reference))
+      .map(reference => (reference.startsWith('/')
+        ? reference.replace(/^\/+/, '')
+        : `${baseDir}${reference}`).replace(/\\/g, '/'))
+  )];
+  for (const reference of localReferences) {
+    if (!fs.existsSync(path.join(distDir, reference))) {
+      throw new Error(`${shell} references a local asset that does not exist: ${reference}`);
+    }
+    if (!embeddedAssetPaths.includes(reference)) {
+      throw new Error(`Hosted asset manifest is missing HTML reference: ${reference}`);
+    }
   }
+}
+for (const missing of embeddedAssetPaths.filter(relativePath => !fs.existsSync(path.join(distDir, relativePath)))) {
+  throw new Error(`Hosted asset manifest lists a file that does not exist: ${missing}`);
 }
 const embeddedAssets = Object.fromEntries(
   embeddedAssetPaths.map(relativePath => {
