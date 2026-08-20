@@ -4624,3 +4624,22 @@ body.intelligence-library-open {
     align-self: center;
   }
 }
+
+/* Councilor skill cells show the effective value with the org contribution
+   marked, so a number that differs from the raw save is self-explaining. */
+.mc-skill-cell {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.mc-skill-org {
+  margin-left: 4px;
+  color: var(--success);
+  font-family: var(--mono);
+  font-size: 9px;
+  vertical-align: super;
+}
+
+.mc-skill-org.is-negative {
+  color: var(--danger, #d9534f);
+}

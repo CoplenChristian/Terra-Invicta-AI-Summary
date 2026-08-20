@@ -593,14 +593,14 @@ function renderCouncilorsGrid() {
         </div>
 
         <div style="margin: 10px 0; font-size: 11px; font-family: var(--font-mono); display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;">
-          <div>ADM: <strong>${formatAttr(c.maskedAttributes?.Administration)}</strong></div>
-          <div>PER: <strong>${formatAttr(c.maskedAttributes?.Persuasion)}</strong></div>
-          <div>INV: <strong>${formatAttr(c.maskedAttributes?.Investigation)}</strong></div>
-          <div>ESP: <strong>${formatAttr(c.maskedAttributes?.Espionage)}</strong></div>
-          <div>CMD: <strong>${formatAttr(c.maskedAttributes?.Command)}</strong></div>
-          <div>SCI: <strong>${formatAttr(c.maskedAttributes?.Science)}</strong></div>
-          <div>SEC: <strong>${formatAttr(c.maskedAttributes?.Security)}</strong></div>
-          <div>LOY: <strong>${formatAttr(c.maskedAttributes?.Loyalty)}</strong></div>
+          <div>ADM: <strong>${formatEffectiveAttr(c, 'Administration')}</strong></div>
+          <div>PER: <strong>${formatEffectiveAttr(c, 'Persuasion')}</strong></div>
+          <div>INV: <strong>${formatEffectiveAttr(c, 'Investigation')}</strong></div>
+          <div>ESP: <strong>${formatEffectiveAttr(c, 'Espionage')}</strong></div>
+          <div>CMD: <strong>${formatEffectiveAttr(c, 'Command')}</strong></div>
+          <div>SCI: <strong>${formatEffectiveAttr(c, 'Science')}</strong></div>
+          <div>SEC: <strong>${formatEffectiveAttr(c, 'Security')}</strong></div>
+          <div>LOY: <strong>${formatEffectiveAttr(c, 'Loyalty')}</strong></div>
         </div>
 
         ${c.orgs?.length > 0 ? `
@@ -617,6 +617,85 @@ function formatAttr(attrObj) {
   if (!attrObj) return '?';
   if (attrObj.visibility === 'unknown' || attrObj.visibility === 'unavailable') return '?';
   return attrObj.visible !== null && attrObj.visible !== undefined ? attrObj.visible : '?';
+}
+
+// The save stores BASE attributes; the game adds equipped-org bonuses when it
+// resolves a mission. Showing maskedAttributes alone therefore displays a
+// number the player never sees in game -- a councilor listed at 2 SCI may
+// actually operate at 11.
+//
+// Records for observed enemies have no orgs or resolved block (the server
+// strips them), so they fall through to the masked estimate unchanged: we do
+// not know their orgs and must not imply otherwise.
+function attrDetail(councilor, attrName) {
+  const resolved = councilor?.resolvedAttributes;
+  if (resolved?.effective && resolved.effective[attrName] !== undefined) {
+    const base = Number(resolved.base?.[attrName]) || 0;
+    const orgBonus = Number(resolved.orgBonuses?.[attrName]) || 0;
+    const traitBonus = Number(resolved.traitBonuses?.[attrName]) || 0;
+    // The realized increase, which differs from org+trait wherever the 0-25
+    // cap clips it. Showing the nominal sum would claim a gain the councilor
+    // never actually receives.
+    const applied = resolved.appliedBonus?.[attrName];
+    return {
+      value: Number(resolved.effective[attrName]),
+      base,
+      orgBonus,
+      traitBonus,
+      bonus: typeof applied === 'number' ? applied : orgBonus + traitBonus,
+      capped: resolved.capped?.[attrName] === true,
+      uncapped: Number(resolved.uncapped?.[attrName]),
+      orgsInactive: resolved.orgsActive === false,
+      known: true
+    };
+  }
+
+  const masked = councilor?.maskedAttributes?.[attrName];
+  const shown = formatAttr(masked);
+  const numeric = Number(shown);
+  return {
+    value: Number.isFinite(numeric) ? numeric : null,
+    base: Number.isFinite(numeric) ? numeric : null,
+    orgBonus: 0,
+    traitBonus: 0,
+    bonus: 0,
+    orgsInactive: false,
+    known: shown !== '?'
+  };
+}
+
+/** Effective attribute for display, with the org contribution marked. */
+function formatEffectiveAttr(councilor, attrName) {
+  const detail = attrDetail(councilor, attrName);
+  if (!detail.known || detail.value === null) return '?';
+  if (detail.bonus !== 0) {
+    const parts = [`${detail.base} base`];
+    if (detail.orgBonus) parts.push(`${detail.orgBonus > 0 ? '+' : ''}${detail.orgBonus} from equipped orgs`);
+    if (detail.traitBonus) parts.push(`${detail.traitBonus > 0 ? '+' : ''}${detail.traitBonus} from traits`);
+    if (detail.capped) parts.push(`capped at 25 (would be ${detail.uncapped})`);
+    const sign = detail.bonus > 0 ? '+' : '';
+    const cls = detail.bonus > 0 ? 'attr-org-bonus' : 'attr-org-bonus is-negative';
+    return `${detail.value}<span class="${cls}" title="${parts.join(', ')}">${sign}${detail.bonus}</span>`;
+  }
+  return String(detail.value);
+}
+
+/**
+ * Sum of the seven mission attributes using effective values. The snapshot's
+ * totalSkills is a base-only sum, so ranking on it while displaying
+ * org-inclusive per-attribute values labels councilors with one metric and
+ * orders them by another.
+ */
+function effectiveTotalSkills(councilor) {
+  const resolved = councilor?.resolvedAttributes;
+  if (typeof resolved?.totalEffectiveSkills === 'number') return resolved.totalEffectiveSkills;
+  return Number(councilor?.totalSkills) || 0;
+}
+
+/** Numeric effective value for sorting. -1 keeps unknowns at the bottom. */
+function effectiveAttrValue(councilor, attrName) {
+  const detail = attrDetail(councilor, attrName);
+  return detail.known && detail.value !== null ? detail.value : -1;
 }
 
 function renderCouncilorsScreen() {
@@ -698,10 +777,9 @@ function renderCouncilorsScreen() {
   }
 
   // Sorting
-  const getRawAttr = (c, attr) => {
-    const a = c.maskedAttributes?.[attr] || { visible: c.attributes?.[attr] };
-    return (a && a.visible !== null && a.visible !== undefined && a.visible !== '?') ? Number(a.visible) : -1;
-  };
+  // Rank on effective values: a councilor with strong orgs outranks one with a
+  // higher base and none, and sorting on base alone hides that entirely.
+  const getRawAttr = (c, attr) => effectiveAttrValue(c, attr);
 
   const sortKey = state.councilorViewMode === 'table' ? state.councilorTableSort.col : state.councilorSort;
   const isAsc = state.councilorViewMode === 'table' ? state.councilorTableSort.asc : false;
@@ -709,7 +787,7 @@ function renderCouncilorsScreen() {
   councilors.sort((a, b) => {
     let cmp = 0;
     if (sortKey === 'totalSkills' || sortKey === 'total') {
-      cmp = (b.totalSkills || 0) - (a.totalSkills || 0);
+      cmp = effectiveTotalSkills(b) - effectiveTotalSkills(a);
     } else if (sortKey === 'persuasion' || sortKey === 'per') {
       cmp = getRawAttr(b, 'Persuasion') - getRawAttr(a, 'Persuasion');
     } else if (sortKey === 'investigation' || sortKey === 'inv') {
@@ -759,7 +837,7 @@ function renderCouncilorsMainCards(councilors) {
     const isOwn = c.isOwnCouncilor;
 
     const renderSkillPill = (label, attrName) => {
-      const val = formatAttr(c.maskedAttributes?.[attrName]);
+      const val = formatEffectiveAttr(c, attrName);
       const num = typeof val === 'number' ? val : (parseInt(val, 10) || null);
       let colorStyle = '';
       if (num !== null && num >= 15) colorStyle = 'color: #ffd700; font-weight: 800; text-shadow: 0 0 8px rgba(255,215,0,0.4);';
@@ -815,7 +893,7 @@ function renderCouncilorsMainCards(councilors) {
         <div style="margin-top: auto; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 11px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <span style="color: var(--text-muted);">Active Skills Sum:</span>
-            <strong style="color: var(--color-initiative); font-family: var(--font-mono); font-size: 12px;">${c.totalSkills || 0}</strong>
+            <strong style="color: var(--color-initiative); font-family: var(--font-mono); font-size: 12px;">${effectiveTotalSkills(c)}</strong>
           </div>
 
           ${c.traits && c.traits.length > 0 ? `
@@ -849,7 +927,7 @@ function renderCouncilorsMainTable(councilors) {
     const fColor = getFactionColorByName(c.factionName);
     const isMole = c.isTurnedMole;
     const formatCell = (attr) => {
-      const val = formatAttr(c.maskedAttributes?.[attr]);
+      const val = formatEffectiveAttr(c, attr);
       const num = typeof val === 'number' ? val : (parseInt(val, 10) || null);
       if (num !== null && num >= 15) return `<span style="color: #ffd700; font-weight: 800;">${val}</span>`;
       if (num !== null && num >= 10) return `<span style="color: #38bdf8; font-weight: 700;">${val}</span>`;
@@ -876,7 +954,7 @@ function renderCouncilorsMainTable(councilors) {
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Science')}</td>
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Security')}</td>
         <td style="text-align: center; font-family: var(--font-mono);">${formatCell('Loyalty')}</td>
-        <td style="text-align: center; font-family: var(--font-mono); font-weight: 700; color: var(--color-initiative);">${c.totalSkills || 0}</td>
+        <td style="text-align: center; font-family: var(--font-mono); font-weight: 700; color: var(--color-initiative);">${effectiveTotalSkills(c)}</td>
         <td style="text-align: center;" title="${(c.orgs || []).map(o => escapeHtml(o.displayName)).join(', ')}">${c.orgs?.length || 0}</td>
         <td title="${(c.traits || []).map(escapeHtml).join(', ')}">${(c.traits || []).slice(0, 2).map(escapeHtml).join(', ')}${c.traits?.length > 2 ? '...' : ''}</td>
       </tr>
@@ -900,7 +978,7 @@ function openCouncilorModal(councilorId) {
   `;
 
   const renderBar = (label, attrName, color = 'var(--color-initiative)') => {
-    const val = formatAttr(c.maskedAttributes?.[attrName]);
+    const val = formatEffectiveAttr(c, attrName);
     const num = typeof val === 'number' ? val : (parseInt(val, 10) || 0);
     const pct = Math.min(100, Math.max(0, (num / 25) * 100));
     return `
@@ -947,7 +1025,7 @@ function openCouncilorModal(councilorId) {
     <div style="margin-bottom: 20px;">
       <div style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--color-initiative); margin-bottom: 10px; display: flex; justify-content: space-between;">
         <span>SKILLS & ATTRIBUTES (0 - 25 SCALE)</span>
-        <span>Total Active Skills: ${c.totalSkills || 0}</span>
+        <span>Total Active Skills: ${effectiveTotalSkills(c)}</span>
       </div>
       <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-dim); border-radius: 6px; padding: 12px;">
         ${renderBar('Administration', 'Administration', '#00e5ff')}

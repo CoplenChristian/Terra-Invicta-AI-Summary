@@ -33,3 +33,6 @@ logs/
 
 # Local Supabase snapshot exports (safety net before pruning; can be large)
 backups/
+
+# Local agent tool state — .opencode/supabase-auth.json holds live OAuth tokens
+.opencode/

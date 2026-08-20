@@ -163,7 +163,17 @@ function spacePosture(snapshot, observerId) {
   };
 }
 
+// Prefer the resolved (org- and trait-inclusive, cap-applied) value. Reading
+// base attributes here made mission coverage recommend a different councilor
+// than the operations table showed as strongest on the same board, because
+// org bonuses change who is actually best at a skill.
+//
+// Observed enemies have no resolved block -- the server strips it -- so they
+// still fall through to the masked estimate.
 function visibleSkill(councilor, skill) {
+  const effective = councilor?.resolvedAttributes?.effective;
+  if (effective && effective[skill] !== undefined) return numeric(effective[skill]);
+
   const masked = councilor?.maskedAttributes?.[skill];
   if (masked && typeof masked === 'object') return numeric(masked.visible);
   return numeric(councilor?.attributes?.[skill]);
@@ -174,11 +184,17 @@ function councilCapabilities(snapshot, observerId) {
   const skillNames = ['Persuasion', 'Investigation', 'Espionage', 'Command', 'Administration', 'Science', 'Security'];
   const bestBySkill = {};
   skillNames.forEach(skill => {
+    // The 0-25 cap produces genuine ties (three councilors can all sit at 25
+    // Administration), so break them on the base attribute the way
+    // rankByAttribute does. Without a shared tie-break the same board can name
+    // one councilor as strongest and recommend another.
     const candidates = councilors.map(councilor => ({
       name: councilor.displayName,
       value: visibleSkill(councilor, skill),
+      base: numeric(councilor?.resolvedAttributes?.base?.[skill]) ?? null,
       location: councilor.locationName
-    })).filter(candidate => candidate.value !== null).sort((a, b) => b.value - a.value);
+    })).filter(candidate => candidate.value !== null)
+      .sort((a, b) => b.value - a.value || (b.base ?? -1) - (a.base ?? -1));
     bestBySkill[skill] = candidates[0] || null;
   });
   const missionRoles = [

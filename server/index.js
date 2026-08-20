@@ -17,6 +17,7 @@ const snapshotDelta = require('./snapshotDelta');
 const intelResources = require('./intelResources');
 const techIntel = require('./techIntel');
 const requestValidation = require('./requestValidation');
+const saveComparison = require('./saveComparison');
 const SupabaseAdapter = require('./supabaseAdapter');
 const { buildStrategicSnapshot } = require('../shared/strategicSnapshot.mjs');
 const { buildStrategicDelta } = require('../shared/strategicDelta.mjs');
@@ -103,19 +104,37 @@ function loadOrGetSnapshot(targetSavePath = null) {
   // dashboard; it simply makes the delta panel explicitly unavailable.
   cachedPreviousRawSave = null;
   try {
-    const currentPath = path.resolve(saveFile.fullPath).toLowerCase();
-    const previousSave = saveParser.getAvailableSaves().find(candidate => {
-      return path.resolve(candidate.fullPath).toLowerCase() !== currentPath &&
-        new Date(candidate.lastModified).getTime() < new Date(saveFile.lastModified).getTime();
-    });
-    if (previousSave) {
-      const previousParsedSave = saveParser.readSaveJson(previousSave.fullPath);
-      cachedPreviousRawSave = snapshotBuilder.buildRawSnapshot(previousParsedSave);
+    // Walk back past saves that capture the same in-game moment (an ExitSave
+    // written seconds after an Autosave, for instance) so the comparison has
+    // something to report. Parsed candidates are reused, not re-read.
+    const parsedCandidates = new Map();
+    const readCandidate = (candidate) => {
+      const key = path.resolve(candidate.fullPath).toLowerCase();
+      if (!parsedCandidates.has(key)) {
+        parsedCandidates.set(key, snapshotBuilder.buildRawSnapshot(saveParser.readSaveJson(candidate.fullPath)));
+      }
+      return parsedCandidates.get(key);
+    };
+
+    const selection = saveComparison.selectComparisonSave(
+      saveParser.getAvailableSaves(),
+      saveFile,
+      rawSnapshot.metadata?.gameTimeString || null,
+      (candidate) => readCandidate(candidate)?.metadata?.gameTimeString || null
+    );
+
+    if (selection?.save) {
+      cachedPreviousRawSave = readCandidate(selection.save);
       snapshotIdentity.attachSnapshotIdentity(cachedPreviousRawSave, snapshotIdentity.createSnapshotIdentity(
-        previousSave,
+        selection.save,
         process.env.SUPABASE_CAMPAIGN_KEY || 'initiative',
         identity.generatedAt
       ));
+      if (selection.reason === 'same-game-time-fallback') {
+        console.log(`[Server] Every recent save shares in-game date ${rawSnapshot.metadata?.gameTimeString}; comparing against ${selection.save.name} anyway.`);
+      } else if (selection.probed > 1) {
+        console.log(`[Server] Comparing against ${selection.save.name} (${selection.gameTime}); skipped ${selection.probed - 1} save(s) from the same in-game moment.`);
+      }
     }
   } catch (previousError) {
     console.warn(`[Server] Previous save comparison unavailable: ${previousError.message}`);

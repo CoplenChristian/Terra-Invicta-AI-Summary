@@ -1,6 +1,7 @@
 const templateLoader = require('./templateLoader');
 const opportunityScorer = require('./opportunityScorer');
 const spaceTheater = require('./spaceTheater');
+const { buildCouncilorAttributes } = require('../shared/councilorAttributes.mjs');
 const techGraph = require('../shared/techGraph.mjs');
 
 class SnapshotBuilder {
@@ -230,6 +231,8 @@ class SnapshotBuilder {
     }
 
     // Process Councilors
+    // Built once for the whole roster rather than per councilor.
+    const traitStatMods = this.buildTraitStatMods();
     const councilors = [];
     for (const c of rawCouncilors) {
       const councilorId = c.ID?.value;
@@ -347,6 +350,15 @@ class SnapshotBuilder {
         locationType,
         homeRegionName,
         attributes: attrs,
+        // `attributes` is the BASE block from the save; the game applies org
+        // bonuses at resolution time. Anything reasoning about mission odds
+        // must use resolvedAttributes.effective, not these raw values.
+        resolvedAttributes: buildCouncilorAttributes({
+          attributes: attrs,
+          orgs: assignedOrgs,
+          traits: Array.isArray(c.traitTemplateNames) ? c.traitTemplateNames : [],
+          status: lifecycleStatus
+        }, { traitStatMods }),
         totalSkills,
         traits: Array.isArray(c.traitTemplateNames) ? c.traitTemplateNames : [],
         orgs: assignedOrgs,
@@ -1120,6 +1132,29 @@ class SnapshotBuilder {
   // "what does this fleet do to my hate" projection wrong. Exposed on the
   // snapshot because shared/intelResources.mjs must stay free of runtime
   // (fs-backed) imports so the hosted worker can import it too.
+  // Attribute modifiers granted by councilor traits, from the game templates.
+  // The augmentation/implant lines are the significant ones (ExecutiveAI +3
+  // Administration, CognitiveEnhancer +3 Science). Conditional and overriding
+  // mods are carried through with flags so the consumer can report them as
+  // unresolved rather than applying them blindly.
+  buildTraitStatMods() {
+    const mods = {};
+    for (const trait of templateLoader.templates.traits.values()) {
+      const name = trait.dataName || trait.friendlyName;
+      if (!name) continue;
+      const entries = (Array.isArray(trait.statMods) ? trait.statMods : [])
+        .filter(mod => mod && mod.stat)
+        .map(mod => ({
+          stat: mod.stat,
+          value: Number(mod.strValue) || 0,
+          operation: mod.operation || 'Additive',
+          conditional: Boolean(mod.condition)
+        }));
+      if (entries.length > 0) mods[name] = entries;
+    }
+    return mods;
+  }
+
   buildShipHullStats() {
     const stats = {};
     for (const hull of templateLoader.templates.shipHulls.values()) {
