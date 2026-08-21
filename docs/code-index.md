@@ -22,7 +22,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/alien-hate-economics.js` | BS | Browser (ESM) | 309 | renders the save-derived Mission Control hate floor without | — | — |
 | `public/v2/js/components/council-orders.js` | BS | Browser (ESM) | 349 | renders the at-a-glance answer to "what should each councilor do | — | — |
 | `public/v2/js/components/detail-panel.js` | BS | Browser (ESM) | 150 | the shared detail surface for clickable Mission Control modules. | — | — |
-| `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 603 | renders the Directive Engine v2 Cycle Plan. | — | — |
+| `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 637 | renders the Directive Engine v2 Cycle Plan. | — | — |
 | `public/v2/js/components/executive-boards.js` | BS | Browser (ESM) | 416 | renders the executive boards — faction power, resources, and the | — | — |
 | `public/v2/js/components/faction-intel.js` | BS | Browser (ESM) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
 | `public/v2/js/components/fleet-procurement.js` | BS | Browser (ESM) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
@@ -85,7 +85,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/directives/space.js` | C | Node (CommonJS) | 73 | the space-department ladder — the off-world mining grid and orbital | `buildSpaceDirectives` | — |
 | `server/earthTheater.js` | C | Node (CommonJS) | 106 | the Earth theater partition — six regional groupings of nations and | `EARTH_THEATERS, buildTheaterStatus` | — |
 | `server/engine/adviseEconomics.js` | C | Node (CommonJS) | 238 | pure calculations for the Advise mission on Nations and Habs. | `computeAdviseHabBonuses, computeAdviseNationBonuses, computeBaseIP, evaluateAdviseValue, getCouncilorAttribute` | `tests/adviseEconomics.test.js` |
-| `server/engine/assignment.js` | C | Node (CommonJS) | 816 | the cycle-plan assignment allocator that binds candidates to | `allocateCyclePlan, computeOngoingMissionBenefit, getActiveMissionInfo` | — |
+| `server/engine/assignment.js` | C | Node (CommonJS) | 838 | the cycle-plan assignment allocator that binds candidates to | `allocateCyclePlan, computeOngoingMissionBenefit, getActiveMissionInfo` | — |
 | `server/engine/budgets.js` | C | Node (CommonJS) | 259 | tracks the shared portfolio budget pools across the entire | `BudgetPoolManager, readPoolCapacity` | — |
 | `server/engine/campaignDate.js` | C | Node (CommonJS) | 65 | campaign-date parsing and the Defend Interests ward status derived | `defenseStatus, parseCampaignDate` | — |
 | `server/engine/candidates/controlPoints.js` | C | Node (CommonJS) | 107 | the open control-point candidate generator — neutral control points | `buildControlNationCandidate, generateOpenControlPointCandidates` | — |

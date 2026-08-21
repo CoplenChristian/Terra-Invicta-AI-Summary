@@ -16,21 +16,26 @@ Last updated 2026-08-21.
 
 | # | doc | state |
 | :-- | :-- | :-- |
-| 1 | `chain-visibility-spec.md` | **in flight.** Promote multi-step chains into the visible COMMAND ranking, gated on reachability so a 442-month chain is not promoted. Folds in the missing `ra-tag--chain` / `--newcap` CSS and the census/capabilities count disagreement |
+| 1 | **total-war year gate ignores `alienProgressionSpeed`** | **not started, and it changes a verdict.** `buildTotalWarState` divides its year gate by `alienProgressionSpeed`, no caller passes one, so it assumes 1 while the save says 200%. Measured on the live save: shipped reads `state: safe, yearsThreshold: 20, yearsRemaining: 7`; at the real speed it is `state: armed, yearsThreshold: 10, yearsRemaining: 0`. Not a silent wrong answer — `progressionSpeedAssumed: true` announces it — but it is a published figure, so wiring it in is a separate verifiable change with before/after capture |
 | 2 | `drive-explorer-spec.md` | **not started.** A drives page: pick a design, see every drive's ΔV, acceleration and which destinations open up. Performance half is pinned; destination half is a labelled heuristic |
-| 3 | `research-category-rate-spec.md` | **not started.** Durations use one flat rate and ignore per-category bonuses. Xenology is +20% today, so those estimates are 17% long. Engineers are already in the measured income — do not double-apply |
-| 4 | `fleet-engagement-spec.md` | **not started.** Per-fleet hull-count estimates in THREAT, reachability-gated: the observer has 4 fleets against 57 alien fleets |
-| 5 | `campaign-settings-spec.md` | **presentational remainder only.** The rate models are measured correct; what is left is baking the ten `TIMetadataState` values and never rendering a customised campaign as plain "Normal" |
-| 6 | `repo-structure-spec.md` | **not started.** Separate the 2025 report tool from the dashboard. Approved, never assigned |
+| 3 | `research-category-rate-spec.md` | **in flight.** Durations use one flat rate and ignore per-category bonuses. Xenology is +20% today, so those estimates are 17% long. Engineers are already in the measured income — do not double-apply |
+| 4 | `fleet-engagement-spec.md` | **not started.** Per-fleet hull-count estimates in THREAT, reachability-gated. Note the existing tiers top out at three ships while 26 of 57 fleets are larger and 3 exceed the whole 24-hull sweep |
+| 5 | `repo-structure-spec.md` | **not started.** Separate the 2025 report tool from the dashboard. Approved, never assigned |
+| 6 | bench ordering | **open question, not a defect.** `benched` is sliced without sorting, so the eight shown are registry order rather than the highest-value eight. Sorting would change which appear, and emission order is load-bearing for explanations — a deliberate call, not a fold-in |
 
 ### Small follow-ups, unassigned
 
-- **Type scale.** `research-tab-layout-spec.md` shipped, but the scale landed at
-  11/10/9.5/9 and three of the four steps sit within 1px, so hierarchy still reads flat.
-  Small CSS change.
-- **`benched` truncation.** `server/engine/assignment.js:782` slices to 8 with no
-  `benchedTotalCount` / `benchedOmittedCount`, and the cap is biting on the live save.
-  This is the truncation rule in `CLAUDE.md`.
+- **`res.sendFile` refuses to serve the shell from a dot-directory.** `server/index.js`
+  passes an absolute path to `res.sendFile`, and `send` defaults to `dotfiles: 'ignore'`,
+  so `/` and `/v2/` return 404 for any checkout living under a path segment that starts
+  with a dot — an agent worktree in `.claude/worktrees/`, for instance. The API routes and
+  `express.static` are unaffected, so it presents as a blank dashboard rather than an
+  error. `tests/cssComputedStyle.test.js` fails there for the same reason.
+- **A fresh checkout fails two byte-comparison tests.** `core.autocrlf=true` with no
+  `.gitattributes` gives a new clone or worktree CRLF copies of `docs/code-index.md` and
+  `tests/fixtures/frozen-snapshot-*.md`, while the generators emit LF. The checked-in
+  index test and the frozen-snapshot test both compare bytes and both fail until the files
+  are normalised by hand. A `.gitattributes` pinning those paths to LF would close it.
 
 ## Shipped
 
@@ -47,6 +52,10 @@ Last updated 2026-08-21.
 | `research-row-naming-spec.md` | — | was already implemented; this table previously said otherwise |
 | `model-verification-review.md` | `b0ec6dc` `e98413f` | all findings actioned |
 | `research-advisor-spec.md` | through §9 | still the governing document: §0 (nothing campaign-specific) and §3b (availability is rolled, not derived) bind any further work |
+| `chain-visibility-spec.md` | `bdcff55` | reachable chains promoted into COMMAND; `Colony Core → Battlestations` now on screen. Pion Torch refused at 413 months against a 156-month horizon |
+| `campaign-settings-spec.md` | `39770d0` | ten settings baked; a custom campaign no longer reads "Normal". Proven not to move any figure across 152 surfaces × 3 modes |
+| type scale follow-up | — | 11/10/9.5/9 → 12.5/11/10/9; every step now ≥1px apart. COMMAND at 1920 measured 2.858 (player) / 2.915 (omniscient) screens, 0 leaf overflows |
+| `benched` truncation follow-up | — | `benchedTotalCount` / `benchedOmittedCount` on the cycle plan and through the board. Live save: 8 of 46 shown (player), 8 of 427 (omniscient). Also fixed `counts.assigned` / `counts.benched`, which were read off a `counts` object that never carried them and rendered a confident "0 allocated · 0 benched" on every plan |
 
 ## Closed as needing no work
 

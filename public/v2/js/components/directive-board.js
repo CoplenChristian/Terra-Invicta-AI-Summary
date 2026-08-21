@@ -391,13 +391,29 @@
       </div>`;
   }
 
-  function renderBenched(benched) {
-    if (!Array.isArray(benched) || benched.length === 0) return '';
+  /**
+   * How many benched rows this board shows. The engine already capped the list
+   * (BENCHED_LIST_LIMIT in server/engine/assignment.js), so this is a SECOND
+   * truncation stacked on the first -- which is exactly why the note below
+   * counts against `benchedTotalCount`, the engine's true total, and not
+   * against the shortened array that arrived.
+   */
+  const BENCHED_RENDER_LIMIT = 5;
+
+  function renderBenched(cyclePlan) {
+    const benched = Array.isArray(cyclePlan.benched) ? cyclePlan.benched : [];
+    if (benched.length === 0) return '';
+    // Absent count means an older payload that never carried one; fall back to
+    // what is actually in hand rather than inventing a total, matching
+    // renderRiskFloorHeld above.
+    const total = num(cyclePlan.benchedTotalCount) ?? benched.length;
+    const shown = benched.slice(0, BENCHED_RENDER_LIMIT);
+    const omitted = Math.max(0, total - shown.length);
     return `
       <div class="directive-benched-section">
-        <div class="directive-subheading">BENCHED ALTERNATIVES & TRADE-OFFS</div>
+        <div class="directive-subheading">BENCHED ALTERNATIVES &amp; TRADE-OFFS (${total})</div>
         <div class="directive-benched-list">
-          ${benched.slice(0, 5).map(b => {
+          ${shown.map(b => {
             const candidate = b.candidate || b;
             const score = num(candidate.score);
             return `
@@ -412,6 +428,11 @@
               </div>`;
           }).join('')}
         </div>
+        ${omitted > 0 ? `
+          <div class="directive-benched-omitted">
+            Showing ${shown.length} of ${total} benched;
+            ${omitted} further alternative${omitted === 1 ? ' is' : 's are'} omitted from this view.
+          </div>` : ''}
       </div>`;
   }
 
@@ -435,10 +456,27 @@
       </div>`;
   }
 
-  function renderDecisionReasoning(reasoning) {
+  function renderDecisionReasoning(reasoning, cyclePlan) {
     if (!reasoning) return '';
     const counts = reasoning.counts || {};
     const sources = Array.isArray(reasoning.sources) ? reasoning.sources : [];
+
+    // `counts` carries generated/recommended/alternatives/uncertain/rejected/
+    // future (server/engine/selection.js) -- it has never carried `assigned` or
+    // `benched`, so reading them off it and defaulting to 0 printed a confident
+    // "0 allocated · 0 benched" on every plan. Both are read from the cycle
+    // plan instead, and a segment whose count cannot be established is dropped
+    // rather than rendered as a zero.
+    const generated = num(counts.generated);
+    const allocated = Array.isArray(cyclePlan?.assignments) ? cyclePlan.assignments.length : null;
+    const benchedTotal = num(cyclePlan?.benchedTotalCount)
+      ?? (Array.isArray(cyclePlan?.benched) ? cyclePlan.benched.length : null);
+    const metaSegments = [
+      generated === null ? null : `<span>${generated} total evaluated</span>`,
+      allocated === null ? null : `<span>${allocated} allocated</span>`,
+      benchedTotal === null ? null : `<span>${benchedTotal} benched</span>`,
+      `<span>Confidence: <strong>${escapeHtml(reasoning.confidence || 'HIGH')}</strong></span>`
+    ].filter(Boolean);
 
     return `
       <div class="directive-reasoning-section">
@@ -446,10 +484,7 @@
         <p class="directive-reasoning-summary">${escapeHtml(reasoning.summary || '')}</p>
         <div class="directive-reasoning-method">${escapeHtml(reasoning.selectionMethod || '')}</div>
         <div class="directive-reasoning-meta">
-          <span>${counts.generated ?? 0} total evaluated</span> ·
-          <span>${counts.assigned ?? 0} allocated</span> ·
-          <span>${counts.benched ?? 0} benched</span> ·
-          <span>Confidence: <strong>${escapeHtml(reasoning.confidence || 'HIGH')}</strong></span>
+          ${metaSegments.join(' · ')}
         </div>
         ${sources.length ? `
           <div class="directive-sources-list">
@@ -488,7 +523,6 @@
 
     const assignments = Array.isArray(cyclePlan.assignments) ? cyclePlan.assignments : [];
     const unassigned = Array.isArray(cyclePlan.unassigned) ? cyclePlan.unassigned : [];
-    const benched = Array.isArray(cyclePlan.benched) ? cyclePlan.benched : [];
     const clocks = Array.isArray(cyclePlan.clocks) ? cyclePlan.clocks : [];
     const horizon = Array.isArray(cyclePlan.horizon) ? cyclePlan.horizon : [];
     const budgets = cyclePlan.budgets || {};
@@ -537,9 +571,9 @@
 
         ${renderHorizon(horizon)}
 
-        ${renderBenched(benched)}
+        ${renderBenched(cyclePlan)}
 
-        ${renderDecisionReasoning(reasoning)}
+        ${renderDecisionReasoning(reasoning, cyclePlan)}
       </div>`;
 
     const riskSelect = root.querySelector('[data-risk-floor-select]');

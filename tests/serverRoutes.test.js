@@ -156,17 +156,14 @@ test('GET /api/save-state reports the newest save identity without parsing it', 
     const logs = [];
     const originalLog = console.log;
     console.log = (...args) => { logs.push(args.join(' ')); };
-    let elapsedMs = Infinity;
     let payload;
     let status;
     try {
-      // Warm-up: the first request on a fresh server pays connection and JIT
-      // setup costs that have nothing to do with the route's stat-and-hash
-      // work. Measure the second request so the timing is the route's.
+      // Two requests: the first exercises the cold path on a fresh server, the
+      // second the warm one. Both are inside the console capture, so the
+      // parse-log assertion below covers each.
       await fetch(`${base}/api/save-state`);
-      const startedAt = Date.now();
       const response = await fetch(`${base}/api/save-state`);
-      elapsedMs = Date.now() - startedAt;
       status = response.status;
       payload = await response.json();
     } finally {
@@ -187,7 +184,16 @@ test('GET /api/save-state reports the newest save identity without parsing it', 
     assert.ok(!payload.saveFilename.includes('/') && !payload.saveFilename.includes('\\'), 'saveFilename is a bare basename');
     assert.ok(!body.includes('Older.json'), 'the older save is not the one reported');
 
-    assert.ok(elapsedMs < 50, `save-state completed in ${elapsedMs}ms, expected under 50ms`);
+    // There was a wall-clock assertion here (`elapsedMs < 50`, itself already
+    // relaxed once from 20ms). It was removed rather than relaxed a third time:
+    // a wall-clock threshold measures the machine, not the route. It passed
+    // 3/3 in isolation and failed under full-suite load with other work on the
+    // box (measured 102ms), so every value is either loose enough to prove
+    // nothing or tight enough to flake. The assertion below is the DIRECT
+    // statement of the same contract -- the route does not parse the save --
+    // and it holds regardless of how busy the machine is. Do not reintroduce a
+    // timing proxy for it; if the concern is a performance regression, measure
+    // it in a benchmark that owns the machine, not in the correctness suite.
     assert.ok(!logs.some(line => line.includes('[Server] Parsing save')), 'save-state must never parse the save');
   } finally {
     await stopServer(server);
