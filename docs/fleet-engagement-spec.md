@@ -61,10 +61,11 @@ the band as a measurement.
 **4. Fifty-seven rows is not advice.** Rank and truncate, and announce it —
 `*TotalCount` / `*OmittedCount` to the consumer, per `CLAUDE.md`.
 
-## The measured answer today: hulls are not the constraint
+## The existing model does not reach fleet scale
 
-Worth stating up front, because it decides what the panel is actually for. The existing
-tier output, measured on the live save:
+This is the central problem, and an earlier draft of this spec got it wrong by comparing
+the observer's whole navy against a **single-ship** tier. The existing tiers are per-ship,
+and the largest stacks only to three:
 
 ```
 tier                       player    omniscient
@@ -75,19 +76,36 @@ heavy-alien-capital        7         4–5
 three-typical-aliens       5         4
 ```
 
-Player mode is *more pessimistic* than omniscient — 7 hulls against 4–5 for a heavy capital
-— which is correct: it uses the uncalibrated `×1.5` opponent assumption where omniscient
-uses true design CVs. Do not "fix" that gap; it is the cost of not knowing the enemy.
+`heavy-alien-capital = 7 hulls` is the cost of beating **one** heavy capital, not a fleet
+containing several. Real alien fleets are far larger and are not stacks of one ship type:
 
-**The observer has 38 ships. The hardest tier needs 7.** Hull count is not the binding
-constraint and a panel that leads with hull counts answers a question the player does not
-have. What binds is that 35 of those 38 sit in one Mercury fleet at 9.5 km/s against an
-alien median of 211 km/s, reaching only Earth, Luna and Venus.
+```
+largest alien fleets          ships   distinct hull types
+Victor-620   @Sol                34            17
+Victor-392   @Sol                26            13
+Victor-75    @Sol                25            17
+Victor-590   @Sol                24            19
+Victor-619   @97 Klotho          23            18
 
-So the honest headline for this campaign is closer to *"you have the hulls for any single
-alien fleet; you can reach three destinations"* than to any per-fleet number. Build the
-panel so that reads naturally when it is true, rather than burying it under 57 rows of
-hull counts.
+26 of 57 fleets exceed 3 ships   (past the largest tier)
+ 3 of 57 exceed 24 ships          (past the entire own-hull sweep)
+MAX_SIMULATED_HULLS = 24
+```
+
+So a fleet with three heavy capitals plus fifteen escorts costs far more than 7 hulls, and
+the current model has no tier that represents it. **Per-fleet estimation is not a
+re-labelling of the tiers — it needs an opponent rating built from that fleet's actual
+composition**, across its real hull mix, not N copies of a representative ship.
+
+**And the sweep ceiling will bind.** Against the larger fleets the answer may exceed 24
+own hulls, which the sweep cannot express. Either raise `MAX_SIMULATED_HULLS` — and say
+what the new ceiling costs in runtime — or report **"beyond the modelled range"** as a
+distinct verdict. What must not happen is a fleet requiring 40 hulls rendering as a band
+near 24, or as "not winnable" when the truth is "not modelled".
+
+Player mode being *more pessimistic* than omniscient (7 against 4–5 for a heavy capital) is
+correct and must not be "fixed": it uses the uncalibrated `×1.5` opponent assumption where
+omniscient has true design CVs. That gap is the cost of not knowing the enemy.
 
 ## Reachability gates the whole thing
 
