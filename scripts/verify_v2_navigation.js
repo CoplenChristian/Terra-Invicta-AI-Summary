@@ -207,6 +207,7 @@ async function runVerification() {
         // 7. Responsive Viewport & No Horizontal Scroll Checks
         console.log('\n--- 7. Viewport & Responsive Overflow Checks ---');
         const viewports = [
+          { name: 'Desktop Full HD', width: 1920, height: 1080 },
           { name: 'Desktop Large', width: 1660, height: 900 },
           { name: 'Desktop Medium', width: 1366, height: 768 },
           { name: 'Tablet', width: 900, height: 700 },
@@ -234,6 +235,15 @@ async function runVerification() {
 
             if (hasHScroll) {
               throw new Error(`Horizontal scroll detected at ${vp.name} (${vp.width}px) on view '${viewId}': scrollWidth ${scrollMetrics.scrollWidth} > clientWidth ${scrollMetrics.clientWidth}`);
+            }
+
+            if (vp.width === 1920 && viewId === 'command') {
+              const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
+              const screensOfScroll = bodyHeight / 1080;
+              console.log(`[1920x1080] COMMAND view page height: ${bodyHeight}px (${screensOfScroll.toFixed(2)} screens)`);
+              if (screensOfScroll > 3.5) {
+                throw new Error(`COMMAND view page height exceeded budget: ${bodyHeight}px (${screensOfScroll.toFixed(2)} screens > 3.5 max)`);
+              }
             }
           }
         }

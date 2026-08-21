@@ -735,6 +735,7 @@ img.faction-logo {
   max-width: 1660px;
   margin: 0 auto;
   padding: 27px 26px 54px;
+  align-items: start;
 }
 
 .init-directives-banner,
@@ -1186,6 +1187,50 @@ img.faction-logo {
   max-width: 1660px;
   margin: 0 auto;
   padding: 27px 26px 54px;
+  align-items: start;
+}
+
+@media (min-width: 1600px) {
+  .init-view__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.init-command-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 1660px;
+  margin: 0 auto;
+  padding: 27px 26px 54px;
+}
+
+.init-command-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.init-command-col {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.init-command-wide-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .init-command-top,
+  .init-command-wide-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .init-view__span {
@@ -6340,3 +6385,242 @@ button.council-orders__row:focus-visible {
   font-size: 10px;
   font-style: italic;
 }
+
+/* Wide Cards Internal Multi-Column & Runaway Capping --------------------- */
+
+#directiveBoard {
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 6px;
+  overscroll-behavior-y: contain;
+}
+
+#sitrepSummary {
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 6px;
+  overscroll-behavior-y: contain;
+}
+
+#directivesStreamList {
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 6px;
+  overscroll-behavior-y: contain;
+}
+
+@media (min-width: 1400px) {
+  .operative-leaderboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+  }
+
+  .op-bar-row {
+    border-bottom: 0;
+    padding: 10px 12px;
+    background: var(--surface-inset);
+    border-left: 2px solid var(--line);
+  }
+
+  #directivesStreamList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .directive-pill-card--hold {
+    grid-column: 1 / -1;
+  }
+
+  .directive-matrix-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+
+  .directive-decisions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+}
+
+/* Strategic Commentary --------------------------------------------------- */
+
+.tech-card--commentary {
+  border-top: 2px solid var(--accent);
+  background: var(--surface);
+}
+
+.commentary-mode-tag {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: var(--accent-strong);
+}
+
+.commentary-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.commentary-headline {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.commentary-prose {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-soft);
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--surface-inset);
+  border-left: 3px solid var(--accent);
+}
+
+.commentary-prose em {
+  font-style: normal;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.commentary-beats-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.commentary-beat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.commentary-beat-chip--pivotal {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.commentary-beat-chip--high {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.commentary-beat-chip--standard {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.commentary-beat-chip--watch {
+  border-color: var(--text-muted);
+  color: var(--text-dim);
+}
+
+.commentary-sim-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.commentary-sim-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.commentary-sim-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  background: var(--surface-raised);
+  border: 1px dashed var(--accent);
+  color: var(--accent-strong);
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+}
+
+.commentary-sim-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.commentary-sim-table th,
+.commentary-sim-table td {
+  padding: 5px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.commentary-sim-table th {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.commentary-sim-table td strong {
+  color: var(--text);
+}
+
+.commentary-sim-table td em {
+  font-style: normal;
+  color: var(--accent-strong);
+  font-family: var(--mono);
+}
+
+.commentary-projections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.commentary-proj-card {
+  padding: 8px 10px;
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+}
+
+.commentary-proj-label {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.commentary-proj-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.commentary-empty {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  padding: 12px 0;
+}
+

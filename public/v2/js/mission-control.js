@@ -95,6 +95,7 @@ const VIEWS = [
     label: 'COMMAND',
     sectionId: 'view-command',
     panels: [
+      'strategicCommentary',
       'councilOrders',
       'directiveBoard',
       'sitrepSummary',
@@ -129,7 +130,8 @@ const VIEWS = [
     sectionId: 'view-records',
     panels: [
       'factionDonutContainer',
-      'researchWatchlist'
+      'researchWatchlist',
+      'sinceLastSave'
     ]
   }
 ];
@@ -785,6 +787,12 @@ function renderDashboard() {
   renderTopHUD();
   renderHeroKPIs();
   renderHolographicCore();
+  if (window.MissionControlStrategicCommentary?.renderStrategicCommentary) {
+    window.MissionControlStrategicCommentary.renderStrategicCommentary(
+      state.briefing?.strategicCommentary,
+      'strategicCommentary'
+    );
+  }
   renderThreatBoard();
   renderGeopoliticalMapAndSectors();
   renderFactionDonut();

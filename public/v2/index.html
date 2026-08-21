@@ -117,156 +117,157 @@
 
     <!-- View 1: COMMAND (default) -->
     <section class="init-view" id="view-command" aria-label="Command view">
-      <div class="init-grid-layout">
-        <div class="init-col init-col--theaters">
-          <div class="tech-card tech-card--featured">
-            <div class="tech-card-header">
-              <div class="tech-card-title">THEATERS</div>
-              <span>6 REGIONS</span>
-            </div>
-            <div class="tech-card-body">
-              <div class="init-map-container">
-                <div class="world-map-fallback" role="status">REAL WORLD MAP INITIALIZING…</div>
-              </div>
-              <div id="mapSectorsList" style="margin-top: 10px;"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="init-col init-col--command">
-          <div class="init-kpi-banner">
-            <div class="init-kpi-item">
-              <div class="init-kpi-label">TREASURY</div>
-              <div id="kpiMoney" class="init-kpi-val">$0</div>
-              <div id="kpiMoneySub" class="init-kpi-sub">+0/mo Flow</div>
-            </div>
-            <div class="init-kpi-item">
-              <div class="init-kpi-label">TERRESTRIAL GDP</div>
-              <div id="kpiGdp" class="init-kpi-val">$0T</div>
-              <div id="kpiGdpSub" class="init-kpi-sub">0 Control Points</div>
-            </div>
-            <div class="init-kpi-item">
-              <div class="init-kpi-label">RESEARCH OUTPUT</div>
-              <div id="kpiResearch" class="init-kpi-val">0 pts</div>
-              <div id="kpiResearchSub" class="init-kpi-sub">R&amp;D Leadership</div>
-            </div>
-            <div class="init-kpi-item">
-              <div class="init-kpi-label">STRATEGIC SCORE (EST.)</div>
-              <div id="kpiPower" class="init-kpi-val">0/100</div>
-              <div id="kpiPowerSub" class="init-kpi-sub">Global Rank #1</div>
-            </div>
-          </div>
-
-          <div class="tech-card tech-card--priority">
-            <div class="tech-card-header">
-              <div class="tech-card-title">PRIORITY BRIEF</div>
-              <span>ONE ACTION FIRST</span>
-            </div>
-            <div class="tech-card-body">
-              <div id="priorityBriefCard" class="init-hologram-stage">
-                <div class="holo-orbit-ring-outer"></div>
-                <div class="holo-orbit-ring-inner"></div>
-                <div class="holo-core-content">
-                  <div class="holo-core-badge">01</div>
-                  <div id="holoPrimaryTitle" class="holo-core-title">Awaiting priority brief</div>
-                  <div id="holoPrimaryStatement" class="holo-core-statement">
-                    Maintain network surveillance until a higher-priority order is available.
-                  </div>
-                  <p id="priorityPolicyNote" class="priority-policy-note" hidden></p>
-                </div>
-                <dl id="priorityOpsMeta" class="priority-ops-meta">
-                  <div><dt>Mission</dt><dd id="priorityMissionType">UNAVAILABLE</dd></div>
-                  <div><dt>Window</dt><dd id="priorityWindow">This cycle</dd></div>
-                  <div><dt>Success</dt><dd id="prioritySuccess">UNAVAILABLE</dd></div>
-                  <div><dt>Mission cost</dt><dd id="priorityMissionCost">UNAVAILABLE</dd></div>
-                </dl>
-                <p id="priorityExpectedHate" class="priority-hate-band" hidden></p>
-                <div id="priorityOperatives" class="priority-ops-roster"></div>
-                <div class="priority-ops-actions">
-                  <button id="openPriorityDetailsBtn" class="init-btn init-btn-cyan" type="button">Open details</button>
-                  <button id="openCouncilorRosterBtn" class="init-btn" type="button">Open councilor roster</button>
-                </div>
-                <div class="holo-node-grid">
-                  <div class="holo-node">
-                    <div class="holo-node-num">01</div>
-                    <div class="holo-node-label">GDP under command</div>
-                    <div id="node1Val" class="holo-node-status">$39.4T GDP</div>
-                  </div>
-                  <div class="holo-node">
-                    <div class="holo-node-num">02</div>
-                    <div class="holo-node-label">Councilors</div>
-                    <div id="node2Val" class="holo-node-status">5 Active</div>
-                  </div>
-                  <div class="holo-node">
-                    <div class="holo-node-num">03</div>
-                    <div class="holo-node-label">Orbital sites</div>
-                    <div id="node3Val" class="holo-node-status">18 Habs</div>
-                  </div>
-                  <div class="holo-node">
-                    <div class="holo-node-num">04</div>
-                    <div class="holo-node-label">Research position</div>
-                    <div id="node4Val" class="holo-node-status">Leading</div>
-                  </div>
-                  <div class="holo-node">
-                    <div class="holo-node-num">05</div>
-                    <div class="holo-node-label">Xenoforming sites</div>
-                    <div id="node5Val" class="holo-node-status">DEFCON 2</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="tech-card tech-card--priority">
-            <div class="tech-card-header">
-              <div class="tech-card-title">COUNCIL ORDERS</div>
-              <span>EVERY COUNCILOR, THIS CYCLE</span>
-            </div>
-            <div class="tech-card-body">
-              <div id="councilOrders" aria-live="polite">
-                <div class="council-orders__empty">LOADING COUNCIL ORDERS…</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="tech-card tech-card--alert">
-            <div class="tech-card-header">
-              <div class="tech-card-title">THREAT PICTURE</div>
-              <span>TOP SIGNALS</span>
-            </div>
-            <div class="tech-card-body">
-              <div id="threatBoard" class="threat-board" aria-live="polite"></div>
-            </div>
-          </div>
-
-          <div class="init-since-save-banner">
-            <div class="tech-card">
+      <div class="init-command-layout">
+        <div class="init-command-top">
+          <!-- Left Column -->
+          <div class="init-command-col">
+            <div class="tech-card tech-card--featured">
               <div class="tech-card-header">
-                <div class="tech-card-title">SINCE LAST SAVE</div>
-                <span>MATERIAL CHANGE</span>
+                <div class="tech-card-title">THEATERS</div>
+                <span>6 REGIONS</span>
               </div>
               <div class="tech-card-body">
-                <div id="sinceLastSave" class="since-save-grid since-save-grid--compact" aria-live="polite">
-                  <p class="since-save-empty">Comparing the current snapshot with the immediately previous save…</p>
+                <div class="init-map-container">
+                  <div class="world-map-fallback" role="status">REAL WORLD MAP INITIALIZING…</div>
                 </div>
+                <div id="mapSectorsList" style="margin-top: 10px;"></div>
+              </div>
+            </div>
+
+            <div class="tech-card tech-card--priority">
+              <div class="tech-card-header">
+                <div class="tech-card-title">COUNCIL ORDERS</div>
+                <span>EVERY COUNCILOR, THIS CYCLE</span>
+              </div>
+              <div class="tech-card-body">
+                <div id="councilOrders" aria-live="polite">
+                  <div class="council-orders__empty">LOADING COUNCIL ORDERS…</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tech-card tech-card--alert">
+              <div class="tech-card-header">
+                <div class="tech-card-title">THREAT PICTURE</div>
+                <span>TOP SIGNALS</span>
+              </div>
+              <div class="tech-card-body">
+                <div id="threatBoard" class="threat-board" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column -->
+          <div class="init-command-col">
+            <div class="tech-card tech-card--priority">
+              <div class="init-kpi-banner">
+                <div class="init-kpi-item">
+                  <div class="init-kpi-label">TREASURY</div>
+                  <div id="kpiMoney" class="init-kpi-val">$0</div>
+                  <div id="kpiMoneySub" class="init-kpi-sub">+0/mo Flow</div>
+                </div>
+                <div class="init-kpi-item">
+                  <div class="init-kpi-label">TERRESTRIAL GDP</div>
+                  <div id="kpiGdp" class="init-kpi-val">$0T</div>
+                  <div id="kpiGdpSub" class="init-kpi-sub">0 Control Points</div>
+                </div>
+                <div class="init-kpi-item">
+                  <div class="init-kpi-label">RESEARCH OUTPUT</div>
+                  <div id="kpiResearch" class="init-kpi-val">0 pts</div>
+                  <div id="kpiResearchSub" class="init-kpi-sub">R&amp;D Leadership</div>
+                </div>
+                <div class="init-kpi-item">
+                  <div class="init-kpi-label">STRATEGIC SCORE (EST.)</div>
+                  <div id="kpiPower" class="init-kpi-val">0/100</div>
+                  <div id="kpiPowerSub" class="init-kpi-sub">Global Rank #1</div>
+                </div>
+              </div>
+
+              <div class="tech-card-header" style="margin-top: 14px; border-top: 1px solid var(--line);">
+                <div class="tech-card-title">PRIORITY BRIEF</div>
+                <span>ONE ACTION FIRST</span>
+              </div>
+              <div class="tech-card-body">
+                <div id="priorityBriefCard" class="init-hologram-stage">
+                  <div class="holo-orbit-ring-outer"></div>
+                  <div class="holo-orbit-ring-inner"></div>
+                  <div class="holo-core-content">
+                    <div class="holo-core-badge">01</div>
+                    <div id="holoPrimaryTitle" class="holo-core-title">Awaiting priority brief</div>
+                    <div id="holoPrimaryStatement" class="holo-core-statement">
+                      Maintain network surveillance until a higher-priority order is available.
+                    </div>
+                    <p id="priorityPolicyNote" class="priority-policy-note" hidden></p>
+                  </div>
+                  <dl id="priorityOpsMeta" class="priority-ops-meta">
+                    <div><dt>Mission</dt><dd id="priorityMissionType">UNAVAILABLE</dd></div>
+                    <div><dt>Window</dt><dd id="priorityWindow">This cycle</dd></div>
+                    <div><dt>Success</dt><dd id="prioritySuccess">UNAVAILABLE</dd></div>
+                    <div><dt>Mission cost</dt><dd id="priorityMissionCost">UNAVAILABLE</dd></div>
+                  </dl>
+                  <p id="priorityExpectedHate" class="priority-hate-band" hidden></p>
+                  <div id="priorityOperatives" class="priority-ops-roster"></div>
+                  <div class="priority-ops-actions">
+                    <button id="openPriorityDetailsBtn" class="init-btn init-btn-cyan" type="button">Open details</button>
+                    <button id="openCouncilorRosterBtn" class="init-btn" type="button">Open councilor roster</button>
+                  </div>
+                  <div class="holo-node-grid">
+                    <div class="holo-node">
+                      <div class="holo-node-num">01</div>
+                      <div class="holo-node-label">GDP under command</div>
+                      <div id="node1Val" class="holo-node-status">$39.4T GDP</div>
+                    </div>
+                    <div class="holo-node">
+                      <div class="holo-node-num">02</div>
+                      <div class="holo-node-label">Councilors</div>
+                      <div id="node2Val" class="holo-node-status">5 Active</div>
+                    </div>
+                    <div class="holo-node">
+                      <div class="holo-node-num">03</div>
+                      <div class="holo-node-label">Orbital sites</div>
+                      <div id="node3Val" class="holo-node-status">18 Habs</div>
+                    </div>
+                    <div class="holo-node">
+                      <div class="holo-node-num">04</div>
+                      <div class="holo-node-label">Research position</div>
+                      <div id="node4Val" class="holo-node-status">Leading</div>
+                    </div>
+                    <div class="holo-node">
+                      <div class="holo-node-num">05</div>
+                      <div class="holo-node-label">Xenoforming sites</div>
+                      <div id="node5Val" class="holo-node-status">DEFCON 2</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tech-card tech-card--commentary" id="strategicCommentaryCard">
+              <div class="tech-card-header">
+                <div class="tech-card-title">STRATEGIC COMMENTARY</div>
+                <span id="commentaryModeBadge" class="commentary-mode-tag">CAMPAIGN READ</span>
+              </div>
+              <div class="tech-card-body">
+                <div id="strategicCommentary" aria-live="polite">
+                  <div class="commentary-empty">ANALYZING STRATEGIC COMMENTARY…</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tech-card">
+              <div class="tech-card-header">
+                <div class="tech-card-title">OPERATIONS BOARD</div>
+                <span>ACTIVE COUNCILORS</span>
+              </div>
+              <div class="tech-card-body">
+                <div id="opLeaderboardList" class="operative-leaderboard"></div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="init-directives-banner">
-          <div class="tech-card">
-            <div class="tech-card-header">
-              <div class="tech-card-title">OPERATIONS BOARD</div>
-              <span>ACTIVE COUNCILORS</span>
-            </div>
-            <div class="tech-card-body">
-              <div id="opLeaderboardList" class="operative-leaderboard"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="init-view__full-card">
+        <!-- Wide Strategic Row: Directive Engine + Executive Brief & Directives -->
+        <div class="init-command-wide-row">
           <div class="tech-card">
             <div class="tech-card-header">
               <div class="tech-card-title">DIRECTIVE ENGINE</div>
@@ -278,9 +279,7 @@
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="init-view__full-card">
           <div class="tech-card tech-card--quiet">
             <div class="tech-card-header">
               <div class="tech-card-title">EXECUTIVE BRIEF &amp; DIRECTIVES</div>
@@ -408,6 +407,18 @@
           </div>
         </div>
 
+        <div class="tech-card tech-card--quiet init-view__span">
+          <div class="tech-card-header">
+            <div class="tech-card-title">SINCE LAST SAVE</div>
+            <span>MATERIAL STRATEGIC DELTA</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="sinceLastSave" class="since-save-grid since-save-grid--compact" aria-live="polite">
+              <p class="since-save-empty">Comparing the current snapshot with the immediately previous save…</p>
+            </div>
+          </div>
+        </div>
+
         <section class="init-api-access init-view__span" aria-labelledby="initApiAccessTitle">
           <div class="init-api-access__header">
             <div>
@@ -471,6 +482,7 @@
   <script src="/v2/js/components/mining-expansion.js"></script>
   <script src="/v2/js/components/directive-board.js"></script>
   <script src="/v2/js/components/council-orders.js"></script>
+  <script src="/v2/js/components/strategic-commentary.js"></script>
   <script src="/v2/js/mission-control.js"></script>
 </body>
 </html>

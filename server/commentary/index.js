@@ -1,0 +1,74 @@
+/**
+ * server/commentary/index.js
+ *
+ * Strategic Commentary Engine — Top-level Orchestrator.
+ *
+ * Combines:
+ * - Layer 1: Null-honest facts extraction (facts.js)
+ * - Layer 2: Deterministic narrative beats with Hold Ground guard (beats.js)
+ * - Layer 3: Seeded Monte Carlo combat threshold simulation (simulation.js)
+ * - Layer 4: Seeded templated grammar with measured/simulated distinction (grammar.js)
+ */
+
+'use strict';
+
+const { extractFacts } = require('./facts');
+const { evaluateBeats } = require('./beats');
+const { runMonteCarloSimulation } = require('./simulation');
+const { generateGrammar } = require('./grammar');
+
+/**
+ * Generates the strategic commentary for a snapshot.
+ *
+ * @param {object} params
+ * @param {object} params.snapshot Filtered snapshot
+ * @param {object} [params.rawSnapshot] Raw snapshot if available
+ * @param {object} [params.campaignPosture] Output of assessCampaignPosture
+ * @param {object} [params.holdGround] Output of buildHoldGround
+ * @param {object} [params.changesSincePrevious] Output of snapshotDelta / strategicDelta
+ * @param {string} [params.snapshotId] Unique identifier for deterministic seeding
+ */
+function generateStrategicCommentary({
+  snapshot = {},
+  rawSnapshot = null,
+  campaignPosture = {},
+  holdGround = {},
+  changesSincePrevious = null,
+  snapshotId = null
+} = {}) {
+  const facts = extractFacts({
+    snapshot,
+    rawSnapshot,
+    campaignPosture,
+    holdGround,
+    changesSincePrevious,
+    snapshotId
+  });
+
+  const beats = evaluateBeats(facts);
+  const simulation = runMonteCarloSimulation(facts);
+  const grammar = generateGrammar({ facts, beats, simulation });
+
+  return {
+    available: true,
+    mode: facts.mode,
+    snapshotId: facts.snapshotId,
+    headline: grammar.headline,
+    prose: grammar.prose,
+    advice: grammar.advice,
+    beats,
+    simulation: {
+      available: simulation.available,
+      source: simulation.source,
+      ownBestHull: simulation.ownBestHull,
+      ownBestDesign: simulation.ownBestDesign,
+      ownRating: simulation.ownRating,
+      tiers: simulation.tiers || [],
+      projections: simulation.projections || {}
+    }
+  };
+}
+
+module.exports = {
+  generateStrategicCommentary
+};

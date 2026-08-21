@@ -55,6 +55,7 @@ const readers = require('./briefing/readers');
 const { buildExecutiveSitrep } = require('./briefing/sitrep');
 const { buildTheaterStatus } = require('./earthTheater');
 const directives = require('./directives');
+const strategicCommentary = require('./commentary');
 
 class BriefingGenerator {
   constructor(config = resolveConfig()) {
@@ -249,6 +250,16 @@ class BriefingGenerator {
     // 4. Operative Roster with Tactical Recommendations
     const operativeRoster = this.buildOperativeRoster(councilors, observerId, campaignPosture);
 
+    // 5. Strategic Commentary (docs/strategic-commentary-and-layout-plan.md)
+    const commentary = strategicCommentary.generateStrategicCommentary({
+      snapshot,
+      rawSnapshot,
+      campaignPosture,
+      holdGround,
+      changesSincePrevious: snapshot.changesSincePrevious,
+      snapshotId: identity.snapshotId || identity.saveFilename
+    });
+
     return {
       ...identity,
       generatedAt: identity.generatedAt || new Date().toISOString(),
@@ -280,6 +291,7 @@ class BriefingGenerator {
       // and at what hate, and the exit condition. Carried whether or not it
       // fires, so a caller can see the stand-down reason too.
       holdGround,
+      strategicCommentary: commentary,
       engineDirectives: {
         primary: engineResult.primary,
         alternatives: engineResult.alternatives,
