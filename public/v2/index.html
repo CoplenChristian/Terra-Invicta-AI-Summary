@@ -29,6 +29,12 @@
       <div class="init-hud-pill">
         <span>SAVE:</span> <strong id="hudSave">-</strong>
       </div>
+      <!-- RULES, not "difficulty": this campaign runs custom multipliers and a
+           pill reading a stock difficulty name would misdescribe every figure
+           on the page. `renderTopHUD` fills it from metadata.difficultyLabel. -->
+      <div class="init-hud-pill init-hud-pill-rules">
+        <span>RULES:</span> <strong id="hudDifficulty">-</strong>
+      </div>
       <div class="init-hud-pill init-hud-pill-observer">
         <span>OBSERVER:</span> <strong id="hudFaction" class="init-hud-faction-value"><span id="hudFactionLogo" class="init-hud-faction-logo" aria-hidden="true"></span><span id="hudFactionName">the Initiative</span></strong>
       </div>

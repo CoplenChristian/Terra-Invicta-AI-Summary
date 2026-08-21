@@ -106,7 +106,9 @@ async function main() {
   const gameTimeString = rawSnapshot.metadata.gameTimeString || 'Unknown';
 
   console.log(`In-Game Date:       ${gameTimeString}`);
-  console.log(`Campaign Difficulty: ${rawSnapshot.metadata.difficulty}`);
+  // The label, not the bare word: an operator watching a publish scroll past
+  // should see that this campaign is customised.
+  console.log(`Campaign Difficulty: ${rawSnapshot.metadata.difficultyLabel || rawSnapshot.metadata.difficulty}`);
 
   // 3. Discover Observer Factions
   //

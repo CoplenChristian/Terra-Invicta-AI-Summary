@@ -914,7 +914,11 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     `**Date:** ${meta.gameTimeString || 'Unknown'}`,
     `**Observer Faction:** ${observerName}`,
     `**Intelligence Mode:** ${mode}`,
-    `**Difficulty:** ${meta.difficulty || 'Normal'}`,
+    // `difficultyLabel` names the customisation when the campaign carries one,
+    // so a save running four rates at 200% never exports as plain "Normal".
+    // The `|| 'Normal'` that used to close this line invented a difficulty for
+    // a save that never stated one; an unread difficulty now says so.
+    `**Difficulty:** ${meta.difficultyLabel || meta.difficulty || 'UNAVAILABLE'}`,
     ``
   ]));
 

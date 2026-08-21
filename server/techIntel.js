@@ -35,6 +35,10 @@ function baseEnvelope(snapshot, mode, observerId) {
     campaignDate: snapshot.metadata?.gameTimeString || null,
     saveFilename: snapshot.metadata?.fileName || null,
     difficulty: snapshot.metadata?.difficulty || null,
+    // See server/intelResources.js: the raw word stays, the reader-facing label
+    // names any customisation rather than showing a stock difficulty name.
+    difficultyLabel: snapshot.metadata?.difficultyLabel || snapshot.metadata?.difficulty || null,
+    campaignSettings: snapshot.metadata?.campaignSettings || null,
     observerFaction: { id: observerId, name: observer?.displayName || null },
     intelMode: mode,
     visibility: mode

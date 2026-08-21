@@ -15,6 +15,10 @@
 //   factions       -> tech tree     (the graph carries a per-faction overlay)
 
 const templateLoader = require('../templateLoader');
+const {
+  CAMPAIGN_SETTINGS_UNAVAILABLE,
+  describeCampaignDifficulty
+} = require('../../shared/campaignSettings.mjs');
 const lookups = require('./lookups');
 const space = require('./space');
 const { buildNations } = require('./nations');
@@ -130,6 +134,10 @@ function buildRawSnapshot(saveData) {
   const keyProjects = (analysisConfig.strategicProjects || []).map(project => project.id);
   const techMatrix = factionsModule.buildTechMatrix(keyProjects, { factions, rawFactions });
 
+  // saveParser bakes this; a hand-built saveData that predates the field falls
+  // back to the explicit unavailable block rather than to an invented default.
+  const campaignSettings = saveData.campaignSettings || CAMPAIGN_SETTINGS_UNAVAILABLE;
+
   return {
     miningScarcityWeights: analysisConfig.miningScarcityWeights,
     metadata: {
@@ -144,6 +152,20 @@ function buildRawSnapshot(saveData) {
       // Derived from the value actually being published, so the flag cannot
       // disagree with the field it describes.
       difficultyAvailable: typeof saveData.difficulty === 'string' && saveData.difficulty.trim() !== '',
+      // The custom-difficulty block, carried alongside the label rather than
+      // replacing it: `difficulty` still selects the alien minimum-hate floor
+      // multiplier and must stay exactly the word the save wrote.
+      //
+      // A save parsed before this field existed -- a committed fixture, a
+      // hand-built test snapshot -- reports `available: false` and every
+      // consumer falls back to the bare label, so behaviour with the settings
+      // absent is unchanged.
+      campaignSettings,
+      // The label every surface renders. It is the bare difficulty for a stock
+      // campaign and names the customisation for a custom one, so no reader
+      // sees "Normal" on a campaign running four rates at 200%.
+      difficultyLabel: describeCampaignDifficulty(saveData.difficulty ?? null, campaignSettings),
+      difficultyIsCustom: campaignSettings.customDifficulty,
       // Verified against the live save on 2026-08-20: TIMetadataState does
       // not carry campaignStartYear at all, so the previous `|| 2022`
       // fabricated an elapsed-campaign measurement for every save. The

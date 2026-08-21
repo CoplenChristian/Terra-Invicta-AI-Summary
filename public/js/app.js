@@ -394,7 +394,13 @@ function renderMetadata() {
   const meta = state.snapshot.metadata;
   document.getElementById('metaDate').textContent = meta.gameTimeString || 'Unknown';
   document.getElementById('metaSaveName').textContent = meta.fileName || 'Save';
-  document.getElementById('metaDifficulty').textContent = meta.difficulty || 'Normal';
+  // `difficultyLabel` names a custom campaign's non-stock multipliers; the old
+  // `|| 'Normal'` both invented a difficulty for a save that stated none and
+  // showed a 200%-rates campaign as stock. This module is otherwise frozen --
+  // the one expression is changed because the alternative is a knowingly wrong
+  // reading on screen.
+  document.getElementById('metaDifficulty').textContent =
+    meta.difficultyLabel || meta.difficulty || 'UNAVAILABLE';
   document.getElementById('metaMtime').textContent = meta.lastModified ? new Date(meta.lastModified).toLocaleTimeString() : '--';
 }
 

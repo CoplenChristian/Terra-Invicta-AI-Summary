@@ -79,6 +79,26 @@ const formatFactor = (value) => value === null ? 'UNAVAILABLE' : Number(value).t
 /**
  * Total war state, given elapsed campaign years and difficulty.
  * Returns 'unavailable' when either input is unknown -- never a false 'safe'.
+ *
+ * ON `alienProgressionSpeed`, and the custom-difficulty audit of 2026-08-21
+ * (docs/campaign-settings-spec.md; verdicts indexed in
+ * shared/campaignSettings.mjs as CAMPAIGN_SETTING_VERDICTS):
+ *
+ * The hate MODEL is clear. `buildAlienHateEconomics` reports
+ * `source: 'save-derived'`, and the venting rate is measured from a
+ * previous-save comparison and explicitly refused when unmeasurable, including
+ * in player mode where the true hate figure is redacted. Nothing there projects
+ * from a stock rate, so no multiplier belongs in it.
+ *
+ * THIS function is the one exception worth knowing about, and it is deliberately
+ * left alone. The year gate below divides by `alienProgressionSpeed`, no caller
+ * passes one, and the save's own `alienProgressionSpeed` is now baked at
+ * `metadata.campaignSettings.settings.alienProgressionSpeed`. The default of 1
+ * is therefore an assumption, which is exactly what `progressionSpeedAssumed`
+ * already announces to every consumer -- it is not a silent wrong answer.
+ * Wiring the measured value in would MOVE a published figure (Normal's 20-year
+ * gate becomes 10 at 200%), so it is a separate, verifiable change and not part
+ * of a presentational pass.
  */
 export function buildTotalWarState({
   difficultyKey,

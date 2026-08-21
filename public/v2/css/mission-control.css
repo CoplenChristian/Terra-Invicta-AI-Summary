@@ -375,6 +375,12 @@ img.faction-logo {
   }
 }
 
+/* A customised campaign is called out rather than left to read as stock. The
+   full multiplier list lives in the pill's title attribute. */
+.init-hud-pill-rules.is-custom strong {
+  color: var(--warning);
+}
+
 .init-hud-pill.is-stale strong {
   color: var(--warning);
 }

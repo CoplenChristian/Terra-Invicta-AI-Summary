@@ -126,6 +126,10 @@ function registerReadOnlyExports(app) {
         source: 'local',
         ...responseIdentity(filtered, targetPath === null),
         difficulty: filtered.metadata?.difficulty || null,
+        // See server/intelResources.js: the raw word stays, the reader-facing
+        // label names any customisation rather than a stock difficulty name.
+        difficultyLabel: filtered.metadata?.difficultyLabel || filtered.metadata?.difficulty || null,
+        campaignSettings: filtered.metadata?.campaignSettings || null,
         observerFaction: {
           id: filtered.observerFactionId,
           name: filtered.observerFactionName

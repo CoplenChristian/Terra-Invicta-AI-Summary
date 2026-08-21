@@ -13,6 +13,25 @@
 
 import { selectExportMarkdown } from '../shared/apiSurface.mjs';
 
+/**
+ * The difficulty fields every hosted data response carries.
+ *
+ * `difficulty` remains the `difficulty` COLUMN -- published wire format, and
+ * the word the alien-hate model keys off. `difficultyLabel` comes from the
+ * published snapshot's metadata and names a customised campaign, so a save
+ * running non-stock rates is never read back as a stock one. A row published
+ * before the settings were baked has no label and falls back to the column,
+ * which is exactly the previous behaviour.
+ */
+export const difficultyFields = (row = {}, snapshot = {}) => {
+  const metadata = snapshot?.metadata || row?.snapshot?.metadata || {};
+  return {
+    difficulty: row.difficulty ?? null,
+    difficultyLabel: metadata.difficultyLabel || row.difficulty || null,
+    campaignSettings: metadata.campaignSettings || null
+  };
+};
+
 export const resultIdentity = (result) => {
   const row = result.row || {};
   const snapshot = result.snapshot || {};
@@ -49,7 +68,7 @@ export const snapshotEnvelope = (result, format = 'compact') => {
     success: true,
     source: 'supabase',
     ...resultIdentity(result),
-    difficulty: row.difficulty,
+    ...difficultyFields(row, result.snapshot),
     campaignStartYear: row.campaign_start_year,
     observerFaction: {
       id: row.observer_faction_id,
@@ -76,7 +95,7 @@ export const resourceEnvelope = (result, resource, items, query = {}, extra = {}
     source: 'supabase',
     resource,
     ...resultIdentity(result),
-    difficulty: row.difficulty,
+    ...difficultyFields(row, result.snapshot),
     observerFaction: {
       id: row.observer_faction_id,
       name: row.observer_faction_name

@@ -119,6 +119,24 @@ export const normalizeCostObject = (cost) => {
 // whose rates were simply absent from the snapshot, which is indistinguishable
 // in the output from a genuinely barren site. Partial coverage is summed but
 // labelled, so a caller can tell a complete reading from a partial one.
+//
+// DO NOT APPLY `miningProductivityMultiplier` HERE. Checked by measurement on
+// 2026-08-21 (docs/campaign-settings-spec.md; indexed in
+// shared/campaignSettings.mjs as CAMPAIGN_SETTING_VERDICTS): the site rates
+// this reads are REALISED extraction, so the multiplier is already inside
+// them. On a campaign running mining at 200%, the observer's 17 completed
+// mines gave rate x30 against the faction's own monthlyIncome as water 1.033,
+// volatiles 0.939, metals 1.094, nobleMetals 1.088, fissiles 1.219 -- five
+// independent resources near 1.0, where an omitted 200% would read ~2.0.
+// Multiplying here would introduce a 2x error into a correct figure.
+//
+// `rateMultiplier` below is a daily->monthly unit conversion (x30), not a
+// difficulty term, and that is why it is the only factor applied.
+//
+// Also recorded so it is not "rediscovered": an unmined site still reports
+// rates. Those are the PROJECTED yield -- exactly what a prospecting board
+// should show -- not evidence that the field means richness rather than
+// extraction. The same field on a built mine carries the realised rate.
 export const siteMonthlyOutput = (site) => {
   const measured = MINING_RESOURCES
     .map(({ key }) => toFinite(site?.[key]))

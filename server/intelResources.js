@@ -81,6 +81,11 @@ function buildResource(snapshot, resource, options = {}) {
     campaignDate: snapshot.metadata?.gameTimeString || null,
     saveFilename: snapshot.metadata?.fileName || null,
     difficulty: snapshot.metadata?.difficulty || null,
+    // `difficulty` stays the save's own word because the hate model keys off
+    // it. `difficultyLabel` is what a reader should see: it names the
+    // customisation so a 200%-rate campaign is not read as a stock one.
+    difficultyLabel: snapshot.metadata?.difficultyLabel || snapshot.metadata?.difficulty || null,
+    campaignSettings: snapshot.metadata?.campaignSettings || null,
     observerFaction: { id: snapshot.observerFactionId, name: snapshot.observerFactionName },
     intelMode: mode,
     visibility: mode,
