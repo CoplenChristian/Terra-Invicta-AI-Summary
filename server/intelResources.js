@@ -1,3 +1,7 @@
+// server/intelResources.js
+//
+// Purpose: CommonJS barrel exposing the shared intel projections to the local Express server.
+
 const snapshotIdentity = require('./snapshotIdentity');
 const shared = require('../shared/intelResources.mjs');
 const { resolveConfig } = require('./config');

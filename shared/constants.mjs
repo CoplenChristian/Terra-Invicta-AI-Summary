@@ -1,3 +1,4 @@
+// Purpose: shared constants — faction ids, intelligence modes, display names.
 export const ALIEN_FACTION_ID = 4717;
 export const DEFAULT_OBSERVER_FACTION_ID = 4712;
 

@@ -1,5 +1,8 @@
 // shared/intel/mobility.mjs
 //
+// Purpose: fleet transfer feasibility, with a destination table that is a
+//   labelled heuristic estimate rather than a measurement.
+//
 // Fleet transfer feasibility. Its destination table is a heuristic estimate
 // (`isEstimate: true` on every response), which is why it is kept apart from
 // the measured fleet projections in `fleets.mjs`.

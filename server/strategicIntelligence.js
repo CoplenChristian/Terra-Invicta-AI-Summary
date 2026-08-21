@@ -1,3 +1,7 @@
+// server/strategicIntelligence.js
+//
+// Purpose: project resource position, fleet capability and alien-hate posture for strategic review.
+
 const spaceTheater = require('./spaceTheater');
 const { ALIEN_FACTION_ID, ALIEN_FACTION_DISPLAY_NAME } = require('../shared/constants.mjs');
 const { asArray, sameId } = require('../shared/util.mjs');

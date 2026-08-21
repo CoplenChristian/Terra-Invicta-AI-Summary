@@ -1,5 +1,8 @@
 // shared/intel/fleets.mjs
 //
+// Purpose: fleets, the ships inside them, inbound arrivals, and the orbital
+//   transfers derived from fleet movement.
+//
 // Fleets, the ships inside them, inbound arrivals, and the orbital transfers
 // derived from fleet movement. `transfersResource` lives here rather than in
 // `theaters.mjs` because it is a projection OF the fleet list; theaters and

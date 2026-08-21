@@ -1,5 +1,8 @@
 // shared/techGraph.mjs
 //
+// Purpose: pure tech-tree normalisation and dependency-graph helpers shared by
+//   the local Express server and the hosted Cloudflare worker.
+//
 // Pure tech-tree normalization + dependency-graph helpers shared by the local
 // Express server and the hosted Cloudflare worker. It has no runtime-specific
 // imports so it stays usable in both.

@@ -1,3 +1,7 @@
+// server/snapshotLoader.js
+//
+// Purpose: orchestrate parsing, building, filtering and caching of the live save into snapshots.
+
 const fs = require('fs');
 const path = require('path');
 const { resolveConfig } = require('./config');

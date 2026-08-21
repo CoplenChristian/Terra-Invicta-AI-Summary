@@ -1,5 +1,8 @@
 // shared/intel/construction.mjs
 //
+// Purpose: shipyards, their queues, and the consolidated build board that
+//   merges ship queues, hab modules and hab sites into one schedule.
+//
 // Shipyards, their queues, and the consolidated build board that merges ship
 // queues, hab modules, and hab sites into one schedule.
 

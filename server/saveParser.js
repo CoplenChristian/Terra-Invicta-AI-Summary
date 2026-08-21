@@ -1,3 +1,7 @@
+// server/saveParser.js
+//
+// Purpose: locate, decompress and parse a Terra Invicta save file into raw game state.
+
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');

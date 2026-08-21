@@ -1,5 +1,6 @@
 /**
  * Research advisor, phase 5: slot allocation.
+ * Purpose: research-advisor phase-5 allocation of research to slots.
  *
  * Spec: docs/research-advisor-spec.md sections 0, 1 and 6.
  *

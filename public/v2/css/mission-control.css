@@ -13,7 +13,9 @@
   --text: #e6eeea;
   --text-soft: #b7c5bf;
   --text-muted: #91a29b;
-  --text-dim: #6a7d75;
+  /* WCAG AA constraint: --text-dim must maintain >= 4.5:1 contrast against --surface (#101b1d),
+     which is the tightest pairing where dim metadata text is placed (4.77:1 at #758a81). */
+  --text-dim: #758a81;
   --accent: #69c5b8;
   --accent-strong: #a3e0d4;
   --accent-soft: rgba(105, 197, 184, 0.14);
@@ -35,8 +37,6 @@
   --bg-card-border: var(--line);
   --bg-card-border-glow: var(--line-strong);
   --text-main: var(--text);
-  --text-muted: var(--text-muted);
-  --text-dim: var(--text-dim);
   --font-mono: var(--mono);
   --font-sans: var(--sans);
   --init-cyan: var(--accent);
@@ -1199,30 +1199,30 @@ img.faction-logo {
 .init-command-layout {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 16px;
   max-width: 1660px;
   margin: 0 auto;
-  padding: 27px 26px 54px;
+  padding: 20px 24px 36px;
 }
 
 .init-command-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 22px;
+  gap: 16px;
   align-items: start;
 }
 
 .init-command-col {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 16px;
   min-width: 0;
 }
 
 .init-command-wide-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 22px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -6746,10 +6746,42 @@ button.council-orders__row:focus-visible {
   .ra-tracks { grid-template-columns: 1fr; }
 }
 
+.ra-procurement {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 2px;
+  padding: 1px 4px;
+  background: var(--surface-inset);
+  border-left: 2px solid var(--line-strong);
+}
+
+.ra-procurement__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 7.5px;
+  letter-spacing: 0.06em;
+  color: var(--accent-strong);
+  text-transform: uppercase;
+  padding-bottom: 0.5px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ra-procurement__head small {
+  font-family: var(--mono);
+  color: var(--text-dim);
+  font-size: 7px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .ra-track {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
@@ -6831,6 +6863,11 @@ button.council-orders__row:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+.ra-row__sub {
+  color: var(--text-muted);
+  font-size: 9.5px;
 }
 
 .ra-row__metric {

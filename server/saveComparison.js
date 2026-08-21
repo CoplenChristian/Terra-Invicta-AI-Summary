@@ -1,4 +1,6 @@
 /**
+ * Purpose: choose which earlier save the "since last save" comparison should use.
+ *
  * Chooses which earlier save the "since last save" comparison should use.
  *
  * Picking the immediately-previous file by modification time produces an empty

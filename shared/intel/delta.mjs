@@ -1,5 +1,8 @@
 // shared/intel/delta.mjs
 //
+// Purpose: three-state turn-to-turn comparison between two snapshots, where a
+//   missing side is never a change of zero.
+//
 // Turn-to-turn comparison between two snapshots. Every measurement here is
 // three-state -- from / to / diff plus an `available` flag -- because a
 // comparison with one side missing is not a change of zero.

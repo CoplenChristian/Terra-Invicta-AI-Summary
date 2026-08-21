@@ -1,5 +1,8 @@
 // shared/unlockIndex.mjs
 //
+// Purpose: read accessors over the baked unlock index built at snapshot-build
+//   time by server/snapshot/templates.js.
+//
 // Read accessors over the baked unlock index (`snapshot.unlockIndex`, built by
 // `server/snapshot/templates.js` at snapshot-build time).
 //

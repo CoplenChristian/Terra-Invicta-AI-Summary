@@ -1,3 +1,7 @@
+// server/templateLoader.js
+//
+// Purpose: load and validate the installed game templates into the maps the snapshot reducers read.
+
 const fs = require('fs');
 const path = require('path');
 const { resolveConfig } = require('./config');

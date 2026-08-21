@@ -1,5 +1,8 @@
 // shared/intel/habs.mjs
 //
+// Purpose: habs, hab sites (the mining deposits), hab modules, and the per-hab
+//   infrastructure briefing.
+//
 // Habs, hab sites (the mining deposits a hab is built on), hab modules, and the
 // per-hab infrastructure briefing.
 

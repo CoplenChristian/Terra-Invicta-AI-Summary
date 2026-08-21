@@ -1,5 +1,7 @@
 /**
  * Shared request-validation rules for both runtimes.
+ * Purpose: the accept/reject request-validation rules shared by the local
+ *   Express server and the hosted Cloudflare worker.
  *
  * The 2026-08-20 review (section D) named this as the reason the local Express
  * server and the hosted Cloudflare worker duplicate validation:

@@ -1,5 +1,7 @@
 /**
  * Shared API surface helpers.
+ * Purpose: the /api/intel discovery index and export-markdown selection shared
+ *   by the local Express server and the hosted Cloudflare worker.
  *
  * The local Express server and the hosted Cloudflare worker both publish the
  * same `/api/intel` directory page and both pick an export markdown variant

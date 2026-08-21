@@ -1,3 +1,7 @@
+// server/snapshotIdentity.js
+//
+// Purpose: fingerprint save files and derive the snapshot identity envelope (id, hashes, timestamps).
+
 const crypto = require('crypto');
 const fs = require('fs');
 

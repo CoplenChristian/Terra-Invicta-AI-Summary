@@ -459,8 +459,8 @@ test('ranking happens inside an availability group and never across two', () => 
   assert.deepEqual(ASPIRATIONAL_GROUPS, ['prereq-clear-but-unrolled', 'prereq-blocked']);
 });
 
-test('zero-cost options with an improvement lead the ranking head', () => {
-  const zeroCostRow = {
+test('zero-cost options sort internally by improvement multiple', () => {
+  const zeroCostRowHigh = {
     id: 'propulsion:warship:Drive_Orion',
     displayName: 'Orion Drive x1',
     isZeroCost: true,
@@ -470,19 +470,19 @@ test('zero-cost options with an improvement lead the ranking head', () => {
     axisKind: AXIS_KINDS.measured,
     valuePerResearchPoint: null
   };
-  const researchRow = {
+  const zeroCostRowLow = {
     id: 'military:weapon:Project_Laser',
     displayName: 'Heavy Laser',
-    isZeroCost: false,
+    isZeroCost: true,
     improvementMultiple: 1.8,
-    rankState: RANK_STATES.ranked,
+    rankState: RANK_STATES.noResearchRequired,
     closesDeficit: false,
     axisKind: AXIS_KINDS.measured,
-    valuePerResearchPoint: 0.0005
+    valuePerResearchPoint: null
   };
 
-  assert.equal(compareMilitaryRows(zeroCostRow, researchRow), -1, 'zero-cost option must rank ahead of researchable candidate');
-  assert.equal(compareMilitaryRows(researchRow, zeroCostRow), 1);
+  assert.ok(compareMilitaryRows(zeroCostRowHigh, zeroCostRowLow) < 0, 'higher improvement multiple must sort first');
+  assert.ok(compareMilitaryRows(zeroCostRowLow, zeroCostRowHigh) > 0);
 });
 
 test('candidates report slot actionability based on dynamic free capacity', () => {
@@ -506,6 +506,10 @@ test('candidates report slot actionability based on dynamic free capacity', () =
         }
       }
     }
+  }
+  for (const item of (result.military.procurement ? result.military.procurement.items : [])) {
+    assert.equal(item.slotAction, 'no-slot-needed');
+    assert.match(item.slotNote, /0 research cost/);
   }
 });
 
@@ -1245,3 +1249,212 @@ test('the live-shaped payload renders the delivery figures with no forbidden tok
     assert.ok(payload.military.deliveryDemoted, `${mode}: the census must reach the panel`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// PROJECT NAME VISIBILITY, ZERO-COST ROWS, AND ALSO-UNLOCKS BADGES
+// Spec: docs/research-row-naming-spec.md
+// ---------------------------------------------------------------------------
+
+test('research rows display the project name as visible lead text and parenthesise unlock item when different', () => {
+  const payload = {
+    success: true,
+    sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
+    research: { monthlyResearchIncome: 1000 },
+    ordering: { deficitApplied: false },
+    deficit: { applied: false, capability: { canContest: 'unknown' } },
+    military: {
+      rankedCount: 2, candidatesConsidered: 2, unrankable: { counts: {} },
+      groups: [{
+        state: 'researchable-now', label: 'Researchable now', actionable: true, count: 2,
+        items: [
+          {
+            id: 'missile', displayName: 'Copperhead Missile Pod',
+            gateProjectId: 'Project_CopperheadMissileBay', gateProjectName: 'Hydrolox High Explosive Missiles',
+            axisLabel: 'sustained output per hardpoint', improvementMultiple: 3, valuePerResearchPoint: 0.001,
+            remainingResearchCost: 2500, monthsAtCurrentIncome: 2.5, isZeroCost: false,
+            availabilityState: 'researchable-now', context: null
+          },
+          {
+            id: 'hull', displayName: 'Dreadnought',
+            gateProjectId: 'Project_ShipsoftheLine', gateProjectName: 'Ships of the Line',
+            axisLabel: 'throw weight', improvementMultiple: 2.07, valuePerResearchPoint: 0.0005,
+            remainingResearchCost: 5000, monthsAtCurrentIncome: 5, isZeroCost: false,
+            availabilityState: 'researchable-now', context: null
+          }
+        ]
+      }]
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  };
+
+  const html = renderToString(payload);
+  assertNoPlaceholderText(html, 'project naming payload');
+  const text = visibleText(html);
+
+  // Both project names must be visible text (not merely tooltips).
+  assert.ok(text.includes('Hydrolox High Explosive Missiles (Copperhead Missile Pod)'),
+    'project name must lead with unlock item parenthesised');
+  assert.ok(text.includes('Ships of the Line (Dreadnought)'),
+    'project name Ships of the Line must be visible on screen');
+  assert.match(html, /ra-row__sub/, 'item name uses subdued styling span');
+});
+
+test('zero-cost rows lead with item name, state refit/build action, and keep project name in tooltip', () => {
+  const payload = {
+    success: true,
+    sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
+    research: { monthlyResearchIncome: 1000 },
+    ordering: { deficitApplied: false },
+    deficit: { applied: false, capability: { canContest: 'unknown' } },
+    military: {
+      rankedCount: 0, candidatesConsidered: 1, procurementCount: 1, unrankable: { counts: {} },
+      procurement: {
+        label: 'Already unlocked, not in service', count: 1, itemsShown: 1,
+        items: [
+          {
+            id: 'dreadnought-zero', displayName: 'Dreadnought',
+            gateProjectId: 'Project_ShipsoftheLine', gateProjectName: 'Ships of the Line',
+            axisLabel: 'throw weight', improvementMultiple: 2.07, isZeroCost: true,
+            action: 'build', remainingResearchCost: 0, monthsAtCurrentIncome: 0,
+            availabilityState: 'buildable-now', context: { family: 'ship_hull' }
+          }
+        ]
+      },
+      groups: []
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  };
+
+  const html = renderToString(payload);
+  assertNoPlaceholderText(html, 'zero-cost payload');
+  const text = visibleText(html);
+
+  assert.ok(text.includes('Dreadnought'), 'zero-cost row shows item name');
+  assert.ok(!text.includes('Ships of the Line (Dreadnought)'), 'project name is not leading on zero-cost row');
+  assert.ok(!text.includes('0 pts'), 'zero-cost row does not state 0 pts');
+  assert.ok(text.includes('build'), 'zero-cost hull row states build');
+  assert.match(text, /Already unlocked, not in service/i, 'procurement section heading is rendered');
+  assert.match(html, /title="Dreadnought — unlocked by Ships of the Line \(completed\)"/, 'project name is in tooltip');
+});
+
+test('matching project and item names render cleanly without redundant parentheses', () => {
+  const payload = {
+    success: true,
+    sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
+    research: { monthlyResearchIncome: 1000 },
+    ordering: { deficitApplied: false },
+    deficit: { applied: false, capability: { canContest: 'unknown' } },
+    military: {
+      rankedCount: 1, candidatesConsidered: 1, unrankable: { counts: {} },
+      groups: [{
+        state: 'researchable-now', label: 'Researchable now', actionable: true, count: 1,
+        items: [
+          {
+            id: 'reactor', displayName: 'Electrostatic Confinement Fusion Reactor I',
+            gateProjectId: 'Project_ElectrostaticConfinementFusionReactorI',
+            gateProjectName: 'Electrostatic Confinement Fusion Reactor I',
+            axisLabel: 'output per tonne', improvementMultiple: 3, valuePerResearchPoint: 0.0008,
+            remainingResearchCost: 2500, monthsAtCurrentIncome: 2.5, isZeroCost: false,
+            availabilityState: 'researchable-now', context: null
+          }
+        ]
+      }]
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  };
+
+  const html = renderToString(payload);
+  assertNoPlaceholderText(html, 'matching-names payload');
+  const text = visibleText(html);
+
+  assert.ok(text.includes('Electrostatic Confinement Fusion Reactor I'), 'item name is visible');
+  assert.ok(!text.includes('(Electrostatic Confinement Fusion Reactor I)'), 'no duplicate parenthesised name');
+  assert.ok(!html.includes('ra-row__sub'), 'no sub-name span rendered for identical names');
+});
+
+test('the longest real labels (e.g. 57 characters) render without placeholder tokens', () => {
+  const payload = {
+    success: true,
+    sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
+    research: { monthlyResearchIncome: 1000 },
+    ordering: { deficitApplied: false },
+    deficit: { applied: false, capability: { canContest: 'unknown' } },
+    military: {
+      rankedCount: 1, candidatesConsidered: 1, unrankable: { counts: {} },
+      groups: [{
+        state: 'researchable-now', label: 'Researchable now', actionable: true, count: 1,
+        items: [
+          {
+            id: 'long', displayName: 'Copperhead Missile Pod',
+            gateProjectId: 'Project_CopperheadMissileBay',
+            gateProjectName: 'Hydrolox High Explosive Missiles',
+            axisLabel: 'sustained output per hardpoint', improvementMultiple: 3.0,
+            valuePerResearchPoint: 0.001, remainingResearchCost: 2500, monthsAtCurrentIncome: 2.5,
+            isZeroCost: false, availabilityState: 'researchable-now', context: null
+          }
+        ]
+      }]
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  };
+
+  const html = renderToString(payload);
+  assertNoPlaceholderText(html, 'longest-label payload');
+  const text = visibleText(html);
+  const expected = 'Hydrolox High Explosive Missiles (Copperhead Missile Pod)';
+  assert.equal(expected.length, 57, 'exact 57-character label length');
+  assert.ok(text.includes(expected), '57-character label renders in full in visible text');
+});
+
+test('alsoUnlocks > 1 is rendered as a visible badge, and <= 1 is not badged', () => {
+  const payload = {
+    success: true,
+    sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
+    research: { monthlyResearchIncome: 1000 },
+    ordering: { deficitApplied: false },
+    deficit: { applied: false, capability: { canContest: 'unknown' } },
+    military: {
+      rankedCount: 3, candidatesConsidered: 3, unrankable: { counts: {} },
+      groups: [{
+        state: 'researchable-now', label: 'Researchable now', actionable: true, count: 3,
+        items: [
+          {
+            id: 'multi-4', displayName: 'Copperhead Missile Pod',
+            gateProjectId: 'Project_CopperheadMissileBay', gateProjectName: 'Hydrolox High Explosive Missiles',
+            axisLabel: 'sustained output per hardpoint', improvementMultiple: 3, valuePerResearchPoint: 0.001,
+            remainingResearchCost: 2500, monthsAtCurrentIncome: 2.5,
+            alsoUnlocks: { totalItems: 4, families: { missile: 4 } },
+            availabilityState: 'researchable-now', context: null
+          },
+          {
+            id: 'multi-2', displayName: 'Dreadnought',
+            gateProjectId: 'Project_ShipsoftheLine', gateProjectName: 'Ships of the Line',
+            axisLabel: 'throw weight', improvementMultiple: 2.07, valuePerResearchPoint: 0.0005,
+            remainingResearchCost: 5000, monthsAtCurrentIncome: 5,
+            alsoUnlocks: { totalItems: 2, families: { ship_hull: 2 } },
+            availabilityState: 'researchable-now', context: null
+          },
+          {
+            id: 'single-1', displayName: 'Single Unlock',
+            gateProjectId: 'Project_Single', gateProjectName: 'Single Project',
+            axisLabel: 'output', improvementMultiple: 1.5, valuePerResearchPoint: 0.001,
+            remainingResearchCost: 1000, monthsAtCurrentIncome: 1,
+            alsoUnlocks: { totalItems: 1, families: { utility: 1 } },
+            availabilityState: 'researchable-now', context: null
+          }
+        ]
+      }]
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  };
+
+  const html = renderToString(payload);
+  assertNoPlaceholderText(html, 'alsoUnlocks payload');
+  const text = visibleText(html);
+
+  assert.ok(text.includes('4 items'), 'alsoUnlocks 4 renders "4 items" badge');
+  assert.ok(text.includes('2 items'), 'alsoUnlocks 2 renders "2 items" badge');
+  assert.ok(!text.includes('1 items'), 'alsoUnlocks 1 renders no badge');
+  assert.match(html, /Unlocks 4 items across this project \(4 missile\)/, 'tooltip includes family breakdown');
+});
+

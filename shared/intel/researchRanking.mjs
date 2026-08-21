@@ -143,6 +143,7 @@ function militaryRow({
     clearsDeliveryFloor: clearsDeliveryFloor ?? null,
     deliveryFloorReason: deliveryFloorReason ?? null,
     alsoUnlocks: alsoUnlocks ?? null,
+    action: (context?.family === 'ship_hull' || classKey === 'ship_hull') ? 'build' : 'refit',
     context: context ?? null,
     closesDeficit: false,
     missingPrerequisites: null,
@@ -615,9 +616,17 @@ export const researchRankingResource = (snapshot, {
     return row;
   });
 
+  const isZeroCostRow = row => row.isZeroCost === true || (row.rankState === RANK_STATES.noResearchRequired && row.gainMultiple > 0);
+
+  const militaryProcurement = militaryAll
+    .filter(isZeroCostRow)
+    .map(attachSlotAction)
+    .sort(compareMilitaryRows);
+
   const militaryRanked = militaryAll
-    .filter(row => row.rankState === RANK_STATES.ranked || (row.rankState === RANK_STATES.noResearchRequired && row.gainMultiple > 0))
+    .filter(row => !isZeroCostRow(row) && row.rankState === RANK_STATES.ranked)
     .map(attachSlotAction);
+
   const militaryGroups = groupByAvailability(militaryRanked, compareMilitaryRows)
     .map(group => ({
       ...group,
@@ -700,9 +709,10 @@ export const researchRankingResource = (snapshot, {
       basis: 'two parallel rankings, concatenated in a fixed track order (military, then economic). '
         + 'This is NOT a merged score and the position of an economic row below a military one carries '
         + 'no claim that the military one is worth more -- there is no exchange rate between them. '
-        + 'Within a track, ordering leads with zero-cost options, then value per research point inside one '
-        + 'availability group, with deficit-closing military candidates promoted ahead of the rest of their group '
-        + 'and rule-scalar candidates demoted behind every measured-axis one.',
+        + 'Within a track, ordering is by value per research point inside one availability group, '
+        + 'with deficit-closing military candidates promoted ahead of the rest of their group '
+        + 'and rule-scalar candidates demoted behind every measured-axis one. Already-unlocked items '
+        + 'are partitioned into procurement and not ranked against research.',
       deficitApplied: ordering.applied,
       militaryKeys: ['closesDeficit', 'axisKind', 'deliveryFloor', 'valuePerResearchPoint', 'id'],
       axisKindOrder: Object.values(AXIS_KINDS),
@@ -784,13 +794,21 @@ export const researchRankingResource = (snapshot, {
       }
     },
     military: {
-      orderedBy: 'zero-cost options first, then value per research point inside each availability group, deficit-closing first, '
-        + 'munitions failing the delivery floor demoted, and rule-scalar axes last',
+      orderedBy: 'value per research point inside each availability group, deficit-closing first, '
+        + 'munitions failing the delivery floor demoted, and rule-scalar axes last. Already-unlocked items '
+        + 'are partitioned into procurement and not ranked against research.',
       axisCaveat: RANKING_METHOD.crossAxisCaveat,
       ruleScalarCaveat: RANKING_METHOD.ruleScalarDemotion,
       deliveryCaveat: RANKING_METHOD.deliveryFloor,
       candidatesConsidered: militaryAll.length,
       rankedCount: militaryRanked.length,
+      procurementCount: militaryProcurement.length,
+      procurement: militaryProcurement.length === 0 ? null : {
+        label: 'Already unlocked, not in service',
+        count: militaryProcurement.length,
+        itemsShown: Math.min(groupLimit, militaryProcurement.length),
+        items: wantsFull ? militaryProcurement : militaryProcurement.slice(0, groupLimit)
+      },
       groups: militaryGroups,
       actionableGroups: militaryGroups.filter(g => ACTIONABLE_GROUPS.includes(g.state)),
       aspirationalGroups: militaryGroups.filter(g => ASPIRATIONAL_GROUPS.includes(g.state)),

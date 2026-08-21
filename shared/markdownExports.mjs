@@ -1,5 +1,8 @@
 // shared/markdownExports.mjs
 //
+// Purpose: shared markdown export renderers for the model-facing .md endpoints
+//   (latest-snapshot, latest-war-room, latest-threats).
+//
 // Shared markdown export renderers for model-facing interfaces:
 //   * /latest-snapshot.md  (macro campaign state, ~14 KB)
 //   * /latest-threats.md   (immediate danger within 365 days, < 10 KB)

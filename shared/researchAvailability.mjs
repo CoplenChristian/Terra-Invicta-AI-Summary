@@ -1,5 +1,8 @@
 // shared/researchAvailability.mjs
 //
+// Purpose: which projects a faction can actually research, in the three states
+//   the game distinguishes.
+//
 // Which projects a faction can actually research, in the three states the game
 // distinguishes and one widespread mistake does not.
 //

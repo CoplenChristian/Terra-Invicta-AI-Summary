@@ -1,3 +1,7 @@
+// server/exportGenerator.js
+//
+// Purpose: CommonJS adapter exposing the shared markdown export renderers to the server.
+
 const {
   renderCompactSnapshotMarkdown,
   renderFullMarkdownReport,

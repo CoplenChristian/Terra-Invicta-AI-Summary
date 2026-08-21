@@ -1,5 +1,8 @@
 // shared/strategicDelta.mjs
 //
+// Purpose: compute the difference between two strategic_snapshot_v1 documents
+//   for turn-to-turn trend and delta analysis.
+//
 // Computes the difference between two `strategic_snapshot_v1` documents.
 //
 // Deltas are calculated on demand and never stored: a second large delta blob

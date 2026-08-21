@@ -1,3 +1,7 @@
+// server/intelligenceFilter.js
+//
+// Purpose: redact and filter a raw snapshot down to what the observer is allowed to see.
+
 const capabilityResolver = require('./capabilityResolver');
 const opportunityScorer = require('./opportunityScorer');
 const snapshotIdentity = require('./snapshotIdentity');

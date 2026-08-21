@@ -1,5 +1,8 @@
 // shared/intel/economicValue.mjs
 //
+// Purpose: /api/intel/economic-value — phase 3 of the research advisor, pricing
+//   what a researched tech actually does against live quantities.
+//
 // `/api/intel/economic-value` -- phase 3 of the research advisor.
 //
 // Phase 1 priced drives and phase 2 priced the fourteen other unlock families.

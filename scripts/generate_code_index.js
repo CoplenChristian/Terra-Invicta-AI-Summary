@@ -1,0 +1,322 @@
+#!/usr/bin/env node
+// scripts/generate_code_index.js
+//
+// Purpose: Generate docs/code-index.md, the required-reading map of what lives
+//   where, from the source tree. Everything derivable is derived; the only
+//   hand-written piece is each module's `Purpose:` line, and a test fails when
+//   that is missing so the index cannot rot silently.
+//
+// Run with `npm run index`. Output is deterministic: the same tree always
+// produces byte-identical docs/code-index.md, which tests/codeIndex.test.js
+// pins as the staleness guard.
+
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.resolve(__dirname, '..');
+const OUT_PATH = path.join(ROOT, 'docs', 'code-index.md');
+
+// Directories whose source modules the index lists, in display order.
+const SOURCE_ROOTS = [
+  { dir: 'server', runtime: 'Node (CommonJS)' },
+  { dir: 'shared', runtime: 'Node + Cloudflare worker (ESM)' },
+  { dir: 'site/worker', runtime: 'Cloudflare worker only (ESM)' },
+  { dir: 'public/v2', runtime: 'Browser (ESM)' },
+  { dir: 'public/js', runtime: 'Browser (legacy, non-module)' },
+  { dir: 'scripts', runtime: 'Node (CommonJS)' }
+];
+
+const EXTENSIONS = new Set(['.js', '.mjs']);
+
+// The four barrels the spec names. Classified by heuristic; these are pinned so
+// the heuristic cannot silently regress (tests/codeIndex.test.js asserts all
+// four are barrels and a spot-check of implementations is not).
+const KNOWN_BARRELS = new Set([
+  'server/snapshotBuilder.js',
+  'shared/intelResources.mjs',
+  'server/index.js',
+  'server/requestValidation.js'
+]);
+
+function walk(dir) {
+  const out = [];
+  for (const name of fs.readdirSync(dir)) {
+    if (name === 'node_modules') continue;
+    const full = path.join(dir, name);
+    const stat = fs.statSync(full);
+    if (stat.isDirectory()) {
+      out.push(...walk(full));
+    } else if (EXTENSIONS.has(path.extname(name))) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+function normalizePath(abs) {
+  return path.relative(ROOT, abs).split(path.sep).join('/');
+}
+
+function isEsm(abs, rel) {
+  if (rel.endsWith('.mjs')) return true;
+  if (rel.startsWith('site/worker/')) return true;
+  const src = fs.readFileSync(abs, 'utf8');
+  if (/\bimport\s+[^'"]+from\s+['"]/.test(src) || /^\s*export\s+(?:const|let|var|function|class|\{|\*)/m.test(src)) return true;
+  return false;
+}
+
+// Leading comment block: the contiguous `//` lines and/or the first `/* ... */`
+// block before any executable code.
+function leadingComment(src) {
+  const lines = src.split(/\r?\n/);
+  const out = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (t === '') continue;
+    if (t.startsWith('#!')) continue;
+    if (t.startsWith('//')) {
+      out.push(t.replace(/^\/\//, '').trim());
+      continue;
+    }
+    if (t.startsWith('/*')) {
+      const rest = line.slice(line.indexOf('/*') + 2);
+      out.push(...blockLines(rest));
+      // consume until closing */
+      let idx = lines.indexOf(line);
+      while (!lines[idx].includes('*/')) {
+        idx += 1;
+        out.push(lines[idx].replace(/\*\//, '').replace(/^\s*\* ?/, '').trim());
+      }
+      break;
+    }
+    // Executable code reached.
+    break;
+  }
+  return out;
+}
+
+function blockLines(firstRest) {
+  // First line after /* : if it ends with */ strip it; else push and continue
+  if (firstRest.includes('*/')) {
+    return [firstRest.replace(/\*\/.*$/, '').replace(/^\s*\* ?/, '').trim()];
+  }
+  return [firstRest.replace(/^\s*\* ?/, '').trim()];
+}
+
+// Purpose line: text after `Purpose:` in the leading comment. Returns null when
+// the module has no hand-written purpose line (the test fails on this).
+function readPurpose(src) {
+  for (const line of leadingComment(src)) {
+    const m = line.match(/^Purpose:\s*(.+)$/i);
+    if (m && m[1].trim()) return m[1].trim();
+  }
+  return null;
+}
+
+// Exported names, best-effort for ESM and CJS.
+function exportedNames(src, rel, esm) {
+  const names = new Set();
+  if (esm) {
+    for (const m of src.matchAll(/export\s+(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)) {
+      names.add(m[1]);
+    }
+    for (const m of src.matchAll(/export\s*\{([^}]*)\}/g)) {
+      for (const part of m[1].split(',')) {
+        const name = part.trim().split(/\s+as\s+/).pop().split(':').pop().trim();
+        if (name && /^[A-Za-z_$]/.test(name)) names.add(name);
+      }
+    }
+  } else {
+    const objStart = src.search(/module\.exports\s*=\s*\{/);
+    if (objStart !== -1) {
+      const brace = src.indexOf('{', objStart);
+      const inner = matchBraces(src, brace);
+      for (const key of inner.matchAll(/(?:^|[,{])\s*([A-Za-z_$][\w$]*)\s*(?=\s*[:}|,]|$)/g)) {
+        names.add(key[1]);
+      }
+    }
+    for (const m of src.matchAll(/Object\.assign\([^,]*,\s*\{([\s\S]*?)\}\)/g)) {
+      for (const key of m[1].matchAll(/(?:^|[,{])\s*([A-Za-z_$][\w$]*)\s*(?=\s*[:}|,]|$)/g)) {
+        names.add(key[1]);
+      }
+    }
+    // Direct property exports.
+    for (const m of src.matchAll(/exports\.([A-Za-z_$][\w$]*)\s*=/g)) {
+      names.add(m[1]);
+    }
+  }
+  return [...names].sort();
+}
+
+// Returns the text inside the brace-delimited block that opens at `openIdx`,
+// matching balanced braces/arrays (handles nested object/array literals).
+function matchBraces(src, openIdx) {
+  let depth = 0;
+  let i = openIdx;
+  for (; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '{' || ch === '[') depth += 1;
+    else if (ch === '}' || ch === ']') depth -= 1;
+    if (depth === 0) break;
+  }
+  return src.slice(openIdx + 1, i);
+}
+
+// Local (same-tree) import count.
+function localImportCount(src, esm) {
+  const pattern = esm
+    ? /from\s+['"]\.{1,2}\/[^'"]+['"]/g
+    : /require\(['"]\.{1,2}\/[^'"]+['"]\)/g;
+  const matches = src.match(pattern) || [];
+  return new Set(matches.map(m => m)).size;
+}
+
+// Own (module-level) function/class definitions, excluding Object.assign of
+// imported objects and excluding inline arrow callbacks inside route/middleware.
+function ownFunctionCount(src, esm) {
+  let count = 0;
+  for (const m of src.matchAll(/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gm)) {
+    if (m[1] !== 'module' && m[1] !== 'require') count += 1;
+  }
+  for (const m of src.matchAll(/^(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function|\([^)]*\)\s*=>|\(\)\s*=>)/gm)) {
+    count += 1;
+  }
+  for (const m of src.matchAll(/^class\s+([A-Za-z_$][\w$]*)/gm)) {
+    count += 1;
+  }
+  return count;
+}
+
+// Barrel classification. Verified against the four known barrels and a spot
+// check of implementations (tests/codeIndex.test.js).
+function isBarrel(src, rel, esm) {
+  if (esm) {
+    const reexports = (src.match(/\bexport\s+[^;]*?\bfrom\s+['"]/g) || []).length;
+    if (reexports === 0) return false;
+    const localDefs = (src.match(/\bexport\s+(?:const|let|var|function|class)\s+/g) || []).length;
+    return reexports > 0 && localDefs === 0;
+  }
+  const localImports = localImportCount(src, esm);
+  const own = ownFunctionCount(src, esm);
+  if (localImports < 2 || own > 2) return false;
+  const exported = exportedNames(src, rel, esm);
+  // Composition root with no own functions and no named exports (e.g.
+  // server/index.js exporting the Express app): a barrel by construction.
+  if (own === 0 && exported.length === 0) return true;
+  if (exported.length === 0) return false;
+  // A barrel re-exports most of its surface. Count the share of exported names
+  // that are NOT defined in this file -- those come from the local modules it
+  // imports. An implementation (commentary/index.js, rules/index.js) defines
+  // its own exports, so its re-export share is low.
+  const local = locallyDefinedNames(src);
+  const reexported = exported.filter(name => !local.has(name)).length;
+  return reexported / exported.length >= 0.5;
+}
+
+// Names bound to a declaration at module scope in this file.
+function locallyDefinedNames(src) {
+  const names = new Set();
+  for (const m of src.matchAll(/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gm)) names.add(m[1]);
+  for (const m of src.matchAll(/^(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/gm)) names.add(m[1]);
+  for (const m of src.matchAll(/^class\s+([A-Za-z_$][\w$]*)/gm)) names.add(m[1]);
+  return names;
+}
+
+// Test file for a module, if one exists.
+function testFile(rel) {
+  const base = path.basename(rel, path.extname(rel));
+  const candidate = path.join(ROOT, 'tests', `${base}.test.js`);
+  return fs.existsSync(candidate) ? `tests/${base}.test.js` : null;
+}
+
+function moduleSystem(src, rel, esm) {
+  if (esm) return 'E';
+  if (rel.startsWith('public/')) return 'BS'; // browser script, not a module
+  if (/\brequire\s*\(|module\.exports/.test(src)) return 'C';
+  return 'C';
+}
+
+function lineCount(abs) {
+  return fs.readFileSync(abs, 'utf8').split(/\r?\n/).length;
+}
+
+function collect() {
+  const modules = [];
+  for (const { dir, runtime } of SOURCE_ROOTS) {
+    const absRoot = path.join(ROOT, dir);
+    if (!fs.existsSync(absRoot)) continue;
+    for (const abs of walk(absRoot)) {
+      const rel = normalizePath(abs);
+      const src = fs.readFileSync(abs, 'utf8');
+      const esm = isEsm(abs, rel);
+      modules.push({
+        rel,
+        runtime,
+        esm,
+        sys: moduleSystem(src, rel, esm),
+        lines: lineCount(abs),
+        purpose: readPurpose(src),
+        exports: exportedNames(src, rel, esm),
+        barrel: isBarrel(src, rel, esm),
+        testFile: testFile(rel)
+      });
+    }
+  }
+  modules.sort((a, b) => a.rel.localeCompare(b.rel));
+  return modules;
+}
+
+function render(modules) {
+  const lines = [];
+  lines.push('# Code Index');
+  lines.push('');
+  lines.push('A required-reading map of what lives where, so an agent stops guessing.');
+  lines.push('');
+  lines.push('> Generated by `npm run index` from `scripts/generate_code_index.js`. Everything');
+  lines.push('> here is derived from the source tree except each module\'s `Purpose:` line, which');
+  lines.push('> is hand-written and enforced by `tests/codeIndex.test.js` -- a source module with');
+  lines.push('> no purpose line fails the suite, and the checked-in index failing to match a');
+  lines.push('> fresh generation fails it too.');
+  lines.push('');
+  lines.push('Legend: **B** = barrel (re-exports another module\'s surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).');
+  lines.push('');
+  lines.push(`**${modules.length} modules.**`);
+  lines.push('');
+
+  let currentDir = null;
+  for (const m of modules) {
+    const dir = path.dirname(m.rel);
+    if (dir !== currentDir) {
+      if (currentDir !== null) lines.push('');
+      lines.push(`## \`${dir}/\``);
+      lines.push('');
+      lines.push('| module | B/E/C | runtime | lines | purpose | exports | test |');
+      lines.push('| :-- | :--: | :-- | --: | :-- | :-- | :-- |');
+      currentDir = dir;
+    }
+    const sys = m.sys;
+    const barrel = m.barrel ? '**B** ' : '';
+    const purpose = m.purpose ? m.purpose.replace(/\|/g, '\\|') : '**MISSING**';
+    const test = m.testFile ? `\`${m.testFile}\`` : '—';
+    const exportsCell = m.exports.length
+      ? '`' + m.exports.slice(0, 12).join(', ') + (m.exports.length > 12 ? `, …(+${m.exports.length - 12})` : '') + '`'
+      : '—';
+    lines.push(`| \`${m.rel}\` | ${barrel}${sys} | ${m.runtime} | ${m.lines} | ${purpose} | ${exportsCell} | ${test} |`);
+  }
+  lines.push('');
+  return lines.join('\n') + '\n';
+}
+
+if (require.main === module) {
+  const modules = collect();
+  const missing = modules.filter(m => !m.purpose).map(m => m.rel);
+  const content = render(modules);
+  fs.writeFileSync(OUT_PATH, content);
+  console.log(`Wrote ${OUT_PATH} (${modules.length} modules).`);
+  if (missing.length) {
+    console.warn(`\nWarning: ${missing.length} module(s) have no Purpose: line:\n  ${missing.join('\n  ')}`);
+  }
+  process.exit(missing.length ? 2 : 0);
+}
+
+module.exports = { collect, render };

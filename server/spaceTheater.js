@@ -1,3 +1,7 @@
+// server/spaceTheater.js
+//
+// Purpose: map solar-system bodies into orbital theaters for the space briefing.
+
 const THEATERS = [
   { key: 'sol', name: 'EARTH / LUNA', bodies: ['sol', 'earth', 'luna'] },
   { key: 'mars', name: 'MARS', bodies: ['mars', 'phobos', 'deimos'] },

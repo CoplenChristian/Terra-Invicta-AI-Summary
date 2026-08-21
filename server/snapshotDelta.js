@@ -1,3 +1,7 @@
+// server/snapshotDelta.js
+//
+// Purpose: compute compact turn-to-turn resource and fleet deltas between two snapshots.
+
 const spaceTheater = require('./spaceTheater');
 const { ALIEN_FACTION_ID, ALIEN_FACTION_DISPLAY_NAME } = require('../shared/constants.mjs');
 const { asArray, sameId, MS_PER_DAY } = require('../shared/util.mjs');

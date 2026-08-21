@@ -1,5 +1,8 @@
 // shared/munitionDelivery.mjs
 //
+// Purpose: research advisor phase 5 — whether a munition round actually
+//   arrives (hit probability, range, point-defence interaction).
+//
 // Phase 5 of the research advisor: DOES THE ROUND ARRIVE?
 //
 // Phase 2 prices a warhead. It never asks whether the warhead gets there, and

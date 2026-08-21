@@ -1,3 +1,7 @@
+// server/config.js
+//
+// Purpose: resolve, validate and migrate the server's config from config.json and environment.
+
 const fs = require('fs');
 const path = require('path');
 // config.schema.json declares $schema draft 2020-12. Ajv's default export is

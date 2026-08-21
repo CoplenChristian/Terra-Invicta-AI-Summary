@@ -1,5 +1,8 @@
 // shared/councilorAttributes.mjs
 //
+// Purpose: resolve a councilor's effective attributes from base stats plus org
+//   bonuses.
+//
 // Resolves a councilor's effective attributes from their base stats plus the
 // bonuses granted by equipped orgs.
 //

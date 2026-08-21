@@ -1,5 +1,8 @@
 // shared/intel/miningExpansion.mjs
 //
+// Purpose: the forward-looking mining expansion board — mine-limit capacity and
+//   its MC penalty, per-resource runways, and need-weighted site scoring.
+//
 // The forward-looking mining expansion board: mine-limit capacity and its
 // quadratic Mission Control penalty, per-resource runways, the need-weighted
 // saturating score for an unowned site, and the ranked partitioning into

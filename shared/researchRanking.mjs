@@ -1,5 +1,7 @@
 /**
  * Research advisor, phase 4: the ranking rules.
+ * Purpose: the research-advisor phase-4 ranking rules that order candidates by
+ *   availability group and priority.
  *
  * Spec: docs/research-advisor-spec.md sections 2, 3, 3a, 3b, 7, 9 step 4.
  *

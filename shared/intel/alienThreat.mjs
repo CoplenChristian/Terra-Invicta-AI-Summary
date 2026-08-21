@@ -1,5 +1,8 @@
 // shared/intel/alienThreat.mjs
 //
+// Purpose: the alien-threat projection — hate math, floor and retaliation —
+//   with its own deliberate mode re-check.
+//
 // The hate math endpoint. Kept in its own module because its mode re-check is
 // a deliberate second line of defence over `server/intelligenceFilter.js` --
 // see the long comment inside -- and burying that beside unrelated projections

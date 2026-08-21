@@ -1,5 +1,8 @@
 // shared/strategicSnapshot.mjs
 //
+// Purpose: reduce a full raw snapshot to a compact strategic_snapshot_v1
+//   document for trend and delta analysis.
+//
 // Reduces a full raw snapshot to `strategic_snapshot_v1`: a compact,
 // self-contained document for trend and delta analysis.
 //

@@ -1,5 +1,8 @@
 // shared/propulsion.mjs
 //
+// Purpose: the propulsion model — delta-V and acceleration per ship/design,
+//   plus what-if refits onto drives the observer has never built.
+//
 // The propulsion model: delta-V, cruise and combat acceleration, per ship and
 // per design, plus what-if refits onto drives the observer has never built.
 //

@@ -1,3 +1,6 @@
+// Purpose: pure alien minimum-hate floor calculation from used Mission Control,
+//   shared by local server, worker, exports and tests.
+//
 // Save-derived calculation for the alien minimum-hate floor created by used
 // Mission Control. Keep this pure so the local server, hosted worker, exports,
 // and tests all agree on the same calculation.

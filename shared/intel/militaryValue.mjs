@@ -1,5 +1,8 @@
 // shared/intel/militaryValue.mjs
 //
+// Purpose: /api/intel/military-value — phase 2 of the research advisor, pricing
+//   every unlock family the propulsion phase does not cover.
+//
 // `/api/intel/military-value` -- phase 2 of the research advisor.
 //
 // Phase 1 priced drives. This prices everything else the unlock index gates

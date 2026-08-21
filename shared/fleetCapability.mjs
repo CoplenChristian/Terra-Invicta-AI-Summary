@@ -1,6 +1,8 @@
 /**
  * Fleet capability: the measured comparison between the observer's force and
  * the aliens', and the dominant capability deficit that follows from it.
+ * Purpose: the measured observer-vs-alien fleet capability comparison and the
+ *   dominant capability deficit derived from it.
  *
  * EXTRACTED FROM server/directiveAdvisor.js, 2026-08-21, unchanged. It moved
  * here because two consumers now need the SAME answer and a second derivation

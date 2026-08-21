@@ -1,5 +1,8 @@
 // shared/intel/common.mjs
 //
+// Purpose: the primitives every intel projection shares — the mining resource
+//   table, filter predicates, cost normalisation, alien-faction lookup.
+//
 // The primitives every intel projection shares: the one mining resource table,
 // the filter predicates, cost normalisation, and the alien-faction lookup.
 //

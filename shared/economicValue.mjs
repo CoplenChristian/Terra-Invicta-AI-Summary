@@ -1,5 +1,8 @@
 // shared/economicValue.mjs
 //
+// Purpose: economic valuation of what a researched tech does, priced against
+//   the observer's own live figures (research advisor phase 3).
+//
 // Economic valuation -- phase 3 of the research advisor (spec section 4).
 //
 // Phase 1 priced drives and phase 2 priced everything a warship is built out

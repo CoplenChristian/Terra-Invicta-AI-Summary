@@ -1,3 +1,7 @@
+// server/capabilityResolver.js
+//
+// Purpose: resolve which intelligence capabilities a faction has from the templates and config.
+
 const templateLoader = require('./templateLoader');
 
 /**

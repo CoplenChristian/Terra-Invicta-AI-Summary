@@ -1,5 +1,8 @@
 // shared/militaryValue.mjs
 //
+// Purpose: military valuation of the unlock families phase 1 did not cover —
+//   what a gate lets the observer build (research advisor phase 2).
+//
 // Military valuation for the fourteen unlock families phase 1 did not cover:
 // the six weapon families, ship hulls, ship armour, power plants, radiators,
 // heat sinks, batteries, utility modules and hab modules.

@@ -1,5 +1,8 @@
 // shared/intel/mining.mjs
 //
+// Purpose: the mining economy as it stands — per-site yields, the sortable
+//   analysis board, and scarcity-weighted prospects.
+//
 // The mining economy as it stands: per-site yields, the sortable analysis
 // board, and the scarcity-weighted ranking of unowned prospects.
 //

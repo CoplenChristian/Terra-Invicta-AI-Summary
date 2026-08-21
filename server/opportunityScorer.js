@@ -1,3 +1,7 @@
+// server/opportunityScorer.js
+//
+// Purpose: score nations as takeover opportunities for the observer faction.
+
 const { resolveConfig } = require('./config');
 const {
   SERVANTS_DISPLAY_NAME,

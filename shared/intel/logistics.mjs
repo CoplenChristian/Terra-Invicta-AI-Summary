@@ -1,5 +1,8 @@
 // shared/intel/logistics.mjs
 //
+// Purpose: the war economy — stockpiles, gross vs net flows, resources
+//   committed to queues, and production rolled up by body and site.
+//
 // The war economy: stockpiles, gross vs net flows, resources committed to
 // queues, and production rolled up by body and site.
 

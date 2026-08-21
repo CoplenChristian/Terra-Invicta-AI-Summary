@@ -1,5 +1,8 @@
 // shared/intel/factions.mjs
 //
+// Purpose: the political/strategic half of the intel surface — factions,
+//   nations, councilors, global research, and the campaign summary.
+//
 // Factions, nations, councilors, global research, and the campaign summary --
 // the political/strategic half of the intel surface, as opposed to the space
 // assets in `habs.mjs` / `fleets.mjs`.
