@@ -306,7 +306,7 @@ test('the hosted index advertises detail and says why sizes are missing', async 
   assert.deepEqual(payload.detail.levels, ['summary', 'full']);
   assert.equal(payload.detail.default, 'summary');
   assert.deepEqual(payload.detail.appliesTo.slice().sort(),
-    ['economic-value', 'fleets', 'military-value', 'ships']);
+    ['economic-value', 'fleets', 'military-value', 'research-ranking', 'ships']);
 
   // No Supabase in this environment, so there is no snapshot to measure. The
   // index must say that rather than publishing a guess, and must still answer.

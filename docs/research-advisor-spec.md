@@ -504,6 +504,71 @@ Worth building **after** the value model — it is a smaller win and depends on 
 - Unquantifiable benefit → `null` and stated, never 0.
 - Deterministic: same snapshot → same ranking.
 
+## 7a. What phase 4 composed, and the two things it had to fix — measured 2026-08-21
+
+### The deficit computation moved rather than being copied
+
+`summarizeFleetCapability` was extracted from `server/directiveAdvisor.js` into
+`shared/fleetCapability.mjs`, unchanged. Hold Ground requires it back and
+re-exports it, so every existing caller and test is untouched; the ranking
+imports the same function. The move was forced rather than cosmetic — the intel
+projections run in the hosted Cloudflare worker, which cannot `require`
+CommonJS, so the alternative was a second derivation of "which axis is the gap".
+Breaking `DECISIVE_CAPABILITY_RATIO` in the shared module fails **19** tests
+across both consumers, so the two really are reading one implementation.
+
+### The ordering, and what it refuses to do
+
+Two tracks, never summed. Within a track, rows are grouped by availability state
+and ranked **inside** a group, deficit-closing candidates first:
+
+```
+militaryValuePerResearchPoint = (rankMetricMultiple - 1) / remainingResearchCost
+economicValuePerResearchPoint = phase 3's own byUnit[].perResearchPoint
+```
+
+The `- 1` is load-bearing: a 1.0× multiple is not worth a single research point
+and must not score as though it were worth 1.0.
+
+Measured on the live save (ExitSave, 1/1/2034, observer 4712): 80 military
+candidates considered, **16 ranked**; the other 64 split 38 `no baseline`, 10
+`buildable now`, 8 `no gain`, 8 `cost unknown`. 279 economic candidates, **24
+ranked** across four units. Both figures are shown on the card — a ranking that
+displayed only its 16 rows would imply it had priced everything.
+
+Ranking across classes is a **triage aid, not an exchange rate**: 3.2× armour
+and 3.2× laser output are not commensurable, every row names its own axis, and
+the caveat is in the payload rather than only in the code.
+
+### Two defects the composition surfaced
+
+**1. A saving sorted as a loss.** The mission-control contexts are
+`direction: 'lower'`, so a helpful tech prices as a *negative* delta
+(−16.65 mission control is a saving). Ordering the raw value descending put the
+**smallest** saving first — the ranking silently inverted for one unit. Rows are
+now oriented from phase 3's own direction table before sorting; a row whose
+priced contexts disagree about direction is not ordered at all, with the reason
+attached, rather than being sorted by a sign nobody checked.
+
+**2. A dice throw that was already over.** The unlock chance was rendered on
+every row, so a `researchable-now` candidate read "rolls 25%/mo, cap 100%" — the
+roll that had already landed, described as still pending. It is now shown only
+in `prereq-clear-but-unrolled`, which is the one state where it is a fact about
+what happens next. This is §3b's state-collapsing error, inverted.
+
+### The panel
+
+COMMAND, not RECORDS: *"what do I research next"* is a decision taken this turn,
+beside Council Orders and the Directive Engine. RECORDS' Technology Watch
+answers *"what happened"*.
+
+Measured at 1920×1080 in both modes: card **345 px**, 0% empty, COMMAND page
+**3,234 px (2.99 screens)** against 3,130 px / 2.90 before. No horizontal scroll
+at 375 / 900 / 1366 / 1660 / 1920, zero console errors, zero 4xx, and zero
+forbidden tokens in a full-page `textContent` scan. The renderer's rule is that
+**only strings it authors reach the DOM** — several upstream `reason` fields use
+the word "null" as a technical term, so they travel as `title` tooltips instead.
+
 ## 8. Acceptance
 
 - Ranks candidates by value-per-research-point, in **both** modes, on the live save AND on an early-campaign save where the only drives are chemical.
@@ -539,5 +604,7 @@ Worth building **after** the value model — it is a smaller win and depends on 
    records omit (`contexts`, `stackable`, `instantEffect`, non-permanent
    duration), and only for the **275 of 719** effects a tech or project can
    actually reference. See §4a for what was and was not substantiated.
-4. Ranking, deficit-aware ordering, and the UI panel.
+4. ~~Ranking, deficit-aware ordering, and the UI panel.~~ **Built 2026-08-21**
+   as `/api/intel/research-ranking` and the **RESEARCH ADVISOR** card in the v2
+   COMMAND view. See §7a for what it measured.
 5. Slot allocation.

@@ -134,7 +134,7 @@ test('the ships manifest is a roll-up that never loses a ship', () => {
   assert.strictEqual(full.count, summary.shipsTotal, 'full returns one row per ship');
 });
 
-test('only the four heavy endpoints honour detail, and the echo says so', async () => {
+test('only the five heavy endpoints honour detail, and the echo says so', async () => {
   const shared = await import('../shared/intelResources.mjs');
   // `military-value` joined fleets and ships on 2026-08-21: its full
   // seventeen-class candidate listing is a 559 KB response against a 146 KB
@@ -142,9 +142,13 @@ test('only the four heavy endpoints honour detail, and the echo says so', async 
   // `economic-value` joined the same day: its full listing carries a per-effect
   // row for every uncompleted node that carries an effect, 603 KB unfiltered
   // against a 75 KB summary.
+  // `research-ranking` joined on 2026-08-21 for the same reason it composes:
+  // its full listing is every row of every availability group in both tracks
+  // plus every candidate that could not be ranked, against a summary that is
+  // the head of each group.
   assert.deepStrictEqual(
     Array.from(shared.DETAIL_AWARE_RESOURCES).sort(),
-    ['economic-value', 'fleets', 'military-value', 'ships']
+    ['economic-value', 'fleets', 'military-value', 'research-ranking', 'ships']
   );
 
   const snapshot = omniscientSnapshot();

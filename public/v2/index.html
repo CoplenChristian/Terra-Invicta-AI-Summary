@@ -155,6 +155,25 @@
                 <div id="threatBoard" class="threat-board" aria-live="polite"></div>
               </div>
             </div>
+
+            <!--
+              COMMAND, not RECORDS: "what do I research next" is a decision the
+              player makes this turn, beside Council Orders and the Directive
+              Engine. RECORDS' Technology Watch answers "what happened" -- the
+              research position and the intelligence gaps -- which is a
+              different question.
+            -->
+            <div class="tech-card tech-card--priority tech-card--dense">
+              <div class="tech-card-header">
+                <div class="tech-card-title">RESEARCH ADVISOR</div>
+                <span>VALUE PER RESEARCH POINT</span>
+              </div>
+              <div class="tech-card-body">
+                <div id="researchAdvisor" aria-live="polite">
+                  <p class="research-advisor__empty">LOADING RESEARCH RANKING…</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Right Column -->
@@ -483,6 +502,7 @@
   <script src="/v2/js/components/directive-board.js"></script>
   <script src="/v2/js/components/council-orders.js"></script>
   <script src="/v2/js/components/strategic-commentary.js"></script>
+  <script src="/v2/js/components/research-advisor.js"></script>
   <script src="/v2/js/mission-control.js"></script>
 </body>
 </html>

@@ -97,6 +97,10 @@ const VIEWS = [
     panels: [
       'strategicCommentary',
       'councilOrders',
+      // "What do I research next" is a turn decision, so it sits beside the
+      // other turn decisions rather than in RECORDS. RECORDS' Technology Watch
+      // answers "what happened"; this answers "what do I do".
+      'researchAdvisor',
       'directiveBoard',
       'sitrepSummary',
       'directivesStreamList',
@@ -845,6 +849,23 @@ function renderDashboard() {
           window.MissionControlMiningExpansion.render(miningEl, data);
         }
       });
+    }
+  }
+  if (window.MissionControlResearchAdvisor?.render) {
+    const advisorEl = document.getElementById('researchAdvisor');
+    if (advisorEl) {
+      // Fetched here rather than ridden in on the briefing for the same reason
+      // the mining board is: the ranking composes three heavy valuation
+      // endpoints and only this panel needs it. A failed fetch renders the
+      // unavailable state -- never a placeholder ranking.
+      const requestedAt = state.requestSequence;
+      window.MissionControlResearchAdvisor.fetchResearchRanking(state.observer, state.mode)
+        .then(data => {
+          // Mode or observer may have changed while this was in flight, and a
+          // stale ranking beside a fresh briefing is another faction's answer.
+          if (state.requestSequence !== requestedAt) return;
+          window.MissionControlResearchAdvisor.render(advisorEl, data);
+        });
     }
   }
   renderOperativeLeaderboard();

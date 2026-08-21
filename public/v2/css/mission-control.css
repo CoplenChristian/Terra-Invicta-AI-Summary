@@ -6624,3 +6624,265 @@ button.council-orders__row:focus-visible {
   padding: 12px 0;
 }
 
+
+/* ---------------------------------------------------------------------------
+   RESEARCH ADVISOR  (COMMAND view)
+   --------------------------------------------------------------------------- */
+
+.research-advisor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.research-advisor__empty {
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  color: var(--text-muted);
+  background: var(--surface-inset);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.55;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ra-deficit {
+  display: grid;
+  gap: 1px;
+  padding: 5px 9px;
+  background: var(--surface-inset);
+  border-left: 2px solid var(--line-strong);
+}
+
+.ra-deficit.is-gap { border-left-color: var(--danger); }
+.ra-deficit.is-unknown { border-left-color: var(--warning); }
+.ra-deficit.is-flat { border-left-color: var(--line-strong); }
+
+.ra-deficit__label {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.ra-deficit strong {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ra-deficit__detail {
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+/* Judgement calls are visually distinct from template-derived facts --
+   spec section 7. This line is the only place the panel asserts an opinion. */
+.ra-deficit__judgement {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.ra-tracks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .ra-tracks { grid-template-columns: 1fr; }
+}
+
+.ra-track {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ra-track__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.ra-track__head h4 {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.ra-track__head small {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.ra-unit__label {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  padding-bottom: 3px;
+}
+
+.ra-group + .ra-group { margin-top: 5px; }
+
+.ra-group__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.ra-group.is-actionable .ra-group__label { color: var(--accent-strong); }
+
+.ra-group__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ra-row {
+  padding: 2px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ra-row:last-child { border-bottom: 0; }
+
+.ra-row__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ra-row__name {
+  font-size: 11px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.ra-row__metric {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--accent-strong);
+  white-space: nowrap;
+  flex: 0 0 auto;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ra-row__meta {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.ra-tag {
+  padding: 0 4px;
+  border: 1px solid var(--line-strong);
+  color: var(--text-muted);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ra-tag--deficit {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.ra-tag--warn {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.ra-census,
+.ra-empty-group {
+  font-family: var(--mono);
+  font-size: 8px;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+}
+
+.ra-empty-group {
+  padding: 8px;
+  border: 1px dashed var(--line);
+  background: var(--surface-inset);
+  text-transform: none;
+}
+
+.ra-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.ra-foot__btn {
+  padding: 2px 8px;
+  font-size: 9px;
+}
+
+.ra-deficit__judgement {
+  display: inline;
+}
+
+.ra-deficit__judgement {
+  display: inline;
+}
+
+/* The label and the headline value share a line: two stacked lines said the
+   same thing and this card is on a measured page-height budget. */
+.ra-deficit__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+/* Scoped density for a card that has to fit the slack left in the COMMAND
+   left column. Applied by class rather than :has() so the selector is
+   explicit at the mount point. */
+.tech-card--dense .tech-card-body {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}

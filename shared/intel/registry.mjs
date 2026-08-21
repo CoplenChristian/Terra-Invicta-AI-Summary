@@ -70,6 +70,7 @@ import { alienThreatResource } from './alienThreat.mjs';
 import { propulsionResource } from './propulsion.mjs';
 import { militaryValueResource } from './militaryValue.mjs';
 import { economicValueResource } from './economicValue.mjs';
+import { researchRankingResource } from './researchRanking.mjs';
 import { deltaResource } from './delta.mjs';
 import { mobilityResource } from './mobility.mjs';
 import { bodyStatusResource, theatersResource } from './theaters.mjs';
@@ -365,6 +366,16 @@ const INTEL_ENDPOINTS = Object.freeze([
     detail: true,
     project: (snapshot, { observerId, mode, family, status, limit, detail }) =>
       economicValueResource(snapshot, { observerId, mode, family, status, limit, detail })
+  },
+  {
+    key: 'researchRanking',
+    example: `${OMNISCIENT}&limit=5`,
+    // Detail-aware like the three phases it composes: the default is the head
+    // of each availability group, and `detail=full` is every row of every group
+    // plus every candidate that could not be ranked.
+    detail: true,
+    project: (snapshot, { observerId, mode, limit, detail }) =>
+      researchRankingResource(snapshot, { observerId, mode, limit, detail })
   },
   {
     key: 'miningExpansion',
