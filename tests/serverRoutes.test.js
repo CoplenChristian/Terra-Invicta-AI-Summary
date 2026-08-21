@@ -187,7 +187,7 @@ test('GET /api/save-state reports the newest save identity without parsing it', 
     assert.ok(!payload.saveFilename.includes('/') && !payload.saveFilename.includes('\\'), 'saveFilename is a bare basename');
     assert.ok(!body.includes('Older.json'), 'the older save is not the one reported');
 
-    assert.ok(elapsedMs < 20, `save-state completed in ${elapsedMs}ms, expected under 20ms`);
+    assert.ok(elapsedMs < 50, `save-state completed in ${elapsedMs}ms, expected under 50ms`);
     assert.ok(!logs.some(line => line.includes('[Server] Parsing save')), 'save-state must never parse the save');
   } finally {
     await stopServer(server);

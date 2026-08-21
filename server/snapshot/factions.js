@@ -328,7 +328,15 @@ function buildFactions(rawFactions, {
       missionControlCapacity: sumOrNull(fNations.map(nation => nation.missionControl)),
       shipyardCount: shipyardCountByFaction.get(factionId) || 0,
       shipyardQueueCount: shipyardQueues.filter(queue => queue.factionId === factionId).length,
-      shipDesigns: fShipDesigns
+      shipDesigns: fShipDesigns,
+      // The player's in-game obsolete markers for designs and parts.
+      // Absent stays null throughout: null (unknown) and [] (none) are distinct.
+      obsoleteShipDesigns: Array.isArray(f.obsoleteShipDesigns)
+        ? f.obsoleteShipDesigns
+        : null,
+      obsoletedShipParts: Array.isArray(f.obsoletedShipParts)
+        ? f.obsoletedShipParts
+        : null
     });
   }
   return factions;

@@ -205,16 +205,22 @@ export function evaluateWeaponUpgrades(
   componentStats,
   completedProjects,
   itemGateMap,
-  projectGating
+  projectGating,
+  options = {}
 ) {
   const upgrades = [];
   const allWeaponTemplates = [];
+
+  const obsoletedParts = options?.obsoletedShipParts || options?.obsoletedPartsSet || null;
+  const obsoletedPartsSet = obsoletedParts instanceof Set
+    ? obsoletedParts
+    : (Array.isArray(obsoletedParts) ? new Set(obsoletedParts) : null);
 
   const weaponFamilies = ['laser_weapon', 'magnetic_gun', 'gun', 'particle_weapon', 'plasma_weapon', 'missile'];
   for (const fam of weaponFamilies) {
     const familyMap = componentStats?.[fam] || {};
     for (const [id, stats] of Object.entries(familyMap)) {
-      if (stats && !stats.disabled) {
+      if (stats && !stats.disabled && (!obsoletedPartsSet || !obsoletedPartsSet.has(id))) {
         allWeaponTemplates.push({ id, family: fam, ...stats });
       }
     }
@@ -300,10 +306,16 @@ export function evaluateArmorRecommendation(
   completedProjects,
   itemGateMap,
   projectGating,
-  factions = []
+  factions = [],
+  options = {}
 ) {
+  const obsoletedParts = options?.obsoletedShipParts || options?.obsoletedPartsSet || null;
+  const obsoletedPartsSet = obsoletedParts instanceof Set
+    ? obsoletedParts
+    : (Array.isArray(obsoletedParts) ? new Set(obsoletedParts) : null);
+
   const armors = Object.entries(componentStats?.ship_armor || {})
-    .filter(([_, stats]) => stats && !stats.disabled)
+    .filter(([id, stats]) => stats && !stats.disabled && (!obsoletedPartsSet || !obsoletedPartsSet.has(id)))
     .map(([id, stats]) => ({ id, ...stats }));
 
   const fittableArmors = armors.filter(a => {
@@ -433,6 +445,28 @@ export function buildRefitAdvisor(snapshot, options = {}) {
   ]);
   const projectGating = snapshot.projectGating || {};
 
+  // Resolve observer's obsolete lists.
+  // Absent stays null throughout: null (unknown) and [] (none) are distinct.
+  const rawObsoleteDesigns = options.obsoleteShipDesigns !== undefined
+    ? options.obsoleteShipDesigns
+    : (snapshot.obsoleteShipDesigns !== undefined
+      ? snapshot.obsoleteShipDesigns
+      : observerFaction?.obsoleteShipDesigns);
+  const obsoleteShipDesigns = Array.isArray(rawObsoleteDesigns)
+    ? rawObsoleteDesigns
+    : (rawObsoleteDesigns === null ? null : null);
+
+  const rawObsoletedParts = options.obsoletedShipParts !== undefined
+    ? options.obsoletedShipParts
+    : (snapshot.obsoletedShipParts !== undefined
+      ? snapshot.obsoletedShipParts
+      : observerFaction?.obsoletedShipParts);
+  const obsoletedShipParts = Array.isArray(rawObsoletedParts)
+    ? rawObsoletedParts
+    : (rawObsoletedParts === null ? null : null);
+
+  const obsoletedPartsSet = Array.isArray(obsoletedShipParts) ? new Set(obsoletedShipParts) : null;
+
   const results = [];
 
   for (const design of designs) {
@@ -440,6 +474,8 @@ export function buildRefitAdvisor(snapshot, options = {}) {
     const dName = design._displayName || design.displayName || design.friendlyName || design.name || dId;
     const exemplarShip = ships.find(s => s.designId === dId || s.hullName === dId || s.displayName === dName) || null;
     const roleInfo = inferDesignRole(design, exemplarShip);
+
+    const isObsolete = obsoleteShipDesigns !== null ? obsoleteShipDesigns.includes(dId) : null;
 
     const fittedDriveName = design.driveTemplateName || design.driveName;
     const fittedDrive = driveStats[fittedDriveName] || null;
@@ -472,9 +508,9 @@ export function buildRefitAdvisor(snapshot, options = {}) {
       cruiseAccelerationMps2: toFinite(exemplarShip?.cruiseAccelerationMps2)
     };
 
-    // 1. Evaluate Candidate Drive Refits
+    // 1. Evaluate Candidate Drive Refits (excluding player-obsoleted drives at candidate pool construction)
     const candidateDrives = Object.entries(driveStats)
-      .filter(([_, d]) => d && !d.disabled)
+      .filter(([id, d]) => d && !d.disabled && (!obsoletedPartsSet || !obsoletedPartsSet.has(id)))
       .map(([id, d]) => ({ id, ...d }));
 
     const fittableDriveRefits = [];
@@ -522,16 +558,17 @@ export function buildRefitAdvisor(snapshot, options = {}) {
 
     const topDriveRefit = rankedDrives.ranked?.[0] || null;
 
-    // 2. Evaluate Weapon Upgrades
+    // 2. Evaluate Weapon Upgrades (with obsoleted parts excluded from candidate pool)
     const weaponUpgrades = evaluateWeaponUpgrades(
       design,
       componentStats,
       completedProjects,
       itemGateMap,
-      projectGating
+      projectGating,
+      { obsoletedPartsSet }
     );
 
-    // 3. Evaluate Armour Recommendation
+    // 3. Evaluate Armour Recommendation (with obsoleted parts excluded from candidate pool)
     const armorRecommendation = evaluateArmorRecommendation(
       design,
       componentStats,
@@ -539,7 +576,8 @@ export function buildRefitAdvisor(snapshot, options = {}) {
       completedProjects,
       itemGateMap,
       projectGating,
-      snapshot.factions
+      snapshot.factions,
+      { obsoletedPartsSet }
     );
 
     const baselineReactorCheck = evaluateReactorClass(fittedDrive, fittedPowerPlant);
@@ -548,6 +586,7 @@ export function buildRefitAdvisor(snapshot, options = {}) {
       designId: dId,
       displayName: dName,
       hull: hullName,
+      isObsolete,
       role: roleInfo.role,
       roleBasis: roleInfo.basis,
       roleTagFromSave: roleInfo.roleTagFromSave,
@@ -580,11 +619,21 @@ export function buildRefitAdvisor(snapshot, options = {}) {
     });
   }
 
+  const obsoleteDesignsCount = obsoleteShipDesigns !== null
+    ? results.filter(it => it.isObsolete === true).length
+    : null;
+  const obsoletedPartsCount = obsoletedShipParts !== null
+    ? obsoletedShipParts.length
+    : null;
+
   return {
     count: results.length,
     items: results,
     observerId,
     mode,
+    isObsoleteStateKnown: obsoleteShipDesigns !== null,
+    obsoleteShipDesignsCount: obsoleteDesignsCount,
+    obsoletedShipPartsCount: obsoletedPartsCount,
     disclaimer: 'Refit recommendations hold the existing hull and evaluate drive, weapon and armour options. Swaps are not combinable into a single computed mass or performance figure.'
   };
 }

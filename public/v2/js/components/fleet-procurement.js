@@ -170,6 +170,23 @@
       value: `${String(designRow.role).toUpperCase()} · ${designRow.roleBasis || 'Structural inference'}`
     });
 
+    if (designRow.isObsolete === true) {
+      facts.push({
+        label: 'DESIGN STATUS',
+        value: 'Marked obsolete by player · demoted in fleet recommendations'
+      });
+    } else if (designRow.isObsolete === false) {
+      facts.push({
+        label: 'DESIGN STATUS',
+        value: 'Active design in service'
+      });
+    } else if (designRow.isObsolete === null) {
+      facts.push({
+        label: 'DESIGN STATUS',
+        value: 'Obsolete status unknown (not recorded in save)'
+      });
+    }
+
     facts.push({
       label: 'BASELINE FITTING',
       value: `Drive: ${base.drive?.displayName || base.drive?.driveId || UNAVAILABLE} · ΔV: ${dec(base.deltaVKps, 1)} km/s · Combat Accel: ${dec(base.combatAccelerationMps2, 3)} m/s²`
@@ -251,9 +268,13 @@
   function renderRefitDesignCard(design) {
     const base = design.baseline || {};
     const rec = design.recommendations || {};
+    const isObsolete = design.isObsolete === true;
     const roleBadge = design.role === DESIGN_ROLES.warship
       ? '<span class="ra-tag ra-tag--deficit">WARSHIP</span>'
       : (design.role === DESIGN_ROLES.transport ? '<span class="ra-tag ra-tag--free">TRANSPORT</span>' : '<span class="ra-tag">UNKNOWN ROLE</span>');
+    const obsoleteBadge = isObsolete
+      ? '<span class="ra-tag ra-tag--warn">OBSOLETE</span>'
+      : '';
 
     const driveRec = rec.drive;
     const fittedDriveId = base.drive?.driveId;
@@ -333,13 +354,13 @@
       : '';
 
     return `
-      <div class="fp-refit-card" data-design-id="${attr(design.designId)}">
+      <div class="fp-refit-card${isObsolete ? ' fp-refit-card--obsolete' : ''}" data-design-id="${attr(design.designId)}">
         <div class="fp-refit-card__head">
           <div class="fp-refit-card__title">
             <strong>${escapeHtml(design.displayName || design.designId)}</strong>
             <small>${escapeHtml(design.hull || 'Hull')}</small>
           </div>
-          <div class="fp-refit-card__role">${roleBadge}</div>
+          <div class="fp-refit-card__role">${obsoleteBadge}${roleBadge}</div>
         </div>
         <div class="fp-refit-card__body">
           ${driveText}
@@ -429,6 +450,10 @@
     let refitHtml = '';
     const refitItems = refits?.items || [];
     if (refits && refits.success !== false && refitItems.length > 0) {
+      const activeItems = refitItems.filter(item => item.isObsolete !== true);
+      const obsoleteItems = refitItems.filter(item => item.isObsolete === true);
+      const sortedRefitItems = [...activeItems, ...obsoleteItems];
+
       refitHtml = `
         <div class="tech-card init-view__span fp-refit-section">
           <div class="tech-card-header">
@@ -440,7 +465,7 @@
               <span>Drive figures hold dry mass constant. Combined drive + weapon + armour swaps yield uncomputable mass.</span>
             </div>
             <div class="fp-refit-grid">
-              ${refitItems.map(renderRefitDesignCard).join('')}
+              ${sortedRefitItems.map(renderRefitDesignCard).join('')}
             </div>
           </div>
         </div>

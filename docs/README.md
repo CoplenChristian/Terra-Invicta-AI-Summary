@@ -11,6 +11,7 @@
 | `research-tab-layout-spec.md` | **not implemented.** Presentational fix for the Research Advisor — eight font sizes, a 41% empty second column, and a global badge rendered per-row |
 | `save-autodetect-spec.md` | **not implemented.** Local dashboard polls for a new save and offers to load it; the server already re-detects on every request, so this is one cheap route plus a client poller |
 | `fleet-procurement-spec.md` | shipped (Part A: dedicated FLEET view procurement extraction; Part B: validated refit advisor with non-composability enforcement) |
+| `obsolete-marker-spec.md` | shipped (backend bake + candidate pool filtering + frontend obsolete marker and active-first sort order) |
 | `model-verification-review.md` | independent review; **actioned (pushed in `b0ec6dc`).** The ×1.35 alien thrust factor, two confounded numbers in the allocation-formula rejection, and Claim 7's understated uncertainty band |
 
 ## Archive

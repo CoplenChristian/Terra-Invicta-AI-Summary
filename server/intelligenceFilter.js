@@ -154,6 +154,8 @@ class IntelligenceFilter {
         shipyardStations: rawSnapshot.shipyardStations,
         shipyardQueues: rawSnapshot.shipyardQueues,
         shipDesigns: rawSnapshot.shipDesigns || [],
+        obsoleteShipDesigns: observer?.obsoleteShipDesigns ?? null,
+        obsoletedShipParts: observer?.obsoletedShipParts ?? null,
         resourceTransfers: rawSnapshot.resourceTransfers,
         globalResearch: rawSnapshot.globalResearch,
         activeXenoforming: rawSnapshot.activeXenoforming,
@@ -302,7 +304,11 @@ class IntelligenceFilter {
         // readable in player mode from /api/snapshot, and from the ship-designs
         // and production-plan resources, which both fall back to this field
         // when the top-level list is empty.
-        shipDesigns: isEnhanced || isObserver ? f.shipDesigns : []
+        shipDesigns: isEnhanced || isObserver ? f.shipDesigns : [],
+        // Obsolete markers are the observer's own internal decisions, not enemy intel.
+        // Redacted to null (never []) for enemy factions in player mode.
+        obsoleteShipDesigns: isEnhanced || isObserver ? f.obsoleteShipDesigns : null,
+        obsoletedShipParts: isEnhanced || isObserver ? f.obsoletedShipParts : null
       };
     });
 
@@ -525,6 +531,8 @@ class IntelligenceFilter {
         shipyardStations: visibleShipyardStations,
         shipyardQueues: visibleShipyardQueues,
         shipDesigns: (rawSnapshot.shipDesigns || []).filter(d => isEnhanced || sameId(d.factionId, actualObserverId)),
+        obsoleteShipDesigns: observerFaction?.obsoleteShipDesigns ?? null,
+        obsoletedShipParts: observerFaction?.obsoletedShipParts ?? null,
         resourceTransfers: visibleResourceTransfers,
       globalResearch: rawSnapshot.globalResearch,
       activeXenoforming: visibleXenoforming,
@@ -678,6 +686,12 @@ class IntelligenceFilter {
       }
       if (this.toFiniteOrNull(faction.researchBreakdown?.habModules) !== null) {
         factionLeaks.push(`${faction.ID}:researchBreakdown.habModules`);
+      }
+      if (Array.isArray(faction.obsoleteShipDesigns)) {
+        factionLeaks.push(`${faction.ID}:obsoleteShipDesigns[${faction.obsoleteShipDesigns.length}]`);
+      }
+      if (Array.isArray(faction.obsoletedShipParts)) {
+        factionLeaks.push(`${faction.ID}:obsoletedShipParts[${faction.obsoletedShipParts.length}]`);
       }
     }
     if (factionLeaks.length) {

@@ -438,3 +438,355 @@ test('fleet procurement frontend renders four distinct drive recommendation stat
   assert.ok(state2Count >= 3, `Expected >= 3 designs in State 2 on live save, found ${state2Count}`);
   assert.ok(state3Count >= 5, `Expected >= 5 designs in State 3 on live save, found ${state3Count}`);
 });
+
+test('obsolete markers: null is distinguished from [] and unknown state is preserved', () => {
+  const baseDesign = {
+    ID: 'design-1',
+    dataName: 'design-1',
+    displayName: 'Test Corvette',
+    factionId: 4712,
+    hullTemplateName: 'Corvette',
+    driveTemplateName: 'NervaDrivex1',
+    powerPlantTemplateName: 'SolidCoreFissionReactor',
+    armorTemplateName: 'CompositeArmor',
+    noseWeaponTemplateEntries: [],
+    hullWeaponTemplateEntries: []
+  };
+
+  const baseSnapshot = {
+    observerFactionId: 4712,
+    designs: [baseDesign],
+    ships: [],
+    driveStats: {
+      NervaDrivex1: { displayName: 'Nerva Drive x1', requiredPowerPlant: 'Solid_Core_Fission' }
+    },
+    componentStats: {
+      power_plant: {
+        SolidCoreFissionReactor: { displayName: 'Solid Core Reactor', powerPlantClass: 'Solid_Core_Fission' }
+      },
+      ship_armor: {}
+    },
+    completedProjects: []
+  };
+
+  // 1. Absent obsolete markers (null) -> isObsoleteStateKnown: false, isObsolete: null
+  const absentSnapshot = {
+    ...baseSnapshot,
+    obsoleteShipDesigns: null,
+    obsoletedShipParts: null
+  };
+  const absentAdvisor = buildRefitAdvisor(absentSnapshot, { observerId: 4712 });
+  assert.strictEqual(absentAdvisor.isObsoleteStateKnown, false);
+  assert.strictEqual(absentAdvisor.obsoleteShipDesignsCount, null);
+  assert.strictEqual(absentAdvisor.obsoletedShipPartsCount, null);
+  assert.strictEqual(absentAdvisor.items[0].isObsolete, null);
+
+  // 2. Empty obsolete markers ([]) -> isObsoleteStateKnown: true, isObsolete: false, count: 0
+  const emptySnapshot = {
+    ...baseSnapshot,
+    obsoleteShipDesigns: [],
+    obsoletedShipParts: []
+  };
+  const emptyAdvisor = buildRefitAdvisor(emptySnapshot, { observerId: 4712 });
+  assert.strictEqual(emptyAdvisor.isObsoleteStateKnown, true);
+  assert.strictEqual(emptyAdvisor.obsoleteShipDesignsCount, 0);
+  assert.strictEqual(emptyAdvisor.obsoletedShipPartsCount, 0);
+  assert.strictEqual(emptyAdvisor.items[0].isObsolete, false);
+
+  // 3. Marked obsolete design
+  const markedSnapshot = {
+    ...baseSnapshot,
+    obsoleteShipDesigns: ['design-1'],
+    obsoletedShipParts: []
+  };
+  const markedAdvisor = buildRefitAdvisor(markedSnapshot, { observerId: 4712 });
+  assert.strictEqual(markedAdvisor.isObsoleteStateKnown, true);
+  assert.strictEqual(markedAdvisor.obsoleteShipDesignsCount, 1);
+  assert.strictEqual(markedAdvisor.items[0].isObsolete, true);
+});
+
+test('non-vacuous obsolete filtering on live save: zero recommendations name an obsoleted part', () => {
+  const snapshot = snapshotLoader.loadFilteredSnapshot({ observer: 4712, mode: 'player' });
+  const advisor = buildRefitAdvisor(snapshot, { observerId: 4712, mode: 'player' });
+
+  // 1. Observer's obsolete design count on live save is exactly 12 of 24
+  assert.strictEqual(advisor.count, 24, `Expected 24 designs evaluated, found ${advisor.count}`);
+  assert.strictEqual(advisor.isObsoleteStateKnown, true);
+  assert.strictEqual(advisor.obsoleteShipDesignsCount, 12, `Expected 12 obsolete designs, found ${advisor.obsoleteShipDesignsCount}`);
+  assert.strictEqual(advisor.obsoletedShipPartsCount, 12, `Expected 12 obsoleted parts, found ${advisor.obsoletedShipPartsCount}`);
+
+  const obsoleteItems = advisor.items.filter(it => it.isObsolete === true);
+  const activeItems = advisor.items.filter(it => it.isObsolete === false);
+  assert.strictEqual(obsoleteItems.length, 12);
+  assert.strictEqual(activeItems.length, 12);
+
+  // 2. Zero recommendations name any part in obsoletedShipParts
+  const obsoletedPartsSet = new Set(snapshot.obsoletedShipParts || []);
+  assert.ok(obsoletedPartsSet.has('480cmIRLaserCannon'), '480cmIRLaserCannon must be in observer obsoleted parts');
+  assert.ok(obsoletedPartsSet.has('RailCannonMk2'), 'RailCannonMk2 must be in observer obsoleted parts');
+
+  for (const item of advisor.items) {
+    // Check drive recommendation
+    const recDrive = item.recommendations.drive;
+    if (recDrive?.candidateDriveId) {
+      assert.ok(
+        !obsoletedPartsSet.has(recDrive.candidateDriveId),
+        `Design ${item.displayName} recommended obsoleted drive ${recDrive.candidateDriveId}`
+      );
+    }
+
+    // Check weapon upgrades (previously 3 designs recommended 480cmIRLaserCannon)
+    for (const w of item.recommendations.weapons || []) {
+      const recPartId = w.recommendedId;
+      assert.ok(
+        !obsoletedPartsSet.has(recPartId),
+        `Design ${item.displayName} recommended obsoleted weapon ${recPartId} (${w.recommendedWeapon})`
+      );
+    }
+
+    // Check armour recommendation
+    const recArmor = item.recommendations.armor;
+    if (recArmor?.recommendedMaterialId) {
+      assert.ok(
+        !obsoletedPartsSet.has(recArmor.recommendedMaterialId),
+        `Design ${item.displayName} recommended obsoleted armour ${recArmor.recommendedMaterialId}`
+      );
+    }
+  }
+
+  // 3. Explicit check on the 3 designs that previously received 480cmIRLaserCannon
+  const angara = advisor.items.find(it => it.displayName === 'Angara');
+  const angaraBlock2 = advisor.items.find(it => it.displayName === 'Angara Block 2');
+  const patapsco = advisor.items.find(it => it.displayName === 'Patapsco');
+
+  assert.ok(angara, 'Angara design must exist');
+  assert.ok(angaraBlock2, 'Angara Block 2 design must exist');
+  assert.ok(patapsco, 'Patapsco design must exist');
+
+  const angaraWeapons = (angara.recommendations.weapons || []).map(w => w.recommendedId);
+  const angara2Weapons = (angaraBlock2.recommendations.weapons || []).map(w => w.recommendedId);
+  const patapscoWeapons = (patapsco.recommendations.weapons || []).map(w => w.recommendedId);
+
+  assert.ok(!angaraWeapons.includes('480cmIRLaserCannon'), 'Angara must not recommend obsoleted 480cmIRLaserCannon');
+  assert.ok(!angara2Weapons.includes('480cmIRLaserCannon'), 'Angara Block 2 must not recommend obsoleted 480cmIRLaserCannon');
+  assert.ok(!patapscoWeapons.includes('480cmIRLaserCannon'), 'Patapsco must not recommend obsoleted 480cmIRLaserCannon');
+
+  // Patapsco should recommend the un-obsoleted 480cmGreenLaserCannon instead
+  assert.ok(patapscoWeapons.includes('480cmGreenLaserCannon'), 'Patapsco should recommend 480cmGreenLaserCannon');
+});
+
+test('synthetic fixture verifies drive and armour obsoletion filtering', () => {
+  const snapshot = {
+    observerFactionId: 4712,
+    obsoleteShipDesigns: [],
+    obsoletedShipParts: ['AdvNervaDrivex1', 'AdamantaneArmor'],
+    designs: [
+      {
+        ID: 'design-synthetic-1',
+        dataName: 'design-synthetic-1',
+        displayName: 'Corvette Alpha',
+        factionId: 4712,
+        hullTemplateName: 'Corvette',
+        driveTemplateName: 'NervaDrivex1',
+        powerPlantTemplateName: 'SolidCoreFissionReactor',
+        armorTemplateName: 'CompositeArmor',
+        noseWeaponTemplateEntries: [],
+        hullWeaponTemplateEntries: []
+      }
+    ],
+    ships: [
+      {
+        designId: 'design-synthetic-1',
+        factionId: 4712,
+        currentDeltaVKps: 15.2,
+        currentMaxDeltaVKps: 15.2,
+        combatAccelerationMps2: 0.12,
+        dryMassKg: 500000,
+        fullWetMassKg: 750000
+      }
+    ],
+    driveStats: {
+      NervaDrivex1: {
+        displayName: 'Nerva Drive x1',
+        EV_kps: 8.5,
+        thrust_N: 120000,
+        thrustCap: 1,
+        propellant: 'LiquidHydrogen',
+        requiredPowerPlant: 'Solid_Core_Fission',
+        reqPowerGW: 0.5,
+        flatMass_tons: 15,
+        requiredProjectName: null
+      },
+      AdvNervaDrivex1: {
+        displayName: 'Advanced Nerva Drive x1',
+        EV_kps: 12.0,
+        thrust_N: 180000,
+        thrustCap: 1,
+        propellant: 'LiquidHydrogen',
+        requiredPowerPlant: 'Solid_Core_Fission',
+        reqPowerGW: 0.8,
+        flatMass_tons: 15,
+        requiredProjectName: 'Project_AdvNerva'
+      }
+    },
+    componentStats: {
+      power_plant: {
+        SolidCoreFissionReactor: {
+          displayName: 'Solid Core Fission Reactor',
+          powerPlantClass: 'Solid_Core_Fission',
+          maxOutputGW: 2.0
+        }
+      },
+      ship_armor: {
+        CompositeArmor: {
+          displayName: 'Composite Armor',
+          densityKgM3: 2000,
+          specialties: [['XRayResistance', 1.11], ['BaryonicResistance', 5.25]]
+        },
+        AdamantaneArmor: {
+          displayName: 'Adamantane Armor',
+          densityKgM3: 3500,
+          specialties: [['XRayResistance', 4.82], ['BaryonicResistance', 31.02]]
+        }
+      }
+    },
+    completedProjects: ['Project_AdvNerva']
+  };
+
+  const advisor = buildRefitAdvisor(snapshot, { observerId: 4712 });
+  const item = advisor.items[0];
+
+  // 1. Drive check: AdvNervaDrivex1 is completed, but obsoleted by player -> must NOT be recommended
+  const recDrive = item.recommendations.drive;
+  assert.ok(
+    !recDrive || recDrive.candidateDriveId !== 'AdvNervaDrivex1',
+    'Obsoleted AdvNervaDrivex1 must not be recommended'
+  );
+
+  // 2. Armour check: AdamantaneArmor has higher resistance, but obsoleted -> falls back to CompositeArmor
+  const recArmor = item.recommendations.armor;
+  assert.strictEqual(
+    recArmor.recommendedMaterialId,
+    'CompositeArmor',
+    'Armour recommendation must exclude obsoleted AdamantaneArmor'
+  );
+});
+
+test('redaction: whole-payload scan verifies enemy obsolete lists are not leaked in player mode', () => {
+  const playerSnapshot = snapshotLoader.loadFilteredSnapshot({ observer: 4712, mode: 'player' });
+  const omniscientSnapshot = snapshotLoader.loadFilteredSnapshot({ observer: 4712, mode: 'omniscient' });
+
+  // Known enemy design IDs that only exist in other factions' obsoleteShipDesigns lists (no active ships in space)
+  const unfieldedEnemyObsoleteDesigns = [
+    'EscapeCouncilShipTemplate485',
+    'EscapeCouncilShipTemplate495',
+    'EscapeCouncilShipTemplate496',
+    'EscapeCouncilShipTemplate309 Refit 1076',
+    'SubmitCouncilShipTemplate535 Refit 1483',
+    'AppeaseCouncilShipTemplate130 Refit 1368',
+    'CooperateCouncilShipTemplate197',
+    'Ship13',
+    'Ship16'
+  ];
+
+  const playerJson = JSON.stringify(playerSnapshot);
+  const omniscientJson = JSON.stringify(omniscientSnapshot);
+
+  // 1. Player mode: stringified JSON scan confirms NO enemy obsolete design lists leak anywhere
+  for (const enemyDesign of unfieldedEnemyObsoleteDesigns) {
+    assert.strictEqual(
+      playerJson.includes(enemyDesign),
+      false,
+      `Enemy obsolete design '${enemyDesign}' leaked into player mode snapshot JSON`
+    );
+  }
+
+  // 2. All enemy factions in player mode have null obsolete lists
+  const enemyFactions = playerSnapshot.factions.filter(f => f.ID !== 4712);
+  assert.ok(enemyFactions.length >= 7, 'Expected at least 7 enemy factions');
+  for (const f of enemyFactions) {
+    assert.strictEqual(f.obsoleteShipDesigns, null, `Enemy faction ${f.displayName} obsoleteShipDesigns must be null in player mode`);
+    assert.strictEqual(f.obsoletedShipParts, null, `Enemy faction ${f.displayName} obsoletedShipParts must be null in player mode`);
+  }
+
+  // 3. Observer's own obsolete design IS present in player mode
+  assert.ok(
+    playerJson.includes('playerShipTemplate70'),
+    'Observer obsolete design playerShipTemplate70 must be present in player snapshot'
+  );
+
+  // 4. Omniscient mode DOES carry the enemy obsolete design IDs
+  for (const enemyDesign of unfieldedEnemyObsoleteDesigns) {
+    assert.strictEqual(
+      omniscientJson.includes(enemyDesign),
+      true,
+      `Omniscient mode must carry enemy obsolete design '${enemyDesign}'`
+    );
+  }
+});
+
+test('fleet procurement frontend renders obsolete markers, demotes retired cards, and quiets armour alert', () => {
+  const { renderRefitDesignCard, render } = loadFleetProcurementComponent();
+
+  // 1. Active design card: no OBSOLETE badge
+  const activeDesign = {
+    designId: 'active-1',
+    displayName: 'Patapsco',
+    isObsolete: false,
+    role: DESIGN_ROLES.warship,
+    baseline: {
+      drive: { driveId: 'BurnerDrivex6', displayName: 'Burner Drive x6' },
+      deltaVKps: 14.0,
+      combatAccelerationMps2: 1.9
+    },
+    recommendations: {
+      drive: null,
+      weapons: [],
+      armor: { recommendedMaterial: 'Nanotube Armor', threatBasis: 'threat-weighted', weighted: true }
+    }
+  };
+  const activeHtml = renderRefitDesignCard(activeDesign);
+  assert.ok(!activeHtml.includes('OBSOLETE'), 'Active design must not render OBSOLETE badge');
+  assert.ok(!activeHtml.includes('fp-refit-card--obsolete'), 'Active design must not have obsolete class');
+
+  // 2. Obsolete design card: renders OBSOLETE tag, adds obsolete class, quiet armour form
+  const obsoleteDesign = {
+    designId: 'obsolete-1',
+    displayName: 'Angara',
+    isObsolete: true,
+    role: DESIGN_ROLES.warship,
+    baseline: {
+      drive: { driveId: 'NervaDrivex5', displayName: 'Nerva Drive x5' },
+      deltaVKps: 12.0,
+      combatAccelerationMps2: 0.8
+    },
+    recommendations: {
+      drive: null,
+      weapons: [],
+      armor: { recommendedMaterial: 'Adamantane Armor', threatBasis: 'threat-weighted', weighted: true }
+    }
+  };
+  const obsoleteHtml = renderRefitDesignCard(obsoleteDesign);
+  assert.match(obsoleteHtml, /<span class="ra-tag ra-tag--warn">OBSOLETE<\/span>/, 'Obsolete design must render OBSOLETE tag');
+  assert.ok(obsoleteHtml.includes('fp-refit-card--obsolete'), 'Obsolete design must carry fp-refit-card--obsolete class');
+  const armorSection = obsoleteHtml.match(/<div class="fp-refit__armor">[\s\S]*?<\/div>/)?.[0];
+  assert.ok(armorSection, 'Armour section must be present');
+  assert.ok(!armorSection.includes('ra-tag--deficit'), 'Obsolete design armour must not raise red deficit tag');
+
+  // 3. Sorting & demotion: render() places active items before obsolete items
+  const mockContainer = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+  const mockRefits = {
+    success: true,
+    items: [
+      { ...obsoleteDesign, designId: 'obs-first' },
+      { ...activeDesign, designId: 'act-second' }
+    ]
+  };
+  render(mockContainer, { military: { procurement: { items: [], count: 0 } } }, mockRefits);
+
+  const actIndex = mockContainer.innerHTML.indexOf('act-second');
+  const obsIndex = mockContainer.innerHTML.indexOf('obs-first');
+  assert.ok(actIndex !== -1 && obsIndex !== -1, 'Both cards must render');
+  assert.ok(actIndex < obsIndex, 'Active design must sort before obsolete design in FLEET view grid');
+});
+
