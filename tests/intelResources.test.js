@@ -493,7 +493,8 @@ test('the dispatcher is derived from the endpoint table, not a third list', () =
     .filter(key => !SUPPORTED_RESOURCES.has(INTEL_ENDPOINT_INDEX[key].replace('/api/intel/', '')));
   assert.deepStrictEqual(adapterServed, [
     'history', 'strategicDelta', 'techTree', 'techPath', 'techSearch',
-    'techMilestones', 'techMatrix', 'techOpportunities', 'researchQueue'
+    'techMilestones', 'techMatrix', 'techOpportunities', 'researchQueue',
+    'latestThreats', 'latestWarRoom', 'latestSnapshot'
   ], 'every other endpoint must reach a projection handler');
 
   // The bare two-key envelope is what an UNRECOGNISED resource gets...

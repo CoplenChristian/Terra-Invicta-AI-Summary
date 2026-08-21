@@ -112,7 +112,7 @@ function registerReadOnlyExports(app) {
         : exportGenerator.generateCompactSnapshot(filtered);
 
       if (req.path === '/latest-snapshot.md') {
-        res.type('text/markdown').set('Cache-Control', 'no-store').send(markdown);
+        res.type('text/markdown; charset=utf-8').set('Cache-Control', 'no-store').send(markdown);
         return;
       }
 
@@ -132,6 +132,32 @@ function registerReadOnlyExports(app) {
       });
     } catch (err) {
       res.status(err.statusCode || 500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/latest-threats.md', (req, res) => {
+    try {
+      const { mode, observerId, targetPath } = requestContext(req);
+      const rawSnapshot = snapshotCache.loadOrGetSnapshot(targetPath);
+      assertObserver(rawSnapshot, observerId);
+      const filtered = snapshotCache.buildFilteredSnapshot(rawSnapshot, mode, observerId);
+      const markdown = exportGenerator.generateThreatsMarkdown(filtered);
+      res.type('text/markdown; charset=utf-8').set('Cache-Control', 'no-store').send(markdown);
+    } catch (err) {
+      res.status(err.statusCode || 500).type('text/plain').send(`Error generating threats markdown: ${err.message}`);
+    }
+  });
+
+  app.get('/latest-war-room.md', (req, res) => {
+    try {
+      const { mode, observerId, targetPath } = requestContext(req);
+      const rawSnapshot = snapshotCache.loadOrGetSnapshot(targetPath);
+      assertObserver(rawSnapshot, observerId);
+      const filtered = snapshotCache.buildFilteredSnapshot(rawSnapshot, mode, observerId);
+      const markdown = exportGenerator.generateWarRoomMarkdown(filtered);
+      res.type('text/markdown; charset=utf-8').set('Cache-Control', 'no-store').send(markdown);
+    } catch (err) {
+      res.status(err.statusCode || 500).type('text/plain').send(`Error generating war room markdown: ${err.message}`);
     }
   });
 }

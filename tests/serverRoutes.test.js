@@ -50,7 +50,9 @@ const EXPECTED_STACK = [
     '/api/intel/research-queue'
   ]],
   ['GET', '/api/v2/briefing'],
-  ['GET', ['/api/snapshot/compact', '/api/snapshot/full', '/latest-snapshot.json', '/latest-snapshot.md']]
+  ['GET', ['/api/snapshot/compact', '/api/snapshot/full', '/latest-snapshot.json', '/latest-snapshot.md']],
+  ['GET', '/latest-threats.md'],
+  ['GET', '/latest-war-room.md']
 ];
 
 function actualStack() {

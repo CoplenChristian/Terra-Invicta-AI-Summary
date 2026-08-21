@@ -39,6 +39,10 @@ import {
 } from '../shared/intelResources.mjs';
 import { isPositiveIntegerId } from '../shared/requestValidation.mjs';
 import { buildStrategicDelta } from '../shared/strategicDelta.mjs';
+import {
+  renderThreatsMarkdown,
+  renderWarRoomMarkdown
+} from '../shared/markdownExports.mjs';
 
 import { corsHeaders, jsonResponse, htmlResponse, markdownSnapshotResponse } from './http.js';
 import { asset, observerFile } from './assets.js';
@@ -441,6 +445,37 @@ export default {
           return markdownSnapshotResponse(envelope);
         }
         return jsonResponse(envelope);
+      } catch (err) {
+        return jsonResponse({ success: false, error: err.message }, 500);
+      }
+    }
+
+    if (url.pathname === '/latest-threats.md' || url.pathname === '/latest-war-room.md') {
+      if (!isSupabaseConfigured) {
+        return jsonResponse({
+          success: false,
+          error: 'Real-time markdown reports require the published Supabase backend.'
+        }, 503);
+      }
+
+      try {
+        const result = await fetchFromSupabase(env, observerId, mode);
+        if (!result.found) {
+          return jsonResponse({ success: false, error: result.error }, result.status);
+        }
+
+        const markdown = url.pathname === '/latest-threats.md'
+          ? renderThreatsMarkdown(result.snapshot)
+          : renderWarRoomMarkdown(result.snapshot);
+
+        return new Response(markdown, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/markdown; charset=utf-8',
+            'Cache-Control': 'no-store',
+            ...corsHeaders
+          }
+        });
       } catch (err) {
         return jsonResponse({ success: false, error: err.message }, 500);
       }

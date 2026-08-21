@@ -321,7 +321,10 @@ const INTEL_ENDPOINTS = Object.freeze([
   { key: 'techMilestones', example: `${OMNISCIENT}&category=ship_hull` },
   { key: 'techMatrix', example: OMNISCIENT },
   { key: 'techOpportunities', example: OMNISCIENT },
-  { key: 'researchQueue', example: OMNISCIENT }
+  { key: 'researchQueue', example: OMNISCIENT },
+  { key: 'latestThreats', path: '/latest-threats.md', example: OBSERVER_ONLY },
+  { key: 'latestWarRoom', path: '/latest-war-room.md', example: OBSERVER_ONLY },
+  { key: 'latestSnapshot', path: '/latest-snapshot.md', example: OBSERVER_ONLY }
 ].map(entry => Object.freeze({
   ...entry,
   route: kebab(entry.key),
@@ -343,7 +346,7 @@ export const SUPPORTED_RESOURCES = new Set(PROJECTION_BY_ROUTE.keys());
 // Keep these as path-only links so external analysis clients can discover the
 // focused routes before adding observer/mode/faction filters themselves.
 export const INTEL_ENDPOINT_INDEX = Object.freeze(
-  Object.fromEntries(INTEL_ENDPOINTS.map(entry => [entry.key, `/api/intel/${entry.route}`]))
+  Object.fromEntries(INTEL_ENDPOINTS.map(entry => [entry.key, entry.path || `/api/intel/${entry.route}`]))
 );
 
 export const INTEL_ENDPOINT_EXAMPLES = Object.freeze(
