@@ -2,7 +2,7 @@
 
 Ground the research recommendation in what the player can actually do this turn.
 
-Written 2026-08-21 against `669e16e`. Every figure below is measured from the live save.
+Written 2026-08-21 against `669e16e`, revised after two corrections from the player. Every figure is measured from saves; the mechanics were confirmed by the player and one earlier reading of them was wrong (§2b-bis).
 
 ---
 
@@ -17,20 +17,21 @@ Reported: *"the suggested research is based more on what can be researched vs wh
 Measured on the live save:
 
 ```
-project slots occupied      4 of 4
-  Project_AudienceResearch          43 / 100
-  Project_OperationsResearch        23 / 100
-  Project_PherocyteResistance   12,412 / 30,000
-  Project_240cmUVLaserCannon         in progress
+three project slots; researchWeights [0,0,3,3,3,0]
 
-global tech slot occupied
-  ColonyHabs (LifeScience)       8,589 / 35,000
+  PherocyteResistance     13,790 / 30,000   3 pips   active
+  240cmUVLaserCannon         912 /  7,500   3 pips   active
+  AudienceResearch            43 /    100   0 pips   backlog, deliberately
+  OperationsResearch          23 /    100   no entry backlog, deliberately
+
+global tech slots (separate pool of three)
+  ColonyHabs · AdministrationAlgorithms · Coilguns
 
 payload keys: slotCapacity ABSENT · freeSlots ABSENT · wouldDisplace ABSENT
               currentProjects ABSENT · alreadyResearching ABSENT
 ```
 
-So the panel says *"research this, 2,500 points, under a month"* when every slot is full and taking it means **abandoning something 41% complete**. The recommendation is arithmetically right and operationally unusable — which is exactly the reported experience, arrived at by a different route than assumed.
+The panel recommends starting work without knowing any of this exists — how many slots there are, which are occupied, what is already under way, or what taking a slot would cost. The recommendation is arithmetically right and operationally ungrounded, which is exactly the reported experience.
 
 A second instance of the same gap, found while comparing drives: `Project_OrionDrive` is **already completed**, so Orion Drive is fittable today at **zero research cost** — a 5.1× combat-acceleration improvement on the observer's main warship, requiring only a refit. The panel ranks research and does not lead with the thing that needs no research at all. Phase 4's census counts these ("10 buildable now") but the count is not the headline.
 
@@ -49,37 +50,40 @@ Every recommendation resolves to one of three cases, and must say which:
 | case | what the row means | what it must state |
 | :-- | :-- | :-- |
 | **free slot** | start it now, nothing lost | slot index, time at current delivery |
-| **occupied slot** | start it by displacing something | what is displaced, its accumulated progress, and whether that progress is lost or retained |
+| **occupied slot** | start it by backlogging something | what gets backlogged and its progress, which is retained |
 | **no slot of the right kind** | cannot be started at all | which kind is exhausted |
 
-**Whether displaced progress survives is the load-bearing unknown, and it could not be established.** Eight saves spanning 2029-09-10 to 2034-02-01 were checked: six projects left a slot in that window and **all six were completed, none displaced**. There is no natural experiment in this campaign, so **report it unknown — that work is done, do not repeat it.**
+**Displaced progress is retained — settled, do not re-investigate.** Stopping a project moves it to the backlog with its accumulation intact; the player confirmed this directly, and it is consistent with `AudienceResearch` reading 43/100 and `OperationsResearch` 23/100 byte-identically across eight saves spanning four and a half years.
 
-A recommendation that silently assumes 13,790 points are safe, or silently assumes they are lost, is wrong in a way the player cannot see. If a future save ever does displace an in-progress project, the comparison becomes available and the state can be tightened then.
+So backlogging costs **time, not research**, and the panel should say so plainly. There is no at-risk calculation to make and `displaceCandidate` needs no minimise-loss heuristic.
 
-`displaceCandidate` needs the same care. Under unknown retention, proposing the occupant with the **least accumulated progress** minimises what is at risk, which makes it a defensible default — but it is a heuristic chosen under uncertainty, not the correct answer, and must be labelled as one. The player may well prefer to drop a 46%-complete project they no longer want over a 12% one they do.
+What it should not do is rank the occupants for the player. Which project to park depends on whether it is still wanted — a 46%-complete project the player has lost interest in is a better candidate than a 12% one they are actively pursuing, and the snapshot cannot tell the difference. Name the occupants and their progress; let the player choose.
 
 Project slots and global tech slots are **different pools** and must not be conflated: a global tech cannot displace a faction project.
 
-### 2b-bis. Stalled slots — measured, and the highest-value thing this panel can say
+### 2b-bis. The backlog — and a wrong reading to avoid
 
-A slot can hold a project and receive **nothing**. Measured across eight saves spanning 2029-09-10 to 2034-02-01:
+**An earlier draft of this document claimed two project slots were "stalled" and had been dead since 2029. That was wrong.** It is recorded here because the mistake is easy to repeat from the data alone.
 
-```
-researchWeights: [0,0,3,3,3,0]
+The player can **stop a project**. It leaves the active set, keeps its accumulated progress, and sits in a **backlog** until resumed. So a project with progress and no pips is not a wasted slot — it is parked, deliberately, and this is a normal and useful thing to do.
 
-slot 3   3 pips   PherocyteResistance     13,790 / 30,000  (46%)  advancing
-slot 4   3 pips   240cmUVLaserCannon         912 /  7,500  (12%)  advancing
-slot 5   0 pips   AudienceResearch            43 /    100  (43%)  FROZEN since 2029
-slot 7   no entry OperationsResearch          23 /    100  (23%)  FROZEN since 2029
-```
+That also settles §2b: **displaced progress is retained.** Confirmed by the player, and consistent with `AudienceResearch` holding at exactly 43/100 and `OperationsResearch` at 23/100 across eight saves spanning four and a half years. Displacing a project costs *time*, not accumulated research. The advisor may say so plainly, and `displaceCandidate` no longer needs an at-risk heuristic — nothing is at risk.
 
-`AudienceResearch: 43` and `OperationsResearch: 23` are byte-identical in every save across **four and a half years**. Slot 5 carries zero pips; slot 7 is beyond the length-6 weight array and receives nothing at all.
+There are **three project slots**, and the global tech slots are a separate pool of three (`globalResearch.activeSlots`, holding ColonyHabs, AdministrationAlgorithms and Coilguns on the sampled save).
 
-So two of four project slots are consumed by work that cannot finish, while the advisor recommends starting more. **Detecting this is worth more than any ranking improvement in this document** — it is capacity the player already owns and is not using.
+**The index mapping is not yet understood and must not be guessed.** On the sampled save `researchWeights` is `[0,0,3,3,3,0]` — six entries, three carrying pips at indices 2, 3, 4 — while `currentProjects` reports slot indices 3, 4, 5 and **7**, the last of which is outside the array entirely. Two of those four entries carry pips and two do not. Whether index 2 addresses a project slot or a global tech slot, and what slot 7 means, are open questions. Establish the mapping from data across several saves before relying on it; if it cannot be established, report the counts that *are* directly stated rather than inferring occupancy.
 
-Emit a `stalled` state for any slotted project receiving zero delivery, distinguishing the two causes (zero pips assigned, versus slot index outside the weight array — they have different fixes), and surface it above the recommendations. Detect it from the data, not from a hardcoded slot count: read the weight array's own length.
+What the panel should say, once the mapping is known: **how many project slots are free.** On the sampled save two of three are active and one appears free — the opposite of the "all full, you must displace" framing this document originally carried, and far more useful. A free slot means a recommendation costs nothing but the research itself.
 
-Do **not** state what the player should do about it beyond naming the cause. Whether to assign pips or clear the slot depends on whether that project is still wanted, which the snapshot does not know.
+**Zero pips is a choice, not a fault.** The player concentrates research on two slots deliberately. Never describe a backlogged or zero-pip project as wasted, stalled, or a mistake — it is a strategy the advisor has no basis to second-guess.
+
+Whether that concentration is optimal is genuinely open, and the campaign cannot answer it: **every save has exactly three pipped slots** (`[0,0,3,2,1,0]` → `[0,0,3,1,3,0]` → `[0,0,3,3,3,0]`). Only the distribution ever changed, never the count, so the wiki's `+5% per pipped slot` breadth term has no variation to test against. That term is the single blocker on ever recommending an allocation, and settling it needs a deliberate two-save experiment — not more analysis of existing saves.
+
+### 2b-ter. Stalled slots — only if genuinely stalled
+
+A backlogged project is not stalled. A project **holding a pipped slot and still receiving nothing** would be, and that is a different and much rarer condition. Detect it only from measured delivery across saves, never from a zero-pip reading, which is just the backlog.
+
+On the sampled save no such case exists, and the panel must say so rather than manufacturing one.
 
 ### 2c. Lead with what needs no research
 
@@ -104,9 +108,9 @@ The live example: Orion Drive x1 — completed, fittable now, **5.1× combat acc
 ## 4. Acceptance
 
 - The panel shows the current queue with progress before any recommendation.
-- **Stalled slots are detected and surfaced above the recommendations**, with the cause named (zero pips versus slot index outside the weight array). On the sampled save this must find Audience Research and Operations Research; on a save with none it must say none, not omit the section.
+- **Free project slots are counted and stated.** A backlogged project is never reported as a stalled or wasted slot.
 - Every recommendation states free-slot / displaces-X / no-slot, and names what would be displaced.
-- Whether displaced progress is retained is either established from saves and stated, or reported as unknown — never assumed.
+- Backlogging is described as costing time, not research, and no occupant is ranked for the player.
 - Zero-research options (already unlocked, merely unbuilt) lead the ranking, with the refit named.
 - Actionable and aspirational are visually distinct blocks, not interleaved ranks.
 - Turn-1: no slots, no queue, nothing recommended as startable — rendered honestly, not as an empty panel.
