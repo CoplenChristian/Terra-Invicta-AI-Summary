@@ -71,9 +71,28 @@ That also settles §2b: **displaced progress is retained.** Confirmed by the pla
 
 There are **three project slots**, and the global tech slots are a separate pool of three (`globalResearch.activeSlots`, holding ColonyHabs, AdministrationAlgorithms and Coilguns on the sampled save).
 
-**The index mapping is not yet understood and must not be guessed.** On the sampled save `researchWeights` is `[0,0,3,3,3,0]` — six entries, three carrying pips at indices 2, 3, 4 — while `currentProjects` reports slot indices 3, 4, 5 and **7**, the last of which is outside the array entirely. Two of those four entries carry pips and two do not. Whether index 2 addresses a project slot or a global tech slot, and what slot 7 means, are open questions. Establish the mapping from data across several saves before relying on it; if it cannot be established, report the counts that *are* directly stated rather than inferring occupancy.
+**The index mapping — now established across six saves spanning 2029-09-10 to 2034-02-16.** An earlier revision listed this as an open question; it is not.
 
-What the panel should say, once the mapping is known: **how many project slots are free.** On the sampled save two of three are active and one appears free — the opposite of the "all full, you must displace" framing this document originally carried, and far more useful. A free slot means a recommendation costs nothing but the research itself.
+```
+G = globalResearch.activeSlots.length          (3 in every save sampled)
+
+researchWeights[0 .. G-1]      global tech slots
+researchWeights[G .. len-1]    project slots            -> projectSlotCapacity = len - G  (3)
+currentProjects[].slot >= len  BACKLOG, outside the weights array entirely
+```
+
+Verified: every in-array project slot index falls in `[G, len)` across all six saves — **zero violations** — and every backlog entry sits at or beyond `len` (observed 6, 7, 8).
+
+Two consequences the arithmetic alone does not give you:
+
+- **A slot index at or beyond `weights.length` is backlog, not capacity.** `w[7]` is `undefined`; treating that as "zero pips" happens to classify correctly but for the wrong reason, and treating it as an active slot would overcount capacity. Handle it explicitly.
+- **A pipped index below `G` is a global tech slot, not a project.** On the sampled saves `weights[2]` carries 3 pips and no project sits at slot 2 — those pips drive a global tech. Do not count it toward project capacity.
+
+Read `G` and `len` from the snapshot; neither is a constant.
+
+What the panel should say: **how many project slots are free.** A free slot means a recommendation costs nothing but the research itself; a full set means it costs backlogging something.
+
+**This number moves, so derive it — never quote it.** On the newest save (2034-02-16) all three project slots are active — Maskirovka 87/15,000, 240cm UV Laser Cannon 2,047/7,500, Fusion Outpost Kit 377/1,500 — so there are **zero** free. Two weeks earlier there was one. An earlier revision of this document quoted "one free slot" as though it were a property of the campaign; it is a property of the moment.
 
 **Zero pips is a choice, not a fault.** The player concentrates research on two slots deliberately. Never describe a backlogged or zero-pip project as wasted, stalled, or a mistake — it is a strategy the advisor has no basis to second-guess.
 
