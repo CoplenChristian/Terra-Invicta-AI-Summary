@@ -43,6 +43,40 @@ This has now happened twice:
 
 Check the real object shape before choosing a field name, and never let an unresolvable identity become a string — drop the record with a recorded reason instead.
 
+## Refactors must prove they changed nothing
+
+Passing tests are **not** sufficient evidence for a refactor. Capture every affected surface before and after — snapshots, briefings, all intel endpoints, both modes — and `diff -rq` to zero. Strip `generatedAt` first.
+
+**Capture against frozen saves copied to disk, MD5-verified.** The game is usually running; the live save folder gained new autosaves mid-run four times in one session. A live-save comparison shows phantom diffs and hides real ones. Prove the harness is deterministic with two identical baseline runs before trusting a single diff.
+
+Corroborate with token counts over code lines only: `?? 0`, `|| 0`, `=== null`, `sameId(`, `*Measured`, `*Available`. Any change must be individually explainable — that check catches a re-introduced `?? 0` even when every test passes and every endpoint matches.
+
+When splitting a file, the original path becomes a **barrel re-exporting the same function objects** (`export … from`, not wrappers), so reference-identity assertions hold and no caller changes. Draw boundaries by what each unit *reads*, not by line count.
+
+## A test that only passes proves nothing
+
+A fixture captured from post-change output passes by construction. Capture expected values **before** the change, then break the code deliberately and confirm the test fails.
+
+The same applies to a guard that outlives its target: the `SERVICE_ROLE` test scanned one file, and a later split moved the key-resolving code into a sibling it no longer covered. When code moves, re-check what its tests still actually cover.
+
+## Order and completeness are load-bearing
+
+The rule registry is **not** grouped by family — `readiness/unmet-preconditions` sits between two `value/` rules, and `cost/affordability` is a veto after every score. `applyRules` and `scoreCandidates` emit in registry order, so "tidying" it silently reshuffles every explanation the user reads.
+
+**Truncation must announce itself.** A capped list needs `*TotalCount` / `*OmittedCount` carried all the way to the consumer. A 25-entry slice presented as the whole set is the same defect class as fabricating data.
+
+**A rendered panel needs a registry entry and a startup assertion.** The mining board had a `<script>` tag and no mount element, so it rendered nowhere and nobody noticed. `assertViewRegistryIntegrity()` exists to fail loudly on that.
+
+## Redaction: check the raw field, not just the derived one
+
+Four player-mode leaks shared one shape — the derived field was nulled while the raw field it came from survived filtering. The observer's own `assessedAlienHateOfMe` persisted while `alienHate.actual` was correctly null; enemy `shipDesigns` survived on the faction object while the top-level array was filtered.
+
+Test by scanning the **entire** player-mode payload for the true value, not by pinning one field.
+
+## Push after each verified milestone
+
+Six commits and 22,000 lines sat unpushed while the remote branch was deleted from under them. Nothing was lost, but only because the local branch survived. Push when a milestone verifies green, not at the end.
+
 ## Sources
 
 Game mechanics are verified against the installed templates at
