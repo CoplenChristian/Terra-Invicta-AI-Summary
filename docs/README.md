@@ -10,8 +10,8 @@
 | `research-row-naming-spec.md` | **not implemented.** Rows are labelled with the item a project unlocks rather than the project — `Dreadnought` for what is actually `Ships of the Line` |
 | `research-tab-layout-spec.md` | **not implemented.** Presentational fix for the Research Advisor — eight font sizes, a 41% empty second column, and a global badge rendered per-row |
 | `save-autodetect-spec.md` | **not implemented.** Local dashboard polls for a new save and offers to load it; the server already re-detects on every request, so this is one cheap route plus a client poller |
-| `fleet-procurement-spec.md` | **not implemented.** Part A moves the already-unlocked block into a new FLEET view; Part B recommends a validated ship design — hull, drive, weapons, armour — from unlocked components only |
-| `model-verification-review.md` | independent review; **findings not yet actioned.** The ×1.35 alien thrust factor, two confounded numbers in the allocation-formula rejection, and Claim 7's understated uncertainty band |
+| `fleet-procurement-spec.md` | shipped (Part A: dedicated FLEET view procurement extraction; Part B: validated refit advisor with non-composability enforcement) |
+| `model-verification-review.md` | independent review; **actioned (pushed in `b0ec6dc`).** The ×1.35 alien thrust factor, two confounded numbers in the allocation-formula rejection, and Claim 7's understated uncertainty band |
 
 ## Archive
 

@@ -583,6 +583,7 @@ function dispatchFixture() {
     shipyardQueues: [{ id: 8, factionId: OBSERVER, orbitBody: 'Earth', design: 'playerShipTemplate584', constructionStatus: 'building' }],
     shipyardStations: [{ id: 9, name: 'Yard', factionId: OBSERVER, orbitBody: 'Earth' }],
     shipDesigns: [{ dataName: 'playerShipTemplate584', _displayName: 'Devilfish', hullName: 'Escort', factionId: OBSERVER }],
+    designs: [{ ID: 'playerShipTemplate584', displayName: 'Devilfish', hullTemplateName: 'Escort', factionId: OBSERVER }],
     globalResearch: { activeSlots: [{ slotNumber: 1, projectId: 'p', displayName: 'P' }], finishedTechsNames: ['MissiontotheAsteroids'] },
     capabilities: { skywatch: true }
   };
@@ -620,3 +621,13 @@ test('the dispatcher is derived from the endpoint table, not a third list', () =
       `${resource} fell through to the unknown-resource fallback`);
   }
 });
+
+test('buildResource projects refit-advisor endpoint', () => {
+  const snapshot = omniscientSnapshot();
+  const refits = localResources.buildResource(snapshot, 'refit-advisor', { mode: 'omniscient' });
+  assert.strictEqual(refits.success, true);
+  assert.strictEqual(refits.resource, 'refit-advisor');
+  assert.ok(Array.isArray(refits.items));
+  assert.ok(refits.disclaimer && refits.disclaimer.includes('Refit recommendations'));
+});
+

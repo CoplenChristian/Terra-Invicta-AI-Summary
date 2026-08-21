@@ -283,18 +283,23 @@ function buildDriveStats() {
       displayName: drive.friendlyName || drive.displayName || name,
       // Absent stays null. A drive with no exhaust velocity is unmeasured, and
       // a delta-V of `0 * ln(ratio)` would render as a confident zero km/s.
-      EV_kps: typeof drive.EV_kps === 'number' ? drive.EV_kps : null,
-      thrust_N: typeof drive.thrust_N === 'number' ? drive.thrust_N : null,
-      thrustCap: typeof drive.thrustCap === 'number' ? drive.thrustCap : null,
+      EV_kps: stat(drive.EV_kps),
+      thrust_N: stat(drive.thrust_N),
+      thrustCap: stat(drive.thrustCap),
       propellant: drive.propellant || null,
       driveClassification: drive.driveClassification || null,
       // Non-zero on 54 of 541 drives. A refit onto one of those changes the
       // ship's dry mass, which the constant-mass what-if does not model, so
       // the figure travels with the drive to let the caller say so.
-      flatMass_tons: typeof drive.flatMass_tons === 'number' ? drive.flatMass_tons : null,
+      flatMass_tons: stat(drive.flatMass_tons),
       requiredProjectName: drive.requiredProjectName || null,
       // 18 of 541 are disabled in the shipped templates and are not buildable.
-      disabled: drive.disable === true
+      disabled: drive.disable === true,
+      // Baked for refit advisor compatibility & power checks
+      requiredPowerPlant: drive.requiredPowerPlant || null,
+      reqPowerGW: stat(drive['req power'] ?? drive.req_power ?? drive.reqPower),
+      cooling: drive.cooling || null,
+      thrustRatingGW: stat(drive.thrustRating_GW)
     };
   }
   return stats;
@@ -400,8 +405,21 @@ function buildProjectGating() {
 // zero that would rank the item last and hide it.
 // ---------------------------------------------------------------------------
 
-/** Finite numbers only. A missing or unparseable stat is absent, never zero. */
-const stat = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+/**
+ * Finite numbers only, parsed comma-safely.
+ * A missing or unparseable stat is absent (null), never zero.
+ */
+function stat(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/,/g, '').trim();
+    if (cleaned === '') return null;
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : null;
+  }
+  return null;
+}
 
 /** Drops null/undefined/false/empty-array fields so absence stays absence. */
 function compact(record) {

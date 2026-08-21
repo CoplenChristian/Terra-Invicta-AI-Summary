@@ -217,38 +217,6 @@
     };
   }
 
-  function procurementRow(row) {
-    const notes = [];
-    if (row.closesDeficit === true) notes.push('<span class="ra-tag ra-tag--deficit">closes gap</span>');
-    if (row.clearsFloor === false) notes.push('<span class="ra-tag ra-tag--warn">fails floor</span>');
-    if (row.clearsDeliveryFloor === false) {
-      notes.push(`<span class="ra-tag ra-tag--warn" title="${attr(DELIVERY_FAILS_TITLE)}">fails delivery</span>`);
-    } else if (row.clearsDeliveryFloor === null && row.context && row.context.delivery) {
-      notes.push(`<span class="ra-tag" title="${attr(DELIVERY_UNKNOWN_TITLE)}">delivery unchecked</span>`);
-    }
-    if (row.axisKind === RULE_SCALAR_KIND) {
-      notes.push(`<span class="ra-tag ra-tag--unitless" title="${attr(RULE_SCALAR_TITLE)}">no unit</span>`);
-    }
-    const duration = num(row.context && row.context.sustainedOutputDurationS);
-    if (duration !== null) notes.push(`<span class="ra-tag">${attr(`${dec(duration, 0)}s of fire`)}</span>`);
-
-    const action = row.action || ((row.context?.family === 'ship_hull' || row.classKey === 'ship_hull') ? 'build' : 'refit');
-    const meta = [action];
-
-    const axisTitle = row.axisBasis || row.axisLabel || '';
-    const nameInfo = formatMilitaryName(row);
-
-    return `
-      <li class="ra-row">
-        <div class="ra-row__head">
-          <span class="ra-row__name" title="${attr(nameInfo.tooltip)}">${escapeHtml(nameInfo.lead)}</span>
-          <span class="ra-row__metric" title="${attr(axisTitle)}">${attr(mult(row.improvementMultiple))} ${escapeHtml(row.axisLabel || 'unnamed axis')}</span>
-        </div>
-        <div class="ra-row__meta">${escapeHtml(meta.join(' · '))}${notes.length ? ` ${notes.join(' ')}` : ''}</div>
-      </li>
-    `;
-  }
-
   function militaryRow(row) {
     const notes = [];
     if (row.slotAction === 'free-slot') {
@@ -626,26 +594,6 @@
     if (!panel || typeof panel.open !== 'function') return;
 
     const facts = [];
-    for (const row of (payload.military && payload.military.procurement && payload.military.procurement.items) || []) {
-      const delivery = (row.context && row.context.delivery) || null;
-      const deliveryText = delivery
-        ? ` · ${dec(delivery.shotsPerArrivingRound, 1)} PD shots per arriving round`
-          + (num(delivery.flightTimeS) === null ? '' : `, ${dec(delivery.flightTimeS, 0)}s flight`)
-          + (num(delivery.terminalSpeedKps) === null ? '' : ` at ${dec(delivery.terminalSpeedKps, 1)} km/s`)
-        : '';
-      const action = row.action || ((row.context?.family === 'ship_hull' || row.classKey === 'ship_hull') ? 'build' : 'refit');
-      const projectTooltip = row.gateProjectName ? ` · unlocked by ${row.gateProjectName}` : '';
-      facts.push({
-        label: `PROCUREMENT · Already unlocked · ${row.displayName || 'unnamed candidate'}`,
-        value: `${mult(row.improvementMultiple)} ${row.axisLabel || 'unnamed axis'} · ${action}${projectTooltip}`
-          + (row.closesDeficit ? ' · closes the measured gap' : '')
-          + (row.clearsFloor === false ? ' · fails its floor' : '')
-          + deliveryText
-          + (row.clearsDeliveryFloor === false ? ' · fails its delivery floor' : '')
-          + (row.clearsDeliveryFloor === null && delivery ? ' · delivery floor could not be evaluated' : '')
-      });
-    }
-
     for (const group of (payload.military && payload.military.groups) || []) {
       for (const row of group.items || []) {
         // Phase 5's figures ride on the existing military fact rather than
@@ -775,19 +723,6 @@
       return;
     }
 
-    const procurementItems = (payload.military && payload.military.procurement && payload.military.procurement.items) || [];
-    const procurementHtml = procurementItems.length > 0
-      ? `
-        <div class="ra-procurement">
-          <div class="ra-procurement__head">
-            <span>${escapeHtml(payload.military.procurement.label || 'Already unlocked, not in service')}</span>
-            <small>${escapeHtml(`${int(payload.military.procurement.count)} unfielded`)}</small>
-          </div>
-          <ul class="ra-group__list">${procurementItems.slice(0, ROWS_PER_GROUP).map(procurementRow).join('')}</ul>
-        </div>
-      `
-      : '';
-
     const militaryBody = renderGroups(payload.military.groups, militaryRow)
       || `<p class="ra-empty-group">${escapeHtml(
         sources.militaryValue && sources.militaryValue.available === false
@@ -827,7 +762,6 @@
         ${renderQueue(payload.slots)}
         <div class="ra-tracks">
           <section class="ra-track">
-            ${procurementHtml}
             <div class="ra-track__head">
               <h4>MILITARY RESEARCH</h4>
               <small title="A multiple on one class's axis is not commensurable with a multiple on another's. Every row names its own axis; this ordering is a triage aid, not an exchange rate.">× your best, per point</small>

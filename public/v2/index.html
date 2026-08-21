@@ -70,6 +70,7 @@
       <nav class="init-view-nav" aria-label="Dashboard views">
         <button class="init-btn init-nav-btn init-btn-cyan" type="button" data-view="command" aria-pressed="true">COMMAND</button>
         <button class="init-btn init-nav-btn" type="button" data-view="expansion" aria-pressed="false">EXPANSION</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="fleet" aria-pressed="false">FLEET</button>
         <button class="init-btn init-nav-btn" type="button" data-view="threat" aria-pressed="false">THREAT</button>
         <button class="init-btn init-nav-btn" type="button" data-view="records" aria-pressed="false">RECORDS</button>
       </nav>
@@ -377,7 +378,16 @@
       </div>
     </section>
 
-    <!-- View 3: THREAT -->
+    <!-- View 3: FLEET -->
+    <section class="init-view" id="view-fleet" hidden inert aria-hidden="true" aria-label="Fleet view">
+      <div class="init-view__grid init-fleet-layout">
+        <div class="tech-card init-view__span">
+          <div id="fleetProcurement"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 4: THREAT -->
     <section class="init-view" id="view-threat" hidden inert aria-hidden="true" aria-label="Threat view">
       <div class="init-view__grid">
         <div class="tech-card tech-card--quiet init-view__span">
@@ -516,6 +526,7 @@
   <script src="/v2/js/components/council-orders.js"></script>
   <script src="/v2/js/components/strategic-commentary.js"></script>
   <script src="/v2/js/components/research-advisor.js"></script>
+  <script src="/v2/js/components/fleet-procurement.js"></script>
   <script src="/v2/js/mission-control.js"></script>
 </body>
 </html>

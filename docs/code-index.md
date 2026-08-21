@@ -10,7 +10,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**161 modules.**
+**164 modules.**
 
 ## `public/`
 
@@ -25,13 +25,14 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 451 | renders the Directive Engine v2 Cycle Plan. | — | — |
 | `public/v2/js/components/executive-boards.js` | BS | Browser (ESM) | 416 | renders the executive boards — faction power, resources, and the | — | — |
 | `public/v2/js/components/faction-intel.js` | BS | Browser (ESM) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
+| `public/v2/js/components/fleet-procurement.js` | BS | Browser (ESM) | 494 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
 | `public/v2/js/components/intelligence-library.js` | BS | Browser (ESM) | 576 | renders the intelligence library — the drillable intelligence | — | — |
 | `public/v2/js/components/mc-budget.js` | BS | Browser (ESM) | 188 | the Mission Control budget planner — MC is the sole input to the | — | — |
 | `public/v2/js/components/mining-expansion.js` | BS | Browser (ESM) | 383 | the mining expansion board — capacity, runways, and need-weighted | — | — |
-| `public/v2/js/components/research-advisor.js` | BS | Browser (ESM) | 886 | phase 4 of the research advisor, on screen. | — | — |
+| `public/v2/js/components/research-advisor.js` | BS | Browser (ESM) | 820 | phase 4 of the research advisor, on screen. | — | — |
 | `public/v2/js/components/strategic-commentary.js` | BS | Browser (ESM) | 126 | renders the non-LLM four-layer Strategic Commentary Engine output. | — | — |
 | `public/v2/js/components/world-map.js` | BS | Browser (ESM) | 493 | renders the interactive world/space theater map surface. | — | — |
-| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 1785 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 1804 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (ESM) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
@@ -52,7 +53,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 256 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
 | `scripts/verify_research_actionability.js` | C | Node (CommonJS) | 196 | browser verification of research-advisor actionability against a | — | — |
 | `scripts/verify_research_tab_layout.js` | C | Node (CommonJS) | 243 | browser verification of the Research Advisor layout and legibility | — | — |
-| `scripts/verify_research_vs_procurement.js` | C | Node (CommonJS) | 333 | browser verification of separating procurement from research and of | — | — |
+| `scripts/verify_research_vs_procurement.js` | C | Node (CommonJS) | 384 | browser verification of separating procurement from research and of | — | — |
 | `scripts/verify_supabase_rls.js` | C | Node (CommonJS) | 196 | verify Supabase RLS policies and hosted endpoints behave as | `main` | — |
 | `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 285 | browser verification of the v2 navigation acceptance checks against a | — | — |
 
@@ -132,7 +133,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/snapshot/rawSnapshot.js` | C | Node (CommonJS) | 210 | the orchestration pass — read the save's collections once, build the | `ASSUMED_CAMPAIGN_START_YEAR, buildRawSnapshot` | — |
 | `server/snapshot/research.js` | C | Node (CommonJS) | 126 | global research — the shared tech slots every faction contributes | `buildGlobalResearchSlots, buildTechTree` | — |
 | `server/snapshot/space.js` | C | Node (CommonJS) | 725 | everything above the atmosphere — fleets and ships, habs, hab sites | `buildFleets, buildHabModules, buildHabSites, buildHabs, buildResourceTransfers, buildShipyardQueues, buildShipyardStations, buildWeaponLoadout, classifyHabModule, daysRemainingForStatus, formatWeaponSummary, getDominantWeaponType, …(+10)` | — |
-| `server/snapshot/templates.js` | C | Node (CommonJS) | 882 | the three template-derived static builders — they read the installed | `MISSION_HATE_SLOT, UNLOCK_FAMILIES, WEAPON_FAMILIES, buildComponentStats, buildDriveStats, buildEffectIndex, buildMissionSpecs, buildProjectGating, buildPropellantModules, buildShipHullStats, buildTraitStatMods, buildUnlockIndex` | — |
+| `server/snapshot/templates.js` | C | Node (CommonJS) | 900 | the three template-derived static builders — they read the installed | `MISSION_HATE_SLOT, UNLOCK_FAMILIES, WEAPON_FAMILIES, buildComponentStats, buildDriveStats, buildEffectIndex, buildMissionSpecs, buildProjectGating, buildPropellantModules, buildShipHullStats, buildTraitStatMods, buildUnlockIndex` | — |
 | `server/snapshotBuilder.js` | **B** C | Node (CommonJS) | 117 | public entry point for the raw-snapshot reducer — a barrel that | `buildMissionSpecs, buildRawSnapshot, buildShipHullStats, buildTechTree, buildWeaponLoadout, classifyHabModule, completionPercent, dateValueToIso, daysRemainingForStatus, firstNumericOrNull, formatWeaponSummary, getDominantWeaponType, …(+21)` | `tests/snapshotBuilder.test.js` |
 | `server/snapshotDelta.js` | C | Node (CommonJS) | 241 | compute compact turn-to-turn resource and fleet deltas between two snapshots. | `build` | `tests/snapshotDelta.test.js` |
 | `server/snapshotIdentity.js` | C | Node (CommonJS) | 85 | fingerprint save files and derive the snapshot identity envelope (id, hashes, timestamps). | `attachSnapshotIdentity, createFileFingerprint, createSnapshotIdentity, hasCompleteIdentity, hashFile, readSnapshotIdentity` | `tests/snapshotIdentity.test.js` |
@@ -168,14 +169,16 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `shared/intel/mobility.mjs` | E | Node + Cloudflare worker (ESM) | 126 | fleet transfer feasibility, with a destination table that is a | `mobilityResource` | — |
 | `shared/intel/production.mjs` | E | Node + Cloudflare worker (ESM) | 284 | ship designs and the procurement plan derived from them, refusing to | `productionPlanResource, shipDesignsResource` | — |
 | `shared/intel/propulsion.mjs` | E | Node + Cloudflare worker (ESM) | 462 | /api/intel/propulsion — phase 1 of the research advisor, pairing the | `propulsionResource` | — |
-| `shared/intel/registry.mjs` | E | Node + Cloudflare worker (ESM) | 576 | the ONE endpoint table from which route, discovery index, example | `DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, SUPPORTED_RESOURCES, buildResourceProjection, isDetailLevel, measureIntelEndpointSizes, parseDetailLevel` | — |
+| `shared/intel/refitAdvisor.mjs` | E | Node + Cloudflare worker (ESM) | 38 | intel resource projection for the refit-advisor endpoint. | `refitAdvisorResource` | `tests/refitAdvisor.test.js` |
+| `shared/intel/registry.mjs` | E | Node + Cloudflare worker (ESM) | 583 | the ONE endpoint table from which route, discovery index, example | `DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, SUPPORTED_RESOURCES, buildResourceProjection, isDetailLevel, measureIntelEndpointSizes, parseDetailLevel` | — |
 | `shared/intel/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 880 | the /api/intel/research-ranking projection composing the phase-4 | `dedupeByGateProject, researchRankingResource` | `tests/researchRanking.test.js` |
 | `shared/intel/theaters.mjs` | E | Node + Cloudflare worker (ESM) | 196 | body-by-body posture — the twelve-body theater board and the | `bodyStatusResource, theatersResource` | — |
-| `shared/intelResources.mjs` | **B** E | Node + Cloudflare worker (ESM) | 151 | public entry point for the intel projections — a barrel re-exporting | `COMBAT_POWER_SOURCE, DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, EXPANSION_MINE_LIMIT_GRANTS, EXPANSION_MISSION_TECH_NAMES, EXPANSION_THEATER_ACCESSIBILITY, FLEET_SUMMARY_OMITTED_FIELDS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, MINING_RESOURCES, MINING_SCARCITY_WEIGHTS, …(+58)` | `tests/intelResources.test.js` |
+| `shared/intelResources.mjs` | **B** E | Node + Cloudflare worker (ESM) | 153 | public entry point for the intel projections — a barrel re-exporting | `COMBAT_POWER_SOURCE, DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, EXPANSION_MINE_LIMIT_GRANTS, EXPANSION_MISSION_TECH_NAMES, EXPANSION_THEATER_ACCESSIBILITY, FLEET_SUMMARY_OMITTED_FIELDS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, MINING_RESOURCES, MINING_SCARCITY_WEIGHTS, …(+59)` | `tests/intelResources.test.js` |
 | `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 1687 | shared markdown export renderers for the model-facing .md endpoints | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, normalizeBody, …(+6)` | `tests/markdownExports.test.js` |
 | `shared/militaryValue.mjs` | E | Node + Cloudflare worker (ESM) | 1227 | military valuation of the unlock families phase 1 did not cover — | `AXIS_SETS, CLASS_KINDS, COMPONENT_CLASS_SPECS, MAGAZINE_BASIS_CODES, MILITARY_CLASS_SPECS, MILITARY_FORMULAE, MOUNT_HARDPOINTS, RATIO_UNAVAILABLE_CODES, WEAPON_CLASS_SPECS, WEAPON_ROLES, armorMetrics, batteryMetrics, …(+15)` | `tests/militaryValue.test.js` |
 | `shared/munitionDelivery.mjs` | E | Node + Cloudflare worker (ESM) | 649 | research advisor phase 5 — whether a munition round actually | `DELIVERY_BASIS_CODES, DELIVERY_FORMULAE, MUNITION_DELIVERY_AXES, buildPointDefenseProfile, munitionDelivery` | `tests/munitionDelivery.test.js` |
 | `shared/propulsion.mjs` | E | Node + Cloudflare worker (ESM) | 758 | the propulsion model — delta-V and acceleration per ship/design, | `COMBAT_ACCELERATION_DISCREPANCY, DESIGN_ROLES, MODEL_AGREEMENT_TOLERANCE, MODEL_CONFIDENCE, PROPULSION_FORMULAE, RANKING_BY_ROLE, accelerationMps2, deltaVKps, effectiveExhaustVelocity, inferDesignRole, rankRefits, refitOntoDrive, …(+2)` | — |
+| `shared/refitAdvisor.mjs` | E | Node + Cloudflare worker (ESM) | 591 | evaluates validated refit recommendations (drive, weapons, armour) for observer-flown ship designs. | `buildRefitAdvisor, evaluateArmorRecommendation, evaluatePowerBudget, evaluateReactorClass, evaluateWeaponUpgrades, isCompletedOrUngated` | `tests/refitAdvisor.test.js` |
 | `shared/requestValidation.mjs` | E | Node + Cloudflare worker (ESM) | 274 | the accept/reject request-validation rules shared by the local | `BODY_FILTER_MAX_LENGTH, BODY_FILTER_MESSAGE, HISTORY_LIMIT_BOUNDS, HISTORY_LIMIT_DEFAULT, MINING_LIMIT_BOUNDS, MINING_LIMIT_RESOURCES, RequestValidationError, assertKnownObserver, exceedsBodyFilterLimits, hasControlCharacters, isAbsent, isBoundedInteger, …(+9)` | `tests/requestValidation.test.js` |
 | `shared/researchAvailability.mjs` | E | Node + Cloudflare worker (ESM) | 301 | which projects a faction can actually research, in the three states | `AVAILABILITY_STATES, buildAvailabilityResolver, monthsAtIncome, tallyAvailabilityStates` | — |
 | `shared/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 670 | the research-advisor phase-4 ranking rules that order candidates by | `ACTIONABLE_GROUPS, ASPIRATIONAL_GROUPS, AVAILABILITY_GROUP_LABELS, AVAILABILITY_GROUP_ORDER, AXIS_KINDS, AXIS_KIND_ORDER, DEFICIT_RESEARCH_REMEDIES, DELIVERY_FLOOR_ORDER, RANKING_FORMULAE, RANKING_METHOD, RANK_STATES, axisKindRank, …(+10)` | `tests/researchRanking.test.js` |

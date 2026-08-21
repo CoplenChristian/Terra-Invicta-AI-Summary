@@ -136,6 +136,8 @@ export { alienThreatResource } from './intel/alienThreat.mjs';
 
 export { deltaResource } from './intel/delta.mjs';
 
+export { refitAdvisorResource } from './intel/refitAdvisor.mjs';
+
 export {
   SUPPORTED_RESOURCES,
   INTEL_ENDPOINT_INDEX,

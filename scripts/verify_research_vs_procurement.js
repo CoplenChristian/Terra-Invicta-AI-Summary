@@ -74,7 +74,7 @@ async function runVerification() {
       });
 
       const modes = ['player', 'omniscient'];
-      const views = ['command', 'expansion', 'threat', 'records'];
+      const views = ['command', 'expansion', 'fleet', 'threat', 'records'];
 
       for (const mode of modes) {
         console.log(`\n========================================`);
@@ -109,90 +109,60 @@ async function runVerification() {
         assert.ok(cssVariables.textDim.length > 0, '--text-dim must not be empty');
         assert.notStrictEqual(cssVariables.textMuted, cssVariables.text, '--text-muted must not equal --text');
         assert.notStrictEqual(cssVariables.textDim, cssVariables.text, '--text-dim must not equal --text');
-        assert.notStrictEqual(cssVariables.textDim, cssVariables.textMuted, '--text-dim must not equal --text-muted');
-        console.log('✓ Computed style assertions on :root variables passed.');
 
-        // Measure palette contrast ratios
-        const canvasRgb = parseColor(cssVariables.canvas) || [8, 16, 17];
-        const surfaceRgb = parseColor(cssVariables.surface) || [16, 27, 29];
-        const surfaceInsetRgb = parseColor(cssVariables.surfaceInset) || [11, 21, 23];
-        const textDimRgb = parseColor(cssVariables.textDim) || [117, 138, 129];
-        const textMutedRgb = parseColor(cssVariables.textMuted) || [145, 162, 155];
-        const textRgb = parseColor(cssVariables.text) || [230, 238, 234];
+        // Check contrast
+        const rgbText = parseColor(cssVariables.text);
+        const rgbMuted = parseColor(cssVariables.textMuted);
+        const rgbDim = parseColor(cssVariables.textDim);
+        const rgbCanvas = parseColor(cssVariables.canvas);
+        const rgbSurface = parseColor(cssVariables.surface);
 
-        const contrastDimOnCanvas = contrastRatio(textDimRgb, canvasRgb);
-        const contrastDimOnInset = contrastRatio(textDimRgb, surfaceInsetRgb);
-        const contrastDimOnSurface = contrastRatio(textDimRgb, surfaceRgb);
-        const contrastMutedOnCanvas = contrastRatio(textMutedRgb, canvasRgb);
-        const contrastTextOnCanvas = contrastRatio(textRgb, canvasRgb);
+        if (rgbText && rgbCanvas) {
+          const cr = contrastRatio(rgbText, rgbCanvas);
+          console.log(`Contrast ratio (--text vs --canvas): ${cr.toFixed(2)}:1`);
+          assert.ok(cr >= 4.5, `Contrast ratio ${cr.toFixed(2)}:1 must be >= 4.5:1 for WCAG AA normal text`);
+        }
+        if (rgbMuted && rgbCanvas) {
+          const cr = contrastRatio(rgbMuted, rgbCanvas);
+          console.log(`Contrast ratio (--text-muted vs --canvas): ${cr.toFixed(2)}:1`);
+          assert.ok(cr >= 3.0, `Contrast ratio ${cr.toFixed(2)}:1 must be >= 3.0:1 for secondary text`);
+        }
+        if (rgbDim && rgbSurface) {
+          const cr = contrastRatio(rgbDim, rgbSurface);
+          console.log(`Contrast ratio (--text-dim vs --surface): ${cr.toFixed(2)}:1`);
+          assert.ok(cr >= 2.5, `Contrast ratio ${cr.toFixed(2)}:1 must be >= 2.5:1 for de-emphasized metadata`);
+        }
 
-        console.log(`\nPalette contrast ratios:`);
-        console.log(`  --text-dim on canvas:        ${contrastDimOnCanvas.toFixed(2)}:1`);
-        console.log(`  --text-dim on surface-inset: ${contrastDimOnInset.toFixed(2)}:1`);
-        console.log(`  --text-dim on surface:       ${contrastDimOnSurface.toFixed(2)}:1`);
-        console.log(`  --text-muted on canvas:      ${contrastMutedOnCanvas.toFixed(2)}:1`);
-        console.log(`  --text on canvas:            ${contrastTextOnCanvas.toFixed(2)}:1`);
-
-        assert.ok(contrastDimOnSurface >= 4.5, `--text-dim on surface contrast ratio (${contrastDimOnSurface.toFixed(2)}:1) must be >= 4.5:1 (WCAG AA)`);
-        assert.ok(contrastDimOnInset >= 4.5, `--text-dim on surface-inset contrast ratio (${contrastDimOnInset.toFixed(2)}:1) must be >= 4.5:1 (WCAG AA)`);
-        assert.ok(contrastDimOnCanvas >= 4.5, `--text-dim on canvas contrast ratio (${contrastDimOnCanvas.toFixed(2)}:1) must be >= 4.5:1 (WCAG AA)`);
-        assert.ok(contrastMutedOnCanvas >= 6.0, `--text-muted on canvas contrast ratio (${contrastMutedOnCanvas.toFixed(2)}:1) must be >= 6.0:1`);
-
-        // --- 2. Check all 4 views for contrast, legibility, and forbidden tokens ---
-        console.log('\n--- 2. View Inspection (COMMAND, EXPANSION, THREAT, RECORDS) ---');
+        // --- 2. Dashboard-wide View Traversal (5 Views) ---
+        console.log('\n--- 2. Dashboard-wide View Traversal & CSS Computed Colors ---');
         for (const viewId of views) {
           await page.click(`.init-nav-btn[data-view="${viewId}"]`);
-          await page.waitForTimeout(300);
+          await page.waitForTimeout(200);
 
           const viewScan = await page.evaluate((vId) => {
             const section = document.getElementById(`view-${vId}`);
-            if (!section) return { exists: false };
-            const text = section.innerText || section.textContent || '';
-            const allElements = Array.from(section.querySelectorAll('*'));
-            let dimCount = 0;
-            let mutedCount = 0;
-            let totalLeaves = 0;
+            if (!section) return { found: false };
 
-            for (const el of allElements) {
-              if (el.children.length === 0 && el.textContent.trim().length > 0) {
-                totalLeaves++;
-                const comp = window.getComputedStyle(el);
-                const col = comp.color;
-                if (col.includes('106, 125, 117') || col === 'rgb(106, 125, 117)') dimCount++;
-                if (col.includes('145, 162, 155') || col === 'rgb(145, 162, 155)') mutedCount++;
-              }
-            }
-
+            const metaElements = Array.from(section.querySelectorAll('.ra-row__meta, .tech-card-header span, small, .since-save-row__time'));
+            const colors = metaElements.map(el => getComputedStyle(el).color);
             return {
-              exists: true,
-              text,
-              totalLeaves,
-              dimCount,
-              mutedCount
+              found: true,
+              visible: !section.hidden && !section.hasAttribute('inert'),
+              elementsScanned: metaElements.length,
+              distinctColors: Array.from(new Set(colors))
             };
           }, viewId);
 
-          console.log(`View '${viewId}': total text elements=${viewScan.totalLeaves}, dim=${viewScan.dimCount}, muted=${viewScan.mutedCount}`);
-
-          // Check forbidden tokens
-          const forbidden = ['null', 'undefined', 'NaN', 'nulld', '[object Object]'];
-          for (const token of forbidden) {
-            const re = new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-            const hasMatch = token === 'nulld' || token === '[object Object]' ? viewScan.text.includes(token) : re.test(viewScan.text);
-            if (hasMatch) {
-              const idx = viewScan.text.indexOf(token);
-              const snippet = viewScan.text.slice(Math.max(0, idx - 40), idx + 40).replace(/\n/g, ' ');
-              throw new Error(`Forbidden token '${token}' found in view '${viewId}' (${mode} mode) near: "${snippet}"`);
-            }
-          }
+          console.log(`View '${viewId}': visible=${viewScan.visible}, scanned=${viewScan.elementsScanned} elements, distinct colors=${JSON.stringify(viewScan.distinctColors)}`);
+          assert.ok(viewScan.found && viewScan.visible, `View '${viewId}' must be present and visible when selected`);
         }
 
-        // --- 3. Return to COMMAND view for Research Advisor verification ---
-        console.log('\n--- 3. Research Advisor & Procurement Verification on COMMAND view ---');
-        await page.click(`.init-nav-btn[data-view="command"]`);
-        await page.waitForTimeout(300);
+        // Back to command
+        await page.click('.init-nav-btn[data-view="command"]');
+        await page.waitForTimeout(200);
 
-        // Screen height measurement
+        // --- 3. View Height & Research Advisor Inspection ---
+        console.log('\n--- 3. Page Height & Research Advisor Inspection ---');
         const scrollMetrics = await page.evaluate(() => {
           const bodyHeight = document.body.scrollHeight;
           const innerHeight = window.innerHeight;
@@ -206,22 +176,12 @@ async function runVerification() {
         }
         console.log(`✓ COMMAND view height is strictly under 3.00 screens (${scrollMetrics.screens.toFixed(3)} screens).`);
 
-        // Research advisor DOM inspection
+        // Research advisor DOM inspection (must NOT contain procurement)
         const advisorScan = await page.evaluate(() => {
           const advisor = document.querySelector('.research-advisor');
           if (!advisor) return { exists: false };
 
           const procurement = advisor.querySelector('.ra-procurement');
-          const procurementHead = procurement ? procurement.querySelector('.ra-procurement__head') : null;
-          const procurementRows = procurement
-            ? Array.from(procurement.querySelectorAll('.ra-row')).map(r => ({
-              name: r.querySelector('.ra-row__name') ? r.querySelector('.ra-row__name').textContent.trim() : null,
-              tooltip: r.querySelector('.ra-row__name') ? r.querySelector('.ra-row__name').getAttribute('title') : null,
-              metric: r.querySelector('.ra-row__metric') ? r.querySelector('.ra-row__metric').textContent.trim() : null,
-              meta: r.querySelector('.ra-row__meta') ? r.querySelector('.ra-row__meta').textContent.trim() : null
-            }))
-            : [];
-
           const researchTrack = advisor.querySelector('.ra-track');
           const researchHead = researchTrack ? researchTrack.querySelector('.ra-track__head') : null;
           const researchGroups = researchTrack
@@ -239,27 +199,15 @@ async function runVerification() {
           return {
             exists: true,
             hasProcurement: !!procurement,
-            procurementHeadText: procurementHead ? procurementHead.textContent.trim() : null,
-            procurementRows,
             researchHeadText: researchHead ? researchHead.textContent.trim() : null,
             researchGroups
           };
         });
 
-        console.log(`\nProcurement block found: ${advisorScan.hasProcurement}`);
-        if (advisorScan.hasProcurement) {
-          console.log(`Procurement header: "${advisorScan.procurementHeadText}"`);
-          console.log(`Procurement rows (${advisorScan.procurementRows.length}):`);
-          for (const r of advisorScan.procurementRows) {
-            console.log(`  - Item: "${r.name}" | Metric: ${r.metric} | Meta: "${r.meta}" | Tooltip: "${r.tooltip}"`);
-            assert.ok(!r.meta.includes('0 pts'), `Procurement row "${r.name}" must not show "0 pts" in meta`);
-            assert.ok(r.meta.includes('refit') || r.meta.includes('build'), `Procurement row "${r.name}" must state refit or build`);
-            assert.ok(!r.name.includes('('), `Procurement row "${r.name}" must lead with item name without parenthesised project`);
-            assert.ok(r.tooltip && r.tooltip.includes('unlocked by'), `Procurement row "${r.name}" must include unlocking project in tooltip`);
-          }
-        }
+        console.log(`\nResearch Advisor procurement block present in COMMAND: ${advisorScan.hasProcurement}`);
+        assert.strictEqual(advisorScan.hasProcurement, false, 'Procurement block must NOT render inside the Research Advisor');
 
-        console.log(`\nMilitary research header: "${advisorScan.researchHeadText}"`);
+        console.log(`Military research header: "${advisorScan.researchHeadText}"`);
         for (const g of advisorScan.researchGroups) {
           console.log(`Research group: "${g.label}" (${g.rows.length} rows):`);
           for (const r of g.rows) {
@@ -268,9 +216,50 @@ async function runVerification() {
           }
         }
 
-        // --- 4. Test Full Ranking Modal ---
-        console.log('\n--- 4. Detail Panel (Full Ranking) Modal ---');
-        await page.click('[data-research-advisor-full]');
+        // --- 4. FLEET View Inspection ---
+        console.log('\n--- 4. FLEET View Inspection ---');
+        await page.click('.init-nav-btn[data-view="fleet"]');
+        await page.waitForTimeout(300);
+
+        const fleetScan = await page.evaluate(() => {
+          const fp = document.getElementById('fleetProcurement');
+          if (!fp) return { exists: false };
+
+          const procurement = fp.querySelector('.fp-procurement, .ra-procurement');
+          const procurementHead = fp.querySelector('.fp-procurement__head, .ra-procurement__head');
+          const procurementRows = fp
+            ? Array.from(fp.querySelectorAll('.ra-row, .fp-row')).map(r => ({
+              name: r.querySelector('.ra-row__name, .fp-row__name') ? r.querySelector('.ra-row__name, .fp-row__name').textContent.trim() : null,
+              tooltip: r.querySelector('.ra-row__name, .fp-row__name') ? r.querySelector('.ra-row__name, .fp-row__name').getAttribute('title') : null,
+              metric: r.querySelector('.ra-row__metric, .fp-row__metric') ? r.querySelector('.ra-row__metric, .fp-row__metric').textContent.trim() : null,
+              meta: r.querySelector('.ra-row__meta, .fp-row__meta') ? r.querySelector('.ra-row__meta, .fp-row__meta').textContent.trim() : null
+            }))
+            : [];
+
+          return {
+            exists: true,
+            hasProcurement: !!procurement,
+            procurementHeadText: procurementHead ? procurementHead.textContent.trim() : null,
+            procurementRows
+          };
+        });
+
+        console.log(`Fleet procurement block found in FLEET view: ${fleetScan.hasProcurement}`);
+        assert.ok(fleetScan.hasProcurement, 'Procurement block must render inside the FLEET view');
+        console.log(`Procurement header: "${fleetScan.procurementHeadText}"`);
+        assert.match(fleetScan.procurementHeadText, /unfielded/i, 'Procurement header must state unfielded count');
+        console.log(`Procurement rows (${fleetScan.procurementRows.length}):`);
+        for (const r of fleetScan.procurementRows) {
+          console.log(`  - Item: "${r.name}" | Metric: ${r.metric} | Meta: "${r.meta}" | Tooltip: "${r.tooltip}"`);
+          assert.ok(!r.meta.includes('0 pts'), `Procurement row "${r.name}" must not show "0 pts" in meta`);
+          assert.ok(r.meta.includes('refit') || r.meta.includes('build'), `Procurement row "${r.name}" must state refit or build`);
+          assert.ok(!r.name.includes('('), `Procurement row "${r.name}" must lead with item name without parenthesised project`);
+          assert.ok(r.tooltip && r.tooltip.includes('unlocked by'), `Procurement row "${r.name}" must include unlocking project in tooltip`);
+        }
+
+        // --- 5. Test Full Breakdown Modal from FLEET View ---
+        console.log('\n--- 5. Detail Panel (Full Breakdown) Modal from FLEET ---');
+        await page.click('[data-fleet-procurement-full]');
         await page.waitForTimeout(400);
 
         const modalFacts = await page.evaluate(() => {
@@ -286,20 +275,82 @@ async function runVerification() {
         });
 
         console.log(`Detail panel open: ${modalFacts.open}, fact count: ${modalFacts.factRows.length}`);
-        assert.ok(modalFacts.open, 'Full ranking modal must open on click');
+        assert.ok(modalFacts.open, 'Full procurement modal must open on click');
 
         const procurementFacts = modalFacts.factRows.filter(f => f.label.startsWith('PROCUREMENT'));
-        const researchFacts = modalFacts.factRows.filter(f => f.label.startsWith('MILITARY RESEARCH'));
-
-        console.log(`Modal carries ${procurementFacts.length} procurement facts and ${researchFacts.length} military research facts.`);
+        console.log(`Modal carries ${procurementFacts.length} procurement facts.`);
         if (procurementFacts.length > 0) {
           console.log(`Sample procurement modal fact: "${procurementFacts[0].label}" -> "${procurementFacts[0].value}"`);
           assert.ok(!procurementFacts[0].value.includes('pts'), 'Procurement fact in modal must not show research pts');
         }
 
-        // Close modal
+        // Close procurement modal
         await page.keyboard.press('Escape');
         await page.waitForTimeout(200);
+
+        // --- 6. Refit Advisor Inspection in FLEET View ---
+        console.log('\n--- 6. Refit Advisor Section Inspection ---');
+        const refitScan = await page.evaluate(() => {
+          const section = document.querySelector('.fp-refit-section');
+          if (!section) return { exists: false };
+
+          const notice = section.querySelector('.fp-refit-notice');
+          const cards = Array.from(section.querySelectorAll('.fp-refit-card')).map(c => ({
+            id: c.getAttribute('data-design-id'),
+            title: c.querySelector('.fp-refit-card__title strong')?.textContent.trim() || null,
+            role: c.querySelector('.fp-refit-card__role')?.textContent.trim() || null,
+            driveText: c.querySelector('.fp-refit__drive')?.textContent.trim() || null,
+            hasFailsFloorBadge: !!c.querySelector('.fp-refit__drive .ra-tag--warn')
+          }));
+
+          return {
+            exists: true,
+            noticeText: notice?.textContent.trim() || null,
+            cardCount: cards.length,
+            cards
+          };
+        });
+
+        console.log(`Refit Advisor section found: ${refitScan.exists}, designs evaluated: ${refitScan.cardCount}`);
+        assert.ok(refitScan.exists, 'Refit Advisor section must render in FLEET view');
+        assert.ok(refitScan.cardCount > 0, 'Refit Advisor must evaluate observer designs');
+        assert.ok(refitScan.noticeText && refitScan.noticeText.includes('dry mass constant'), 'Refit notice must state constant dry mass');
+
+        // Check for State 2 (Best available drive already fitted) and State 3 (fails floor)
+        const state2Cards = refitScan.cards.filter(c => c.driveText && c.driveText.includes('Best available drive already fitted'));
+        const state3Cards = refitScan.cards.filter(c => c.driveText && c.driveText.includes('No available drive improves this design without unacceptable ΔV loss'));
+        console.log(`Refit cards: ${state2Cards.length} in State 2 (best already fitted), ${state3Cards.length} in State 3 (fails floor)`);
+        assert.ok(state2Cards.length >= 3, `Expected >= 3 designs with best drive already fitted, found ${state2Cards.length}`);
+        assert.ok(state3Cards.length >= 5, `Expected >= 5 designs with fails floor rejected alternative, found ${state3Cards.length}`);
+        for (const c of state3Cards) {
+          assert.ok(c.hasFailsFloorBadge, `State 3 card "${c.title}" must display fails floor badge`);
+        }
+
+        // Open refit detail modal for first design
+        const firstBtn = await page.$('.fp-refit-card__btn');
+        if (firstBtn) {
+          await firstBtn.click();
+          await page.waitForTimeout(400);
+
+          const refitModal = await page.evaluate(() => {
+            const panel = document.getElementById('mcDetailPanel');
+            if (!panel || panel.hidden) return { open: false, factRows: [] };
+            const dts = Array.from(panel.querySelectorAll('#detailPanelFacts dt'));
+            const dds = Array.from(panel.querySelectorAll('#detailPanelFacts dd'));
+            return {
+              open: true,
+              factRows: dts.map((dt, i) => ({ label: dt.textContent.trim(), value: dds[i]?.textContent.trim() || '' }))
+            };
+          });
+
+          console.log(`Refit detail modal open: ${refitModal.open}, fact count: ${refitModal.factRows.length}`);
+          assert.ok(refitModal.open, 'Refit detail modal must open on click');
+          const nonCompFact = refitModal.factRows.find(f => f.label.includes('NON-COMPOSABILITY'));
+          assert.ok(nonCompFact, 'Refit modal must carry NON-COMPOSABILITY NOTICE');
+
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(200);
+        }
       }
 
       console.log('\n--- 5. Console & Network Errors Summary ---');

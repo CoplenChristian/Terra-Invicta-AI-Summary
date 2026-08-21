@@ -18,7 +18,7 @@ const v2IndexHtmlPath = path.join(repoRoot, 'public', 'v2', 'index.html');
 const missionControlJsPath = path.join(repoRoot, 'public', 'v2', 'js', 'mission-control.js');
 const detailPanelJsPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'detail-panel.js');
 
-test('public/v2/index.html defines 4 view sections and topbar navigation without init-records accordion', () => {
+test('public/v2/index.html defines 5 view sections and topbar navigation without init-records accordion', () => {
   const html = fs.readFileSync(v2IndexHtmlPath, 'utf8');
 
   // No old accordion
@@ -28,28 +28,31 @@ test('public/v2/index.html defines 4 view sections and topbar navigation without
   assert.ok(html.includes('class="init-view-nav"'), 'public/v2/index.html must contain .init-view-nav');
   assert.ok(html.includes('data-view="command"'), 'navigation must include command view button');
   assert.ok(html.includes('data-view="expansion"'), 'navigation must include expansion view button');
+  assert.ok(html.includes('data-view="fleet"'), 'navigation must include fleet view button');
   assert.ok(html.includes('data-view="threat"'), 'navigation must include threat view button');
   assert.ok(html.includes('data-view="records"'), 'navigation must include records view button');
 
-  // 4 View sections
+  // 5 View sections
   assert.ok(html.includes('id="view-command"'), 'must contain #view-command');
   assert.ok(html.includes('id="view-expansion"'), 'must contain #view-expansion');
+  assert.ok(html.includes('id="view-fleet"'), 'must contain #view-fleet');
   assert.ok(html.includes('id="view-threat"'), 'must contain #view-threat');
   assert.ok(html.includes('id="view-records"'), 'must contain #view-records');
 
   // Initial inactive view attributes
   assert.ok(/id="view-expansion"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-expansion must be initially hidden and inert');
+  assert.ok(/id="view-fleet"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-fleet must be initially hidden and inert');
   assert.ok(/id="view-threat"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-threat must be initially hidden and inert');
   assert.ok(/id="view-records"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-records must be initially hidden and inert');
 });
 
-test('VIEWS registry in mission-control.js defines exactly the 4 required views and passes integrity assertion', () => {
+test('VIEWS registry in mission-control.js defines exactly the 5 required views and passes integrity assertion', () => {
   const html = fs.readFileSync(v2IndexHtmlPath, 'utf8');
   const js = fs.readFileSync(missionControlJsPath, 'utf8');
 
   // Parse DOM elements from index.html
   const idToSection = new Map();
-  const sectionIds = ['view-command', 'view-expansion', 'view-threat', 'view-records'];
+  const sectionIds = ['view-command', 'view-expansion', 'view-fleet', 'view-threat', 'view-records'];
 
   for (const sId of sectionIds) {
     const sectionMatch = html.match(new RegExp(`<section[^>]*id="${sId}"[\\s\\S]*?<\\/section>`));
@@ -99,10 +102,10 @@ test('VIEWS registry in mission-control.js defines exactly the 4 required views 
 
   const { VIEWS, assertViewRegistryIntegrity } = sandbox.window.MissionControlViews || {};
   assert.ok(Array.isArray(VIEWS), 'VIEWS must be exported as an array');
-  assert.strictEqual(VIEWS.length, 4, 'VIEWS must contain exactly 4 views');
+  assert.strictEqual(VIEWS.length, 5, 'VIEWS must contain exactly 5 views');
 
   const viewIds = [...VIEWS.map(v => v.id)];
-  assert.deepStrictEqual(viewIds, ['command', 'expansion', 'threat', 'records']);
+  assert.deepStrictEqual(viewIds, ['command', 'expansion', 'fleet', 'threat', 'records']);
 
   // Assert integrity with valid DOM
   assert.doesNotThrow(() => {
@@ -134,6 +137,7 @@ test('detail-panel syncPageInert manages inert across topbar and all .init-view 
   const sections = [
     { id: 'view-command', hidden: false, inert: false },
     { id: 'view-expansion', hidden: true, inert: true },
+    { id: 'view-fleet', hidden: true, inert: true },
     { id: 'view-threat', hidden: true, inert: true },
     { id: 'view-records', hidden: true, inert: true }
   ];

@@ -77,6 +77,7 @@ import { researchRankingResource } from './researchRanking.mjs';
 import { deltaResource } from './delta.mjs';
 import { mobilityResource } from './mobility.mjs';
 import { bodyStatusResource, theatersResource } from './theaters.mjs';
+import { refitAdvisorResource } from './refitAdvisor.mjs';
 
 const kebab = (key) => key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 
@@ -391,6 +392,12 @@ const INTEL_ENDPOINTS = Object.freeze([
       });
       return { count: expansion.available.length, items: expansion.available, ...expansion };
     }
+  },
+  {
+    key: 'refitAdvisor',
+    example: OMNISCIENT_OWN,
+    project: (snapshot, { observerId, mode, designId, limit }) =>
+      refitAdvisorResource(snapshot, { observerId, mode, designId, limit })
   },
   // Served by the adapters themselves, not by buildResourceProjection: history
   // and strategic-delta need snapshot storage, and the tech-graph family needs

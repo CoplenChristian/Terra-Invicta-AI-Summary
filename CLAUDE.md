@@ -42,6 +42,10 @@ Check both modes, every time.
 
 Related: a check that cannot be evaluated must report `unknown`, never fall through to "safe". And never fabricate data for a UI fallback — an honest "unavailable" state beats mock content that looks real.
 
+**Template numerics are strings, and some carry thousands separators.** `TIDriveTemplate.json` stores `req power` as `"2,130.928"` on **92 of 541** drives, and `thrustRating_GW` similarly. `Number("2,130.928")` is `NaN`, so the usual `Number(x) ?? 0` / `|| 0` idiom silently scores the highest-power drives as drawing **zero**. This produced a fake "580/580 power budget pins" result in `docs/fleet-procurement-spec.md`; the real figure was 577/3. Strip separators before parsing, and treat unparseable as `null`, never `0`.
+
+**A one-sided pin is weaker than its count looks.** Checking that 580 shipped designs all pass a rule shows only that legal things pass — not that illegal things fail. Before treating a rule as a veto, confirm the game actually enforces it: the power "budget" is not a veto at all, because the game scales thrust instead of rejecting an underpowered ship, and a fielded alien design runs 2.13× over its plant.
+
 ## The save uses `ID`, not `id`
 
 Save-derived objects carry **`ID`** (capital) and `displayName`. They do **not** have `id` or `name`. Verified nation keys: `ID, displayName, templateName, GDP, population, boost, research, milTech, democracy, cohesion, unrest, nukes, armies, missionControl, controlPoints, executiveFactionId, executiveFactionName, regionsCount`.

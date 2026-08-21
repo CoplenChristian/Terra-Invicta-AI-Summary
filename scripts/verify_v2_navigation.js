@@ -45,7 +45,7 @@ async function runVerification() {
       });
 
       const modes = ['player', 'omniscient'];
-      const viewIds = ['command', 'expansion', 'threat', 'records'];
+      const viewIds = ['command', 'expansion', 'fleet', 'threat', 'records'];
 
       for (const mode of modes) {
         console.log(`\n========================================`);
@@ -81,7 +81,7 @@ async function runVerification() {
 
           // Check other sections are hidden & inert
           const otherInactive = await page.evaluate((vId) => {
-            const others = ['command', 'expansion', 'threat', 'records'].filter(o => o !== vId);
+            const others = ['command', 'expansion', 'fleet', 'threat', 'records'].filter(o => o !== vId);
             return others.every(o => {
               const sec = document.getElementById(`view-${o}`);
               return sec && sec.hidden && sec.hasAttribute('inert') && sec.getAttribute('aria-hidden') === 'true';

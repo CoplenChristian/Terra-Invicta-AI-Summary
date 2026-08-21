@@ -716,6 +716,8 @@ const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'r
 const v2ShellPath = path.join(repoRoot, 'public', 'v2', 'index.html');
 const missionControlPath = path.join(repoRoot, 'public', 'v2', 'js', 'mission-control.js');
 
+const fleetComponentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'fleet-procurement.js');
+
 function loadComponent() {
   const source = fs.readFileSync(componentPath, 'utf8');
   const sandbox = { window: {}, console, fetch: () => Promise.resolve(null) };
@@ -727,6 +729,22 @@ function loadComponent() {
 
 function renderToString(payload) {
   const component = loadComponent();
+  const root = { innerHTML: '', querySelector: () => null };
+  component.render(root, payload);
+  return root.innerHTML;
+}
+
+function loadFleetComponent() {
+  const source = fs.readFileSync(fleetComponentPath, 'utf8');
+  const sandbox = { window: {}, console, fetch: () => Promise.resolve(null) };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(source, sandbox, { filename: fleetComponentPath });
+  return sandbox.window.MissionControlFleetProcurement;
+}
+
+function renderFleetToString(payload) {
+  const component = loadFleetComponent();
   const root = { innerHTML: '', querySelector: () => null };
   component.render(root, payload);
   return root.innerHTML;
@@ -1299,7 +1317,7 @@ test('research rows display the project name as visible lead text and parenthesi
   assert.match(html, /ra-row__sub/, 'item name uses subdued styling span');
 });
 
-test('zero-cost rows lead with item name, state refit/build action, and keep project name in tooltip', () => {
+test('zero-cost rows do not render in research-advisor and render in fleet-procurement', () => {
   const payload = {
     success: true,
     sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
@@ -1325,16 +1343,42 @@ test('zero-cost rows lead with item name, state refit/build action, and keep pro
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   };
 
-  const html = renderToString(payload);
-  assertNoPlaceholderText(html, 'zero-cost payload');
-  const text = visibleText(html);
+  // 1. Research advisor must contain no procurement block and no zero-cost rows
+  const advisorHtml = renderToString(payload);
+  assertNoPlaceholderText(advisorHtml, 'research advisor zero-cost payload');
+  assert.ok(!advisorHtml.includes('ra-procurement'), 'research advisor must not render .ra-procurement');
+  assert.ok(!advisorHtml.includes('Dreadnought'), 'research advisor must not contain zero-cost items');
 
-  assert.ok(text.includes('Dreadnought'), 'zero-cost row shows item name');
-  assert.ok(!text.includes('Ships of the Line (Dreadnought)'), 'project name is not leading on zero-cost row');
-  assert.ok(!text.includes('0 pts'), 'zero-cost row does not state 0 pts');
-  assert.ok(text.includes('build'), 'zero-cost hull row states build');
-  assert.match(text, /Already unlocked, not in service/i, 'procurement section heading is rendered');
-  assert.match(html, /title="Dreadnought — unlocked by Ships of the Line \(completed\)"/, 'project name is in tooltip');
+  // 2. Fleet procurement component renders the block
+  const fleetHtml = renderFleetToString(payload);
+  assertNoPlaceholderText(fleetHtml, 'fleet procurement payload');
+  const fleetText = visibleText(fleetHtml);
+
+  assert.ok(fleetText.includes('Dreadnought'), 'fleet procurement shows item name');
+  assert.ok(!fleetText.includes('Ships of the Line (Dreadnought)'), 'project name is not leading on zero-cost row');
+  assert.ok(!fleetText.includes('0 pts'), 'zero-cost row does not state 0 pts');
+  assert.ok(fleetText.includes('build'), 'zero-cost hull row states build');
+  assert.match(fleetText, /1 unfielded/i, 'procurement header states unfielded count');
+  assert.match(fleetHtml, /title="Dreadnought — unlocked by Ships of the Line \(completed\)"/, 'project name is in tooltip');
+});
+
+test('fleet procurement is mounted in FLEET view and loaded by the shell', () => {
+  const html = fs.readFileSync(v2ShellPath, 'utf8');
+  const missionControl = fs.readFileSync(missionControlPath, 'utf8');
+
+  assert.ok(html.includes('id="fleetProcurement"'), 'the mount element must exist');
+  assert.ok(html.includes('/v2/js/components/fleet-procurement.js'),
+    'fleet procurement script tag must exist');
+
+  const fleet = html.match(/<section[^>]*id="view-fleet"[\s\S]*?<\/section>/);
+  assert.ok(fleet, '#view-fleet must exist');
+  assert.ok(fleet[0].includes('id="fleetProcurement"'),
+    'the panel must live inside the view its registry entry claims');
+
+  assert.ok(/panels: \[[\s\S]*?'fleetProcurement'[\s\S]*?\]/.test(missionControl),
+    'the view registry must list fleetProcurement');
+  assert.ok(missionControl.includes('MissionControlFleetProcurement'),
+    'and the render dispatch must actually call it');
 });
 
 test('matching project and item names render cleanly without redundant parentheses', () => {

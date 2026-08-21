@@ -160,6 +160,14 @@ const VIEWS = [
     ]
   },
   {
+    id: 'fleet',
+    label: 'FLEET',
+    sectionId: 'view-fleet',
+    panels: [
+      'fleetProcurement'
+    ]
+  },
+  {
     id: 'threat',
     label: 'THREAT',
     sectionId: 'view-threat',
@@ -1047,6 +1055,17 @@ function renderDashboard() {
           // stale ranking beside a fresh briefing is another faction's answer.
           if (state.requestSequence !== requestedAt) return;
           window.MissionControlResearchAdvisor.render(advisorEl, data);
+        });
+    }
+  }
+  if (window.MissionControlFleetProcurement?.render) {
+    const fleetEl = document.getElementById('fleetProcurement');
+    if (fleetEl) {
+      const requestedAt = state.requestSequence;
+      window.MissionControlFleetProcurement.fetchProcurement(state.observer, state.mode)
+        .then(data => {
+          if (state.requestSequence !== requestedAt) return;
+          window.MissionControlFleetProcurement.render(fleetEl, data);
         });
     }
   }

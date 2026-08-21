@@ -7071,3 +7071,192 @@ button.council-orders__row:focus-visible {
 .tech-card--dense .tech-card-body {
   padding: 6px 10px 8px;
 }
+
+/* --- FLEET VIEW & PROCUREMENT --- */
+.init-fleet-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.fleet-procurement {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fp-procurement {
+  margin-bottom: 0;
+  padding: 8px 12px;
+}
+
+.fp-procurement__head {
+  padding-bottom: 4px;
+  font-size: var(--fs-label);
+}
+
+.fp-procurement__head small {
+  font-size: var(--fs-meta);
+}
+
+.fp-group__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fp-row {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.fp-row:last-child {
+  border-bottom: none;
+}
+
+.fp-foot {
+  padding-top: 6px;
+}
+
+.fleet-dashboard-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fp-refit-section {
+  margin-top: 4px;
+}
+
+.fp-refit-notice {
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  background: var(--surface-inset);
+  border-left: 2px solid var(--accent);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.fp-refit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.fp-refit-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.fp-refit-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+
+.fp-refit-card__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fp-refit-card__title strong {
+  font-size: var(--fs-label);
+  color: var(--text);
+}
+
+.fp-refit-card__title small {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.fp-refit-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-meta);
+  flex-grow: 1;
+}
+
+.fp-refit__drive,
+.fp-refit__weapon,
+.fp-refit__armor {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fp-refit__label {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fp-refit__perf {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--accent);
+}
+
+.fp-refit__caveat,
+.fp-refit__impact,
+.fp-refit__threat {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.fp-refit__rejected {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.fp-refit__rejected-name {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fp-refit__rejected-reason {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.fp-refit__power--scaled {
+  padding-top: 4px;
+}
+
+.fp-refit-card__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+}
+
+.fp-refit-card__btn {
+  font-size: var(--fs-meta);
+  padding: 2px 8px;
+}
+
