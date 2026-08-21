@@ -15,6 +15,8 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const { createClient } = require('@supabase/supabase-js');
 const SupabaseAdapter = require('../server/supabaseAdapter');
+const { resolveConfig } = require('../server/config');
+const runtimeConfig = resolveConfig();
 
 async function testWithLiveSupabase(supabaseUrl, anonKey, serviceRoleKey, campaignKey) {
   console.log('--- Running Live Supabase RLS & API Verification ---');
@@ -135,18 +137,20 @@ async function testWithLiveSupabase(supabaseUrl, anonKey, serviceRoleKey, campai
     campaignKey
   });
 
-  const initiativeResult = await adapter.getLatestPlayerSnapshot(4712);
-  console.log(`  - Initiative Observer (4712): found=${initiativeResult.found}`);
-  if (initiativeResult.found) {
-    console.log(`    Mode: ${initiativeResult.data.mode} (isOmniscient: ${initiativeResult.data.isOmniscient})`);
-    console.log(`    Factions: ${initiativeResult.data.factions?.length}`);
-    console.log(`    Councilors: ${initiativeResult.data.councilors?.length}`);
+  const observerId = runtimeConfig.campaign.defaultObserverFactionId;
+  const observerName = runtimeConfig.campaign.defaultObserverFactionName;
+  const observerResult = await adapter.getLatestPlayerSnapshot(observerId);
+  console.log(`  - ${observerName} Observer (${observerId}): found=${observerResult.found}`);
+  if (observerResult.found) {
+    console.log(`    Mode: ${observerResult.data.mode} (isOmniscient: ${observerResult.data.isOmniscient})`);
+    console.log(`    Factions: ${observerResult.data.factions?.length}`);
+    console.log(`    Councilors: ${observerResult.data.councilors?.length}`);
   }
 
   const servantsResult = await adapter.getLatestPlayerSnapshot(4713);
   console.log(`  - Servants Observer (4713): found=${servantsResult.found}`);
 
-  const exportResult = await adapter.getExportMarkdown('chatgpt', 4712);
+  const exportResult = await adapter.getExportMarkdown('chatgpt', observerId);
   console.log(`  - Export generation: success=${exportResult.success}, length=${exportResult.markdown?.length || 0}`);
 }
 
@@ -154,7 +158,7 @@ async function main() {
   const supabaseUrl = process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const campaignKey = process.env.SUPABASE_CAMPAIGN_KEY || 'initiative';
+  const campaignKey = process.env.SUPABASE_CAMPAIGN_KEY || runtimeConfig.campaign.key;
 
   console.log('========================================================');
   console.log('  TERRA INVICTA // SUPABASE RLS & ADAPTER TEST          ');

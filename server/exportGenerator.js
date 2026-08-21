@@ -61,10 +61,14 @@ class ExportGenerator {
     lines.push(``);
     for (const f of filteredData.factions) {
       const gdpT = ((f.totalGdp || 0) / 1e12).toFixed(1);
-      const resK = ((f.totalResearch || 0) / 1e3).toFixed(1);
+      // Research output can legitimately be unmeasured. Printing "0.0k" for a
+      // null reads as a faction with no research programme at all.
+      const research = typeof f.totalResearch === 'number' && Number.isFinite(f.totalResearch)
+        ? `${(f.totalResearch / 1e3).toFixed(1)}k Research/mo`
+        : 'UNAVAILABLE Research/mo';
       const score = f.powerScore?.overall ?? 'UNKNOWN';
       const fleetPower = f.combatPowerAvailable ? f.combatPower : 'UNAVAILABLE';
-      lines.push(`- **${f.displayName}**: ${f.controlPointsCount} CPs | $${gdpT}T GDP | ${f.habsCount ?? 'UNKNOWN'} Habs | ${f.shipsCount ?? 'UNKNOWN'} Ships (${fleetPower} Fleet Power) | ${resK}k Research/mo | Dashboard Power Estimate: ${score}/100`);
+      lines.push(`- **${f.displayName}**: ${f.controlPointsCount} CPs | $${gdpT}T GDP | ${f.habsCount ?? 'UNKNOWN'} Habs | ${f.shipsCount ?? 'UNKNOWN'} Ships (${fleetPower} Fleet Power) | ${research} | Dashboard Power Estimate: ${score}/100`);
     }
     lines.push(``);
 

@@ -157,10 +157,11 @@
             <div class="holo-orbit-ring-inner"></div>
             <div class="holo-core-content">
               <div class="holo-core-badge">01</div>
-              <div id="holoPrimaryTitle" class="holo-core-title">AUTHORIZE CRACKDOWN IN JAPAN</div>
+              <div id="holoPrimaryTitle" class="holo-core-title">Awaiting priority brief</div>
               <div id="holoPrimaryStatement" class="holo-core-statement">
-                Servant hold in Tokyo compromised. Espionage operative required to eliminate hostile executive control.
+                Maintain network surveillance until a higher-priority order is available.
               </div>
+              <p id="priorityPolicyNote" class="priority-policy-note" hidden></p>
             </div>
             <dl id="priorityOpsMeta" class="priority-ops-meta">
               <div><dt>Mission</dt><dd id="priorityMissionType">UNAVAILABLE</dd></div>
@@ -168,6 +169,7 @@
               <div><dt>Success</dt><dd id="prioritySuccess">UNAVAILABLE</dd></div>
               <div><dt>Mission cost</dt><dd id="priorityMissionCost">UNAVAILABLE</dd></div>
             </dl>
+            <p id="priorityExpectedHate" class="priority-hate-band" hidden></p>
             <div id="priorityOperatives" class="priority-ops-roster"></div>
             <div class="priority-ops-actions">
               <button id="openPriorityDetailsBtn" class="init-btn init-btn-cyan" type="button">Open details</button>
@@ -200,6 +202,18 @@
                 <div id="node5Val" class="holo-node-status">DEFCON 2</div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tech-card tech-card--priority">
+        <div class="tech-card-header">
+          <div class="tech-card-title">COUNCIL ORDERS</div>
+          <span>EVERY COUNCILOR, THIS CYCLE</span>
+        </div>
+        <div class="tech-card-body">
+          <div id="councilOrders" aria-live="polite">
+            <div class="council-orders__empty">LOADING COUNCIL ORDERS…</div>
           </div>
         </div>
       </div>
@@ -292,6 +306,18 @@
           <div class="tech-card-body">
             <div id="alienHateEconomics" aria-live="polite">
               <div class="alien-hate-econ-empty">LOADING HATE ECONOMICS…</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tech-card">
+          <div class="tech-card-header">
+            <div class="tech-card-title">DIRECTIVE ENGINE</div>
+            <span>RECOMMENDED ACTION &amp; DECISION REASONING</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="directiveBoard" aria-live="polite">
+              <div class="alien-hate-econ-empty">LOADING DIRECTIVE ENGINE…</div>
             </div>
           </div>
         </div>
@@ -399,6 +425,9 @@
   <script src="/v2/js/components/executive-boards.js"></script>
   <script src="/v2/js/components/alien-hate-economics.js"></script>
   <script src="/v2/js/components/mc-budget.js"></script>
+  <script src="/v2/js/components/mining-expansion.js"></script>
+  <script src="/v2/js/components/directive-board.js"></script>
+  <script src="/v2/js/components/council-orders.js"></script>
   <script src="/v2/js/mission-control.js"></script>
 </body>
 </html>

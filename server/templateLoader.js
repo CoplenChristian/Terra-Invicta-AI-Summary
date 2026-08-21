@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { resolveConfig } = require('./config');
 
 class TemplateLoader {
   // Without these a candidate directory cannot produce a tech graph, so it
@@ -10,8 +11,9 @@ class TemplateLoader {
     'TIEffectTemplate.json'
   ];
 
-  constructor(configPath = null) {
-    this.configPath = configPath || path.join(__dirname, '../config/intelligence_capabilities.json');
+  constructor(configOrPath = null) {
+    this.configPath = typeof configOrPath === 'string' ? configOrPath : null;
+    this.configOverride = configOrPath && typeof configOrPath === 'object' ? configOrPath : null;
     this.config = this.loadConfig();
     this.templatesPath = this.resolveTemplatesPath();
     this.templates = {
@@ -27,6 +29,12 @@ class TemplateLoader {
       // Science, and so on). Without these a councilor's effective attributes
       // are understated and org capacity appears to be violated.
       traits: new Map(),
+      // Mission templates carry the attack/defence attribute pairing, base
+      // difficulty, hate-by-outcome and cost for every mission. Deliberately
+      // NOT in REQUIRED_TEMPLATES: that list is the "is this directory
+      // usable" probe, and widening it would make install paths that work
+      // today start failing the check.
+      missions: new Map(),
       weaponModules: new Map(),
       drives: new Map(),
       reactors: new Map(),
@@ -58,28 +66,35 @@ class TemplateLoader {
   }
 
   loadConfig() {
-    try {
-      if (fs.existsSync(this.configPath)) {
-        return JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
-      }
-    } catch (err) {
-      console.warn('[TemplateLoader] Could not load intelligence_capabilities.json:', err.message);
-    }
-    return {
-      templatesPath: 'F:/SteamLibrary/steamapps/common/Terra Invicta/TerraInvicta_Data/StreamingAssets/Templates',
-      effects: {},
-      strategicProjects: []
-    };
+    return this.configOverride || resolveConfig({ configPath: this.configPath || undefined });
   }
 
   resolveTemplatesPath() {
-    const candidates = [
-      this.config.templatesPath,
-      'F:/SteamLibrary/steamapps/common/Terra Invicta/TerraInvicta_Data/StreamingAssets/Templates',
-      'C:/Program Files (x86)/Steam/steamapps/common/Terra Invicta/TerraInvicta_Data/StreamingAssets/Templates',
-      'E:/SteamLibrary/steamapps/common/Terra Invicta/TerraInvicta_Data/StreamingAssets/Templates',
-      path.join(__dirname, '../Ship_Info/raw_json')
-    ];
+    const installSuffix = path.join('steamapps', 'common', 'Terra Invicta', 'TerraInvicta_Data', 'StreamingAssets', 'Templates');
+    const candidates = [this.config.paths?.templatesPath, process.env.TI_TEMPLATES_DIR];
+    const steamRoots = [
+      process.env.STEAM_LIBRARY_PATH,
+      process.env.ProgramFiles,
+      process.env['ProgramFiles(x86)'],
+      process.env.SystemDrive ? path.join(process.env.SystemDrive, 'SteamLibrary') : null
+    ].filter(Boolean);
+    for (const root of steamRoots) {
+      // `STEAM_LIBRARY_PATH` is commonly the library root, while
+      // ProgramFiles/ProgramFiles(x86) usually points at the parent of the
+      // Steam installation. Probe both layouts without assuming a developer's
+      // drive letter.
+      candidates.push(path.join(root, installSuffix));
+      candidates.push(path.join(root, 'Steam', installSuffix));
+    }
+
+    // Steam libraries are often installed on a secondary drive. Probe the
+    // conventional library directory without baking a developer's drive into
+    // the repository. An explicit TI_TEMPLATES_DIR always takes precedence.
+    if (process.platform === 'win32') {
+      for (let code = 65; code <= 90; code++) {
+        candidates.push(`${String.fromCharCode(code)}:/SteamLibrary/${installSuffix.replace(/\\/g, '/')}`);
+      }
+    }
 
     for (const p of candidates) {
       if (p && this.isUsableTemplatesDir(p)) {
@@ -188,6 +203,11 @@ class TemplateLoader {
     this.loadJsonFile('TITraitTemplate.json', (item) => {
       const id = item.dataName || item.friendlyName;
       if (id) this.templates.traits.set(id, item);
+    });
+
+    this.loadJsonFile('TIMissionTemplate.json', (item) => {
+      const id = item.dataName || item.friendlyName;
+      if (id) this.templates.missions.set(id, item);
     });
 
     // Component templates used by the tech graph to answer "which project
@@ -306,15 +326,13 @@ class TemplateLoader {
 
   validateIntelligenceMappings() {
     this.validationResults = [];
-    const expected = [
-      { id: 'Project_TheirSignatures', type: 'project', effect: 'Effect_DetectAbductions' },
-      { id: 'Project_TheirMethods', type: 'project', effect: 'Effect_DetectEnthralls' },
-      { id: 'Project_TheirOperations', type: 'project', effect: 'Effect_DetectAllOperations' },
-      { id: 'Project_TheirOperations', type: 'project', effect: 'Effect_UpdateAlienThreatMeter' },
-      { id: 'Project_TheirMovements', type: 'project', effect: 'Effect_DetectAlienMovements' },
-      { id: 'Skywatch', type: 'tech', effect: 'Effect_Skywatch' },
-      { id: 'DeepSystemSkywatch', type: 'tech', effect: 'Effect_DeepSkywatch' }
-    ];
+    const expected = Object.entries(this.config.analysis?.effects || {})
+      .map(([effect, descriptor]) => ({
+        id: descriptor.defaultProject || descriptor.defaultTech,
+        type: descriptor.defaultProject ? 'project' : 'tech',
+        effect
+      }))
+      .filter(entry => entry.id && entry.effect);
 
     for (const exp of expected) {
       const effects = exp.type === 'project'
@@ -339,16 +357,15 @@ class TemplateLoader {
   }
 
   buildFallbackMappings() {
-    const fallbackProjects = {
-      'Project_TheirSignatures': ['Effect_DetectAbductions'],
-      'Project_TheirMethods': ['Effect_DetectEnthralls'],
-      'Project_TheirOperations': ['Effect_DetectAllOperations', 'Effect_UpdateAlienThreatMeter'],
-      'Project_TheirMovements': ['Effect_DetectAlienMovements']
-    };
-    const fallbackTechs = {
-      'Skywatch': ['Effect_Skywatch', 'Effect_SpaceScan'],
-      'DeepSystemSkywatch': ['Effect_DeepSkywatch', 'Effect_SpaceScan']
-    };
+    const fallbackProjects = {};
+    const fallbackTechs = {};
+    for (const [effectId, descriptor] of Object.entries(this.config.analysis?.effects || {})) {
+      const target = descriptor.defaultProject ? fallbackProjects : fallbackTechs;
+      const targetId = descriptor.defaultProject || descriptor.defaultTech;
+      if (!targetId) continue;
+      if (!target[targetId]) target[targetId] = [];
+      target[targetId].push(effectId);
+    }
 
     for (const [proj, effs] of Object.entries(fallbackProjects)) {
       this.effectMappings.projectToEffects.set(proj, effs);

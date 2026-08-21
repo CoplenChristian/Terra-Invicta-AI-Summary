@@ -3,6 +3,7 @@ const API = {
   // Set once the runtime probe has run. 'local'/'dev' -> live API present,
   // errors must surface. 'hosted'/'fallback' -> static assets are authoritative.
   runtimeEnvironment: null,
+  publishToken: null,
 
   async requestJson(url, options = {}) {
     const res = await fetch(url, options);
@@ -28,6 +29,7 @@ const API = {
     try {
       const runtime = await API.requestJson('/api/runtime');
       API.runtimeEnvironment = runtime.environment || 'hosted';
+      API.publishToken = runtime.publishToken || null;
       return runtime;
     } catch {
       // A missing runtime endpoint means this is an older/static hosted build.
@@ -88,7 +90,9 @@ const API = {
   },
 
   async publishLatest() {
-    return await API.requestJson('/api/publish', { method: 'POST' });
+    const headers = { Accept: 'application/json' };
+    if (API.publishToken) headers['X-TI-Publish-Token'] = API.publishToken;
+    return await API.requestJson('/api/publish', { method: 'POST', headers });
   },
 
   async getExport(format = 'chatgpt', mode = 'player', observerId = 4712) {

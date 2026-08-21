@@ -3,6 +3,7 @@ const assert = require('node:assert');
 
 const snapshotBuilder = require('../server/snapshotBuilder');
 const intelligenceFilter = require('../server/intelligenceFilter');
+const capabilityResolver = require('../server/capabilityResolver');
 const { makeSaveData } = require('./fixtures/syntheticSave');
 
 const OBSERVER = 4712;
@@ -80,6 +81,38 @@ test('capabilities resolve from finished projects', () => {
   assert.strictEqual(filtered.capabilities.canEstimateAlienThreat, true);
   assert.strictEqual(filtered.capabilities.canDirectlyDetectAlienCouncilors, false);
   assert.strictEqual(filtered.alienIntelligenceStage.operatives.status, 'LOCKED');
+});
+
+test('alien detention follows the verified CaptureAHydra story gate', () => {
+  const resolver = capabilityResolver;
+  const resolve = (storyState) => resolver.resolveCapabilities(
+    { completedProjects: [] },
+    { finishedTechsNames: [] },
+    storyState
+  ).canDetainAlienCouncilors;
+
+  assert.equal(resolve({ objectiveNames: { CaptureAHydra: 'Locked' } }), false);
+  assert.equal(resolve({ objectiveNames: { CaptureAHydra: 'Unlocked' } }), true);
+  assert.equal(resolve({ objectiveNames: { CaptureAHydra: 'Completed' } }), true);
+  assert.equal(resolve({ milestones: ['AccessLiveHydra'] }), true);
+});
+
+test('player mode keeps control-point defense state to the observer faction', () => {
+  const raw = rawFor();
+  const ownCp = raw.nations.find(n => n.ID === 1).controlPoints[0];
+  ownCp.defended = true;
+  ownCp.defendExpiration = { year: 2032, month: 12, day: 31 };
+  const enemyCp = raw.nations.find(n => n.ID === 2).controlPoints[0];
+  enemyCp.defended = true;
+  enemyCp.defendExpiration = { year: 2032, month: 12, day: 31 };
+
+  const player = intelligenceFilter.applyFilter(raw, 'player', OBSERVER);
+  const ownVisible = player.nations.find(n => n.ID === 1).controlPoints[0];
+  const enemyVisible = player.nations.find(n => n.ID === 2).controlPoints[0];
+  assert.equal(ownVisible.defended, true);
+  assert.deepStrictEqual(ownVisible.defendExpiration, { year: 2032, month: 12, day: 31 });
+  assert.equal(Object.hasOwn(enemyVisible, 'defended'), false);
+  assert.equal(Object.hasOwn(enemyVisible, 'defendExpiration'), false);
 });
 
 test('player faction rows hide assessed alien hate while enhanced exposes it', () => {

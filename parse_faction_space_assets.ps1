@@ -38,147 +38,12 @@ param(
 Set-StrictMode -Version Latest
 
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$configPath = Join-Path $scriptPath "config.json"
-
-if (-not (Test-Path -LiteralPath $configPath)) {
-    throw "Config file not found at $configPath"
+$commonModulePath = Join-Path $scriptPath "TerraInvicta.Common.psm1"
+if (-not (Test-Path -LiteralPath $commonModulePath -PathType Leaf)) {
+    throw "Shared parser module not found at $commonModulePath"
 }
-
-$config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
-
-function Resolve-TISaveFolder {
-    param(
-        [string]$ConfiguredSavePath,
-        [string]$RequestedSaveFolder,
-        [Parameter(Mandatory)]
-        [string]$BasePath
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($RequestedSaveFolder)) {
-        $folder = $RequestedSaveFolder
-        if (-not [IO.Path]::IsPathRooted($folder)) {
-            $folder = Join-Path $BasePath $folder
-        }
-    } else {
-        if ([string]::IsNullOrWhiteSpace($ConfiguredSavePath)) {
-            throw "config.json does not define SavePath; supply -SaveFolder."
-        }
-
-        $configuredPath = $ConfiguredSavePath
-        if (-not [IO.Path]::IsPathRooted($configuredPath)) {
-            $configuredPath = Join-Path $BasePath $configuredPath
-        }
-
-        $folder = Split-Path -Parent $configuredPath
-    }
-
-    $folder = [IO.Path]::GetFullPath($folder)
-    if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
-        throw "Save folder not found: $folder"
-    }
-
-    return $folder
-}
-
-function Get-TISaveFiles {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Folder
-    )
-
-    $files = @(
-        Get-ChildItem -LiteralPath $Folder -File |
-            Where-Object { $_.Extension.ToLowerInvariant() -in @(".gz", ".json") } |
-            Sort-Object LastWriteTime -Descending
-    )
-
-    if ($files.Count -eq 0) {
-        throw "No .gz or .json save files found in $Folder"
-    }
-
-    return $files
-}
-
-function Select-TISaveFile {
-    param(
-        [Parameter(Mandatory)]
-        [array]$Files,
-
-        [int]$RequestedNumber = 0,
-
-        [switch]$UseLatest
-    )
-
-    if ($UseLatest -and $RequestedNumber -gt 0) {
-        throw "Use either -Latest or -SaveNumber, not both."
-    }
-
-    if ($UseLatest) {
-        return $Files[0]
-    }
-
-    if ($RequestedNumber -gt 0) {
-        if ($RequestedNumber -gt $Files.Count) {
-            throw "Save number $RequestedNumber is out of range. Choose 1-$($Files.Count)."
-        }
-
-        return $Files[$RequestedNumber - 1]
-    }
-
-    Write-Host "Available Terra Invicta saves:"
-    for ($index = 0; $index -lt $Files.Count; $index++) {
-        $file = $Files[$index]
-        Write-Host ("  {0,2}. {1}  ({2})" -f ($index + 1), $file.Name, $file.LastWriteTime.ToString("yyyy-MM-dd HH:mm"))
-    }
-
-    do {
-        $selectionText = Read-Host ("Select a save number (1-{0})" -f $Files.Count)
-        $selection = 0
-        $validNumber = [int]::TryParse($selectionText, [ref]$selection)
-        if (-not $validNumber -or $selection -lt 1 -or $selection -gt $Files.Count) {
-            Write-Warning ("Enter a number from 1 to {0}." -f $Files.Count)
-            $selection = 0
-        }
-    } while ($selection -eq 0)
-
-    return $Files[$selection - 1]
-}
-
-function Get-TIStateValues {
-    param(
-        [Parameter(Mandatory)]
-        $StateContainer
-    )
-
-    if ($null -eq $StateContainer) {
-        return @()
-    }
-
-    return @($StateContainer | ForEach-Object {
-        if ($_.PSObject.Properties.Name -contains "Value") {
-            $_.Value
-        } else {
-            $_
-        }
-    })
-}
-
-function Get-TIStateCollection {
-    param(
-        [Parameter(Mandatory)]
-        $GameStates,
-
-        [Parameter(Mandatory)]
-        [string]$StateName
-    )
-
-    $stateProperty = $GameStates.PSObject.Properties[$StateName]
-    if ($null -eq $stateProperty) {
-        return @()
-    }
-
-    return @(Get-TIStateValues -StateContainer $stateProperty.Value)
-}
+Import-Module -Name $commonModulePath -Force
+$config = Get-TIConfig -BasePath $scriptPath
 
 function Get-TIPropertyValue {
     param(
@@ -200,61 +65,6 @@ function Get-TIPropertyValue {
     }
 
     return $null
-}
-
-function Get-TIReferenceId {
-    param(
-        $Reference
-    )
-
-    if ($null -eq $Reference) {
-        return $null
-    }
-
-    $value = $Reference
-    if ($Reference.PSObject.Properties.Name -contains "value") {
-        $value = $Reference.value
-    }
-
-    if ($null -eq $value -or [string]::IsNullOrWhiteSpace([string]$value)) {
-        return $null
-    }
-
-    return [int]$value
-}
-
-function Select-TIFaction {
-    param(
-        [Parameter(Mandatory)]
-        [array]$Factions,
-
-        [int]$RequestedNumber = 0
-    )
-
-    if ($RequestedNumber -gt 0) {
-        if ($RequestedNumber -gt $Factions.Count) {
-            throw "Faction number $RequestedNumber is out of range. Choose 1-$($Factions.Count)."
-        }
-
-        return $Factions[$RequestedNumber - 1]
-    }
-
-    Write-Host "Available factions:"
-    for ($index = 0; $index -lt $Factions.Count; $index++) {
-        Write-Host ("  {0,2}. {1}" -f ($index + 1), $Factions[$index].displayName)
-    }
-
-    do {
-        $selectionText = Read-Host ("Select a faction number (1-{0})" -f $Factions.Count)
-        $selection = 0
-        $validNumber = [int]::TryParse($selectionText, [ref]$selection)
-        if (-not $validNumber -or $selection -lt 1 -or $selection -gt $Factions.Count) {
-            Write-Warning ("Enter a number from 1 to {0}." -f $Factions.Count)
-            $selection = 0
-        }
-    } while ($selection -eq 0)
-
-    return $Factions[$selection - 1]
 }
 
 function Resolve-TIOrbitBodyName {
@@ -286,42 +96,6 @@ function Resolve-TIOrbitBodyName {
     }
 
     return "Unknown body"
-}
-
-function Read-TISaveJson {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Path
-    )
-
-    $jsonText = $null
-
-    if ([IO.Path]::GetExtension($Path).ToLowerInvariant() -eq ".gz") {
-        $fileStream = $null
-        $gzipStream = $null
-        $reader = $null
-        try {
-            $fileStream = [IO.File]::OpenRead($Path)
-            $gzipStream = New-Object IO.Compression.GzipStream(
-                $fileStream,
-                [IO.Compression.CompressionMode]::Decompress
-            )
-            $reader = New-Object IO.StreamReader($gzipStream)
-            $jsonText = $reader.ReadToEnd()
-        }
-        catch {
-            throw "Unable to read save file '$Path'. It may be locked or incomplete. $($_.Exception.Message)"
-        }
-        finally {
-            if ($null -ne $reader) { $reader.Dispose() }
-            if ($null -ne $gzipStream) { $gzipStream.Dispose() }
-            if ($null -ne $fileStream) { $fileStream.Dispose() }
-        }
-    } else {
-        $jsonText = Get-Content -LiteralPath $Path -Raw
-    }
-
-    return ($jsonText | ConvertFrom-Json)
 }
 
 $saveFolderPath = Resolve-TISaveFolder `

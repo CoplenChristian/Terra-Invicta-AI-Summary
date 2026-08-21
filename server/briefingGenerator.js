@@ -9,8 +9,14 @@
 const snapshotIdentity = require('./snapshotIdentity');
 const strategicIntelligence = require('./strategicIntelligence');
 const directiveAdvisor = require('./directiveAdvisor');
+const directiveEngine = require('./directiveEngine');
+const { resolveConfig } = require('./config');
 
 class BriefingGenerator {
+  constructor(config = resolveConfig()) {
+    this.config = config;
+  }
+
   generateMissionControlBriefing(snapshot = {}, rawSnapshot = null) {
     const metadata = snapshot.metadata || {};
     const factions = this.asArray(snapshot.factions);
@@ -46,6 +52,27 @@ class BriefingGenerator {
       factions,
       fleets
     });
+
+    // v1 rule engine (docs/directive-rule-engine-plan.md). Runs alongside the
+    // policyRank-based directives below rather than replacing them -- it
+    // does not yet cover space, research, or mining, so deleting the ranks
+    // now would drop those directives with no successor (plan §7, P5 note).
+    const engineWorld = directiveEngine.buildWorld({
+      observerId,
+      observerName,
+      posture: campaignPosture,
+      campaignDate: snapshot.metadata?.gameTimeString || null,
+      resources: observer.resources,
+      nations,
+      councilors,
+      capabilities,
+      alienIntelligenceStage: snapshot.alienIntelligenceStage || null,
+      directiveWeights: this.config.analysis?.directiveWeights || null,
+      missionSpecs: snapshot.missionSpecs || null,
+      alienHate: observer.alienHate || snapshot.alienThreat?.hate || null,
+      alienThreat: snapshot.alienThreat || null
+    });
+    const engineResult = directiveEngine.runEngine(engineWorld);
 
     const getPowerOverall = (f) => {
       if (!f) return null;
@@ -175,6 +202,15 @@ class BriefingGenerator {
       theaters: theaterStatus,
       operatives: operativeRoster,
       campaignPosture,
+      engineDirectives: {
+        primary: engineResult.primary,
+        alternatives: engineResult.alternatives,
+        rejected: engineResult.rejected,
+        uncertain: engineResult.uncertain,
+        futureOpportunities: engineResult.futureOpportunities,
+        cyclePlan: engineResult.cyclePlan,
+        decisionReasoning: engineResult.decisionReasoning
+      },
       primaryDirective: directiveAdvisor.pickPrimaryDirective({
         geopolitical: geopoliticalDirectives,
         council: councilDirectives,
@@ -356,10 +392,10 @@ class BriefingGenerator {
         id: 'geo',
         severity: holdProxy ? 'HOLD' : (targetEntries.length && targetFactionName ? 'CRITICAL' : 'WATCH'),
         title: holdProxy
-          ? `Hold proxy offensive vs ${targetFactionName}`
-          : targetEntries.length && targetFactionName
+          ? `Protect core holdings and stage the ${targetFactionName} operation`
+          : (targetEntries.length && targetFactionName
             ? `${targetFactionName} in ${targetEntries[0].nationName || 'an unidentified nation'}`
-            : 'Priority theater',
+            : 'Priority theater'),
         statement: holdProxy
           ? `Crackdown/Purge vs ${targetFactionName} would feed alien hate (${directiveAdvisor.classifyProxy(targetFaction || { displayName: targetFactionName }).shareLabel}) while ${directiveAdvisor.formatShipPosture(campaignPosture)}. ${campaignPosture.reasons[0]}.`
           : p2.replace(/^PRIORITY THEATER (ALERT|STATUS):\s*/i, '')
@@ -433,17 +469,17 @@ class BriefingGenerator {
       directives.push({
         id: 'geo-hold',
         policyRank: 100,
-        title: `Hold proxy offensive vs ${targetFactionName} in ${t.nationName}`,
+        title: `Protect core holdings while preparing the ${targetFactionName} operation in ${t.nationName}`,
         category: 'ESCALATE LATE',
         severity: 'CRITICAL',
         target: t.nationName,
         statement: `${targetFactionName} still hold ${t.nationName || 'the identified nation'} ($${this.formatTargetGdp(t)}T GDP), but Crackdown/Purge against them feeds alien hate (${proxy.shareLabel}). Current posture: ${campaignPosture.reasons.join('; ')}. A Purge success would add ${purgeHate.label}; Crackdown ${crackdownHate.label}.`,
-        action: 'Do not Crackdown or Purge this proxy holding this cycle. Ward own majors with Defend Interests (0 template hate) and preserve the fleet until retaliation is survivable.',
+        action: `Assign Defend Interests to own majors, keep ${t.nationName} on the watch list, and prepare the proxy operation for the next survivable window.`,
         successFactor: 'SURVIVAL FIRST',
         missionType: 'Defend Interests',
         preparation: 'Assign Administration or Persuasion to executive nations. Leave the proxy holding on watch.',
         window: 'Until fleet posture can survive open war',
-        missionCost: 'UNAVAILABLE',
+        missionCost: '20 Influence',
         expectedAlienHate: 'none (Defend Interests)',
         expectedAlienHateNote: 'Defend Interests success-slot hate is 0. Crackdown/Purge vs this proxy is deferred because it feeds alien hate.',
         policyNote: campaignPosture.reasons.join(' · '),
@@ -453,15 +489,15 @@ class BriefingGenerator {
       directives.push(this.attachHateEstimate({
         id: 'geo-1',
         policyRank: 25,
-        title: `Watch ${targetFactionName} holding in ${t.nationName}`,
+        title: `Monitor ${targetFactionName} holding in ${t.nationName} and prepare a later operation`,
         category: 'DEFERRED — PROXY HATE',
         severity: 'WATCH',
         target: t.nationName,
         statement: `${t.nationName} remains a scored ${targetFactionName} holding, including ${t.isExecutiveTarget ? 'executive authority' : 'non-executive CPs'}. Offensive action is deferred while alien hate is elevated and the fleet is fragile.`,
-        action: 'Do not authorize Crackdown or Purge against this proxy until hate is ventable and the fleet can absorb retaliation.',
+        action: 'Prepare the target dossier and stage Crackdown or Purge for a window when hate is ventable and the fleet can absorb retaliation.',
         successFactor: 'DEFERRED',
         missionType: 'Crackdown / Purge',
-        preparation: 'Keep the target on the watch list; do not stage an Espionage offensive this cycle.',
+        preparation: 'Maintain the target watch list and build the dossier for the next survivable operation window.',
         window: 'Deferred',
         missionCost: 'UNAVAILABLE',
         policyNote: `${proxy.shareLabel}. ${purgeHate.note}`,
@@ -546,7 +582,7 @@ class BriefingGenerator {
       missionType: 'Defend Interests',
       preparation: 'Confirm executive nations, then assign an Administration or Persuasion operative to ward them.',
       window: escalateLate ? 'This cycle — first Earth action' : 'Standing order',
-      missionCost: 'UNAVAILABLE',
+      missionCost: '20 Influence',
       eligibleOperatives: this.eligibleOperatives(councilors, resolvedObserverId, ['Administration', 'Persuasion', 'Security'])
     }, 'Defend Interests', { share: 0, label: observerLabel }));
 
@@ -581,7 +617,7 @@ class BriefingGenerator {
       const attrs = agent.attributes || {};
       const holdProxy = campaignPosture?.escalateLate === true;
       const specialty = holdProxy
-        ? (attrs.Persuasion > 10 ? 'Public Campaign or Defend Interests' : 'Defend Interests / Advise Nation — do not Crackdown proxy factions while alien hate is elevated')
+        ? (attrs.Persuasion > 10 ? 'Public Campaign or Defend Interests' : 'Defend Interests / Advise Nation, then prepare a proxy operation for a survivable window')
         : (attrs.Persuasion > 10 ? 'Public Campaign' : (attrs.Espionage > 10 ? 'Crackdown / Sabotage' : 'Advise Nation'));
       directives.push({
         id: 'c-idle',
@@ -630,6 +666,7 @@ class BriefingGenerator {
     // Directive 1: Mining Infrastructure
     directives.push({
       id: 'sp-1',
+      policyRank: 20,
       title: `Review Off-World Mining Grid (${ownHabs.length} Habs Visible)`,
       category: 'LOGISTICS & MINING',
       severity: 'HIGH',
@@ -658,7 +695,7 @@ class BriefingGenerator {
         ? `Visible fleet combat power for ${observerLabel} is ${this.formatPower(fleetPower)} across ${ownFleets.length} fleet group${ownFleets.length === 1 ? '' : 's'}. ${escalateLate ? 'Doctrine is escalate late: ship count is not combat capability, but this force cannot be assumed to survive the retaliation cycle if proxy actions add more alien hate.' : ''}`
         : 'No own fleet groups are visible in this filtered snapshot; fleet posture cannot be confirmed.',
       action: escalateLate
-        ? 'Do not pick a fight you cannot survive afterward. Preserve experienced hulls, avoid growing used Mission Control, and do not feed Servants/Protectorate proxy hate.'
+        ? 'Prioritize fleet preservation: keep experienced hulls intact, limit new Mission Control, and stage proxy operations for a survivable window.'
         : ownFleets.length > 0
           ? 'Maintain a defensive patrol in a relevant inner-system orbit and assign intercept orders when a confirmed threat is identified.'
           : 'Obtain current fleet telemetry before issuing an orbital defense order.',
@@ -674,17 +711,30 @@ class BriefingGenerator {
     const researchSlots = this.getResearchSlots(globalResearch);
     const stages = activeAlienStages || {};
     const hasStageData = Object.keys(stages).length > 0;
+    const effects = this.config.analysis?.effects || {};
+    const projects = new Map(
+      (this.config.analysis?.strategicProjects || []).map(project => [project.id, project])
+    );
+    const unlockLabel = (effectId, fallback) => {
+      const descriptor = effects[effectId] || {};
+      const id = descriptor.defaultProject || descriptor.defaultTech;
+      if (!id) return fallback;
+      const displayName = projects.get(id)?.name || id;
+      const kind = descriptor.defaultTech ? 'Tech' : 'Project';
+      return `${kind} '${displayName}' (${id})`;
+    };
 
     // Research Vector 1: Alien Threat Meter
     if (hasStageData && stages.operations && stages.operations.active === false) {
       directives.push({
         id: 'res-1',
-        title: "Unlock Project 'Alien Operations' (Project_TheirOperations)",
+        title: `Unlock ${unlockLabel('Effect_UpdateAlienThreatMeter', 'the configured alien threat project')}`,
         category: 'STRATEGIC INTEL UNLOCK',
         severity: 'CRITICAL',
         statement: 'Our intelligence command is currently blind to the calibrated Alien Threat Meter and worldwide alien operations.',
         action: 'Prioritize faction engineering slots on Alien Operations to unlock real-time alien hate estimation.',
-        successFactor: 'MISSION CRITICAL'
+        successFactor: 'MISSION CRITICAL',
+        policyRank: 55
       });
     }
 
@@ -692,7 +742,7 @@ class BriefingGenerator {
     if (hasStageData && stages.operatives && stages.operatives.active === false) {
       directives.push({
         id: 'res-2',
-        title: "Advance Project 'Alien Movements' (Project_TheirMovements)",
+        title: `Advance ${unlockLabel('Effect_DetectAlienMovements', 'the configured alien movement project')}`,
         category: 'TACTICAL RECONNAISSANCE',
         severity: 'HIGH',
         statement: 'Alien Hydra operatives on Earth cannot be directly targeted or unmasked on satellite telemetry without completed xenobiology tracking.',
@@ -797,8 +847,20 @@ class BriefingGenerator {
     });
   }
 
-  buildOperativeRoster(councilors, observerId) {
+  buildOperativeRoster(councilors, observerId, campaignPosture = {}) {
     const ownCouncilors = this.asArray(councilors).filter(c => this.isOwnCouncilor(c, observerId));
+
+    // `escalateLate` is true when ANY hold fired, and the holds are no longer
+    // interchangeable: Total War proximity holds on its own, with a strong
+    // fleet and hate that is nowhere near the war threshold. Naming the
+    // fragile-fleet case regardless produced advice that contradicted the
+    // measured posture (spaceFragile false, hold text about Total War), so
+    // quote the reason that actually fired instead of assuming one.
+    const holdReasons = this.asArray(campaignPosture?.holds)
+      .filter(hold => typeof hold === 'string' && hold.trim() !== '');
+    const holdClause = holdReasons.length > 0
+      ? holdReasons.join('; ')
+      : 'the campaign posture is holding proxy offensives';
 
     return ownCouncilors.map(c => {
       let readiness = 'READY FOR DEPLOYMENT';
@@ -814,7 +876,9 @@ class BriefingGenerator {
       if (attrs.Persuasion >= 12) {
         recOrder = 'Deploy to high-GDP nation to run Public Campaign or Defend Interests.';
       } else if (attrs.Espionage >= 12) {
-        recOrder = 'Deploy to hostile territory to execute Crackdown or Sabotage Facilities.';
+        recOrder = campaignPosture?.escalateLate
+          ? `Ward own majors and prepare a non-proxy operation. Posture hold: ${holdClause}.`
+          : 'Deploy to hostile territory to execute Crackdown or Sabotage Facilities.';
       } else if (attrs.Investigation >= 12) {
         recOrder = 'Conduct Surveil Location or Investigate Councilor to unmask enemy moles.';
       } else if (attrs.Administration >= 12) {
@@ -961,7 +1025,18 @@ class BriefingGenerator {
       controlPoints: hasControlPointData ? controlPoints : null,
       nations: controlled.length > 0 ? controlled.length : null,
       gdp: controlled.length > 0 ? controlled.reduce((sum, nation) => sum + (this.toFiniteNumber(nation.GDP) || 0), 0) : null,
-      research: controlled.length > 0 ? controlled.reduce((sum, nation) => sum + (this.toFiniteNumber(nation.research) || 0), 0) : null
+      // Last-resort fallback for a snapshot with no faction totalResearch. A
+      // nation's research is split equally between its control points (wiki,
+      // Nations, 2026-05-17), so take our share rather than the whole nation.
+      // It still omits space and org research, so it is a floor, not a total.
+      research: controlled.length > 0
+        ? controlled.reduce((sum, nation) => {
+          const nationControlPoints = this.asArray(nation.controlPoints);
+          if (nationControlPoints.length === 0) return sum;
+          const owned = nationControlPoints.filter(cp => this.sameId(cp.factionId, observerId)).length;
+          return sum + (this.toFiniteNumber(nation.research) || 0) * (owned / nationControlPoints.length);
+        }, 0)
+        : null
     };
   }
 

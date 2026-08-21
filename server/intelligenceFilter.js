@@ -1,6 +1,7 @@
 const capabilityResolver = require('./capabilityResolver');
 const opportunityScorer = require('./opportunityScorer');
 const snapshotIdentity = require('./snapshotIdentity');
+const { resolveConfig } = require('./config');
 const { buildAlienHateEconomics } = require('./alienHateEconomics');
 const {
   ALIEN_FACTION_DISPLAY_NAME,
@@ -8,8 +9,12 @@ const {
   SERVANTS_DISPLAY_NAME
 } = require('../shared/constants.mjs');
 
+const DEFAULT_OBSERVER_FACTION_ID = resolveConfig().campaign.defaultObserverFactionId;
+const RUNTIME_CONFIG = resolveConfig();
+const POWER_NORMALIZERS = RUNTIME_CONFIG.analysis.powerScore.normalizers;
+
 class IntelligenceFilter {
-  applyFilter(rawSnapshot, mode = 'player', observerFactionId = 4712) {
+  applyFilter(rawSnapshot, mode = 'player', observerFactionId = DEFAULT_OBSERVER_FACTION_ID) {
     const observer = rawSnapshot.factions.find(f => f.ID === observerFactionId) ||
                      rawSnapshot.factions.find(f => f.displayName === INITIATIVE_DISPLAY_NAME) ||
                      rawSnapshot.factions[0];
@@ -18,6 +23,16 @@ class IntelligenceFilter {
     const identity = snapshotIdentity.readSnapshotIdentity(rawSnapshot);
     const observerIntelligence = rawSnapshot.factionIntelligence?.[actualObserverId] || {};
     const isEnhanced = mode === 'enhanced';
+    const visibleNations = (rawSnapshot.nations || []).map((nation) => ({
+      ...nation,
+      controlPoints: (nation.controlPoints || []).map((controlPoint) => {
+        const belongsToObserver = actualObserverId !== null && actualObserverId !== undefined &&
+          String(controlPoint.factionId) === String(actualObserverId);
+        if (isEnhanced || belongsToObserver) return controlPoint;
+        const { defended, defendExpiration, ...publicControlPoint } = controlPoint;
+        return publicControlPoint;
+      })
+    }));
 
     const capabilities = capabilityResolver.resolveCapabilities(
       observer,
@@ -98,6 +113,11 @@ class IntelligenceFilter {
         techMatrix: rawSnapshot.techMatrix,
         techTree: rawSnapshot.techTree,
         shipHullStats: rawSnapshot.shipHullStats,
+        // Mission rules are public game data, not intelligence -- nothing
+        // about them is observer-dependent, so they pass through unfiltered
+        // in both modes.
+        missionSpecs: rawSnapshot.missionSpecs,
+        miningScarcityWeights: rawSnapshot.miningScarcityWeights,
         isOmniscient: true
       };
     }
@@ -127,7 +147,13 @@ class IntelligenceFilter {
           visibleEstimate: isEnhanced ? (f.assessedAlienHateOfMe || 0).toFixed(2) : 'UNAVAILABLE',
           visibility: isEnhanced ? 'raw_save_only' : 'unavailable',
           status: 'unavailable',
-          requiredProject: 'Alien Operations (Project_TheirOperations)'
+          requiredProject: (() => {
+            const detail = capabilities.details?.estimateAlienThreat || {};
+            if (detail.requiredDisplayName && detail.requiredProject) {
+              return `${detail.requiredDisplayName} (${detail.requiredProject})`;
+            }
+            return detail.requiredDisplayName || detail.requiredProject || 'Alien threat assessment capability';
+          })()
         };
       }
 
@@ -253,32 +279,43 @@ class IntelligenceFilter {
     }
 
     // 3. Alien Intelligence Stage Status
+    const stageFromCapability = (detailKey, outputKey, fallbackName, fallbackDescription, extra = {}) => {
+      const detail = capabilities.details?.[detailKey] || {};
+      const active = capabilities[outputKey] === true;
+      return {
+        ...extra,
+        active,
+        name: detail.requiredDisplayName || detail.name || fallbackName,
+        status: active ? 'AVAILABLE' : 'LOCKED',
+        description: detail.description || fallbackDescription
+      };
+    };
     const alienIntelligenceStage = {
-      abductions: {
-        active: capabilities.canDetectAlienAbductions,
-        name: 'Alien Signatures',
-        status: capabilities.canDetectAlienAbductions ? 'AVAILABLE' : 'LOCKED',
-        description: 'Detects alien abductions in surveyed regions.'
-      },
-      contacts: {
-        active: capabilities.canDetectAlienHumanContacts,
-        name: 'Alien Methods',
-        status: capabilities.canDetectAlienHumanContacts ? 'AVAILABLE' : 'LOCKED',
-        description: 'Detects alien contacts and enthrall activities with human factions.'
-      },
-      operations: {
-        active: capabilities.canDetectAlienOperations,
-        name: 'Alien Operations',
-        status: capabilities.canDetectAlienOperations ? 'AVAILABLE' : 'LOCKED',
-        description: 'Detects worldwide alien operations and updates the threat meter.'
-      },
-      operatives: {
-        active: capabilities.canDirectlyDetectAlienCouncilors,
-        name: 'Alien Movements',
-        status: capabilities.canDirectlyDetectAlienCouncilors ? 'AVAILABLE' : 'LOCKED',
-        detectedCount: capabilities.canDirectlyDetectAlienCouncilors ? detectedAlienCount : null,
-        description: 'Directly detects and tracks individual alien operatives (Hydras).'
-      }
+      abductions: stageFromCapability(
+        'detectAlienAbductions',
+        'canDetectAlienAbductions',
+        'Alien Signatures',
+        'Detects alien abductions in surveyed regions.'
+      ),
+      contacts: stageFromCapability(
+        'detectAlienHumanContacts',
+        'canDetectAlienHumanContacts',
+        'Alien Methods',
+        'Detects alien contacts and enthrall activities with human factions.'
+      ),
+      operations: stageFromCapability(
+        'detectAlienOperations',
+        'canDetectAlienOperations',
+        'Alien Operations',
+        'Detects worldwide alien operations and updates the threat meter.'
+      ),
+      operatives: stageFromCapability(
+        'detectAlienCouncilors',
+        'canDirectlyDetectAlienCouncilors',
+        'Alien Movements',
+        'Directly detects and tracks individual alien operatives (Hydras).',
+        { detectedCount: capabilities.canDirectlyDetectAlienCouncilors ? detectedAlienCount : null }
+      )
     };
 
     // 4. Tech Matrix Filtering
@@ -366,7 +403,7 @@ class IntelligenceFilter {
       metadata: rawSnapshot.metadata,
       factions: visibleFactions,
       factionRelationships,
-      nations: rawSnapshot.nations,
+      nations: visibleNations,
       councilors: filteredCouncilors,
       fleets: visibleSpaceAssets.fleets,
       habs: visibleSpaceAssets.habs,
@@ -385,6 +422,9 @@ class IntelligenceFilter {
       techMatrix: filteredTechMatrix,
       techTree: rawSnapshot.techTree,
       shipHullStats: rawSnapshot.shipHullStats,
+      // Public game rules, not intelligence -- unfiltered in player mode too.
+      missionSpecs: rawSnapshot.missionSpecs,
+      miningScarcityWeights: rawSnapshot.miningScarcityWeights,
       isOmniscient: false
     };
   }
@@ -543,19 +583,21 @@ class IntelligenceFilter {
 
   filterFactionSpaceMetrics(factions, rawSnapshot, visibleAssets, observerFactionId, capabilities, isEnhanced) {
     const alienFactionId = rawSnapshot.factions.find(f => f.displayName === ALIEN_FACTION_DISPLAY_NAME)?.ID;
-    const weights = rawSnapshot.factions.find(f => f.ID === observerFactionId)?.powerScore?.weights || {
-      earthEconomy: 0.20,
-      earthPolitics: 0.15,
-      researchPower: 0.20,
-      spaceEconomy: 0.15,
-      fleetPower: 0.20,
-      militaryPower: 0.10
-    };
+    const weights = rawSnapshot.factions.find(f => f.ID === observerFactionId)?.powerScore?.weights ||
+      RUNTIME_CONFIG.analysis.powerScore.weights;
     const hasFullSpaceVisibility = (factionId) =>
       isEnhanced || factionId === observerFactionId ||
       (factionId === alienFactionId && capabilities.canTrackSolarSystemSpaceAssets);
 
     const visibleByFaction = (items, factionId) => items.filter(item => item.factionId === factionId);
+
+    // The faction's headline research figure comes from the save's own income
+    // rate and stays visible, but the hab-module component of the breakdown is
+    // a module manifest -- exactly what habModules withholds in player mode.
+    // Redact it to null (unmeasured), never to zero.
+    const redactHabResearch = (breakdown) => (breakdown
+      ? { ...breakdown, habModules: null, habModuleCount: null, habModulesUnresolved: null }
+      : breakdown);
 
     return factions.map(faction => {
       const visibleFleets = visibleByFaction(visibleAssets.fleets, faction.ID);
@@ -580,6 +622,7 @@ class IntelligenceFilter {
           shipsCount: null,
           combatPower: null,
           combatPowerAvailable: false,
+          researchBreakdown: redactHabResearch(faction.researchBreakdown),
           spaceVisibility: 'unavailable',
           powerScore: { ...faction.powerScore, overall: null, spaceEconomy: null, fleet: null }
         };
@@ -593,12 +636,13 @@ class IntelligenceFilter {
         shipsCount: visibleShipCount,
         combatPower: visibleCombatPower || null,
         combatPowerAvailable: visibleFleets.some(fleet => fleet.combatPowerAvailable),
+        researchBreakdown: redactHabResearch(faction.researchBreakdown),
         spaceVisibility: 'partial',
         powerScore: {
           ...faction.powerScore,
           overall: null,
-          spaceEconomy: Math.min(100, Math.round((visibleHabs.length / 20) * 100)),
-          fleet: Math.min(100, Math.round((visibleCombatPower / 3000) * 100))
+          spaceEconomy: Math.min(100, Math.round((visibleHabs.length / POWER_NORMALIZERS.habs) * 100)),
+          fleet: Math.min(100, Math.round((visibleCombatPower / POWER_NORMALIZERS.combatPower) * 100))
         },
         visibilityNote: 'Visible assets only; total faction strength is unknown.'
       };
@@ -609,7 +653,8 @@ class IntelligenceFilter {
     if (isEnhanced) return activeXenoforming.map(item => ({ ...item, visibility: 'enhanced telemetry' }));
     if (!capabilities.canDetectXenoforming) return [];
 
-    const threshold = capabilities.xenoformingAutomaticVisibilityThreshold || 65;
+    const threshold = capabilities.xenoformingAutomaticVisibilityThreshold ??
+      RUNTIME_CONFIG.analysis.rules.xenoforming.automaticVisibilityThreshold;
     return activeXenoforming
       .filter(item => !capabilities.xenoformingRequiresRegionDiscovery ||
         this.knownRegion(observerIntelligence, item.regionId) ||

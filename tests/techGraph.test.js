@@ -6,9 +6,13 @@ const snapshotIdentity = require('../server/snapshotIdentity');
 const intelligenceFilter = require('../server/intelligenceFilter');
 const techIntel = require('../server/techIntel');
 const techGraph = require('../shared/techGraph.mjs');
+const templateLoader = require('../server/templateLoader');
 const { makeSaveData } = require('./fixtures/syntheticSave');
 
 const OBSERVER = 4712;
+const templateTest = templateLoader.templatesPath
+  ? test
+  : (name, options, fn) => test(name, { ...(typeof options === 'object' ? options : {}), skip: 'TI templates are not configured' }, typeof options === 'function' ? options : fn);
 
 function buildSnapshot(initiativeOverrides = {}) {
   const save = makeSaveData();
@@ -28,7 +32,7 @@ function buildSnapshot(initiativeOverrides = {}) {
   return intelligenceFilter.applyFilter(raw, 'omniscient', OBSERVER);
 }
 
-test('techTree is embedded in the filtered snapshot', () => {
+templateTest('techTree is embedded in the filtered snapshot', () => {
   const snapshot = buildSnapshot();
   assert.ok(snapshot.techTree, 'techTree present on filtered snapshot');
   assert.strictEqual(snapshot.techTree.counts.techs, 149);
@@ -36,7 +40,7 @@ test('techTree is embedded in the filtered snapshot', () => {
   assert.ok(Array.isArray(snapshot.techTree.nodes) && snapshot.techTree.nodes.length > 0);
 });
 
-test('tech-tree reports accurate observer status per node', () => {
+templateTest('tech-tree reports accurate observer status per node', () => {
   const snapshot = buildSnapshot();
   const tree = techIntel.buildTechTree(snapshot, 'omniscient', OBSERVER, { category: 'all' });
   assert.strictEqual(tree.resource, 'tech-tree');
@@ -51,7 +55,7 @@ test('tech-tree reports accurate observer status per node', () => {
   assert.strictEqual(theirMov.researchPercent, 25);
 });
 
-test('tech-tree category filter narrows nodes', () => {
+templateTest('tech-tree category filter narrows nodes', () => {
   const snapshot = buildSnapshot();
   const all = techIntel.buildTechTree(snapshot, 'omniscient', OBSERVER, { category: 'all' });
   const weapons = techIntel.buildTechTree(snapshot, 'omniscient', OBSERVER, { category: 'weapons' });
@@ -60,7 +64,7 @@ test('tech-tree category filter narrows nodes', () => {
   assert.ok(weapons.nodes.every(n => /weapon|gun|laser|plasma|particle|rail|coil|missile|torpedo|kinetic|point.?defen/i.test(n.id + ' ' + n.displayName + ' ' + (n.subcategory || ''))));
 });
 
-test('tech-path accounts for current progress', () => {
+templateTest('tech-path accounts for current progress', () => {
   const snapshot = buildSnapshot();
   const path = techIntel.buildPath(snapshot, 'omniscient', OBSERVER, ['Project_RailCannonMk3']);
   assert.strictEqual(path.resource, 'tech-path');
@@ -72,7 +76,7 @@ test('tech-path accounts for current progress', () => {
   assert.strictEqual(path.remainingFactionResearchCost, 5000);
 });
 
-test('tech-path reports already-completed target', () => {
+templateTest('tech-path reports already-completed target', () => {
   const snapshot = buildSnapshot();
   const path = techIntel.buildPath(snapshot, 'omniscient', OBSERVER, ['Project_RailCannonMk2']);
   assert.strictEqual(path.alreadyCompleted.length, 1);
@@ -80,13 +84,13 @@ test('tech-path reports already-completed target', () => {
   assert.strictEqual(path.totalRemainingResearchCost, 0);
 });
 
-test('tech-path resolves target by display name', () => {
+templateTest('tech-path resolves target by display name', () => {
   const snapshot = buildSnapshot();
   const path = techIntel.buildPath(snapshot, 'omniscient', OBSERVER, ['Advanced Rail Cannon']);
   assert.strictEqual(path.target.id, 'Project_RailCannonMk3');
 });
 
-test('multi-target path deduplicates shared prerequisites', () => {
+templateTest('multi-target path deduplicates shared prerequisites', () => {
   const snapshot = buildSnapshot();
   const path = techIntel.buildPath(snapshot, 'omniscient', OBSERVER, ['Project_RailCannonMk3', 'Battlecruiser']);
   assert.ok(Array.isArray(path.targets));
@@ -96,7 +100,7 @@ test('multi-target path deduplicates shared prerequisites', () => {
   assert.ok(ids.includes('Project_FleetCombatants'), 'Battlecruiser unlock project is on the path');
 });
 
-test('tech-search finds the project that unlocks Battlecruiser', () => {
+templateTest('tech-search finds the project that unlocks Battlecruiser', () => {
   const snapshot = buildSnapshot();
   const result = techIntel.buildSearch(snapshot, 'omniscient', OBSERVER, 'battlecruiser');
   assert.ok(result.items.length > 0);
@@ -104,7 +108,7 @@ test('tech-search finds the project that unlocks Battlecruiser', () => {
   assert.ok(unlockers.some(u => u.id === 'Project_FleetCombatants'), 'Fleet Combatants found via hull unlock name');
 });
 
-test('tech-milestones reports ship hull unlock state', () => {
+templateTest('tech-milestones reports ship hull unlock state', () => {
   const snapshot = buildSnapshot();
   const result = techIntel.buildMilestones(snapshot, 'omniscient', OBSERVER, 'ship_hull');
   const bc = result.items.find(i => i.name === 'Battlecruiser');
@@ -114,7 +118,7 @@ test('tech-milestones reports ship hull unlock state', () => {
   assert.ok(bc.remainingResearchCost > 0);
 });
 
-test('research-queue projects observer current research', () => {
+templateTest('research-queue projects observer current research', () => {
   const snapshot = buildSnapshot();
   const queue = techIntel.buildQueue(snapshot, 'omniscient', OBSERVER);
   assert.strictEqual(queue.resource, 'research-queue');
@@ -123,13 +127,13 @@ test('research-queue projects observer current research', () => {
   assert.strictEqual(queue.factionProjects.find(p => p.projectId === 'Project_TheirMovements').progress, 0.25);
 });
 
-test('unknown tech target returns an error entry', () => {
+templateTest('unknown tech target returns an error entry', () => {
   const snapshot = buildSnapshot();
   const path = techIntel.buildPath(snapshot, 'omniscient', OBSERVER, ['NoSuchProject']);
   assert.ok(path.targets[0].error, 'missing target is reported as an error');
 });
 
-test('shared module and local wrapper produce identical projections', async () => {
+templateTest('shared module and local wrapper produce identical projections', async () => {
   const shared = await import('../shared/techGraph.mjs');
   const snapshot = buildSnapshot();
   const local = techIntel.buildTechTree(snapshot, 'omniscient', OBSERVER, { category: 'all' });

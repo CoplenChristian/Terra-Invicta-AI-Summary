@@ -1,24 +1,46 @@
 param(
     [string]$SavePath = $null,
-    [string]$WorkDir = $null
+    [string]$WorkDir = $null,
+    [int]$SaveNumber = 0,
+    [switch]$Latest
 )
 
 # Load configuration
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$configPath = Join-Path $scriptPath "config.json"
-if (-not (Test-Path $configPath)) {
-    throw "Config file not found at $configPath"
-}
-$config = Get-Content $configPath -Raw | ConvertFrom-Json
+$commonModulePath = Join-Path $scriptPath "TerraInvicta.Common.psm1"
+Import-Module -Name $commonModulePath -Force
+$config = Get-TIConfig -BasePath $scriptPath
 
-if ([string]::IsNullOrEmpty($WorkDir)) {
-    $WorkDir = $config.WorkDir
-    if ($WorkDir -eq ".") { $WorkDir = $scriptPath }
-}
+if ([string]::IsNullOrEmpty($WorkDir)) { $WorkDir = $config.WorkDir }
+if (-not [IO.Path]::IsPathRooted($WorkDir)) { $WorkDir = Join-Path $scriptPath $WorkDir }
 
 if ([string]::IsNullOrEmpty($SavePath)) {
     $SavePath = $config.SavePath
 }
+
+if ($Latest -and $SaveNumber -gt 0) {
+    throw 'Use either -Latest or -SaveNumber, not both.'
+}
+
+# SavePath may identify a single historical file for an explicit export. When
+# it identifies a folder (the normal config shape), select the newest save by
+# default and allow -SaveNumber for a deliberate historical lookup.
+$requestedSave = $SavePath
+$lookupSave = if ($requestedSave -and -not [IO.Path]::IsPathRooted($requestedSave)) {
+    Join-Path $scriptPath $requestedSave
+} else { $requestedSave }
+if ($lookupSave -and (Test-Path -LiteralPath $lookupSave -PathType Leaf)) {
+    $selectedSave = Get-Item -LiteralPath $lookupSave
+} else {
+    $saveFolder = Resolve-TISaveFolder -ConfiguredSavePath $config.paths.savePath -RequestedSaveFolder $requestedSave -BasePath $scriptPath
+    $saveFiles = Get-TISaveFiles -Folder $saveFolder
+    $selectedSave = if ($SaveNumber -gt 0) {
+        Select-TISaveFile -Files $saveFiles -RequestedNumber $SaveNumber
+    } else {
+        Select-TISaveFile -Files $saveFiles -UseLatest
+    }
+}
+$SavePath = $selectedSave.FullName
 
 $csvSubDir = $config.CsvSubDir
 
@@ -63,28 +85,34 @@ $humanFactionOrder = @(
 
 try {
     Set-Alias pwsh powershell
-    # Decompress Again.gz -> temp JSON
-    $fs = [IO.File]::OpenRead($SavePath)
-    try {
-        $gz = New-Object IO.Compression.GzipStream(
-            $fs,
-            [IO.Compression.CompressionMode]::Decompress
-        )
+    # Normalize either supported save format into the temporary JSON file.
+    # The standalone parsers accept .gz and .json; the broad export should do
+    # the same instead of assuming that every selected save is compressed.
+    if ([IO.Path]::GetExtension($SavePath).ToLowerInvariant() -eq '.json') {
+        Copy-Item -LiteralPath $SavePath -Destination $tempJson
+    } else {
+        $fs = [IO.File]::OpenRead($SavePath)
         try {
-            $out = [IO.File]::Create($tempJson)
+            $gz = New-Object IO.Compression.GzipStream(
+                $fs,
+                [IO.Compression.CompressionMode]::Decompress
+            )
             try {
-                $gz.CopyTo($out)
+                $out = [IO.File]::Create($tempJson)
+                try {
+                    $gz.CopyTo($out)
+                }
+                finally {
+                    $out.Close()
+                }
             }
             finally {
-                $out.Close()
+                $gz.Close()
             }
         }
         finally {
-            $gz.Close()
+            $fs.Close()
         }
-    }
-    finally {
-        $fs.Close()
     }
 
     # Load JSON once
@@ -229,7 +257,7 @@ try {
         return $scores
     }
 
-    $shipInfoDir = Join-Path $WorkDir "Ship_Info/raw_json"
+    $shipInfoDir = Join-Path $WorkDir (Join-Path $config.paths.shipInfoSubDir 'raw_json')
     $componentScores = Get-ShipComponentScores -JsonDir $shipInfoDir
 
     $globalResearch = $json.gamestates.'PavonisInteractive.TerraInvicta.TIGlobalResearchState' |

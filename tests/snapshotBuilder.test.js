@@ -3,6 +3,7 @@ const assert = require('node:assert');
 
 const snapshotBuilder = require('../server/snapshotBuilder');
 const saveParser = require('../server/saveParser');
+const templateLoader = require('../server/templateLoader');
 const { makeSaveData } = require('./fixtures/syntheticSave');
 
 test('buildRawSnapshot builds factions with derived power metrics', () => {
@@ -47,6 +48,25 @@ test('buildRawSnapshot captures nations, councilors and control points', () => {
   assert.strictEqual(own.attributes.Persuasion, 10);
 });
 
+test('buildRawSnapshot preserves control-point defense state and expiry', () => {
+  const save = makeSaveData();
+  const controlPoints = save.gamestates['PavonisInteractive.TerraInvicta.TIControlPoint'];
+  controlPoints[0].Value.defended = true;
+  controlPoints[0].Value.defendExpiration = {
+    year: 2032,
+    month: 12,
+    day: 31,
+    hour: 23,
+    minute: 59,
+    second: 0,
+    millisecond: 0
+  };
+  const raw = snapshotBuilder.buildRawSnapshot(save);
+  const ownCp = raw.nations.find(n => n.ID === 1).controlPoints.find(cp => cp.id === 11);
+  assert.strictEqual(ownCp.defended, true);
+  assert.deepStrictEqual(ownCp.defendExpiration, controlPoints[0].Value.defendExpiration);
+});
+
 test('buildRawSnapshot resolves space assets and theater classification', () => {
   const raw = snapshotBuilder.buildRawSnapshot(makeSaveData({ ships: 2 }));
   assert.strictEqual(raw.fleets.length, 1);
@@ -82,6 +102,123 @@ test('buildRawSnapshot handles empty game state collections', () => {
   assert.strictEqual(empty.councilors.length, 0);
   assert.strictEqual(empty.fleets.length, 0);
   assert.ok(empty.techMatrix.length > 0, 'tech matrix still present from template keys');
+});
+
+// Research output. The KPI read Earth nations only, so every orbital lab was
+// missing from it. These pin the four rules that fix took: hab modules count,
+// only completed ones count, an unreadable module is null rather than zero,
+// and a rate the save states outranks anything we recompute.
+//
+// The module's research value is injected into the template index rather than
+// read from a game install, so the assertions hold on a clean checkout.
+const RESEARCH_MODULE = 'TestScienceInstitute';
+const RESEARCH_PER_MODULE = 40;
+
+function withResearchTemplate(run) {
+  templateLoader.templates.habModules.set(RESEARCH_MODULE, {
+    dataName: RESEARCH_MODULE,
+    friendlyName: 'Test Science Institute',
+    incomeResearch_month: RESEARCH_PER_MODULE
+  });
+  try {
+    return run();
+  } finally {
+    templateLoader.templates.habModules.delete(RESEARCH_MODULE);
+  }
+}
+
+test('faction research totals more than its Earth nations once research habs are counted', () => {
+  withResearchTemplate(() => {
+    const raw = snapshotBuilder.buildRawSnapshot(makeSaveData({
+      habModules: [
+        { id: 351, templateName: RESEARCH_MODULE },
+        { id: 352, templateName: RESEARCH_MODULE }
+      ]
+    }));
+    const initiative = raw.factions.find(f => f.ID === 4712);
+    const breakdown = initiative.researchBreakdown;
+
+    assert.strictEqual(breakdown.habModuleCount, 2);
+    assert.strictEqual(breakdown.habModules, 2 * RESEARCH_PER_MODULE);
+    assert.ok(
+      initiative.totalResearch > breakdown.earthControlPointShare,
+      `expected ${initiative.totalResearch} to exceed the Earth-only ${breakdown.earthControlPointShare}`
+    );
+    assert.strictEqual(
+      initiative.totalResearch,
+      breakdown.earthControlPointShare + 2 * RESEARCH_PER_MODULE
+    );
+
+    // A faction with no research habs is unchanged by the correction.
+    const servants = raw.factions.find(f => f.ID === 4713);
+    assert.strictEqual(servants.researchBreakdown.habModules, 0);
+    assert.strictEqual(servants.totalResearch, servants.researchBreakdown.earthControlPointShare);
+  });
+});
+
+test('a hab module still under construction produces no research', () => {
+  withResearchTemplate(() => {
+    const raw = snapshotBuilder.buildRawSnapshot(makeSaveData({
+      habModules: [
+        { id: 351, templateName: RESEARCH_MODULE },
+        { id: 352, templateName: RESEARCH_MODULE, constructionCompleted: false }
+      ]
+    }));
+    const breakdown = raw.factions.find(f => f.ID === 4712).researchBreakdown;
+    assert.strictEqual(breakdown.habModuleCount, 1, 'only the completed module counts');
+    assert.strictEqual(breakdown.habModules, RESEARCH_PER_MODULE);
+  });
+});
+
+test('a hab module with no resolvable template reports null research, never zero', () => {
+  withResearchTemplate(() => {
+    const raw = snapshotBuilder.buildRawSnapshot(makeSaveData({
+      habModules: [
+        { id: 351, templateName: RESEARCH_MODULE },
+        { id: 352, templateName: 'ModuleFromAnUnknownMod' }
+      ]
+    }));
+    const initiative = raw.factions.find(f => f.ID === 4712);
+    assert.strictEqual(initiative.researchBreakdown.habModulesUnresolved, 1);
+    assert.strictEqual(initiative.researchBreakdown.habModules, null);
+    assert.strictEqual(initiative.researchBreakdown.computedMonthly, null);
+    assert.strictEqual(initiative.totalResearch, null, 'a missing template must not shrink the total');
+    assert.strictEqual(initiative.powerScore.research, null);
+  });
+});
+
+test('the rate the save reports outranks the recomputed research sum', () => {
+  withResearchTemplate(() => {
+    const raw = snapshotBuilder.buildRawSnapshot(makeSaveData({
+      habModules: [{ id: 351, templateName: RESEARCH_MODULE }],
+      factionOptions: { 4712: { cachedYearlyRevenue: { Research: 36000 } } }
+    }));
+    const initiative = raw.factions.find(f => f.ID === 4712);
+    const breakdown = initiative.researchBreakdown;
+    assert.strictEqual(breakdown.reportedMonthly, 3000);
+    assert.strictEqual(breakdown.computedMonthly, breakdown.earthControlPointShare + RESEARCH_PER_MODULE);
+    assert.strictEqual(initiative.totalResearch, 3000);
+    assert.match(breakdown.source, /cachedYearlyRevenue/);
+  });
+});
+
+test('nation research is split between its control points, not handed out whole', () => {
+  const save = makeSaveData();
+  // A rival takes a third control point in the USA, so our two points now earn
+  // two thirds of its research instead of all of it.
+  save.gamestates['PavonisInteractive.TerraInvicta.TIControlPoint'].push({
+    Value: { ID: { value: 13 }, faction: { value: 4713 }, nation: { value: 1 }, controlPointType: 'Standard' }
+  });
+  const raw = snapshotBuilder.buildRawSnapshot(save);
+  const initiative = raw.factions.find(f => f.ID === 4712);
+  assert.strictEqual(initiative.researchBreakdown.earthControlPointShare, 533.33, '800 x 2/3');
+
+  // A crackdown'd point keeps its share of the nation but stops paying out.
+  const disabled = makeSaveData();
+  disabled.gamestates['PavonisInteractive.TerraInvicta.TIControlPoint'][1].Value.benefitsDisabled = true;
+  const disabledRaw = snapshotBuilder.buildRawSnapshot(disabled);
+  const crippled = disabledRaw.factions.find(f => f.ID === 4712);
+  assert.strictEqual(crippled.researchBreakdown.earthControlPointShare, 400, '800 x 1/2');
 });
 
 test('saveParser getStateCollection unwraps Value-wrapped entries', () => {

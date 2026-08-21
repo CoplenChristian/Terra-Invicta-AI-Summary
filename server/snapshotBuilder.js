@@ -169,7 +169,17 @@ class SnapshotBuilder {
           nationId,
           isExecutive,
           controlPointType: cp.controlPointType || 'Standard',
-          benefits: cp.benefits || null
+          benefits: cp.benefits || null,
+          // A crackdown'd or abandoned control point keeps its share of the
+          // nation's output but the owning faction stops receiving it, so the
+          // resource split has to know the difference.
+          benefitsDisabled: typeof cp.benefitsDisabled === 'boolean' ? cp.benefitsDisabled : null,
+          // Defend Interests is stateful: keep the save's ward and expiry
+          // so the directive engine can distinguish an actionable gap from a
+          // holding that is already protected. The filter decides who may
+          // see these fields in player mode.
+          defended: typeof cp.defended === 'boolean' ? cp.defended : null,
+          defendExpiration: cp.defendExpiration || null
         };
 
         controlPointsById.set(cpId, cpData);
@@ -624,6 +634,12 @@ class SnapshotBuilder {
     const habModules = [];
     const shipyardCountByFaction = new Map();
     const habModuleRowsById = new Map();
+    // Space research. Hab modules carry incomeResearch_month in the installed
+    // templates, and it is a real slice of a faction's output that the Earth
+    // nation sum knows nothing about. Aggregated here, at snapshot-build time,
+    // for the same reason as shipHullStats and missionSpecs: the hosted worker
+    // has no template directory, so anything template-derived must be baked on.
+    const habResearchByFaction = new Map();
     for (const module of rawHabModules) {
       const moduleId = module.ID?.value;
       if (!moduleId || module.archived) continue;
@@ -649,6 +665,24 @@ class SnapshotBuilder {
       const isShipyard = template?.allowsShipConstruction === true ||
         (Array.isArray(template?.specialRules) && template.specialRules.includes('Shipyard'));
 
+      // A module still under construction produces nothing, so only operational
+      // ones are counted. A module whose template cannot be resolved is
+      // unmeasured, not zero -- it is tracked separately so the faction total
+      // reports null rather than quietly losing that module's output.
+      const researchIncomeMonth = this.habModuleResearchIncome(template);
+      if (factionId) {
+        if (!habResearchByFaction.has(factionId)) {
+          habResearchByFaction.set(factionId, { monthly: 0, modules: 0, unresolvedModules: 0 });
+        }
+        const bucket = habResearchByFaction.get(factionId);
+        if (researchIncomeMonth === null) {
+          bucket.unresolvedModules += 1;
+        } else if (researchIncomeMonth > 0 && constructionStatus === 'operational') {
+          bucket.monthly += researchIncomeMonth;
+          bucket.modules += 1;
+        }
+      }
+
       const row = {
         id: moduleId,
         name: template?.friendlyName || module.displayName || module.templateName,
@@ -665,6 +699,7 @@ class SnapshotBuilder {
         spaceTheaterKey: hab?.spaceTheaterKey || null,
         spaceTheaterName: hab?.spaceTheaterName || null,
         isShipyard,
+        researchIncomeMonth,
         constructionStatus,
         constructionCompleted: module.constructionCompleted ?? null,
         powered: module.powered ?? null,
@@ -809,14 +844,9 @@ class SnapshotBuilder {
 
     // Process Factions Summary & Power Scores
     const factions = [];
-    const scoreWeights = templateLoader.config.powerScoreWeights || {
-      earthEconomy: 0.20,
-      earthPolitics: 0.15,
-      researchPower: 0.20,
-      spaceEconomy: 0.15,
-      fleetPower: 0.20,
-      militaryPower: 0.10
-    };
+    const analysisConfig = templateLoader.config.analysis || {};
+    const scoreWeights = analysisConfig.powerScore?.weights || {};
+    const scoreNormalizers = analysisConfig.powerScore?.normalizers || {};
 
     // FactionHate is stored as a per-faction map in the save. Preserve it as
     // an explicit, shallow relationship list so observer-relative screens can
@@ -866,7 +896,49 @@ class SnapshotBuilder {
       const totalGdp = fNations.reduce((acc, n) => acc + (n.GDP || 0), 0);
       const totalPop = fNations.reduce((acc, n) => acc + (n.population || 0), 0);
       const totalBoost = fNations.reduce((acc, n) => acc + (n.boost || 0), 0);
-      const totalResearch = fNations.reduce((acc, n) => acc + (n.research || 0), 0);
+      // A nation's research is split between its control points, not handed
+      // whole to everyone holding one. Official wiki, Nations page (last
+      // edited 2026-05-17): "The research, boost, mc and money (from funding
+      // and spoils) produced by the nation is divided up equally among all of
+      // its control points. Control points that have sustained a Crackdown or
+      // are abandoned still get their share, but the owning faction does not
+      // receive it." So a crackdown'd point stays in the denominator and drops
+      // out of the numerator. Summing each nation whole -- what this did
+      // before -- overstates every faction that shares a nation with a rival.
+      const earthResearch = this.roundNumber(fNations.reduce((acc, n) => {
+        const allCps = Array.isArray(n.controlPoints) ? n.controlPoints : [];
+        if (allCps.length === 0) return acc;
+        const earning = allCps.filter(cp => cp.factionId === factionId && cp.benefitsDisabled !== true).length;
+        return acc + (n.research || 0) * (earning / allCps.length);
+      }, 0), 2);
+
+      // Research output has three candidate readings and they are not equal:
+      //
+      //  - Earth nations alone (what this used to report) omits every orbital
+      //    lab and every org, so it is always short.
+      //  - The 30-day transaction ledger (monthlyIncome.Research below) is a
+      //    trailing realised total, so it lags a changing rate.
+      //  - cachedYearlyRevenue is the game's own current annualised rate: it
+      //    tracks the newest "Daily Income" ledger entry x 365.25 to within
+      //    0.01% on the live save, across every faction. It already includes
+      //    nations, orgs, hab modules and the faction base income.
+      //
+      // A figure the game states beats one we reconstruct, so the reported
+      // rate wins when the save carries it. The recomputed sum is the fallback
+      // for saves that do not, and both are published side by side below.
+      const habResearch = habResearchByFaction.get(factionId) || { monthly: 0, modules: 0, unresolvedModules: 0 };
+      const habResearchMonthly = habResearch.unresolvedModules > 0 ? null : habResearch.monthly;
+      const computedMonthlyResearch = habResearchMonthly === null
+        ? null
+        : this.roundNumber(earthResearch + habResearchMonthly, 2);
+      const reportedYearlyResearch = this.firstNumericOrNull(f.cachedYearlyRevenue?.Research);
+      const reportedMonthlyResearch = reportedYearlyResearch === null
+        ? null
+        : this.roundNumber(reportedYearlyResearch / 12, 2);
+      const totalResearch = reportedMonthlyResearch !== null
+        ? reportedMonthlyResearch
+        : computedMonthlyResearch;
+
       const recent30DayFlow = this.summarizeRecentTransactions(f.Transactions, saveData.gameTimeString, 30);
       const projectedMonthlyIncome = this.scaleResourceMap(f.cachedYearlyRevenue, 1 / 12);
       const monthlyIncome = recent30DayFlow.income;
@@ -874,14 +946,18 @@ class SnapshotBuilder {
       const monthlyNet = recent30DayFlow.net;
 
       // Power Score Components (0-100 scales)
-      const earthEconomyScore = Math.min(100, Math.round((totalGdp / 40e12) * 100));
-      const earthPoliticsScore = Math.min(100, Math.round((fCPs.length / 50) * 100));
-      const researchPowerScore = Math.min(100, Math.round((totalResearch / 5000) * 100));
-      const spaceEconomyScore = Math.min(100, Math.round((fHabs.length / 20) * 100));
+      const earthEconomyScore = Math.min(100, Math.round((totalGdp / scoreNormalizers.gdp) * 100));
+      const earthPoliticsScore = Math.min(100, Math.round((fCPs.length / scoreNormalizers.controlPoints) * 100));
+      const researchPowerScore = totalResearch === null
+        ? null
+        : Math.min(100, Math.round((totalResearch / scoreNormalizers.research) * 100));
+      const spaceEconomyScore = Math.min(100, Math.round((fHabs.length / scoreNormalizers.habs) * 100));
       const fleetPowerScore = fCombatPower === null
         ? null
-        : Math.min(100, Math.round((fCombatPower / 3000) * 100));
-      const militaryPowerScore = Math.min(100, Math.round((fNations.reduce((acc, n) => acc + (n.nukes || 0), 0) * 20)));
+        : Math.min(100, Math.round((fCombatPower / scoreNormalizers.combatPower) * 100));
+      const militaryPowerScore = Math.min(100, Math.round(
+        (fNations.reduce((acc, n) => acc + (n.nukes || 0), 0) / scoreNormalizers.nukes) * 100
+      ));
 
       const scoreComponents = [
         [earthEconomyScore, scoreWeights.earthEconomy],
@@ -944,6 +1020,21 @@ class SnapshotBuilder {
         totalPopulation: totalPop,
         totalBoost,
         totalResearch,
+        researchBreakdown: {
+          monthly: totalResearch,
+          source: reportedMonthlyResearch !== null
+            ? "save cachedYearlyRevenue.Research / 12 (the game's own current annualised rate)"
+            : 'computed: Earth control-point share + completed hab module research',
+          reportedMonthly: reportedMonthlyResearch,
+          computedMonthly: computedMonthlyResearch,
+          // Components of the fallback only. The reported rate also carries
+          // org, trait, unused-Mission-Control and passive faction income,
+          // which are not reconstructed here.
+          earthControlPointShare: earthResearch,
+          habModules: habResearchMonthly,
+          habModuleCount: habResearch.modules,
+          habModulesUnresolved: habResearch.unresolvedModules
+        },
         habsCount: fHabs.length,
         fleetsCount: fFleets.length,
         shipsCount: fShipsCount,
@@ -1023,7 +1114,7 @@ class SnapshotBuilder {
 
     // Seed a default target list for consumers that do not have an observer
     // context yet. The API filter recomputes this for the selected observer.
-    const defaultObserverName = templateLoader.config.defaultObserverFaction || 'the Initiative';
+    const defaultObserverName = templateLoader.config.campaign?.defaultObserverFactionName || 'the Initiative';
     const defaultObserver = factions.find(f => f.displayName === defaultObserverName) || factions[0];
     const defaultPriorityTarget = defaultObserver
       ? opportunityScorer.selectPriorityTargetFaction(factions, nations, defaultObserver.ID)
@@ -1039,22 +1130,7 @@ class SnapshotBuilder {
       : [];
 
     // Key Tech Matrix (Selected strategic projects across all factions)
-    const keyProjects = [
-      'Project_TheirSignatures',
-      'Project_TheirMethods',
-      'Project_TheirOperations',
-      'Project_TheirMovements',
-      'Project_AlienAdministrationTransitionTeam',
-      'Project_BurnerDrive',
-      'Project_FleetCombatants',
-      'Project_ShipsoftheLine',
-      'Project_TitanicSpacecraft',
-      'Project_CoilCannon',
-      'Project_RailCannonMk2',
-      'Project_PointDefenseIonBattery',
-      'Project_PhasedArrayLasers',
-      'Project_ProtiumConverterTorch'
-    ];
+    const keyProjects = (analysisConfig.strategicProjects || []).map(project => project.id);
 
     const techMatrix = keyProjects.map(projId => {
       const projTemplate = templateLoader.getProject(projId);
@@ -1086,6 +1162,7 @@ class SnapshotBuilder {
     });
 
     return {
+      miningScarcityWeights: analysisConfig.miningScarcityWeights,
       metadata: {
         fileName: saveData.fileName,
         fileSizeBytes: saveData.fileSizeBytes,
@@ -1117,11 +1194,12 @@ class SnapshotBuilder {
       priorityTargetFaction: defaultPriorityTarget,
       spaceDetection: {
         saturnOrbitDistanceAU,
-        skywatchRule: templateLoader.config.intelligenceRules?.spaceAssets?.innerSystemDescription || null,
-        deepSystemSkywatchRule: templateLoader.config.intelligenceRules?.spaceAssets?.deepSystemDescription || null
+        skywatchRule: templateLoader.config.analysis?.rules?.spaceAssets?.innerSystemDescription || null,
+        deepSystemSkywatchRule: templateLoader.config.analysis?.rules?.spaceAssets?.deepSystemDescription || null
       },
       techMatrix,
       shipHullStats: this.buildShipHullStats(),
+      missionSpecs: this.buildMissionSpecs(),
       techTree: this.buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions)
     };
   }
@@ -1153,6 +1231,74 @@ class SnapshotBuilder {
       if (entries.length > 0) mods[name] = entries;
     }
     return mods;
+  }
+
+  // Mission rules, read from the installed templates so the engine never has
+  // to hardcode them. Carries the attack/defence attribute pairing, the base
+  // difficulty that stacks on the defender's stat, hate by outcome, and cost.
+  //
+  // Exposed on the snapshot for the same reason as shipHullStats: the hosted
+  // worker has no template directory, so anything that reads templates at
+  // request time works locally and breaks the deployed site.
+  //
+  // Measured at ~12.8 KB raw / 1.8 KB gzipped for 43 missions, so no dedupe
+  // or static/dynamic split is needed the way the tech graph required one.
+  buildMissionSpecs() {
+    const specs = {};
+    for (const mission of templateLoader.templates.missions.values()) {
+      const dataName = mission.dataName || mission.friendlyName;
+      if (!dataName || mission.disable === true) continue;
+
+      const resolution = mission.resolutionMethod || {};
+      const conditions = (Array.isArray(mission.conditions) ? mission.conditions : [])
+        .map(c => String(c?.$type || '').replace('TIMissionCondition_', ''))
+        .filter(Boolean);
+
+      // Victory missions are endgame triggers, not cycle decisions.
+      if (conditions.includes('VictoryCondition')) continue;
+
+      const attacking = Array.isArray(resolution.attackingModifiers) ? resolution.attackingModifiers : [];
+      const defending = Array.isArray(resolution.defendingModifiers) ? resolution.defendingModifiers : [];
+      const attack = attacking.find(m => m?.attackerAttribute)?.attackerAttribute || null;
+      const defend = defending.find(m => m?.defenderAttribute)?.defenderAttribute || null;
+
+      // The wiki's "Base Difficulty" column is a defence-side FlatModifier.
+      // It stacks on top of the defender's attribute and is wildly uneven --
+      // Turn Councilor carries 15, Crackdown 0 -- so omitting it makes every
+      // odds estimate wrong in the direction that matters.
+      const flat = defending.find(m => String(m?.$type || '').includes('FlatModifier'));
+      const baseDifficulty = flat
+        ? (Object.entries(flat).find(([key]) => key !== '$type')?.[1] ?? null)
+        : 0;
+
+      const hate = Array.isArray(mission.hate) ? mission.hate : [];
+      const cost = mission.cost || {};
+
+      specs[dataName] = {
+        friendlyName: mission.friendlyName || dataName,
+        // Explicit zeros, never null. Everywhere else in this codebase null
+        // means unmeasured, and the hate model depends on that distinction --
+        // "costs nothing" and "unknown" must not share a value.
+        successHate: typeof hate[4] === 'number' ? hate[4] : 0,
+        criticalHate: typeof hate[5] === 'number' ? hate[5] : 0,
+        failureHate: Math.max(
+          typeof hate[1] === 'number' ? hate[1] : 0,
+          typeof hate[2] === 'number' ? hate[2] : 0
+        ),
+        attack,
+        defend,
+        baseDifficulty: typeof baseDifficulty === 'number' ? baseDifficulty : 0,
+        contested: String(resolution.$type || '').includes('Contested'),
+        costResource: cost.resourceType || null,
+        costKind: String(cost.$type || '').replace('TIMissionCost_', '') || null,
+        costAmount: typeof cost.value === 'number' ? cost.value : null,
+        context: mission.missionContext || null,
+        targetKind: String(mission.target?.$type || '').replace('TIMissionTarget_', '') || null,
+        conditions,
+        utilityScore: typeof mission.utilityScore === 'number' ? mission.utilityScore : null
+      };
+    }
+    return specs;
   }
 
   buildShipHullStats() {
@@ -1334,6 +1480,18 @@ class SnapshotBuilder {
       net: this.scaleResourceMap(net, 1),
       source: 'save transaction ledger'
     };
+  }
+
+  // Monthly research produced by one hab module, read from the installed
+  // TIHabModuleTemplate rather than hardcoded. Only the 36 science templates
+  // carry incomeResearch_month, so a template that exists without the key
+  // genuinely produces no research -- that is a measured zero. A template that
+  // could not be resolved at all is unmeasured and returns null, so the
+  // faction total reports null rather than silently dropping the module.
+  habModuleResearchIncome(template) {
+    if (!template) return null;
+    const value = template.incomeResearch_month;
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
   }
 
   moduleConstructionStatus(module) {

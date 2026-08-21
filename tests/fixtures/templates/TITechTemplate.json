@@ -1,0 +1,4 @@
+[
+  { "dataName": "Skywatch", "friendlyName": "Skywatch", "techCategory": "SpaceScience", "effects": ["Effect_Skywatch"] },
+  { "dataName": "DeepSystemSkywatch", "friendlyName": "Deep System Skywatch", "techCategory": "SpaceScience", "effects": ["Effect_DeepSkywatch"] }
+]

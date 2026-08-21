@@ -158,3 +158,23 @@ test('theater filter keeps unreachable prospects out', () => {
   assert.strictEqual(inner.unownedSites, 1);
   assert.strictEqual(inner.ranked[0].name, 'Tolkien Crater');
 });
+
+test('local mining-prospects uses canonical theater and limit parameters', () => {
+  const result = localResources.buildResource(siteFixture(), 'mining-prospects', {
+    theater: 'belt',
+    limit: 1,
+    mode: 'omniscient'
+  });
+  assert.equal(result.query.theater, 'belt');
+  assert.equal(result.query.limit, 1);
+  assert.equal(result.count, 1);
+  assert.equal(result.items[0].name, 'Hertha');
+});
+
+test('shared dispatcher and local adapter agree on mining projections', async () => {
+  const shared = await import('../shared/intelResources.mjs');
+  const snapshot = siteFixture();
+  const local = localResources.buildResource(snapshot, 'mining-prospects', { theater: 'belt', limit: 2 }).items;
+  const pure = shared.buildResourceProjection(snapshot, 'mining-prospects', { theater: 'belt', limit: 2 }).items;
+  assert.deepStrictEqual(local, pure);
+});

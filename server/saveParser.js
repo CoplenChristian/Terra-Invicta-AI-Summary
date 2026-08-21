@@ -1,47 +1,32 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const { resolveConfig } = require('./config');
 
 class SaveParser {
-  constructor(configPath = null) {
-    this.configPath = configPath || path.join(__dirname, '../config.json');
+  constructor(configOrPath = null) {
+    this.configPath = typeof configOrPath === 'string' ? configOrPath : null;
+    this.configOverride = configOrPath && typeof configOrPath === 'object' ? configOrPath : null;
     this.config = this.loadConfig();
   }
 
   loadConfig() {
-    try {
-      if (fs.existsSync(this.configPath)) {
-        return JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
-      }
-    } catch (err) {
-      console.warn('[SaveParser] Failed loading config.json:', err.message);
-    }
-    return {
-      SavePath: 'C:/Users/cople/Documents/My Games/TerraInvicta/Saves/initiative 2.gz',
-      WorkDir: '.'
-    };
+    return this.configOverride || resolveConfig({ configPath: this.configPath || undefined });
   }
 
   resolveSaveFolder() {
-    let configured = this.config.SavePath;
+    const configured = this.config.paths?.savePath;
     if (!configured) {
-      configured = 'C:/Users/cople/Documents/My Games/TerraInvicta/Saves';
+      throw new Error('No save path configured. Set paths.savePath in config.json or TI_SAVE_PATH.');
     }
-    let folder = path.dirname(configured);
-    if (!fs.existsSync(folder)) {
-      // Check alternative drive paths if Documents was moved to F:
-      const altPaths = [
-        'F:/Documents/My Games/TerraInvicta/Saves',
-        'C:/Users/cople/Documents/My Games/TerraInvicta/Saves',
-        path.join(__dirname, '..')
-      ];
-      for (const alt of altPaths) {
-        if (fs.existsSync(alt)) {
-          folder = alt;
-          break;
-        }
-      }
-    }
+
+    const resolved = path.resolve(configured);
+    if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) return resolved;
+    if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) return path.dirname(resolved);
+    // A configured future save filename is useful, but only its existing
+    // parent may be searched. Never substitute a different directory.
+    const folder = path.extname(resolved) ? path.dirname(resolved) : resolved;
+    if (!fs.existsSync(folder)) throw new Error(`Configured save folder not found: ${folder}`);
     return folder;
   }
 

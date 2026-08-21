@@ -1,10 +1,13 @@
 const express = require('express');
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 // Supabase-backed routes (strategic history) need SUPABASE_URL and a key.
 // The publish script already loads .env; the server did not, so those routes
 // reported "not configured" locally even when credentials were present.
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
+const { resolveConfig, safeRuntimeConfig } = require('./config');
+const runtimeConfig = resolveConfig();
 const { spawn } = require('child_process');
 const saveParser = require('./saveParser');
 const snapshotBuilder = require('./snapshotBuilder');
@@ -24,16 +27,25 @@ const { buildStrategicDelta } = require('../shared/strategicDelta.mjs');
 
 // Compact strategic history lives in Supabase, not on disk, so these routes
 // degrade cleanly to a clear message when Supabase is not configured locally.
-const strategicHistory = new SupabaseAdapter();
+const strategicHistory = new SupabaseAdapter({ campaignKey: runtimeConfig.campaign.key });
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
-const PUBLISH_TIMEOUT_MS = Number(process.env.PUBLISH_TIMEOUT_MS) > 0
-  ? Number(process.env.PUBLISH_TIMEOUT_MS)
-  : 15 * 60 * 1000;
+const PORT = runtimeConfig.server.port;
+const HOST = runtimeConfig.server.host;
+const PUBLISH_TIMEOUT_MS = runtimeConfig.server.publishTimeoutMs;
 
 app.use(express.json({ limit: '5mb' }));
+
+// Mission Control (v2) is the dashboard. Serve its shell at both the site root
+// and /v2/ so either path renders the same live UI and existing /v2/ links keep
+// working without a redirect. This is registered ahead of express.static so the
+// root is answered by an explicit route rather than by directory-index
+// behaviour over public/, which is what used to surface the legacy v1 shell.
+const missionControlShell = path.join(__dirname, '../public/v2/index.html');
+app.get(['/', '/v2'], (req, res) => {
+  res.sendFile(missionControlShell);
+});
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 if (require.main === module) {
@@ -54,6 +66,32 @@ let cachedSaveStatKey = null;
 let cachedPreviousRawSave = null;
 const filteredSnapshotCache = new Map();
 let activePublisherProcess = null;
+// A per-process token turns the local publish route into an explicit local
+// capability. The browser obtains it through the same-origin runtime probe;
+// a cross-origin form cannot set the custom header, so it cannot trigger the
+// service-role-backed publisher.
+const publishToken = crypto.randomBytes(32).toString('hex');
+
+function sameOrigin(req) {
+  const origin = req.get('origin');
+  if (origin) {
+    const expected = `${req.protocol}://${req.get('host')}`;
+    if (origin !== expected) return false;
+  }
+  const fetchSite = req.get('sec-fetch-site');
+  return !fetchSite || fetchSite === 'same-origin' || fetchSite === 'same-site' || fetchSite === 'none';
+}
+
+function hasValidPublishToken(req) {
+  const supplied = req.get('x-ti-publish-token') || '';
+  const expected = Buffer.from(publishToken, 'utf8');
+  const actual = Buffer.from(supplied, 'utf8');
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+function isPublishAuthorized(req) {
+  return sameOrigin(req) && hasValidPublishToken(req);
+}
 
 function requestContext(req) {
   const mode = requestValidation.parseMode(req.query.mode);
@@ -95,7 +133,7 @@ function loadOrGetSnapshot(targetSavePath = null) {
   const rawSnapshot = snapshotBuilder.buildRawSnapshot(parsedSave);
   const identity = snapshotIdentity.createSnapshotIdentity(
     { ...saveFile, saveHash: beforeFingerprint.saveHash },
-    process.env.SUPABASE_CAMPAIGN_KEY || 'initiative'
+    runtimeConfig.campaign.key
   );
   snapshotIdentity.attachSnapshotIdentity(rawSnapshot, identity);
 
@@ -127,7 +165,7 @@ function loadOrGetSnapshot(targetSavePath = null) {
       cachedPreviousRawSave = readCandidate(selection.save);
       snapshotIdentity.attachSnapshotIdentity(cachedPreviousRawSave, snapshotIdentity.createSnapshotIdentity(
         selection.save,
-        process.env.SUPABASE_CAMPAIGN_KEY || 'initiative',
+        runtimeConfig.campaign.key,
         identity.generatedAt
       ));
       if (selection.reason === 'same-game-time-fallback') {
@@ -200,11 +238,13 @@ app.get('/api/runtime', (req, res) => {
     environment: process.env.NODE_ENV === 'development' ? 'dev' : 'local',
     canPublish: true,
     canRefresh: true,
-    supportedModes: ['player', 'enhanced', 'omniscient'],
+    supportedModes: runtimeConfig.publishing.observerModes,
     // Local runs parse the save directly, so every faction is selectable.
     // null means "no restriction"; the hosted worker returns a real list.
     availableObservers: null,
-    defaultMode: 'player',
+    defaultMode: runtimeConfig.server.defaultMode,
+    defaults: safeRuntimeConfig(runtimeConfig),
+    publishToken,
     source: 'express'
   });
 });
@@ -213,6 +253,12 @@ app.get('/api/runtime', (req, res) => {
 // push_latest_to_supabase.ps1. This endpoint exists only in the local
 // Express server; the hosted worker explicitly rejects it.
 app.post('/api/publish', (req, res) => {
+  if (!isPublishAuthorized(req)) {
+    return res.status(403).json({
+      success: false,
+      error: 'Publishing requires a same-origin request with the current local publish token.'
+    });
+  }
   if (activePublisherProcess) {
     return res.status(409).json({
       success: false,
@@ -368,10 +414,12 @@ app.get(['/api/intel', '/api/intel/'], (req, res) => {
     endpoints: intelResources.INTEL_ENDPOINT_INDEX,
     examples: intelResources.INTEL_ENDPOINT_EXAMPLES,
     query: {
-      observer: 'Observer faction ID, e.g. 4712',
+      observer: `Observer faction ID, e.g. ${runtimeConfig.campaign.defaultObserverFactionId}`,
       mode: 'player | enhanced | omniscient',
       faction: 'Optional faction ID filter',
-      body: 'Optional body/theater filter'
+      body: 'Optional body filter',
+      theater: 'Mining-prospects theater filter (body is accepted as a legacy alias)',
+      limit: 'Mining-prospects result limit from 1 to 100'
     }
   };
   if (req.query.format === 'json' || String(req.get('accept') || '').includes('application/json')) {
@@ -380,7 +428,7 @@ app.get(['/api/intel', '/api/intel/'], (req, res) => {
   }
 
   const links = Object.entries(payload.endpoints).map(([name, endpoint]) => {
-    const query = payload.examples[name] || '?observer=4712&mode=omniscient';
+    const query = payload.examples[name] || `?observer=${runtimeConfig.campaign.defaultObserverFactionId}&mode=omniscient`;
     const href = `${endpoint}${query}`.replace(/&/g, '&amp;');
     return `<li><span>${name}</span><a href="${href}">${endpoint}${query}</a></li>`;
   }).join('');
@@ -406,6 +454,11 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
       'faction filter'
     );
     const body = requestValidation.parseBodyQuery(req.query.body);
+    const theater = requestValidation.parseBodyQuery(req.query.theater ?? req.query.body);
+    const limit = requestValidation.parseBoundedIntegerQuery(
+      req.query.limit ?? ((req.params.resource === 'mining-prospects' || req.params.resource === 'mining-expansion') ? req.query.quantity : undefined),
+      'mining prospects limit'
+    );
     const destination = req.query.destination ? String(req.query.destination).trim() : null;
     const fleetId = req.query.fleet || req.query.fleetId || null;
     const designId = req.query.design || req.query.designId || req.query.target || null;
@@ -420,6 +473,8 @@ app.get(['/api/intel/:resource', '/api/:resource'], (req, res, next) => {
     const projection = intelResources.buildResource(filtered, req.params.resource, {
       factionId,
       body,
+      theater,
+      limit,
       destination,
       fleetId,
       designId,
@@ -535,8 +590,9 @@ app.get('/api/intel/strategic-delta', async (req, res) => {
         const { targetPath } = requestContext(req);
         const rawSnapshot = loadOrGetSnapshot(targetPath);
         toDoc = buildStrategicSnapshot(rawSnapshot, {
-          observerFactionId: Number(req.query.observer) || 4712,
-          campaignKey: campaign
+          observerFactionId: Number(req.query.observer) || runtimeConfig.campaign.defaultObserverFactionId,
+          campaignKey: campaign,
+          policy: runtimeConfig.analysis.strategicHistory
         });
         fromDoc = recent.snapshots[0]?.payload || null;
       } catch (localErr) {
@@ -675,11 +731,6 @@ app.get(['/api/snapshot/compact', '/api/snapshot/full', '/latest-snapshot.json',
   } catch (err) {
     res.status(err.statusCode || 500).json({ success: false, error: err.message });
   }
-});
-
-// 7. Route /v2 to Mission Control interface
-app.get('/v2', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/v2/index.html'));
 });
 
 // Start Server

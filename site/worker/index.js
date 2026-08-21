@@ -4,37 +4,7 @@ import {
   SUPPORTED_RESOURCES,
   INTEL_ENDPOINT_INDEX,
   INTEL_ENDPOINT_EXAMPLES,
-  asArray,
-  factionMatches,
-  bodyMatches,
-  factionResourceRow,
-  nationResourceRow,
-  councilorResourceRow,
-  habResourceRow,
-  habSiteResourceRow,
-  miningResourceRow,
-  fleetResourceRow,
-  shipResourceRows,
-  habModuleResourceRow,
-  shipyardResourceRow,
-  shipyardStationResourceRow,
-  arrivalResourceRow,
-  friendlyStrengthAtDestination,
-  researchResourceRows,
-  summaryResource,
-  findAlienFaction,
-  logisticsResource,
-  constructionResource,
-  transfersResource,
-  shipDesignsResource,
-  theatersResource,
-  infrastructureResource,
-  alienThreatResource,
-  deltaResource,
-  miningAnalysisResource,
-  mobilityResource,
-  productionPlanResource,
-  bodyStatusResource
+  buildResourceProjection
 } from '../shared/intelResources.mjs';
 import {
   buildTechTreeProjection,
@@ -113,7 +83,7 @@ const observerFile = (observerId, suffix) => {
 
 const corsHeaders = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-allow-headers': 'Content-Type, Authorization',
   'access-control-max-age': '86400'
 };
@@ -423,8 +393,15 @@ const validateResourceQuery = (url) => {
     return `Invalid faction filter '${faction}'. Use a positive numeric id.`;
   }
   const body = url.searchParams.get('body');
-  if (body !== null && (body.length > 80 || /[\u0000-\u001f\u007f]/.test(body))) {
+  const theater = url.searchParams.get('theater') || body;
+  if ((body !== null && (body.length > 80 || /[\u0000-\u001f\u007f]/.test(body))) ||
+      (theater !== null && (theater.length > 80 || /[\u0000-\u001f\u007f]/.test(theater)))) {
     return 'Invalid body filter. Use a short body name such as Ceres.';
+  }
+  const isMiningProspects = /\/api(?:\/intel)?\/(?:mining-prospects|mining-expansion)$/.test(url.pathname);
+  const limit = url.searchParams.get('limit') || (isMiningProspects ? url.searchParams.get('quantity') : null);
+  if (limit !== null && (!/^\d+$/.test(limit) || Number(limit) < 1 || Number(limit) > 100)) {
+    return 'Invalid mining prospects limit. Use an integer from 1 to 100.';
   }
   return null;
 };
@@ -458,186 +435,66 @@ const intelResource = (pathName) => {
   return SUPPORTED_RESOURCES.has(resource) ? resource : null;
 };
 
+// The hosted adapter uses the same pure projection registry as the local
+// Express server. It only supplies the Supabase row and response envelope.
 const buildIntelResource = (result, resource, url) => {
   const snapshot = result.snapshot || {};
   const factionId = numericQuery(url.searchParams.get('faction') || url.searchParams.get('factionId'));
   const body = url.searchParams.get('body');
-  const query = { faction: factionId, body: body || null };
+  const theater = url.searchParams.get('theater') || body;
+  const rawLimit = url.searchParams.get('limit') || ((resource === 'mining-prospects' || resource === 'mining-expansion') ? url.searchParams.get('quantity') : null);
+  const limit = rawLimit && /^\d+$/.test(rawLimit) ? Number(rawLimit) : null;
+  const destination = url.searchParams.get('destination');
+  const fleetId = url.searchParams.get('fleet') || url.searchParams.get('fleetId');
+  const designId = url.searchParams.get('design') || url.searchParams.get('designId') || url.searchParams.get('target');
+  const quantity = parseInt(url.searchParams.get('quantity'), 10) || 1;
+  const status = url.searchParams.get('status');
+  const sort = url.searchParams.get('sort');
+  const query = {
+    faction: factionId,
+    body: body || null,
+    theater: theater || null,
+    limit,
+    destination: destination || null,
+    fleet: fleetId || null,
+    design: designId || null,
+    quantity,
+    status: status || null,
+    sort: sort || null
+  };
+  const projection = buildResourceProjection(snapshot, resource, {
+    factionId,
+    body,
+    theater,
+    limit,
+    destination,
+    fleetId,
+    designId,
+    quantity,
+    status,
+    sort,
+    mode: result.mode || result.row?.visibility || 'player'
+  });
+  return resourceEnvelope(result, resource, projection.items, query, projection);
+};
 
-  if (resource === 'summary') {
-    return resourceEnvelope(result, resource, null, query, summaryResource(snapshot));
+const productionPlanPaths = new Set(['/api/intel/production-plan', '/api/production-plan']);
+
+const readRuntimeDefaults = async (env, request) => {
+  const fallback = {
+    campaignKey: env?.SUPABASE_CAMPAIGN_KEY || 'initiative',
+    defaultObserverFactionId: Number(env?.SUPABASE_OBSERVER_FACTION_ID) || 4712,
+    defaultObserverFactionName: 'the Initiative',
+    defaultMode: 'player',
+    supportedModes: Array.from(HOSTED_MODES)
+  };
+  try {
+    const response = await asset(env, request, '/data/runtime-config.json');
+    if (response.ok) return { ...fallback, ...(await response.json()) };
+  } catch (error) {
+    // A source worker without a generated static bundle uses the safe fallback.
   }
-
-  let items;
-  switch (resource) {
-    case 'factions':
-      items = asArray(snapshot.factions)
-        .filter(faction => factionMatches(faction, factionId))
-        .map(factionResourceRow);
-      break;
-    case 'nations':
-      items = asArray(snapshot.nations)
-        .filter(nation => factionMatches(nation, factionId))
-        .map(nationResourceRow);
-      break;
-    case 'councilors':
-      items = asArray(snapshot.councilors)
-        .filter(councilor => factionMatches(councilor, factionId))
-        .map(councilor => councilorResourceRow(councilor, result.mode));
-      break;
-    case 'habs':
-      items = asArray(snapshot.habs)
-        .filter(hab => factionMatches(hab, factionId) && bodyMatches(hab, body))
-        .map(habResourceRow);
-      break;
-    case 'hab-sites':
-      items = asArray(snapshot.habSites)
-        .filter(site => factionMatches(site, factionId) && bodyMatches(site, body))
-        .map(habSiteResourceRow);
-      break;
-    // NOTE: 'mining' is handled by the analysis branch further down, which
-    // honours ?status and ?sort and returns best-site analysis. A duplicate
-    // case label here matched first and made that branch unreachable, so
-    // hosted responses silently ignored both parameters.
-    case 'fleets':
-      items = asArray(snapshot.fleets)
-        .filter(fleet => factionMatches(fleet, factionId) && bodyMatches(fleet, body))
-        .map(fleetResourceRow);
-      break;
-    case 'ships':
-      items = shipResourceRows(asArray(snapshot.fleets), factionId, body);
-      break;
-    case 'resources':
-      items = asArray(snapshot.factions)
-        .filter(faction => factionMatches(faction, factionId))
-        .map(factionResourceRow);
-      break;
-    case 'hab-modules':
-      items = asArray(snapshot.habModules)
-        .filter(module => factionMatches(module, factionId) && bodyMatches(module, body))
-        .map(habModuleResourceRow);
-      break;
-    case 'shipyards':
-      items = asArray(snapshot.shipyardStations)
-        .filter(station => factionMatches(station, factionId) && bodyMatches(station, body))
-        .map(shipyardStationResourceRow);
-      break;
-    case 'shipyard-queues':
-      items = asArray(snapshot.shipyardQueues)
-        .filter(queue => factionMatches(queue, factionId) && bodyMatches(queue, body))
-        .map(shipyardResourceRow);
-      break;
-    case 'arrivals':
-      items = asArray(snapshot.fleets)
-        .filter(fleet => fleet.arrivalDate && factionMatches(fleet, factionId) && bodyMatches(fleet, body))
-        .map(fleet => arrivalResourceRow(fleet, friendlyStrengthAtDestination(fleet, snapshot)));
-      break;
-    case 'transfers': {
-      const destination = url.searchParams.get('destination');
-      items = transfersResource(snapshot, factionId, body, destination);
-      break;
-    }
-    case 'logistics': {
-      const observerId = snapshot.observerFactionId || 4712;
-      const log = logisticsResource(snapshot, observerId);
-      return resourceEnvelope(result, resource, log.resources, query, log);
-    }
-    case 'construction': {
-      items = constructionResource(snapshot, factionId, body);
-      break;
-    }
-    case 'ship-designs': {
-      items = shipDesignsResource(snapshot, factionId);
-      break;
-    }
-    case 'theaters': {
-      const observerId = snapshot.observerFactionId || 4712;
-      items = theatersResource(snapshot, observerId);
-      break;
-    }
-    case 'infrastructure': {
-      items = infrastructureResource(snapshot, factionId, body);
-      break;
-    }
-    case 'alien-threat': {
-      const observerId = snapshot.observerFactionId || 4712;
-      const threat = alienThreatResource(snapshot, observerId);
-      return resourceEnvelope(result, resource, [], query, threat);
-    }
-    case 'delta': {
-      const observerId = snapshot.observerFactionId || 4712;
-      // The hosted worker has no previous raw snapshot to diff against, but
-      // the publisher already embedded a computed comparison in every row.
-      // Passing null unconditionally made this endpoint permanently report
-      // comparisonAvailable:false, even after many saves had been published.
-      if (snapshot.changesSincePrevious) {
-        return resourceEnvelope(result, resource, [], query, {
-          ...snapshot.changesSincePrevious,
-          source: 'published-comparison'
-        });
-      }
-      const delta = deltaResource(snapshot, null, observerId);
-      return resourceEnvelope(result, resource, [], query, delta);
-    }
-    case 'mobility': {
-      const fleetId = url.searchParams.get('fleet') || url.searchParams.get('fleetId');
-      const observerId = snapshot.observerFactionId || 4712;
-      const mob = mobilityResource(snapshot, fleetId, observerId);
-      return resourceEnvelope(result, resource, mob.transfers || [], query, mob);
-    }
-    case 'production-plan': {
-      const designId = url.searchParams.get('design') || url.searchParams.get('designId') || url.searchParams.get('target');
-      const quantity = parseInt(url.searchParams.get('quantity'), 10) || 1;
-      const observerId = snapshot.observerFactionId || 4712;
-      const plan = productionPlanResource(snapshot, designId, quantity, observerId);
-      return resourceEnvelope(result, resource, [], query, plan);
-    }
-    case 'body-status': {
-      const observerId = snapshot.observerFactionId || 4712;
-      const statusObj = bodyStatusResource(snapshot, body || 'Mars', observerId);
-      return resourceEnvelope(result, resource, [], query, statusObj);
-    }
-    case 'mining': {
-      const status = url.searchParams.get('status');
-      const sort = url.searchParams.get('sort');
-      const mining = miningAnalysisResource(snapshot, factionId, body, status, sort);
-      return resourceEnvelope(result, resource, mining.items, query, mining);
-    }
-    case 'research': {
-      const research = researchResourceRows(snapshot);
-      return resourceEnvelope(result, resource, research.rows, query, {
-        finishedGlobalProjects: research.finishedGlobalProjects
-      });
-    }
-    case 'capabilities':
-      return resourceEnvelope(result, resource, [], query, {
-        capabilities: snapshot.capabilities || {},
-        activeXenoforming: snapshot.activeXenoforming || [],
-        builtAlienFacilities: snapshot.builtAlienFacilities || []
-      });
-    case 'alien': {
-      const alienFaction = findAlienFaction(snapshot);
-      const alienId = alienFaction?.ID;
-      const councilors = asArray(snapshot.councilors).filter(councilor => councilor.factionId === alienId).map(councilor => councilorResourceRow(councilor, result.mode));
-      const fleets = asArray(snapshot.fleets).filter(fleet => fleet.factionId === alienId && bodyMatches(fleet, body)).map(fleetResourceRow);
-      const habs = asArray(snapshot.habs).filter(hab => hab.factionId === alienId && bodyMatches(hab, body)).map(habResourceRow);
-      const habSites = asArray(snapshot.habSites).filter(site => site.factionId === alienId && bodyMatches(site, body)).map(habSiteResourceRow);
-      return resourceEnvelope(result, resource, null, query, {
-        faction: alienFaction ? factionResourceRow(alienFaction) : null,
-        count: councilors.length + fleets.length + habs.length + habSites.length,
-        councilors,
-        fleets,
-        habs,
-        habSites,
-        activeXenoforming: snapshot.activeXenoforming || [],
-        builtAlienFacilities: snapshot.builtAlienFacilities || []
-      });
-    }
-    default:
-      items = [];
-  }
-
-  return resourceEnvelope(result, resource, items, query);
+  return fallback;
 };
 
 const TECH_RESOURCES = new Set([
@@ -709,7 +566,9 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
-    const observerId = url.searchParams.get('observer') || '4712';
+    const runtimeDefaults = await readRuntimeDefaults(env, request);
+    const defaultObserverId = Number(runtimeDefaults.defaultObserverFactionId) || 4712;
+    const observerId = url.searchParams.get('observer') || String(defaultObserverId);
     if (!/^\d+$/.test(observerId) || !Number.isSafeInteger(Number(observerId)) || Number(observerId) <= 0) {
       return jsonResponse({ success: false, error: `Invalid observer faction '${observerId}'.` }, 400);
     }
@@ -730,7 +589,7 @@ export default {
       // unpublished observer returns 404 and clears the dashboard.
       let availableObservers = null;
       try {
-        const campaign = await readPublicCampaign(env, env.SUPABASE_CAMPAIGN_KEY || 'initiative');
+        const campaign = await readPublicCampaign(env, env.SUPABASE_CAMPAIGN_KEY || runtimeDefaults.campaignKey || 'initiative');
         if (Array.isArray(campaign?.published_observers) && campaign.published_observers.length > 0) {
           availableObservers = campaign.published_observers;
         }
@@ -744,8 +603,9 @@ export default {
         environment: 'hosted',
         canPublish: false,
         canRefresh: true,
-        supportedModes: Array.from(HOSTED_MODES),
-        defaultMode: 'player',
+        supportedModes: runtimeDefaults.supportedModes || Array.from(HOSTED_MODES),
+        defaultMode: runtimeDefaults.defaultMode || 'player',
+        defaults: runtimeDefaults,
         availableObservers,
         source: 'hosted-worker'
       });
@@ -769,7 +629,9 @@ export default {
           observer: 'Observer faction ID, e.g. 4712',
           mode: 'player | enhanced | omniscient',
           faction: 'Optional faction ID filter',
-          body: 'Optional body/theater filter'
+          body: 'Optional body filter',
+          theater: 'Mining-prospects theater filter (body is accepted as a legacy alias)',
+          limit: 'Mining-prospects result limit from 1 to 100'
         }
       };
       if (url.searchParams.get('format') === 'json' || request.headers.get('accept')?.includes('application/json')) {
@@ -966,8 +828,45 @@ export default {
 
     // Flat resource endpoints are designed for external analysis tools. Each
     // call returns one focused collection instead of the entire nested snapshot.
+    if (request.method === 'POST' && productionPlanPaths.has(url.pathname)) {
+      if (!isSupabaseConfigured) {
+        return jsonResponse({ success: false, error: 'Hosted Supabase is not configured.' }, 503);
+      }
+      let body = {};
+      try {
+        body = await request.json();
+      } catch (err) {
+        return jsonResponse({ success: false, error: 'Production-plan POST body must be valid JSON.' }, 400);
+      }
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return jsonResponse({ success: false, error: 'Production-plan POST body must be a JSON object.' }, 400);
+      }
+      const requestUrl = new URL(url.toString());
+      const design = body.designId || body.design || body.target;
+      if (design && !requestUrl.searchParams.has('design') && !requestUrl.searchParams.has('designId')) {
+        requestUrl.searchParams.set('design', String(design));
+      }
+      if (body.quantity !== undefined && !requestUrl.searchParams.has('quantity')) {
+        requestUrl.searchParams.set('quantity', String(body.quantity));
+      }
+      const quantity = Number(requestUrl.searchParams.get('quantity') || 1);
+      if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000) {
+        return jsonResponse({ success: false, error: 'Production quantity must be an integer from 1 to 1000.' }, 400);
+      }
+      try {
+        const result = await fetchFromSupabase(env, observerId, mode);
+        if (!result.found) return jsonResponse({ success: false, error: result.error }, result.status);
+        return jsonResponse(buildIntelResource(result, 'production-plan', requestUrl));
+      } catch (err) {
+        return jsonResponse({ success: false, error: err.message }, 500);
+      }
+    }
+
     const resource = intelResource(url.pathname);
     if (resource) {
+      if (request.method !== 'GET') {
+        return jsonResponse({ success: false, error: 'This intelligence resource accepts GET requests only.' }, 405);
+      }
       const queryError = validateResourceQuery(url);
       if (queryError) return jsonResponse({ success: false, error: queryError }, 400);
       if (!isSupabaseConfigured) {
@@ -1029,8 +928,8 @@ export default {
           return jsonResponse({ success: false, error: err.message }, 500);
         }
       }
-      if (mode === 'omniscient') {
-        return jsonResponse({ success: false, error: 'Omniscient snapshots require the published Supabase backend.' }, 503);
+      if (mode !== 'player') {
+        return jsonResponse({ success: false, error: `${mode[0].toUpperCase()}${mode.slice(1)} snapshots require the published Supabase backend.` }, 503);
       }
       // Fallback to static Player Intel asset if Supabase is not configured.
       return asset(env, request, observerFile(observerId, 'snapshot'));
@@ -1094,8 +993,8 @@ export default {
           return jsonResponse({ success: false, error: err.message }, 500);
         }
       }
-      if (mode === 'omniscient') {
-        return jsonResponse({ success: false, error: 'Omniscient exports require the published Supabase backend.' }, 503);
+      if (mode !== 'player') {
+        return jsonResponse({ success: false, error: `${mode[0].toUpperCase()}${mode.slice(1)} exports require the published Supabase backend.` }, 503);
       }
       const fileSuffix = format === 'full' ? 'export-full' : 'export-chatgpt';
       return asset(env, request, observerFile(observerId, fileSuffix));

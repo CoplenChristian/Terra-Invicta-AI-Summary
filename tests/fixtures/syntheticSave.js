@@ -34,7 +34,28 @@ function makeFaction(id, displayName, options = {}) {
       knowsIveBeenSeenBy: [],
       milestones: [],
       intel: [],
-      knownAlienSites: []
+      knownAlienSites: [],
+      // The game's own annualised income rate. Omitted unless a test asks for
+      // it, so the default fixture exercises the recomputed fallback.
+      ...(options.cachedYearlyRevenue ? { cachedYearlyRevenue: options.cachedYearlyRevenue } : {})
+    }
+  };
+}
+
+// A hab module as the save stores it: the sector owns the module list, and the
+// module carries its own construction state.
+function makeHabModule(id, templateName, { constructionCompleted = true, destroyed = false, decommissioning = false } = {}) {
+  return {
+    Value: {
+      ID: ref(id),
+      templateName,
+      displayName: templateName,
+      constructionCompleted,
+      destroyed,
+      decommissioning,
+      powered: true,
+      archived: false,
+      buildCost: {}
     }
   };
 }
@@ -100,7 +121,15 @@ function makeOrbit(id, barycenterId) {
   };
 }
 
-function makeSaveData({ money = 100, ships = 1, gameTimeString = '2025-01-01T00:00:00Z' } = {}) {
+function makeSaveData({
+  money = 100,
+  ships = 1,
+  gameTimeString = '2025-01-01T00:00:00Z',
+  // Modules to install on Nightingale Station (hab 300, the Initiative's).
+  // Each entry is { id, templateName, constructionCompleted }.
+  habModules = [],
+  factionOptions = {}
+} = {}) {
   return {
     filePath: 'synthetic.gz',
     fileName: 'synthetic.gz',
@@ -115,7 +144,7 @@ function makeSaveData({ money = 100, ships = 1, gameTimeString = '2025-01-01T00:
         { Value: { gameTimeString, difficulty: 'Veteran', campaignStartYear: 2022 } }
       ],
       'PavonisInteractive.TerraInvicta.TIFactionState': [
-        makeFaction(4712, 'the Initiative', { money, hate: 5, missionControlUsage: 10, finishedProjects: ['Project_TheirOperations'] }),
+        makeFaction(4712, 'the Initiative', { money, hate: 5, missionControlUsage: 10, finishedProjects: ['Project_TheirOperations'], ...(factionOptions[4712] || {}) }),
         makeFaction(4713, 'the Servants', { money: 200, hate: 90, factionHate: [{ targetId: 4712, hate: 90 }] }),
         makeFaction(4717, 'the Aliens', { money: 0, hate: 100, factionHate: [{ targetId: 4712, hate: 100 }] })
       ],
@@ -192,6 +221,19 @@ function makeSaveData({ money = 100, ships = 1, gameTimeString = '2025-01-01T00:
           }
         }
       ],
+      'PavonisInteractive.TerraInvicta.TISectorState': habModules.length === 0 ? [] : [
+        {
+          Value: {
+            ID: ref(350),
+            hab: ref(300),
+            sectorNum: 1,
+            habModules: habModules.map(m => ref(m.id))
+          }
+        }
+      ],
+      'PavonisInteractive.TerraInvicta.TIHabModuleState': habModules.map(
+        m => makeHabModule(m.id, m.templateName, { constructionCompleted: m.constructionCompleted !== false })
+      ),
       'PavonisInteractive.TerraInvicta.TIHabSiteState': [
         {
           Value: {

@@ -1,6 +1,9 @@
 const path = require('path');
 const fs = require('fs');
 const { SUPPORTED_MODES } = require('../shared/constants.mjs');
+const { resolveConfig } = require('./config');
+
+const DEFAULT_OBSERVER_FACTION_ID = resolveConfig().campaign.defaultObserverFactionId;
 
 const LOCAL_MODES = SUPPORTED_MODES;
 const HOSTED_MODES = SUPPORTED_MODES;
@@ -23,7 +26,7 @@ function parseMode(value, supportedModes = LOCAL_MODES) {
   return mode;
 }
 
-function parseObserverId(value, defaultId = 4712) {
+function parseObserverId(value, defaultId = DEFAULT_OBSERVER_FACTION_ID) {
   const raw = value === undefined || value === null || value === '' ? String(defaultId) : String(value);
   if (!/^\d+$/.test(raw)) {
     throw new RequestValidationError(`Invalid observer faction id '${raw}'. Use a numeric faction id.`);
@@ -94,6 +97,19 @@ function parseBodyQuery(value) {
   return body;
 }
 
+function parseBoundedIntegerQuery(value, label, { min = 1, max = 100, defaultValue = null } = {}) {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  const raw = String(value);
+  if (!/^\d+$/.test(raw)) {
+    throw new RequestValidationError(`Invalid ${label} '${raw}'. Use an integer from ${min} to ${max}.`);
+  }
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new RequestValidationError(`Invalid ${label} '${raw}'. Use an integer from ${min} to ${max}.`);
+  }
+  return parsed;
+}
+
 module.exports = {
   LOCAL_MODES,
   HOSTED_MODES,
@@ -103,5 +119,6 @@ module.exports = {
   assertKnownObserver,
   resolveSavePath,
   parseOptionalNumericQuery,
-  parseBodyQuery
+  parseBodyQuery,
+  parseBoundedIntegerQuery
 };

@@ -34,20 +34,25 @@ function escapeHtml(value) {
 
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
-  initializeRuntime();
-  loadData();
+  initializeRuntime()
+    .catch(error => console.warn('[Runtime] Capability probe failed:', error.message))
+    .finally(loadData);
 });
 
 async function initializeRuntime() {
   const publishButton = document.getElementById('btnPublishLatest');
-  if (!publishButton) return;
 
   // Keep the control hidden unless the server explicitly identifies itself as
   // the local/dev runtime and opts into publishing.
-  publishButton.classList.add('hidden');
+  if (publishButton) publishButton.classList.add('hidden');
   const runtime = await API.getRuntime();
+  const configuredObserver = Number(runtime?.defaults?.defaultObserverFactionId || runtime?.defaultObserverFactionId);
+  if (Number.isSafeInteger(configuredObserver) && configuredObserver > 0) {
+    state.observerId = configuredObserver;
+    state.dossierFactionId = configuredObserver;
+  }
   const localRuntime = runtime?.success && ['local', 'dev'].includes(runtime.environment);
-  publishButton.classList.toggle('hidden', !(localRuntime && runtime.canPublish === true));
+  if (publishButton) publishButton.classList.toggle('hidden', !(localRuntime && runtime.canPublish === true));
 }
 
 function initEventListeners() {

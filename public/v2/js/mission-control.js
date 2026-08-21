@@ -22,7 +22,8 @@ const state = {
   },
   runtime: {
     supportedModes: ['player', 'enhanced', 'omniscient'],
-    defaultMode: 'player'
+    defaultMode: 'player',
+    publishToken: null
   }
 };
 
@@ -97,6 +98,10 @@ async function loadRuntime() {
     const runtime = await res.json();
     if (!runtime.success) return;
     state.runtime = runtime;
+    const configuredObserver = Number(runtime.defaults?.defaultObserverFactionId || runtime.defaultObserverFactionId);
+    if (Number.isSafeInteger(configuredObserver) && configuredObserver > 0) {
+      state.observer = configuredObserver;
+    }
     applyRuntimeCapabilities();
   } catch (err) {
     // The dashboard can still load with its local defaults if the capability
@@ -141,6 +146,62 @@ const MODE_CAPTIONS = {
 };
 
 function primaryDirective() {
+  const enginePrimary = state.briefing?.engineDirectives?.primary;
+  if (enginePrimary) {
+    const hateObj = enginePrimary.hate?.toAliens;
+    let expectedAlienHate = 'none';
+    if (hateObj) {
+      if (hateObj.high === 0) {
+        expectedAlienHate = '0';
+      } else if (hateObj.low === hateObj.high) {
+        expectedAlienHate = `${hateObj.low}`;
+      } else {
+        expectedAlienHate = `${hateObj.low}–${hateObj.high}`;
+      }
+    }
+    const costObj = enginePrimary.cost;
+    let missionCost = 'UNAVAILABLE';
+    if (costObj) {
+      if (costObj.amount !== null && costObj.amount !== undefined) {
+        missionCost = `${costObj.amount} ${costObj.resource || ''}`.trim();
+      } else if (costObj.kind === 'bonus') {
+        missionCost = `${costObj.resource || 'Resource'} (Bonus)`;
+      }
+    }
+
+    const whyNote = (enginePrimary.scoreBreakdown || [])
+      .map((b) => b.reason)
+      .filter(Boolean)
+      .join(' · ') || enginePrimary.provenance?.source || null;
+
+    return {
+      id: enginePrimary.id,
+      title: enginePrimary.title,
+      statement: enginePrimary.recommendation || enginePrimary.title,
+      missionType: enginePrimary.missionType,
+      category: enginePrimary.family ? enginePrimary.family.toUpperCase() : 'COUNCIL',
+      severity: enginePrimary.isFallback ? 'WATCH' : 'RECOMMENDED',
+      action: enginePrimary.recommendation || enginePrimary.title,
+      window: 'This cycle',
+      missionCost,
+      expectedAlienHate,
+      expectedAlienHateNote: enginePrimary.hate?.note || null,
+      policyNote: whyNote,
+      successFactor: enginePrimary.score !== null && enginePrimary.score !== undefined
+        ? `Score: ${Number(enginePrimary.score).toFixed(2)}`
+        : 'RECOMMENDED',
+      score: enginePrimary.score,
+      scoreBreakdown: enginePrimary.scoreBreakdown,
+      // Engine candidates do not yet pair missions with councilors. Do not
+      // borrow the legacy primary's roster: its skill filters may describe a
+      // different mission than the engine-selected action.
+      eligibleOperatives: [],
+      unmetPreconditions: enginePrimary.unmetPreconditions || [],
+      provenance: enginePrimary.provenance,
+      isEnginePrimary: true
+    };
+  }
+
   const directives = state.briefing?.directives || {};
   return state.briefing?.primaryDirective
     || directives.geopolitical?.[0]
@@ -254,7 +315,10 @@ function initEventListeners() {
       try {
         const publishResponse = await fetch('/api/publish', {
           method: 'POST',
-          headers: { Accept: 'application/json' }
+          headers: {
+            Accept: 'application/json',
+            ...(state.runtime.publishToken ? { 'X-TI-Publish-Token': state.runtime.publishToken } : {})
+          }
         });
         const publishPayload = await publishResponse.json().catch(() => ({}));
         if (!publishResponse.ok || publishPayload.success === false) {
@@ -398,22 +462,33 @@ function initEventListeners() {
     const operatives = Array.isArray(directive.eligibleOperatives) ? directive.eligibleOperatives : [];
     const rosterLabel = operatives.length
       ? operatives.map((op) => `${op.name} (${op.available ? 'idle' : op.mission || 'assigned'}${op.matchSkill ? `, ${op.matchSkill} ${op.matchValue ?? ''}` : ''})`).join('; ')
-      : 'No eligible observer councilors are visible in this intelligence picture.';
+      : directive.isEnginePrimary
+        ? 'Operative pairing is not yet calculated; open the roster to choose or stage one.'
+        : 'No eligible observer councilors are visible in this intelligence picture.';
+    const facts = [
+      { label: 'Department', value: directive.category || 'Unassigned' },
+      { label: 'Severity', value: directive.severity || 'Unspecified' },
+      { label: 'Mission', value: directive.missionType || 'UNAVAILABLE' },
+      { label: 'Window', value: directive.window || 'This cycle' },
+      { label: 'Preparation', value: directive.preparation || (directive.isEnginePrimary ? 'Review mission requirements and stage operative.' : 'UNAVAILABLE') },
+      { label: 'Mission cost', value: directive.missionCost || 'UNAVAILABLE' },
+      { label: 'Expected alien hate', value: directive.expectedAlienHate || 'UNAVAILABLE' },
+      { label: 'Why this action', value: directive.policyNote || directive.expectedAlienHateNote || 'No campaign-posture note on this directive.' },
+      { label: 'Recommended action', value: directive.action || 'No action specified' },
+      { label: 'Success factor', value: directive.successFactor || 'Not assessed' },
+      { label: 'Eligible operatives', value: rosterLabel }
+    ];
+    if (directive.isEnginePrimary && Array.isArray(directive.unmetPreconditions) && directive.unmetPreconditions.length > 0) {
+      facts.push({ label: 'Preconditions', value: directive.unmetPreconditions.join(' · ') });
+    }
+    if (directive.isEnginePrimary && directive.score !== null && directive.score !== undefined) {
+      facts.push({ label: 'Rule Engine Score', value: `${Number(directive.score).toFixed(2)} pts` });
+    }
     window.MissionControlDetailPanel.open({
       eyebrow: 'PRIMARY DIRECTIVE',
       title: directive.title,
       summary: directive.statement,
-      facts: [
-        { label: 'Department', value: directive.category || 'Unassigned' },
-        { label: 'Severity', value: directive.severity || 'Unspecified' },
-        { label: 'Mission', value: directive.missionType || 'UNAVAILABLE' },
-        { label: 'Window', value: directive.window || 'This cycle' },
-        { label: 'Preparation', value: directive.preparation || 'UNAVAILABLE' },
-        { label: 'Mission cost', value: directive.missionCost || 'UNAVAILABLE' },
-        { label: 'Recommended action', value: directive.action || 'No action specified' },
-        { label: 'Success factor', value: directive.successFactor || 'Not assessed' },
-        { label: 'Eligible operatives', value: rosterLabel }
-      ],
+      facts,
       actions: [
         { label: 'Open councilor roster', primary: true, onClick: () => openLibraryScreen('councilors') }
       ]
@@ -585,6 +660,26 @@ function renderDashboard() {
   renderResourceFlowChart();
   renderPowerTrajectoryChart();
   renderDualAssetRings();
+  if (window.MissionControlCouncilOrders?.render) {
+    // The same cycle plan the Directive Engine card renders, reduced to one
+    // row per councilor and mounted beside the Priority Brief. The full card
+    // stays where it is: this is the answer, that is the reasoning.
+    window.MissionControlCouncilOrders.render(
+      document.getElementById('councilOrders'),
+      { engineDirectives: state.briefing?.engineDirectives }
+    );
+  }
+  if (window.MissionControlDirectiveBoard?.render) {
+    // The engine guarantees its primary is an action rather than a
+    // prohibition, so this board is the one place the dashboard can promise
+    // "here is what to do", with the vetoes shown as reasoning beside it.
+    window.MissionControlDirectiveBoard.render(
+      document.getElementById('directiveBoard'),
+      // /api/v2/briefing returns { briefing, data }; the engine output rides
+      // on the briefing, not on the raw snapshot.
+      { engineDirectives: state.briefing?.engineDirectives, briefing: state.briefing }
+    );
+  }
   if (window.MissionControlMcBudget?.render) {
     // Per-hull Mission Control comes from the game templates via the snapshot;
     // it is what turns the hate floor from a readout into a build decision.
@@ -602,6 +697,16 @@ function renderDashboard() {
       document.getElementById('alienHateEconomics'),
       state.rawSnapshot.alienHateEconomics
     );
+  }
+  if (window.MissionControlMiningExpansion?.render) {
+    const miningEl = document.getElementById('miningExpansion');
+    if (miningEl) {
+      window.MissionControlMiningExpansion.fetchMiningExpansion(state.observer, state.mode).then(data => {
+        if (data) {
+          window.MissionControlMiningExpansion.render(miningEl, data);
+        }
+      });
+    }
   }
   renderOperativeLeaderboard();
   renderHoldingsBubbleMatrix();
@@ -721,11 +826,29 @@ function renderHolographicCore() {
   setMeta('prioritySuccess', topDirective.successFactor);
   setMeta('priorityMissionCost', topDirective.missionCost || 'UNAVAILABLE');
 
+  const policyNote = document.getElementById('priorityPolicyNote');
+  if (policyNote) {
+    const note = topDirective.policyNote || '';
+    policyNote.hidden = !note;
+    policyNote.textContent = note;
+  }
+  const hateBand = document.getElementById('priorityExpectedHate');
+  if (hateBand) {
+    const label = topDirective.expectedAlienHate
+      ? `Expected alien hate: ${topDirective.expectedAlienHate}`
+      : '';
+    hateBand.hidden = !label;
+    hateBand.textContent = label;
+  }
+
   const roster = document.getElementById('priorityOperatives');
   if (roster) {
     const operatives = Array.isArray(topDirective.eligibleOperatives) ? topDirective.eligibleOperatives.slice(0, 3) : [];
     if (!operatives.length) {
-      roster.innerHTML = '<p class="since-save-empty">No eligible observer councilors are visible. Open the roster to inspect the current picture.</p>';
+      const emptyMessage = topDirective.isEnginePrimary
+        ? 'Operative pairing is not yet calculated; open the roster to choose or stage one.'
+        : 'No eligible observer councilors are visible. Open the roster to inspect the current picture.';
+      roster.innerHTML = `<p class="since-save-empty">${emptyMessage}</p>`;
     } else {
       roster.innerHTML = operatives.map((op) => `
         <button class="priority-op ${op.available ? 'is-ready' : ''}" type="button" data-open-roster="${escapeHtml(op.id)}">

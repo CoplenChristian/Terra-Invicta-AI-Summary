@@ -1,4 +1,10 @@
+const { resolveConfig } = require('./config');
+
 class OpportunityScorer {
+  constructor(config = null) {
+    this.rules = config?.analysis?.opportunityScoring || resolveConfig().analysis.opportunityScoring;
+  }
+
   scoreNationTarget(nation, controlPoints, observerFactionId, targetFactionId, targetFactionName = 'the Servants') {
     if (!nation) return null;
 
@@ -17,68 +23,68 @@ class OpportunityScorer {
     // 1. Economic value (GDP)
     const gdpBillion = (nation.GDP || 0) / 1e9;
     const gdpTrillion = gdpBillion / 1000;
-    if (gdpTrillion >= 5) {
-      score += 35;
+    if (gdpTrillion >= this.rules.gdp.superpowerThresholdTrillion) {
+      score += this.rules.gdp.superpowerPoints;
       reasons.push(`Superpower Economy ($${gdpTrillion.toFixed(1)}T GDP)`);
-    } else if (gdpTrillion >= 1) {
-      score += 25;
+    } else if (gdpTrillion >= this.rules.gdp.majorThresholdTrillion) {
+      score += this.rules.gdp.majorPoints;
       reasons.push(`Major Economy ($${gdpTrillion.toFixed(1)}T GDP)`);
-    } else if (gdpBillion >= 200) {
-      score += 15;
+    } else if (gdpBillion >= this.rules.gdp.regionalThresholdBillion) {
+      score += this.rules.gdp.regionalPoints;
       reasons.push(`Regional Economy ($${gdpBillion.toFixed(0)}B GDP)`);
     }
 
     // 2. Target-faction holding severity
     if (isExecutiveTarget) {
-      score += 30;
+      score += this.rules.targetControl.executivePoints;
       reasons.push(`${targetFactionName} Executive Control (National Priority Target)`);
     } else if (isTargetControlled) {
-      score += 15 + (targetCPs.length * 5);
+      score += this.rules.targetControl.heldBasePoints + (targetCPs.length * this.rules.targetControl.heldPerControlPoint);
       reasons.push(`${targetFactionName} hold ${targetCPs.length}/${controlPoints.length} Control Points`);
     }
 
     // 3. Nuclear capability
     const nukes = nation.nukes || 0;
     if (nukes > 0) {
-      score += Math.min(30, nukes * 5);
+      score += Math.min(this.rules.nukes.pointCap, nukes * this.rules.nukes.pointsPerBarrage);
       reasons.push(`Nuclear Arsenal (${nukes} barrage${nukes > 1 ? 's' : ''})`);
     }
 
     // 4. Mission Control & Boost
     const mc = nation.missionControl || 0;
-    if (mc >= 5) {
-      score += 15;
+    if (mc >= this.rules.missionControl.threshold) {
+      score += this.rules.missionControl.points;
       reasons.push(`Strategic Mission Control (${mc} MC)`);
     }
     const boost = nation.boost || 0;
-    if (boost >= 2) {
-      score += 10;
+    if (boost >= this.rules.boost.threshold) {
+      score += this.rules.boost.points;
       reasons.push(`Significant Boost Launch Capacity (${boost.toFixed(1)}/mo)`);
     }
 
     // 5. Crackdown vulnerability (high unrest, low cohesion)
     const unrest = nation.unrest || 0;
     const cohesion = nation.cohesion || 5;
-    if (unrest >= 5) {
-      score += 10;
+    if (unrest >= this.rules.unrest.threshold) {
+      score += this.rules.unrest.points;
       reasons.push(`High Unrest (${unrest.toFixed(1)}), Vulnerable to Crackdown`);
     }
-    if (cohesion <= 2) {
-      score += 8;
+    if (cohesion <= this.rules.cohesion.threshold) {
+      score += this.rules.cohesion.points;
       reasons.push(`Fractured Cohesion (${cohesion.toFixed(1)})`);
     }
 
     // 6. Research output
     const research = nation.research || 0;
-    if (research >= 200) {
-      score += 10;
+    if (research >= this.rules.research.threshold) {
+      score += this.rules.research.points;
       reasons.push(`High Research Output (${research.toFixed(0)}/mo)`);
     }
 
     return {
       nationId: nation.ID,
       nationName: nation.displayName,
-      score: Math.min(100, Math.round(score)),
+      score: Math.min(this.rules.scoreCap, Math.round(score)),
       targetFactionId,
       targetFactionName,
       isTargetControlled,
@@ -139,7 +145,7 @@ class OpportunityScorer {
     for (const nation of nations) {
       const cps = controlPointsByNationId.get(nation.ID) || [];
       const evaluated = this.scoreNationTarget(nation, cps, observerFactionId, targetFactionId, targetFactionName);
-      if (evaluated && evaluated.score > 20) {
+      if (evaluated && evaluated.score > this.rules.minimumScore) {
         targets.push(evaluated);
       }
     }

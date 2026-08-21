@@ -12,19 +12,17 @@ A PowerShell toolkit for analyzing *Terra Invicta* save files and generating det
 
 1.  **Clone or Download** this repository.
 2.  **Configure Paths**:
-    - Locate `template.config` in the root directory.
-    - Copy it to a new file named `config.json`.
-    - Open `config.json` and update the `SavePath` to point to your Terra Invicta save file.
-    - The `WorkDir` can usually remain `.` (current directory).
+    - Locate `template.config` in the root directory and copy it to a new, ignored file named `config.json`.
+    - Set `paths.savePath` to your Terra Invicta save folder or a specific `.gz`/`.json` save file.
+    - Optional values such as `paths.templatesPath`, campaign defaults, scoring weights, and directive weights live in `config/defaults.json`; override only the values you need in the ignored root `config.json`.
+    - Existing flat keys (`SavePath`, `WorkDir`, and output directory keys) remain supported temporarily and emit deprecation warnings.
 
     ```json
     {
-        "SavePath": "C:/Users/YourUser/Documents/My Games/TerraInvicta/Saves/Again.gz",
-        "WorkDir": ".",
-        "CsvSubDir": "csv",
-        "ShipInfoSubDir": "Ship_Info",
-        "AgainSaveSubDir": "Again_Save",
-        "SnippetPackSubDir": "Again_Save/snippet_pack"
+      "paths": {
+        "savePath": "C:/Users/YourUser/Documents/My Games/TerraInvicta/Saves",
+        "templatesPath": "C:/Program Files (x86)/Steam/steamapps/common/Terra Invicta/TerraInvicta_Data/StreamingAssets/Templates"
+      }
     }
     ```
 
@@ -35,7 +33,18 @@ Run the exporter to parse your save file and generate CSVs.
 ```powershell
 .\export_factions.ps1
 ```
-*This will create/update files in the `csv/` directory.*
+The exporter selects the newest `.gz` or `.json` save by default and writes to
+the configured CSV folder. Use `.\export_factions.ps1 -Latest` explicitly in
+automation, or `.\export_factions.ps1 -SaveNumber 2` for a numbered historical
+lookup. This will create/update files in the `csv/` directory.
+
+The standalone parsers (`parse_*.ps1`) use the same central configuration and
+selection rules. Values that are likely to change—paths, scoring weights,
+directive weights, capability mappings, and retention—belong in the nested
+JSON config; the defaults file documents the complete shape.
+Both the Node loader and the PowerShell common module validate the resolved
+configuration against `config/config.schema.json`, so type and range errors are
+reported before analysis starts.
 
 ### 2. Load the Toolbox
 Load the analysis functions into your PowerShell session.
