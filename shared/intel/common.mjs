@@ -131,6 +131,50 @@ export const siteMonthlyOutput = (site) => {
   };
 };
 
+/**
+ * The reported source of a combat-power column, in the snapshot's own wording.
+ *
+ * `server/snapshot/space.js` already labels each ship and fleet `'save'` or
+ * `'not present in save'`; an aggregate over a mixed set is neither, so it says
+ * so rather than picking whichever half is more flattering.
+ */
+export const COMBAT_POWER_SOURCE = Object.freeze({
+  measured: 'save',
+  partial: 'save (partial coverage)',
+  absent: 'not present in save'
+});
+
+/**
+ * Sums a combat-power column without inventing a measurement.
+ *
+ * `combatPower` is absent from EVERY ship and fleet in the current save format
+ * -- `server/snapshot/space.js` correctly emits `null` plus
+ * `combatPowerAvailable: false` for all of them. Downstream, `(f.combatPower ||
+ * 0)` turned that back into a confident 0, so `/api/intel/theaters` reported
+ * `friendly.combatPower: 0` against `hostile.combatPower: 0` and a reader saw
+ * MEASURED PARITY where nothing had been measured at all. `/api/intel/arrivals`
+ * had it right and this is now the one place both go through.
+ *
+ * Absent stays null; `available` says which it is; a partially covered set is
+ * summed but labelled rather than silently understated.
+ */
+export const combatPowerTotal = (records, read = (record) => record?.combatPower) => {
+  const rows = asArray(records);
+  const measured = rows
+    .map(read)
+    .filter(value => typeof value === 'number' && Number.isFinite(value));
+  const source = measured.length === 0
+    ? COMBAT_POWER_SOURCE.absent
+    : (measured.length === rows.length ? COMBAT_POWER_SOURCE.measured : COMBAT_POWER_SOURCE.partial);
+  return {
+    total: measured.length ? measured.reduce((sum, value) => sum + value, 0) : null,
+    available: measured.length > 0,
+    source,
+    measuredRecords: measured.length,
+    totalRecords: rows.length
+  };
+};
+
 export const findAlienFaction = (snapshot) => {
   const factions = asArray(snapshot.factions);
   return factions.find(faction => sameId(faction.ID, ALIEN_FACTION_ID) || faction.displayName === ALIEN_FACTION_DISPLAY_NAME) || null;

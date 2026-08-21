@@ -53,6 +53,8 @@ export {
   rateMultiplier,
   normalizeCostObject,
   siteMonthlyOutput,
+  combatPowerTotal,
+  COMBAT_POWER_SOURCE,
   findAlienFaction
 } from './intel/common.mjs';
 
@@ -73,8 +75,13 @@ export {
 
 export {
   fleetResourceRow,
+  fleetSummaryRow,
+  fleetSummaryProjection,
   shipResourceRow,
   shipResourceRows,
+  shipSummaryProjection,
+  FLEET_SUMMARY_OMITTED_FIELDS,
+  SHIP_SUMMARY_OMITTED_FIELDS,
   friendlyStrengthAtDestination,
   arrivalResourceRow,
   transferResourceRow,
@@ -126,5 +133,11 @@ export {
   SUPPORTED_RESOURCES,
   INTEL_ENDPOINT_INDEX,
   INTEL_ENDPOINT_EXAMPLES,
+  DETAIL_LEVELS,
+  DEFAULT_DETAIL_LEVEL,
+  DETAIL_AWARE_RESOURCES,
+  isDetailLevel,
+  parseDetailLevel,
+  measureIntelEndpointSizes,
   buildResourceProjection
 } from './intel/registry.mjs';

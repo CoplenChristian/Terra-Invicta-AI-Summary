@@ -14,6 +14,9 @@
 //   6. Human-readable design rollups: joins ship.hullName against shipDesigns.
 //   7. Hostile filtering with explicit omitted count.
 //   8. Zero-detection coverage vs no-threats distinction.
+//   9. Hard byte budget: the stated ceilings are enforced, not hoped for, and
+//      every entry cut to meet them is counted and stated -- separately from
+//      entries cut for irrelevance. See BYTE BUDGET ENGINE below.
 
 import {
   ALIEN_FACTION_ID,
@@ -214,7 +217,13 @@ export function isGenuinelyHostileFaction(factionId, factionName, filteredSnapsh
  *   3. Co-located at the same specific orbit/station with an observer asset AND shipsCount >= 5 (Sol excluded)
  *   4. Major combat fleet (shipsCount >= 10)
  *
- * Returns { isRelevant: boolean, reasons: string[], daysRemaining: number|null }
+ * Returns { isRelevant, reasons, daysRemaining, rank }.
+ *
+ * `rank` is a lexicographically-comparable tuple used by the byte-budget pass
+ * to decide which RELEVANT fleets to drop when the document will not fit.
+ * Lower sorts first and is kept longest. It is derived from the same criteria
+ * as `reasons` -- degradation is by relevance, never by truncating the tail.
+ * Inclusion semantics (`isRelevant` / `reasons`) are unchanged by the rank.
  */
 export function evaluateHostileRelevance(fleet, ourHabIds, ourOrbits, gameDate) {
   const reasons = [];
@@ -252,11 +261,360 @@ export function evaluateHostileRelevance(fleet, ourHabIds, ourOrbits, gameDate) 
     reasons.push(`major combat fleet (${ships} ships)`);
   }
 
+  // Relevance tiers, most relevant first. A fleet aimed at one of our habs is
+  // the most actionable contact there is; a fleet merely large and far away is
+  // the least. Ties break on time-to-impact, then on size, then on identity so
+  // the ordering is deterministic for a given snapshot.
+  let tier = 4;
+  if (isTargetingOurHab) tier = 0;
+  else if (isInboundToOurTheater) tier = 1;
+  else if (isCoLocated && ships >= 5) tier = 2;
+  else if (reasons.length > 0) tier = 3;
+
+  const idKey = num(fleet.ID);
+  const rank = [
+    tier,
+    daysRemaining === null ? Number.MAX_SAFE_INTEGER : daysRemaining,
+    -ships,
+    idKey === null ? Number.MAX_SAFE_INTEGER : idKey,
+    String(fleet.displayName || '')
+  ];
+
   return {
     isRelevant: reasons.length > 0,
     reasons,
-    daysRemaining
+    daysRemaining,
+    rank
   };
+}
+
+// ---------------------------------------------------------------------------
+// BYTE BUDGET ENGINE
+//
+// The stated size ceilings used to be an observation about one save rather
+// than a guarantee: nothing bounded the output, so at 5x the current fleet
+// count /latest-war-room.md rendered 36 KB against its own 30 KB ceiling.
+// The engine below makes the ceiling a hard cap with graceful, *announced*
+// degradation.
+//
+// Two omission reasons exist and are deliberately never conflated:
+//   * "below relevance threshold" -- the entry did not qualify for the
+//     document at all (the pre-existing hostile-relevance filter).
+//   * "omitted to fit the size budget" -- the entry WAS relevant and was cut
+//     only because the document would otherwise exceed its ceiling.
+// A reader must be able to tell that something relevant was cut, so the two
+// counts are printed separately in the section each entry came from.
+//
+// Section headers are never dropped. A section degraded to zero entries still
+// renders its header and states why it is empty -- a missing section reads as
+// "nothing to report", which is the same failure class as fabricating data.
+// ---------------------------------------------------------------------------
+
+/** Hard ceiling for /latest-war-room.md. Output is guaranteed strictly below. */
+export const WAR_ROOM_BYTE_BUDGET = 30720; // 30 KB
+/** Hard ceiling for /latest-threats.md. Output is guaranteed strictly below. */
+export const THREATS_BYTE_BUDGET = 10240; // 10 KB
+
+// Dropping entries also ADDS the omission notice, so each drop pass frees a
+// little more than the raw overflow to avoid oscillating around the ceiling.
+const BUDGET_SLACK_BYTES = 512;
+
+// The hate-venting condition list is the only unbounded list inside an
+// otherwise fixed-size section. Cap it so the non-degradable residue of the
+// document is bounded by construction, and announce the cap.
+const MAX_VENTING_CONDITIONS = 12;
+
+/**
+ * UTF-8 byte length without Node's Buffer -- this module also runs in the
+ * Cloudflare Worker, which has no Buffer. Lone surrogates count as 3 bytes,
+ * matching what Buffer.byteLength / TextEncoder produce for U+FFFD.
+ */
+export function utf8ByteLength(text) {
+  const str = String(text);
+  let bytes = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    const code = str.charCodeAt(i);
+    if (code < 0x80) {
+      bytes += 1;
+    } else if (code < 0x800) {
+      bytes += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = i + 1 < str.length ? str.charCodeAt(i + 1) : 0;
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        i += 1;
+      } else {
+        bytes += 3;
+      }
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+}
+
+const linesByteLength = (lines) => {
+  let total = 0;
+  for (const line of lines) total += utf8ByteLength(line) + 1; // + '\n' from join
+  return total;
+};
+
+/** Lexicographic comparison of rank tuples. Numbers and strings only. */
+function compareRank(a, b) {
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i += 1) {
+    const x = a[i];
+    const y = b[i];
+    if (x === y) continue;
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    return x < y ? -1 : 1;
+  }
+  return 0;
+}
+
+/** A block of lines that always renders verbatim (headers, fixed tables). */
+function fixedBlock(key, headingLines, bodyLines = []) {
+  return {
+    kind: 'fixed',
+    key,
+    headingLines,
+    bodyLines,
+    bodySuppressed: false,
+    suppressedNoteLines: ['*Section body omitted to fit the size budget.*', '']
+  };
+}
+
+/** A block of ranked entries that the budget pass may thin or compact. */
+function listBlock(key, config) {
+  return {
+    kind: 'list',
+    key,
+    headingLines: config.headingLines || [],
+    entries: [],
+    grouped: Boolean(config.groupHeader),
+    groupHeader: config.groupHeader || null,
+    groupTrailingLines: config.groupTrailingLines || [],
+    emptyLines: config.emptyLines || [],
+    budgetEmptyLines: config.budgetEmptyLines || null,
+    relevanceOmitted: config.relevanceOmitted || 0,
+    relevanceNote: config.relevanceNote || null,
+    budgetNote: config.budgetNote || null,
+    detailNote: config.detailNote || null,
+    trailingLines: config.trailingLines || [],
+    bodySuppressed: false,
+    suppressedNoteLines: config.suppressedNoteLines
+      || ['*Section body omitted to fit the size budget.*', '']
+  };
+}
+
+/**
+ * @param variants  Line arrays by detail level; level N above the last variant
+ *                  reuses the last one. Index 0 is the fullest rendering.
+ */
+function addEntry(block, { rank, variants, group = null }) {
+  block.entries.push({ rank, variants, group, dropped: false, level: 0 });
+}
+
+// Detail level is per ENTRY, not per section, so compaction is applied from
+// the least-relevant end and stops the moment the document fits. A
+// section-wide switch overshot badly -- at 5x growth it shed 9 KB of budget
+// that could have carried real content.
+const entryLines = (entry) =>
+  entry.variants[Math.min(entry.level, entry.variants.length - 1)];
+
+const entryByteCost = (entry) => linesByteLength(entryLines(entry));
+
+const entryMaxLevel = (entry) => entry.variants.length - 1;
+
+/** Standard "relevant but did not fit" notice. Never merged with the relevance notice. */
+const budgetOmissionNote = (noun, pointer) => (dropped, total) => {
+  const shown = total - dropped;
+  const noun2 = dropped === 1 ? 'entry' : 'entries';
+  return [
+    `*${dropped} further ${noun2} omitted to fit the size budget — these met the `
+    + `relevance bar but did not fit. ${shown} of ${total} ${noun} shown${pointer ? `; full set at ${pointer}` : ''}.*`
+  ];
+};
+
+/**
+ * Standard "everything was cut" notice for a section budgeted down to zero.
+ * The section header still renders above it -- a missing section reads as
+ * "nothing to report", which is not what happened.
+ */
+const budgetEmptyNote = (noun, pointer, trailingBlank = true) => (total) => {
+  const note = [`*All ${total} ${noun} omitted to fit the size budget${pointer ? `; full set at ${pointer}` : ''}.*`];
+  // Blocks that already carry a trailing blank line opt out, so an emptied
+  // section does not render two blank lines where a populated one renders one.
+  if (trailingBlank) note.push('');
+  return note;
+};
+
+function renderBlock(block, out) {
+  for (const line of block.headingLines) out.push(line);
+
+  if (block.bodySuppressed) {
+    for (const line of block.suppressedNoteLines) out.push(line);
+    return;
+  }
+
+  if (block.kind === 'fixed') {
+    for (const line of block.bodyLines) out.push(line);
+    return;
+  }
+
+  const kept = block.entries.filter(e => !e.dropped);
+  const budgetOmitted = block.entries.length - kept.length;
+
+  if (block.entries.length === 0) {
+    for (const line of block.emptyLines) out.push(line);
+  } else if (kept.length === 0) {
+    const emptyLines = block.budgetEmptyLines ? block.budgetEmptyLines(block.entries.length) : [];
+    for (const line of emptyLines) out.push(line);
+  } else if (block.grouped) {
+    // Group totals stay TRUE totals; the budget notice below reconciles them
+    // with the shorter list. A group whose every entry was cut disappears --
+    // it is an entry label, not a section header.
+    const groupTotals = new Map();
+    for (const e of block.entries) groupTotals.set(e.group, (groupTotals.get(e.group) || 0) + 1);
+    let previousGroup = null;
+    for (const e of kept) {
+      if (e.group !== previousGroup) {
+        if (previousGroup !== null) for (const line of block.groupTrailingLines) out.push(line);
+        for (const line of block.groupHeader(e.group, groupTotals.get(e.group))) out.push(line);
+        previousGroup = e.group;
+      }
+      for (const line of entryLines(e)) out.push(line);
+    }
+    if (previousGroup !== null) for (const line of block.groupTrailingLines) out.push(line);
+  } else {
+    for (const e of kept) {
+      for (const line of entryLines(e)) out.push(line);
+    }
+  }
+
+  if (kept.length > 0 && block.detailNote) {
+    // levelCounts[i] = how many listed entries were compacted to at least
+    // level i + 1, so the notice can state exactly what was shed and from how
+    // many entries rather than rounding to "some detail was removed".
+    const levelCounts = [];
+    for (const e of kept) {
+      for (let i = 0; i < e.level; i += 1) levelCounts[i] = (levelCounts[i] || 0) + 1;
+    }
+    if (levelCounts.length > 0) {
+      for (const line of block.detailNote(levelCounts, kept.length)) out.push(line);
+    }
+  }
+  if (block.relevanceOmitted > 0 && block.relevanceNote) {
+    for (const line of block.relevanceNote(block.relevanceOmitted)) out.push(line);
+  }
+  // Only when SOME entries survived -- an emptied section already said so via
+  // budgetEmptyLines, and printing both read as two separate omissions.
+  if (budgetOmitted > 0 && kept.length > 0 && block.budgetNote) {
+    for (const line of block.budgetNote(budgetOmitted, block.entries.length)) out.push(line);
+  }
+  for (const line of block.trailingLines) out.push(line);
+}
+
+function renderBlocks(blocks) {
+  const out = [];
+  for (const block of blocks) renderBlock(block, out);
+  return out.join('\n');
+}
+
+const leastRelevantFirst = (entries) =>
+  entries.slice().sort((a, b) => compareRank(b.rank, a.rank));
+
+/** Drops the least-relevant surviving entries until `neededBytes` is freed. */
+function dropLeastRelevant(block, neededBytes) {
+  const survivors = block.entries.filter(e => !e.dropped);
+  if (survivors.length === 0) return false;
+
+  let freed = 0;
+  for (const entry of leastRelevantFirst(survivors)) {
+    entry.dropped = true;
+    freed += entryByteCost(entry);
+    if (freed >= neededBytes) break;
+  }
+  return true;
+}
+
+/**
+ * Compacts the least-relevant surviving entries one detail level, up to
+ * `toLevel`, until `neededBytes` is freed. Every entry stays listed -- only
+ * its depth shrinks, and the most relevant entries keep full detail longest.
+ */
+function compactLeastRelevant(block, neededBytes, toLevel) {
+  const candidates = block.entries.filter(e =>
+    !e.dropped && e.level < toLevel && e.level < entryMaxLevel(e));
+  if (candidates.length === 0) return false;
+
+  let freed = 0;
+  for (const entry of leastRelevantFirst(candidates)) {
+    const before = entryByteCost(entry);
+    entry.level += 1;
+    freed += before - entryByteCost(entry);
+    if (freed >= neededBytes) break;
+  }
+  return true;
+}
+
+/**
+ * Renders `blocks` and degrades them until the document fits under `maxBytes`.
+ *
+ * `ladder` is the deliberate order in which sections give way, and `clampOrder`
+ * is the last-resort order for suppressing whole section bodies if even an
+ * entry-free document would not fit. Termination is structural, not
+ * byte-driven: every `drop` strictly reduces a finite survivor set and every
+ * `reduce` strictly raises a bounded detail level.
+ */
+export function renderWithByteBudget(blocks, ladder, clampOrder, maxBytes) {
+  const byKey = new Map(blocks.map(b => [b.key, b]));
+  let text = renderBlocks(blocks);
+  let bytes = utf8ByteLength(text);
+  if (bytes < maxBytes) return text;
+
+  let stageIndex = 0;
+  while (bytes >= maxBytes && stageIndex < ladder.length) {
+    const stage = ladder[stageIndex];
+    const block = byKey.get(stage.block);
+    if (!block) { stageIndex += 1; continue; }
+
+    const needed = (bytes - maxBytes) + BUDGET_SLACK_BYTES;
+    let acted = false;
+    if (stage.action === 'reduce') {
+      acted = compactLeastRelevant(block, needed, stage.toLevel ?? 1);
+    } else if (stage.action === 'drop') {
+      acted = dropLeastRelevant(block, needed);
+    }
+
+    if (!acted) { stageIndex += 1; continue; }
+    text = renderBlocks(blocks);
+    bytes = utf8ByteLength(text);
+  }
+
+  // Last resort: even with every degradable entry gone the fixed content does
+  // not fit. Suppress whole fixed-section BODIES, lowest priority first.
+  // Section headers still render, each stating that its body was omitted.
+  //
+  // List blocks are deliberately excluded: the ladder has already emptied them
+  // and their "All N omitted" notices carry counts a reader needs, which a
+  // generic suppression banner would throw away for one line of savings.
+  //
+  // What remains after this is irreducible -- the title block, one header per
+  // section and one notice per section, roughly 2 KB. A budget below that
+  // floor cannot be met; the real ceilings are an order of magnitude above it.
+  for (const key of clampOrder) {
+    if (bytes < maxBytes) break;
+    const block = byKey.get(key);
+    if (!block || block.kind !== 'fixed') continue;
+    if (block.bodySuppressed || block.bodyLines.length === 0) continue;
+    block.bodySuppressed = true;
+    text = renderBlocks(blocks);
+    bytes = utf8ByteLength(text);
+  }
+
+  return text;
 }
 
 // ---------------------------------------------------------------------------
@@ -324,13 +682,6 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
   // Sort strictly by time-to-impact (arrival ascending)
   inboundThreats.sort((a, b) => a.daysRemaining - b.daysRemaining);
 
-  const lines = [];
-  lines.push(`# TI Tactical Threat Assessment`);
-  lines.push(``);
-  lines.push(`**Date:** ${meta.gameTimeString || 'Unknown'}`);
-  lines.push(`**Observer Faction:** ${observerName}`);
-  lines.push(`**Intelligence Mode:** ${mode}`);
-
   // Detection coverage assessment
   const hasVisibleHostiles = hostiles.length > 0;
   const alienStage = filteredSnapshot.alienIntelligenceStage;
@@ -341,75 +692,113 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
   } else if (hasVisibleHostiles) {
     detectionLabel = hostiles[0].visibility || 'Active Deep System Skywatch';
   }
-  lines.push(`**Detection Status:** ${detectionLabel}`);
-  lines.push(``);
 
-  lines.push(`## Immediate Inbound Threats (≤ 365 Days)`);
-  lines.push(``);
+  const blocks = [];
 
-  if (inboundThreats.length === 0) {
-    if (!hasVisibleHostiles && !deepSkywatch) {
-      lines.push(`> **NO DETECTION COVERAGE**`);
-      lines.push(`> No space surveillance capability active. Zero observed hostile transfers does not indicate absence of threats.`);
-    } else {
-      lines.push(`*No hostile transfers inbound to observer assets detected within 365 days under active detection coverage.*`);
+  blocks.push(fixedBlock('title', [
+    `# TI Tactical Threat Assessment`,
+    ``,
+    `**Date:** ${meta.gameTimeString || 'Unknown'}`,
+    `**Observer Faction:** ${observerName}`,
+    `**Intelligence Mode:** ${mode}`,
+    `**Detection Status:** ${detectionLabel}`,
+    ``
+  ]));
+
+  const noThreatLines = (!hasVisibleHostiles && !deepSkywatch)
+    ? [
+      `> **NO DETECTION COVERAGE**`,
+      `> No space surveillance capability active. Zero observed hostile transfers does not indicate absence of threats.`,
+      ``
+    ]
+    : [
+      `*No hostile transfers inbound to observer assets detected within 365 days under active detection coverage.*`,
+      ``
+    ];
+
+  const inboundBlock = listBlock('inbound-threats', {
+    headingLines: [`## Immediate Inbound Threats (≤ 365 Days)`, ``],
+    emptyLines: noThreatLines,
+    budgetEmptyLines: budgetEmptyNote('inbound hostile transfers', '/api/intel/fleets'),
+    budgetNote: budgetOmissionNote('inbound hostile transfers', '/api/intel/fleets'),
+    detailNote: (levelCounts, kept) => [
+      `*Weapon-loadout, interception-state and reinforcement lines suppressed to fit the size budget `
+      + `for ${levelCounts[0]} of ${kept} listed contacts, least imminent first; see /api/intel/fleets.*`,
+      ``
+    ]
+  });
+  blocks.push(inboundBlock);
+
+  for (const item of inboundThreats) {
+    const f = item.fleet;
+    const days = item.daysRemaining < 9999 ? `${item.daysRemaining} days` : 'ETA Unknown';
+    const arrivalFormatted = f.arrivalDate ? f.arrivalDate.split('T')[0] : 'Unknown date';
+    const hostileWeapons = extractWeaponAndPdSummary(f);
+
+    // Defending forces stationed at destination
+    const defendingFleets = ourFleets.filter(other => normalizeBody(other.orbitBody) === item.destBody);
+    const defendingShipCount = defendingFleets.reduce((sum, other) => sum + (Number(other.shipsCount) || 0), 0);
+    let defendingPdTotal = 0;
+    for (const dFleet of defendingFleets) {
+      const dWeapons = extractWeaponAndPdSummary(dFleet);
+      defendingPdTotal += dWeapons.pdCount;
     }
-    lines.push(``);
-  } else {
-    for (const item of inboundThreats) {
-      const f = item.fleet;
-      const days = item.daysRemaining < 9999 ? `${item.daysRemaining} days` : 'ETA Unknown';
-      const arrivalFormatted = f.arrivalDate ? f.arrivalDate.split('T')[0] : 'Unknown date';
-      const hostileWeapons = extractWeaponAndPdSummary(f);
 
-      lines.push(`### ⚠️ ${f.displayName} (${f.factionName || 'Hostile'}) — ETA: ${arrivalFormatted} (${days})`);
-      lines.push(`- **Inbound Force:** ${f.shipsCount ?? 'Unknown'} ships | Dominant Weapon: ${hostileWeapons.dominantWeapon || 'Unknown'}`);
-      lines.push(`- **Weapon Loadout:** ${hostileWeapons.summary} (${hostileWeapons.pdCount} Point Defense systems)`);
-      lines.push(`- **Trajectory:** ${f.orbitBody || 'Deep Space'} → ${f.destination || 'Observer Asset'} (Target: ${item.targetHab?.displayName || f.destination || 'Station/Orbit'})`);
-      lines.push(`- **Interception / Pursuit State:** UNAVAILABLE (Game save format does not track interception orders)`);
+    // Construction completing before arrival at destination
+    const completingQueues = asArray(filteredSnapshot.shipyardQueues).filter(q => {
+      if (!sameId(q.factionId, observerId)) return false;
+      if (normalizeBody(q.orbitBody) !== item.destBody) return false;
+      if (!q.completionDate || !f.arrivalDate) return true;
+      return new Date(q.completionDate) <= new Date(f.arrivalDate);
+    });
 
-      // Defending forces stationed at destination
-      const defendingFleets = ourFleets.filter(other => normalizeBody(other.orbitBody) === item.destBody);
-      const defendingShipCount = defendingFleets.reduce((sum, other) => sum + (Number(other.shipsCount) || 0), 0);
-      let defendingPdTotal = 0;
-      for (const dFleet of defendingFleets) {
-        const dWeapons = extractWeaponAndPdSummary(dFleet);
-        defendingPdTotal += dWeapons.pdCount;
-      }
+    const headerLine = `### ⚠️ ${f.displayName} (${f.factionName || 'Hostile'}) — ETA: ${arrivalFormatted} (${days})`;
+    const forceLine = `- **Inbound Force:** ${f.shipsCount ?? 'Unknown'} ships | Dominant Weapon: ${hostileWeapons.dominantWeapon || 'Unknown'}`;
+    const loadoutLine = `- **Weapon Loadout:** ${hostileWeapons.summary} (${hostileWeapons.pdCount} Point Defense systems)`;
+    const trajectoryLine = `- **Trajectory:** ${f.orbitBody || 'Deep Space'} → ${f.destination || 'Observer Asset'} (Target: ${item.targetHab?.displayName || f.destination || 'Station/Orbit'})`;
+    const interceptLine = `- **Interception / Pursuit State:** UNAVAILABLE (Game save format does not track interception orders)`;
+    const defenceLine = `- **Defending Forces at Destination:** ${defendingShipCount} friendly ships stationed at ${item.destBody || 'destination'} (${defendingPdTotal} Point Defense systems)`;
 
-      // Construction completing before arrival at destination
-      const completingQueues = asArray(filteredSnapshot.shipyardQueues).filter(q => {
-        if (!sameId(q.factionId, observerId)) return false;
-        if (normalizeBody(q.orbitBody) !== item.destBody) return false;
-        if (!q.completionDate || !f.arrivalDate) return true;
-        return new Date(q.completionDate) <= new Date(f.arrivalDate);
+    let reinforcementLine;
+    if (completingQueues.length > 0) {
+      const queueDesigns = completingQueues.map(q => {
+        const info = designLookup.get(q.design || q.hull);
+        return info ? info.displayName : (q.design || q.hull || 'Ship');
       });
-
-      lines.push(`- **Defending Forces at Destination:** ${defendingShipCount} friendly ships stationed at ${item.destBody || 'destination'} (${defendingPdTotal} Point Defense systems)`);
-      if (completingQueues.length > 0) {
-        const queueDesigns = completingQueues.map(q => {
-          const info = designLookup.get(q.design || q.hull);
-          return info ? info.displayName : (q.design || q.hull || 'Ship');
-        });
-        lines.push(`- **Reinforcements Completing Before ETA:** ${completingQueues.length} ship(s) (${queueDesigns.join(', ')})`);
-      } else {
-        lines.push(`- **Reinforcements Completing Before ETA:** None queued at destination`);
-      }
-
-      // Hab defenses at destination if specific hab is targeted
-      if (item.targetHab) {
-        const habAgg = habModulesAgg.get(Number(item.targetHab.ID));
-        if (habAgg) {
-          lines.push(`- **Target Hab Defense Modules:** ${habAgg.defense} defense array(s) | ${habAgg.shipyards} shipyard(s)`);
-        }
-      }
-      lines.push(``);
+      reinforcementLine = `- **Reinforcements Completing Before ETA:** ${completingQueues.length} ship(s) (${queueDesigns.join(', ')})`;
+    } else {
+      reinforcementLine = `- **Reinforcements Completing Before ETA:** None queued at destination`;
     }
+
+    const full = [headerLine, forceLine, loadoutLine, trajectoryLine, interceptLine, defenceLine, reinforcementLine];
+
+    // Hab defenses at destination if specific hab is targeted
+    if (item.targetHab) {
+      const habAgg = habModulesAgg.get(Number(item.targetHab.ID));
+      if (habAgg) {
+        full.push(`- **Target Hab Defense Modules:** ${habAgg.defense} defense array(s) | ${habAgg.shipyards} shipyard(s)`);
+      }
+    }
+    full.push(``);
+
+    addEntry(inboundBlock, {
+      // Ordered by time-to-impact, so the latest arrival is the first to give
+      // way. A 6-ship fleet arriving in 40 days outranks a 40-ship fleet
+      // arriving in 300.
+      rank: [
+        item.daysRemaining,
+        -(num(f.shipsCount) ?? 0),
+        num(f.ID) ?? Number.MAX_SAFE_INTEGER,
+        String(f.displayName || '')
+      ],
+      variants: [
+        full,
+        [headerLine, forceLine, trajectoryLine, defenceLine, ``]
+      ]
+    });
   }
 
   // Theaters & Assets at Immediate Risk
-  lines.push(`## Theaters & Assets at Immediate Risk`);
-  lines.push(``);
 
   const bodiesAtRisk = new Set(inboundThreats.map(t => t.destBody).filter(Boolean));
   // Add orbits where genuine hostile fleets are currently co-located with friendly assets (excluding sol)
@@ -421,29 +810,66 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
     }
   }
 
-  if (bodiesAtRisk.size === 0) {
-    lines.push(`*No observer theater currently has co-located or inbound hostile fleets.*`);
-  } else {
-    for (const bodyKey of bodiesAtRisk) {
-      const bodyHabs = ourHabs.filter(h => normalizeBody(h.orbitBody) === bodyKey);
-      const bodyFleets = ourFleets.filter(f => normalizeBody(f.orbitBody) === bodyKey);
-      const bodyHostiles = hostiles.filter(h => normalizeBody(h.orbitBody) === bodyKey);
-      const bodyInbound = inboundThreats.filter(t => t.destBody === bodyKey);
+  const theatreBlock = listBlock('risk-theaters', {
+    headingLines: [`## Theaters & Assets at Immediate Risk`, ``],
+    emptyLines: [`*No observer theater currently has co-located or inbound hostile fleets.*`],
+    budgetEmptyLines: budgetEmptyNote('at-risk theaters', '/api/intel/theaters'),
+    budgetNote: budgetOmissionNote('at-risk theaters', '/api/intel/theaters'),
+    detailNote: (levelCounts, kept) => [
+      `*Per-theater hab inventories suppressed to fit the size budget for `
+      + `${levelCounts[0]} of ${kept} listed theaters, least pressured first; see /api/intel/habs.*`,
+      ``
+    ]
+  });
+  blocks.push(theatreBlock);
 
-      const capitalizedBody = bodyHabs[0]?.orbitBody || bodyFleets[0]?.orbitBody || bodyKey;
-      lines.push(`### ${capitalizedBody}`);
-      lines.push(`- **Friendly Assets:** ${bodyHabs.length} hab(s), ${bodyFleets.reduce((s, f) => s + (Number(f.shipsCount) || 0), 0)} ships`);
-      lines.push(`- **Hostile Contacts Present:** ${bodyHostiles.length} fleet(s) (${bodyHostiles.reduce((s, f) => s + (Number(f.shipsCount) || 0), 0)} ships)`);
-      lines.push(`- **Hostile Transfers Inbound:** ${bodyInbound.length} fleet(s)`);
-      for (const h of bodyHabs) {
-        const agg = habModulesAgg.get(Number(h.ID));
-        lines.push(`  - **${h.displayName}** (Tier ${h.tier || 1} ${h.habType || 'Hab'}): ${agg?.defense || 0} Defenses | ${agg?.shipyards || 0} Shipyards | ${agg?.mines || 0} Mines`);
-      }
-      lines.push(``);
+  for (const bodyKey of bodiesAtRisk) {
+    const bodyHabs = ourHabs.filter(h => normalizeBody(h.orbitBody) === bodyKey);
+    const bodyFleets = ourFleets.filter(f => normalizeBody(f.orbitBody) === bodyKey);
+    const bodyHostiles = hostiles.filter(h => normalizeBody(h.orbitBody) === bodyKey);
+    const bodyInbound = inboundThreats.filter(t => t.destBody === bodyKey);
+    const hostileShips = bodyHostiles.reduce((s, f) => s + (Number(f.shipsCount) || 0), 0);
+
+    const capitalizedBody = bodyHabs[0]?.orbitBody || bodyFleets[0]?.orbitBody || bodyKey;
+    const summary = [
+      `### ${capitalizedBody}`,
+      `- **Friendly Assets:** ${bodyHabs.length} hab(s), ${bodyFleets.reduce((s, f) => s + (Number(f.shipsCount) || 0), 0)} ships`,
+      `- **Hostile Contacts Present:** ${bodyHostiles.length} fleet(s) (${hostileShips} ships)`,
+      `- **Hostile Transfers Inbound:** ${bodyInbound.length} fleet(s)`
+    ];
+    const full = summary.slice();
+    for (const h of bodyHabs) {
+      const agg = habModulesAgg.get(Number(h.ID));
+      full.push(`  - **${h.displayName}** (Tier ${h.tier || 1} ${h.habType || 'Hab'}): ${agg?.defense || 0} Defenses | ${agg?.shipyards || 0} Shipyards | ${agg?.mines || 0} Mines`);
     }
+    full.push(``);
+
+    addEntry(theatreBlock, {
+      // A theater with hostiles actually inbound outranks one that merely has
+      // a hostile fleet parked in it; then by hostile mass present.
+      rank: [
+        bodyInbound.length > 0 ? 0 : 1,
+        -hostileShips,
+        -bodyInbound.length,
+        String(bodyKey)
+      ],
+      variants: [full, [...summary, ``]]
+    });
   }
 
-  return lines.join('\n');
+  // Degradation order for /latest-threats.md. The inbound-contact list IS the
+  // document -- the theater roll-up is supporting context, so it gives way
+  // first, and detail is shed before whole entries are cut.
+  const ladder = [
+    { block: 'risk-theaters', action: 'reduce', toLevel: 1 },
+    { block: 'inbound-threats', action: 'reduce', toLevel: 1 },
+    { block: 'risk-theaters', action: 'drop' },
+    { block: 'inbound-threats', action: 'drop' }
+  ];
+  const clampOrder = ['risk-theaters', 'inbound-threats'];
+  const maxBytes = isMeasured(options.maxBytes) ? Number(options.maxBytes) : THREATS_BYTE_BUDGET;
+
+  return renderWithByteBudget(blocks, ladder, clampOrder, maxBytes);
 }
 
 // ---------------------------------------------------------------------------
@@ -465,6 +891,11 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
 
   const ourHabs = asArray(filteredSnapshot.habs).filter(h => sameId(h.factionId, observerId));
   const ourHabIds = new Set(ourHabs.map(h => Number(h.ID)));
+  // Section 4 reads this to name the specific hab a hostile transfer is aimed
+  // at. It was referenced but never declared here, so any hostile fleet whose
+  // destinationId matched one of ours threw a ReferenceError and took the
+  // whole export down. No fleet on the current save triggers it.
+  const ourHabMap = new Map(ourHabs.map(h => [Number(h.ID), h]));
   const ourFleets = asArray(filteredSnapshot.fleets).filter(f => sameId(f.factionId, observerId));
   const ourOrbits = new Set([
     ...ourHabs.map(h => normalizeBody(h.orbitBody)).filter(Boolean),
@@ -473,24 +904,25 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   ourOrbits.delete('sol');
   ourOrbits.delete('deep space');
 
-  const lines = [];
-  lines.push(`# TI Strategic War Room Briefing`);
-  lines.push(``);
-  lines.push(`**Date:** ${meta.gameTimeString || 'Unknown'}`);
-  lines.push(`**Observer Faction:** ${observerName}`);
-  lines.push(`**Intelligence Mode:** ${mode}`);
-  lines.push(`**Difficulty:** ${meta.difficulty || 'Normal'}`);
-  lines.push(``);
+  const blocks = [];
+  blocks.push(fixedBlock('title', [
+    `# TI Strategic War Room Briefing`,
+    ``,
+    `**Date:** ${meta.gameTimeString || 'Unknown'}`,
+    `**Observer Faction:** ${observerName}`,
+    `**Intelligence Mode:** ${mode}`,
+    `**Difficulty:** ${meta.difficulty || 'Normal'}`,
+    ``
+  ]));
 
   // -------------------------------------------------------------------------
   // SECTION 1: ALIEN THREAT & HATE ECONOMICS
   // -------------------------------------------------------------------------
-  lines.push(`## 1. Alien Threat Posture & Hate Economics`);
-  lines.push(``);
+  const alienThreatLines = [];
 
   const economics = filteredSnapshot.alienHateEconomics;
   if (!economics || !economics.applicable) {
-    lines.push(`- Alien hate economics not applicable to ${observerName}.`);
+    alienThreatLines.push(`- Alien hate economics not applicable to ${observerName}.`);
   } else {
     const actualHate = isMeasured(economics.actualAlienHate)
       ? Number(economics.actualAlienHate).toFixed(2)
@@ -499,67 +931,101 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
       ? 'Raw-save actual hate'
       : (economics.visibleHateEstimate ? 'Game-visible hate estimate' : 'Actual hate');
 
-    lines.push(`- **${actualLabel}:** ${actualHate}`);
-    lines.push(`- **Minimum Alien Hate Floor:** ${fixedOr(economics.minimumAlienHate, 2)}`);
-    lines.push(`- **Hate Above Floor:** ${fixedOr(economics.hateAboveFloor, 2)}`);
-    lines.push(`- **War Threshold:** ${fixedOr(economics.warThreshold, 2)} (crossing triggers retaliation / war footing)`);
-    lines.push(`- **Headroom to 50-Hate War Floor:** ${fixedOr(economics.minimumHateHeadroom, 2)}`);
-    lines.push(`- **Mission Control Used:** ${fixedOr(economics.usedMissionControl, 0)} / ${fixedOr(economics.missionControlCapacity, 0)} capacity`);
-    lines.push(`- **MC Threshold for 50-Hate Floor:** ${fixedOr(economics.mcWarFloor, 1)} used MC`);
-    lines.push(`- **Current War Footing:** ${economics.currentWarStatus || 'UNAVAILABLE'}`);
-    lines.push(`- **Hate Formula:** \`${economics.formula?.text || 'UNAVAILABLE'}\``);
+    alienThreatLines.push(`- **${actualLabel}:** ${actualHate}`);
+    alienThreatLines.push(`- **Minimum Alien Hate Floor:** ${fixedOr(economics.minimumAlienHate, 2)}`);
+    alienThreatLines.push(`- **Hate Above Floor:** ${fixedOr(economics.hateAboveFloor, 2)}`);
+    alienThreatLines.push(`- **War Threshold:** ${fixedOr(economics.warThreshold, 2)} (crossing triggers retaliation / war footing)`);
+    alienThreatLines.push(`- **Headroom to 50-Hate War Floor:** ${fixedOr(economics.minimumHateHeadroom, 2)}`);
+    alienThreatLines.push(`- **Mission Control Used:** ${fixedOr(economics.usedMissionControl, 0)} / ${fixedOr(economics.missionControlCapacity, 0)} capacity`);
+    alienThreatLines.push(`- **MC Threshold for 50-Hate Floor:** ${fixedOr(economics.mcWarFloor, 1)} used MC`);
+    alienThreatLines.push(`- **Current War Footing:** ${economics.currentWarStatus || 'UNAVAILABLE'}`);
+    alienThreatLines.push(`- **Hate Formula:** \`${economics.formula?.text || 'UNAVAILABLE'}\``);
 
     // Venting and Total War
     if (economics.totalWar) {
-      lines.push(`- **Total War Proximity:** State: ${economics.totalWar.state?.toUpperCase() || 'SAFE'} | Hate Distance: ${fixedOr(economics.totalWar.hateRemaining, 1)} | Year Distance: ${fixedOr(economics.totalWar.yearsRemaining, 1)} yrs`);
+      alienThreatLines.push(`- **Total War Proximity:** State: ${economics.totalWar.state?.toUpperCase() || 'SAFE'} | Hate Distance: ${fixedOr(economics.totalWar.hateRemaining, 1)} | Year Distance: ${fixedOr(economics.totalWar.yearsRemaining, 1)} yrs`);
     }
     if (economics.venting) {
-      lines.push(`- **Hate Venting Eligibility:** ${economics.venting.status?.toUpperCase() || 'UNAVAILABLE'} (Guaranteed: ${economics.venting.guaranteed ? 'YES' : 'NO'})`);
+      alienThreatLines.push(`- **Hate Venting Eligibility:** ${economics.venting.status?.toUpperCase() || 'UNAVAILABLE'} (Guaranteed: ${economics.venting.guaranteed ? 'YES' : 'NO'})`);
       if (Array.isArray(economics.venting.conditions)) {
-        for (const cond of economics.venting.conditions) {
-          lines.push(`  - Condition: ${cond}`);
+        // The only unbounded list inside an otherwise fixed section. Capped so
+        // the non-degradable residue of the document is bounded by
+        // construction; the cap announces itself.
+        for (const cond of economics.venting.conditions.slice(0, MAX_VENTING_CONDITIONS)) {
+          alienThreatLines.push(`  - Condition: ${cond}`);
+        }
+        const ventingOmitted = economics.venting.conditions.length - MAX_VENTING_CONDITIONS;
+        if (ventingOmitted > 0) {
+          alienThreatLines.push(`  - *...and ${ventingOmitted} further venting condition(s) omitted to fit the size budget.*`);
         }
       }
     }
   }
-  lines.push(``);
+  alienThreatLines.push(``);
+  blocks.push(fixedBlock('alien-threat', [`## 1. Alien Threat Posture & Hate Economics`, ``], alienThreatLines));
 
   // -------------------------------------------------------------------------
   // SECTION 2: FRIENDLY FLEETS
   // -------------------------------------------------------------------------
-  lines.push(`## 2. Friendly Fleets (${ourFleets.length} fleets, ${ourFleets.reduce((s, f) => s + (Number(f.shipsCount) || 0), 0)} ships)`);
-  lines.push(``);
-  lines.push(`*Note: Fleet interception and pursuit state is UNAVAILABLE in the save format.*`);
-  lines.push(``);
-
-  if (ourFleets.length === 0) {
-    lines.push(`*No friendly warships currently in service.*`);
-    lines.push(``);
-  } else {
-    for (const f of ourFleets) {
-      const weapons = extractWeaponAndPdSummary(f);
-      const missionDesc = f.destination
-        ? `Transfer to ${f.destination} (ETA: ${f.arrivalDate ? f.arrivalDate.split('T')[0] : 'Unknown'})`
-        : (f.mission || 'Stationary / Patrol');
-
-      lines.push(`### ${f.displayName} (${f.shipsCount ?? 0} ships | ${f.orbitBody || 'Deep Space'} | ${missionDesc})`);
-      lines.push(`- **Propulsion:** Lowest ΔV: ${fixedOr(f.lowestDeltaVKps, 1, 'UNAVAILABLE')} kps | Combat Accel: ${fixedOr(f.lowestCombatAccelerationMps2, 3, 'UNAVAILABLE')} m/s² | Interception State: UNAVAILABLE`);
-      lines.push(`- **Weapons & Defense:** ${weapons.summary} (${weapons.pdCount} Point Defense systems)`);
-      lines.push(`- **Ship Manifest & Design Rollup:**`);
-      const rollups = formatFleetDesignRollup(f, designLookup);
-      for (const line of rollups) {
-        lines.push(line);
-      }
-      lines.push(``);
+  const friendlyBlock = listBlock('friendly-fleets', {
+    headingLines: [
+      `## 2. Friendly Fleets (${ourFleets.length} fleets, ${ourFleets.reduce((s, f) => s + (Number(f.shipsCount) || 0), 0)} ships)`,
+      ``,
+      `*Note: Fleet interception and pursuit state is UNAVAILABLE in the save format.*`,
+      ``
+    ],
+    emptyLines: [`*No friendly warships currently in service.*`, ``],
+    budgetEmptyLines: budgetEmptyNote('friendly fleets', '/api/intel/fleets'),
+    budgetNote: budgetOmissionNote('friendly fleets', '/api/intel/fleets'),
+    detailNote: (levelCounts, kept) => {
+      const shed = ['weapon and point-defense', 'propulsion', 'ship manifest and design rollup'];
+      const clauses = levelCounts.map((count, i) => `${shed[i]} line for ${count}`);
+      return [
+        `*Per-fleet detail reduced to fit the size budget, least operationally significant `
+        + `fleets first — suppressed ${clauses.join('; ')} of ${kept} listed fleets. `
+        + `Full detail at /api/intel/fleets and /api/intel/ship-designs.*`,
+        ``
+      ];
     }
+  });
+  blocks.push(friendlyBlock);
+
+  for (const f of ourFleets) {
+    const weapons = extractWeaponAndPdSummary(f);
+    const missionDesc = f.destination
+      ? `Transfer to ${f.destination} (ETA: ${f.arrivalDate ? f.arrivalDate.split('T')[0] : 'Unknown'})`
+      : (f.mission || 'Stationary / Patrol');
+
+    const headerLine = `### ${f.displayName} (${f.shipsCount ?? 0} ships | ${f.orbitBody || 'Deep Space'} | ${missionDesc})`;
+    const propulsionLine = `- **Propulsion:** Lowest ΔV: ${fixedOr(f.lowestDeltaVKps, 1, 'UNAVAILABLE')} kps | Combat Accel: ${fixedOr(f.lowestCombatAccelerationMps2, 3, 'UNAVAILABLE')} m/s² | Interception State: UNAVAILABLE`;
+    const weaponLine = `- **Weapons & Defense:** ${weapons.summary} (${weapons.pdCount} Point Defense systems)`;
+    const manifestLines = [`- **Ship Manifest & Design Rollup:**`, ...formatFleetDesignRollup(f, designLookup)];
+
+    const ships = num(f.shipsCount) ?? (Array.isArray(f.ships) ? f.ships.length : 0);
+    addEntry(friendlyBlock, {
+      // Friendly fleets are the observer's own operational picture, so they
+      // shed detail long before they shed entries. When entries must go, a
+      // fleet in contact is never cut before a quiet one, then mass decides,
+      // then a committed transfer outranks a stationary patrol.
+      rank: [
+        f.inCombat ? 0 : 1,
+        -ships,
+        f.destination ? 0 : 1,
+        num(f.ID) ?? Number.MAX_SAFE_INTEGER,
+        String(f.displayName || '')
+      ],
+      variants: [
+        [headerLine, propulsionLine, weaponLine, ...manifestLines, ``],
+        [headerLine, propulsionLine, ...manifestLines, ``],
+        [headerLine, ...manifestLines, ``],
+        [headerLine, ``]
+      ]
+    });
   }
 
   // -------------------------------------------------------------------------
   // SECTION 3: HOSTILE RELEVANT FLEETS
   // -------------------------------------------------------------------------
-  lines.push(`## 3. Hostile Relevant Fleets`);
-  lines.push(``);
-
   const allHostiles = asArray(filteredSnapshot.fleets).filter(f =>
     isGenuinelyHostileFaction(f.factionId, f.factionName, filteredSnapshot)
   );
@@ -575,37 +1041,55 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     }
   }
 
-  if (allHostiles.length === 0) {
-    lines.push(`> **No hostile fleets detected.**`);
-    lines.push(`> (Detection coverage: ${filteredSnapshot.capabilities?.deepSkywatch ? 'Deep System Skywatch active' : 'No surveillance coverage active — unobserved space is not empty'}).`);
-    lines.push(``);
-  } else if (relevantHostiles.length === 0) {
-    lines.push(`*All ${allHostiles.length} observed hostile fleets are below the relevance threshold (< 5 ships, not targeting observer assets, not sharing theater, arrival > 365 days).*`);
-    lines.push(``);
-  } else {
-    for (const item of relevantHostiles) {
-      const f = item.fleet;
-      const weapons = extractWeaponAndPdSummary(f);
-      const missionDesc = f.destination
-        ? `Transfer to ${f.destination} (ETA: ${f.arrivalDate ? f.arrivalDate.split('T')[0] : 'Unknown'})`
-        : (f.mission || 'Stationary / Patrol');
+  const noRelevantHostileLines = allHostiles.length === 0
+    ? [
+      `> **No hostile fleets detected.**`,
+      `> (Detection coverage: ${filteredSnapshot.capabilities?.deepSkywatch ? 'Deep System Skywatch active' : 'No surveillance coverage active — unobserved space is not empty'}).`,
+      ``
+    ]
+    : [
+      `*All ${allHostiles.length} observed hostile fleets are below the relevance threshold (< 5 ships, not targeting observer assets, not sharing theater, arrival > 365 days).*`,
+      ``
+    ];
 
-      lines.push(`- **${f.displayName}** (${f.shipsCount ?? 0} ships | ${f.factionName || 'Hostile'} | ${f.orbitBody || 'Deep Space'}) — ${missionDesc} [${item.rel.reasons.join('; ')}]`);
-      lines.push(`  - Weapons: ${weapons.dominantWeapon || 'Unknown'} (${weapons.summary} | ${weapons.pdCount} PD) | Armor: ${fixedOr(f.armorMedian, 1, 'UNAVAILABLE')} cm | ΔV: ${fixedOr(f.lowestDeltaVKps, 1, 'UNAVAILABLE')} kps, Accel: ${fixedOr(f.lowestCombatAccelerationMps2, 2, 'UNAVAILABLE')} m/s²`);
-    }
-  }
+  const hostileBlock = listBlock('hostile-fleets', {
+    headingLines: [`## 3. Hostile Relevant Fleets`, ``],
+    emptyLines: noRelevantHostileLines,
+    budgetEmptyLines: budgetEmptyNote('relevant hostile fleets', '/api/intel/fleets'),
+    // Two different reasons, two different notices, never merged: the one
+    // above says "did not qualify", this one says "qualified but did not fit".
+    relevanceOmitted: omittedCount,
+    relevanceNote: (n) => [
+      `*${n} hostile fleets omitted (below relevance threshold: < 5 ships, not targeting observer assets, not sharing theater, arrival > 365 days).*`,
+      ``
+    ],
+    budgetNote: budgetOmissionNote('relevant hostile fleets', '/api/intel/fleets'),
+    detailNote: (levelCounts, kept) => [
+      `*Weapon, armour and propulsion detail suppressed to fit the size budget for `
+      + `${levelCounts[0]} of ${kept} listed hostile fleets, least relevant first; see /api/intel/fleets.*`,
+      ``
+    ]
+  });
+  blocks.push(hostileBlock);
 
-  if (omittedCount > 0) {
-    lines.push(`*${omittedCount} hostile fleets omitted (below relevance threshold: < 5 ships, not targeting observer assets, not sharing theater, arrival > 365 days).*`);
-    lines.push(``);
+  for (const item of relevantHostiles) {
+    const f = item.fleet;
+    const weapons = extractWeaponAndPdSummary(f);
+    const missionDesc = f.destination
+      ? `Transfer to ${f.destination} (ETA: ${f.arrivalDate ? f.arrivalDate.split('T')[0] : 'Unknown'})`
+      : (f.mission || 'Stationary / Patrol');
+
+    const headLine = `- **${f.displayName}** (${f.shipsCount ?? 0} ships | ${f.factionName || 'Hostile'} | ${f.orbitBody || 'Deep Space'}) — ${missionDesc} [${item.rel.reasons.join('; ')}]`;
+    const detailLine = `  - Weapons: ${weapons.dominantWeapon || 'Unknown'} (${weapons.summary} | ${weapons.pdCount} PD) | Armor: ${fixedOr(f.armorMedian, 1, 'UNAVAILABLE')} cm | ΔV: ${fixedOr(f.lowestDeltaVKps, 1, 'UNAVAILABLE')} kps, Accel: ${fixedOr(f.lowestCombatAccelerationMps2, 2, 'UNAVAILABLE')} m/s²`;
+
+    // Ranked by the same criteria the relevance evaluator already applies, so
+    // budget pressure removes the least relevant contact, not the last one.
+    addEntry(hostileBlock, { rank: item.rel.rank, variants: [[headLine, detailLine], [headLine]] });
   }
 
   // -------------------------------------------------------------------------
   // SECTION 4: INCOMING THREATS & TRANSFERS
   // -------------------------------------------------------------------------
-  lines.push(`## 4. Incoming Threats & Transfers`);
-  lines.push(``);
-
   const inboundList = [];
   for (const f of allHostiles) {
     if (!f.arrivalDate && !f.destination) continue;
@@ -635,26 +1119,44 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
 
   inboundList.sort((a, b) => a.daysRemaining - b.daysRemaining);
 
-  if (inboundList.length === 0) {
-    lines.push(`*No hostile transfers currently inbound to observer assets.*`);
-  } else {
-    for (const item of inboundList) {
-      const f = item.fleet;
-      const days = item.daysRemaining < 9999 ? `${item.daysRemaining} days` : 'ETA Unknown';
-      const arrivalDate = f.arrivalDate ? f.arrivalDate.split('T')[0] : 'Unknown date';
-      const weapons = extractWeaponAndPdSummary(f);
-      const targetLabel = item.targetsOurHab?.displayName || f.destination || 'Observer Asset';
+  const incomingBlock = listBlock('incoming-threats', {
+    headingLines: [`## 4. Incoming Threats & Transfers`, ``],
+    emptyLines: [`*No hostile transfers currently inbound to observer assets.*`],
+    // No trailing blank here -- trailingLines already supplies one.
+    budgetEmptyLines: (total) => [
+      `*All ${total} inbound hostile transfers omitted to fit the size budget; full set at /api/intel/fleets.*`
+    ],
+    budgetNote: budgetOmissionNote('inbound hostile transfers', '/api/intel/fleets'),
+    trailingLines: [``]
+  });
+  blocks.push(incomingBlock);
 
-      lines.push(`- **${f.displayName}** (${f.shipsCount ?? 0} ships) → Target: **${targetLabel}** | ETA: ${arrivalDate} (${days}) | Force: ${weapons.summary}`);
-    }
+  for (const item of inboundList) {
+    const f = item.fleet;
+    const days = item.daysRemaining < 9999 ? `${item.daysRemaining} days` : 'ETA Unknown';
+    const arrivalDate = f.arrivalDate ? f.arrivalDate.split('T')[0] : 'Unknown date';
+    const weapons = extractWeaponAndPdSummary(f);
+    const targetLabel = item.targetsOurHab?.displayName || f.destination || 'Observer Asset';
+
+    addEntry(incomingBlock, {
+      // Sorted and ranked by time-to-impact: the latest arrival is the first
+      // to give way, so what remains is always the most imminent.
+      rank: [
+        item.daysRemaining,
+        -(num(f.shipsCount) ?? 0),
+        num(f.ID) ?? Number.MAX_SAFE_INTEGER,
+        String(f.displayName || '')
+      ],
+      variants: [[
+        `- **${f.displayName}** (${f.shipsCount ?? 0} ships) → Target: **${targetLabel}** | ETA: ${arrivalDate} (${days}) | Force: ${weapons.summary}`
+      ]]
+    });
   }
-  lines.push(``);
 
   // -------------------------------------------------------------------------
   // SECTION 5: SHIPYARDS & FLEET CONSTRUCTION
   // -------------------------------------------------------------------------
-  lines.push(`## 5. Shipyards & Fleet Construction`);
-  lines.push(``);
+  blocks.push(fixedBlock('construction-heading', [`## 5. Shipyards & Fleet Construction`, ``]));
 
   const friendlyStations = asArray(filteredSnapshot.shipyardStations).filter(s => sameId(s.factionId, observerId));
   const friendlyQueues = asArray(filteredSnapshot.shipyardQueues).filter(q => sameId(q.factionId, observerId));
@@ -662,50 +1164,86 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     sameId(m.factionId, observerId) && !m.constructionCompleted && !m.destroyed
   );
 
-  lines.push(`### Active Shipyard Stations (${friendlyStations.length} stations)`);
-  if (friendlyStations.length === 0) {
-    lines.push(`*No active shipyard stations owned by ${observerName}.*`);
-  } else {
-    for (const s of friendlyStations) {
-      lines.push(`- **${s.name || s.displayName}** (${s.orbitBody || 'Orbit'} | Tier ${s.tier || 1}): ${s.shipyardModulesCount ?? s.shipyardsCount ?? 1} Yard(s) | Active Builds: ${asArray(s.queue).length}`);
-    }
+  const stationBlock = listBlock('construction-stations', {
+    headingLines: [`### Active Shipyard Stations (${friendlyStations.length} stations)`],
+    emptyLines: [`*No active shipyard stations owned by ${observerName}.*`],
+    budgetEmptyLines: budgetEmptyNote('shipyard stations', '/api/intel/shipyards', false),
+    budgetNote: budgetOmissionNote('shipyard stations', '/api/intel/shipyards'),
+    trailingLines: [``]
+  });
+  blocks.push(stationBlock);
+  for (const s of friendlyStations) {
+    const yards = num(s.shipyardModulesCount) ?? num(s.shipyardsCount) ?? 1;
+    addEntry(stationBlock, {
+      // Most build capacity first; a station with active builds outranks an idle one.
+      rank: [-yards, -asArray(s.queue).length, String(s.name || s.displayName || '')],
+      variants: [[
+        `- **${s.name || s.displayName}** (${s.orbitBody || 'Orbit'} | Tier ${s.tier || 1}): ${s.shipyardModulesCount ?? s.shipyardsCount ?? 1} Yard(s) | Active Builds: ${asArray(s.queue).length}`
+      ]]
+    });
   }
-  lines.push(``);
 
-  lines.push(`### Ship Construction Queues (${friendlyQueues.length} ship(s) building)`);
-  if (friendlyQueues.length === 0) {
-    lines.push(`*No warships currently under construction.*`);
-  } else {
-    for (const q of friendlyQueues) {
-      const designInfo = designLookup.get(q.design || q.hull);
-      const designName = designInfo ? `${designInfo.displayName} (${designInfo.hullClass})` : (q.design || q.hull || 'Warship');
-      const compDate = q.completionDate ? q.completionDate.split('T')[0] : 'Unknown date';
-      lines.push(`- **${designName}** at ${q.orbitBody || 'Station'} — Ready: ${compDate} (Queue ID: ${q.id || 'N/A'})`);
-    }
+  const queueBlock = listBlock('construction-queues', {
+    headingLines: [`### Ship Construction Queues (${friendlyQueues.length} ship(s) building)`],
+    emptyLines: [`*No warships currently under construction.*`],
+    budgetEmptyLines: budgetEmptyNote('ship construction queues', '/api/intel/shipyard-queues', false),
+    budgetNote: budgetOmissionNote('ship construction queues', '/api/intel/shipyard-queues'),
+    trailingLines: [``]
+  });
+  blocks.push(queueBlock);
+  for (const q of friendlyQueues) {
+    const designInfo = designLookup.get(q.design || q.hull);
+    const designName = designInfo ? `${designInfo.displayName} (${designInfo.hullClass})` : (q.design || q.hull || 'Warship');
+    const compDate = q.completionDate ? q.completionDate.split('T')[0] : 'Unknown date';
+    const readyAt = q.completionDate ? Date.parse(q.completionDate) : NaN;
+    addEntry(queueBlock, {
+      // The soonest reinforcement is the one that changes a decision, so a
+      // distant completion is cut before an imminent one.
+      rank: [Number.isFinite(readyAt) ? readyAt : Number.MAX_SAFE_INTEGER, String(designName)],
+      variants: [[
+        `- **${designName}** at ${q.orbitBody || 'Station'} — Ready: ${compDate} (Queue ID: ${q.id || 'N/A'})`
+      ]]
+    });
   }
-  lines.push(``);
 
   if (friendlyModules.length > 0) {
-    lines.push(`### Hab Modules Under Construction (${friendlyModules.length} module(s))`);
+    const moduleBlock = listBlock('construction-modules', {
+      headingLines: [`### Hab Modules Under Construction (${friendlyModules.length} module(s))`],
+      // Pre-existing hard cap at 10, announced. Distinct from a budget cut.
+      relevanceOmitted: Math.max(0, friendlyModules.length - 10),
+      relevanceNote: (n) => [`- *...and ${n} additional modules building.*`],
+      budgetEmptyLines: budgetEmptyNote('hab modules under construction', '/api/intel/construction', false),
+      budgetNote: budgetOmissionNote('hab modules under construction', '/api/intel/construction'),
+      trailingLines: [``]
+    });
+    blocks.push(moduleBlock);
     for (const m of friendlyModules.slice(0, 10)) {
       const compDate = m.completionDate ? m.completionDate.split('T')[0] : 'In progress';
-      lines.push(`- **${m.templateName || m.name}** at ${m.habName || m.orbitBody || 'Hab'} — Ready: ${compDate}`);
+      const readyAt = m.completionDate ? Date.parse(m.completionDate) : NaN;
+      addEntry(moduleBlock, {
+        rank: [Number.isFinite(readyAt) ? readyAt : Number.MAX_SAFE_INTEGER, String(m.templateName || m.name || '')],
+        variants: [[
+          `- **${m.templateName || m.name}** at ${m.habName || m.orbitBody || 'Hab'} — Ready: ${compDate}`
+        ]]
+      });
     }
-    if (friendlyModules.length > 10) {
-      lines.push(`- *...and ${friendlyModules.length - 10} additional modules building.*`);
-    }
-    lines.push(``);
   }
 
   // -------------------------------------------------------------------------
   // SECTION 6: KEY HABS & INFRASTRUCTURE
   // -------------------------------------------------------------------------
-  lines.push(`## 6. Key Habs & Space Infrastructure (${ourHabs.length} habs)`);
-  lines.push(``);
+  const habBlock = listBlock('habs', {
+    headingLines: [`## 6. Key Habs & Space Infrastructure (${ourHabs.length} habs)`, ``],
+    // Group totals stay true totals; the budget notice reconciles them.
+    groupHeader: (bodyName, total) => [`### ${bodyName} (${total} habs)`],
+    groupTrailingLines: [``],
+    emptyLines: [`*No habs or surface bases owned by ${observerName}.*`],
+    budgetEmptyLines: budgetEmptyNote('habs', '/api/intel/habs'),
+    budgetNote: budgetOmissionNote('habs', '/api/intel/habs')
+  });
+  blocks.push(habBlock);
 
-  if (ourHabs.length === 0) {
-    lines.push(`*No habs or surface bases owned by ${observerName}.*`);
-  } else {
+  {
     const habsByBody = new Map();
     for (const h of ourHabs) {
       const b = h.orbitBody || 'Deep Space';
@@ -714,7 +1252,6 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     }
 
     for (const [bodyName, habList] of habsByBody.entries()) {
-      lines.push(`### ${bodyName} (${habList.length} habs)`);
       for (const h of habList) {
         const agg = habModulesAgg.get(Number(h.ID)) || {
           mines: 0,
@@ -729,17 +1266,27 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
         if (h.underBombardment) statusFlags.push('UNDER BOMBARDMENT');
         const flagText = statusFlags.length ? ` **[${statusFlags.join(', ')}]**` : '';
 
-        lines.push(`- **${h.displayName}** (Tier ${h.tier || 1} ${h.habType || 'Hab'})${flagText}: ${agg.mines} Mine(s) | ${agg.shipyards} Shipyard(s) | ${agg.construction} Construction | ${agg.defense} Defense(s) | ${agg.research} Lab(s)`);
+        // A hab in contact is never dropped ahead of a quiet one; otherwise
+        // capability weight decides, so the industrial and defensive centres
+        // outlive the empty outposts.
+        const contested = statusFlags.length > 0 ? 0 : 1;
+        const capability = (agg.shipyards * 4) + (agg.defense * 3) + (agg.construction * 2)
+          + agg.mines + agg.research;
+        addEntry(habBlock, {
+          group: bodyName,
+          rank: [contested, -capability, -(num(h.tier) ?? 0), String(h.displayName || '')],
+          variants: [[
+            `- **${h.displayName}** (Tier ${h.tier || 1} ${h.habType || 'Hab'})${flagText}: ${agg.mines} Mine(s) | ${agg.shipyards} Shipyard(s) | ${agg.construction} Construction | ${agg.defense} Defense(s) | ${agg.research} Lab(s)`
+          ]]
+        });
       }
-      lines.push(``);
     }
   }
 
   // -------------------------------------------------------------------------
   // SECTION 7: LOGISTICS & WAR ECONOMY
   // -------------------------------------------------------------------------
-  lines.push(`## 7. Logistics & War Economy`);
-  lines.push(``);
+  const logisticsLines = [];
 
   const res = observer?.resources || {};
   const net = observer?.monthlyNet || {};
@@ -757,8 +1304,8 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     ['Research', res.Research, net.Research, 'RP/mo']
   ];
 
-  lines.push(`| Resource | Stockpile | Monthly Net | Runway / Burn |`);
-  lines.push(`| :--- | :--- | :--- | :--- |`);
+  logisticsLines.push(`| Resource | Stockpile | Monthly Net | Runway / Burn |`);
+  logisticsLines.push(`| :--- | :--- | :--- | :--- |`);
 
   for (const [name, stockVal, netVal] of resourceEntries) {
     const stockStr = isMeasured(stockVal) ? Number(stockVal).toLocaleString(undefined, { maximumFractionDigits: 1 }) : 'UNAVAILABLE';
@@ -773,42 +1320,130 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
       runway = 'UNKNOWN';
     }
 
-    lines.push(`| **${name}** | ${stockStr} | ${netStr} | ${runway} |`);
+    logisticsLines.push(`| **${name}** | ${stockStr} | ${netStr} | ${runway} |`);
   }
-  lines.push(``);
+  logisticsLines.push(``);
+  blocks.push(fixedBlock('logistics', [`## 7. Logistics & War Economy`, ``], logisticsLines));
 
   // -------------------------------------------------------------------------
   // SECTION 8: ACTIVE RESEARCH & PROJECTS
   // -------------------------------------------------------------------------
-  lines.push(`## 8. Active Research & Technology Projects`);
-  lines.push(``);
+  blocks.push(fixedBlock('research-heading', [`## 8. Active Research & Technology Projects`, ``]));
 
-  lines.push(`### Global Research Slots`);
+  const slotBlock = listBlock('research-slots', {
+    headingLines: [`### Global Research Slots`],
+    emptyLines: [`*No global research slots tracked.*`],
+    budgetEmptyLines: budgetEmptyNote('global research slots', '/api/intel/research', false),
+    budgetNote: budgetOmissionNote('global research slots', '/api/intel/research'),
+    trailingLines: [``]
+  });
+  blocks.push(slotBlock);
+
   const globalSlots = asArray(filteredSnapshot.globalResearch?.activeSlots);
-  if (globalSlots.length === 0) {
-    lines.push(`*No global research slots tracked.*`);
-  } else {
-    for (const slot of globalSlots) {
-      const pct = isMeasured(slot.percent) ? `${slot.percent}%` : 'UNKNOWN%';
-      lines.push(`- **Slot ${slot.slotNumber ?? '•'}: ${slot.displayName || slot.techId}** — ${pct} (${localeOr(slot.accumulatedResearch)} / ${localeOr(slot.totalCost)} RP) | Leading: ${slot.leadFactionName || 'Unknown'} (${localeOr(slot.leadContribution)})`);
-    }
+  for (const slot of globalSlots) {
+    const pct = isMeasured(slot.percent) ? `${slot.percent}%` : 'UNKNOWN%';
+    addEntry(slotBlock, {
+      // Nearest to completion is the most decision-relevant, so the least
+      // advanced slot is the first to give way. An unmeasured percentage is
+      // ranked last rather than treated as zero progress.
+      rank: [
+        isMeasured(slot.percent) ? -Number(slot.percent) : Number.MAX_SAFE_INTEGER,
+        num(slot.slotNumber) ?? Number.MAX_SAFE_INTEGER,
+        String(slot.displayName || slot.techId || '')
+      ],
+      variants: [[
+        `- **Slot ${slot.slotNumber ?? '•'}: ${slot.displayName || slot.techId}** — ${pct} (${localeOr(slot.accumulatedResearch)} / ${localeOr(slot.totalCost)} RP) | Leading: ${slot.leadFactionName || 'Unknown'} (${localeOr(slot.leadContribution)})`
+      ]]
+    });
   }
-  lines.push(``);
 
-  lines.push(`### Observer Projects (${observerName})`);
+  const projectBlock = listBlock('research-projects', {
+    headingLines: [`### Observer Projects (${observerName})`],
+    emptyLines: [`*No faction engineering projects currently active.*`],
+    budgetEmptyLines: budgetEmptyNote('observer projects', '/api/intel/research', false),
+    budgetNote: budgetOmissionNote('observer projects', '/api/intel/research'),
+    trailingLines: [``]
+  });
+  blocks.push(projectBlock);
+
   const currentProjects = asArray(observer?.currentProjects);
-  if (currentProjects.length === 0) {
-    lines.push(`*No faction engineering projects currently active.*`);
-  } else {
-    for (const cp of currentProjects) {
-      const pct = isMeasured(cp.percent) ? `${cp.percent}%` : 'UNKNOWN%';
-      const cost = isMeasured(cp.totalCost) ? localeOr(cp.totalCost) : 'UNKNOWN';
-      lines.push(`- **${cp.displayName || cp.projectId}** — ${pct} (${localeOr(cp.accumulatedResearch)} / ${cost} RP)`);
-    }
+  for (const cp of currentProjects) {
+    const pct = isMeasured(cp.percent) ? `${cp.percent}%` : 'UNKNOWN%';
+    const cost = isMeasured(cp.totalCost) ? localeOr(cp.totalCost) : 'UNKNOWN';
+    addEntry(projectBlock, {
+      rank: [
+        isMeasured(cp.percent) ? -Number(cp.percent) : Number.MAX_SAFE_INTEGER,
+        String(cp.displayName || cp.projectId || '')
+      ],
+      variants: [[
+        `- **${cp.displayName || cp.projectId}** — ${pct} (${localeOr(cp.accumulatedResearch)} / ${cost} RP)`
+      ]]
+    });
   }
-  lines.push(``);
 
-  return lines.join('\n');
+  // -------------------------------------------------------------------------
+  // DEGRADATION ORDER -- deliberate, and the reason for each position.
+  //
+  // A war-room brief exists to answer "what can hurt me, and what do I have to
+  // answer with". So compaction that keeps every entry listed comes first,
+  // then the reference material, and the threat-bearing content survives
+  // longest. Each step is applied only as far as the overflow requires, and
+  // within a step the least relevant entries always give way first.
+  //
+  //   1-2.  Research (§8) entries      -- background; nothing here changes
+  //                                       what a commander does this turn.
+  //   3.    Friendly fleets (§2) → L1  -- shed the weapon/PD line. Cheap, and
+  //                                       every fleet stays listed.
+  //   4.    Hostile fleets (§3) → L1   -- shed the second detail line, same
+  //                                       reasoning; every contact stays named.
+  //   5-6.  Construction (§5) modules, then stations.
+  //   7.    Friendly fleets (§2) → L2  -- shed the propulsion line.
+  //   8.    Key habs (§6)              -- a static inventory the JSON
+  //                                       endpoints carry in full.
+  //   9.    Construction (§5) queues   -- last of §5: the only part that says
+  //                                       when reinforcements actually arrive.
+  //   10.   Friendly fleets (§2) → L3  -- shed the design rollup; header only.
+  //   11.   Hostile fleets (§3) entries -- ranked by the relevance evaluator's
+  //                                       own criteria, least relevant first.
+  //   12.   Friendly fleets (§2) entries -- the observer's own picture is the
+  //                                       last thing cut before threats.
+  //   13.   Incoming threats (§4)      -- cut only when nothing else remains,
+  //                                       latest ETA first.
+  //
+  // §1 (alien threat posture) and §7 (logistics) are fixed-size by
+  // construction and never degrade.
+  // -------------------------------------------------------------------------
+  const ladder = [
+    { block: 'research-projects', action: 'drop' },
+    { block: 'research-slots', action: 'drop' },
+    { block: 'friendly-fleets', action: 'reduce', toLevel: 1 },
+    { block: 'hostile-fleets', action: 'reduce', toLevel: 1 },
+    { block: 'construction-modules', action: 'drop' },
+    { block: 'construction-stations', action: 'drop' },
+    { block: 'friendly-fleets', action: 'reduce', toLevel: 2 },
+    { block: 'habs', action: 'drop' },
+    { block: 'construction-queues', action: 'drop' },
+    { block: 'friendly-fleets', action: 'reduce', toLevel: 3 },
+    { block: 'hostile-fleets', action: 'drop' },
+    { block: 'friendly-fleets', action: 'drop' },
+    { block: 'incoming-threats', action: 'drop' }
+  ];
+
+  // Last resort if even an entry-free document will not fit: suppress whole
+  // section BODIES in the same priority order. Section headers always survive.
+  const clampOrder = [
+    'research-projects', 'research-slots', 'research-heading',
+    'habs',
+    'construction-modules', 'construction-stations', 'construction-queues', 'construction-heading',
+    'logistics',
+    'friendly-fleets',
+    'hostile-fleets',
+    'incoming-threats',
+    'alien-threat'
+  ];
+
+  const maxBytes = isMeasured(options.maxBytes) ? Number(options.maxBytes) : WAR_ROOM_BYTE_BUDGET;
+  return renderWithByteBudget(blocks, ladder, clampOrder, maxBytes);
 }
 
 // ---------------------------------------------------------------------------
@@ -1040,5 +1675,9 @@ export default {
   buildHabModuleAggregates,
   evaluateHostileRelevance,
   extractWeaponAndPdSummary,
-  formatFleetDesignRollup
+  formatFleetDesignRollup,
+  renderWithByteBudget,
+  utf8ByteLength,
+  WAR_ROOM_BYTE_BUDGET,
+  THREATS_BYTE_BUDGET
 };

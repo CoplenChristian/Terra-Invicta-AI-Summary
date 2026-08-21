@@ -25,8 +25,15 @@ export const factionResourceRow = (faction) => ({
   powerScore: faction.powerScore?.overall ?? null,
   missionControlUsage: faction.missionControlUsage ?? null,
   missionControlCapacity: faction.missionControlCapacity ?? null,
-  shipyardCount: faction.shipyardCount ?? 0,
-  shipyardQueueCount: faction.shipyardQueueCount ?? 0,
+  // `?? 0` here UNDID a player-mode redaction in the most dangerous direction.
+  // `server/intelligenceFilter.js` deliberately nulls an enemy's shipyard
+  // counts (pinned by tests/intelligenceFilter.test.js), and this row then
+  // restored a confident 0 -- so /api/intel/factions reported seven of eight
+  // factions as having exactly zero shipyards and zero queued ships, which
+  // reads as measured industrial dominance rather than "not observed".
+  // Same rule as the two lines above it: absent stays null.
+  shipyardCount: faction.shipyardCount ?? null,
+  shipyardQueueCount: faction.shipyardQueueCount ?? null,
   resources: faction.resources || null,
   monthlyIncome: faction.monthlyIncome || null,
   monthlyExpense: faction.monthlyExpense ?? null,

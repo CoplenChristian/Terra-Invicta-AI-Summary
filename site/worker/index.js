@@ -35,7 +35,11 @@ import {
 } from '../shared/apiSurface.mjs';
 import {
   INTEL_ENDPOINT_INDEX,
-  INTEL_ENDPOINT_EXAMPLES
+  INTEL_ENDPOINT_EXAMPLES,
+  DETAIL_LEVELS,
+  DEFAULT_DETAIL_LEVEL,
+  DETAIL_AWARE_RESOURCES,
+  measureIntelEndpointSizes
 } from '../shared/intelResources.mjs';
 import { isPositiveIntegerId } from '../shared/requestValidation.mjs';
 import { buildStrategicDelta } from '../shared/strategicDelta.mjs';
@@ -65,6 +69,45 @@ import {
   validateResourceQuery
 } from './projections.js';
 import { HOSTED_MODES, positiveIntegerOr, readRuntimeDefaults } from './runtimeDefaults.js';
+
+/**
+ * Measured response sizes for the hosted discovery index.
+ *
+ * Memoised per (snapshot, mode) so a warm isolate answers a repeat index
+ * request without re-running thirty projections, and wrapped so that a
+ * measurement failure degrades to "no size hints" instead of taking down the
+ * route an external client discovers everything else through.
+ */
+const hostedSizeMemo = new Map();
+async function hostedResponseSizes(env, observerId, mode, isSupabaseConfigured) {
+  if (!isSupabaseConfigured) {
+    return {
+      responseSizesUnavailable: {
+        all: 'sizes are measured against the published snapshot, which requires the hosted Supabase backend'
+      }
+    };
+  }
+  try {
+    const result = await fetchFromSupabase(env, observerId, mode);
+    if (!result.found) {
+      return { responseSizesUnavailable: { all: `sizes could not be measured: ${result.error}` } };
+    }
+    const snapshot = result.snapshot || {};
+    const memoKey = `${snapshot.snapshotId || 'unknown'}|${mode}|${observerId}`;
+    if (!hostedSizeMemo.has(memoKey)) {
+      hostedSizeMemo.clear();
+      hostedSizeMemo.set(memoKey, measureIntelEndpointSizes(snapshot, { mode }));
+    }
+    const measured = hostedSizeMemo.get(memoKey);
+    return {
+      responseSizes: measured.sizes,
+      responseSizesUnavailable: measured.unavailable,
+      responseSizeBasis: measured.basis
+    };
+  } catch (err) {
+    return { responseSizesUnavailable: { all: `sizes could not be measured: ${err.message}` } };
+  }
+}
 
 export default {
   async fetch(request, env) {
@@ -134,12 +177,25 @@ export default {
     // INTEL_ENDPOINT_INDEX appears in both runtimes from one edit instead of
     // requiring the page to be written out twice.
     if (url.pathname === '/api/intel' || url.pathname === '/api/intel/') {
-      const payload = buildIntelApiIndex({
-        source: 'hosted-worker',
-        endpoints: INTEL_ENDPOINT_INDEX,
-        examples: INTEL_ENDPOINT_EXAMPLES,
-        defaultObserverFactionId: defaultObserverId
-      });
+      const payload = {
+        ...buildIntelApiIndex({
+          source: 'hosted-worker',
+          endpoints: INTEL_ENDPOINT_INDEX,
+          examples: INTEL_ENDPOINT_EXAMPLES,
+          defaultObserverFactionId: defaultObserverId
+        }),
+        detail: {
+          levels: DETAIL_LEVELS,
+          default: DEFAULT_DETAIL_LEVEL,
+          appliesTo: Array.from(DETAIL_AWARE_RESOURCES),
+          description: 'summary returns a manifest; full returns the per-ship payload and is much larger.'
+        },
+        // Measured, never estimated: the published snapshot is read and each
+        // projection is actually run. A deployment with no Supabase, or a read
+        // that fails, omits the numbers and says why -- an index without size
+        // hints is still usable, an index with invented ones is not.
+        ...(await hostedResponseSizes(env, observerId, mode, isSupabaseConfigured))
+      };
       if (url.searchParams.get('format') === 'json' || request.headers.get('accept')?.includes('application/json')) {
         return jsonResponse(payload);
       }

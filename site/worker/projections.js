@@ -17,6 +17,9 @@
 
 import {
   SUPPORTED_RESOURCES,
+  DETAIL_LEVELS,
+  DETAIL_AWARE_RESOURCES,
+  parseDetailLevel,
   buildResourceProjection
 } from '../shared/intelResources.mjs';
 import {
@@ -89,6 +92,10 @@ export const validateResourceQuery = (url) => {
   if (limit !== null && !isBoundedInteger(limit, MINING_LIMIT_BOUNDS)) {
     return `Invalid mining prospects limit. Use an integer from ${MINING_LIMIT_BOUNDS.min} to ${MINING_LIMIT_BOUNDS.max}.`;
   }
+  const detail = url.searchParams.get('detail');
+  if (detail !== null && parseDetailLevel(detail) === null) {
+    return `Invalid detail level '${detail}'. Use ${DETAIL_LEVELS.join(' or ')}.`;
+  }
   return null;
 };
 
@@ -107,6 +114,9 @@ export const buildIntelResource = (result, resource, url) => {
   const quantity = parseInt(url.searchParams.get('quantity'), 10) || 1;
   const status = url.searchParams.get('status');
   const sort = url.searchParams.get('sort');
+  // `validateResourceQuery` has already rejected a malformed value, so this
+  // cannot silently fall back to the default for a caller who asked for `full`.
+  const detail = parseDetailLevel(url.searchParams.get('detail'));
   const query = {
     faction: factionId,
     body: body || null,
@@ -117,7 +127,8 @@ export const buildIntelResource = (result, resource, url) => {
     design: designId || null,
     quantity,
     status: status || null,
-    sort: sort || null
+    sort: sort || null,
+    ...(DETAIL_AWARE_RESOURCES.has(resource) ? { detail } : {})
   };
   const projection = buildResourceProjection(snapshot, resource, {
     factionId,
@@ -130,6 +141,7 @@ export const buildIntelResource = (result, resource, url) => {
     quantity,
     status,
     sort,
+    detail,
     mode: result.mode || result.row?.visibility || 'player'
   });
   return resourceEnvelope(result, resource, projection.items, query, projection);

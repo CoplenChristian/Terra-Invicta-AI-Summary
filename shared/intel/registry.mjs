@@ -51,8 +51,10 @@ import {
 import {
   arrivalResourceRow,
   fleetResourceRow,
+  fleetSummaryProjection,
   friendlyStrengthAtDestination,
   shipResourceRows,
+  shipSummaryProjection,
   transfersResource
 } from './fleets.mjs';
 import {
@@ -80,6 +82,30 @@ const OBSERVER_ONLY = `?observer=${DEFAULT_OBSERVER_FACTION_ID}`;
 
 /** The plain `{ count, items }` envelope most list endpoints return. */
 const rows = (items) => ({ count: items.length, items });
+
+// ---------------------------------------------------------------------------
+// detail=summary|full
+//
+// Only `fleets` and `ships` honour it; every other endpoint ignores it, and
+// `DETAIL_AWARE_RESOURCES` is what lets a caller (and the discovery index) tell
+// the difference instead of guessing that a parameter did something.
+// ---------------------------------------------------------------------------
+
+export const DETAIL_LEVELS = Object.freeze(['summary', 'full']);
+export const DEFAULT_DETAIL_LEVEL = 'summary';
+
+/** The accept/reject decision, shared so local and hosted cannot drift. */
+export const isDetailLevel = (value) => DETAIL_LEVELS.includes(String(value));
+
+/**
+ * Absent -> the small default. Present-but-invalid -> null, so each adapter can
+ * reject it in its own wording rather than silently answering a different
+ * question than the caller asked.
+ */
+export const parseDetailLevel = (value) => {
+  if (value === undefined || value === null || value === '') return DEFAULT_DETAIL_LEVEL;
+  return isDetailLevel(value) ? String(value) : null;
+};
 
 const INTEL_ENDPOINTS = Object.freeze([
   {
@@ -128,13 +154,21 @@ const INTEL_ENDPOINTS = Object.freeze([
   {
     key: 'fleets',
     example: OMNISCIENT_ALIEN,
-    project: (snapshot, { factionId, body }) =>
-      rows(asArray(snapshot.fleets).filter(item => factionMatches(item, factionId) && bodyMatches(item, body)).map(fleetResourceRow))
+    detail: true,
+    project: (snapshot, { factionId, body, detail }) => {
+      const matching = asArray(snapshot.fleets).filter(item => factionMatches(item, factionId) && bodyMatches(item, body));
+      if (detail === 'full') return { ...rows(matching.map(fleetResourceRow)), detail: 'full' };
+      return fleetSummaryProjection(matching);
+    }
   },
   {
     key: 'ships',
     example: OMNISCIENT_ALIEN,
-    project: (snapshot, { factionId, body }) => rows(shipResourceRows(asArray(snapshot.fleets), factionId, body))
+    detail: true,
+    project: (snapshot, { factionId, body, detail }) => {
+      if (detail === 'full') return { ...rows(shipResourceRows(asArray(snapshot.fleets), factionId, body)), detail: 'full' };
+      return shipSummaryProjection(snapshot.fleets, factionId, body);
+    }
   },
   {
     key: 'research',
@@ -259,6 +293,7 @@ const INTEL_ENDPOINTS = Object.freeze([
   {
     key: 'delta',
     example: OMNISCIENT,
+    unsizable: 'size depends on the previous snapshot, which the index does not load',
     project: (snapshot, { observerId, previousSnapshot }) => {
       if (snapshot.changesSincePrevious) {
         return { count: null, items: [], ...snapshot.changesSincePrevious, source: 'published-comparison' };
@@ -269,6 +304,7 @@ const INTEL_ENDPOINTS = Object.freeze([
   {
     key: 'mobility',
     example: `${OMNISCIENT}&fleet=<fleetId>`,
+    unsizable: 'requires ?fleet=<fleetId>; an unfiltered size would not describe a real request',
     project: (snapshot, { fleetId, observerId }) => {
       const mob = mobilityResource(snapshot, fleetId, observerId);
       return { count: mob.transfers?.length || 0, items: mob.transfers || [], ...mob };
@@ -277,6 +313,7 @@ const INTEL_ENDPOINTS = Object.freeze([
   {
     key: 'productionPlan',
     example: `${OMNISCIENT}&design=playerShipTemplate584&quantity=4`,
+    unsizable: 'requires ?design=<designId>; an unfiltered size would not describe a real request',
     project: (snapshot, { designId, quantity, observerId }) =>
       ({ count: null, items: [], ...productionPlanResource(snapshot, designId, quantity, observerId) })
   },
@@ -342,6 +379,14 @@ const PROJECTION_BY_ROUTE = new Map(
 /** Resource names `buildResourceProjection` understands. */
 export const SUPPORTED_RESOURCES = new Set(PROJECTION_BY_ROUTE.keys());
 
+/**
+ * Routes that honour `?detail=`, derived from the table's own `detail: true`
+ * rather than listed a second time -- the same reason the dispatcher is derived.
+ */
+export const DETAIL_AWARE_RESOURCES = Object.freeze(
+  new Set(INTEL_ENDPOINTS.filter(entry => entry.detail === true).map(entry => entry.route))
+);
+
 // Public discovery map shared by the local Express API and hosted worker.
 // Keep these as path-only links so external analysis clients can discover the
 // focused routes before adding observer/mode/faction filters themselves.
@@ -352,6 +397,88 @@ export const INTEL_ENDPOINT_INDEX = Object.freeze(
 export const INTEL_ENDPOINT_EXAMPLES = Object.freeze(
   Object.fromEntries(INTEL_ENDPOINTS.map(entry => [entry.key, entry.example]))
 );
+
+// ---------------------------------------------------------------------------
+// Response sizes for the discovery index.
+//
+// `/api/intel` is documented as how an external analysis client discovers the
+// route surface, and it pointed at a 909 KB endpoint with no indication that it
+// was three orders of magnitude larger than `runtime`. A model-facing client
+// cannot choose what to fetch without knowing that.
+//
+// Every number here is MEASURED -- each projection is run against the snapshot
+// the runtime already holds and the result is stringified -- never estimated
+// from a row count. An endpoint whose size cannot be measured honestly (it needs
+// a required parameter, it needs a second snapshot, or an adapter answers it
+// rather than this registry) is OMITTED from the map with its reason recorded
+// separately, because a plausible-looking invented byte count is worse than a
+// gap the client can see.
+// ---------------------------------------------------------------------------
+
+const byteLength = (text) => {
+  // `TextEncoder` is available in both Node and the Cloudflare worker; the
+  // `.length` fallback under-counts multi-byte characters, so it is only ever
+  // reached if a runtime has neither, and the result stays labelled `bytes`.
+  if (typeof TextEncoder === 'function') return new TextEncoder().encode(text).length;
+  return text.length;
+};
+
+/**
+ * Measures every projected endpoint against `snapshot`, with no filters.
+ *
+ * No filters is deliberate: the discovery index lists the routes without
+ * filters, so the measured size is the size of the request the index actually
+ * describes -- and therefore the worst case, which is the useful warning.
+ *
+ * @returns {{ sizes: Object, unavailable: Object, basis: Object }}
+ */
+export const measureIntelEndpointSizes = (snapshot, { mode = 'player' } = {}) => {
+  const sizes = {};
+  const unavailable = {};
+  for (const entry of INTEL_ENDPOINTS) {
+    if (!entry.projected) {
+      unavailable[entry.key] = 'served by the runtime adapter, not by the shared projection registry';
+      continue;
+    }
+    if (entry.unsizable) {
+      unavailable[entry.key] = entry.unsizable;
+      continue;
+    }
+    try {
+      const projection = buildResourceProjection(snapshot, entry.route, { mode });
+      const bytes = byteLength(JSON.stringify(projection));
+      const measurement = { bytes, items: Array.isArray(projection?.items) ? projection.items.length : null };
+      if (DETAIL_AWARE_RESOURCES.has(entry.route)) {
+        measurement.detail = DEFAULT_DETAIL_LEVEL;
+        measurement.fullBytes = byteLength(JSON.stringify(
+          buildResourceProjection(snapshot, entry.route, { mode, detail: 'full' })
+        ));
+      }
+      sizes[entry.key] = measurement;
+    } catch (err) {
+      // A projection that throws has no honest size. Say so; do not guess.
+      unavailable[entry.key] = `projection failed: ${err.message}`;
+    }
+  }
+  return {
+    sizes,
+    unavailable,
+    basis: {
+      measurement: 'measured',
+      // Deliberately precise about WHAT was measured: this is the projection
+      // payload, not the whole HTTP body. Each runtime wraps it in an identity
+      // envelope of roughly 1 KB, so the wire response is a little larger. A
+      // description that overstated its own scope would be the same defect
+      // class as an estimated number presented as a measurement.
+      description: 'Uncompressed bytes of the projection payload for this endpoint with no filters, measured against the snapshot named below. The response envelope adds roughly 1 KB on the wire.',
+      mode,
+      snapshotId: snapshot?.snapshotId ?? null,
+      saveFilename: snapshot?.metadata?.fileName ?? null,
+      campaignDate: snapshot?.metadata?.gameTimeString ?? null,
+      note: 'A faction or body filter reduces these. Endpoints listed under `unavailable` have no honest measurement and are omitted rather than estimated.'
+    }
+  };
+};
 
 // One pure projection dispatcher is shared by the local Express adapter and
 // the hosted worker. The adapters are responsible only for request parsing,
@@ -369,7 +496,8 @@ export const buildResourceProjection = (snapshot, resource, {
   sort = null,
   previousSnapshot = null,
   mode = 'player',
-  weights = null
+  weights = null,
+  detail = DEFAULT_DETAIL_LEVEL
 } = {}) => {
   const observerId = snapshot.observerFactionId || DEFAULT_OBSERVER_FACTION_ID;
   const project = PROJECTION_BY_ROUTE.get(resource);
@@ -391,6 +519,7 @@ export const buildResourceProjection = (snapshot, resource, {
     sort,
     previousSnapshot,
     mode,
-    weights
+    weights,
+    detail
   });
 };

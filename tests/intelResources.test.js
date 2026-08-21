@@ -48,7 +48,7 @@ test('buildResource projects nations and councilors', () => {
 
 test('buildResource reports ships through fleet projection', () => {
   const snapshot = omniscientSnapshot({ ships: 2 });
-  const ships = localResources.buildResource(snapshot, 'ships', { mode: 'omniscient' });
+  const ships = localResources.buildResource(snapshot, 'ships', { mode: 'omniscient', detail: 'full' });
   assert.strictEqual(ships.count, 2);
   assert.strictEqual(ships.items[0].fleetName, 'Belt Patrol');
   assert.ok(ships.items[0].spaceTheaterKey, 'shared ship rows include theater fields');
@@ -79,13 +79,103 @@ test('API discovery index lists focused routes', () => {
 test('local wrapper and shared ESM module produce identical rows', async () => {
   const shared = await import('../shared/intelResources.mjs');
   const snapshot = omniscientSnapshot({ ships: 2 });
-  const localFleetRow = localResources.buildResource(snapshot, 'fleets', { mode: 'omniscient' }).items[0];
+  const localFleetRow = localResources.buildResource(snapshot, 'fleets', { mode: 'omniscient', detail: 'full' }).items[0];
   const sharedFleetRow = shared.fleetResourceRow(snapshot.fleets[0]);
   assert.deepStrictEqual(localFleetRow, sharedFleetRow);
 
-  const localShipRows = localResources.buildResource(snapshot, 'ships', { mode: 'omniscient' }).items;
+  const localShipRows = localResources.buildResource(snapshot, 'ships', { mode: 'omniscient', detail: 'full' }).items;
   const sharedShipRows = shared.shipResourceRows(snapshot.fleets, null, null);
   assert.deepStrictEqual(localShipRows, sharedShipRows);
+});
+
+// --- detail=summary|full ----------------------------------------------------
+// `/api/intel/fleets` (909 KB) and `/api/intel/ships` (766 KB) were the only
+// two focused endpoints an external analysis client could not consume. The
+// default is now a manifest; `full` is the payload that used to be the default.
+
+test('the default detail level is the small one, and full restores the old shape', () => {
+  const snapshot = omniscientSnapshot({ ships: 2 });
+
+  const defaulted = localResources.buildResource(snapshot, 'fleets', { mode: 'omniscient' });
+  assert.strictEqual(defaulted.detail, 'summary', 'omitting ?detail must NOT return the heavy payload');
+  assert.strictEqual(defaulted.query.detail, 'summary', 'the echo names the level that was applied');
+  assert.strictEqual(defaulted.items[0].shipManifest, undefined,
+    'the per-ship payload is what made this endpoint unusable; it must be opt-in');
+  assert.strictEqual(defaulted.items[0].weaponBreakdown, undefined);
+  assert.strictEqual(defaulted.shipsTotal, 2, 'the manifest still reports how many ships exist');
+  assert.ok(defaulted.omittedInSummary.includes('shipManifest'),
+    'a truncated view must announce what it dropped');
+
+  const full = localResources.buildResource(snapshot, 'fleets', { mode: 'omniscient', detail: 'full' });
+  assert.strictEqual(full.detail, 'full');
+  assert.strictEqual(full.items[0].shipManifest.length, 2, 'full carries the per-ship rows');
+  assert.ok(JSON.stringify(full).length > JSON.stringify(defaulted).length,
+    'full must be the larger of the two, or the parameter is backwards');
+});
+
+test('the ships manifest is a roll-up that never loses a ship', () => {
+  const snapshot = omniscientSnapshot({ ships: 2 });
+  const summary = localResources.buildResource(snapshot, 'ships', { mode: 'omniscient' });
+
+  assert.strictEqual(summary.detail, 'summary');
+  assert.deepStrictEqual(summary.groupedBy, ['factionId', 'hullName', 'orbitBody'],
+    'the grouping is stated, so grouped rows cannot be mistaken for truncated ones');
+  assert.strictEqual(summary.count, summary.items.length, 'count always counts the rows it returns');
+  assert.strictEqual(summary.shipsTotal, 2);
+  assert.strictEqual(
+    summary.items.reduce((sum, row) => sum + row.ships, 0),
+    summary.shipsTotal,
+    'the roll-up must account for every ship, not a capped slice'
+  );
+  assert.strictEqual(summary.items[0].hullName, 'Hull_Corvette');
+  assert.strictEqual(summary.items[0].fleets, 1);
+
+  const full = localResources.buildResource(snapshot, 'ships', { mode: 'omniscient', detail: 'full' });
+  assert.strictEqual(full.count, summary.shipsTotal, 'full returns one row per ship');
+});
+
+test('only fleets and ships honour detail, and the echo says so', async () => {
+  const shared = await import('../shared/intelResources.mjs');
+  assert.deepStrictEqual(Array.from(shared.DETAIL_AWARE_RESOURCES).sort(), ['fleets', 'ships']);
+
+  const snapshot = omniscientSnapshot();
+  const habs = localResources.buildResource(snapshot, 'habs', { mode: 'omniscient', detail: 'full' });
+  assert.strictEqual(habs.query.detail, undefined,
+    'echoing detail on an endpoint that ignores it would imply the parameter did something');
+});
+
+test('a malformed detail level is rejected rather than silently defaulted', async () => {
+  const shared = await import('../shared/intelResources.mjs');
+  assert.strictEqual(shared.parseDetailLevel(undefined), 'summary', 'absent means the small default');
+  assert.strictEqual(shared.parseDetailLevel(''), 'summary');
+  assert.strictEqual(shared.parseDetailLevel('full'), 'full');
+  assert.strictEqual(shared.parseDetailLevel('FULL'), null, 'the level is case-sensitive');
+  assert.strictEqual(shared.parseDetailLevel('everything'), null,
+    'answering a smaller question than the caller asked is the failure this endpoint is being fixed for');
+});
+
+test('the discovery index carries measured sizes and omits the ones it cannot measure', async () => {
+  const shared = await import('../shared/intelResources.mjs');
+  const snapshot = omniscientSnapshot({ ships: 2 });
+  const measured = shared.measureIntelEndpointSizes(snapshot, { mode: 'omniscient' });
+
+  assert.strictEqual(measured.basis.measurement, 'measured');
+  assert.ok(measured.sizes.fleets.bytes > 0);
+  assert.strictEqual(
+    measured.sizes.fleets.bytes,
+    Buffer.byteLength(JSON.stringify(shared.buildResourceProjection(snapshot, 'fleets', { mode: 'omniscient' })), 'utf8'),
+    'the published byte count is the real one, not an estimate from a row count'
+  );
+  assert.strictEqual(measured.sizes.fleets.detail, 'summary');
+  assert.ok(measured.sizes.fleets.fullBytes > measured.sizes.fleets.bytes,
+    'the opt-in cost of detail=full is published alongside the default');
+
+  // Endpoints with no honest measurement are ABSENT from `sizes`, with a
+  // reason, rather than carrying an invented number.
+  for (const key of ['mobility', 'productionPlan', 'delta', 'techTree', 'history', 'latestThreats']) {
+    assert.strictEqual(measured.sizes[key], undefined, `${key} has no honest unfiltered size`);
+    assert.ok(measured.unavailable[key], `${key} must say why its size is missing`);
+  }
 });
 
 // --- Mining prospects --------------------------------------------------------

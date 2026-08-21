@@ -6,7 +6,7 @@
 
 import { DEFAULT_OBSERVER_FACTION_ID } from '../constants.mjs';
 import { asArray, sameId } from '../util.mjs';
-import { findAlienFaction, normalizeBody } from './common.mjs';
+import { combatPowerTotal, findAlienFaction, normalizeBody } from './common.mjs';
 import { fleetResourceRow, transfersResource } from './fleets.mjs';
 import { habResourceRow } from './habs.mjs';
 import { miningResourceRow } from './mining.mjs';
@@ -43,6 +43,7 @@ export const theatersResource = (snapshot, observerId = DEFAULT_OBSERVER_FACTION
   const habs = asArray(snapshot.habs);
   const sites = asArray(snapshot.habSites);
   const queues = asArray(snapshot.shipyardQueues);
+  const stations = asArray(snapshot.shipyardStations);
   const transfers = transfersResource(snapshot);
 
   const alienFaction = findAlienFaction(snapshot);
@@ -62,17 +63,23 @@ export const theatersResource = (snapshot, observerId = DEFAULT_OBSERVER_FACTION
     const bodyHabs = habs.filter(h => normalizeBody(h.orbitBody) === norm);
     const bodySites = sites.filter(s => normalizeBody(s.parentBodyName) === norm);
     const bodyQueues = queues.filter(q => normalizeBody(q.orbitBody) === norm);
+    const bodyStations = stations.filter(s => normalizeBody(s.orbitBody) === norm);
 
     const friendlyFleets = bodyFleets.filter(f => sameId(f.factionId, observerId));
     const hostileFleets = bodyFleets.filter(f => isHostile(f.factionId, f.factionName));
 
     const friendlyShips = friendlyFleets.reduce((sum, f) => sum + (f.shipsCount || 0), 0);
     const hostileShips = hostileFleets.reduce((sum, f) => sum + (f.shipsCount || 0), 0);
-    const friendlyCP = friendlyFleets.reduce((sum, f) => sum + (f.combatPower || 0), 0);
-    const hostileCP = hostileFleets.reduce((sum, f) => sum + (f.combatPower || 0), 0);
+    const friendlyCP = combatPowerTotal(friendlyFleets);
+    const hostileCP = combatPowerTotal(hostileFleets);
 
     const friendlyHabs = bodyHabs.filter(h => sameId(h.factionId, observerId)).length;
-    const friendlyYards = bodyHabs.filter(h => sameId(h.factionId, observerId) && (h.isShipyard || h.shipyardCount > 0)).length;
+    // Read from `shipyardStations`, the collection `/api/intel/shipyards`
+    // serves, NOT from the hab record. A hab row carries neither `isShipyard`
+    // nor `shipyardCount` -- both spellings are absent from all 177 habs in the
+    // save -- so `(h.isShipyard || h.shipyardCount > 0)` could never be true and
+    // this counter was a structural, permanent 0 for every body in both modes.
+    const friendlyYards = bodyStations.filter(s => sameId(s.factionId, observerId)).length;
     const friendlyMines = bodySites.filter(s => sameId(s.factionId, observerId) && s.mineModuleName).length;
 
     // Incoming hostile transfers
@@ -109,7 +116,11 @@ export const theatersResource = (snapshot, observerId = DEFAULT_OBSERVER_FACTION
       friendly: {
         ships: friendlyShips,
         fleets: friendlyFleets.length,
-        combatPower: friendlyCP,
+        // null, never 0, when the save carries no combat power: a 0 on both
+        // sides of this row reads as measured parity between the two forces.
+        combatPower: friendlyCP.total,
+        combatPowerAvailable: friendlyCP.available,
+        combatPowerSource: friendlyCP.source,
         habs: friendlyHabs,
         shipyards: friendlyYards,
         mines: friendlyMines
@@ -117,7 +128,9 @@ export const theatersResource = (snapshot, observerId = DEFAULT_OBSERVER_FACTION
       hostile: {
         ships: hostileShips,
         fleets: hostileFleets.length,
-        combatPower: hostileCP,
+        combatPower: hostileCP.total,
+        combatPowerAvailable: hostileCP.available,
+        combatPowerSource: hostileCP.source,
         factions: Array.from(new Set(hostileFleets.map(f => f.factionName).filter(Boolean)))
       },
       incoming: {
@@ -148,6 +161,11 @@ export const bodyStatusResource = (snapshot, bodyName = 'Mars', observerId = DEF
 
   const friendlyFleets = fleets.filter(f => sameId(f.factionId, observerId));
   const hostileFleets = fleets.filter(f => !sameId(f.factionId, observerId) && f.factionName !== 'Neutral');
+  const friendlyCP = combatPowerTotal(friendlyFleets);
+  const hostileCP = combatPowerTotal(hostileFleets);
+  // Derived over BOTH sides together so a side with no fleets at all cannot
+  // make a fully measured reading look like partial coverage.
+  const combatPowerSource = combatPowerTotal([...friendlyFleets, ...hostileFleets]).source;
 
   return {
     body: bodyName,
@@ -156,9 +174,14 @@ export const bodyStatusResource = (snapshot, bodyName = 'Mars', observerId = DEF
     miningSitesCount: sites.length,
     militaryBalance: {
       friendlyShips: friendlyFleets.reduce((sum, f) => sum + (f.shipsCount || 0), 0),
-      friendlyCombatPower: friendlyFleets.reduce((sum, f) => sum + (f.combatPower || 0), 0),
+      // Same rule as the theater board: an unmeasured combat power is null on
+      // both sides, so the balance cannot read as a measured draw.
+      friendlyCombatPower: friendlyCP.total,
+      friendlyCombatPowerAvailable: friendlyCP.available,
       hostileShips: hostileFleets.reduce((sum, f) => sum + (f.shipsCount || 0), 0),
-      hostileCombatPower: hostileFleets.reduce((sum, f) => sum + (f.combatPower || 0), 0)
+      hostileCombatPower: hostileCP.total,
+      hostileCombatPowerAvailable: hostileCP.available,
+      combatPowerSource
     },
     habs: habs.map(habResourceRow),
     fleets: fleets.map(fleetResourceRow),

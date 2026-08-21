@@ -657,3 +657,132 @@ test('ranking marks an unknown base as a lower bound rather than a measured zero
   assert.strictEqual(masked.baseMeasured, false);
   assert.strictEqual(masked.effectiveIsLowerBound, true);
 });
+
+// ---------------------------------------------------------------------------
+// Combat power: absent from EVERY ship and fleet in the current save format.
+//
+// `server/snapshot/space.js` had this right -- null plus
+// `combatPowerAvailable: false`. Downstream, `(fleet.combatPower || 0)` turned
+// that back into a confident 0, so `/api/intel/theaters` reported
+// `friendly.combatPower: 0` against `hostile.combatPower: 0` and a reader saw
+// MEASURED PARITY where nothing had been measured. `/api/intel/arrivals` was
+// already honest; these pin the rest of the surface to the same rule.
+// ---------------------------------------------------------------------------
+
+const { theatersResource, bodyStatusResource, combatPowerTotal, factionResourceRow } =
+  require('../shared/intelResources.mjs');
+
+/** Two opposed fleets at Ceres, with combat power present or absent. */
+function contestedBody({ measured }) {
+  const power = (value) => (measured
+    ? { combatPower: value, combatPowerAvailable: true, combatPowerSource: 'save' }
+    : { combatPower: null, combatPowerAvailable: false, combatPowerSource: 'not present in save' });
+  return {
+    observerFactionId: OBSERVER,
+    metadata: { gameTimeString: '5/1/2033 12:00:00 AM' },
+    factions: [
+      { ID: OBSERVER, displayName: 'the Initiative' },
+      { ID: 4717, displayName: 'the Aliens' }
+    ],
+    fleets: [
+      { ID: 1, displayName: 'Ours', factionId: OBSERVER, factionName: 'the Initiative', orbitBody: 'Ceres', shipsCount: 4, ...power(40) },
+      { ID: 2, displayName: 'Theirs', factionId: 4717, factionName: 'the Aliens', orbitBody: 'Ceres', shipsCount: 9, ...power(900) }
+    ],
+    habs: [],
+    habSites: [],
+    shipyardQueues: [],
+    shipyardStations: []
+  };
+}
+
+test('an unmeasured combat power reads as unavailable on both sides, never as a 0-0 draw', () => {
+  const ceres = theatersResource(contestedBody({ measured: false }), OBSERVER)
+    .find(row => row.body === 'Ceres');
+
+  assert.strictEqual(ceres.friendly.combatPower, null,
+    'a 0 here is indistinguishable from a measured "we have no combat strength"');
+  assert.strictEqual(ceres.hostile.combatPower, null,
+    'and a 0 on both sides reads as measured parity against nine hostile ships');
+  assert.strictEqual(ceres.friendly.combatPowerAvailable, false);
+  assert.strictEqual(ceres.hostile.combatPowerAvailable, false);
+  assert.strictEqual(ceres.friendly.combatPowerSource, 'not present in save');
+  assert.strictEqual(ceres.hostile.combatPowerSource, 'not present in save');
+  // The ship counts ARE measured and must stay measured.
+  assert.strictEqual(ceres.friendly.ships, 4);
+  assert.strictEqual(ceres.hostile.ships, 9);
+});
+
+test('a measured combat power still reports a real total', () => {
+  const ceres = theatersResource(contestedBody({ measured: true }), OBSERVER)
+    .find(row => row.body === 'Ceres');
+  assert.strictEqual(ceres.friendly.combatPower, 40);
+  assert.strictEqual(ceres.hostile.combatPower, 900);
+  assert.strictEqual(ceres.friendly.combatPowerAvailable, true);
+  assert.strictEqual(ceres.friendly.combatPowerSource, 'save');
+});
+
+test('body status reports the same balance under the same rule', () => {
+  const unmeasured = bodyStatusResource(contestedBody({ measured: false }), 'Ceres', OBSERVER).militaryBalance;
+  assert.strictEqual(unmeasured.friendlyCombatPower, null);
+  assert.strictEqual(unmeasured.hostileCombatPower, null);
+  assert.strictEqual(unmeasured.friendlyCombatPowerAvailable, false);
+  assert.strictEqual(unmeasured.hostileCombatPowerAvailable, false);
+  assert.strictEqual(unmeasured.combatPowerSource, 'not present in save');
+  assert.strictEqual(unmeasured.hostileShips, 9, 'the measured half is untouched');
+
+  const measured = bodyStatusResource(contestedBody({ measured: true }), 'Ceres', OBSERVER).militaryBalance;
+  assert.strictEqual(measured.friendlyCombatPower, 40);
+  assert.strictEqual(measured.hostileCombatPower, 900);
+  assert.strictEqual(measured.combatPowerSource, 'save');
+});
+
+test('a partly measured column is summed but labelled, not silently understated', () => {
+  const mixed = combatPowerTotal([
+    { combatPower: 10 },
+    { combatPower: null },
+    { combatPower: 5 }
+  ]);
+  assert.strictEqual(mixed.total, 15);
+  assert.strictEqual(mixed.available, true);
+  assert.strictEqual(mixed.source, 'save (partial coverage)',
+    'a partial reading presented as complete understates the force it describes');
+  assert.strictEqual(mixed.measuredRecords, 2);
+  assert.strictEqual(mixed.totalRecords, 3);
+
+  const empty = combatPowerTotal([]);
+  assert.strictEqual(empty.total, null, 'no records is not a measured zero');
+  assert.strictEqual(empty.available, false);
+});
+
+test('a theater shipyard count is read from the stations, not from a field habs do not have', () => {
+  // `(hab.isShipyard || hab.shipyardCount > 0)` read two spellings that are
+  // absent from every hab record in the save, so this counter was a structural,
+  // permanent 0 for every body in both modes.
+  const snapshot = contestedBody({ measured: false });
+  snapshot.habs = [{ ID: 10, factionId: OBSERVER, orbitBody: 'Ceres' }];
+  snapshot.shipyardStations = [
+    { id: 11, factionId: OBSERVER, orbitBody: 'Ceres' },
+    { id: 12, factionId: OBSERVER, orbitBody: 'Ceres' },
+    { id: 13, factionId: 4717, orbitBody: 'Ceres' }
+  ];
+  const ceres = theatersResource(snapshot, OBSERVER).find(row => row.body === 'Ceres');
+  assert.strictEqual(ceres.friendly.shipyards, 2, 'only the observer\'s own stations at this body');
+  assert.strictEqual(ceres.friendly.habs, 1);
+});
+
+test('a redacted enemy shipyard count stays null instead of becoming a confident zero', () => {
+  // intelligenceFilter deliberately nulls these for an unobserved faction. The
+  // projection then restored `?? 0`, so seven of eight factions reported
+  // exactly zero shipyards -- measured industrial dominance out of nothing.
+  const redacted = factionResourceRow({
+    ID: 4713, displayName: 'the Servants', shipyardCount: null, shipyardQueueCount: null
+  });
+  assert.strictEqual(redacted.shipyardCount, null);
+  assert.strictEqual(redacted.shipyardQueueCount, null);
+
+  const observed = factionResourceRow({
+    ID: OBSERVER, displayName: 'the Initiative', shipyardCount: 11, shipyardQueueCount: 0
+  });
+  assert.strictEqual(observed.shipyardCount, 11);
+  assert.strictEqual(observed.shipyardQueueCount, 0, 'a genuinely measured zero must still read as zero');
+});

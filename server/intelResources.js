@@ -6,6 +6,12 @@ const {
   SUPPORTED_RESOURCES,
   INTEL_ENDPOINT_INDEX,
   INTEL_ENDPOINT_EXAMPLES,
+  DETAIL_LEVELS,
+  DEFAULT_DETAIL_LEVEL,
+  DETAIL_AWARE_RESOURCES,
+  isDetailLevel,
+  parseDetailLevel,
+  measureIntelEndpointSizes,
   buildResourceProjection
 } = shared;
 const runtimeConfig = resolveConfig();
@@ -25,10 +31,25 @@ function buildResource(snapshot, resource, options = {}) {
     sort = null,
     previousSnapshot = null,
     mode = 'player',
-    isLatestSnapshot = true
+    isLatestSnapshot = true,
+    detail = DEFAULT_DETAIL_LEVEL
   } = options;
   const identity = snapshotIdentity.readSnapshotIdentity(snapshot);
-  const query = { faction: factionId, body, theater, limit, destination, fleet: fleetId, design: designId, quantity, status, sort };
+  // `detail` is echoed only for the resources that honour it, so the echo never
+  // implies a parameter did something it did not.
+  const query = {
+    faction: factionId,
+    body,
+    theater,
+    limit,
+    destination,
+    fleet: fleetId,
+    design: designId,
+    quantity,
+    status,
+    sort,
+    ...(DETAIL_AWARE_RESOURCES.has(resource) ? { detail } : {})
+  };
   const projection = buildResourceProjection(snapshot, resource, {
     factionId,
     body,
@@ -42,6 +63,7 @@ function buildResource(snapshot, resource, options = {}) {
     sort,
     previousSnapshot,
     mode,
+    detail,
     weights: runtimeConfig.analysis.miningScarcityWeights
   });
   return {
@@ -71,5 +93,11 @@ module.exports = {
   SUPPORTED_RESOURCES,
   INTEL_ENDPOINT_INDEX,
   INTEL_ENDPOINT_EXAMPLES,
+  DETAIL_LEVELS,
+  DEFAULT_DETAIL_LEVEL,
+  DETAIL_AWARE_RESOURCES,
+  isDetailLevel,
+  parseDetailLevel,
+  measureIntelEndpointSizes,
   buildResource
 };
