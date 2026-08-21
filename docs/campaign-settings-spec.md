@@ -42,32 +42,40 @@ cheaper. Strip the `%`, parse, and treat unparseable as **`null` — never `0`, 
 silent fallback to `1`.** A multiplier that cannot be read must make the affected figure
 report `unknown`, not quietly proceed at stock rate.
 
-## Settle the direction before implementing
+## Research — measured, and it needs NO adjustment
 
-**Do not assume which side of the equation the multiplier applies to.** For research there
-are two possibilities and they lead to opposite fixes:
+This was the assumed motivation for the whole spec, and the measurement reverses it.
+**Research costs and durations are already correct. Do not "fix" them.**
 
-- **Cost side** — a 200% rate halves project cost. Then every remaining-cost figure the
-  advisor prints (3,000 for Colony Core, 15,000 for the Antimatter Microfission chain) is
-  **2× too high**, while `monthsAtCurrentIncome` may already be right.
-- **Income side** — a 200% rate doubles research output. Then costs are right and durations
-  are wrong.
+**The multiplier acts on income, not on cost.** Scanning all 14 saves for the highest
+accumulated-versus-template-cost ratio on an item still in progress:
 
-`monthsAtCurrentIncome` is derived from `cachedYearlyRevenue.Research`, which is **measured
-from the save**. If that figure is already post-multiplier, month estimates are correct
-today and only displayed costs are wrong. If it is pre-multiplier, every duration shown is
-2× too long.
+```
+Fleet Logistics   accumulatedResearch 44,780  /  template researchCost 45,000  =  99.5%
+                  still in progress (First.gz)
+```
 
-**Measure it.** Take two consecutive saves, compute research actually delivered over the
-elapsed interval, and compare against `cachedYearlyRevenue.Research` scaled to that
-interval. If delivery matches revenue, revenue is post-multiplier. The technique and its
-confounds are already documented — see `ALLOCATION_MODEL.reproduction` in
-`shared/researchSlots.mjs`, and note the income-drift confound recorded there: use a
-**relative** comparison where possible, since a stable relative share cancels global drift
-while an absolute ratio does not.
+If a 200% rate halved the effective cost to 22,500, that project would have completed at
+22,500 and could never have reached 44,780. **Effective cost equals template cost.** Every
+remaining-cost figure the advisor prints — 3,000 for Colony Core, 15,000 for the Antimatter
+Microfission chain — is right as it stands.
 
-The user reports "techs are half what they normally are", which points to the cost side.
-That is a starting hypothesis, not evidence — confirm against the save.
+**And the income figure is already post-multiplier**, so durations are right too.
+`monthsAtCurrentIncome` derives from `cachedYearlyRevenue.Research`, and the measurement
+recorded in `ALLOCATION_MODEL.reproduction` (`shared/researchSlots.mjs`) compared delivery
+predicted from that revenue against delivery actually observed, over two consecutive
+intervals: **1.147× and 0.993×**. Had revenue been pre-multiplier while real delivery ran
+at 200%, those ratios would have been near 2.0. They are near 1.0. The revenue the save
+reports already includes the multiplier.
+
+Both figures are therefore correct today, and applying a 2× correction to either would
+*introduce* the error this spec was written to remove.
+
+The player's report that "techs are half what they normally are" is a fair description of
+the experience — research completes twice as fast — but it comes from doubled output, not
+from halved cost, and the dashboard already reflects it.
+
+**Record research as checked-and-unaffected.** The remaining multipliers are still open.
 
 ## Surfaces to check
 
@@ -75,7 +83,7 @@ Each of these plausibly consumes a rate. **Check each; do not assume a uniform f
 
 | multiplier | plausibly affects |
 | :-- | :-- |
-| `researchSpeedMultiplier` | research advisor costs and `monthsAtCurrentIncome`; every chain projection in `research-chain-spec.md` |
+| `researchSpeedMultiplier` | **CHECKED — unaffected.** Costs are template costs and income is already post-multiplier. No adjustment; see the section above |
 | `miningProductivityMultiplier` | mining and economic value, tonnes/month, mining expansion board |
 | `nationalIPMultiplier` | nation investment-point projections, Advise valuations |
 | `alienProgressionSpeed` | alien threat timelines, hate trajectory, any "months until" estimate |
@@ -117,8 +125,11 @@ figure rather than falling back to stock. Absent is not 100%.
 - All ten `TIMetadataState` settings are baked, parsed numerically, with `null` for
   unparseable. Assert `"200%"` → `200` (or `2.0`, stated explicitly) and never `0`.
 - A campaign with `customDifficulty: true` never renders as plain "Normal".
-- The research direction question is **answered with a measurement recorded in the spec**,
-  not assumed. State which side the multiplier applies to and show the evidence.
+- **Research figures are unchanged.** Assert that costs and `monthsAtCurrentIncome` produce
+  the same values before and after this change — the measurement above shows they are
+  already correct, and a regression here would be a 2× error introduced by the fix.
+- Each remaining multiplier is settled the same way: measure which side it acts on before
+  applying it, and record the evidence in this spec rather than assuming from the label.
 - Every affected figure states the multiplier applied to it.
 - Each surface in the table above is recorded as either adjusted or checked-and-unaffected.
 - With the settings absent, behaviour is unchanged and the affected figures report unknown.
