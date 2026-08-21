@@ -167,9 +167,17 @@ Do not add a fifth view; THREAT is the right home and has room.
 - The panel is in `VIEWS` under `threat`; `assertViewRegistryIntegrity()` passes.
 - **Unreachable fleets show no hull count** and say why. On the live save the observer has
   4 fleets against 57 alien fleets across 6 theatres, so this path must exercise.
+- **Opponent rating is built from each fleet's real composition**, not N copies of a
+  representative ship. Assert against `Victor-620` — 34 ships across 17 distinct hull
+  types — that its rating differs from 34× the rating of any single member.
+- **A fleet beyond the modelled range says so.** 26 of 57 fleets exceed the largest
+  existing tier of three ships, and 3 exceed the entire 24-hull sweep. Assert a large
+  fleet renders either a real band or an explicit beyond-modelled-range verdict — never a
+  band pinned at the ceiling, and never "not winnable" when the truth is "not modelled".
 - `combatPower` is not read. Assert it — a test that greps the new module for it is fair.
 - Alien-acceleration confidence reaches any row whose estimate used mobility.
 - The `uncertainty` block travels per fleet; no band renders as a measurement.
 - Truncation carries `*TotalCount` / `*OmittedCount`.
-- "Not winnable at any count ≤ 24" renders as that verdict, not an empty band.
+- "Not winnable at any count ≤ 24" renders as that verdict, not an empty band, and is
+  distinguished from "beyond the modelled range".
 - Both modes; no `null` / `undefined` / `NaN` rendered; full suite green with exact counts.
