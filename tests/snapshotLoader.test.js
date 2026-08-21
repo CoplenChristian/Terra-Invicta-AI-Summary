@@ -54,6 +54,8 @@ test('snapshotLoader loads snapshot and filters correctly across modes', (t) => 
       err.message.includes('busy') ||
       err.message.includes('No save path configured') ||
       err.message.includes('Save folder not found') ||
+      err.message.includes('Save file not found') ||
+      err.message.includes('No .gz or .json save files found') ||
       err.message.includes('No save files found')
     ) {
       t.skip('Skipping live save test: Live save unavailable or busy: ' + err.message);

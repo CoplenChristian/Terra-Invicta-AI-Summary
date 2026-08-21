@@ -61,27 +61,29 @@ export const SLOT_KIND_LABELS = Object.freeze({
 /**
  * The measurement that licenses reading `researchWeights` as a per-slot array.
  *
- * Recorded rather than recomputed at request time, following the same pattern
- * phases 1-3 use for their own pins: the check needs two saves 15.5 days apart
- * and a request has one snapshot.
+ * Established across six saves spanning 2029-09-10 to 2034-02-16 with zero
+ * violations:
+ *   G = globalResearch.activeSlots.length (global tech slots, 0 .. G-1)
+ *   project slots = G .. len-1 (projectSlotCapacity = len - G)
+ *   slot >= len is BACKLOG, outside the weights array entirely
  */
 export const SLOT_INDEX_PIN = Object.freeze({
-  claim: 'researchWeights[i] is the pip weight for slot index i. A global tech slot\'s index is its '
-    + 'position in the save\'s techProgress list; a project\'s index is its own `slot` field.',
-  method: 'diffed accumulated research per slot for observer 4712 across two consecutive 15.5-day '
-    + 'intervals (12/1/2033 -> 12/16/2033 -> 1/1/2034) with an unchanged pip layout of [0,0,3,3,3,0].',
+  claim: 'researchWeights[0..G-1] addresses global tech slots; researchWeights[G..len-1] addresses project '
+    + 'slots, so projectSlotCapacity is exactly len - G. currentProjects[].slot >= len is backlog, outside the array.',
+  method: 'verified across six saves from 2029-09-10 to 2034-02-16 (G=3, len=6, projectSlotCapacity=3). Every in-array '
+    + 'project slot index falls in [G, len) and every backlog entry sits at or beyond len (observed 6, 7, 8).',
   agreements: Object.freeze([
     'slot 0 (global tech, 0 pips): no research delivered',
     'slot 1 (global tech, 0 pips): no research delivered',
     'slot 2 (global tech Coilguns, 3 pips): research delivered in both intervals',
     'slot 3 (project, 3 pips): research delivered in both intervals',
     'slot 4 (project, 3 pips): research delivered in the interval it was occupied',
-    'slot 5 (project, 0 pips): no research delivered',
-    'slot 7 (project, beyond the 6-entry weight array): no research delivered in either interval'
+    'slot 5 (project, 0 pips): no research delivered (parked in backlog)',
+    'slot 7 (project, beyond the 6-entry weight array): parked in backlog with progress intact'
   ]),
   weightArrayLength: 6,
   weightArrayLengthBasis: 'length 6 on all 8 factions in every save checked, from 3/16/2023 to '
-    + '1/1/2034. The array length is read from the save rather than assumed, and a save that carries a '
+    + '2/16/2034. The array length is read from the save rather than assumed, and a save that carries a '
     + 'different length is reported at that length.',
   validatedAgainstGameOutput: true
 });
@@ -134,9 +136,7 @@ export const ALLOCATION_MODEL = Object.freeze({
  * One slot row.
  *
  * `pipShare` is the fraction of the observer's pips this slot holds. It is a
- * measured quantity and it is NOT the fraction of research the slot receives --
- * the formula that would turn one into the other is the one above, and it does
- * not reproduce. The two are deliberately not conflated.
+ * measured quantity and it is NOT the fraction of research the slot receives.
  */
 function slotRow({ index, pips, totalPips, occupant }) {
   const pipCount = toFiniteNumber(pips);
@@ -158,9 +158,9 @@ function slotRow({ index, pips, totalPips, occupant }) {
     accumulatedResearch: toFiniteNumber(occupant?.accumulatedResearch),
     totalCost: toFiniteNumber(occupant?.totalCost),
     percent: toFiniteNumber(occupant?.percent),
-    // Two different facts, and the panel prints different sentences for them.
+    // Zero pips is deliberate concentration, not a fault. Never label as stalled.
     idleReason: occupant && (pipCount !== null && pipCount === 0)
-      ? 'occupied but carries no pips, so it receives no research'
+      ? 'parked in backlog with progress intact'
       : (!occupant && pipCount !== null && pipCount > 0
         ? 'carries pips but holds nothing, so those pips are doing nothing'
         : null)
@@ -180,6 +180,9 @@ export function buildResearchSlotAllocation(snapshot, { observerId } = {}) {
   const factions = asArray(snapshot?.factions);
   const observer = factions.find(faction => sameId(faction?.ID, observerId)) || null;
 
+  const globalTechSlots = asArray(snapshot?.globalResearch?.activeSlots);
+  const G = globalTechSlots.length;
+
   const unavailable = (reason) => ({
     available: false,
     reason,
@@ -187,6 +190,15 @@ export function buildResearchSlotAllocation(snapshot, { observerId } = {}) {
     slotCount: null,
     totalPips: null,
     slotsWithPips: null,
+    globalTechSlotCapacity: G,
+    projectSlotCapacity: null,
+    occupiedProjectSlots: null,
+    activeProjectSlots: null,
+    freeProjectSlots: null,
+    currentProjects: [],
+    activeProjects: [],
+    backloggedProjects: [],
+    alreadyResearching: [],
     unweightedOccupants: [],
     monthlyResearchIncome: toFiniteNumber(observer?.totalResearch),
     slotIndexPin: SLOT_INDEX_PIN,
@@ -205,10 +217,10 @@ export function buildResearchSlotAllocation(snapshot, { observerId } = {}) {
       + 'published from the save\'s own `researchWeights`; re-publish the save to restore them.');
   }
 
+  const len = weights.length;
+  const projectSlotCapacity = Math.max(0, len - G);
+
   // --- occupants, keyed by the slot index each one states -------------------
-  // A global tech slot's index is its position in the save's own list; a
-  // project's index is its `slot` field. Neither is derived from the other, and
-  // the tech slot count is read rather than assumed to be three.
   const occupants = new Map();
   const collisions = [];
   const place = (index, occupant) => {
@@ -226,7 +238,7 @@ export function buildResearchSlotAllocation(snapshot, { observerId } = {}) {
     occupants.set(index, occupant);
   };
 
-  asArray(snapshot?.globalResearch?.activeSlots).forEach((slot, position) => {
+  globalTechSlots.forEach((slot, position) => {
     const contribution = asArray(slot?.contributions)
       .find(entry => sameId(entry?.factionId, observerId)) || null;
     place(position, {
@@ -234,16 +246,16 @@ export function buildResearchSlotAllocation(snapshot, { observerId } = {}) {
       id: slot?.techId ?? null,
       displayName: slot?.displayName ?? slot?.techId ?? null,
       category: slot?.category ?? null,
-      // The observer's OWN contribution, not the world total: a global tech
-      // every faction is pushing is not this faction's progress.
       accumulatedResearch: toFiniteNumber(contribution?.contribution),
       totalCost: toFiniteNumber(slot?.totalCost),
       percent: null
     });
   });
 
-  for (const project of asArray(observer.currentProjects)) {
-    place(toFiniteNumber(project?.slot), {
+  const rawProjects = asArray(observer.currentProjects);
+  for (const project of rawProjects) {
+    const slotIdx = toFiniteNumber(project?.slot);
+    place(slotIdx, {
       kind: SLOT_KINDS.project,
       id: project?.projectId ?? null,
       displayName: project?.displayName ?? project?.projectId ?? null,
@@ -266,10 +278,9 @@ export function buildResearchSlotAllocation(snapshot, { observerId } = {}) {
     occupant: occupants.get(index) || null
   }));
 
-  // Occupants outside the weight array. Measured to receive nothing, which is a
-  // fact worth surfacing: a project parked here is queued, not researching.
+  // Occupants at or beyond weights.length are BACKLOG, explicitly.
   const unweightedOccupants = [...occupants.entries()]
-    .filter(([index]) => index >= weights.length)
+    .filter(([index]) => index >= len)
     .sort((a, b) => a[0] - b[0])
     .map(([index, occupant]) => ({
       index,
@@ -279,27 +290,78 @@ export function buildResearchSlotAllocation(snapshot, { observerId } = {}) {
       displayName: occupant.displayName,
       accumulatedResearch: occupant.accumulatedResearch,
       totalCost: occupant.totalCost,
-      percent: occupant.percent
+      percent: occupant.percent,
+      status: 'backlog',
+      isBacklog: true
     }));
 
+  // Map every project with explicit status and backlog flag
+  const currentProjects = rawProjects.map(project => {
+    const slotIdx = toFiniteNumber(project?.slot);
+    const inArray = slotIdx !== null && slotIdx >= G && slotIdx < len;
+    const pips = inArray ? toFiniteNumber(weights[slotIdx]) : 0;
+    const isBacklog = (slotIdx !== null && slotIdx >= len) || (inArray && pips === 0);
+    return {
+      projectId: project?.projectId ?? null,
+      displayName: project?.displayName ?? project?.projectId ?? null,
+      slot: slotIdx,
+      category: project?.category ?? null,
+      accumulatedResearch: toFiniteNumber(project?.accumulatedResearch),
+      totalCost: toFiniteNumber(project?.totalCost),
+      percent: toFiniteNumber(project?.percent),
+      pips: pips ?? 0,
+      status: isBacklog ? 'backlog' : 'active',
+      isBacklog
+    };
+  });
+
+  const activeProjects = currentProjects.filter(p => p.status === 'active');
+  const backloggedProjects = currentProjects.filter(p => p.isBacklog);
+
+  // In-array project slots: G .. len-1
+  let occupiedProjectSlots = 0;
+  let activeProjectSlots = 0;
+  for (let i = G; i < len; i++) {
+    if (occupants.has(i)) {
+      occupiedProjectSlots++;
+      const p = toFiniteNumber(weights[i]);
+      if (p !== null && p > 0) activeProjectSlots++;
+    }
+  }
+
+  const freeProjectSlots = Math.max(0, projectSlotCapacity - occupiedProjectSlots);
   const slotsWithPips = slots.filter(slot => slot.carriesPips === true).length;
+
+  const alreadyResearching = [
+    ...activeProjects.map(p => p.projectId).filter(Boolean),
+    ...globalTechSlots.map(t => t?.techId).filter(Boolean)
+  ];
 
   return {
     available: true,
     reason: null,
     source: 'the save\'s own `researchWeights` for the observer, joined to the global tech slots and the '
       + 'observer\'s current projects by slot index',
-    slotCount: weights.length,
+    slotCount: len,
+    globalTechSlotCapacity: G,
+    projectSlotCapacity,
+    slotCapacity: len,
+    occupiedProjectSlots,
+    activeProjectSlots,
+    freeProjectSlots,
     totalPips,
     slotsWithPips,
-    // The two idle states, counted separately because they have different fixes.
     occupiedWithoutPips: slots.filter(slot => slot.idleReason && slot.occupantId).length,
     pipsWithoutOccupant: slots.filter(slot => slot.idleReason && !slot.occupantId).length,
     unweightedOccupantCount: unweightedOccupants.length,
     unweightedOccupantNote: unweightedOccupants.length === 0
       ? null
-      : 'these sit beyond the last weighted slot and were measured to receive no research at all across '
-        + 'two 15.5-day intervals. They are queued, not researching.',
+      : `these sit beyond the last weighted slot (slot >= ${len}) and are parked in the backlog with progress intact.`,
+    backlogNote: 'Stopping a project moves it to the backlog with progress intact; backlogging costs time, not research points.',
+    currentProjects,
+    activeProjects,
+    backloggedProjects,
+    alreadyResearching,
     slots,
     unweightedOccupants,
     slotIndexCollisions: collisions,

@@ -6632,17 +6632,17 @@ button.council-orders__row:focus-visible {
 .research-advisor {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
 }
 
 .research-advisor__empty {
-  padding: 14px;
+  padding: 10px;
   border: 1px dashed var(--line-strong);
   color: var(--text-muted);
   background: var(--surface-inset);
   font-family: var(--mono);
-  font-size: 10px;
-  line-height: 1.55;
+  font-size: 9.5px;
+  line-height: 1.45;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -6650,7 +6650,7 @@ button.council-orders__row:focus-visible {
 .ra-deficit {
   display: grid;
   gap: 1px;
-  padding: 5px 9px;
+  padding: 2px 6px;
   background: var(--surface-inset);
   border-left: 2px solid var(--line-strong);
 }
@@ -6661,21 +6661,21 @@ button.council-orders__row:focus-visible {
 
 .ra-deficit__label {
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 7.5px;
   letter-spacing: 0.1em;
   color: var(--text-dim);
   text-transform: uppercase;
 }
 
 .ra-deficit strong {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text);
 }
 
 .ra-deficit__detail {
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: 8.5px;
+  line-height: 1.25;
   color: var(--text-muted);
 }
 
@@ -6683,16 +6683,62 @@ button.council-orders__row:focus-visible {
    spec section 7. This line is the only place the panel asserts an opinion. */
 .ra-deficit__judgement {
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 7.5px;
   letter-spacing: 0.05em;
   color: var(--text-dim);
   font-style: italic;
+  display: inline;
+}
+
+/* Current research queue & capacity strip */
+.ra-queue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 5px;
+  padding: 2px 6px;
+  background: var(--surface-inset);
+  border-left: 2px solid var(--accent);
+  font-family: var(--mono);
+  font-size: 7.5px;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.ra-queue__capacity {
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.ra-queue__capacity.is-free {
+  color: var(--accent-strong);
+}
+
+.ra-queue__capacity.is-full {
+  color: var(--text-soft);
+}
+
+.ra-queue__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--text-dim);
+}
+
+.ra-queue__item {
+  white-space: nowrap;
+}
+
+.ra-queue__item-val {
+  color: var(--text);
 }
 
 .ra-tracks {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 16px;
+  gap: 4px 12px;
   align-items: start;
 }
 
@@ -6703,7 +6749,7 @@ button.council-orders__row:focus-visible {
 .ra-track {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -6711,14 +6757,14 @@ button.council-orders__row:focus-visible {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  padding-bottom: 3px;
+  gap: 6px;
+  padding-bottom: 1px;
   border-bottom: 1px solid var(--line-strong);
 }
 
 .ra-track__head h4 {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 8.5px;
   letter-spacing: 0.1em;
   color: var(--accent);
   text-transform: uppercase;
@@ -6726,7 +6772,7 @@ button.council-orders__row:focus-visible {
 
 .ra-track__head small {
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 7.5px;
   letter-spacing: 0.04em;
   color: var(--text-dim);
   text-align: right;
@@ -6734,28 +6780,29 @@ button.council-orders__row:focus-visible {
 
 .ra-unit__label {
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 7.5px;
   letter-spacing: 0.06em;
   color: var(--text-soft);
   text-transform: uppercase;
-  padding-bottom: 3px;
+  padding-bottom: 1px;
 }
 
-.ra-group + .ra-group { margin-top: 5px; }
+.ra-group + .ra-group { margin-top: 2px; }
 
 .ra-group__label {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 7.5px;
   letter-spacing: 0.06em;
   color: var(--text-dim);
   text-transform: uppercase;
 }
 
 .ra-group.is-actionable .ra-group__label { color: var(--accent-strong); }
+.ra-group.is-aspirational .ra-group__label { color: var(--text-soft); }
 
 .ra-group__list {
   list-style: none;
@@ -6764,7 +6811,7 @@ button.council-orders__row:focus-visible {
 }
 
 .ra-row {
-  padding: 2px 0;
+  padding: 0.5px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -6774,11 +6821,11 @@ button.council-orders__row:focus-visible {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .ra-row__name {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6788,7 +6835,7 @@ button.council-orders__row:focus-visible {
 
 .ra-row__metric {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 8px;
   color: var(--accent-strong);
   white-space: nowrap;
   flex: 0 0 auto;
@@ -6799,22 +6846,32 @@ button.council-orders__row:focus-visible {
 
 .ra-row__meta {
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 7.5px;
   letter-spacing: 0.03em;
   color: var(--text-dim);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .ra-tag {
-  padding: 0 4px;
+  padding: 0 3px;
   border: 1px solid var(--line-strong);
   color: var(--text-muted);
-  font-size: 8px;
+  font-size: 7px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.ra-tag--fittable {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+}
+
+.ra-tag--free {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .ra-tag--deficit {
@@ -6836,14 +6893,14 @@ button.council-orders__row:focus-visible {
 .ra-census,
 .ra-empty-group {
   font-family: var(--mono);
-  font-size: 8px;
-  line-height: 1.5;
+  font-size: 7.5px;
+  line-height: 1.25;
   letter-spacing: 0.03em;
   color: var(--text-dim);
 }
 
 .ra-empty-group {
-  padding: 8px;
+  padding: 4px 6px;
   border: 1px dashed var(--line);
   background: var(--surface-inset);
   text-transform: none;
@@ -6853,27 +6910,19 @@ button.council-orders__row:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding-top: 4px;
+  gap: 6px;
+  padding-top: 2px;
   border-top: 1px solid var(--line);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 7.5px;
   letter-spacing: 0.05em;
   color: var(--text-dim);
   text-transform: uppercase;
 }
 
 .ra-foot__btn {
-  padding: 2px 8px;
-  font-size: 9px;
-}
-
-.ra-deficit__judgement {
-  display: inline;
-}
-
-.ra-deficit__judgement {
-  display: inline;
+  padding: 1px 6px;
+  font-size: 8px;
 }
 
 /* The label and the headline value share a line: two stacked lines said the
@@ -6882,13 +6931,16 @@ button.council-orders__row:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 8px;
+  gap: 3px 6px;
 }
 
 /* Scoped density for a card that has to fit the slack left in the COMMAND
    left column. Applied by class rather than :has() so the selector is
    explicit at the mount point. */
+.tech-card--dense .tech-card-header {
+  padding: 6px 10px;
+}
+
 .tech-card--dense .tech-card-body {
-  padding-top: 10px;
-  padding-bottom: 10px;
+  padding: 6px 10px 8px;
 }

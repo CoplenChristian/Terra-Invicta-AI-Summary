@@ -243,7 +243,7 @@ test('Live save integration: mining-expansion endpoint works in both Player and 
     // Test omniscient mode
     const omniSnap = loadFilteredSnapshot({ mode: 'omniscient', observer: 4712 });
     const expansionOmni = miningExpansionResource(omniSnap, { observerId: 4712 });
-    assert(expansionOmni.capacity, 'Omniscient capacity present');
+assert(expansionOmni.capacity, 'Omniscient capacity present');
     assert.strictEqual(expansionOmni.available.length, expansionPlayer.available.length);
   } catch (err) {
     if (
@@ -255,6 +255,8 @@ test('Live save integration: mining-expansion endpoint works in both Player and 
       err.message.includes('busy') ||
       err.message.includes('No save path configured') ||
       err.message.includes('Save folder not found') ||
+      err.message.includes('Save file not found') ||
+      err.message.includes('No .gz or .json save files found') ||
       err.message.includes('No save files found')
     ) {
       t.skip('Skipping live save test: Live save unavailable or busy: ' + err.message);

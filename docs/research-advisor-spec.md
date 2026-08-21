@@ -370,6 +370,226 @@ Where a long-term target is prereq-clear but unrolled, the advisor may still rec
 
 ---
 
+## 3c. Delivery: does the round arrive? — measured 2026-08-21
+
+§3 prices a warhead and never asks whether it gets there. On the live save that
+omission produces the loudest number in the whole endpoint:
+`AntimatterTorpedoLauncher` ranks at **6,687,502.98×** a `CopperheadMissileBay`
+on sustained output per hardpoint. The figure is real. It is also a *damage*
+figure, and damage the point defence removes in flight is damage that never
+lands.
+
+So point-defence-**targetable** munitions get a delivery axis, reported beside
+the damage axes and never blended into them, plus a delivery **floor** that
+stops a munition leading the ranking on damage when its delivery is measurably
+worse than what the observer already fields.
+
+### Two pins, both 57 of 57
+
+The flight model rests on two identities that reproduce the templates' own
+published figures for every missile in the game, within 0.5% — which is the
+templates' own rounding:
+
+```
+acceleration_g = "Rocket Thrust" / ammoMass_kg / 9.80665        57 of 57
+deltaV_kps     = EV_kps × ln(ammoMass_kg / (ammoMass_kg − fuelMass_kg))   57 of 57
+```
+
+plus `ammoMass_kg == fuelMass_kg + systemMass_kg + warheadMass_kg` **exactly**,
+also 57 of 57. Together they establish that `acceleration_g` is thrust at
+**launch** mass and that `deltaV_kps` is the round's own delta-V budget — which
+is what licenses "burn at the stated g until the budget is spent, then coast"
+rather than making it a guess. The pins are asserted in
+`tests/munitionDelivery.test.js` against the installed templates, the way the
+515-design mount pin is; their inputs are **not** baked into the payload.
+
+Which families the game marks `isPointDefenseTargetable`: missiles **57 of 57**
+(all carry `acceleration_g` — guided and accelerating), magnetic guns **70 of
+70** and guns **4 of 8** (a `muzzleVelocity_kps` and no acceleration — an
+unguided slug at constant velocity). Lasers, particle weapons and plasma weapons
+carry it **zero** times: a beam cannot be intercepted, so it has no delivery
+axis at all. That is a fact about a beam, not a gap, and it reports as one.
+
+On the defending side the flag is `defenseMode: true` — the game's own "can
+engage defensively" marker, carried by **121 lasers, 23 particle weapons, 5 guns
+and 10 magnetic guns**, not merely the 9 dedicated point-defence turrets. The
+`point-defense` weapon *role* additionally requires `attackMode: false` and so
+would miss every dual-purpose battery that also shoots back at missiles.
+
+### The flight model, and its three stated assumptions
+
+With `a = acceleration_g × 9.80665`, `r = thrustRamp_s`, `dV = deltaV_kps × 1000`
+and `R = targetingRange_km × 1000`:
+
+| phase | speed | distance |
+| :-- | :-- | :-- |
+| ramp, `0 ≤ t ≤ r` | `a·t²/(2r)` | `a·t³/(6r)` |
+| powered, `t > r` | `vRamp + a(t−r)` | `xRamp + vRamp(t−r) + a(t−r)²/2` |
+| coast, `t > tBurn` | `dV` | linear |
+
+`vRamp = a·r/2`, `xRamp = a·r²/6`, and `tBurn = √(2r·dV/a)` when the budget runs
+out inside the ramp, otherwise `r + (dV − vRamp)/a`. `flightTimeS` is the `t` at
+which `x(t) = R`, solved in closed form past burnout and by 200 deterministic
+bisection steps inside the burn. An unguided slug is the degenerate case:
+`flightTimeS = R / muzzleVelocity`, terminal speed equal to muzzle speed, no
+burnout, and **no agility fields in the template at all**.
+
+Three assumptions, none of which the templates confirm, and all three stated in
+the payload rather than only here:
+
+1. **Acceleration is held at the stated launch-mass value.** The real value
+   rises as propellant burns, so `flightTimeS` is an *upper* bound and
+   `terminalSpeedKps` a *lower* one. Both sides of any comparison are measured
+   under the identical assumption, so the **ordering is unaffected** even though
+   the absolute figures are bounds.
+2. **The target is stationary and the launching hull is at rest.** The templates
+   state no engagement geometry.
+3. **The thrust ramp is linear from zero over `thrustRamp_s`.** The templates do
+   not state the ramp shape.
+
+### The envelope, and the saturation that actually decides it
+
+Per defending weapon type in the profile:
+
+```
+envelopeDepth(type)   = min(pdTargetingRange_km × 1000, R)
+envelopeSeconds(type) = flightTimeS − timeToCover(R − envelopeDepth(type))
+shotsFrom(type)       = mountsPerHull(type) × envelopeSeconds(type) / cycleSeconds(type)
+shotsPerSalvo         = Σ over types
+shotsPerArrivingRound = shotsPerSalvo / roundsPerSalvo
+```
+
+`roundsPerSalvo` is the template's own `salvo_shots` where it states one and
+**1** otherwise, flagged as an assumption exactly as `shotsPerCycleAssumed`
+already is. `cycleSeconds` is §3's own firing-cycle figure, passed in rather
+than derived a second time. `mountsPerHull` is a **mean** over the hulls read.
+The `min` is load-bearing: a 1,000 km point-defence laser cannot begin engaging
+a round fired from 800 km before the round exists.
+
+The salvo division is **modelled**. It assumes a defending battery distributes
+its fire evenly across the rounds that are in the envelope together, and that a
+salvo launched at `intraSalvoCooldown_s` spacing arrives essentially together —
+1 s × 8 = 7 s of launch spread against a ~95 s shared envelope on the live save.
+
+### What it measured
+
+Against the live save's 656 non-observer hulls carrying 880 point-defence
+mounts (ExitSave, 1/1/2034, observer 4712, player mode):
+
+| | launch range km | flight s | terminal km/s | rounds/salvo | PD shots/salvo | shots per **arriving** round |
+| :-- | --: | --: | --: | --: | --: | --: |
+| CopperheadMissileBay *(fielded)* | 800 | 230.6 | 3.68 | 8 | 31.55 | **3.943** |
+| AntimatterTorpedoLauncher | 1000 | 206.7 | 9.79 | 1 | 14.28 | **14.278** |
+| HeavyRailCannonMk3 *(fielded)* | 900 | 126.3 | 7.125 | 1 | 16.25 | **16.249** |
+| AnacondaMissileBay | 800 | 228.5 | 3.76 | 8 | 30.94 | 3.868 |
+| ViperMissileBay | 800 | 159.1 | 5.64 | 8 | 20.79 | 2.599 |
+| SidewinderNuclearMissileBay | 800 | 248.3 | 3.37 | 4 | 34.36 | 8.591 |
+
+**The finding, and note the direction of the surprise.** The antimatter torpedo
+is **faster**, not slower: 206.7 s to cross 1,000 km against the Copperhead's
+230.6 s to cross 800, and its terminal speed is 2.66× higher, because the
+Copperhead burns out after ~23 s and coasts 762 km at 3.68 km/s while the
+torpedo is still under thrust when it arrives. Every kinematic axis favours the
+torpedo.
+
+What sinks it is **saturation**. A Copperhead bay throws eight rounds per firing
+cycle and a torpedo launcher throws one, so the same defensive fire is split
+eight ways for the Copperhead and lands entirely on the torpedo — **3.62×** as
+much point-defence fire per arriving round (14.278 / 3.943). The trade is not
+speed against damage; it is concentration against dispersion, and nothing in
+§3's axes could have shown it.
+
+### Agility is reported, never ranked
+
+`maneuverSlewTimeS` is the time to rotate through `maneuver_angle` at
+`rotation_degps` with a linear ramp over `turnRamp_s`; `maneuversPerFlight` is
+the flight time divided by it. Copperhead: 25 °/s, 1 s ramp, 50° → **2.50 s**,
+**92.2** manoeuvres per flight. Antimatter torpedo: 20 °/s, 1 s, 40° → 2.50 s,
+82.7.
+
+The templates never say what `maneuver_angle` *bounds* — per manoeuvre, total
+authority, or something else. The three stated fields are reported verbatim and
+the derived pair carries an explicit note that the interpretation is ours.
+Agility never becomes the floor axis and reorders nothing.
+
+**No hit probability is computed anywhere.** No percentage, no survival odds, no
+"effectiveness score". The game publishes nothing to check one against, and a
+confident percentage resting on an unverified flight model is precisely what §7
+forbids. Only the measurable quantities are reported.
+
+### The ranking mechanism, and why this one
+
+Damage still **leads**, because it is the axis that decides the outcome of an
+engagement. Delivery is the **floor**, because it decides whether the outcome
+happens at all — the direct analogue of §3a ranking warships on combat
+acceleration with delta-V as the floor. The floor value is
+`shotsPerArrivingRound` for the best point-defence-targetable munition the
+observer *already fields*, never a constant; only the offensive weapon role
+declares one, because point defence is not itself interceptable and an
+installation gun fires from a hab that is not going anywhere.
+
+The floor verdict is **tri-state**, and only a measured `false` demotes:
+
+| verdict | meaning |
+| :-- | :-- |
+| `false` | measured, and measurably worse than what the observer fields |
+| `true` | measured, and no worse |
+| `null` | **could not be evaluated** — a beam, an observer fielding nothing comparable, or a template that does not describe the flight |
+
+Treating `null` as failure would reorder the entire ranking on the strength of a
+measurement nobody made, every time the sky happened to be unobserved. "Unknown
+is not safe" is honoured by carrying the reason on the row and giving it its own
+badge in the panel — `delivery unchecked`, visibly distinct from `fails
+delivery` — so an unevaluated floor never reads as a cleared one.
+
+In §4's comparator the delivery term sits **after** `axisKind` and **before**
+`valuePerResearchPoint`. After, because a row with a named engineering unit that
+fails delivery is still more commensurable than a unitless rule scalar — the
+torpedo's megawatts per hardpoint remain a real quantity even though the round
+arrives alone. Before, because that is the whole point: a candidate that wins on
+damage per research point must not lead its group on the number it wins.
+`closesDeficit` stays first, exactly as it does for `axisKind`.
+
+Measured effect on the live save, both modes: the antimatter torpedo moves from
+**#2 to #9 of 11** in the `prereq-blocked` group, landing behind every
+measured-axis row and still ahead of the two rule-scalar ones. Nothing else in
+either mode's ordering changes.
+
+**A floor that silently removes a row from the top of a ranking is a
+truncation**, so it announces itself: each class carries a `deliveryDemoted`
+census, aggregated across classes on the ranking endpoint and rendered as one
+line on the card — *"66 ranked below their damage: Antimatter Torpedo Launcher —
+3.6× the point-defence fire per round of Copperhead Missile Bay"*.
+
+### Player mode
+
+`weaponLoadout` survives redaction, so a player-mode observer can see the alien
+point-defence battery at all: **656 non-observer hulls** are read, 0 through
+their designs and 656 through weapon display names. The delivery figures above
+are the player-mode ones, and they are the numbers a player actually gets.
+
+**Omniscient is not identical, and it should not be claimed to be.** With
+designs visible the same 656 hulls yield **1,069** point-defence installations
+rather than 880, because `weaponLoadout.systems` is a *distinct* list — a group
+reading `{count: 3, systems: ["Copperhead Missile Bay"]}` is three bays, and the
+display-name path counts one. The player-mode figure therefore **under**-states
+the defensive battery, which is the safe direction, and the payload says so.
+The consequence is that the absolute figures differ by mode (floor 3.943 vs
+4.421; torpedo 14.278 vs 16.122) while the **finding and the ordering do not**:
+3.62× in player mode against 3.65× in omniscient, torpedo #9 of 11 in both.
+
+### What is NOT validated
+
+Everything above the two pins. The game publishes no flight time, no terminal
+speed, no interception figure and no point-defence engagement model, so the
+envelope, the saturation division, the agility interpretation and the
+`mountsPerHull` mean are all `validatedAgainstGameOutput: false` and say so on
+every axis descriptor. The `weaponLoadout` under-count is recorded as an
+assumption rather than corrected, because correcting it would mean attributing
+an ambiguous `{count: 5, systems: [A, B]}` group to particular weapons.
+
+---
+
 ## 4. Economic valuation
 
 Each context-scoped effect maps to a live quantity in the snapshot:
@@ -731,3 +951,18 @@ that line wraps. `document.scrollWidth === clientWidth` at 375 / 900 / 1366 /
    bytes gzipped**, 0.0102% of the 3,124 KB published player row.
    `researchWeights` is redacted for every non-observer faction in player mode,
    as `null` and never as `[]`, and the filter's own leak assertion covers it.
+6. ~~The munition delivery axis.~~ **Built 2026-08-21** as
+   `shared/munitionDelivery.mjs`, the `deliveryEnvironment` block on
+   `/api/intel/military-value`, a delivery floor on the offensive weapon role,
+   and a `deliveryDemoted` census carried through to the panel. It answers the
+   question §3 never asked — whether the round arrives — for the 131 munitions
+   the game marks `isPointDefenseTargetable`, and it does so beside the damage
+   axes rather than blended into them. Two pins reproduce the templates' own
+   `acceleration_g` and `deltaV_kps` for **57 of 57** missiles; everything built
+   on top of them is modelled and labelled as such, and **no hit probability is
+   computed anywhere**. Baked `componentStats` gained five weapon fields:
+   **+5.3 KB raw / +0.4 KB gzipped** (166.6 → 171.9 KB), 0.17% of the published
+   player row. The measured outcome is that `AntimatterTorpedoLauncher` — the
+   6,687,502.98× damage leader — absorbs **3.62×** the point-defence fire per
+   arriving round of the Copperhead bay the observer flies, and moves from #2 to
+   #9 of 11 in its availability group in both modes. See §3c.

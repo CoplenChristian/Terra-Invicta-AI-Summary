@@ -541,7 +541,7 @@ test('Live save integration: Hold Ground fires in both modes with different word
   } catch (err) {
     if (
       err.code === 'EBUSY' || err.code === 'ENOENT' || err.code === 'EPERM'
-      || /EBUSY|locked|busy|No save path configured|Save folder not found|No save files found/.test(err.message || '')
+      || /EBUSY|locked|busy|No save path configured|Save folder not found|Save file not found|No \.gz or \.json save files found|No save files found/.test(err.message || '')
     ) {
       t.skip(`Skipping live save test: ${err.message}`);
     } else {

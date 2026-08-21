@@ -37,9 +37,11 @@ import { summarizeFleetCapability } from '../fleetCapability.mjs';
 import { AVAILABILITY_STATES, buildAvailabilityResolver } from '../researchAvailability.mjs';
 import {
   ACTIONABLE_GROUPS,
+  ASPIRATIONAL_GROUPS,
   AVAILABILITY_GROUP_LABELS,
   AVAILABILITY_GROUP_ORDER,
   AXIS_KINDS,
+  DELIVERY_FLOOR_ORDER,
   DEFICIT_RESEARCH_REMEDIES,
   RANKING_FORMULAE,
   RANKING_METHOD,
@@ -90,9 +92,11 @@ function militaryRow({
   id, source, classKey, ruleKey, itemId, displayName, axisLabel, axisKind, axisBasis,
   multiple, availabilityState, gateProjectId, gateProjectName, remainingResearchCost,
   monthsAtCurrentIncome, unlockChance, clearsFloor, floorReason, alsoUnlocks, context,
-  ruleGroupSize
+  ruleGroupSize, clearsDeliveryFloor, deliveryFloorReason
 }) {
   const scored = militaryValuePerResearchPoint(multiple, remainingResearchCost, availabilityState);
+  const isZeroCost = scored.state === RANK_STATES.noResearchRequired && scored.gainMultiple !== null && scored.gainMultiple > 0;
+  const effectiveState = isZeroCost ? 'buildable-now' : (availabilityState || AVAILABILITY_STATES.unknown);
   return {
     id,
     track: 'military',
@@ -114,25 +118,36 @@ function militaryRow({
     improvementMultiple: toFinite(multiple),
     valuePerResearchPoint: scored.perResearchPoint,
     gainMultiple: scored.gainMultiple,
+    isZeroCost,
+    isBuildableNow: isZeroCost,
     rankState: scored.state,
     rankReason: scored.reason,
-    availabilityState: availabilityState || AVAILABILITY_STATES.unknown,
-    availabilityLabel: AVAILABILITY_GROUP_LABELS[availabilityState] || availabilityState || 'unknown',
+    availabilityState: effectiveState,
+    availabilityLabel: AVAILABILITY_GROUP_LABELS[effectiveState] || effectiveState || 'unknown',
     gateProjectId: gateProjectId ?? null,
     gateProjectName: gateProjectName ?? null,
-    remainingResearchCost: toFinite(remainingResearchCost),
-    monthsAtCurrentIncome: toFinite(monthsAtCurrentIncome),
-    unlockChance: unlockChance ?? null,
+    remainingResearchCost: isZeroCost ? 0 : toFinite(remainingResearchCost),
+    monthsAtCurrentIncome: isZeroCost ? 0 : toFinite(monthsAtCurrentIncome),
+    unlockChance: isZeroCost ? null : (unlockChance ?? null),
     // Phase 1 and phase 2 both rank on one axis with a stated floor on the axis
     // it trades against. A candidate that wins its axis by failing the floor is
     // the exact shape of phase 1's finding, so the floor verdict is not
     // optional decoration.
     clearsFloor: clearsFloor ?? null,
     floorReason: floorReason ?? null,
+    // Phase 5's second floor, and tri-state for the same reason the first is:
+    // null means the floor could not be EVALUATED for this row -- a beam, an
+    // observer fielding no comparable munition, or an item whose flight the
+    // templates do not describe -- which is not the same as clearing it. Only a
+    // measured `false` demotes; see `deliveryFloorRank`.
+    clearsDeliveryFloor: clearsDeliveryFloor ?? null,
+    deliveryFloorReason: deliveryFloorReason ?? null,
     alsoUnlocks: alsoUnlocks ?? null,
     context: context ?? null,
     closesDeficit: false,
-    missingPrerequisites: null
+    missingPrerequisites: null,
+    slotAction: isZeroCost ? 'no-slot-needed' : null,
+    slotNote: isZeroCost ? 'Fittable today at 0 research cost — requires only a refit or build.' : null
   };
 }
 
@@ -257,6 +272,8 @@ function militaryValueRows(military) {
           unlockChance: best.unlockChance,
           clearsFloor: best.clearsFloor,
           floorReason: best.floorReason,
+          clearsDeliveryFloor: best.clearsDeliveryFloor,
+          deliveryFloorReason: best.deliveryFloorReason,
           alsoUnlocks: best.alsoUnlocks,
           context: {
             family: cls.family,
@@ -272,7 +289,26 @@ function militaryValueRows(military) {
             // magazine field at all, which is a fact about them rather than a
             // missing measurement.
             sustainedOutputDurationS: toFinite(best.vsFielded?.byAxis?.sustainedOutputDurationS?.candidate),
-            magazineEnergyMJ: toFinite(best.vsFielded?.byAxis?.magazineEnergyMJ?.candidate)
+            magazineEnergyMJ: toFinite(best.vsFielded?.byAxis?.magazineEnergyMJ?.candidate),
+            // Phase 5's fifth correction: a damage rate needs to be told
+            // whether the round arrives. Null on every row the delivery axis
+            // does not apply to -- a beam is not interceptable, and saying
+            // nothing about it is the correct answer rather than a gap.
+            delivery: best.deliveryShotsPerArrivingRound === null || best.deliveryShotsPerArrivingRound === undefined
+              ? null
+              : {
+                shotsPerArrivingRound: toFinite(best.deliveryShotsPerArrivingRound),
+                floorValue: toFinite(best.deliveryFloorValue),
+                floorBaselineDisplayName: best.deliveryFloorBaselineDisplayName ?? null,
+                multipleOfFloor: (toFinite(best.deliveryFloorValue) === null
+                  || !(toFinite(best.deliveryFloorValue) > 0)
+                  || toFinite(best.deliveryShotsPerArrivingRound) === null)
+                  ? null
+                  : round(toFinite(best.deliveryShotsPerArrivingRound) / toFinite(best.deliveryFloorValue), 6),
+                flightTimeS: toFinite(best.deliveryFlightTimeS),
+                terminalSpeedKps: toFinite(best.deliveryTerminalSpeedKps),
+                profileKey: best.deliveryProfileKey ?? null
+              }
           }
         }));
       }
@@ -311,6 +347,10 @@ function militaryValueRows(military) {
         unlockChance: null,
         clearsFloor: null,
         floorReason: null,
+        // A utility or hab module is not a munition, so the delivery floor is
+        // not merely unevaluated for it -- it does not exist.
+        clearsDeliveryFloor: null,
+        deliveryFloorReason: null,
         context: {
           family: cls.family,
           rule: group.rule,
@@ -506,8 +546,47 @@ export const researchRankingResource = (snapshot, {
   const propulsion = propulsionResource(snapshot, { observerId, mode, limit: 1 });
   const military = militaryValueResource(snapshot, { observerId, mode, detail: 'summary' });
   const economic = economicValueResource(snapshot, { observerId, mode, detail: 'summary', limit: ECONOMIC_SCAN_LIMIT });
-
   const resolver = buildAvailabilityResolver(snapshot, mode, observerId);
+  const slots = buildResearchSlotAllocation(snapshot, { observerId });
+
+  function attachSlotAction(row) {
+    if (row.isZeroCost || row.rankState === RANK_STATES.noResearchRequired) {
+      row.slotAction = 'no-slot-needed';
+      row.slotNote = 'Fittable today at 0 research cost — requires only a refit or build.';
+      return row;
+    }
+    if (row.availabilityState === 'researchable-now') {
+      if (!slots || slots.available !== true) {
+        row.slotAction = null;
+        row.slotNote = null;
+        return row;
+      }
+      const free = slots.freeProjectSlots;
+      const cap = slots.projectSlotCapacity;
+      if (free !== null && free > 0) {
+        row.slotAction = 'free-slot';
+        row.freeProjectSlots = free;
+        row.slotNote = `${free} of ${cap} project slots free — start now with nothing lost (${row.monthsAtCurrentIncome !== null ? `${row.monthsAtCurrentIncome} mo` : '—'} at current research income).`;
+      } else if (free !== null && free === 0 && cap > 0) {
+        row.slotAction = 'occupied-slot';
+        row.activeOccupants = asArray(slots.activeProjects).map(p => ({
+          id: p.projectId,
+          displayName: p.displayName,
+          accumulatedResearch: p.accumulatedResearch,
+          totalCost: p.totalCost,
+          percent: p.percent
+        }));
+        row.slotNote = `All ${cap} project slots active — starting this requires backlogging an active project (progress is retained).`;
+      } else {
+        row.slotAction = 'no-slot';
+        row.slotNote = 'No project slots available to start this research.';
+      }
+      return row;
+    }
+    row.slotAction = null;
+    row.slotNote = null;
+    return row;
+  }
 
   // --- military track ------------------------------------------------------
   // Deficit relevance is stamped BEFORE the dedupe, not after: the dedupe keeps
@@ -536,10 +615,14 @@ export const researchRankingResource = (snapshot, {
     return row;
   });
 
-  const militaryRanked = militaryAll.filter(row => row.rankState === RANK_STATES.ranked);
+  const militaryRanked = militaryAll
+    .filter(row => row.rankState === RANK_STATES.ranked || (row.rankState === RANK_STATES.noResearchRequired && row.gainMultiple > 0))
+    .map(attachSlotAction);
   const militaryGroups = groupByAvailability(militaryRanked, compareMilitaryRows)
     .map(group => ({
       ...group,
+      actionable: ACTIONABLE_GROUPS.includes(group.state),
+      aspirational: ASPIRATIONAL_GROUPS.includes(group.state),
       itemsShown: Math.min(groupLimit, group.items.length),
       items: wantsFull ? group.items : group.items.slice(0, groupLimit)
     }));
@@ -555,7 +638,7 @@ export const researchRankingResource = (snapshot, {
   const byUnit = new Map();
   for (const row of economicRanked) {
     if (!byUnit.has(row.unit)) byUnit.set(row.unit, []);
-    byUnit.get(row.unit).push(row);
+    byUnit.get(row.unit).push(attachSlotAction(row));
   }
   const economicUnits = [...byUnit.entries()]
     .sort((a, b) => b[1].length - a[1].length || String(a[0]).localeCompare(String(b[0])))
@@ -564,6 +647,8 @@ export const researchRankingResource = (snapshot, {
       count: rows.length,
       groups: groupByAvailability(rows, compareEconomicRows).map(group => ({
         ...group,
+        actionable: ACTIONABLE_GROUPS.includes(group.state),
+        aspirational: ASPIRATIONAL_GROUPS.includes(group.state),
         itemsShown: Math.min(groupLimit, group.items.length),
         items: wantsFull ? group.items : group.items.slice(0, groupLimit)
       }))
@@ -583,6 +668,19 @@ export const researchRankingResource = (snapshot, {
   const militaryTally = tallyUnrankable(militaryAll);
   const economicTally = tallyUnrankable([...economicRanked, ...economicUnrankable]);
 
+  // Phase 5's census, aggregated across the classes that declare a delivery
+  // floor. A floor that silently removes a row from the top of a ranking is a
+  // TRUNCATION, and truncation announces itself: without this the only visible
+  // effect on the live save is that the antimatter torpedo is no longer where
+  // it was, with nothing on screen saying why.
+  const demotedAcrossClasses = asArray(military?.items)
+    .flatMap(cls => asArray(cls.deliveryDemoted?.items).map(item => ({ ...item, classKey: cls.classKey, family: cls.family })))
+    .sort((a, b) => (toFinite(b.rankValue) ?? -Infinity) - (toFinite(a.rankValue) ?? -Infinity)
+      || String(a.id).localeCompare(String(b.id)));
+  const demotedTotal = asArray(military?.items)
+    .reduce((sum, cls) => sum + (toFinite(cls.deliveryDemoted?.count) ?? 0), 0);
+  const classesWithDeliveryFloor = asArray(military?.items).filter(cls => cls.deliveryDemoted !== null).length;
+
   return {
     resource: 'research-ranking',
     observerFactionId: observerId,
@@ -595,19 +693,22 @@ export const researchRankingResource = (snapshot, {
       availability: Object.values(AVAILABILITY_STATES),
       availabilityLabels: AVAILABILITY_GROUP_LABELS,
       actionableGroups: ACTIONABLE_GROUPS,
+      aspirationalGroups: ASPIRATIONAL_GROUPS,
       axisKinds: Object.values(AXIS_KINDS)
     },
     ordering: {
       basis: 'two parallel rankings, concatenated in a fixed track order (military, then economic). '
         + 'This is NOT a merged score and the position of an economic row below a military one carries '
         + 'no claim that the military one is worth more -- there is no exchange rate between them. '
-        + 'Within a track, ordering is by value per research point inside one availability group, with '
-        + 'deficit-closing military candidates promoted ahead of the rest of their group and rule-scalar '
-        + 'candidates demoted behind every measured-axis one.',
+        + 'Within a track, ordering leads with zero-cost options, then value per research point inside one '
+        + 'availability group, with deficit-closing military candidates promoted ahead of the rest of their group '
+        + 'and rule-scalar candidates demoted behind every measured-axis one.',
       deficitApplied: ordering.applied,
-      militaryKeys: ['closesDeficit', 'axisKind', 'valuePerResearchPoint', 'id'],
+      militaryKeys: ['closesDeficit', 'axisKind', 'deliveryFloor', 'valuePerResearchPoint', 'id'],
       axisKindOrder: Object.values(AXIS_KINDS),
+      deliveryFloorOrder: DELIVERY_FLOOR_ORDER,
       ruleScalarDemotion: RANKING_METHOD.ruleScalarDemotion,
+      deliveryFloorDemotion: RANKING_METHOD.deliveryFloor,
       groupLimit,
       trackOrder: ['military', 'economic']
     },
@@ -635,12 +736,9 @@ export const researchRankingResource = (snapshot, {
       },
       remedyTable: DEFICIT_RESEARCH_REMEDIES
     },
-    // Section 6. WHERE the observer's research is currently pointed, which is a
-    // different question from what to research next and is answered from the
-    // save rather than from a model. No reallocation is recommended: the wiki
-    // allocation formula does not reproduce the observer's measured research
-    // delivery, and `slots.model.reproduction` carries the numbers that say so.
-    slots: buildResearchSlotAllocation(snapshot, { observerId }),
+    // Section 6 & Actionability Spec. WHERE the observer's research is currently pointed,
+    // how many project slots are free, and which projects are backlogged with progress intact.
+    slots,
     research: {
       monthlyResearchIncome: monthlyResearch,
       monthlyResearchIncomeReason: monthlyResearch === null
@@ -666,7 +764,18 @@ export const researchRankingResource = (snapshot, {
       militaryValue: {
         available: military.componentCatalogue?.available ?? false,
         reason: military.componentCatalogue?.reason ?? null,
-        comparisonClasses: toFinite(military.count)
+        comparisonClasses: toFinite(military.count),
+        deliveryEnvironment: military.deliveryEnvironment
+          ? {
+            available: military.deliveryEnvironment.available === true,
+            selected: military.deliveryEnvironment.selected ?? null,
+            reason: military.deliveryEnvironment.reason ?? null,
+            hullsRead: toFinite(military.deliveryEnvironment.profiles?.[military.deliveryEnvironment.selected]?.hullsRead),
+            pointDefenseInstallations: toFinite(military.deliveryEnvironment.profiles?.[military.deliveryEnvironment.selected]?.pointDefenseInstallations),
+            meanMountsPerHull: toFinite(military.deliveryEnvironment.profiles?.[military.deliveryEnvironment.selected]?.meanMountsPerHull),
+            validatedAgainstGameOutput: false
+          }
+          : null
       },
       economicValue: {
         available: economic.effectIndex?.available ?? false,
@@ -675,19 +784,38 @@ export const researchRankingResource = (snapshot, {
       }
     },
     military: {
-      orderedBy: 'value per research point, inside one availability group, deficit-closing first and '
-        + 'rule-scalar axes last',
+      orderedBy: 'zero-cost options first, then value per research point inside each availability group, deficit-closing first, '
+        + 'munitions failing the delivery floor demoted, and rule-scalar axes last',
       axisCaveat: RANKING_METHOD.crossAxisCaveat,
       ruleScalarCaveat: RANKING_METHOD.ruleScalarDemotion,
+      deliveryCaveat: RANKING_METHOD.deliveryFloor,
       candidatesConsidered: militaryAll.length,
       rankedCount: militaryRanked.length,
       groups: militaryGroups,
+      actionableGroups: militaryGroups.filter(g => ACTIONABLE_GROUPS.includes(g.state)),
+      aspirationalGroups: militaryGroups.filter(g => ASPIRATIONAL_GROUPS.includes(g.state)),
+      deliveryDemoted: classesWithDeliveryFloor === 0 ? null : {
+        count: demotedTotal,
+        classesWithDeliveryFloor,
+        basis: RANKING_METHOD.deliveryFloor,
+        itemsShown: Math.min(demotedAcrossClasses.length, groupLimit),
+        itemsTotalCount: demotedTotal,
+        itemsOmittedCount: Math.max(0, demotedTotal - Math.min(demotedAcrossClasses.length, groupLimit)),
+        items: demotedAcrossClasses.slice(0, groupLimit)
+      },
+      deliveryFloor: {
+        applied: classesWithDeliveryFloor > 0,
+        classesWithDeliveryFloor,
+        demotedCount: demotedTotal,
+        demotedItems: wantsFull ? demotedAcrossClasses : demotedAcrossClasses.slice(0, groupLimit),
+        rationale: 'phase 5: a point-defence-targetable munition whose delivery is measurably worse than what the observer fields cannot lead on damage per research point alone. Damage that never lands is not damage dealt.'
+      },
       unrankable: militaryTally,
       // The unrankable rows themselves, so a caller can see WHICH candidate was
       // a downgrade rather than only how many were. Section 7: never a silent zero.
       unrankableItems: wantsFull
-        ? militaryAll.filter(row => row.rankState !== RANK_STATES.ranked)
-        : militaryAll.filter(row => row.rankState !== RANK_STATES.ranked).slice(0, groupLimit)
+        ? militaryAll.filter(row => row.rankState !== RANK_STATES.ranked && row.rankState !== RANK_STATES.noResearchRequired)
+        : militaryAll.filter(row => row.rankState !== RANK_STATES.ranked && row.rankState !== RANK_STATES.noResearchRequired).slice(0, groupLimit)
     },
     economic: {
       orderedBy: 'value per research point, per unit, inside one availability group',
@@ -696,6 +824,8 @@ export const researchRankingResource = (snapshot, {
       candidatesConsidered: economicRanked.length + economicUnrankable.length,
       rankedCount: economicRanked.length,
       units: economicUnits,
+      actionableGroups: economicUnits.flatMap(u => u.groups.filter(g => ACTIONABLE_GROUPS.includes(g.state))),
+      aspirationalGroups: economicUnits.flatMap(u => u.groups.filter(g => ASPIRATIONAL_GROUPS.includes(g.state))),
       unrankable: economicTally,
       unrankableItems: wantsFull
         ? economicUnrankable

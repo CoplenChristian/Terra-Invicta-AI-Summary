@@ -1,0 +1,1311 @@
+{
+  "provenance": {
+    "source": "filtered player-mode snapshot from the live save",
+    "derivedFrom": "filtered live snapshot (mode player, observer 4712)",
+    "derivedBy": "scripts/derive_snapshot_fixtures.js",
+    "note": "Mechanically trimmed to keep generateCompactSnapshot byte-identical. Do not hand-edit. Re-run the script deliberately when the compact renderer legitimately changes; regenerating this to turn a red test green destroys the byte-identical guarantee it exists to provide."
+  },
+  "mode": "player",
+  "observerFactionId": 4712,
+  "alienIntelligenceStage": {
+    "abductions": {
+      "status": "AVAILABLE"
+    },
+    "contacts": {
+      "status": "AVAILABLE"
+    },
+    "operations": {
+      "status": "AVAILABLE"
+    },
+    "operatives": {
+      "active": true,
+      "status": "AVAILABLE"
+    }
+  },
+  "metadata": {
+    "gameTimeString": "2/16/2034 12:00:00 PM"
+  },
+  "factions": [
+    {
+      "displayName": "the Resistance",
+      "controlPointsCount": 81,
+      "totalGdp": 34194934640812.875,
+      "totalResearch": 1825.66,
+      "habsCount": 14,
+      "shipsCount": 15
+    },
+    {
+      "displayName": "Humanity First",
+      "controlPointsCount": 63,
+      "totalGdp": 19337161294912.438,
+      "totalResearch": 1474.22,
+      "habsCount": 24,
+      "shipsCount": 51
+    },
+    {
+      "ID": 4712,
+      "displayName": "the Initiative",
+      "controlPointsCount": 18,
+      "totalGdp": 46589906225678.89,
+      "totalResearch": 3150.55,
+      "habsCount": 22,
+      "shipsCount": 42,
+      "powerScore": {
+        "overall": 66
+      },
+      "currentProjects": [
+        {
+          "displayName": "Audience Research",
+          "accumulatedResearch": 43,
+          "totalCost": 100,
+          "percent": 42.5
+        },
+        {
+          "displayName": "Operations Research",
+          "accumulatedResearch": 23,
+          "totalCost": 100,
+          "percent": 22.8
+        },
+        {
+          "displayName": "UV Laser Cannon",
+          "accumulatedResearch": 2047,
+          "totalCost": 7500,
+          "percent": 27.3
+        },
+        {
+          "displayName": "Fusion Outpost Kit",
+          "accumulatedResearch": 377,
+          "totalCost": 1500,
+          "percent": 25.1
+        },
+        {
+          "displayName": "Maskirovka",
+          "accumulatedResearch": 87,
+          "totalCost": 15000,
+          "percent": 0.6
+        }
+      ],
+      "alienHate": {
+        "visibleEstimate": "■■■■■",
+        "visibility": "estimated"
+      }
+    },
+    {
+      "displayName": "the Servants",
+      "controlPointsCount": 76,
+      "totalGdp": 28977421254762.805,
+      "totalResearch": 2021.22,
+      "habsCount": 47,
+      "shipsCount": 73
+    },
+    {
+      "displayName": "the Protectorate",
+      "controlPointsCount": 45,
+      "totalGdp": 94430500004477.61,
+      "totalResearch": 3965.07,
+      "habsCount": 14,
+      "shipsCount": 69
+    },
+    {
+      "displayName": "the Academy",
+      "controlPointsCount": 55,
+      "totalGdp": 24524477857297.3,
+      "totalResearch": 1378.09,
+      "habsCount": 18,
+      "shipsCount": 16
+    },
+    {
+      "displayName": "Project Exodus",
+      "controlPointsCount": 40,
+      "totalGdp": 20920743283897.32,
+      "totalResearch": 1279.98,
+      "habsCount": 17,
+      "shipsCount": 32
+    },
+    {
+      "displayName": "the Aliens",
+      "controlPointsCount": 5,
+      "totalGdp": 13150471419900.1,
+      "totalResearch": 0,
+      "habsCount": 24,
+      "shipsCount": 416,
+      "powerScore": {
+        "overall": 29
+      }
+    }
+  ],
+  "councilors": [
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {}
+  ],
+  "fleets": [
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 3,
+      "weaponSummary": "Point Defense x5 • Laser x4 • Missile x4 • Kinetic x2",
+      "orbitBody": "Miranda"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Laser x1 • Point Defense x1",
+      "orbitBody": "Triton"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 3,
+      "weaponSummary": "Missile x5 • Kinetic x1 • Point Defense x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Kinetic x1 • Point Defense x1",
+      "orbitBody": "Quaoar"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 6,
+      "weaponSummary": "Missile x12",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Point Defense x2 • Laser x1 • Missile x1",
+      "orbitBody": "97 Klotho"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 3,
+      "weaponSummary": "Point Defense x5 • Laser x4 • Missile x4 • Kinetic x2",
+      "orbitBody": "Rhea"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x5 • Kinetic x1 • Point Defense x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 6,
+      "weaponSummary": "Kinetic x6 • Laser x6 • Missile x4 • Point Defense x4 • Particle x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 2,
+      "weaponSummary": "Kinetic x2 • Missile x2 • Point Defense x1",
+      "orbitBody": "433 Eros"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 14,
+      "weaponSummary": "Missile x30 • Laser x15 • Point Defense x14 • Kinetic x6 • Particle x4 • Plasma x1",
+      "orbitBody": "Quaoar"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 2,
+      "weaponSummary": "Kinetic x3 • Particle x3 • Point Defense x3 • Laser x2",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Initiative",
+      "shipsCount": 6,
+      "weaponSummary": "Missile x6 • Laser x5 • Point Defense x5 • Kinetic x3",
+      "orbitBody": "Mercury"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "4 Vesta"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 18,
+      "weaponSummary": "Laser x22 • Missile x22 • Point Defense x16 • Kinetic x12 • Particle x6",
+      "orbitBody": "Ganymede"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Mars"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 3,
+      "weaponSummary": "Missile x6",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1",
+      "orbitBody": "Luna"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 13,
+      "weaponSummary": "Laser x18 • Missile x16 • Point Defense x12 • Kinetic x4 • Particle x1",
+      "orbitBody": "Miranda"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 7,
+      "weaponSummary": "Missile x14 • Kinetic x5",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x1 • Point Defense x1",
+      "orbitBody": "Dione"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 7,
+      "weaponSummary": "Missile x13 • Kinetic x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 3,
+      "weaponSummary": "Laser x4 • Missile x3 • Kinetic x1 • Point Defense x1",
+      "orbitBody": "54598 Bienor"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 3,
+      "weaponSummary": "Missile x5 • Kinetic x1",
+      "orbitBody": "Luna"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Kinetic x1 • Point Defense x1",
+      "orbitBody": "54598 Bienor"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x5 • Particle x1 • Point Defense x1",
+      "orbitBody": "Titan"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 2,
+      "weaponSummary": "Kinetic x3 • Missile x3 • Point Defense x2",
+      "orbitBody": "Titan"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 7,
+      "weaponSummary": "Laser x10 • Kinetic x3 • Point Defense x3 • Missile x1 • Particle x1",
+      "orbitBody": "Miranda"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 11,
+      "weaponSummary": "Missile x17 • Kinetic x10 • Point Defense x4 • Particle x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 6,
+      "weaponSummary": "Kinetic x8 • Point Defense x6 • Laser x4 • Missile x4 • Particle x2",
+      "orbitBody": "16 Psyche"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x4",
+      "orbitBody": "Luna"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 3,
+      "weaponSummary": "Missile x4 • Point Defense x4 • Kinetic x1 • Particle x1",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x5 • Point Defense x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Particle x1 • Point Defense x1",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x4 • Point Defense x2 • Kinetic x1",
+      "orbitBody": "38 Leda"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x5 • Laser x3 • Point Defense x3 • Kinetic x1 • Particle x1",
+      "orbitBody": "Rhea"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 2,
+      "weaponSummary": "Kinetic x2 • Missile x2 • Point Defense x2",
+      "orbitBody": "37 Fides"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x4",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 4,
+      "weaponSummary": "Kinetic x6 • Point Defense x3 • Particle x2 • Missile x1",
+      "orbitBody": "433 Eros"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 20,
+      "weaponSummary": "Missile x19 • Point Defense x18 • Laser x14 • Kinetic x11 • Particle x6",
+      "orbitBody": "Ganymede"
+    },
+    {
+      "factionName": "the Academy",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Kinetic x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Laser x2",
+      "orbitBody": "97 Klotho"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 8,
+      "weaponSummary": "Laser x9 • Missile x8 • Point Defense x8 • Kinetic x4 • Particle x2",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x4",
+      "orbitBody": "Luna"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 39,
+      "weaponSummary": "Laser x48 • Missile x38 • Point Defense x32 • Kinetic x18 • Particle x7",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 24,
+      "weaponSummary": "Missile x40 • Point Defense x16 • Kinetic x13 • Particle x6",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "490 Veritas"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Kinetic x1",
+      "orbitBody": "Ceres"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 9,
+      "weaponSummary": "Missile x11 • Laser x10 • Kinetic x8 • Point Defense x8 • Particle x2",
+      "orbitBody": "Rhea"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 26,
+      "weaponSummary": "Laser x46 • Point Defense x21 • Kinetic x11 • Missile x11 • Particle x6",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Initiative",
+      "shipsCount": 21,
+      "weaponSummary": "Missile x23 • Laser x16 • Point Defense x16 • Kinetic x13",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x5 • Point Defense x3 • Laser x2 • Particle x1",
+      "orbitBody": "97 Klotho"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 3,
+      "weaponSummary": "Missile x7 • Laser x5 • Particle x1 • Point Defense x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x5 • Particle x1 • Point Defense x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x3 • Kinetic x1 • Point Defense x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 9,
+      "weaponSummary": "Laser x17 • Missile x6 • Point Defense x5 • Kinetic x2 • Particle x2",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Kinetic x1",
+      "orbitBody": "37 Fides"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Kinetic x1",
+      "orbitBody": "375 Ursula"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 13,
+      "weaponSummary": "Missile x17 • Point Defense x13 • Laser x11 • Kinetic x7 • Particle x4",
+      "orbitBody": "Triton"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 2,
+      "weaponSummary": "Kinetic x2 • Missile x2 • Point Defense x2",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 5,
+      "weaponSummary": "Missile x8 • Point Defense x2 • Kinetic x1 • Particle x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Kinetic x1",
+      "orbitBody": "Ceres"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Laser x1 • Point Defense x1",
+      "orbitBody": "16 Psyche"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 6,
+      "weaponSummary": "Missile x7 • Kinetic x5 • Point Defense x3 • Particle x2",
+      "orbitBody": "Luna"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x2 • Point Defense x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 3,
+      "weaponSummary": "Laser x5 • Missile x5 • Particle x1 • Point Defense x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 4,
+      "weaponSummary": "Missile x5 • Laser x4 • Point Defense x2 • Kinetic x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x4",
+      "orbitBody": "Deimos"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 5,
+      "weaponSummary": "Point Defense x5 • Kinetic x4 • Missile x4 • Laser x3 • Particle x1",
+      "orbitBody": "Quaoar"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 21,
+      "weaponSummary": "Missile x46 • Kinetic x10 • Point Defense x5",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Laser x5",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 5,
+      "weaponSummary": "Missile x12 • Laser x6 • Point Defense x4 • Particle x3 • Kinetic x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 13,
+      "weaponSummary": "Missile x25 • Kinetic x5",
+      "orbitBody": "433 Eros"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 2,
+      "weaponSummary": "Kinetic x2 • Missile x2 • Point Defense x2",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Academy",
+      "shipsCount": 3,
+      "weaponSummary": "Missile x4 • Kinetic x3 • Point Defense x1",
+      "orbitBody": "Luna"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "69 Hesperia"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Point Defense x1",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "433 Eros"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 3,
+      "weaponSummary": "Missile x4 • Kinetic x2",
+      "orbitBody": "Deimos"
+    },
+    {
+      "factionName": "the Initiative",
+      "shipsCount": 1,
+      "weaponSummary": "Laser x1 • Missile x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 2,
+      "weaponSummary": "Kinetic x2 • Missile x2 • Point Defense x2",
+      "orbitBody": "37 Fides"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 5,
+      "weaponSummary": "Missile x7 • Kinetic x4 • Point Defense x2 • Particle x1",
+      "orbitBody": "433 Eros"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "36 Atalante"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Kinetic x1",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 1,
+      "weaponSummary": "Point Defense x2 • Kinetic x1 • Missile x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x3 • Kinetic x2 • Point Defense x1",
+      "orbitBody": "490 Veritas"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Point Defense x1",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 3,
+      "weaponSummary": "Laser x7 • Kinetic x2 • Point Defense x2",
+      "orbitBody": "16 Psyche"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 7,
+      "weaponSummary": "Missile x13 • Particle x4 • Kinetic x2 • Point Defense x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 16,
+      "weaponSummary": "Laser x25 • Missile x16 • Point Defense x13 • Kinetic x10 • Particle x3",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 10,
+      "weaponSummary": "Laser x7 • Point Defense x6 • Kinetic x5 • Missile x5 • Particle x3",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Kinetic x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 2,
+      "weaponSummary": "Particle x5 • Kinetic x2 • Missile x2",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "the Academy",
+      "shipsCount": 12,
+      "weaponSummary": "Missile x12 • Kinetic x10 • Point Defense x8 • Particle x7",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 4,
+      "weaponSummary": "Missile x8 • Kinetic x4 • Point Defense x2",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Initiative",
+      "shipsCount": 12,
+      "weaponSummary": "Missile x19 • Point Defense x11 • Laser x7 • Kinetic x4",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Point Defense x2 • Kinetic x1 • Missile x1",
+      "orbitBody": "Mercury"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x7 • Kinetic x1 • Point Defense x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "4 Vesta"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Point Defense x1",
+      "orbitBody": "490 Veritas"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 21,
+      "weaponSummary": "Laser x27 • Missile x18 • Point Defense x16 • Kinetic x10 • Particle x4",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 18,
+      "weaponSummary": "Laser x29 • Point Defense x19 • Kinetic x18 • Particle x10 • Missile x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Kinetic x1 • Point Defense x1",
+      "orbitBody": "38 Leda"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "4954 Eric"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "37 Fides"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 6,
+      "weaponSummary": "Missile x10 • Particle x4 • Point Defense x2 • Kinetic x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 3,
+      "weaponSummary": "Laser x7 • Kinetic x3 • Missile x3 • Point Defense x2",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "37 Fides"
+    },
+    {
+      "factionName": "the Initiative",
+      "shipsCount": 1,
+      "weaponSummary": "Laser x1 • Missile x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Initiative",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Laser x1 • Point Defense x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 13,
+      "weaponSummary": "Laser x18 • Point Defense x10 • Kinetic x8 • Missile x6 • Particle x1",
+      "orbitBody": "Quaoar"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 22,
+      "weaponSummary": "Missile x28 • Laser x26 • Point Defense x14 • Kinetic x8 • Particle x6",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "36 Atalante"
+    },
+    {
+      "factionName": "the Protectorate",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Kinetic x1",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "Project Exodus",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Earth"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 2,
+      "weaponSummary": "Missile x5 • Kinetic x1 • Point Defense x1",
+      "orbitBody": "37 Fides"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "69 Hesperia"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "37 Fides"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 14,
+      "weaponSummary": "Laser x23 • Missile x16 • Point Defense x9 • Kinetic x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 8,
+      "weaponSummary": "Missile x9 • Point Defense x9 • Kinetic x7 • Laser x6 • Particle x2",
+      "orbitBody": "Quaoar"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2 • Kinetic x1",
+      "orbitBody": "433 Eros"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x3",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "490 Veritas"
+    },
+    {
+      "factionName": "the Resistance",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Particle x5 • Kinetic x2",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 9,
+      "weaponSummary": "Laser x13 • Point Defense x5 • Kinetic x3 • Missile x3 • Particle x1",
+      "orbitBody": "Quaoar"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 27,
+      "weaponSummary": "Laser x40 • Missile x21 • Point Defense x18 • Kinetic x12 • Particle x5",
+      "orbitBody": "97 Klotho"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 3,
+      "weaponSummary": "Laser x3 • Missile x1 • Point Defense x1",
+      "orbitBody": "Ganymede"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Kinetic x2 • Particle x1 • Point Defense x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x2",
+      "orbitBody": "Mars"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Point Defense x1",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 2,
+      "weaponSummary": "Kinetic x2 • Missile x2 • Point Defense x2",
+      "orbitBody": "4 Vesta"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Kinetic x2 • Particle x1 • Point Defense x1",
+      "orbitBody": "Mercury"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 4,
+      "weaponSummary": "Laser x8 • Missile x5 • Point Defense x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 8,
+      "weaponSummary": "Kinetic x10 • Missile x8 • Point Defense x2 • Particle x1",
+      "orbitBody": "Deimos"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x3 • Particle x3 • Point Defense x2",
+      "orbitBody": "Quaoar"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Point Defense x1",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "Humanity First",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x3 • Point Defense x1",
+      "orbitBody": "Venus"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 8,
+      "weaponSummary": "Missile x16 • Kinetic x1",
+      "orbitBody": "433 Eros"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 4,
+      "weaponSummary": "Kinetic x4 • Laser x3 • Point Defense x3 • Particle x1",
+      "orbitBody": "Sol"
+    },
+    {
+      "factionName": "the Servants",
+      "shipsCount": 1,
+      "weaponSummary": "Kinetic x1 • Missile x1 • Point Defense x1",
+      "orbitBody": "433 Eros"
+    },
+    {
+      "factionName": "the Aliens",
+      "shipsCount": 1,
+      "weaponSummary": "Missile x5 • Particle x1 • Point Defense x1",
+      "orbitBody": "Quaoar"
+    }
+  ],
+  "globalResearch": {
+    "activeSlots": [
+      {
+        "slotNumber": 1,
+        "displayName": "Colony Habs",
+        "accumulatedResearch": 11560,
+        "totalCost": 35000,
+        "percent": 33,
+        "leadFactionName": "the Protectorate",
+        "leadContribution": 7028
+      },
+      {
+        "slotNumber": 2,
+        "displayName": "Administration Algorithms",
+        "accumulatedResearch": 1678,
+        "totalCost": 50000,
+        "percent": 3.4,
+        "leadFactionName": "the Protectorate",
+        "leadContribution": 1591
+      },
+      {
+        "slotNumber": 3,
+        "displayName": "Arc Lasers",
+        "accumulatedResearch": 626,
+        "totalCost": 25000,
+        "percent": 2.5,
+        "leadFactionName": "the Initiative",
+        "leadContribution": 269
+      }
+    ]
+  },
+  "alienHateEconomics": {
+    "applicable": true,
+    "minimumFloorStatus": "BELOW PERMANENT-WAR FLOOR",
+    "currentWarStatus": "GAME-VISIBLE ESTIMATE",
+    "usedMissionControl": 152,
+    "missionControlCapacity": 170,
+    "visibleHateEstimate": "■■■■■",
+    "minimumAlienHate": 36.48,
+    "warThreshold": 50,
+    "minimumHateHeadroom": 13.520000000000003,
+    "mcWarFloor": 208.33333333333334,
+    "reductionProjects": [
+      {
+        "label": "Strategic Deception",
+        "applicable": true,
+        "completed": true
+      },
+      {
+        "label": "Maskirovka",
+        "applicable": true
+      },
+      {
+        "label": "Operational Misdirection",
+        "applicable": true
+      },
+      {}
+    ],
+    "formula": {
+      "text": "152.00 × 0.30 × 0.80 = 36.48"
+    }
+  },
+  "servantTargets": [
+    {
+      "nationName": "India",
+      "score": 95,
+      "servantCPCount": 2,
+      "totalCPCount": 5,
+      "gdpTrillion": "19.60",
+      "reasons": [
+        "Superpower Economy ($19.6T GDP)",
+        "the Servants hold 2/5 Control Points",
+        "Strategic Mission Control (27 MC)",
+        "Significant Boost Launch Capacity (5.0/mo)",
+        "High Research Output (686/mo)"
+      ]
+    },
+    {
+      "nationName": "Australia",
+      "score": 80,
+      "servantCPCount": 2,
+      "totalCPCount": 3,
+      "gdpTrillion": "1.19",
+      "reasons": [
+        "Major Economy ($1.2T GDP)",
+        "the Servants Executive Control (National Priority Target)",
+        "Strategic Mission Control (8 MC)",
+        "Significant Boost Launch Capacity (3.8/mo)"
+      ]
+    },
+    {
+      "nationName": "China",
+      "score": 78,
+      "totalCPCount": 6,
+      "gdpTrillion": "41.72",
+      "reasons": [
+        "Superpower Economy ($41.7T GDP)",
+        "Strategic Mission Control (32 MC)",
+        "Significant Boost Launch Capacity (7.8/mo)",
+        "Fractured Cohesion (1.2)",
+        "High Research Output (1220/mo)"
+      ]
+    },
+    {
+      "nationName": "Alien Administration",
+      "score": 70,
+      "totalCPCount": 5,
+      "gdpTrillion": "13.15",
+      "reasons": [
+        "Superpower Economy ($13.2T GDP)",
+        "Strategic Mission Control (59 MC)",
+        "Significant Boost Launch Capacity (12.0/mo)",
+        "High Research Output (329/mo)"
+      ]
+    },
+    {
+      "nationName": "European Union",
+      "score": 70,
+      "totalCPCount": 5,
+      "gdpTrillion": "14.83",
+      "reasons": [
+        "Superpower Economy ($14.8T GDP)",
+        "Strategic Mission Control (69 MC)",
+        "Significant Boost Launch Capacity (25.5/mo)",
+        "High Research Output (673/mo)"
+      ]
+    },
+    {
+      "nationName": "United Malay Nation",
+      "score": 70,
+      "totalCPCount": 5,
+      "gdpTrillion": "9.69",
+      "reasons": [
+        "Superpower Economy ($9.7T GDP)",
+        "Strategic Mission Control (45 MC)",
+        "Significant Boost Launch Capacity (13.7/mo)",
+        "High Research Output (444/mo)"
+      ]
+    },
+    {
+      "nationName": "Russia",
+      "score": 70,
+      "totalCPCount": 4,
+      "gdpTrillion": "6.54",
+      "reasons": [
+        "Superpower Economy ($6.5T GDP)",
+        "Strategic Mission Control (22 MC)",
+        "Significant Boost Launch Capacity (4.8/mo)",
+        "High Research Output (209/mo)"
+      ]
+    },
+    {
+      "nationName": "Türkiye",
+      "score": 60,
+      "totalCPCount": 4,
+      "gdpTrillion": "3.47",
+      "reasons": [
+        "Major Economy ($3.5T GDP)",
+        "Strategic Mission Control (15 MC)",
+        "Significant Boost Launch Capacity (4.2/mo)",
+        "High Research Output (206/mo)"
+      ]
+    },
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {}
+  ]
+}

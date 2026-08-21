@@ -378,8 +378,150 @@ test('the baked catalogue stays inside its stated size budget', () => {
   // Measured 2026-08-21 at 168 KB raw / 17 KB gzipped, which is 5.5% of the
   // 3.07 MB player-mode row. The ceiling exists so a future field addition has
   // to be a deliberate decision rather than a silent one.
+  //
+  // Phase 5 spent 5.3 KB of it: 166.6 -> 171.9 KB raw, 17.0 -> 17.4 KB gzipped,
+  // for the five delivery fields below. Measured 2026-08-21 against the
+  // installed 1.0 templates.
   assert.ok(bytes < 200 * 1024, `componentStats is ${(bytes / 1024).toFixed(1)} KB, over the 200 KB budget`);
   assert.ok(bytes > 100 * 1024, `componentStats is only ${(bytes / 1024).toFixed(1)} KB; a family probably stopped loading`);
+});
+
+test('the five delivery inputs are baked, and the two pins\' inputs deliberately are not', () => {
+  const stats = buildComponentStats();
+
+  // A guided round carries all five. Anything less and the flight cannot be
+  // modelled at request time, where there is no template directory to read.
+  const copperhead = stats.missile.CopperheadMissileBay;
+  assert.equal(copperhead.accelerationG, 18.27);
+  assert.equal(copperhead.thrustRampS, 6);
+  assert.equal(copperhead.rotationDegPerS, 25);
+  assert.equal(copperhead.turnRampS, 1);
+  assert.equal(copperhead.maneuverAngleDeg, 50);
+
+  // An unguided slug carries NONE of them, and that is a fact about a slug
+  // rather than a hole in the bake -- `compact` drops absent fields.
+  const rail = stats.magnetic_gun.HeavyRailCannonMk3;
+  assert.equal(rail.accelerationG, undefined);
+  assert.equal(rail.rotationDegPerS, undefined);
+  assert.equal(rail.muzzleVelocityKps, 7.125, 'what it does carry is a muzzle velocity');
+  assert.equal(rail.pointDefenseTargetable, true);
+
+  // The PIN inputs stay out of the payload. Their job is to justify the model
+  // once, in a test against the installed templates, exactly as the 515-design
+  // mount pin does -- not to travel with every request.
+  for (const [family, entries] of Object.entries(stats)) {
+    for (const [id, row] of Object.entries(entries)) {
+      for (const field of ['rocketThrustN', 'evKps', 'ammoMassKg', 'fuelMassKg', 'systemMassKg']) {
+        assert.equal(row[field], undefined, `${family}:${id} bakes ${field}, which only the pin needs`);
+      }
+    }
+  }
+});
+
+test('the delivery axis reaches only the classes that declare it; the other fifteen are untouched', () => {
+  const result = project(fieldedSnapshot(), { observerId: OBSERVER, detail: 'full' });
+
+  const declaring = [];
+  for (const entry of result.items) {
+    const floor = entry.ranking ? entry.ranking.deliveryFloor : null;
+    if (entry.role === WEAPON_ROLES.offensive) {
+      assert.ok(floor, `${entry.classKey} is an offensive weapon class and must declare a delivery floor`);
+      assert.equal(floor.axis, 'deliveryShotsPerArrivingRound');
+      assert.ok(entry.deliveryDemoted, 'a class with a delivery floor carries its demotion census');
+      declaring.push(entry.classKey);
+      continue;
+    }
+    // Every other class: the field exists and is explicitly null, and nothing
+    // about its ranking changed.
+    assert.equal(floor ?? null, null, `${entry.classKey} must declare no delivery floor`);
+    assert.equal(entry.deliveryDemoted, null, `${entry.classKey} must carry a null demotion census, not an empty one`);
+    for (const state of Object.keys(entry.bestByState || {})) {
+      const row = entry.bestByState[state];
+      if (!row) continue;
+      assert.equal(row.clearsDeliveryFloor, null, `${entry.classKey}:${state} must have no delivery verdict`);
+      assert.equal(row.deliveryShotsPerArrivingRound, null);
+      assert.equal(row.deliveryFloorValue, null);
+    }
+  }
+  assert.equal(result.items.length - declaring.length, result.items.length - declaring.length);
+  assert.deepEqual(declaring.sort(),
+    ['gun:offensive', 'laser_weapon:offensive', 'magnetic_gun:offensive', 'missile:offensive',
+      'particle_weapon:offensive', 'plasma_weapon:offensive']);
+
+  // A beam class declares the floor and can never measure one, because no beam
+  // is interceptable. That is a null verdict with a reason, not a pass.
+  const lasers = classOf(result, 'laser_weapon:offensive');
+  assert.equal(lasers.ranking.deliveryFloor.value, null);
+  assert.match(lasers.ranking.deliveryFloor.basis, /not measurable/);
+  assert.equal(lasers.deliveryDemoted.count, 0);
+  for (const row of lasers.candidates) {
+    assert.equal(row.clearsDeliveryFloor, null);
+    assert.match(row.deliveryFloorReason, /not point-defence targetable/);
+  }
+});
+
+test('a turn-1 observer with no fleets gets an honest empty delivery environment, not a zero', () => {
+  const result = project(turnOneSnapshot(), { observerId: OBSERVER });
+  const environment = result.deliveryEnvironment;
+
+  assert.equal(environment.available, false);
+  assert.ok(environment.reason && environment.reason.length > 0);
+  assert.match(environment.reason, /not the same as an undefended target/);
+  assert.equal(environment.selected, null);
+  assert.equal(environment.validatedAgainstGameOutput, false);
+
+  for (const key of ['observed-opposing', 'observer-own']) {
+    const profile = environment.profiles[key];
+    assert.equal(profile.available, false, `${key} must not claim availability with nothing read`);
+    assert.equal(profile.hullsRead, 0);
+    assert.equal(profile.meanMountsPerHull, null, 'a mean over zero hulls is null, never 0');
+    assert.equal(profile.pointDefenseInstallations, null);
+    assert.equal(profile.maxEngagementRangeKm, null);
+    assert.deepEqual(profile.weapons, []);
+    assert.equal(profile.weaponsOmittedCount, 0);
+  }
+
+  // Every offensive class still describes its catalogue; it just cannot
+  // evaluate a floor, and says so rather than passing everything.
+  const missiles = classOf(result, 'missile:offensive');
+  assert.equal(missiles.ranking.deliveryFloor.value, null);
+  assert.equal(missiles.deliveryDemoted.count, 0);
+  const torpedo = missiles.bestByState['prereq-blocked'] || missiles.bestByState['researchable-now'];
+  if (torpedo) {
+    assert.equal(torpedo.clearsDeliveryFloor, null);
+    assert.notEqual(torpedo.clearsDeliveryFloor, true);
+  }
+});
+
+test('the delivery figures degrade honestly by mode, and the finding survives both', () => {
+  const byMode = {};
+  for (const mode of ['player', 'omniscient']) {
+    const result = project(fieldedSnapshot(mode), { observerId: OBSERVER, mode });
+    const environment = result.deliveryEnvironment;
+    assert.equal(environment.available, true, `${mode}: the fixture's alien hull carries point defence`);
+    assert.equal(environment.selected, 'observed-opposing');
+    const missiles = classOf(result, 'missile:offensive');
+    byMode[mode] = {
+      hullsRead: environment.profiles['observed-opposing'].hullsRead,
+      floor: missiles.ranking.deliveryFloor.value,
+      torpedo: missiles.bestByState['prereq-blocked'],
+      demoted: missiles.deliveryDemoted.count
+    };
+  }
+
+  // The alien hull in this fixture is redacted in BOTH modes -- it names no
+  // design -- so the weapon-display-name path is the only one available and the
+  // two modes agree exactly. On the live save, where omniscient CAN see the
+  // designs, the mount count is higher and the figures differ; the ordering and
+  // the finding do not. See spec section 3c.
+  assert.equal(byMode.player.hullsRead, byMode.omniscient.hullsRead);
+  assert.equal(byMode.player.floor, byMode.omniscient.floor);
+  assert.equal(byMode.player.demoted, byMode.omniscient.demoted);
+  assert.ok(byMode.player.floor > 0, 'a floor was actually measured, so this is not vacuously equal');
+  assert.equal(byMode.player.torpedo.id, byMode.omniscient.torpedo.id);
+  assert.equal(byMode.player.torpedo.clearsDeliveryFloor, byMode.omniscient.torpedo.clearsDeliveryFloor);
+  assert.equal(byMode.player.torpedo.deliveryShotsPerArrivingRound,
+    byMode.omniscient.torpedo.deliveryShotsPerArrivingRound);
 });
 
 // ---------------------------------------------------------------------------
@@ -862,7 +1004,17 @@ test('detail=summary omits the heavy listing and says so; detail=full carries it
   const summaryBytes = Buffer.byteLength(JSON.stringify(summary), 'utf8');
   const fullBytes = Buffer.byteLength(JSON.stringify(full), 'utf8');
   assert.ok(fullBytes > summaryBytes, 'full must actually carry more than summary');
-  assert.ok(summaryBytes < 220 * 1024, `the default response is ${(summaryBytes / 1024).toFixed(1)} KB`);
+  // Raised from 220 KB to 280 KB for phase 5, and the raise is the deliberate
+  // decision this ceiling exists to force rather than a silent drift. Measured
+  // on this fixture 2026-08-21: summary 211.8 KB -> 250.7 KB raw (+38.9 KB),
+  // 19.8 KB -> 24.9 KB gzipped (+5.1 KB); `detail=full` 761.8 KB -> 862.2 KB
+  // raw, 49.9 KB -> 61.5 KB gzipped. What the growth buys: the delivery
+  // formulae and axis descriptors and the basis codes, each stated ONCE
+  // (~16.8 KB of the total); the point-defence profile the whole response is
+  // measured against; the six flat delivery fields on every `bestByState` row;
+  // and the per-class `deliveryDemoted` census, which exists precisely so the
+  // floor cannot silently remove a row from the top of a ranking.
+  assert.ok(summaryBytes < 280 * 1024, `the default response is ${(summaryBytes / 1024).toFixed(1)} KB`);
 });
 
 test('the family filter narrows to one class without changing the answer for it', () => {

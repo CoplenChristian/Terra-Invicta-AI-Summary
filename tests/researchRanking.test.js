@@ -37,6 +37,7 @@ const {
 const { dedupeByGateProject } = require('../shared/intel/researchRanking.mjs');
 const {
   ACTIONABLE_GROUPS,
+  ASPIRATIONAL_GROUPS,
   AVAILABILITY_GROUP_ORDER,
   AXIS_KINDS,
   DEFICIT_RESEARCH_REMEDIES,
@@ -182,8 +183,18 @@ function fleetScenario({ ownArmor, ownDeltaV, alienArmor, alienDeltaV, ownShips,
   ];
   const observer = snapshot.factions.find(faction => faction.ID === OBSERVER);
   const aliens = snapshot.factions.find(faction => faction.ID === ALIEN);
-  if (observer) observer.shipsCount = ownShips;
+  if (observer) {
+    observer.shipsCount = ownShips;
+    observer.researchWeights = [0, 0, 3, 3, 3, 0];
+  }
   if (aliens) aliens.shipsCount = alienShips;
+  snapshot.globalResearch = {
+    activeSlots: [
+      { techId: 'G1', displayName: 'Global 1', contributions: [] },
+      { techId: 'G2', displayName: 'Global 2', contributions: [] },
+      { techId: 'G3', displayName: 'Global 3', contributions: [] }
+    ]
+  };
   return snapshot;
 }
 
@@ -312,8 +323,16 @@ test('when armour is the measured gap the ranking leads with armour, not drives'
   assert.equal(blocked.items[0].closesDeficit, true);
   const topScorer = [...blocked.items].sort((a, b) => b.valuePerResearchPoint - a.valuePerResearchPoint)[0];
   assert.notEqual(topScorer.id, blocked.items[0].id);
-  assert.ok(topScorer.valuePerResearchPoint > blocked.items[0].valuePerResearchPoint * 10,
-    'and the candidate it outranks scores far higher, so the ordering cannot be an accident of value');
+  // The margin was 371,000x until phase 5, because the group's top scorer was
+  // `AntimatterTorpedoLauncher` at 1,114.58 per point. Phase 5's delivery floor
+  // now ranks that row below its own class-mate -- the torpedo absorbs 2.44x
+  // the point-defence fire per arriving round of the Krait bay this fixture's
+  // observer flies -- so the group's highest scorer is the fission reactor at
+  // 0.0081 against armour's 0.0030. The demotion itself is asserted in
+  // `tests/munitionDelivery.test.js`; what this line still proves is that the
+  // deficit promotion is not an accident of value, which holds at 2.70x.
+  assert.ok(topScorer.valuePerResearchPoint > blocked.items[0].valuePerResearchPoint * 2,
+    'and the candidate it outranks scores substantially higher, so the ordering cannot be an accident of value');
 });
 
 test('when delta-V is the measured gap a drive leads, ahead of a higher-scoring armour candidate', () => {
@@ -436,7 +455,58 @@ test('ranking happens inside an availability group and never across two', () => 
   // Groups arrive in reachability order, so the actionable ones lead.
   const expectedOrder = AVAILABILITY_GROUP_ORDER.filter(state => seen.includes(state));
   assert.deepEqual(seen, expectedOrder);
-  assert.deepEqual(ACTIONABLE_GROUPS, ['researchable-now', 'prereq-clear-but-unrolled']);
+  assert.deepEqual(ACTIONABLE_GROUPS, ['buildable-now', 'researchable-now']);
+  assert.deepEqual(ASPIRATIONAL_GROUPS, ['prereq-clear-but-unrolled', 'prereq-blocked']);
+});
+
+test('zero-cost options with an improvement lead the ranking head', () => {
+  const zeroCostRow = {
+    id: 'propulsion:warship:Drive_Orion',
+    displayName: 'Orion Drive x1',
+    isZeroCost: true,
+    improvementMultiple: 5.14,
+    rankState: RANK_STATES.noResearchRequired,
+    closesDeficit: false,
+    axisKind: AXIS_KINDS.measured,
+    valuePerResearchPoint: null
+  };
+  const researchRow = {
+    id: 'military:weapon:Project_Laser',
+    displayName: 'Heavy Laser',
+    isZeroCost: false,
+    improvementMultiple: 1.8,
+    rankState: RANK_STATES.ranked,
+    closesDeficit: false,
+    axisKind: AXIS_KINDS.measured,
+    valuePerResearchPoint: 0.0005
+  };
+
+  assert.equal(compareMilitaryRows(zeroCostRow, researchRow), -1, 'zero-cost option must rank ahead of researchable candidate');
+  assert.equal(compareMilitaryRows(researchRow, zeroCostRow), 1);
+});
+
+test('candidates report slot actionability based on dynamic free capacity', () => {
+  const result = project(fleetScenario(SCENARIOS.deltaV));
+  assert.ok(result.slots.available, 'slots must be available on live save');
+  const free = result.slots.freeProjectSlots;
+  assert.ok(typeof free === 'number', 'free project slots must be a number');
+
+  for (const group of result.military.groups) {
+    for (const item of group.items) {
+      if (item.isZeroCost) {
+        assert.equal(item.slotAction, 'no-slot-needed');
+        assert.match(item.slotNote, /0 research cost/);
+      } else if (item.availabilityState === 'researchable-now') {
+        if (free > 0) {
+          assert.equal(item.slotAction, 'free-slot');
+          assert.match(item.slotNote, /free/);
+        } else {
+          assert.equal(item.slotAction, 'occupied-slot');
+          assert.match(item.slotNote, /backlogging an active project/);
+        }
+      }
+    }
+  }
 });
 
 test('a prereq-clear-but-unrolled candidate keeps its monthly chance and its cap', () => {
@@ -948,4 +1018,230 @@ test('a unitless row is badged as such on the card, and a measured one is not', 
 
   const measured = renderToString(payload('measured'));
   assert.ok(!/ra-tag--unitless/.test(measured), 'a measured axis carries no badge');
+});
+
+// ---------------------------------------------------------------------------
+// PHASE 5 -- THE DELIVERY FLOOR IN THE ORDERING AND ON THE CARD
+// ---------------------------------------------------------------------------
+
+test('the ordering declares the delivery term, in the position that makes it a floor', () => {
+  const result = project(fleetScenario(SCENARIOS.armour));
+  assert.deepEqual(result.ordering.militaryKeys,
+    ['closesDeficit', 'axisKind', 'deliveryFloor', 'valuePerResearchPoint', 'id']);
+  // AFTER axisKind, so a named engineering unit that fails delivery still
+  // outranks a unitless rule scalar; BEFORE value, because that is the whole
+  // point of a floor.
+  const keys = result.ordering.militaryKeys;
+  assert.ok(keys.indexOf('deliveryFloor') > keys.indexOf('axisKind'));
+  assert.ok(keys.indexOf('deliveryFloor') < keys.indexOf('valuePerResearchPoint'));
+  assert.ok(keys.indexOf('closesDeficit') < keys.indexOf('deliveryFloor'));
+  assert.ok(result.military.deliveryCaveat && result.military.deliveryCaveat.length > 0);
+  assert.match(result.military.deliveryCaveat, /Only a MEASURED failure demotes/);
+  assert.match(result.military.orderedBy, /delivery floor/);
+});
+
+test('a munition that fails delivery is demoted, announced, and never silently dropped', () => {
+  const result = project(fleetScenario(SCENARIOS.armour), { detail: 'full' });
+
+  const demoted = result.military.deliveryDemoted;
+  assert.ok(demoted, 'a response with offensive weapon classes must carry the demotion census');
+  assert.ok(demoted.count > 0, 'this fixture demotes something, or the rest of this test is vacuous');
+  // Truncation announces itself, in both places it happens.
+  assert.equal(typeof demoted.itemsShown, 'number');
+  assert.equal(typeof demoted.itemsOmittedCount, 'number');
+  assert.equal(demoted.itemsTotalCount, demoted.count);
+  assert.equal(demoted.items.length, demoted.itemsShown);
+
+  const lead = demoted.items[0];
+  assert.equal(lead.id, 'AntimatterTorpedoLauncher',
+    'the highest-damage demoted row leads, because it is the one the reader would otherwise have seen first');
+  assert.ok(lead.multipleOfFloor > 1, 'it absorbs measurably more fire per arriving round than the floor');
+  assert.ok(lead.floorBaselineDisplayName, 'and it names what it was measured against');
+  assert.notEqual(lead.shotsPerArrivingRound, null);
+
+  // The row is demoted, not deleted: it still carries its damage figure.
+  assert.ok(lead.rankValue > 0);
+
+  // The environment the whole comparison rests on travels with the response.
+  const environment = result.sources.militaryValue.deliveryEnvironment;
+  assert.ok(environment);
+  assert.equal(environment.available, true);
+  assert.equal(environment.selected, 'observed-opposing');
+  assert.ok(environment.hullsRead > 0);
+  assert.equal(environment.validatedAgainstGameOutput, false);
+});
+
+test('a beam candidate carries a null delivery verdict with its own reason, never a pass', () => {
+  const result = project(fleetScenario(SCENARIOS.armour), { detail: 'full' });
+  // Ranked rows AND unrankable ones: a beam candidate that beats nothing the
+  // observer fields is carried in the unrankable bucket, and its delivery
+  // verdict has to be honest there too.
+  const rows = [...result.military.groups.flatMap(group => group.items), ...result.military.unrankableItems]
+    .filter(row => row.source === 'military-value'
+      && ['laser_weapon:offensive', 'particle_weapon:offensive', 'plasma_weapon:offensive'].includes(row.classKey));
+  assert.ok(rows.length >= 3, 'the fixture must offer beam candidates from all three families, or this test is vacuous');
+  for (const row of rows) {
+    assert.equal(row.clearsDeliveryFloor, null, `${row.id}: a beam has no delivery verdict`);
+    assert.notEqual(row.clearsDeliveryFloor, true, 'unknown must never read as clearing');
+    assert.match(row.deliveryFloorReason, /not point-defence targetable/);
+    assert.equal(row.context.delivery, null, 'and it carries no delivery context to render');
+  }
+});
+
+/**
+ * A campaign where the only missile on offer is the one that arrives alone.
+ *
+ * The class-level floor normally hands `bestByState` to a better-delivering
+ * sibling, so the failing row never reaches the ranking at all. Narrowing the
+ * available-project list to the torpedo forces it through, which is what makes
+ * this an END-TO-END check of the comparator wiring rather than a unit test of
+ * the comparator.
+ *
+ * `SCENARIOS.hulls` is used deliberately: its deficit remedy is production
+ * rather than research, so nothing is promoted and the ordering is purely
+ * value-per-point against the delivery floor.
+ */
+function torpedoOnlySnapshot(mode = 'player') {
+  const snapshot = fleetScenario(SCENARIOS.hulls, mode);
+  const offered = ['Project_AntimatterTorpedoLauncher', 'Project_NanotubeArmor'];
+  for (const faction of snapshot.factions) {
+    faction.availableProjectNames = faction.ID === OBSERVER ? [...offered] : [];
+    faction.availableProjectsCount = faction.ID === OBSERVER ? offered.length : 0;
+  }
+  if (snapshot.techTree) {
+    snapshot.techTree.factionStatus = Object.fromEntries(
+      Object.keys(snapshot.techTree.factionStatus || {}).map(id => [id, {
+        completedProjects: [],
+        availableProjectNames: Number(id) === OBSERVER ? [...offered] : [],
+        currentProjects: []
+      }])
+    );
+  }
+  return snapshot;
+}
+
+test('a failing munition is ordered behind a clearing row IN THE PAYLOAD, not just in the comparator', () => {
+  const result = project(torpedoOnlySnapshot(), { detail: 'full' });
+  assert.equal(result.ordering.deficitApplied, false,
+    'this scenario\'s remedy is production, so nothing is promoted and the ordering is purely value against the floor');
+
+  const now = groupOf(result, 'researchable-now');
+  assert.ok(now && now.items.length > 1, 'the fixture must offer more than one researchable candidate');
+
+  const torpedo = now.items.find(row => row.itemId === 'AntimatterTorpedoLauncher');
+  assert.ok(torpedo, 'the narrowed project list must put the torpedo in the ranking');
+  assert.equal(torpedo.clearsDeliveryFloor, false, 'and it must be the row that fails delivery');
+
+  const position = now.items.indexOf(torpedo);
+  assert.ok(position > 0, 'a row that fails delivery must not lead its group');
+
+  // ...and it leads on value by an enormous margin, so its position cannot be
+  // an accident of scoring.
+  const ahead = now.items.slice(0, position);
+  assert.ok(ahead.length > 0);
+  for (const row of ahead) {
+    assert.notEqual(row.clearsDeliveryFloor, false,
+      'nothing ordered ahead of it may itself be a measured delivery failure');
+    assert.ok(torpedo.valuePerResearchPoint > row.valuePerResearchPoint * 100,
+      `${row.displayName} outranks a candidate scoring ${torpedo.valuePerResearchPoint} per point purely on the delivery floor`);
+  }
+
+  // The census names it, so the demotion is visible rather than silent.
+  const named = (result.military.deliveryDemoted.items || [])
+    .some(item => item.id === 'AntimatterTorpedoLauncher');
+  assert.ok(named, 'the row the floor moved must be named in the census');
+});
+
+test('the delivery badges and the demotion line render, and neither prints a null', () => {
+  const weaponRow = (overrides) => ({
+    id: 'r', displayName: 'A Weapon', axisLabel: 'sustained output per hardpoint (MW)', axisBasis: 'basis',
+    axisKind: 'measured', improvementMultiple: 6687502.98, valuePerResearchPoint: 334.375,
+    remainingResearchCost: 20000, monthsAtCurrentIncome: 6.3, unlockChance: null, clearsFloor: true,
+    gateProjectId: null, gateProjectName: null, availabilityState: 'researchable-now',
+    closesDeficit: false, clearsDeliveryFloor: null, context: null, ...overrides
+  });
+  const payload = (row, deliveryDemoted) => ({
+    success: true,
+    sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
+    research: { monthlyResearchIncome: 3150 },
+    ordering: { deficitApplied: false },
+    deficit: { applied: false, capability: { canContest: 'unknown' } },
+    military: {
+      rankedCount: 1, candidatesConsidered: 1, unrankable: { counts: {} }, deliveryDemoted,
+      groups: [{ state: 'researchable-now', label: 'Researchable now', actionable: true, count: 1, items: [row] }]
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  });
+
+  const fails = renderToString(payload(weaponRow({ clearsDeliveryFloor: false }), null));
+  assert.match(visibleText(fails), /fails delivery/);
+  assert.match(fails, /ra-tag--warn/);
+  assert.match(fails, /decides whether the damage lands/, 'the badge carries its explanation as a tooltip');
+  assertNoPlaceholderText(fails, 'fails-delivery row');
+
+  // Unknown gets its OWN badge, visibly distinct from the failure one, because
+  // an unevaluated floor must never read as a cleared one.
+  const unknown = renderToString(payload(weaponRow({
+    clearsDeliveryFloor: null,
+    context: { delivery: { shotsPerArrivingRound: null, floorValue: null, multipleOfFloor: null } }
+  }), null));
+  assert.match(visibleText(unknown), /delivery unchecked/);
+  assert.match(unknown, /This is not a pass/);
+  assert.ok(!/fails delivery/.test(visibleText(unknown)));
+  assertNoPlaceholderText(unknown, 'delivery-unchecked row');
+
+  // A row with no delivery context at all gets no badge: a reactor has no
+  // delivery axis, and badging it would invent one.
+  const silent = renderToString(payload(weaponRow({ clearsDeliveryFloor: null, context: null }), null));
+  assert.ok(!/delivery unchecked/.test(visibleText(silent)));
+  assert.ok(!/fails delivery/.test(visibleText(silent)));
+
+  // The census line: one line, naming the leader and the multiple.
+  const withCensus = renderToString(payload(weaponRow({ clearsDeliveryFloor: false }), {
+    count: 1,
+    itemsShown: 1,
+    itemsOmittedCount: 0,
+    items: [{
+      id: 'AntimatterTorpedoLauncher',
+      displayName: 'Antimatter Torpedo Launcher',
+      shotsPerArrivingRound: 14.278211,
+      floorValue: 3.943211,
+      floorBaselineDisplayName: 'Copperhead Missile Bay',
+      multipleOfFloor: 3.62096
+    }]
+  }));
+  const text = visibleText(withCensus);
+  assert.match(text, /1 ranked below its damage/);
+  assert.match(text, /Antimatter Torpedo Launcher/);
+  assert.match(text, /3\.62/);
+  assert.match(text, /Copperhead Missile Bay/);
+  assertNoPlaceholderText(withCensus, 'delivery census line');
+
+  // An all-null demoted row still renders the em dash, never the word null.
+  const hostile = renderToString(payload(weaponRow({ clearsDeliveryFloor: false }), {
+    count: 2,
+    itemsShown: 1,
+    itemsOmittedCount: 1,
+    items: [{ id: 'x', displayName: 'Nameless Round', shotsPerArrivingRound: null,
+      floorValue: null, floorBaselineDisplayName: null, multipleOfFloor: null }]
+  }));
+  assertNoPlaceholderText(hostile, 'all-null demoted row');
+  assert.match(visibleText(hostile), /2 ranked below their damage/);
+  assert.match(hostile, /—/);
+
+  // Nothing demoted costs no height at all: the COMMAND column has none spare.
+  const clean = renderToString(payload(weaponRow({ clearsDeliveryFloor: true }),
+    { count: 0, itemsShown: 0, itemsOmittedCount: 0, items: [] }));
+  assert.ok(!/ranked below/.test(visibleText(clean)));
+  const absent = renderToString(payload(weaponRow({ clearsDeliveryFloor: true }), null));
+  assert.ok(!/ranked below/.test(visibleText(absent)));
+});
+
+test('the live-shaped payload renders the delivery figures with no forbidden token, in both modes', () => {
+  for (const mode of ['player', 'omniscient']) {
+    const payload = project(fleetScenario(SCENARIOS.armour, mode), { mode });
+    const html = renderToString(payload);
+    assertNoPlaceholderText(html, `${mode} delivery payload`);
+    assert.ok(payload.military.deliveryDemoted, `${mode}: the census must reach the panel`);
+  }
 });

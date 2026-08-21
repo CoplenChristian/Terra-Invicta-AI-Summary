@@ -102,17 +102,51 @@ export function axisKindRank(axisKind) {
 }
 
 /**
+ * The delivery-floor tier: rows that clear or cannot be evaluated first, rows
+ * MEASURED to fail second.
+ *
+ * Phase 5 gives a point-defence-targetable munition a second floor -- how much
+ * defensive fire each arriving round has to survive against the best the
+ * observer already fields. `AntimatterTorpedoLauncher` leads the live save's
+ * military ranking at 6,687,502.98x on damage per hardpoint and absorbs 3.62x
+ * the point-defence fire per arriving round of the Copperhead bay the observer
+ * flies, because the bay throws eight rounds a cycle and the launcher throws
+ * one. Damage that the defending battery removes in flight is damage that never
+ * lands, so that row must not lead on damage alone.
+ *
+ * THREE STATES, and only the measured `false` demotes:
+ *
+ *   false  measured, and measurably worse than what the observer fields.
+ *   true   measured, and no worse.
+ *   null   the floor could not be evaluated -- a beam, which nothing can
+ *          intercept; an observer who fields no comparable munition; or an item
+ *          whose flight the templates do not describe. This does NOT demote.
+ *
+ * Treating null as a failure would reorder the entire ranking on the strength
+ * of a measurement nobody made, every time the sky happened to be unobserved.
+ * "Unknown is not safe" is honoured by carrying the reason on the row and
+ * giving it its own badge in the panel, so it never reads as clearing -- not by
+ * burying every munition in the catalogue.
+ */
+export const DELIVERY_FLOOR_ORDER = Object.freeze(['clears-or-unevaluable', 'measured-below-floor']);
+
+export function deliveryFloorRank(row) {
+  return row?.clearsDeliveryFloor === false ? 1 : 0;
+}
+
+/**
  * Availability groups, in the order they are offered.
  *
- * Section 3b: these are not tiers of quality, they are different PROPOSITIONS, and
- * the ranking is done inside each one rather than across them. A
- * researchable-now item can be selected this turn; a prereq-clear-but-unrolled
- * item is a monthly dice roll that may never land; a faction-restricted item
- * belongs to somebody else's council. Sorting them into one list by value would
- * put an unreachable target at the top, which is the failure section 3b exists to
- * prevent.
+ * Section 3b & Actionability Spec: these are not tiers of quality, they are
+ * different PROPOSITIONS, and the ranking is done inside each one rather than
+ * across them:
+ *   - buildable-now: completed or ungated items that improve on fielded equipment at 0 pts
+ *   - researchable-now: available this turn in availableProjectNames
+ *   - prereq-clear-but-unrolled: monthly dice roll that may never land
+ *   - prereq-blocked: prerequisites not met
  */
 export const AVAILABILITY_GROUP_ORDER = Object.freeze([
+  'buildable-now',
   'researchable-now',
   'researching',
   'prereq-clear-but-unrolled',
@@ -125,6 +159,7 @@ export const AVAILABILITY_GROUP_ORDER = Object.freeze([
 
 /** Human labels for the groups above, so no renderer invents its own. */
 export const AVAILABILITY_GROUP_LABELS = Object.freeze({
+  'buildable-now': 'Fittable now (0 research cost)',
   'researchable-now': 'Researchable now',
   researching: 'In progress',
   'prereq-clear-but-unrolled': 'Not yet available — rolls monthly',
@@ -136,12 +171,14 @@ export const AVAILABILITY_GROUP_LABELS = Object.freeze({
 });
 
 /**
- * The two groups a player can act on the turn they read this.
- *
- * Everything else is still listed and still counted; this is only which groups
- * the compact dashboard panel leads with.
+ * Actionable groups: what the player can build/fit or research this turn.
  */
-export const ACTIONABLE_GROUPS = Object.freeze(['researchable-now', 'prereq-clear-but-unrolled']);
+export const ACTIONABLE_GROUPS = Object.freeze(['buildable-now', 'researchable-now']);
+
+/**
+ * Aspirational groups: what requires monthly dice rolls or prerequisite research.
+ */
+export const ASPIRATIONAL_GROUPS = Object.freeze(['prereq-clear-but-unrolled', 'prereq-blocked']);
 
 // ---------------------------------------------------------------------------
 // DEFICIT -> RESEARCH REMEDY
@@ -412,12 +449,42 @@ export function economicRankRows(item) {
  * Axis kind comes second: a ratio of two unnamed module scalars is not
  * commensurable with a ratio of two figures in GW/t, so it never displaces one.
  * See `AXIS_KINDS`.
+ *
+ * The delivery floor comes THIRD, between axis kind and value, and the position
+ * is deliberate in both directions. It sits AFTER `axisKind` because a row with
+ * a named engineering unit that fails delivery is still more commensurable than
+ * a unitless rule scalar -- the antimatter torpedo's megawatts per hardpoint
+ * remain a real quantity even though the round arrives alone, so it still
+ * outranks a `RadHardened` ratio. It sits BEFORE `valuePerResearchPoint`
+ * because that is the whole point: a candidate that wins on damage per research
+ * point and loses on whether the round survives the flight must not lead its
+ * group on the number it wins. And `closesDeficit` stays first, exactly as it
+ * does for `axisKind`: a measured capability gap outranks both.
  */
 export function compareMilitaryRows(left, right) {
   if (left.closesDeficit !== right.closesDeficit) return left.closesDeficit ? -1 : 1;
+  const leftZeroCost = left.isZeroCost === true || left.rankState === RANK_STATES.noResearchRequired;
+  const rightZeroCost = right.isZeroCost === true || right.rankState === RANK_STATES.noResearchRequired;
+  if (leftZeroCost !== rightZeroCost) return leftZeroCost ? -1 : 1;
+
   const leftAxis = axisKindRank(left.axisKind);
   const rightAxis = axisKindRank(right.axisKind);
   if (leftAxis !== rightAxis) return leftAxis - rightAxis;
+
+  if (leftZeroCost && rightZeroCost) {
+    const leftMult = toFiniteNumber(left.improvementMultiple);
+    const rightMult = toFiniteNumber(right.improvementMultiple);
+    if (leftMult !== rightMult) {
+      if (leftMult === null) return 1;
+      if (rightMult === null) return -1;
+      return rightMult - leftMult;
+    }
+    return String(left.id).localeCompare(String(right.id));
+  }
+
+  const leftDelivery = deliveryFloorRank(left);
+  const rightDelivery = deliveryFloorRank(right);
+  if (leftDelivery !== rightDelivery) return leftDelivery - rightDelivery;
   const leftValue = toFiniteNumber(left.valuePerResearchPoint);
   const rightValue = toFiniteNumber(right.valuePerResearchPoint);
   if (leftValue !== rightValue) {
@@ -588,5 +655,13 @@ export const RANKING_METHOD = Object.freeze({
     + 'row, which stays first: the EVMultiplier modules are rule-scalar rows and are also the only '
     + 'non-drive unlocks that move delta-V.',
   unrankableVisible: 'anything that could not be scored is carried in its own bucket with the reason, '
-    + 'never as a zero. A tech whose value silently computes to 0 gets ranked last and never surfaces.'
+    + 'never as a zero. A tech whose value silently computes to 0 gets ranked last and never surfaces.',
+  deliveryFloor: 'a point-defence-targetable munition carries a second floor: how much defensive fire '
+    + 'each ARRIVING round has to survive, against the best such munition the observer already fields. '
+    + 'Damage still leads the ordering, because it decides the outcome of an engagement; delivery is a '
+    + 'floor, because it decides whether the outcome happens at all. Only a MEASURED failure demotes -- '
+    + 'a beam has no delivery axis, an observer with no comparable munition has no floor, and neither '
+    + 'is treated as a failure. Those rows carry their own reason and their own badge instead, so an '
+    + 'unevaluated floor never reads as a cleared one. No hit probability is computed anywhere: the '
+    + 'game publishes nothing to check one against.'
 });

@@ -103,11 +103,11 @@ test('pip share is the share of PIPS and says so, not the share of research', ()
   assert.match(result.slots[2].pipShareBasis, /NOT the share of research/);
 });
 
-test('a slot that holds something with no pips is reported as receiving nothing', () => {
+test('a slot that holds something with no pips is reported as parked in backlog with progress intact', () => {
   const result = live();
   // Two global techs and one project on this layout.
   assert.equal(result.occupiedWithoutPips, 3);
-  assert.match(result.slots[0].idleReason, /receives no research/);
+  assert.match(result.slots[0].idleReason, /parked in backlog with progress intact/);
   assert.equal(result.slots[2].idleReason, null);
 });
 
@@ -121,14 +121,57 @@ test('pips with nothing to spend them on is a different fact from an unpipped ho
   assert.match(result.slots[0].idleReason, /holds nothing/);
 });
 
-test('a project beyond the weighted slots is surfaced as queued, not researching', () => {
+test('a project beyond the weighted slots is surfaced as parked in backlog with progress intact', () => {
   const result = live();
   assert.equal(result.unweightedOccupantCount, 1);
   assert.equal(result.unweightedOccupants[0].index, 7);
   assert.equal(result.unweightedOccupants[0].displayName, 'Operations Research');
-  assert.match(result.unweightedOccupantNote, /queued, not researching/);
+  assert.match(result.unweightedOccupantNote, /parked in the backlog with progress intact/);
+  assert.equal(result.unweightedOccupants[0].isBacklog, true);
   // And it is NOT smuggled into the weighted list.
   assert.equal(result.slots.length, 6);
+});
+
+test('projectSlotCapacity is derived as len - G, and slot >= len is explicitly backlog', () => {
+  const result = live();
+  assert.equal(result.globalTechSlotCapacity, 3);
+  assert.equal(result.slotCount, 6);
+  assert.equal(result.projectSlotCapacity, 3);
+  // On LIVE_LAYOUT: slots 3 and 4 are occupied with pips (3 each), slot 5 is occupied with 0 pips.
+  // So all 3 project slots (3, 4, 5) are occupied, 0 free slots.
+  assert.equal(result.occupiedProjectSlots, 3);
+  assert.equal(result.activeProjectSlots, 2);
+  assert.equal(result.freeProjectSlots, 0);
+  assert.equal(result.backloggedProjects.length, 2); // AudienceResearch (0 pips at slot 5) & OperationsResearch (slot 7)
+});
+
+test('pips on index below G drive global tech and do not count toward project capacity', () => {
+  // G=3, weights=[0,0,3,3,3,0]. Slot 2 carries 3 pips driving Coilguns (global tech).
+  const result = live();
+  assert.equal(result.slots[2].kind, SLOT_KINDS.globalTech);
+  assert.equal(result.slots[2].pips, 3);
+  assert.equal(result.slots[2].displayName, 'Coilguns');
+  // Project slot capacity remains exactly len - G = 3
+  assert.equal(result.projectSlotCapacity, 3);
+});
+
+test('free project slots is dynamically derived per request', () => {
+  // If one project slot is empty (e.g. only 1 project in slot 3):
+  const oneProjectResult = buildResearchSlotAllocation(snapshotWith({
+    weights: [0, 0, 3, 3, 0, 0],
+    techSlots: [
+      { techId: 'G1', displayName: 'Global 1', contributions: [] },
+      { techId: 'G2', displayName: 'Global 2', contributions: [] },
+      { techId: 'G3', displayName: 'Global 3', contributions: [] }
+    ],
+    projects: [
+      { projectId: 'P1', displayName: 'Project 1', slot: 3, percent: 50, accumulatedResearch: 500, totalCost: 1000 }
+    ]
+  }), { observerId: OBSERVER });
+
+  assert.equal(oneProjectResult.projectSlotCapacity, 3);
+  assert.equal(oneProjectResult.occupiedProjectSlots, 1);
+  assert.equal(oneProjectResult.freeProjectSlots, 2);
 });
 
 // ---------------------------------------------------------------------------
@@ -236,7 +279,7 @@ test('the allocation model is marked unvalidated and names what it could not rep
 test('the slot index mapping is the pinned claim, and it is marked as pinned', () => {
   assert.equal(SLOT_INDEX_PIN.validatedAgainstGameOutput, true);
   assert.equal(SLOT_INDEX_PIN.agreements.length, 7);
-  assert.match(SLOT_INDEX_PIN.method, /two consecutive 15\.5-day intervals/);
+  assert.match(SLOT_INDEX_PIN.method, /verified across six saves from 2029-09-10 to 2034-02-16/);
 });
 
 // ---------------------------------------------------------------------------

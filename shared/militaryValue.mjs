@@ -55,6 +55,7 @@
 // Plain ESM, no Node built-ins, no imports outside `shared/`.
 
 import { asArray, round, toFiniteNumber as toFinite } from './util.mjs';
+import { MUNITION_DELIVERY_AXES, munitionDelivery } from './munitionDelivery.mjs';
 
 // ---------------------------------------------------------------------------
 // MOUNTS
@@ -408,8 +409,15 @@ export function weaponDamage(stats, family) {
   };
 }
 
-/** The full derived metric set for one weapon. */
-export function weaponMetrics(id, stats, family) {
+/**
+ * The full derived metric set for one weapon.
+ *
+ * `options.pointDefenseProfile` is phase 5's defensive battery, and it is
+ * OPTIONAL: every three-argument caller keeps working unchanged and gets a
+ * delivery block whose `pointDefense` is null with the reason attached, rather
+ * than one that quietly claims an undefended sky.
+ */
+export function weaponMetrics(id, stats, family, options = {}) {
   const damage = weaponDamage(stats, family);
   const cooldown = toFinite(stats?.cooldownS);
   const salvo = toFinite(stats?.salvoShots);
@@ -475,6 +483,11 @@ export function weaponMetrics(id, stats, family) {
       usedForRanking: false
     };
 
+  // Phase 5. Reported BESIDE the damage axes and never blended into them: the
+  // whole point is that a round can win every damage axis and still be the one
+  // the defensive battery removes, which is only visible if the two stay apart.
+  const delivery = munitionDelivery(stats, options?.pointDefenseProfile ?? null);
+
   return {
     id,
     displayName: stats?.displayName || id,
@@ -516,6 +529,14 @@ export function weaponMetrics(id, stats, family) {
     xRayFraction: toFinite(stats?.xRayFraction),
     baryonFraction: toFinite(stats?.baryonFraction),
     beamSpread,
+    delivery,
+    // Flattened out of `delivery` so `bestOnAxis` and `rankByAxis` can read the
+    // floor axis by key like every other axis, without either of them learning
+    // the shape of a delivery block.
+    deliveryApplies: delivery.applies === true,
+    deliveryShotsPerArrivingRound: delivery.pointDefense?.shotsPerArrivingRound ?? null,
+    deliveryFlightTimeS: delivery.flightTimeS,
+    deliveryTerminalSpeedKps: delivery.terminalSpeedKps,
     disabled: stats?.disabled === true
   };
 }
@@ -759,7 +780,18 @@ export const WEAPON_CLASS_SPECS = Object.freeze({
   [WEAPON_ROLES.offensive]: Object.freeze({
     rankBy: 'outputPerHardpointMW',
     floorAxis: 'outputPerTonMWPerTon',
-    rankRationale: 'hardpoints are the scarce resource on a hull, so output per hardpoint is what an extra weapon buys. Output per tonne is the floor: a weapon that hits harder per hardpoint and worse per tonne is paying for it in propellant and structure, which is the same trade phase 1 found between delta-V and thrust.'
+    rankRationale: 'hardpoints are the scarce resource on a hull, so output per hardpoint is what an extra weapon buys. Output per tonne is the floor: a weapon that hits harder per hardpoint and worse per tonne is paying for it in propellant and structure, which is the same trade phase 1 found between delta-V and thrust.',
+    // Phase 5, and ONLY on the offensive role: point defence is not itself
+    // interceptable and an installation gun fires from a hab that is not going
+    // anywhere, so neither has a delivery axis to floor.
+    deliveryFloorAxis: 'deliveryShotsPerArrivingRound',
+    deliveryFloorRationale: 'damage still LEADS, because it is the axis that decides the outcome of an '
+      + 'engagement. Delivery is the FLOOR, because it decides whether the outcome happens at all: a '
+      + 'round the defending battery removes in flight delivers none of its stated damage. This is the '
+      + 'direct analogue of phase 1 ranking warships on combat acceleration with delta-V as the floor '
+      + '-- the fastest warship in the game is useless if it cannot reach the fight. The floor applies '
+      + 'only to munitions the game itself marks `isPointDefenseTargetable`; a beam has no delivery '
+      + 'axis and is never demoted by one.'
   }),
   [WEAPON_ROLES.pointDefense]: Object.freeze({
     rankBy: 'outputPerHardpointMW',
@@ -915,7 +947,8 @@ export const RATIO_UNAVAILABLE_CODES = Object.freeze({
 });
 
 /**
- * Orders rows by one axis, with the tensioned axis as a stated floor.
+ * Orders rows by one axis, with the tensioned axis as a stated floor and -- for
+ * the classes that declare one -- a second, DELIVERY floor.
  *
  * Same three rules as phase 1's `rankRefits`, and for the same reasons:
  *   1. rows the model could not compute sort LAST and keep their reason. An
@@ -924,25 +957,48 @@ export const RATIO_UNAVAILABLE_CODES = Object.freeze({
  *      "this hits harder and you cannot carry it" is the finding, not something
  *      to hide.
  *   3. ties break on id, so the same snapshot always yields the same order.
+ *
+ * The delivery floor (phase 5) is the same machinery pointed at a second axis,
+ * with one addition: it does not apply to every row. A beam is not
+ * point-defence targetable, so there is nothing to intercept and nothing to
+ * floor, and `deliveryFloorApplies` is the predicate that says so per row.
+ *
+ * When no delivery floor is configured every new field is null and the ordering
+ * is byte-identical to what it was before phase 5 existed.
  */
 export function rankByAxis(rows, {
   rankBy = null,
   direction = 'higher',
   floorAxis = null,
   floorDirection = 'higher',
-  floorValue = null
+  floorValue = null,
+  deliveryFloorAxis = null,
+  deliveryFloorDirection = 'lower',
+  deliveryFloorValue = null,
+  deliveryFloorApplies = null
 } = {}) {
   const list = asArray(rows);
   if (!rankBy) {
     return {
       ranked: [...list]
         .sort((a, b) => String(a.id || '').localeCompare(String(b.id || '')))
-        .map(row => ({ ...row, rankMetric: null, rankValue: null, clearsFloor: null, floorReason: 'this class has no single ranking metric' })),
+        .map(row => ({
+          ...row,
+          rankMetric: null,
+          rankValue: null,
+          clearsFloor: null,
+          floorReason: 'this class has no single ranking metric',
+          clearsDeliveryFloor: null,
+          deliveryFloorReason: 'this class has no single ranking metric, so no floor of any kind is applied to it'
+        })),
       ranking: null
     };
   }
 
   const floor = toFinite(floorValue);
+  const deliveryFloor = toFinite(deliveryFloorValue);
+  const appliesTo = typeof deliveryFloorApplies === 'function' ? deliveryFloorApplies : null;
+
   const scored = list.map(row => {
     const rankValue = toFinite(row[rankBy]);
     const floorMetric = floorAxis === null ? null : toFinite(row[floorAxis]);
@@ -960,15 +1016,51 @@ export function rankByAxis(rows, {
         ? null
         : `${floorAxis} moves from ${round(floor, 6)} to ${round(floorMetric, 6)}, the wrong way`;
     }
-    return { ...row, rankMetric: rankBy, rankValue, clearsFloor, floorReason };
+
+    // FOUR distinct outcomes, each with its own reason string, because they are
+    // four different facts and collapsing any two of them into "unknown" is the
+    // failure this repo keeps re-fixing.
+    let clearsDeliveryFloor = null;
+    let deliveryFloorReason = null;
+    const deliveryMetric = deliveryFloorAxis === null ? null : toFinite(row[deliveryFloorAxis]);
+    if (deliveryFloorAxis === null) {
+      deliveryFloorReason = 'this class declares no delivery floor';
+    } else if (appliesTo !== null && appliesTo(row) !== true) {
+      deliveryFloorReason = 'this weapon is not point-defence targetable, so the delivery floor does not apply to it';
+    } else if (deliveryFloor === null) {
+      deliveryFloorReason = 'the observer fields no point-defence-targetable munition with a measurable delivery figure, so no floor could be measured';
+    } else if (deliveryMetric === null) {
+      deliveryFloorReason = 'delivery is not measurable for this item, so the floor cannot be evaluated';
+    } else {
+      clearsDeliveryFloor = deliveryFloorDirection === 'lower'
+        ? deliveryMetric <= deliveryFloor
+        : deliveryMetric >= deliveryFloor;
+      deliveryFloorReason = clearsDeliveryFloor
+        ? null
+        : `${deliveryFloorAxis} moves from ${round(deliveryFloor, 6)} to ${round(deliveryMetric, 6)}, the wrong way`;
+    }
+
+    return { ...row, rankMetric: rankBy, rankValue, clearsFloor, floorReason, clearsDeliveryFloor, deliveryFloorReason };
   });
 
   scored.sort((a, b) => {
     const aComputable = a.rankValue !== null;
     const bComputable = b.rankValue !== null;
     if (aComputable !== bComputable) return aComputable ? -1 : 1;
-    const aBelow = a.clearsFloor === false ? 1 : 0;
-    const bBelow = b.clearsFloor === false ? 1 : 0;
+    // ONLY A MEASURED `false` DEMOTES. A floor that could not be evaluated --
+    // because the row is a beam, because the observer fields no comparable
+    // munition, or because the item states no flight inputs -- leaves the row
+    // exactly where its rank value puts it.
+    //
+    // That is not "unknown falls through to safe". Unknown carries its own
+    // reason string on the row and gets its OWN badge in the panel, distinct
+    // from the one a passing row gets, so it never READS as clearing. Burying
+    // every munition in the catalogue whenever the sky happens to be unobserved
+    // would be the opposite error: a snapshot with no visible hostile hull
+    // would silently reorder the entire ranking on the strength of a
+    // measurement nobody made.
+    const aBelow = (a.clearsFloor === false || a.clearsDeliveryFloor === false) ? 1 : 0;
+    const bBelow = (b.clearsFloor === false || b.clearsDeliveryFloor === false) ? 1 : 0;
     if (aBelow !== bBelow) return aBelow - bBelow;
     if (!aComputable) return String(a.id || '').localeCompare(String(b.id || ''));
     if (a.rankValue !== b.rankValue) {
@@ -987,7 +1079,19 @@ export function rankByAxis(rows, {
       floorValue: round(floor, 6),
       floorBasis: floor === null
         ? 'not measurable from what the observer currently fields'
-        : 'the best value among the items the observer currently fields'
+        : 'the best value among the items the observer currently fields',
+      // Explicit null rather than an omitted key, so a consumer can tell "this
+      // class declares no delivery floor" from "this build predates phase 5".
+      deliveryFloor: deliveryFloorAxis === null ? null : {
+        axis: deliveryFloorAxis,
+        direction: deliveryFloorDirection,
+        value: round(deliveryFloor, 6),
+        basis: deliveryFloor === null
+          ? 'not measurable from the point-defence-targetable munitions the observer currently fields'
+          : 'the best value among the point-defence-targetable munitions the observer currently fields',
+        appliesTo: 'rows the game marks `isPointDefenseTargetable`; every other row reports a null verdict with its own reason',
+        rationale: 'damage leads because it decides the outcome; delivery is the floor because it decides whether the outcome happens at all.'
+      }
     }
   };
 }
@@ -1086,11 +1190,17 @@ export const MAGAZINE_BASIS_CODES = Object.freeze({
 });
 
 /**
- * The seven distinct axis sets, emitted ONCE per response.
+ * The distinct axis sets, emitted ONCE per response.
  *
  * Each class names its set rather than carrying a copy. The axis descriptors
  * run to about 3.3 KB apiece and seventeen classes share seven sets, so
  * inlining them cost 53 KB of pure repetition on every request.
+ *
+ * `munition_delivery` is phase 5's set and is deliberately NOT named by any
+ * class. It is a second, parallel description of the offensive weapon rows --
+ * reported beside the damage axes, never merged into `weapon` -- so a consumer
+ * that wants the delivery descriptors reads them by name and a consumer that
+ * ranks on `weapon` cannot pick one up by accident.
  */
 export const AXIS_SETS = Object.freeze({
   weapon: WEAPON_AXES,
@@ -1100,6 +1210,7 @@ export const AXIS_SETS = Object.freeze({
   radiator: RADIATOR_AXES,
   heat_sink: HEAT_SINK_AXES,
   battery: BATTERY_AXES,
+  munition_delivery: MUNITION_DELIVERY_AXES,
   none: Object.freeze([])
 });
 

@@ -53,6 +53,11 @@ import {
   MILITARY_CLASS_SPECS
 } from '../militaryValue.mjs';
 import {
+  DELIVERY_BASIS_CODES,
+  DELIVERY_FORMULAE,
+  buildPointDefenseProfile
+} from '../munitionDelivery.mjs';
+import {
   AVAILABILITY_STATES,
   buildAvailabilityResolver,
   monthsAtIncome,
@@ -63,6 +68,17 @@ import { findAlienFaction } from './common.mjs';
 
 const DEFAULT_CANDIDATE_LIMIT = 8;
 const MAX_CANDIDATE_LIMIT = 100;
+
+/**
+ * How many rows of a point-defence profile the response lists.
+ *
+ * The MODEL always uses every weapon and every faction it read; these caps
+ * apply to the emitted listing only, so truncation can never change a number.
+ * Both carry a `*TotalCount` and a `*OmittedCount` beside them -- a capped list
+ * presented as the whole set is the same defect class as fabricating data.
+ */
+const PROFILE_WEAPON_LIMIT = 25;
+const PROFILE_FACTION_LIMIT = 25;
 
 /** The six weapon families, in the order the unlock index lists them. */
 const WEAPON_FAMILIES = Object.freeze([
@@ -80,7 +96,9 @@ const isWeaponFamily = (family) => WEAPON_FAMILIES.includes(family);
 
 /** family -> metric builder. Weapons need their family; the rest do not. */
 function metricsFor(family, id, stats, context = {}) {
-  if (isWeaponFamily(family)) return weaponMetrics(id, stats, family);
+  if (isWeaponFamily(family)) {
+    return weaponMetrics(id, stats, family, { pointDefenseProfile: context.pointDefenseProfile ?? null });
+  }
   switch (family) {
     case 'ship_hull': return hullMetrics(id, stats, context.armament);
     case 'ship_armor': return armorMetrics(id, stats);
@@ -256,6 +274,225 @@ function buildFieldedInventory(snapshot, factionId, index) {
 }
 
 // ---------------------------------------------------------------------------
+// THE DEFENSIVE BATTERY A MUNITION HAS TO FLY THROUGH -- phase 5
+// ---------------------------------------------------------------------------
+
+/**
+ * Both point-defence inventories, from ONE walk of `snapshot.fleets`.
+ *
+ *   observed-opposing  every faction whose id is not the observer's. There is
+ *                      no hostility flag anywhere in the snapshot, so this is
+ *                      stated as what it is -- "every faction other than the
+ *                      observer" -- rather than dressed up as a threat set it
+ *                      cannot actually narrow to.
+ *   observer-own       the observer's own hulls, as a NAMED fallback reference
+ *                      for a snapshot in which nothing else is visible. It
+ *                      answers a different question ("what would my own fleet
+ *                      do to this round"), and which one was used is reported.
+ *
+ * Mounts are identified by the game's own `defenseMode` flag, NOT by the
+ * `point-defense` weapon role: the role additionally requires
+ * `attackMode: false` and so covers only the 9 dedicated turrets, while
+ * `defenseMode` is carried by 121 lasers, 23 particle weapons, 5 guns and 10
+ * magnetic guns -- every dual-purpose battery that also shoots at missiles.
+ *
+ * The same design-then-`weaponLoadout` degradation `buildFieldedInventory`
+ * uses, and it matters here more than anywhere else, because it is the ONLY
+ * reason a player-mode observer can see an alien point-defence battery at all.
+ */
+function buildPointDefenseInventories(snapshot, observerId, index, componentStats) {
+  const designsById = new Map(asArray(snapshot?.shipDesigns)
+    .map(design => [design?.dataName, design])
+    .filter(([key]) => key));
+
+  const make = () => ({
+    mounts: new Map(),
+    hullsRead: 0,
+    hullsViaDesign: 0,
+    hullsViaWeaponLoadout: 0,
+    factions: new Map()
+  });
+  const buckets = { 'observed-opposing': make(), 'observer-own': make() };
+
+  const statsOf = (id) => {
+    const family = index.familyOfId.get(id);
+    if (!family) return null;
+    const stats = componentStats?.[family]?.[id];
+    return stats ? { family, stats } : null;
+  };
+
+  for (const fleet of asArray(snapshot?.fleets)) {
+    const bucketKey = sameId(fleet?.factionId, observerId) ? 'observer-own' : 'observed-opposing';
+    const bucket = buckets[bucketKey];
+    // An unresolvable faction identity must never become a dedupe key: the
+    // string "undefined" has twice collapsed a whole record set in this repo.
+    const factionKey = fleet?.factionId === null || fleet?.factionId === undefined
+      ? null
+      : String(fleet.factionId);
+
+    for (const ship of asArray(fleet?.ships)) {
+      bucket.hullsRead += 1;
+      if (factionKey !== null) {
+        if (!bucket.factions.has(factionKey)) {
+          bucket.factions.set(factionKey, {
+            factionId: fleet.factionId,
+            displayName: fleet?.factionName ?? null,
+            hulls: 0,
+            pointDefenseInstallations: 0
+          });
+        }
+        bucket.factions.get(factionKey).hulls += 1;
+      }
+
+      const count = (id) => {
+        const hit = statsOf(id);
+        if (!hit || hit.stats.defenseMode !== true) return;
+        bucket.mounts.set(id, (bucket.mounts.get(id) || 0) + 1);
+        if (factionKey !== null) bucket.factions.get(factionKey).pointDefenseInstallations += 1;
+      };
+
+      const design = ship?.hullName ? designsById.get(ship.hullName) || null : null;
+      if (design) {
+        bucket.hullsViaDesign += 1;
+        for (const key of ['noseWeaponTemplateEntries', 'hullWeaponTemplateEntries']) {
+          for (const entry of asArray(design[key])) {
+            const name = entry?.moduleName;
+            // `Empty` is the game's padding marker for an unfilled hardpoint.
+            if (!name || name === 'Empty') continue;
+            count(name);
+          }
+        }
+        continue;
+      }
+
+      const loadout = asArray(ship?.weaponLoadout);
+      if (loadout.length === 0) continue;
+      bucket.hullsViaWeaponLoadout += 1;
+      for (const group of loadout) {
+        for (const system of asArray(group?.systems)) {
+          const hit = index.byDisplayName.get(system);
+          if (!hit) continue;
+          count(hit.id);
+        }
+      }
+    }
+  }
+
+  const toProfile = (key, bucket) => buildPointDefenseProfile({
+    key,
+    hullsRead: bucket.hullsRead,
+    factions: [...bucket.factions.values()]
+      .sort((a, b) => b.pointDefenseInstallations - a.pointDefenseInstallations
+        || String(a.factionId).localeCompare(String(b.factionId))),
+    basis: bucket.hullsRead === 0
+      ? (key === 'observer-own'
+        ? 'the observer has no hulls in service in this snapshot'
+        : 'no hull belonging to any other faction is visible in this snapshot')
+      : `${bucket.hullsViaDesign} of ${bucket.hullsRead} hulls read through their ship design (exact component ids)`
+        + (bucket.hullsViaWeaponLoadout > 0
+          ? `; ${bucket.hullsViaWeaponLoadout} through weapon display names only, because their designs are not visible in this mode`
+          : ''),
+    mounts: [...bucket.mounts.entries()].map(([id, installations]) => {
+      const hit = statsOf(id);
+      // Cycle time is phase 2's OWN firing-cycle figure. Deriving a second one
+      // here would leave two models of the same thing free to drift apart.
+      const metrics = hit ? weaponMetrics(id, hit.stats, hit.family) : null;
+      return {
+        id,
+        displayName: hit?.stats?.displayName || id,
+        installations,
+        engagementRangeKm: toFinite(hit?.stats?.targetingRangeKm),
+        cycleSeconds: metrics?.cycleSeconds ?? null
+      };
+    })
+  });
+
+  return {
+    profiles: {
+      'observed-opposing': toProfile('observed-opposing', buckets['observed-opposing']),
+      'observer-own': toProfile('observer-own', buckets['observer-own'])
+    },
+    paths: {
+      'observed-opposing': {
+        hullsViaDesign: buckets['observed-opposing'].hullsViaDesign,
+        hullsViaWeaponLoadout: buckets['observed-opposing'].hullsViaWeaponLoadout
+      },
+      'observer-own': {
+        hullsViaDesign: buckets['observer-own'].hullsViaDesign,
+        hullsViaWeaponLoadout: buckets['observer-own'].hullsViaWeaponLoadout
+      }
+    }
+  };
+}
+
+/**
+ * Which of the two profiles every row in this response is measured against.
+ *
+ * ONE profile is used throughout, so every number in the response is
+ * comparable, and the choice is NAMED rather than implied. Opposing first,
+ * because "what would actually be shooting at this round" is the question;
+ * the observer's own battery second, as a stated stand-in; and with neither
+ * available the delivery block reports `pointDefense: null` with the reason,
+ * never an undefended target.
+ */
+function selectDeliveryProfile(inventories, mode) {
+  const opposing = inventories.profiles['observed-opposing'];
+  const own = inventories.profiles['observer-own'];
+
+  if (opposing.available === true) {
+    return {
+      profile: opposing,
+      selected: 'observed-opposing',
+      selectionBasis: 'measured against every faction other than the observer. There is no hostility '
+        + 'flag in this snapshot, so this is literally "everyone else", not a threat set narrowed to '
+        + 'the factions actually at war with the observer.'
+    };
+  }
+  if (own.available === true) {
+    return {
+      profile: own,
+      selected: 'observer-own',
+      selectionBasis: 'no point-defence battery is observable on any other faction\'s hulls in this '
+        + `${mode} snapshot, so the observer's OWN battery is used as a named stand-in. It answers a `
+        + 'different question -- what the observer\'s fleet would do to this round -- and the figures '
+        + 'should be read as that rather than as a measurement of the opposition.'
+    };
+  }
+  return {
+    profile: null,
+    selected: null,
+    selectionBasis: 'no hull carrying a weapon the game marks `defenseMode` is observable anywhere in '
+      + 'this snapshot, so how much defensive fire a round would fly through is UNMEASURED. That is '
+      + 'not the same as an undefended target, and no delivery figure is reported rather than a zero.'
+  };
+}
+
+/** One profile, capped for the wire, with what the cap left out. */
+function emitProfile(profile, paths) {
+  const weapons = asArray(profile.weapons);
+  const factions = asArray(profile.factions);
+  return {
+    profileKey: profile.profileKey,
+    available: profile.available,
+    reason: profile.reason,
+    basis: profile.basis,
+    hullsRead: profile.hullsRead,
+    hullsViaDesign: paths?.hullsViaDesign ?? null,
+    hullsViaWeaponLoadout: paths?.hullsViaWeaponLoadout ?? null,
+    pointDefenseInstallations: profile.pointDefenseInstallations,
+    distinctWeapons: profile.distinctWeapons,
+    meanMountsPerHull: profile.meanMountsPerHull,
+    maxEngagementRangeKm: profile.maxEngagementRangeKm,
+    factionsTotalCount: factions.length,
+    factionsOmittedCount: Math.max(0, factions.length - PROFILE_FACTION_LIMIT),
+    factions: factions.slice(0, PROFILE_FACTION_LIMIT),
+    weaponsTotalCount: weapons.length,
+    weaponsOmittedCount: Math.max(0, weapons.length - PROFILE_WEAPON_LIMIT),
+    weapons: weapons.slice(0, PROFILE_WEAPON_LIMIT)
+  };
+}
+
+// ---------------------------------------------------------------------------
 // RESEARCH
 // ---------------------------------------------------------------------------
 
@@ -396,7 +633,7 @@ function buildFieldedArmament(fieldedWeaponRows) {
 /** Builds one comparison class end to end. */
 function buildClass({
   entry, componentStats, itemGateMap, resolver, snapshot, fielded, monthlyResearch,
-  armament, armorRanking, candidateLimit, bestFieldedHull, detail
+  armament, armorRanking, candidateLimit, bestFieldedHull, detail, pointDefenseProfile
 }) {
   const { classKey, family, role, spec } = entry;
   const catalogue = componentStats[family] || {};
@@ -406,7 +643,7 @@ function buildClass({
   const notComparable = [];
   for (const [id, stats] of Object.entries(catalogue)) {
     if (isWeaponFamily(family) && weaponRole(stats) !== role) continue;
-    const metrics = metricsFor(family, id, stats, { armament });
+    const metrics = metricsFor(family, id, stats, { armament, pointDefenseProfile });
     if (!metrics) continue;
     rows.push({
       ...metrics,
@@ -431,12 +668,27 @@ function buildClass({
   const floorBest = floorAxis ? bestOnAxis(fieldedRows, floorAxis, floorDirection) : null;
   const floorValue = floorBest ? toFinite(floorBest[floorAxis]) : null;
 
+  // Phase 5's second floor. Measured over the point-defence-TARGETABLE
+  // munitions the observer fields, not over everything: a laser has no
+  // delivery figure at all, and letting a class with no interceptable weapon
+  // in service produce a floor would compare a missile against nothing.
+  const deliveryFloorAxis = spec.deliveryFloorAxis ?? null;
+  const deliveryFloorApplies = (row) => row?.deliveryApplies === true;
+  const deliveryFloorBest = deliveryFloorAxis
+    ? bestOnAxis(fieldedRows.filter(deliveryFloorApplies), deliveryFloorAxis, 'lower')
+    : null;
+  const deliveryFloorValue = deliveryFloorBest ? toFinite(deliveryFloorBest[deliveryFloorAxis]) : null;
+
   const { ranked, ranking } = rankByAxis(rows, {
     rankBy: spec.kind === CLASS_KINDS.rule ? null : rankBy,
     direction,
     floorAxis,
     floorDirection,
-    floorValue
+    floorValue,
+    deliveryFloorAxis: spec.kind === CLASS_KINDS.rule ? null : deliveryFloorAxis,
+    deliveryFloorDirection: 'lower',
+    deliveryFloorValue,
+    deliveryFloorApplies
   });
 
   // Per-axis best of what is fielded: the baseline every ratio is against.
@@ -516,6 +768,21 @@ function buildClass({
           // Half-mount costs are inferred from the mount name rather than
           // verified against a design, so a top row resting on one says so.
           hardpointCostVerifiedInSave: best.hardpointCostVerifiedInSave ?? null,
+          // Phase 5, carried BESIDE the damage figures and never folded into
+          // them. `clearsDeliveryFloor` is tri-state: null means the floor
+          // could not be evaluated for this row, which is not the same as
+          // clearing it, and `deliveryFloorReason` says which of the four
+          // cases this one is.
+          clearsDeliveryFloor: best.clearsDeliveryFloor ?? null,
+          deliveryFloorReason: best.deliveryFloorReason ?? null,
+          deliveryShotsPerArrivingRound: best.deliveryShotsPerArrivingRound ?? null,
+          deliveryFlightTimeS: best.deliveryFlightTimeS ?? null,
+          deliveryTerminalSpeedKps: best.deliveryTerminalSpeedKps ?? null,
+          deliveryProfileKey: best.delivery?.pointDefense?.profileKey ?? null,
+          // The baseline the verdict was measured against, so a reader can see
+          // the comparison rather than only its outcome.
+          deliveryFloorValue,
+          deliveryFloorBaselineDisplayName: deliveryFloorBest?.displayName ?? null,
           vsFielded: best.vsFielded,
           gateProjectId: best.research.gateProjectId,
           gateProjectName: best.research.gateProjectName,
@@ -528,6 +795,62 @@ function buildClass({
         // state was not considered".
         : null;
     }
+  }
+
+  // WHAT THE DELIVERY FLOOR PUSHED DOWN.
+  //
+  // A floor that silently removes a row from the top of a ranking is a
+  // TRUNCATION, and truncation must announce itself. Without this block the
+  // only visible effect of phase 5 on the live save is that the antimatter
+  // torpedo is no longer where it was, with nothing saying why.
+  //
+  // Null -- not an empty block -- when the class declares no delivery floor, so
+  // "this class does not use one" reads differently from "it uses one and
+  // demoted nothing".
+  let deliveryDemoted = null;
+  if (deliveryFloorAxis !== null && spec.kind !== CLASS_KINDS.rule) {
+    // Candidates only. A weapon the observer already flies is not something the
+    // advisor is offering, and listing it here would mix "you fly something
+    // worse than your own best" into an answer about what to research next --
+    // a different question, and the one this block is not asking.
+    //
+    // Ordered by the DAMAGE axis descending, so the row a reader would
+    // otherwise have seen at the top of its group is the first one named.
+    const demoted = ranked
+      .filter(row => row.clearsDeliveryFloor === false && !row.isFielded)
+      .slice()
+      .sort((a, b) => (toFinite(b.rankValue) ?? -Infinity) - (toFinite(a.rankValue) ?? -Infinity)
+        || String(a.id).localeCompare(String(b.id)));
+    deliveryDemoted = {
+      count: demoted.length,
+      basis: 'candidates ranked BELOW their damage because the point-defence fire each arriving round '
+        + 'has to survive is measurably worse than the best point-defence-targetable munition the '
+        + 'observer already fields. They are still listed and still carry their damage figure -- '
+        + '"this hits harder and arrives alone" is the finding, not something to hide. Listed highest '
+        + 'damage first, so the row a reader would otherwise have seen leading its group is named '
+        + 'first. Weapons already in service are excluded: this answers what to research, not what is '
+        + 'already flown.',
+      itemsShown: Math.min(demoted.length, candidateLimit),
+      itemsOmittedCount: Math.max(0, demoted.length - candidateLimit),
+      items: demoted.slice(0, candidateLimit).map(row => ({
+        id: row.id,
+        displayName: row.displayName,
+        rankValue: row.rankValue,
+        shotsPerArrivingRound: row.deliveryShotsPerArrivingRound ?? null,
+        floorValue: deliveryFloorValue,
+        floorBaselineDisplayName: deliveryFloorBest?.displayName ?? null,
+        // How much worse, in the same "greater than 1 is worse on a lower-is-
+        // better axis" direction the ratio machinery already uses.
+        multipleOfFloor: (deliveryFloorValue === null
+          || !(deliveryFloorValue > 0)
+          || toFinite(row.deliveryShotsPerArrivingRound) === null)
+          ? null
+          : round(toFinite(row.deliveryShotsPerArrivingRound) / deliveryFloorValue, 6),
+        researchState: row.research?.state ?? null,
+        gateProjectId: row.research?.gateProjectId ?? null,
+        remainingResearchCost: row.research?.remainingResearchCost ?? null
+      }))
+    };
   }
 
   // Rule-grouped classes: compared WITHIN a rule, never across rules.
@@ -760,6 +1083,9 @@ function buildClass({
     candidatesShown: detail === 'full' ? candidates.length : 0,
     candidateStates: tallyAvailabilityStates(withComparison.map(row => ({ state: row.research.state }))),
     bestByState,
+    // Null when this class declares no delivery floor, which is every class
+    // except the five offensive weapon roles.
+    deliveryDemoted,
     // `detail=summary` is the default for the same reason `/api/intel/fleets`
     // defaults to a manifest: the full seventeen-class listing is a 300 KB
     // response, and a caller cannot choose what to fetch if the small answer
@@ -813,7 +1139,7 @@ function buildClass({
  * design-level one does not, and the difference is stated in `basis` rather
  * than hidden behind an identical-looking answer.
  */
-function buildAlienBenchmark(snapshot, index, componentStats, observerWeaponRows, mode) {
+function buildAlienBenchmark(snapshot, index, componentStats, observerWeaponRows, mode, pointDefenseProfile) {
   const alien = findAlienFaction(snapshot);
   if (!alien) {
     return { available: false, reason: 'no alien faction is present in this snapshot', basis: null, threatMix: null };
@@ -828,7 +1154,7 @@ function buildAlienBenchmark(snapshot, index, componentStats, observerWeaponRows
     for (const [id, count] of counts) {
       const stats = componentStats?.[family]?.[id];
       if (!stats) continue;
-      rows.push({ ...weaponMetrics(id, stats, family), fieldedCount: count });
+      rows.push({ ...weaponMetrics(id, stats, family, { pointDefenseProfile }), fieldedCount: count });
     }
   }
 
@@ -929,6 +1255,12 @@ export const militaryValueResource = (snapshot, {
   const index = buildCatalogueIndex(componentStats);
   const fielded = buildFieldedInventory(snapshot, observerId, index);
 
+  // Phase 5. ONE walk of the fleets, two profiles, and one of them selected for
+  // the whole response so every delivery figure in it is comparable.
+  const pdInventories = buildPointDefenseInventories(snapshot, observerId, index, componentStats);
+  const pdSelection = selectDeliveryProfile(pdInventories, mode);
+  const pointDefenseProfile = pdSelection.profile;
+
   // The observer's own weapons, needed three times over: to fill candidate
   // hulls, to benchmark against the aliens, and to pick the armour axis.
   const observerWeaponRows = [];
@@ -938,7 +1270,7 @@ export const militaryValueResource = (snapshot, {
     for (const [id, count] of counts) {
       const stats = componentStats?.[weaponFamily]?.[id];
       if (!stats) continue;
-      observerWeaponRows.push({ ...weaponMetrics(id, stats, weaponFamily), fieldedCount: count });
+      observerWeaponRows.push({ ...weaponMetrics(id, stats, weaponFamily, { pointDefenseProfile }), fieldedCount: count });
     }
   }
   const armament = buildFieldedArmament(observerWeaponRows);
@@ -952,7 +1284,7 @@ export const militaryValueResource = (snapshot, {
     return bestOnAxis(rows, 'massTons', 'higher');
   })();
 
-  const alienBenchmark = buildAlienBenchmark(snapshot, index, componentStats, observerWeaponRows, mode);
+  const alienBenchmark = buildAlienBenchmark(snapshot, index, componentStats, observerWeaponRows, mode, pointDefenseProfile);
   // Armour follows the measured threat: what the aliens shoot, weighted by
   // output. With nothing observable it declines to rank rather than defaulting.
   const armorRanking = rankArmorAxis(alienBenchmark.threatMix);
@@ -972,7 +1304,8 @@ export const militaryValueResource = (snapshot, {
       armorRanking,
       candidateLimit,
       bestFieldedHull,
-      detail: wantsFull ? 'full' : 'summary'
+      detail: wantsFull ? 'full' : 'summary',
+      pointDefenseProfile
     }));
 
   const familyCounts = Object.fromEntries(FAMILY_ORDER
@@ -984,19 +1317,51 @@ export const militaryValueResource = (snapshot, {
     observerFactionId: observerId,
     intelMode: mode,
     detail: wantsFull ? 'full' : 'summary',
-    formulae: MILITARY_FORMULAE,
-    // The axis descriptors, the ratio codes and the magazine codes, each stated
-    // ONCE. Every row that references one carries the key, not the prose.
+    // Merged, not replaced: phase 5's delivery formulae sit beside phase 2's
+    // damage formulae in one table, because a reader checking a delivery figure
+    // and a reader checking a damage figure look in the same place.
+    formulae: { ...MILITARY_FORMULAE, ...DELIVERY_FORMULAE },
+    // The axis descriptors, the ratio codes, the magazine codes and the
+    // delivery codes, each stated ONCE. Every row that references one carries
+    // the key, not the prose.
     axisSets: AXIS_SETS,
     codes: {
       ratioUnavailable: RATIO_UNAVAILABLE_CODES,
-      magazineBasis: MAGAZINE_BASIS_CODES
+      magazineBasis: MAGAZINE_BASIS_CODES,
+      deliveryBasis: DELIVERY_BASIS_CODES
     },
     method: {
       neverBlended: 'each class declares one ranking axis and a floor on the axis it trades against. The two are reported separately and are never summed into one score: phase 1 measured a single-scalar drive ranking recommending a 1,300x combat-acceleration downgrade, and the same trade exists between damage and mass, hardpoints and structure, and the two armour channels.',
       baseline: 'every comparison is against what this observer currently fields, read from the hulls and habs in service in this snapshot. No absolute scale and no threshold appears anywhere in this endpoint.',
       pointDefense: 'point defence is its own comparison class, never ranked against offensive armament.',
-      absentStaysNull: 'an item missing a stat this class ranks on is listed under `notComparable` with the reason. It is never scored zero, which would rank it last and hide it.'
+      absentStaysNull: 'an item missing a stat this class ranks on is listed under `notComparable` with the reason. It is never scored zero, which would rank it last and hide it.',
+      deliveryNeverBlended: 'the delivery axes are reported BESIDE the damage axes and are never blended '
+        + 'into them. Damage still leads the ranking, because it is the axis that decides the outcome of '
+        + 'an engagement; delivery is a FLOOR, because it decides whether the outcome happens at all. No '
+        + 'hit probability, survival chance or effectiveness score is computed anywhere -- the game '
+        + 'publishes nothing to check one against, and a confident percentage resting on an unverified '
+        + 'flight model is exactly what section 7 forbids. Only the measurable quantities are reported.'
+    },
+    // Phase 5. What every delivery figure in this response was measured
+    // against, once, so a reader does not have to infer it from the rows.
+    deliveryEnvironment: {
+      available: pdSelection.profile !== null,
+      reason: pdSelection.profile === null ? pdSelection.selectionBasis : null,
+      selected: pdSelection.selected,
+      selectionBasis: pdSelection.selectionBasis,
+      profiles: {
+        'observed-opposing': emitProfile(pdInventories.profiles['observed-opposing'], pdInventories.paths['observed-opposing']),
+        'observer-own': emitProfile(pdInventories.profiles['observer-own'], pdInventories.paths['observer-own'])
+      },
+      assumptions: [
+        'acceleration is held at the stated LAUNCH-mass value, so flight time is an upper bound and terminal speed a lower one. Both sides of any comparison are measured under the identical assumption, so the ordering is unaffected.',
+        'the target is treated as stationary and the launching hull as at rest; the templates state no engagement geometry.',
+        'the thrust ramp is read as linear from zero over `thrustRamp_s`; the templates do not state the ramp shape.',
+        'a defending battery is assumed to distribute its fire evenly across the rounds in the envelope together, and a salvo launched at `intraSalvoCooldown_s` spacing is assumed to arrive essentially together.',
+        '`mountsPerHull` is a MEAN over the hulls read in the profile, not a figure for any one hull.',
+        'a hull read through `weaponLoadout` rather than through its design contributes one installation per DISTINCT system name in the group, because that is the shape the loadout carries; a hull mounting the same weapon several times is therefore under-counted on that path, which understates the defensive battery rather than overstating it.'
+      ],
+      validatedAgainstGameOutput: false
     },
     componentCatalogue: {
       available: true,

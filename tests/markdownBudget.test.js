@@ -16,11 +16,19 @@
 //
 // Both modes are exercised throughout: player is the default and a genuinely
 // different code path.
+//
+// Live-save independence (docs/live-save-test-dependency-spec.md): every
+// assertion here is a PROPERTY assertion ("output satisfies a bound"), which
+// is exactly the case where synthetic volume is correct and safe. The base
+// snapshot is synthetic (tests/fixtures/syntheticMarkdownSnapshot.js) and the
+// growth ladder clones its fleets to breach the caps -- cloned fleets carry
+// the relevance characteristics of the fleets they came from, so the omission
+// and degradation paths are exercised for real without reading a save.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { loadFilteredSnapshot } = require('../server/snapshotLoader');
+const { makeMarkdownSnapshot, OBSERVER_ID: OBSERVER } = require('./fixtures/syntheticMarkdownSnapshot');
 const {
   renderWarRoomMarkdown,
   renderThreatsMarkdown,
@@ -29,14 +37,13 @@ const {
   THREATS_BYTE_BUDGET
 } = require('../shared/markdownExports.mjs');
 
-const OBSERVER = 4712;
 const MODES = ['player', 'omniscient'];
 const NO_BUDGET = { maxBytes: Number.MAX_SAFE_INTEGER };
 
 const snapshotCache = new Map();
 function snapshotFor(mode) {
   if (!snapshotCache.has(mode)) {
-    snapshotCache.set(mode, loadFilteredSnapshot({ mode, observer: OBSERVER }));
+    snapshotCache.set(mode, makeMarkdownSnapshot(mode));
   }
   return snapshotCache.get(mode);
 }

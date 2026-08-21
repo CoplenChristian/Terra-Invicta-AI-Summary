@@ -5,7 +5,19 @@
 //   * /latest-war-room.md  (20-30 KB, comprehensive military/economic brief)
 //   * /latest-snapshot.md  (byte-identical to pre-refactor baseline)
 //
-// Tests all 8 acceptance criteria from docs/markdown-export-plan.md
+// Tests all 8 acceptance criteria from docs/markdown-export-plan.md.
+//
+// Live-save independence (docs/live-save-test-dependency-spec.md):
+//   * The byte-identical snapshot test is a VALUE assertion, so it reads a
+//     committed, mechanically-trimmed fixture (tests/fixtures/snapshot-*.json,
+//     derived by scripts/derive_snapshot_fixtures.js), never the live save.
+//   * The size ceilings and rendering behaviour are PROPERTY assertions --
+//     "output satisfies a bound" -- so they run against a synthetic snapshot
+//     (tests/fixtures/syntheticMarkdownSnapshot.js) whose volume is grown by
+//     cloning fleets. A bound is not a value, so synthetic data is safe here,
+//     and it states its own preconditions.
+//   * The one remaining HTTP smoke test reads the live save but skips cleanly
+//     when no save is available; it must never fail on live-save state.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -16,22 +28,32 @@ const path = require('path');
 const { loadFilteredSnapshot } = require('../server/snapshotLoader');
 const exportGenerator = require('../server/exportGenerator');
 const app = require('../server');
+const { makeMarkdownSnapshot, OBSERVER_ID } = require('./fixtures/syntheticMarkdownSnapshot');
 const {
   renderThreatsMarkdown,
   renderWarRoomMarkdown,
-  renderCompactSnapshotMarkdown,
-  buildDesignLookup
+  renderCompactSnapshotMarkdown
 } = require('../shared/markdownExports.mjs');
 
 const FROZEN_PLAYER_PATH = path.join(__dirname, 'fixtures', 'frozen-snapshot-player.md');
 const FROZEN_OMNI_PATH = path.join(__dirname, 'fixtures', 'frozen-snapshot-omni.md');
+const PLAYER_FIXTURE_PATH = path.join(__dirname, 'fixtures', 'snapshot-player.json');
+const OMNI_FIXTURE_PATH = path.join(__dirname, 'fixtures', 'snapshot-omniscient.json');
+
+// Load a committed fixture, stripping the provenance header the derive script
+// attaches (it is metadata about the fixture, not snapshot data).
+function loadFixture(filePath) {
+  const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  delete data.provenance;
+  return data;
+}
 
 // ---------------------------------------------------------------------------
 // 1. CEILING & FLOOR SIZES (INCLUDING SECTION 3 SUB-8KB CONSTRAINT)
 // ---------------------------------------------------------------------------
-test('export sizes meet ceiling and floor constraints on live save', () => {
-  const playerSnap = loadFilteredSnapshot({ mode: 'player', observer: 4712 });
-  const omniSnap = loadFilteredSnapshot({ mode: 'omniscient', observer: 4712 });
+test('export sizes meet ceiling and floor constraints on the synthetic snapshot', () => {
+  const playerSnap = makeMarkdownSnapshot('player');
+  const omniSnap = makeMarkdownSnapshot('omniscient');
 
   const playerThreats = exportGenerator.generateThreatsMarkdown(playerSnap);
   const omniThreats = exportGenerator.generateThreatsMarkdown(omniSnap);
@@ -61,11 +83,11 @@ test('export sizes meet ceiling and floor constraints on live save', () => {
 });
 
 test('war room stays under 30 KB ceiling under 3x observer and 2x hostile fleet growth', () => {
-  const playerSnap = loadFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const playerSnap = makeMarkdownSnapshot('player');
   const growthSnapshot = JSON.parse(JSON.stringify(playerSnap));
 
-  const ownFleets = playerSnap.fleets.filter(f => f.factionId === 4712);
-  const hostileFleets = playerSnap.fleets.filter(f => f.factionId !== 4712);
+  const ownFleets = playerSnap.fleets.filter(f => f.factionId === OBSERVER_ID);
+  const hostileFleets = playerSnap.fleets.filter(f => f.factionId !== OBSERVER_ID);
 
   growthSnapshot.fleets = [
     ...ownFleets,
@@ -88,8 +110,8 @@ test('war room stays under 30 KB ceiling under 3x observer and 2x hostile fleet 
 // 2. MARKDOWN INTEGRITY (NO CORRUPTION TOKENS)
 // ---------------------------------------------------------------------------
 test('markdown exports contain no corruption tokens (null, undefined, NaN, [object Object])', () => {
-  const playerSnap = loadFilteredSnapshot({ mode: 'player', observer: 4712 });
-  const omniSnap = loadFilteredSnapshot({ mode: 'omniscient', observer: 4712 });
+  const playerSnap = makeMarkdownSnapshot('player');
+  const omniSnap = makeMarkdownSnapshot('omniscient');
 
   const exports = [
     { name: 'player threats', text: exportGenerator.generateThreatsMarkdown(playerSnap) },
@@ -116,11 +138,11 @@ test('markdown exports contain no corruption tokens (null, undefined, NaN, [obje
 // 3. HOSTILE RELEVANCE FILTERING & OMITTED COUNT
 // ---------------------------------------------------------------------------
 test('war room filters hostile fleets by relevance and reports omitted count', () => {
-  const playerSnap = loadFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const playerSnap = makeMarkdownSnapshot('player');
   const warRoom = exportGenerator.generateWarRoomMarkdown(playerSnap);
 
-  const totalHostiles = playerSnap.fleets.filter(f => f.factionId !== 4712).length;
-  assert.ok(totalHostiles > 50, `Expected many hostile fleets in save (found ${totalHostiles})`);
+  const totalHostiles = playerSnap.fleets.filter(f => f.factionId !== OBSERVER_ID).length;
+  assert.ok(totalHostiles > 50, `Expected many hostile fleets in synthetic snapshot (found ${totalHostiles})`);
 
   // Assert that omitted count is explicitly reported in markdown
   assert.match(
@@ -149,9 +171,9 @@ test('war room filters hostile fleets by relevance and reports omitted count', (
 test('threats report distinguishes unobserved space from absence of threats', () => {
   const blindSnapshot = {
     metadata: { gameTimeString: '2027-01-01T00:00:00Z', difficulty: 'Normal' },
-    observerFactionId: 4712,
+    observerFactionId: OBSERVER_ID,
     mode: 'player',
-    factions: [{ ID: 4712, displayName: 'the Initiative', resources: {}, monthlyNet: {} }],
+    factions: [{ ID: OBSERVER_ID, displayName: 'the Initiative', resources: {}, monthlyNet: {} }],
     habs: [],
     fleets: [],
     shipDesigns: [],
@@ -178,7 +200,7 @@ test('threats report distinguishes unobserved space from absence of threats', ()
 // 5. HUMAN-READABLE DESIGN ROLLUPS
 // ---------------------------------------------------------------------------
 test('friendly fleet manifests resolve design IDs to human-readable names', () => {
-  const playerSnap = loadFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const playerSnap = makeMarkdownSnapshot('player');
   const warRoom = exportGenerator.generateWarRoomMarkdown(playerSnap);
 
   // Raw hull template names like playerShipTemplate584 must not appear in the ship manifest
@@ -195,7 +217,7 @@ test('friendly fleet manifests resolve design IDs to human-readable names', () =
 // 6. NO FABRICATED FALLBACKS (INTERCEPTION STATE UNAVAILABLE)
 // ---------------------------------------------------------------------------
 test('fleet pursuit and interception state explicitly renders as UNAVAILABLE', () => {
-  const playerSnap = loadFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const playerSnap = makeMarkdownSnapshot('player');
   const warRoom = exportGenerator.generateWarRoomMarkdown(playerSnap);
   const threats = exportGenerator.generateThreatsMarkdown(playerSnap);
 
@@ -217,22 +239,22 @@ test('fleet pursuit and interception state explicitly renders as UNAVAILABLE', (
 test('synthetic observer-owned shipyard queues survive and render resolved design names', () => {
   const syntheticSnapshot = {
     metadata: { gameTimeString: '2027-06-01T00:00:00Z', difficulty: 'Normal' },
-    observerFactionId: 4712,
+    observerFactionId: OBSERVER_ID,
     mode: 'player',
-    factions: [{ ID: 4712, displayName: 'the Initiative', resources: {}, monthlyNet: {} }],
-    habs: [{ ID: 101, factionId: 4712, displayName: 'Alpha Station', orbitBody: 'Earth Orbit', tier: 2 }],
+    factions: [{ ID: OBSERVER_ID, displayName: 'the Initiative', resources: {}, monthlyNet: {} }],
+    habs: [{ ID: 101, factionId: OBSERVER_ID, displayName: 'Alpha Station', orbitBody: 'Earth Orbit', tier: 2 }],
     fleets: [],
     shipDesigns: [
       { dataName: 'playerShipTemplate999', _displayName: 'Dreadnought Alpha', hullName: 'Dreadnought' }
     ],
     habModules: [],
     shipyardStations: [
-      { id: 101, name: 'Alpha Station', factionId: 4712, orbitBody: 'Earth Orbit', tier: 2, shipyardModulesCount: 2 }
+      { id: 101, name: 'Alpha Station', factionId: OBSERVER_ID, orbitBody: 'Earth Orbit', tier: 2, shipyardModulesCount: 2 }
     ],
     shipyardQueues: [
       {
         id: 777,
-        factionId: 4712,
+        factionId: OBSERVER_ID,
         orbitBody: 'Earth Orbit',
         design: 'playerShipTemplate999',
         completionDate: '2027-08-15T00:00:00Z',
@@ -256,8 +278,8 @@ test('synthetic observer-owned shipyard queues survive and render resolved desig
 // 8. BYTE-IDENTICAL /latest-snapshot.md AND NON-VACUOUS PROOF
 // ---------------------------------------------------------------------------
 test('compact snapshot output is byte-identical to frozen baseline captured from a5a3d01', () => {
-  const playerSnap = loadFilteredSnapshot({ mode: 'player', observer: 4712 });
-  const omniSnap = loadFilteredSnapshot({ mode: 'omniscient', observer: 4712 });
+  const playerSnap = loadFixture(PLAYER_FIXTURE_PATH);
+  const omniSnap = loadFixture(OMNI_FIXTURE_PATH);
 
   const currentPlayerData = exportGenerator.generateCompactSnapshot(playerSnap);
   const currentOmniData = exportGenerator.generateCompactSnapshot(omniSnap);
@@ -286,9 +308,23 @@ test('compact snapshot output is byte-identical to frozen baseline captured from
 });
 
 // ---------------------------------------------------------------------------
-// 9. HTTP ENDPOINTS ON EPHEMERAL PORT
+// 9. HTTP ENDPOINTS ON EPHEMERAL PORT (smoke -- skips cleanly without a save)
 // ---------------------------------------------------------------------------
-test('Express server serves /latest-threats.md and /latest-war-room.md on ephemeral port', async () => {
+function hasLiveSave() {
+  try {
+    const raw = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER_ID });
+    return !!(raw && raw.metadata);
+  } catch {
+    return false;
+  }
+}
+
+test('Express server serves /latest-threats.md and /latest-war-room.md on ephemeral port', async (t) => {
+  if (!hasLiveSave()) {
+    t.skip('Skipping HTTP smoke test: no live save available');
+    return;
+  }
+
   const server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;

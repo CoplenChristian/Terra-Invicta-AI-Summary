@@ -466,6 +466,27 @@ function buildWeaponStats(family) {
       // 3.2 GW sustained output it can hold for 28 seconds.
       magazine: stat(weapon.magazine),
 
+      // --- delivery: does the round arrive? -------------------------------
+      // Phase 2 prices a warhead and never asks whether it gets there. These
+      // five fields are what `shared/munitionDelivery.mjs` needs to model the
+      // flight of a point-defence-TARGETABLE round -- the 57 missiles, the 70
+      // magnetic guns and 4 of the 8 guns. Beams carry none of them and have
+      // no delivery axis at all, which is a fact about a beam rather than a
+      // gap in the bake.
+      //
+      // The PIN INPUTS are deliberately NOT baked. `Rocket Thrust`, `EV_kps`,
+      // `ammoMass_kg`, `fuelMass_kg` and `systemMass_kg` exist only to prove
+      // that `acceleration_g` is thrust at LAUNCH mass and that `deltaV_kps`
+      // is the round's own budget -- both reproduce the templates' own figures
+      // for 57 of 57 missiles. That proof belongs in a test against the
+      // installed templates, exactly as the 515-design mount pin does, not in
+      // a payload every request has to carry.
+      accelerationG: stat(weapon.acceleration_g),
+      thrustRampS: stat(weapon.thrustRamp_s),
+      rotationDegPerS: stat(weapon.rotation_degps),
+      turnRampS: stat(weapon.turnRamp_s),
+      maneuverAngleDeg: stat(weapon.maneuver_angle),
+
       // --- cost and reach ------------------------------------------------
       massTons: stat(weapon.baseWeaponMass_tons),
       targetingRangeKm: stat(weapon.targetingRange_km),
