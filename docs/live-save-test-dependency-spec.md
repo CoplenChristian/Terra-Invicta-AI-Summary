@@ -44,6 +44,38 @@ Two patterns already exist in the repo for this:
 - **`tests/fixtures/propulsionSample.json`** (60 KB) — real data extracted from a save into JSON and committed. The propulsion ΔV guarantee test uses it, so it validates the model without reading a save at all.
 - **`tests/fixtures/syntheticSave.js`** (10 KB) — a constructed snapshot with controlled contents.
 
+## The distinction that resolves the fixture-size question
+
+A first implementation attempt estimated a committed omniscient fixture at **4–5 MB** and stalled on whether that was acceptable. It is not necessary. The estimate assumed the fixture must carry a whole snapshot; it only has to carry **what the assertion reads**.
+
+**Property assertions and value assertions have different needs, and must not share a fixture strategy:**
+
+| assertion kind | example | fixture |
+| :-- | :-- | :-- |
+| **value** — "output is exactly this" | byte-identical `/latest-snapshot.md` | **real data, trimmed**. Synthetic here re-creates the passes-by-construction trap. |
+| **property** — "output satisfies a bound" | war room ≤ 30 KB, threats < 10 KB, section headers survive | **synthetic volume is correct**. The assertion is a bound, not a value, so cloned or generated fleets are legitimate — the growth ladder already does exactly this. |
+
+### Measured: the value-assertion fixture is small
+
+Deriving it mechanically — drop each top-level key, then each per-entry field, keeping whatever leaves `generateCompactSnapshot` output **byte-identical**:
+
+```
+player      3,177 KB  ->  48 KB
+omniscient  6,612 KB  ->  62 KB      both byte-identical
+
+kept: mode, observerFactionId, metadata, factions, councilors, fleets,
+      globalResearch, alienHateEconomics, servantTargets, alienIntelligenceStage
+
+  factions        10 of 36 fields
+  councilors       0 of 35 fields   (player: empty objects suffice)
+  fleets           4 of 28 fields
+  servantTargets   6 of 19 fields
+```
+
+48 and 62 KB sit alongside `propulsionSample.json` at 60 KB. **Commit trimmed real fixtures; the tradeoff the first attempt was weighing does not exist.**
+
+The trimming is mechanical and worth automating as a small script, so the fixture can be re-derived deliberately when the renderer legitimately changes — which is different from regenerating it to make a red test go green.
+
 ## What to do
 
 **1. Classify all 17 call sites** as *exact-value* or *smoke*.
