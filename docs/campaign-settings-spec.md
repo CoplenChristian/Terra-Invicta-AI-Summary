@@ -84,7 +84,7 @@ Each of these plausibly consumes a rate. **Check each; do not assume a uniform f
 | multiplier | plausibly affects |
 | :-- | :-- |
 | `researchSpeedMultiplier` | **CHECKED — unaffected.** Costs are template costs and income is already post-multiplier. No adjustment; see the section above |
-| `miningProductivityMultiplier` | mining and economic value, tonnes/month, mining expansion board |
+| `miningProductivityMultiplier` | **OPEN.** Mining and economic value, tonnes/month, mining expansion board. One measurement attempted and discarded — see below |
 | `nationalIPMultiplier` | nation investment-point projections, Advise valuations |
 | `alienProgressionSpeed` | alien threat timelines, hate trajectory, any "months until" estimate |
 | `controlPointMaintenanceFreebieBonus` | control-point and mission-control budgets (note the AI variant is 0 — this is a player-only bonus of 150) |
@@ -92,6 +92,36 @@ Each of these plausibly consumes a rate. **Check each; do not assume a uniform f
 
 A surface that turns out **not** to consume the rate should be recorded as checked and
 unaffected, so the next reader does not re-derive it.
+
+### Mining — one approach tried and discarded, do not repeat it
+
+`siteMonthlyOutput` (`shared/intel/common.mjs:122`) reads per-resource rates straight off
+the site and applies only `rateMultiplier`, which is a **daily-to-monthly unit conversion**
+(×30 unless the unit already says "month"), not a difficulty factor. So the rates are
+save-measured, as research revenue was — which made comparing our computed total against
+the faction's observed `monthlyIncome` look like the same decisive test.
+
+It is not. Attempted and discarded:
+
+```
+resource     our sum    faction monthlyIncome    ratio
+water         1229.4            703.56           0.572
+volatiles      931.1            895.69           0.962
+metals         411.4           1161.26           2.823
+nobles          91.0            291.56           3.204
+fissiles        10.9              6.78           0.622
+```
+
+No consistent factor, because the comparison is confounded three ways: the `mining`
+endpoint returns all **409 prospected sites**, not the observer's built mines; mining sites
+carry no `factionId`, so an owner filter silently matches everything; and the rate unit is
+**per day** while `monthlyIncome` is per month. Any of the three alone invalidates it.
+
+A cleaner test would compare a **single built mine's** save-reported rate against the base
+rate for that body in `TIMiningProfileTemplate.json`. Note also that
+`miningProductivityMultiplier` has no `...AI` counterpart — unlike
+`controlPointMaintenanceFreebieBonus` — which suggests it is global rather than
+player-only, so cross-faction comparison will not discriminate either.
 
 ## What to build
 
