@@ -42,6 +42,26 @@
  * slots is read from the snapshot rather than assumed to be three, the category
  * of each slot comes from the data, and a turn-1 observer with no pips assigned
  * anywhere reports exactly that rather than an empty section.
+ *
+ * DO NOT APPLY `researchSpeedMultiplier` HERE OR TO ANY RESEARCH COST. Checked
+ * by measurement on 2026-08-21 (docs/campaign-settings-spec.md; indexed in
+ * shared/campaignSettings.mjs as CAMPAIGN_SETTING_VERDICTS), on a campaign
+ * running research at 200%. Two independent findings:
+ *
+ *   - It acts on OUTPUT, not on cost. Fleet Logistics sat at
+ *     accumulatedResearch 44,780 against a template researchCost of 45,000 and
+ *     was STILL IN PROGRESS. A halved effective cost of 22,500 would have
+ *     completed it long before 44,780, so effective cost equals template cost
+ *     and every remaining-cost figure the advisor prints is already right.
+ *   - Income is already post-multiplier. `monthsAtCurrentIncome` derives from
+ *     `cachedYearlyRevenue.Research`, and the reproduction recorded in
+ *     ALLOCATION_MODEL below compared predicted against observed delivery at
+ *     1.147x and 0.993x over two intervals. Pre-multiplier revenue against real
+ *     200% delivery would have shown ~2.0.
+ *
+ * The player's report that techs finish twice as fast is accurate and comes
+ * from doubled output, which the save's own revenue figure already carries.
+ * Multiplying here would introduce a 2x error into a correct figure.
  */
 
 import { asArray, round, sameId, toFiniteNumber } from './util.mjs';

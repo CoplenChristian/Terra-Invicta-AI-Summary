@@ -574,7 +574,13 @@ export function buildStrategicSnapshot(raw, {
       saveFilename: raw.metadata?.fileName || null,
       saveLastModified: raw.metadata?.lastModified || null,
       campaignDate,
-      difficulty: raw.metadata?.difficulty || null
+      difficulty: raw.metadata?.difficulty || null,
+      // Carried beside the raw word, never instead of it: a history row that
+      // records "Normal" for a campaign running four rates at 200% is the same
+      // record as a stock campaign's, and nothing downstream could tell them
+      // apart. Rows written before the settings were baked have no label and
+      // read back as the bare difficulty, exactly as before.
+      difficultyLabel: raw.metadata?.difficultyLabel || raw.metadata?.difficulty || null
     },
     summary: {
       observerFactionId: Number(observerFactionId),

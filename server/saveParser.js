@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const { resolveConfig } = require('./config');
+const { buildCampaignSettings } = require('../shared/campaignSettings.mjs');
 
 class SaveParser {
   constructor(configOrPath = null) {
@@ -115,6 +116,13 @@ class SaveParser {
         ? metaObj.difficulty
         : null,
       difficultyAvailable: typeof metaObj.difficulty === 'string' && metaObj.difficulty.trim() !== '',
+      // The custom-difficulty block sitting beside `difficulty` in the same
+      // state. Baking only the label let a campaign running four rates at 200%
+      // present itself as plain 'Normal'. The values arrive as strings with a
+      // percent sign ("200%") or as bare numerals ("150"), so the parsing lives
+      // in shared/campaignSettings.mjs where the `Number("200%") === NaN` trap
+      // is handled once -- an unreadable setting is null, never a confident 0.
+      campaignSettings: buildCampaignSettings(metaObj),
       // Campaign start year drives elapsed-years gating. An invented 2022
       // silently shifts every elapsed-time calculation.
       campaignStartYear: Number.isFinite(Number(metaObj.campaignStartYear)) && metaObj.campaignStartYear !== null && metaObj.campaignStartYear !== ''

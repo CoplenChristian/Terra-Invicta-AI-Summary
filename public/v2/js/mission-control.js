@@ -1159,6 +1159,25 @@ function renderTopHUD() {
   if (hudDate) hudDate.title = campaignDate || 'UNAVAILABLE';
   document.getElementById('hudSave').textContent = meta.fileName || meta.activeSaveFileName || 'Latest';
 
+  // The rules pill. A campaign with customDifficulty set must never read as its
+  // stock difficulty name -- every figure on this page is produced under those
+  // multipliers, and a reader comparing them against a stock reference would
+  // draw the wrong conclusion. A save that states no difficulty says so rather
+  // than falling back to an invented 'Normal'.
+  const hudDifficulty = document.getElementById('hudDifficulty');
+  if (hudDifficulty) {
+    const settings = meta.campaignSettings || null;
+    const isCustom = settings?.customDifficulty === true;
+    const shortLabel = isCustom
+      ? `${meta.difficulty || 'Unknown'} + CUSTOM`
+      : (meta.difficulty || 'UNAVAILABLE');
+    hudDifficulty.textContent = shortLabel;
+    hudDifficulty.title = meta.difficultyLabel
+      || meta.difficulty
+      || 'This save states no difficulty.';
+    hudDifficulty.closest('.init-hud-pill')?.classList.toggle('is-custom', isCustom);
+  }
+
   const brandName = document.getElementById('initBrandFactionName');
   if (brandName) brandName.textContent = brandFactionLabel(resolvedObserverName);
   updateFactionLogoSlot(document.getElementById('initFactionLogo'), observerFaction, 'faction-logo faction-logo--title');

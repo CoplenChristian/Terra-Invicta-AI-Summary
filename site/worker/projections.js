@@ -44,7 +44,7 @@ import {
 } from '../shared/requestValidation.mjs';
 import { DEFAULT_OBSERVER_FACTION_ID } from '../shared/constants.mjs';
 import { jsonResponse } from './http.js';
-import { resourceEnvelope, resultIdentity } from './envelopes.js';
+import { difficultyFields, resourceEnvelope, resultIdentity } from './envelopes.js';
 import { positiveIntegerOr } from './runtimeDefaults.js';
 
 export const productionPlanPaths = new Set(['/api/intel/production-plan', '/api/production-plan']);
@@ -199,7 +199,7 @@ export const buildTechIntelResource = (result, resource, snapshot, url) => {
     success: true,
     source: 'supabase',
     ...identity,
-    difficulty: row.difficulty,
+    ...difficultyFields(row, snapshot),
     observerFaction: { id: observerId, name: row.observer_faction_name || null },
     intelMode: mode,
     visibility: row.visibility || mode,

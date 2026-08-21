@@ -30,6 +30,21 @@ function normalizeGDPInBillions(rawGdp) {
  * Wiki formula:
  *   base IP = (GDP in billions)^0.35 * (1 - max(unrest - 2, 0) / 10)
  *             - 0.5 * navies - 0.5 * idle_armies - 1.0 * other_armies
+ *
+ * DO NOT APPLY `nationalIPMultiplier` HERE. This was the one genuine candidate
+ * among the custom-difficulty multipliers, because unlike the rest of the
+ * dashboard this DERIVES a value rather than reading a measured one, and a
+ * derived value cannot inherit a multiplier the save applies. It was therefore
+ * tested directly against the save's own `baseInvestmentPoints_month` on
+ * 2026-08-21 (docs/campaign-settings-spec.md; indexed in
+ * shared/campaignSettings.mjs as CAMPAIGN_SETTING_VERDICTS), on a campaign
+ * running national IP at 200%:
+ *
+ *   across 295 nations, median actual/computed = 1.000
+ *   United Malay Nation 25.58 / 25.58, Brazil 19.08 / 19.08, Mexico 17.24 / 17.24
+ *
+ * The formula already produces the game's real IP. Multiplying here would
+ * double a figure that currently matches the save exactly.
  */
 function computeBaseIP(nation = {}) {
   const rawGdp = nation.gdp ?? nation.GDP;
