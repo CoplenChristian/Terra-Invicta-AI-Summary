@@ -132,6 +132,67 @@ This connects to the Hold Ground directive, which already computes the dominant 
 
 ---
 
+## 3a. Propulsion — build this first
+
+The highest-value slice, and the only one whose physics is **validated against the game's own output**.
+
+### The model, verified exact
+
+```
+ΔV            = EV_kps × ln(wet_mass / dry_mass)
+cruise accel  = thrust_N / wet_mass
+combat accel  = thrust_N × drive.thrustCap / wet_mass
+```
+
+Checked against `currentMaxDeltaVKps` for every observer ship across multiple designs and drives — **ratio 1.000, exact, no fudge factor**. `cruiseAccelerationMps2` likewise reproduces exactly. The combat/cruise ratio resolves to `drive.thrustCap` (verified: `thrustCap 9` designs show ratio 9.0000, `thrustCap 24` show 24.0000).
+
+Inputs: `fleets[].ships[]` gives `currentMassKg` and `propellantTons`; `shipDesigns[]` gives `driveName` and `hullName`; `TIDriveTemplate.json` gives `EV_kps`, `thrust_N`, `thrustCap`, `propellant`.
+
+Because the model reproduces measured values exactly, **what-if refits onto drives the observer has never built are trustworthy**.
+
+### The finding that dictates the design
+
+Ranking drives by EV alone produces actively harmful advice. Refitting a real ship (Lena, Huang He Block 2, wet 5,936 t / dry 4,436 t):
+
+| drive | ΔV kps | cruise | combat accel |
+| :-- | --: | --: | --: |
+| **BurnerDrivex6** (in service) | 20.1 | 0.1092 | **2.620** |
+| PulsedPlasmoidDrivex6 | 124 (6.2×) | 0.0022 | **0.002** — 1,300× worse |
+| HeliconDrivex6 | 91 (4.5×) | 0.0202 | 0.404 — 6.5× worse |
+| FissionFragDrivex6 | 91 | 0.0047 | 0.009 |
+| VASIMRx6 | 43 | 0.0010 | 0.061 |
+
+`Project_PulsedPlasmoidDrive` costs **500 research with every prerequisite already met** and offers 6.2× the ΔV — and would turn a manoeuvring warship into a barge. A naive "best EV, cheapest, already unlocked" recommender surfaces it first.
+
+**So the advisor must never rank drives on a single scalar.** ΔV and thrust are in direct tension, and which wins depends entirely on the hull's role:
+
+- **Warship** — combat acceleration decides whether you can close or disengage. Rank by `thrust × thrustCap / mass`, with ΔV as a floor constraint (enough to reach the theatre).
+- **Transport / prospector / explorer** — ΔV is reach. Rank by ΔV, with acceleration as a floor (enough to make transfer windows).
+
+Role should be inferred from the design's weapon loadout and hull, and **stated**, because it determines the entire ranking.
+
+### The alien benchmark
+
+Alien fleets show `lowestDeltaVKps` 691 against the observer's 14–20. The cause is visible in the templates: **`AdvancedAlienFusionTorch` — EV 1,600 *and* thrust 4.4M–26.3M, `thrustCap` 50.** They are not trading reach for thrust; they have both.
+
+The human Pareto frontier on (EV, thrust) is short:
+
+| drive | EV | thrust_N | cap | gated behind |
+| :-- | --: | --: | --: | :-- |
+| PionTorchx6 | 14,720 | 60,000,000 | 60 | `Project_AntimatterBeamCoreTorch` |
+| NeutronFluxTorchx6 | 1,700 | 78,000,000 | 2 | `Project_NeutronFluxTorch` |
+| DianaSuperheavyRocketx6 | 3.73 | 120,960,000 | 1 | `Project_SuperheavyRockets` |
+
+Everything else is dominated. **No reachable drive closes the alien gap** — the answer is the torch line, and the advisor should say that plainly rather than offering a 500-cost project that looks like progress. This is the concrete research answer to the Hold Ground posture, which currently reports ΔV as the dominant capability deficit.
+
+### Output
+
+Per design in service: current ΔV / cruise / combat, the same three under each candidate refit, the role-appropriate ranking, and the research cost and prerequisite gap for each. Per candidate drive: whether it is unlocked, reachable (all prereqs met), or how many steps away.
+
+Verified reachability on the current save — `PulsedPlasmoid`, `Helicon`, `FissionFrag`, `VASIMR`, `Lorentz`, `PlasmaWave` all have zero unmet prerequisites; `GridDrive`, `AdvancedMinimagOrion` and the microfission line are one prerequisite away.
+
+---
+
 ## 4. Economic valuation
 
 Each context-scoped effect maps to a live quantity in the snapshot:
