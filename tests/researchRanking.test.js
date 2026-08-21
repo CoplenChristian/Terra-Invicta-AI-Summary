@@ -1502,3 +1502,81 @@ test('alsoUnlocks > 1 is rendered as a visible badge, and <= 1 is not badged', (
   assert.match(html, /Unlocks 4 items across this project \(4 missile\)/, 'tooltip includes family breakdown');
 });
 
+test('research-ranking generates drive chains ranked by whole-chain payoff per point', () => {
+  const snapshotLoader = require('../server/snapshotLoader');
+  const liveSnapshot = snapshotLoader.loadFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const result = project(liveSnapshot, { mode: 'player', observerId: 4712, detail: 'full' });
+
+  assert.ok(result.military.driveChainsCount > 0, 'Must produce drive chain candidates');
+  assert.ok(Array.isArray(result.military.driveChains.items), 'driveChains items must be an array');
+
+  const topChain = result.military.driveChains.items[0];
+  assert.ok(topChain.valuePerResearchPoint > 0, 'Top drive chain must have positive payoff per research point');
+  assert.ok(topChain.chain.stepsCount >= 1, 'Chain must report stepsCount');
+  assert.ok(topChain.chain.totalRemainingCost > 0, 'Chain must report totalRemainingCost');
+  assert.ok(topChain.chain.immediateNextStep.displayName, 'Chain must report immediateNextStep displayName');
+  assert.ok(topChain.chain.immediateNextStep.cost !== undefined, 'Chain must report immediateNextStep cost');
+});
+
+test('research-ranking produces capability verdicts for uncompared candidates', () => {
+  const snapshotLoader = require('../server/snapshotLoader');
+  const liveSnapshot = snapshotLoader.loadFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const result = project(liveSnapshot, { mode: 'player', observerId: 4712, detail: 'full' });
+
+  assert.ok(result.military.capabilitiesCount > 0, 'Must produce capabilities');
+  const caps = result.military.capabilities.items;
+  assert.ok(caps.length > 0, 'Must have capability items');
+
+  for (const cap of caps) {
+    assert.strictEqual(cap.isFirstInClass, true);
+    assert.strictEqual(cap.verdict, 'first-in-class');
+    assert.strictEqual(cap.verdictLabel, 'First capability of its kind — no baseline to compare against');
+    assert.strictEqual(cap.improvementMultiple, null);
+  }
+});
+
+test('research-advisor frontend renders chain steps and capability tags', () => {
+  const payload = {
+    resource: 'research-ranking',
+    military: {
+      rankedCount: 2, candidatesConsidered: 2, unrankable: { counts: {} },
+      groups: [{
+        state: 'prereq-blocked', label: 'Prerequisites not met', aspirational: true, count: 2,
+        items: [
+          {
+            id: 'chain-item', displayName: 'Battlestations',
+            gateProjectId: 'Project_Battlestations', gateProjectName: 'Battlestations',
+            axisLabel: 'defense output', improvementMultiple: 4.5, valuePerResearchPoint: 0.00045,
+            remainingResearchCost: 5000, monthsAtCurrentIncome: 5,
+            availabilityState: 'prereq-blocked', context: null,
+            chain: {
+              stepsCount: 2,
+              totalRemainingCost: 7844,
+              immediateNextStep: { id: 'Project_ColonyCore', displayName: 'Colony Core', cost: 2844, status: 'researching' }
+            }
+          },
+          {
+            id: 'cap-item', displayName: 'Installation Laser',
+            gateProjectId: 'Project_InstLaser', gateProjectName: 'Installation Laser',
+            axisLabel: null, improvementMultiple: null, valuePerResearchPoint: null,
+            remainingResearchCost: 3000, monthsAtCurrentIncome: 3,
+            isFirstInClass: true, verdict: 'first-in-class',
+            availabilityState: 'prereq-blocked', context: { fieldedInClass: 0 }
+          }
+        ]
+      }]
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  };
+
+  const html = renderToString(payload);
+  assertNoPlaceholderText(html, 'chain payload');
+  const text = visibleText(html);
+
+  assert.ok(text.includes('2 steps'), 'Renders "2 steps" badge for multi-step chain');
+  assert.ok(text.includes('new'), 'Renders "new" tag for first-in-class capability');
+  assert.ok(text.includes('First of kind'), 'Renders "First of kind" for capability metric');
+  assert.match(html, /Prerequisite chain: 2 steps, 7,844 pts total \(Immediate next: Colony Core — 2,844 pts\)/, 'tooltip contains chain details');
+});
+
+

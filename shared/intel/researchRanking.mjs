@@ -59,6 +59,7 @@ import {
   tallyUnrankable
 } from '../researchRanking.mjs';
 import { buildResearchSlotAllocation } from '../researchSlots.mjs';
+import { buildTechPath, observerGraph } from '../techGraph.mjs';
 import { propulsionResource } from './propulsion.mjs';
 import { militaryValueResource } from './militaryValue.mjs';
 import { economicValueResource } from './economicValue.mjs';
@@ -96,9 +97,10 @@ function militaryRow({
   monthsAtCurrentIncome, unlockChance, clearsFloor, floorReason, alsoUnlocks, context,
   ruleGroupSize, clearsDeliveryFloor, deliveryFloorReason
 }) {
-  const scored = militaryValuePerResearchPoint(multiple, remainingResearchCost, availabilityState);
+  const scored = militaryValuePerResearchPoint(multiple, remainingResearchCost, availabilityState, context);
   const isZeroCost = scored.state === RANK_STATES.noResearchRequired && scored.gainMultiple !== null && scored.gainMultiple > 0;
   const effectiveState = isZeroCost ? 'buildable-now' : (availabilityState || AVAILABILITY_STATES.unknown);
+  const isFirstInClass = (multiple === null) && (context?.fieldedInClass === 0 || context?.fieldedInRule === 0 || (typeof context?.noBaselineNote === 'string' && context.noBaselineNote.length > 0));
   return {
     id,
     track: 'military',
@@ -122,6 +124,9 @@ function militaryRow({
     gainMultiple: scored.gainMultiple,
     isZeroCost,
     isBuildableNow: isZeroCost,
+    isFirstInClass,
+    verdict: isFirstInClass ? 'first-in-class' : null,
+    verdictLabel: isFirstInClass ? 'First capability of its kind — no baseline to compare against' : null,
     rankState: scored.state,
     rankReason: scored.reason,
     availabilityState: effectiveState,
@@ -591,6 +596,9 @@ export const researchRankingResource = (snapshot, {
     return row;
   }
 
+  const graph = observerGraph(snapshot, mode, observerId);
+  const byId = graph.byId;
+
   // --- military track ------------------------------------------------------
   // Deficit relevance is stamped BEFORE the dedupe, not after: the dedupe keeps
   // the highest-scoring row per gate project and OR-s the flag across the ones
@@ -606,14 +614,41 @@ export const researchRankingResource = (snapshot, {
     // Section 8 requires the prerequisite chain beside a recommendation. It comes
     // from the same resolver phases 1-3 use, so a blocked row names what blocks
     // it instead of only saying that something does.
-    if (row.gateProjectId && row.availabilityState === AVAILABILITY_STATES.prereqBlocked) {
+    if (row.gateProjectId) {
       const resolved = resolver.resolve(row.gateProjectId);
-      row.missingPrerequisites = asArray(resolved.missingPrerequisites)
-        .map(entry => nameOr(entry.displayName, entry.id))
-        .filter(Boolean);
+      if (row.availabilityState === AVAILABILITY_STATES.prereqBlocked) {
+        row.missingPrerequisites = asArray(resolved.missingPrerequisites)
+          .map(entry => nameOr(entry.displayName, entry.id))
+          .filter(Boolean);
+      }
       if (!row.gateProjectName) row.gateProjectName = nameOr(resolved.displayName, null);
-    } else if (row.gateProjectId && !row.gateProjectName) {
-      row.gateProjectName = nameOr(resolver.resolve(row.gateProjectId).displayName, null);
+
+      const path = buildTechPath(graph, byId, [row.gateProjectId]);
+      if (path && path.remainingPath && path.remainingPath.length > 0) {
+        const targetNode = byId.get(row.gateProjectId);
+        const immediateNextNode = path.remainingPath[path.remainingPath.length - 1];
+        row.chain = {
+          destinationId: row.gateProjectId,
+          destinationDisplayName: targetNode?.displayName || row.gateProjectName || row.gateProjectId,
+          stepsCount: path.remainingPath.length,
+          totalRemainingCost: path.totalRemainingResearchCost,
+          researchCostComplete: path.researchCostComplete,
+          uncostedNodes: path.uncostedNodes,
+          routesEvaluated: path.routesEvaluated,
+          immediateNextStep: {
+            id: immediateNextNode.id,
+            displayName: immediateNextNode.displayName,
+            cost: immediateNextNode.cost,
+            status: immediateNextNode.status
+          },
+          steps: path.remainingPath.map(p => ({
+            id: p.id,
+            displayName: p.displayName,
+            cost: p.cost,
+            status: p.status
+          }))
+        };
+      }
     }
     return row;
   });
@@ -624,6 +659,10 @@ export const researchRankingResource = (snapshot, {
     .filter(isZeroCostRow)
     .map(attachSlotAction)
     .sort(compareMilitaryRows);
+
+  const militaryCapabilities = militaryAll
+    .filter(row => row.isFirstInClass === true)
+    .map(attachSlotAction);
 
   const militaryRanked = militaryAll
     .filter(row => !isZeroCostRow(row) && row.rankState === RANK_STATES.ranked)
@@ -637,6 +676,59 @@ export const researchRankingResource = (snapshot, {
       itemsShown: Math.min(groupLimit, group.items.length),
       items: wantsFull ? group.items : group.items.slice(0, groupLimit)
     }));
+
+  const driveChains = [];
+  const referenceDesigns = propulsion?.items || [];
+  for (const design of referenceDesigns) {
+    const role = design?.role?.role || 'warship';
+    for (const refit of asArray(design.refits)) {
+      if (refit.isFittedDrive || !refit.requiredProjectName) continue;
+      const path = buildTechPath(graph, byId, [refit.requiredProjectName]);
+      if (!path.researchCostComplete || !path.totalRemainingResearchCost || path.totalRemainingResearchCost <= 0) continue;
+      const rankMetricMultiple = refit.vsFittedDrive?.rankMetricMultiple;
+      if (rankMetricMultiple && rankMetricMultiple > 1) {
+        const immediateNextNode = path.remainingPath[path.remainingPath.length - 1];
+        driveChains.push({
+          id: `drive-chain:${role}:${refit.driveId}`,
+          driveId: refit.driveId,
+          displayName: refit.displayName,
+          role,
+          referenceDesign: design.displayName,
+          referenceHulls: design.shipCount,
+          deltaVKps: refit.deltaVKps,
+          combatAccelerationMps2: refit.combatAccelerationMps2,
+          cruiseAccelerationMps2: refit.cruiseAccelerationMps2,
+          rankMetricMultiple,
+          axisLabel: role === 'warship' ? 'combat acceleration' : 'delta-V',
+          dryMassCaveat: refit.dryMassCaveat,
+          chain: {
+            destinationId: refit.requiredProjectName,
+            destinationDisplayName: byId.get(refit.requiredProjectName)?.displayName || refit.requiredProjectName,
+            stepsCount: path.remainingPath.length,
+            totalRemainingCost: path.totalRemainingResearchCost,
+            researchCostComplete: path.researchCostComplete,
+            uncostedNodes: path.uncostedNodes,
+            routesEvaluated: path.routesEvaluated,
+            immediateNextStep: {
+              id: immediateNextNode.id,
+              displayName: immediateNextNode.displayName,
+              cost: immediateNextNode.cost,
+              status: immediateNextNode.status
+            },
+            steps: path.remainingPath.map(p => ({
+              id: p.id,
+              displayName: p.displayName,
+              cost: p.cost,
+              status: p.status
+            }))
+          },
+          valuePerResearchPoint: round((rankMetricMultiple - 1) / path.totalRemainingResearchCost, 10),
+          gainMultiple: round(rankMetricMultiple - 1, 6)
+        });
+      }
+    }
+  }
+  driveChains.sort((a, b) => (b.valuePerResearchPoint ?? 0) - (a.valuePerResearchPoint ?? 0));
 
   // --- economic track ------------------------------------------------------
   const directions = directionTable(economic);
@@ -810,6 +902,20 @@ export const researchRankingResource = (snapshot, {
         count: militaryProcurement.length,
         itemsShown: Math.min(groupLimit, militaryProcurement.length),
         items: wantsFull ? militaryProcurement : militaryProcurement.slice(0, groupLimit)
+      },
+      capabilitiesCount: militaryCapabilities.length,
+      capabilities: militaryCapabilities.length === 0 ? null : {
+        label: 'New capabilities (no fielded baseline to compare against)',
+        count: militaryCapabilities.length,
+        itemsShown: Math.min(groupLimit, militaryCapabilities.length),
+        items: wantsFull ? militaryCapabilities : militaryCapabilities.slice(0, groupLimit)
+      },
+      driveChainsCount: driveChains.length,
+      driveChains: driveChains.length === 0 ? null : {
+        label: 'Drive chains ranked by payoff per point of remaining chain',
+        count: driveChains.length,
+        itemsShown: Math.min(groupLimit, driveChains.length),
+        items: wantsFull ? driveChains : driveChains.slice(0, groupLimit)
       },
       groups: militaryGroups,
       actionableGroups: militaryGroups.filter(g => ACTIONABLE_GROUPS.includes(g.state)),

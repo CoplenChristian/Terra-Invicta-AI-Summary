@@ -252,23 +252,36 @@
       notes.push(`<span class="ra-tag" title="${attr(unlockTitle)}">${int(count)} items</span>`);
     }
 
+    if (row.chain && row.chain.stepsCount > 1) {
+      const chainTitle = `Prerequisite chain: ${int(row.chain.stepsCount)} steps, ${int(row.chain.totalRemainingCost)} pts total`
+        + (row.chain.immediateNextStep ? ` (Immediate next: ${row.chain.immediateNextStep.displayName} — ${int(row.chain.immediateNextStep.cost)} pts)` : '');
+      notes.push(`<span class="ra-tag ra-tag--chain" title="${attr(chainTitle)}">${int(row.chain.stepsCount)} steps</span>`);
+    }
+
+    if (row.isFirstInClass) {
+      notes.push('<span class="ra-tag ra-tag--newcap">new</span>');
+    }
+
     const meta = [
-      `${int(row.remainingResearchCost)} pts`,
+      `${int(row.chain?.totalRemainingCost || row.remainingResearchCost)} pts`,
       months(row.monthsAtCurrentIncome)
     ];
     const roll = rollNote(row.unlockChance, row.availabilityState);
     if (roll) meta.push(roll);
 
     // The upstream axis rationale is a tooltip, never body text: see rule 2.
-    const axisTitle = row.axisBasis || row.axisLabel || '';
+    const axisTitle = row.axisBasis || row.axisLabel || (row.isFirstInClass ? 'First capability of its kind — no baseline to compare against' : '');
     const nameInfo = formatMilitaryName(row);
     const subHtml = nameInfo.sub ? ` <span class="ra-row__sub">${escapeHtml(nameInfo.sub)}</span>` : '';
+    const metricDisplay = row.isFirstInClass
+      ? 'First of kind'
+      : `${attr(mult(row.improvementMultiple))} ${escapeHtml(row.axisLabel || 'unnamed axis')}`;
 
     return `
       <li class="ra-row">
         <div class="ra-row__head">
           <span class="ra-row__name" title="${attr(nameInfo.tooltip)}">${escapeHtml(nameInfo.lead)}${subHtml}</span>
-          <span class="ra-row__metric" title="${attr(axisTitle)}">${attr(mult(row.improvementMultiple))} ${escapeHtml(row.axisLabel || 'unnamed axis')}</span>
+          <span class="ra-row__metric" title="${attr(axisTitle)}">${metricDisplay}</span>
         </div>
         <div class="ra-row__meta">${escapeHtml(meta.join(' · '))}${notes.length ? ` ${notes.join(' ')}` : ''}</div>
       </li>
@@ -618,8 +631,10 @@
         const rowLabel = nameInfo.sub ? `${nameInfo.lead} ${nameInfo.sub}` : nameInfo.lead;
         facts.push({
           label: `MILITARY RESEARCH · ${group.label} · ${rowLabel}`,
-          value: `${mult(row.improvementMultiple)} ${row.axisLabel || 'unnamed axis'} · `
-            + `${int(row.remainingResearchCost)} pts · ${months(row.monthsAtCurrentIncome)}`
+          value: `${row.isFirstInClass ? 'First of kind' : `${mult(row.improvementMultiple)} ${row.axisLabel || 'unnamed axis'}`} · `
+            + `${int(row.chain?.totalRemainingCost || row.remainingResearchCost)} pts · ${months(row.monthsAtCurrentIncome)}`
+            + (row.chain && row.chain.stepsCount > 1 ? ` · ${int(row.chain.stepsCount)} steps` : '')
+            + (row.chain?.immediateNextStep ? ` · Next: ${row.chain.immediateNextStep.displayName}` : '')
             + (row.closesDeficit ? ' · closes the measured gap' : '')
             + (row.clearsFloor === false ? ' · fails its floor' : '')
             + deliveryText
@@ -629,6 +644,26 @@
             + slotNote
         });
       }
+    }
+    for (const cap of ((payload.military && payload.military.capabilities) || {}).items || []) {
+      const chainInfo = cap.chain && cap.chain.stepsCount > 1
+        ? ` · ${int(cap.chain.stepsCount)} steps (Next: ${cap.chain.immediateNextStep?.displayName || '—'})`
+        : '';
+      facts.push({
+        label: `CAPABILITY · New · ${cap.displayName || cap.id}`,
+        value: `First capability of its kind — no baseline to compare against · `
+          + `${int(cap.chain?.totalRemainingCost || cap.remainingResearchCost)} pts · ${months(cap.monthsAtCurrentIncome)}`
+          + chainInfo
+      });
+    }
+    for (const chain of ((payload.military && payload.military.driveChains) || {}).items || []) {
+      facts.push({
+        label: `DRIVE CHAIN · ${chain.displayName} on ${chain.referenceDesign}`,
+        value: `${mult(chain.rankMetricMultiple)} ${chain.axisLabel} · `
+          + `ΔV ${dec(chain.deltaVKps, 1)} km/s · Accel ${dec(chain.combatAccelerationMps2, 2)} m/s² · `
+          + `${int(chain.chain.totalRemainingCost)} pts · ${int(chain.chain.stepsCount)} steps (Immediate: ${chain.chain.immediateNextStep?.displayName || '—'})`
+          + (chain.dryMassCaveat ? ` · ${chain.dryMassCaveat}` : '')
+      });
     }
     for (const item of ((payload.military && payload.military.deliveryDemoted) || {}).items || []) {
       facts.push({

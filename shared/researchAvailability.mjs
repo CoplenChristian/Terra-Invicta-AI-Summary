@@ -78,6 +78,42 @@ export const AVAILABILITY_STATES = Object.freeze({
 });
 
 /**
+ * Candidate prerequisite branches for a node.
+ * Under Terra Invicta game mechanics, altPrereq0 substitutes for prerequisites[0] only;
+ * prerequisites[1..n] (component/tier lineage) still strictly bind across all branches.
+ *
+ * @param {Object} node
+ * @returns {Array<Array<{id: string, type: string, isAlternate?: boolean}>>}
+ */
+export function getPrerequisiteBranches(node) {
+  const prereqs = asArray(node?.prerequisites);
+  const alternates = asArray(node?.alternatePrerequisites);
+
+  if (prereqs.length === 0) {
+    if (alternates.length > 0) {
+      return [alternates.map(alt => ({ ...alt, isAlternate: true }))];
+    }
+    return [[]];
+  }
+
+  const p0 = prereqs[0];
+  const rest = prereqs.slice(1);
+  const primaryBranch = [p0, ...rest];
+
+  if (alternates.length === 0) {
+    return [primaryBranch];
+  }
+
+  // Each alternate substitutes for prereqs[0] while keeping prereqs[1..n]
+  const alternateBranches = alternates.map(alt => [
+    { ...alt, isAlternate: true },
+    ...rest
+  ]);
+
+  return [primaryBranch, ...alternateBranches];
+}
+
+/**
  * A resolver over the observer's tech graph, built once and queried per project.
  *
  * Returns `{ available: false, reason }` when the snapshot carries no tech tree,
@@ -237,37 +273,44 @@ export function buildAvailabilityResolver(snapshot, mode, observerId) {
     // Not available. Now -- and only now -- prerequisites decide WHICH of the
     // two remaining states this is. Prerequisites are never used to decide
     // whether it is available; the list above already decided that.
-    const prereqs = asArray(node.prerequisites);
-    const missing = prereqs.filter(prereq => isSatisfied(prereq?.id) !== true).map(prereq => ({
-      id: prereq?.id ?? null,
-      type: prereq?.type ?? null,
-      displayName: byId.get(prereq?.id)?.displayName || prereq?.id || null,
-      known: byId.has(prereq?.id)
-    }));
+    const branches = getPrerequisiteBranches(node);
+    const mappedBranches = branches.map((branch, branchIndex) => {
+      const missing = branch.filter(prereq => isSatisfied(prereq?.id) !== true).map(prereq => ({
+        id: prereq?.id ?? null,
+        type: prereq?.type ?? null,
+        displayName: byId.get(prereq?.id)?.displayName || prereq?.id || null,
+        known: byId.has(prereq?.id)
+      }));
+      return {
+        branchIndex,
+        isAlternateBranch: branchIndex > 0,
+        missing
+      };
+    });
 
-    // altPrereq0 is a genuine alternative path, so a satisfied alternate clears
-    // the requirement even when the primary chain does not.
-    const alternates = asArray(node.alternatePrerequisites);
-    const alternateSatisfied = alternates.length > 0 &&
-      alternates.some(prereq => isSatisfied(prereq?.id) === true);
-
-    if (missing.length === 0 || alternateSatisfied) {
+    const clearBranch = mappedBranches.find(b => b.missing.length === 0);
+    if (clearBranch) {
       return {
         ...common,
         state: AVAILABILITY_STATES.prereqClearUnrolled,
         missingPrerequisites: [],
-        alternateSatisfied,
+        alternateSatisfied: clearBranch.isAlternateBranch,
         reason: chance
           ? `prerequisites are met but the project has not yet been offered; it rolls monthly from ${chance.initialPercent}% rising ${chance.deltaPercentPerMonth}%/month to a cap of ${chance.maxPercent}%${chance.certain ? '' : ' — a cap below 100% may never land in this campaign'}`
           : 'prerequisites are met but the project has not yet been offered, and this snapshot carries no unlock-chance data for it'
       };
     }
 
+    // Pick the branch closest to being satisfied (fewest missing prerequisites)
+    const sortedBranches = [...mappedBranches].sort((a, b) => a.missing.length - b.missing.length);
+    const closestBranch = sortedBranches[0];
+
     return {
       ...common,
       state: AVAILABILITY_STATES.prereqBlocked,
-      missingPrerequisites: missing,
-      reason: `blocked on ${missing.length} unmet prerequisite(s): ${missing.map(entry => entry.displayName || entry.id).join(', ')}`
+      missingPrerequisites: closestBranch.missing,
+      alternateSatisfied: false,
+      reason: `blocked on ${closestBranch.missing.length} unmet prerequisite(s): ${closestBranch.missing.map(entry => entry.displayName || entry.id).join(', ')}`
     };
   };
 

@@ -679,13 +679,9 @@ test('redaction: whole-payload scan verifies enemy obsolete lists are not leaked
 
   // Known enemy design IDs that only exist in other factions' obsoleteShipDesigns lists (no active ships in space)
   const unfieldedEnemyObsoleteDesigns = [
-    'EscapeCouncilShipTemplate485',
-    'EscapeCouncilShipTemplate495',
-    'EscapeCouncilShipTemplate496',
-    'EscapeCouncilShipTemplate309 Refit 1076',
-    'SubmitCouncilShipTemplate535 Refit 1483',
+    'SubmitCouncilShipTemplate102 Refit 1545',
+    'SubmitCouncilShipTemplate222 Refit 1547',
     'AppeaseCouncilShipTemplate130 Refit 1368',
-    'CooperateCouncilShipTemplate197',
     'Ship13',
     'Ship16'
   ];

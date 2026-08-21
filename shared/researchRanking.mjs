@@ -64,6 +64,7 @@ import { round, toFiniteNumber } from './util.mjs';
  */
 export const RANK_STATES = Object.freeze({
   ranked: 'ranked',
+  firstInClass: 'first-in-class',
   noImprovement: 'no-improvement',
   noResearchRequired: 'no-research-required',
   costUnmeasured: 'cost-unmeasured',
@@ -330,7 +331,7 @@ export const RANKING_FORMULAE = Object.freeze({
  * Returns a state, always, and a number only in the one state that has one.
  * `multiple` is phase 1's or phase 2's own figure and is never recomputed here.
  */
-export function militaryValuePerResearchPoint(multiple, remainingResearchCost, availabilityState) {
+export function militaryValuePerResearchPoint(multiple, remainingResearchCost, availabilityState, context = null) {
   const cost = toFiniteNumber(remainingResearchCost);
   const value = toFiniteNumber(multiple);
 
@@ -339,8 +340,10 @@ export function militaryValuePerResearchPoint(multiple, remainingResearchCost, a
       state: RANK_STATES.notComparable,
       perResearchPoint: null,
       gainMultiple: null,
-      reason: 'no comparison multiple: the observer fields nothing in this class, or this item does '
-        + 'not carry the stat the class ranks on. Not scored zero, which would rank it last and hide it.'
+      reason: (context?.fieldedInClass === 0 || context?.fieldedInRule === 0)
+        ? 'First capability of its kind — no baseline to compare against'
+        : 'no comparison multiple: the observer fields nothing in this class, or this item does '
+          + 'not carry the stat the class ranks on. Not scored zero, which would rank it last and hide it.'
     };
   }
 

@@ -253,3 +253,130 @@ test('a reader-supplied unavailable reason is surfaced verbatim', () => {
   assert.strictEqual(mismatch.omitted, true);
   assert.match(mismatch.omittedReason, /republish the campaign/);
 });
+
+templateTest('tech-path selects cheaper alternate prerequisite route and reports routes evaluated', () => {
+  const snapshotLoader = require('../server/snapshotLoader');
+  const liveSnapshot = snapshotLoader.loadFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const livePath = techIntel.buildPath(liveSnapshot, 'player', 4712, ['Project_Battlestations']);
+
+  assert.strictEqual(livePath.resource, 'tech-path');
+  assert.strictEqual(livePath.target.id, 'Project_Battlestations');
+
+  const remainingIds = livePath.remainingPath.map(p => p.id);
+  assert.ok(remainingIds.includes('Project_Battlestations'), 'Path must include Battlestations');
+  assert.ok(remainingIds.includes('Project_ColonyCore'), 'Path must choose cheaper alternate Colony Core');
+  assert.ok(!remainingIds.includes('Project_RingCore'), 'Path must not include more expensive Ring Core');
+
+  // Exact numerical assertion accounting for Colony Core's in-progress state (2844 remaining + 5000 Battlestations)
+  assert.strictEqual(livePath.totalRemainingResearchCost, 7844, 'Total remaining cost must be 7844 pts on live save');
+  assert.strictEqual(livePath.researchCostComplete, true);
+
+  // Check routesEvaluated reports the decision and route not taken
+  assert.ok(Array.isArray(livePath.routesEvaluated), 'routesEvaluated must be an array');
+  const bsRoute = livePath.routesEvaluated.find(r => r.nodeId === 'Project_Battlestations');
+  assert.ok(bsRoute, 'Must evaluate routes for Battlestations');
+  assert.strictEqual(bsRoute.chosenRoute.id, 'Project_ColonyCore');
+  assert.strictEqual(bsRoute.chosenRoute.type, 'alternate');
+  assert.strictEqual(bsRoute.alternativeRoute.id, 'Project_RingCore');
+  assert.strictEqual(bsRoute.alternativeRoute.type, 'primary');
+  assert.strictEqual(bsRoute.savings, 2156);
+
+  // Synthetic graph test where Colony Core (3000) and Ring Core (5000) are unstarted
+  const synthNodes = [
+    {
+      id: 'Project_Battlestations',
+      displayName: 'Battlestations',
+      type: 'faction_project',
+      category: 'MilitaryScience',
+      researchCost: 5000,
+      status: 'locked',
+      prerequisites: [{ id: 'Project_RingCore', type: 'faction_project' }],
+      alternatePrerequisites: [{ id: 'Project_ColonyCore', type: 'faction_project', alternative: true }],
+      effects: [],
+      unlocks: []
+    },
+    {
+      id: 'Project_RingCore',
+      displayName: 'Ring Core',
+      type: 'faction_project',
+      category: 'Habitats',
+      researchCost: 5000,
+      status: 'locked',
+      prerequisites: [],
+      alternatePrerequisites: [],
+      effects: [],
+      unlocks: []
+    },
+    {
+      id: 'Project_ColonyCore',
+      displayName: 'Colony Core',
+      type: 'faction_project',
+      category: 'Habitats',
+      researchCost: 3000,
+      status: 'available',
+      prerequisites: [],
+      alternatePrerequisites: [],
+      effects: [],
+      unlocks: []
+    }
+  ];
+  const synthById = new Map(synthNodes.map(n => [n.id, n]));
+  const synthGraph = { nodes: synthNodes, byId: synthById };
+  const synthPath = techGraph.buildTechPath(synthGraph, synthById, ['Project_Battlestations']);
+  assert.strictEqual(synthPath.totalRemainingResearchCost, 8000, 'Unstarted Battlestations chain must cost exactly 8000 pts');
+  assert.strictEqual(synthPath.remainingFactionResearchCost, 8000);
+  assert.strictEqual(synthPath.routesEvaluated[0].savings, 2000, 'Savings must be 2000 pts (5000 Ring Core - 3000 Colony Core)');
+});
+
+templateTest('discriminating availability test: Project_ResidentialModule is prereq-blocked on missing Quarters', () => {
+  const { buildAvailabilityResolver, AVAILABILITY_STATES } = require('../shared/researchAvailability.mjs');
+  const snapshotLoader = require('../server/snapshotLoader');
+  const liveSnapshot = snapshotLoader.loadFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const resolver = buildAvailabilityResolver(liveSnapshot, 'player', 4712);
+
+  const res = resolver.resolve('Project_ResidentialModule');
+  assert.strictEqual(
+    res.state,
+    AVAILABILITY_STATES.prereqBlocked,
+    'Residential Module must be prereq-blocked because Quarters is unresearched, proving altPrereq0 substitutes for prereqs[0] only'
+  );
+  assert.strictEqual(res.alternateSatisfied, false);
+  assert.ok(res.missingPrerequisites.some(p => p.id === 'Project_Quarters'), 'Must name missing Quarters prerequisite');
+});
+
+test('tech-path handles unresearchable sentinel -1 costs safely', () => {
+  const nodes = [
+    {
+      id: 'Project_AlienGatedWeapon',
+      displayName: 'Alien Gated Weapon',
+      type: 'faction_project',
+      category: 'Weapons',
+      researchCost: 10000,
+      status: 'locked',
+      prerequisites: [{ id: 'Project_AlienMasterTech', type: 'faction_project' }],
+      alternatePrerequisites: [],
+      effects: [],
+      unlocks: []
+    },
+    {
+      id: 'Project_AlienMasterTech',
+      displayName: 'Alien Master Tech',
+      type: 'faction_project',
+      category: 'Xenology',
+      researchCost: -1, // Unresearchable sentinel
+      status: 'locked',
+      prerequisites: [],
+      alternatePrerequisites: [],
+      effects: [],
+      unlocks: []
+    }
+  ];
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const graph = { nodes, byId };
+
+  const path = techGraph.buildTechPath(graph, byId, ['Project_AlienGatedWeapon']);
+  assert.strictEqual(path.totalRemainingResearchCost, null, 'Alien sentinel -1 cost must cause total cost to be null, never a partial sum');
+  assert.strictEqual(path.researchCostComplete, false, 'researchCostComplete must be false');
+  assert.ok(path.uncostedNodes.includes('Project_AlienMasterTech'), 'Uncosted nodes must list unresearchable project');
+});
+

@@ -452,42 +452,206 @@ export function resolveNode(graph, target) {
   return null;
 }
 
-// Breadth-first traversal collecting every prerequisite (transitively) that is
-// not yet completed. Returns an ordered array of remaining nodes. Nodes that are
-// still locked are included: they are part of the remaining research path even
-// though they are not yet selectable.
-export function collectRemainingPath(graph, byId, targetNode, includeSelf = true) {
-  const remaining = [];
-  const visited = new Set();
-  const queue = [targetNode];
-  while (queue.length) {
-    const current = queue.shift();
-    if (visited.has(current.id)) continue;
-    visited.add(current.id);
-    if (current.status === 'completed') continue;
-    remaining.push(current);
-    for (const prereq of current.prerequisites) {
-      const prereqNode = byId.get(prereq.id);
-      if (prereqNode && !visited.has(prereqNode.id)) queue.push(prereqNode);
+/**
+ * Candidate prerequisite branches for a node.
+ * Under Terra Invicta game mechanics, altPrereq0 substitutes for prerequisites[0] only;
+ * prerequisites[1..n] (component/tier lineage) still strictly bind across all branches.
+ *
+ * @param {Object} node
+ * @returns {Array<Array<{id: string, type: string, isAlternate?: boolean}>>}
+ */
+export function getPrerequisiteBranches(node) {
+  const prereqs = asArray(node?.prerequisites);
+  const alternates = asArray(node?.alternatePrerequisites);
+
+  if (prereqs.length === 0) {
+    if (alternates.length > 0) {
+      return [alternates.map(alt => ({ ...alt, isAlternate: true }))];
     }
-    // altPrereq0 is an alternative, not a strict requirement, so it is not
-    // traversed as a hard dependency here.
+    return [[]];
   }
-  if (!includeSelf) {
-    return remaining.filter(n => n.id !== targetNode.id);
+
+  const p0 = prereqs[0];
+  const rest = prereqs.slice(1);
+  const primaryBranch = [p0, ...rest];
+
+  if (alternates.length === 0) {
+    return [primaryBranch];
   }
-  return remaining;
+
+  // Each alternate substitutes for prereqs[0] while keeping prereqs[1..n]
+  const alternateBranches = alternates.map(alt => [
+    { ...alt, isAlternate: true },
+    ...rest
+  ]);
+
+  return [primaryBranch, ...alternateBranches];
 }
 
 // Computes remaining research cost for a node, accounting for current
-// progress. Returns null when the node's cost is unknown -- `|| 0` reported an
-// unresolved node as costing nothing more to finish, which understates every
-// path total that contains one.
+// progress. Returns null when the node's cost is unknown or unresearchable
+// (sentinel researchCost < 0) -- `|| 0` reported an unresolved or alien node as
+// costing nothing more to finish, which understates every path total that
+// contains one.
 function remainingCost(node) {
   const cost = numOrNull(node?.researchCost);
-  if (cost === null) return null;
+  if (cost === null || cost < 0) return null;
   const progress = numOrNull(node?.researchProgress) ?? 0;
   return Math.max(0, cost - progress);
+}
+
+/**
+ * Evaluates the optimal (cheapest satisfying) prerequisite path for targetNode,
+ * exploring alternative routes (altPrereq0) where they exist and reporting routes evaluated.
+ */
+export function collectOptimalRemainingPath(graph, byId, targetNode, includeSelf = true, activeStack = new Set()) {
+  if (!targetNode || targetNode.status === 'completed') {
+    return { path: [], routesEvaluated: [], cost: 0, costComplete: true };
+  }
+
+  if (activeStack.has(targetNode.id)) {
+    // Cycle detected, break recursion
+    return { path: [], routesEvaluated: [], cost: 0, costComplete: true };
+  }
+
+  const newStack = new Set(activeStack);
+  newStack.add(targetNode.id);
+
+  const branches = getPrerequisiteBranches(targetNode);
+  const evaluatedBranches = [];
+
+  for (let bIndex = 0; bIndex < branches.length; bIndex++) {
+    const branch = branches[bIndex];
+    const branchPath = [];
+    const branchRoutes = [];
+    const seenInBranch = new Set();
+    let branchCost = 0;
+    let branchCostComplete = true;
+
+    for (const prereqRef of branch) {
+      const prereqNode = byId.get(prereqRef.id);
+      if (!prereqNode || prereqNode.status === 'completed') continue;
+
+      const subResult = collectOptimalRemainingPath(graph, byId, prereqNode, true, newStack);
+      for (const item of subResult.path) {
+        if (!seenInBranch.has(item.id)) {
+          seenInBranch.add(item.id);
+          branchPath.push(item);
+          const c = remainingCost(byId.get(item.id));
+          if (c === null) {
+            branchCostComplete = false;
+          } else {
+            branchCost += c;
+          }
+        }
+      }
+      for (const r of subResult.routesEvaluated) {
+        if (!branchRoutes.some(existing => existing.nodeId === r.nodeId)) {
+          branchRoutes.push(r);
+        }
+      }
+      if (!subResult.costComplete) {
+        branchCostComplete = false;
+      }
+    }
+
+    evaluatedBranches.push({
+      branchIndex: bIndex,
+      isAlternate: bIndex > 0,
+      branchRef: branch[0] || null,
+      path: branchPath,
+      routesEvaluated: branchRoutes,
+      cost: branchCostComplete ? branchCost : null,
+      costComplete: branchCostComplete,
+      nodeCount: branchPath.length
+    });
+  }
+
+  // Pick optimal branch:
+  // 1. Prefer branches where cost is complete (researchable) over unresearchable/sentinel branches.
+  // 2. Among complete branches, pick lowest remaining cost.
+  // 3. If tied, pick fewer nodes.
+  evaluatedBranches.sort((a, b) => {
+    if (a.costComplete && !b.costComplete) return -1;
+    if (!a.costComplete && b.costComplete) return 1;
+    if (a.cost !== null && b.cost !== null) {
+      if (a.cost !== b.cost) return a.cost - b.cost;
+    }
+    return a.nodeCount - b.nodeCount;
+  });
+
+  const bestBranch = evaluatedBranches[0] || {
+    branchIndex: 0,
+    isAlternate: false,
+    path: [],
+    routesEvaluated: [],
+    cost: 0,
+    costComplete: true
+  };
+  const finalRoutes = [...bestBranch.routesEvaluated];
+
+  if (branches.length > 1) {
+    const primaryBranch = evaluatedBranches.find(b => b.branchIndex === 0) || evaluatedBranches[0];
+    const altBranch = evaluatedBranches.find(b => b.branchIndex > 0) || evaluatedBranches[1];
+    const chosen = bestBranch;
+    const unchosen = chosen === primaryBranch ? altBranch : primaryBranch;
+
+    if (primaryBranch && altBranch) {
+      const chosenFirstRef = chosen.isAlternate
+        ? (targetNode.alternatePrerequisites && targetNode.alternatePrerequisites[chosen.branchIndex - 1]) || chosen.branchRef
+        : (targetNode.prerequisites && targetNode.prerequisites[0]) || chosen.branchRef;
+      const unchosenFirstRef = unchosen.isAlternate
+        ? (targetNode.alternatePrerequisites && targetNode.alternatePrerequisites[unchosen.branchIndex - 1]) || unchosen.branchRef
+        : (targetNode.prerequisites && targetNode.prerequisites[0]) || unchosen.branchRef;
+
+      const chosenNode = byId.get(chosenFirstRef?.id);
+      const unchosenNode = byId.get(unchosenFirstRef?.id);
+
+      const targetSelfCost = remainingCost(targetNode) || 0;
+      const chosenTotalBranchCost = chosen.cost !== null ? chosen.cost + targetSelfCost : null;
+      const unchosenTotalBranchCost = unchosen.cost !== null ? unchosen.cost + targetSelfCost : null;
+
+      finalRoutes.unshift({
+        nodeId: targetNode.id,
+        nodeDisplayName: targetNode.displayName,
+        chosenRoute: {
+          id: chosenFirstRef?.id || null,
+          displayName: chosenNode?.displayName || chosenFirstRef?.id || null,
+          type: chosen.isAlternate ? 'alternate' : 'primary',
+          cost: remainingCost(chosenNode)
+        },
+        alternativeRoute: {
+          id: unchosenFirstRef?.id || null,
+          displayName: unchosenNode?.displayName || unchosenFirstRef?.id || null,
+          type: unchosen.isAlternate ? 'alternate' : 'primary',
+          cost: remainingCost(unchosenNode)
+        },
+        savings: (chosenTotalBranchCost !== null && unchosenTotalBranchCost !== null)
+          ? Math.max(0, unchosenTotalBranchCost - chosenTotalBranchCost)
+          : null
+      });
+    }
+  }
+
+  const finalPath = [...bestBranch.path];
+  if (includeSelf) {
+    finalPath.unshift(targetNode);
+  }
+
+  const selfCost = remainingCost(targetNode);
+  const totalCost = (bestBranch.costComplete && selfCost !== null) ? bestBranch.cost + selfCost : null;
+
+  return {
+    path: finalPath,
+    routesEvaluated: finalRoutes,
+    cost: totalCost,
+    costComplete: bestBranch.costComplete && selfCost !== null
+  };
+}
+
+export function collectRemainingPath(graph, byId, targetNode, includeSelf = true) {
+  const result = collectOptimalRemainingPath(graph, byId, targetNode, includeSelf);
+  return result.path;
 }
 
 export function buildTechPath(graph, byId, targets) {
@@ -507,13 +671,15 @@ export function buildTechPath(graph, byId, targets) {
   const alreadyCompleted = [];
   const remainingPath = [];
   const remainingSet = new Set();
+  const allRoutesEvaluated = [];
+
   for (const { node } of resolved) {
     if (!node) continue;
     if (node.status === 'completed') {
       alreadyCompleted.push({ id: node.id, displayName: node.displayName, type: node.type });
       continue;
     }
-    const path = collectRemainingPath(graph, byId, node);
+    const { path, routesEvaluated } = collectOptimalRemainingPath(graph, byId, node, true);
     for (const item of path) {
       if (remainingSet.has(item.id)) continue;
       remainingSet.add(item.id);
@@ -527,34 +693,42 @@ export function buildTechPath(graph, byId, targets) {
         progressPercent: item.researchPercent
       });
     }
+    for (const route of routesEvaluated) {
+      if (!allRoutesEvaluated.some(r => r.nodeId === route.nodeId)) {
+        allRoutesEvaluated.push(route);
+      }
+    }
   }
 
-  // A path containing a node whose cost could not be resolved has an unknown
-  // total, not a smaller one. The measured part is still reported, alongside
-  // the nodes that could not be costed, so the figure is never mistaken for a
-  // complete one.
   let remainingGlobalResearchCost = 0;
   let remainingFactionResearchCost = 0;
   const uncostedNodes = [];
+  let globalCostComplete = true;
+  let factionCostComplete = true;
+
   for (const item of remainingPath) {
     const cost = remainingCost(graph.byId.get(item.id));
     if (cost === null) {
       uncostedNodes.push(item.id);
+      if (item.type === 'global_tech') globalCostComplete = false;
+      else factionCostComplete = false;
       continue;
     }
     if (item.type === 'global_tech') remainingGlobalResearchCost += cost;
     else remainingFactionResearchCost += cost;
   }
 
+  const researchCostComplete = uncostedNodes.length === 0;
   const single = resolved.length === 1 && resolved[0].node;
   const base = {
     alreadyCompleted,
     remainingPath,
-    remainingGlobalResearchCost,
-    remainingFactionResearchCost,
-    totalRemainingResearchCost: remainingGlobalResearchCost + remainingFactionResearchCost,
+    remainingGlobalResearchCost: globalCostComplete ? remainingGlobalResearchCost : null,
+    remainingFactionResearchCost: factionCostComplete ? remainingFactionResearchCost : null,
+    totalRemainingResearchCost: researchCostComplete ? remainingGlobalResearchCost + remainingFactionResearchCost : null,
     uncostedNodes,
-    researchCostComplete: uncostedNodes.length === 0
+    researchCostComplete,
+    routesEvaluated: allRoutesEvaluated
   };
   if (single) {
     return {
