@@ -1,30 +1,83 @@
 # Docs
 
-**This folder holds specs with open work.** Anything shipped and closed moves to `archive/`.
+**This folder holds specs with open work, and is the single tracker for what is built,
+what is in flight, and what is left.** Anything shipped and closed moves to `archive/`.
 
-## Active
+There is deliberately no second status file. This repo carries a scar from three
+hand-maintained parallel lists in `shared/intel/registry.mjs` that disagreed until all
+three were derived from one table — the same failure applies to progress tracking. Update
+this table in the same commit as the work.
 
-| doc | status |
-| :-- | :-- |
-| `research-advisor-spec.md` | shipped through §9, but still the governing document for the two below — §0 (nothing campaign-specific) and §3b (availability is rolled, not derived) bind any further work |
-| `research-row-naming-spec.md` | shipped. Rows lead with `gateProjectName`, item parenthesised, `alsoUnlocks` badged when greater than one |
-| `research-tab-layout-spec.md` | shipped, with one follow-up outstanding: the type scale landed at 11/10/9.5/9, and three of the four steps sit within 1px, so the hierarchy still reads flat. Widening the gaps is a small CSS change |
-| `save-autodetect-spec.md` | shipped in `b0ec6dc`. `/api/save-state` plus a 5 s visibility-gated poller, opt-in auto-load, 503 retry on the load path |
-| `campaign-settings-spec.md` | **measured: no rate model needs changing.** All four 200% multipliers are already reflected because the dashboard reads measured values rather than computing from base rates. Remaining work is presentational — `difficulty` renders as "Normal" while `customDifficulty` is true |
-| `risk-tolerance-spec.md` | **not implemented.** Mission odds are computed and used only to weight expected hate — no rule vetoes on a success floor, so the player cannot say how much risk they will accept |
-| `fleet-procurement-spec.md` | shipped (Part A: dedicated FLEET view procurement extraction; Part B: validated refit advisor with non-composability enforcement) |
-| `obsolete-marker-spec.md` | shipped (backend bake + candidate pool filtering + frontend obsolete marker and active-first sort order) |
-| `research-chain-spec.md` | shipped (alternate prereq pathfinding + routesEvaluated savings + whole-chain drive payoffs + first-in-class capability verdicts) |
-| `model-verification-review.md` | independent review; **actioned (pushed in `b0ec6dc`).** The ×1.35 alien thrust factor, two confounded numbers in the allocation-formula rejection, and Claim 7's understated uncertainty band |
+Last updated 2026-08-21.
+
+---
+
+## Open work
+
+| # | doc | state |
+| :-- | :-- | :-- |
+| 1 | `chain-visibility-spec.md` | **in flight.** Promote multi-step chains into the visible COMMAND ranking, gated on reachability so a 442-month chain is not promoted. Folds in the missing `ra-tag--chain` / `--newcap` CSS and the census/capabilities count disagreement |
+| 2 | `drive-explorer-spec.md` | **not started.** A drives page: pick a design, see every drive's ΔV, acceleration and which destinations open up. Performance half is pinned; destination half is a labelled heuristic |
+| 3 | `research-category-rate-spec.md` | **not started.** Durations use one flat rate and ignore per-category bonuses. Xenology is +20% today, so those estimates are 17% long. Engineers are already in the measured income — do not double-apply |
+| 4 | `fleet-engagement-spec.md` | **not started.** Per-fleet hull-count estimates in THREAT, reachability-gated: the observer has 4 fleets against 57 alien fleets |
+| 5 | `campaign-settings-spec.md` | **presentational remainder only.** The rate models are measured correct; what is left is baking the ten `TIMetadataState` values and never rendering a customised campaign as plain "Normal" |
+| 6 | `repo-structure-spec.md` | **not started.** Separate the 2025 report tool from the dashboard. Approved, never assigned |
+
+### Small follow-ups, unassigned
+
+- **Type scale.** `research-tab-layout-spec.md` shipped, but the scale landed at
+  11/10/9.5/9 and three of the four steps sit within 1px, so hierarchy still reads flat.
+  Small CSS change.
+- **`benched` truncation.** `server/engine/assignment.js:782` slices to 8 with no
+  `benchedTotalCount` / `benchedOmittedCount`, and the cap is biting on the live save.
+  This is the truncation rule in `CLAUDE.md`.
+
+## Shipped
+
+| doc | commit | note |
+| :-- | :-- | :-- |
+| `code-index-spec.md` | `bbef9f0` | generated index, required agent reading |
+| `research-vs-procurement-spec.md` | `baaa38a` | also repaired the self-referential `--text-dim` token that silently broke 164 rules |
+| `save-autodetect-spec.md` | `b0ec6dc` | `/api/save-state`, 5 s visibility-gated poller, opt-in auto-load, 503 retry |
+| `research-tab-layout-spec.md` | `b0ec6dc` | eight font sizes → four; 41% empty column fixed; per-row global badge removed |
+| `fleet-procurement-spec.md` | `36fa5ba` `2b6e3d5` | FLEET view; refit advisor with non-composability enforced; armour gap indicator |
+| `obsolete-marker-spec.md` | `cdceae7` | the parts filter was a real correctness fix — it was recommending a retired weapon |
+| `research-chain-spec.md` | `e98413f` | alternate-prereq semantics, `routesEvaluated`, whole-chain drive payoffs, first-in-class verdicts |
+| `risk-tolerance-spec.md` | `b3b77f6` | success floor as a pairing-scoped registry veto, testing the band low not the midpoint |
+| `research-row-naming-spec.md` | — | was already implemented; this table previously said otherwise |
+| `model-verification-review.md` | `b0ec6dc` `e98413f` | all findings actioned |
+| `research-advisor-spec.md` | through §9 | still the governing document: §0 (nothing campaign-specific) and §3b (availability is rolled, not derived) bind any further work |
+
+## Closed as needing no work
+
+Recorded because the measurement is the deliverable, and because acting on the assumption
+would have introduced errors.
+
+- **Campaign rate multipliers.** Research, mining, national IP and alien progression all
+  run at 200% and are **already reflected**, because the dashboard reads measured values
+  rather than computing from base rates. Applying a 2× correction would have broken correct
+  figures. Evidence in `campaign-settings-spec.md`.
+- **Engineers (+95%).** Already inside measured research income. Applying separately would
+  double-count.
 
 ## Archive
 
-`archive/` holds finished plans, shipped specs and completed reviews. They are kept because **source comments cite them** — they carry the reasoning behind decisions in the code, and several record a model that was tried and rejected, which is worth as much as the one that shipped.
+`archive/` holds finished plans, shipped specs and completed reviews. They are kept because
+**source comments cite them** — they carry the reasoning behind decisions in the code, and
+several record a model that was tried and rejected, which is worth as much as the one that
+shipped.
 
-Notable: `archive/directive-rule-engine-plan.md` is the v1 engine, superseded by `archive/directive-engine-v2*.md`. `archive/strategic-intelligence-suite/` holds earlier reviews.
+Notable: `archive/directive-rule-engine-plan.md` is the v1 engine, superseded by
+`archive/directive-engine-v2*.md`. `archive/strategic-intelligence-suite/` holds earlier
+reviews.
 
 ## Conventions
 
-Specs here record **what was measured**, not what was assumed. Where a model was rejected, the rejection and its evidence stay in the document rather than being deleted — `research-advisor-spec.md` keeps a superseded armour derivation for exactly that reason.
+Specs here record **what was measured**, not what was assumed. Where a model was rejected,
+the rejection and its evidence stay in the document rather than being deleted —
+`research-advisor-spec.md` keeps a superseded armour derivation for exactly that reason,
+and `campaign-settings-spec.md` keeps two discarded measurement attempts so they are not
+repeated.
 
-When archiving, update the citing source comments in the same commit; the paths are load-bearing.
+When archiving, update the citing source comments in the same commit; the paths are
+load-bearing.
