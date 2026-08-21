@@ -5,7 +5,7 @@
 //   * /latest-threats.md   (immediate danger within 365 days, < 10 KB)
 //   * /latest-war-room.md  (operational military/economic brief, 20-30 KB)
 //
-// Design principles (see docs/markdown-export-plan.md):
+// Design principles (see docs/archive/markdown-export-plan.md):
 //   1. Consumes the filtered snapshot DIRECTLY, never the stripped /api/intel projections.
 //   2. Pure ESM with no Node built-ins -- runnable in Express and Cloudflare Worker.
 //   3. Deterministic: same snapshot -> byte-identical markdown.

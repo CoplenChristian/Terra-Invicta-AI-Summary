@@ -5,9 +5,9 @@
 //   * /latest-war-room.md  (20-30 KB, comprehensive military/economic brief)
 //   * /latest-snapshot.md  (byte-identical to pre-refactor baseline)
 //
-// Tests all 8 acceptance criteria from docs/markdown-export-plan.md.
+// Tests all 8 acceptance criteria from docs/archive/markdown-export-plan.md.
 //
-// Live-save independence (docs/live-save-test-dependency-spec.md):
+// Live-save independence (docs/archive/live-save-test-dependency-spec.md):
 //   * The byte-identical snapshot test is a VALUE assertion, so it reads a
 //     committed, mechanically-trimmed fixture (tests/fixtures/snapshot-*.json,
 //     derived by scripts/derive_snapshot_fixtures.js), never the live save.

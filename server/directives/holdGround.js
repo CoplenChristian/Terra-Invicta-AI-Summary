@@ -1,6 +1,6 @@
 // server/directives/holdGround.js
 //
-// Hold Ground as a first-class directive (docs/directive-engine-v2-plan.md §4f).
+// Hold Ground as a first-class directive (docs/archive/directive-engine-v2-plan.md §4f).
 //
 // It is ranked above the deferred-crackdown hold because it is the same
 // decision stated affirmatively AND it fires on posture alone -- including

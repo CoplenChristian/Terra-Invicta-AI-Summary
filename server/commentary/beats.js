@@ -3,7 +3,7 @@
  *
  * Layer 2 — Deterministic narrative beats and Hold Ground stance coherence.
  *
- * Rules from docs/strategic-commentary-and-layout-plan.md & Review:
+ * Rules from docs/archive/strategic-commentary-and-layout-plan.md & Review:
  * 1. Strict null-honesty: a beat whose required facts are null or missing MUST NOT fire.
  * 2. Hold Ground Stance Guard: If Hold Ground is active (or fleet cannot contest),
  *    commentary beats cannot contradict Hold Ground (no aggressive or unbacked escalation).

@@ -17,7 +17,7 @@
 // Both modes are exercised throughout: player is the default and a genuinely
 // different code path.
 //
-// Live-save independence (docs/live-save-test-dependency-spec.md): every
+// Live-save independence (docs/archive/live-save-test-dependency-spec.md): every
 // assertion here is a PROPERTY assertion ("output satisfies a bound"), which
 // is exactly the case where synthetic volume is correct and safe. The base
 // snapshot is synthetic (tests/fixtures/syntheticMarkdownSnapshot.js) and the

@@ -1410,7 +1410,7 @@ function renderHoldingsBubbleMatrix() {
 }
 
 /**
- * Hold Ground detail (docs/directive-engine-v2-plan.md §4f).
+ * Hold Ground detail (docs/archive/directive-engine-v2-plan.md §4f).
  *
  * A hold is only legible as a CHOICE if the board shows what was measured, what
  * is still available at zero hate, what was set aside and at what cost, and how

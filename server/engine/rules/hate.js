@@ -163,7 +163,7 @@ const warThresholdCrossing = {
     }
     return `Current hate ${current.toFixed(1)} + up to ${high} stays clear of the next threshold -- scored at 1x.`;
   },
-  source: 'docs/directive-rule-engine-plan.md §2 -- cost ladder is ASSUMPTION, tunable weights, anchored on '
+  source: 'docs/archive/directive-rule-engine-plan.md §2 -- cost ladder is ASSUMPTION, tunable weights, anchored on '
     + 'the war/Total War thresholds from wiki Diplomacy (rev 2026-08-11).',
   estimateClass: 'heuristic'
 };

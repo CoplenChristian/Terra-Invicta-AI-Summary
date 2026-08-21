@@ -23,7 +23,7 @@ const unmetPreconditions = {
     return `${n} precondition${n === 1 ? '' : 's'} cannot be confirmed from this snapshot, so this ranks `
       + 'below an equally valuable action we know is available.';
   },
-  source: 'docs/directive-rule-engine-plan.md §4 -- Turn\'s HasSpySlot and HasIntelOnCouncilorSecrets are '
+  source: 'docs/archive/directive-rule-engine-plan.md §4 -- Turn\'s HasSpySlot and HasIntelOnCouncilorSecrets are '
     + 'not in the snapshot and must not be presented as satisfiable.',
   estimateClass: 'heuristic'
 };

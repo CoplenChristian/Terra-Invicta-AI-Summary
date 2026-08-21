@@ -43,7 +43,7 @@ const gdpPerCpCost = {
       + `point(s); CP cost ≈ GDP_Bn^0.6/2 = ${cpCost.toFixed(2)} (Notion 09, absolute scale unverified). `
       + `Value density ${valueDensity.toFixed(3)}.`;
   },
-  source: 'Notion 09 -- output ÷ (GDP_Bn^0.6 / 2); docs/directive-rule-engine-plan.md §3, §4a.',
+  source: 'Notion 09 -- output ÷ (GDP_Bn^0.6 / 2); docs/archive/directive-rule-engine-plan.md §3, §4a.',
   estimateClass: 'heuristic'
 };
 
@@ -123,7 +123,7 @@ const unblockAlienResponse = {
         + 'Escalate-late posture makes that worse: the fleet cannot absorb what it cannot see.'
       : 'Alien tracking is unlocked and unused, which blocks every downstream alien action.';
   },
-  source: 'docs/directive-rule-engine-plan.md §5; weights are judgement -- see WEIGHTS.INTELLIGENCE.',
+  source: 'docs/archive/directive-rule-engine-plan.md §5; weights are judgement -- see WEIGHTS.INTELLIGENCE.',
   estimateClass: 'heuristic'
 };
 

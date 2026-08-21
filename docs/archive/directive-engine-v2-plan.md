@@ -1,6 +1,6 @@
 # Directive Engine v2 — Implementation Plan
 
-How to build what `docs/directive-engine-v2.md` designs. That document is the *what and why*; this is the *how and in what order*.
+How to build what `docs/archive/directive-engine-v2.md` designs. That document is the *what and why*; this is the *how and in what order*.
 
 Written 2026-08-20 against commit `16050e2`.
 
@@ -271,7 +271,7 @@ The wiki's "Base Difficulty" column is the defence-side `TIMissionModifier_FlatM
 
 ### 4a.4 This corrects a v2 design assumption
 
-`docs/directive-engine-v2.md` frames Investigate → Turn as the cheap zero-hate offensive. **Turn is hate-cheap, not cheap.** Base difficulty 15 stacks on top of the target's Loyalty, so:
+`docs/archive/directive-engine-v2.md` frames Investigate → Turn as the cheap zero-hate offensive. **Turn is hate-cheap, not cheap.** Base difficulty 15 stacks on top of the target's Loyalty, so:
 
 | Our Persuasion | Target Loyalty | diff | Success |
 | --- | --- | --- | --- |

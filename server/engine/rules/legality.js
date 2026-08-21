@@ -68,7 +68,7 @@ const noTerritory = {
     }
     return `${nation} reports 0 regions in this snapshot.`;
   },
-  source: 'Live-save analysis (docs/directive-rule-engine-plan.md §4a): unclaimed CPs split into unformed '
+  source: 'Live-save analysis (docs/archive/directive-rule-engine-plan.md §4a): unclaimed CPs split into unformed '
     + 'placeholder nations, nations absorbed into blocs, and real territory. regionsCount > 0 is the decisive filter.',
   estimateClass: 'exact'
 };

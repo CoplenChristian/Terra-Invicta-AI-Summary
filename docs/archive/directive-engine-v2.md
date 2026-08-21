@@ -2,7 +2,7 @@
 
 v1 turns a snapshot into a ranked list of independent actions. v2 turns it into **an allocated plan for the cycle**, drawn from the whole action space, priced against shared budgets, and re-ranked by what is about to expire.
 
-Written 2026-08-20. Builds on `docs/directive-rule-engine-plan.md`; that document's hate ladder, three-outcome vetoes, and provenance discipline carry forward unchanged.
+Written 2026-08-20. Builds on `docs/archive/directive-rule-engine-plan.md`; that document's hate ladder, three-outcome vetoes, and provenance discipline carry forward unchanged.
 
 Four structural changes, in order of how much they change the output:
 

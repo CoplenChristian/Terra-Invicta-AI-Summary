@@ -6,7 +6,7 @@
 // Why this script exists and why it is committed:
 //
 //   The byte-identical /latest-snapshot.md test must not read the live save
-//   (docs/live-save-test-dependency-spec.md). It asserts the compact renderer
+//   (docs/archive/live-save-test-dependency-spec.md). It asserts the compact renderer
 //   is unchanged, so its input must be a stable, committed fixture. A fixture
 //   is NOT regenerated to turn a red test green -- that is the exact trap the
 //   spec describes. It IS re-derived deliberately when the renderer

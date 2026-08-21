@@ -3,7 +3,7 @@
 // Reduces a full raw snapshot to `strategic_snapshot_v1`: a compact,
 // self-contained document for trend and delta analysis.
 //
-// Design rules (see docs/strategic-history-and-war-room-plan.md):
+// Design rules (see docs/archive/strategic-history-and-war-room-plan.md):
 //   * IDs and raw numbers only. Never presentation strings.
 //   * No static template data -- no tech tree, component catalogs, or
 //     mining-site deposits. Those do not change between saves and are the

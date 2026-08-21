@@ -101,7 +101,7 @@ class BriefingGenerator {
       fleets
     });
 
-    // v1 rule engine (docs/directive-rule-engine-plan.md). Runs alongside the
+    // v1 rule engine (docs/archive/directive-rule-engine-plan.md). Runs alongside the
     // policyRank-based directives below rather than replacing them -- it
     // does not yet cover space, research, or mining, so deleting the ranks
     // now would drop those directives with no successor (plan §7, P5 note).
@@ -134,7 +134,7 @@ class BriefingGenerator {
     });
     const engineResult = directiveEngine.runEngine(engineWorld);
 
-    // Hold Ground (docs/directive-engine-v2-plan.md §4f). The affirmative
+    // Hold Ground (docs/archive/directive-engine-v2-plan.md §4f). The affirmative
     // counterpart to the vetoes: when hate is at the war line and the fleet
     // cannot contest, holding IS the move, and the panel should say so rather
     // than degrading toward empty. Built here because it needs both the
@@ -250,7 +250,7 @@ class BriefingGenerator {
     // 4. Operative Roster with Tactical Recommendations
     const operativeRoster = this.buildOperativeRoster(councilors, observerId, campaignPosture);
 
-    // 5. Strategic Commentary (docs/strategic-commentary-and-layout-plan.md)
+    // 5. Strategic Commentary (docs/archive/strategic-commentary-and-layout-plan.md)
     const commentary = strategicCommentary.generateStrategicCommentary({
       snapshot,
       rawSnapshot,

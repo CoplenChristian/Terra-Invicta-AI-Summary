@@ -91,9 +91,9 @@ or the official wiki read as **raw wikitext** (spoiler content only exists there
 
 ## Design docs
 
-- `docs/directive-rule-engine-plan.md` — v1 engine
-- `docs/directive-engine-v2.md` — v2 design (what and why)
-- `docs/directive-engine-v2-plan.md` — v2 implementation plan (how and in what order)
+- `docs/archive/directive-rule-engine-plan.md` — v1 engine
+- `docs/archive/directive-engine-v2.md` — v2 design (what and why)
+- `docs/archive/directive-engine-v2-plan.md` — v2 implementation plan (how and in what order)
 
 ---
 

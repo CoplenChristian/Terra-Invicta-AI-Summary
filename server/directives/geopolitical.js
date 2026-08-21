@@ -7,7 +7,7 @@
 // This is the v1 hand-tuned ladder the rule engine is gradually replacing. It
 // still runs because the engine does not yet cover space, research or mining,
 // and deleting the ranks now would drop those directives with no successor
-// (docs/directive-rule-engine-plan.md §7, P5 note).
+// (docs/archive/directive-rule-engine-plan.md §7, P5 note).
 //
 // `attachHateEstimate` is the discipline that keeps this ladder honest: every
 // offensive directive carries the expected alien hate of the mission it names,

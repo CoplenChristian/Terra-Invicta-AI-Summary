@@ -6,7 +6,7 @@ Answer three questions the dashboard cannot currently answer:
 2. **Which sites are open?** — unowned hab sites, filtered to ones we can actually reach.
 3. **Which of those are worth taking?** — ranked by resource value against scarcity, reachability and cost.
 
-Written 2026-08-20. Companion to `docs/directive-engine-v2-plan.md`; the candidate/veto/scoring vocabulary is shared, and mining candidates should eventually feed the same cycle plan.
+Written 2026-08-20. Companion to `docs/archive/directive-engine-v2-plan.md`; the candidate/veto/scoring vocabulary is shared, and mining candidates should eventually feed the same cycle plan.
 
 ---
 

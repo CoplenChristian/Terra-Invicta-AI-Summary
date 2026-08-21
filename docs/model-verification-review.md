@@ -1,6 +1,6 @@
 # Model Verification Review — independent findings
 
-Independent re-verification of `docs/model-verification-brief.md` (committed `0d8f66d`),
+Independent re-verification of `docs/archive/model-verification-brief.md` (committed `0d8f66d`),
 written with no prior context beyond that brief. Every claim below was re-run against
 the live save on 2026-08-21 (latest = `Autosave.gz`, campaign date 2/16/2034, observer
 4712) and against the frozen fixtures in `tests/fixtures/`.

@@ -37,7 +37,7 @@
 
   // How many availability groups to show per track, and how many rows in each.
   // The card lives in the COMMAND column that has the least slack, so this is a
-  // measured budget rather than a taste call: see docs/v2-navigation-plan.md
+  // measured budget rather than a taste call: see docs/archive/v2-navigation-plan.md
   // section 4 on the page-height constraint.
   const GROUPS_SHOWN = 2;
   const ROWS_PER_GROUP = 2;
@@ -346,7 +346,7 @@
    * A floor that silently removes a row from the top of a ranking is a
    * truncation, and truncation announces itself. One line, because the COMMAND
    * column is measured against a 3.00-screen budget -- see
-   * docs/v2-navigation-plan.md section 4 -- and this card was already at 2.99
+   * docs/archive/v2-navigation-plan.md section 4 -- and this card was already at 2.99
    * of it before section 6 rode in on the foot line.
    *
    * Returns '' when nothing was demoted, so a clean ranking costs no height.

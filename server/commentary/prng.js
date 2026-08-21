@@ -3,7 +3,7 @@
  *
  * Deterministic Mulberry32 PRNG for strategic commentary simulations and phrasing.
  *
- * Per CLAUDE.md and docs/strategic-commentary-and-layout-plan.md:
+ * Per CLAUDE.md and docs/archive/strategic-commentary-and-layout-plan.md:
  * - Seed from snapshotId, never the clock.
  * - Same save -> byte-identical output across refreshes.
  * - Math.random() is forbidden here.

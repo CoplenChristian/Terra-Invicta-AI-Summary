@@ -3,8 +3,8 @@
  *
  * Turns a frozen "world" snapshot into a ranked set of concrete action
  * candidates, using data-driven rules instead of the hand-tuned policyRank
- * ladder in briefingGenerator.js. See docs/directive-rule-engine-plan.md for
- * the v1 design and docs/directive-engine-v2-plan.md §1 for this layout.
+ * ladder in briefingGenerator.js. See docs/archive/directive-rule-engine-plan.md for
+ * the v1 design and docs/archive/directive-engine-v2-plan.md §1 for this layout.
  *
  * Architecture (plan §3):
  *   world -> generateCandidates -> applyRules -> scoreCandidates -> primary
@@ -36,7 +36,7 @@
  * hand-written generators, the candidate schema, twelve rules, the selection
  * pass and the orchestration. The 2026-08-20 code review (section D) flagged
  * it as a multi-functional file, so the bodies moved into `server/engine/`
- * following the layout docs/directive-engine-v2-plan.md §1 sketches, and this
+ * following the layout docs/archive/directive-engine-v2-plan.md §1 sketches, and this
  * file kept only `buildWorld` and `runEngine`.
  *
  * Every export below is the SAME function or object the module exports,

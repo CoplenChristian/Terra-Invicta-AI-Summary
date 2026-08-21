@@ -3,7 +3,7 @@
  * ------------------
  * Renders the Directive Engine v2 Cycle Plan (server/directiveEngine.js).
  *
- * Implements the cycle allocation model from docs/directive-engine-v2.md:
+ * Implements the cycle allocation model from docs/archive/directive-engine-v2.md:
  *   - Cycle Allocation Matrix: assigns available councilors to high-expected-value missions
  *   - Shared Portfolio Budgets: tracks set-level hate, influence, ops, and MC consumption
  *   - Strategic Clocks: tracks expiring wards, alien passive hate acceleration, and countdowns

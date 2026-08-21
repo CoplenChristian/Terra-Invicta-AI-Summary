@@ -14,7 +14,7 @@ const { ALIEN_HATE_WAR_THRESHOLD } = require('../server/alienHateEconomics');
 
 // ---------------------------------------------------------------------------
 // Hold Ground — the affirmative posture directive
-// (docs/directive-engine-v2-plan.md §4f)
+// (docs/archive/directive-engine-v2-plan.md §4f)
 //
 // A hold used to be a SUPPRESSION: the engine could say "don't crackdown
 // Japan", never "do this instead", so a cycle where the vetoes fired hard left

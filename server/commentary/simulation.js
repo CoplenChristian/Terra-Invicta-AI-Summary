@@ -3,7 +3,7 @@
  *
  * Layer 3 — Monte Carlo threshold cruncher and projection simulator.
  *
- * Requirements from docs/strategic-commentary-and-layout-plan.md & Review:
+ * Requirements from docs/archive/strategic-commentary-and-layout-plan.md & Review:
  * 1. Player-First: Uses observable alien fleet telemetry in player mode;
  *    never relies on redacted shipDesigns CVs in player mode.
  * 2. Zero-Opponent Guard: Empty opponent list resolves to unavailable, NEVER P(win) = 1.0.
