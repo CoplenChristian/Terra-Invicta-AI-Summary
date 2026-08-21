@@ -18,7 +18,15 @@ const { buildNations } = require('./nations');
 const { buildCouncilors } = require('./councilors');
 const { buildGlobalResearchSlots, buildTechTree } = require('./research');
 const factionsModule = require('./factions');
-const { buildTraitStatMods, buildMissionSpecs, buildShipHullStats } = require('./templates');
+const {
+  buildTraitStatMods,
+  buildMissionSpecs,
+  buildShipHullStats,
+  buildUnlockIndex,
+  buildDriveStats,
+  buildPropellantModules,
+  buildProjectGating
+} = require('./templates');
 
 // Terra Invicta campaigns begin in 2022. The save's TIMetadataState does not
 // record the start year (verified against the live save, 2026-08-20), so this
@@ -173,6 +181,13 @@ function buildRawSnapshot(saveData) {
     techMatrix,
     shipHullStats: buildShipHullStats(),
     missionSpecs: buildMissionSpecs(),
+    // Baked for the same reason as the two above: the hosted Cloudflare worker
+    // has no template directory, so anything reading templates at request time
+    // works locally and breaks the deployed site.
+    unlockIndex: buildUnlockIndex(),
+    driveStats: buildDriveStats(),
+    propellantModules: buildPropellantModules(),
+    projectGating: buildProjectGating(),
     techTree: buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions)
   };
 }

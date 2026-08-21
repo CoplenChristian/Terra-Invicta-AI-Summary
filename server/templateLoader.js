@@ -49,6 +49,14 @@ class TemplateLoader {
       batteries: new Map(),
       utilityModules: new Map(),
       shipArmor: new Map(),
+      // Heat sinks are the sixteenth `requiredProjectName`-gated family and the
+      // only ship component template this loader did not read. They are loaded
+      // for the unlock index in server/snapshot/templates.js and deliberately
+      // NOT registered in buildUnlockMappings below: `classifyComponent` in
+      // shared/techGraph.mjs has no branch for them, so they would land in the
+      // published tech tree as class `other` with an empty stats object -- a
+      // silent degradation of an existing payload in exchange for nothing.
+      heatSinks: new Map(),
       // Hab sites carry the mining profile that determines a site's resource
       // yields. The save does not repeat the profile on unclaimed sites, so
       // ranking expansion targets requires joining back to these templates.
@@ -261,7 +269,8 @@ class TemplateLoader {
       ['radiators', 'TIRadiatorTemplate.json'],
       ['batteries', 'TIBatteryTemplate.json'],
       ['utilityModules', 'TIUtilityModuleTemplate.json'],
-      ['shipArmor', 'TIShipArmorTemplate.json']
+      ['shipArmor', 'TIShipArmorTemplate.json'],
+      ['heatSinks', 'TIHeatSinkTemplate.json']
     ];
     for (const [key, filename] of componentFiles) {
       this.loadJsonFile(filename, (item) => {
@@ -273,16 +282,21 @@ class TemplateLoader {
     // Ship weapon templates are split across several files in the game data.
     // Keeping them in one index lets the save parser classify equipped weapons
     // without relying on display-name guesses.
+    // `templateFamily` records WHICH file an entry came from, because `category`
+    // cannot: magnetic guns (70 gated) and guns (7 gated) are both `Kinetic`, so
+    // the two families are unrecoverable from the category alone. The unlock
+    // index in server/snapshot/templates.js reports them separately, which is
+    // the only way its per-family counts can be checked against the templates.
     const weaponTemplateFiles = [
-      ['TILaserWeaponTemplate.json', 'Laser'],
-      ['TIMagneticGunTemplate.json', 'Kinetic'],
-      ['TIGunTemplate.json', 'Kinetic'],
-      ['TIParticleWeaponTemplate.json', 'Particle'],
-      ['TIPlasmaWeaponTemplate.json', 'Plasma'],
-      ['TIMissileTemplate.json', 'Missile']
+      ['TILaserWeaponTemplate.json', 'Laser', 'laser_weapon'],
+      ['TIMagneticGunTemplate.json', 'Kinetic', 'magnetic_gun'],
+      ['TIGunTemplate.json', 'Kinetic', 'gun'],
+      ['TIParticleWeaponTemplate.json', 'Particle', 'particle_weapon'],
+      ['TIPlasmaWeaponTemplate.json', 'Plasma', 'plasma_weapon'],
+      ['TIMissileTemplate.json', 'Missile', 'missile']
     ];
 
-    for (const [filename, category] of weaponTemplateFiles) {
+    for (const [filename, category, templateFamily] of weaponTemplateFiles) {
       this.loadJsonFile(filename, (item) => {
         const id = item.dataName || item.displayName || item.friendlyName || item.templateName;
         if (!id) return;
@@ -294,6 +308,7 @@ class TemplateLoader {
           dataName: id,
           displayName,
           category,
+          templateFamily,
           role: isPointDefense ? 'Point Defense' : category
         });
       });

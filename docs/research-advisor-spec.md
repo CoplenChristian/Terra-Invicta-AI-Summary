@@ -161,7 +161,8 @@ The highest-value slice, and the only one whose physics is **validated against t
 ### The model, verified exact
 
 ```
-ΔV            = EV_kps × ln(wet_mass / dry_mass)
+EV_effective  = drive.EV_kps × Π(EVMultiplier modules the drive's propellant satisfies)
+ΔV            = EV_effective × ln(wet_mass / dry_mass)
 cruise accel  = thrust_N / wet_mass
 combat accel  = thrust_N × drive.thrustCap / wet_mass
 ```
@@ -171,6 +172,46 @@ Checked against `currentMaxDeltaVKps` for every observer ship across multiple de
 Inputs: `fleets[].ships[]` gives `currentMassKg` and `propellantTons`; `shipDesigns[]` gives `driveName` and `hullName`; `TIDriveTemplate.json` gives `EV_kps`, `thrust_N`, `thrustCap`, `propellant`.
 
 Because the model reproduces measured values exactly, **what-if refits onto drives the observer has never built are trustworthy**.
+
+#### Two corrections, measured 2026-08-21 while building phase 1
+
+Both were found by widening the check from the observer to all 698 ships in the
+save. The three-line model above is right for the observer on the sampled save
+and wrong in general; these are the missing terms.
+
+**1. The `EVMultiplier` term is not optional.** Five utility modules multiply
+effective exhaust velocity — `LiquidHydrogenContainment` 1.2,
+`SlushHydrogenTankage` 1.35, `HydronTrap` 1.5, `AlienSlushHydrogenTankage` 1.5,
+`AlienHydronTrap` 2.0 — carried in `specialModuleRules` / `specialModuleValue`.
+All five also carry `RequiresHydrogenPropellant`, so the multiplier applies only
+when `drive.propellant === 'Hydrogen'`. Without the term, ΔV reproduces for only
+four of the eight factions; with it, **696 of 698 ships** match exactly. The
+observer happened to fly no such module on the sampled save, which is why the
+original check missed it. It matters directly for refits: swapping a hydrogen
+drive for a non-hydrogen one **loses** the multiplier, so a naive refit
+overstates the candidate's reach by up to 2×.
+
+**2. ΔV and acceleration are reported against different masses.** Measurable on
+the three observer ships not at full tanks:
+
+| save field | mass it is computed against |
+| :-- | :-- |
+| `currentDeltaVKps` | the ship's **current** mass |
+| `currentMaxDeltaVKps` | the ship at **full tanks** |
+| `cruise` / `combatAccelerationMps2` | the ship at **full tanks** (rated, not current) |
+
+Using current mass for acceleration overstates a half-empty hull by up to 1.72×
+on this save. Full-tank mass is derivable from the save without a tons-per-tank
+constant: a ship already at full tanks is its own full-tank mass, and a
+partially fuelled one inverts the rocket equation through its measured
+`currentMaxDeltaVKps`. A ship supporting neither path reports `null` capacity
+and no refit.
+
+**Where the model does not hold.** Alien hulls: ΔV matches 381/410, acceleration
+frequently does not — alien hulls carry performance the design record does not
+explain. One damaged human hull reports an acceleration corresponding to no mass
+in the save. Both are surfaced as **model disagreements with the ratio visible**,
+never as a modelled figure presented as fact.
 
 ### The finding that dictates the design
 
@@ -252,6 +293,28 @@ Collapsing the middle state into either neighbour is the failure mode. Reporting
 
 Because global tech completion does not imply personal visibility, **never infer availability from `globalResearch.finishedTechsNames`**. That set reflects the world, not this faction.
 
+(Global tech *completion* is a different question. `finishedTechsNames` is the
+correct and only source for whether a **global-tech prerequisite** is satisfied,
+because global techs genuinely are world state. The prohibition is on deriving
+project availability from it.)
+
+### A fourth state, found while building phase 1 — measured 2026-08-21
+
+Two template gates put a project outside all three states above, and folding
+them into the middle one is the same error §3b exists to prevent:
+
+- **`factionPrereq`** — 103 projects are restricted to named faction templates
+  (`AlienCouncil`, `SubmitCouncil`, …), matched against `faction.templateName`.
+- **`researchCost: -1`** — marks a project that is never researched at all.
+  Left alone it becomes `max(0, −1 − 0)` = 0 remaining, which renders as free.
+
+`Project_AlienMasterProject` carries both. Its prerequisites are trivially met,
+so without this gate it reads as *"prerequisites clear, rolls at 100%/month,
+cost 0"* — an unreachable target rendered as imminent. On the sampled save this
+misclassified **18 of 541 drives** for the observer. The implementation emits
+these as a distinct `faction-restricted` state naming the eligible factions, and
+reports a negative cost as `null` rather than zero.
+
 Where a long-term target is prereq-clear but unrolled, the advisor may still recommend the *path* — but must say the final step depends on a monthly roll and state the cap. A plan whose last step is a 50% coin-flip that may never land is a different proposition from a plan that merely costs research, and the player is entitled to know which one they are being handed.
 
 ---
@@ -312,7 +375,7 @@ Worth building **after** the value model — it is a smaller win and depends on 
 
 ## 9. Sequencing
 
-1. Unlock index — reverse-map all 16 gated template families to their `requiredProjectName`. Everything else depends on it, and it is pure data with no judgement.
+1. ~~Unlock index — reverse-map all 16 gated template families to their `requiredProjectName`. Everything else depends on it, and it is pure data with no judgement.~~ **Built 2026-08-21**, together with the propulsion model and `/api/intel/propulsion`. Note one correction: fifteen families carry `requiredProjectName`, but **orgs (83) carry `requiredTechName`** — the gate is a global tech, not a faction project, and the two must not be flattened. All sixteen counts verified against the installed templates: 1,223 gated entries across 436 gates.
 2. Military valuation against the observer's current best.
 3. Economic valuation against live quantities.
 4. Ranking, deficit-aware ordering, and the UI panel.

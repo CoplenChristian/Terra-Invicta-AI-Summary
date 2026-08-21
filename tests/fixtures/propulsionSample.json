@@ -1,0 +1,2310 @@
+{
+  "provenance": {
+    "source": "observer fleet extracted from the live save on 2026-08-21",
+    "saveFilename": "ExitSave.gz",
+    "campaignDate": "1/1/2034 12:00:00 AM",
+    "observerFactionId": 4712,
+    "note": "Real measured game output. Every numeric field below is read from the save, not computed here, so the model has something independent to be checked against."
+  },
+  "ships": [
+    {
+      "faction": 4712,
+      "fleetName": "India-305",
+      "note": null,
+      "ship": {
+        "id": 52977,
+        "displayName": "Sankuru",
+        "hullName": "playerShipTemplate401",
+        "currentMassKg": 9424695,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 16.458,
+        "currentMaxDeltaVKps": 16.45801,
+        "cruiseAccelerationMps2": 0.01145926,
+        "combatAccelerationMps2": 0.2750221,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "720 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 1,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-305",
+      "note": null,
+      "ship": {
+        "id": 52979,
+        "displayName": "Pechora",
+        "hullName": "playerShipTemplate85",
+        "currentMassKg": 8132819,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 14.06756,
+        "currentMaxDeltaVKps": 14.06756,
+        "cruiseAccelerationMps2": 0.07967717,
+        "combatAccelerationMps2": 1.912252,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-305",
+      "note": null,
+      "ship": {
+        "id": 56039,
+        "displayName": "Kasai",
+        "hullName": "playerShipTemplate1",
+        "currentMassKg": 7810880,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 20.40921,
+        "currentMaxDeltaVKps": 20.40921,
+        "cruiseAccelerationMps2": 0.01382687,
+        "combatAccelerationMps2": 0.3318448,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "720 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 1,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-305",
+      "note": null,
+      "ship": {
+        "id": 56041,
+        "displayName": "Lena",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-305",
+      "note": null,
+      "ship": {
+        "id": 56043,
+        "displayName": "Euphrates",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-305",
+      "note": null,
+      "ship": {
+        "id": 55144,
+        "displayName": "Tone",
+        "hullName": "playerShipTemplate209",
+        "currentMassKg": 6537155,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.19893,
+        "currentMaxDeltaVKps": 25.19893,
+        "cruiseAccelerationMps2": 0.09912569,
+        "combatAccelerationMps2": 2.379017,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 4,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 50840,
+        "displayName": "Salween",
+        "hullName": "playerShipTemplate1",
+        "currentMassKg": 7810880,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 20.40921,
+        "currentMaxDeltaVKps": 20.40921,
+        "cruiseAccelerationMps2": 0.01382687,
+        "combatAccelerationMps2": 0.3318448,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "720 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 1,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 52778,
+        "displayName": "Mekong",
+        "hullName": "playerShipTemplate1",
+        "currentMassKg": 7810880,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 20.40921,
+        "currentMaxDeltaVKps": 20.40921,
+        "cruiseAccelerationMps2": 0.01382687,
+        "combatAccelerationMps2": 0.3318448,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "720 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 1,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 52780,
+        "displayName": "Dvina",
+        "hullName": "playerShipTemplate1",
+        "currentMassKg": 7810880,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 20.40921,
+        "currentMaxDeltaVKps": 20.40921,
+        "cruiseAccelerationMps2": 0.01382687,
+        "combatAccelerationMps2": 0.3318448,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "720 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 1,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 51158,
+        "displayName": "Madeira",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 51160,
+        "displayName": "Okavango",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 51460,
+        "displayName": "Rio Grande",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 51462,
+        "displayName": "Ganges",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 51800,
+        "displayName": "Sendai",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 52782,
+        "displayName": "Kagera",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 53125,
+        "displayName": "Tyne",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 53127,
+        "displayName": "Indigirka",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 53129,
+        "displayName": "Yana",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 53438,
+        "displayName": "Kolyma",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 53440,
+        "displayName": "Huang He",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 53442,
+        "displayName": "Volta",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 53753,
+        "displayName": "Murray",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 46417,
+        "displayName": "Ohio",
+        "hullName": "playerShipTemplate209",
+        "currentMassKg": 6537155,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.19893,
+        "currentMaxDeltaVKps": 25.19893,
+        "cruiseAccelerationMps2": 0.09912569,
+        "combatAccelerationMps2": 2.379017,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 4,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 46419,
+        "displayName": "Forth",
+        "hullName": "playerShipTemplate209",
+        "currentMassKg": 6537155,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.19893,
+        "currentMaxDeltaVKps": 25.19893,
+        "cruiseAccelerationMps2": 0.09912569,
+        "combatAccelerationMps2": 2.379017,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 4,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 50617,
+        "displayName": "Darling",
+        "hullName": "playerShipTemplate209",
+        "currentMassKg": 6537155,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.19893,
+        "currentMaxDeltaVKps": 25.19893,
+        "cruiseAccelerationMps2": 0.09912569,
+        "combatAccelerationMps2": 2.379017,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 4,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 50260,
+        "displayName": "Volga",
+        "hullName": "playerShipTemplate209",
+        "currentMassKg": 6537155,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.19893,
+        "currentMaxDeltaVKps": 25.19893,
+        "cruiseAccelerationMps2": 0.09912569,
+        "combatAccelerationMps2": 2.379017,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 4,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-211",
+      "note": null,
+      "ship": {
+        "id": 51108,
+        "displayName": "Medway",
+        "hullName": "playerShipTemplate209",
+        "currentMassKg": 6537155,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.19893,
+        "currentMaxDeltaVKps": 25.19893,
+        "cruiseAccelerationMps2": 0.09912569,
+        "combatAccelerationMps2": 2.379017,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 4,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-336",
+      "note": null,
+      "ship": {
+        "id": 65503,
+        "displayName": "Sturgeon",
+        "hullName": "playerShipTemplate322",
+        "currentMassKg": 3800954,
+        "propellantTons": 1659.24,
+        "currentDeltaVKps": 39.58159,
+        "currentMaxDeltaVKps": 77.04496,
+        "cruiseAccelerationMps2": 0.09905664,
+        "combatAccelerationMps2": 2.377359,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "240 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 1,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 53119,
+        "displayName": "Kushiro",
+        "hullName": "playerShipTemplate1",
+        "currentMassKg": 7810880,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 20.40921,
+        "currentMaxDeltaVKps": 20.40921,
+        "cruiseAccelerationMps2": 0.01382687,
+        "combatAccelerationMps2": 0.3318448,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "720 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 1,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 53121,
+        "displayName": "Senegal",
+        "hullName": "playerShipTemplate1",
+        "currentMassKg": 7810880,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 20.40921,
+        "currentMaxDeltaVKps": 20.40921,
+        "cruiseAccelerationMps2": 0.01382687,
+        "combatAccelerationMps2": 0.3318448,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "720 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 1,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 53123,
+        "displayName": "Nueces",
+        "hullName": "playerShipTemplate1",
+        "currentMassKg": 7810880,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 20.40921,
+        "currentMaxDeltaVKps": 20.40921,
+        "cruiseAccelerationMps2": 0.01382687,
+        "combatAccelerationMps2": 0.3318448,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "720 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 1,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 52776,
+        "displayName": "Xingu",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 74759,
+        "displayName": "Amur",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 74761,
+        "displayName": "Guadalupe",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 74763,
+        "displayName": "Danube",
+        "hullName": "playerShipTemplate0",
+        "currentMassKg": 5936024,
+        "propellantTons": 1500,
+        "currentDeltaVKps": 20.0984,
+        "currentMaxDeltaVKps": 20.0984,
+        "cruiseAccelerationMps2": 0.109164,
+        "combatAccelerationMps2": 2.619936,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Heavy Rail Cannon Mk3"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "60 cm Green Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 49851,
+        "displayName": "Japura",
+        "hullName": "playerShipTemplate209",
+        "currentMassKg": 6537155,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.19893,
+        "currentMaxDeltaVKps": 25.19893,
+        "cruiseAccelerationMps2": 0.09912569,
+        "combatAccelerationMps2": 2.379017,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 4,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 46206,
+        "displayName": "Irrawaddy",
+        "hullName": "playerShipTemplate402",
+        "currentMassKg": 6500189,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.37212,
+        "currentMaxDeltaVKps": 25.37212,
+        "cruiseAccelerationMps2": 0.09968941,
+        "combatAccelerationMps2": 2.392546,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 3,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 46204,
+        "displayName": "Saint Lawrence",
+        "hullName": "playerShipTemplate402",
+        "currentMassKg": 6500189,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.37212,
+        "currentMaxDeltaVKps": 25.37212,
+        "cruiseAccelerationMps2": 0.09968941,
+        "combatAccelerationMps2": 2.392546,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 3,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 49195,
+        "displayName": "Rubicon",
+        "hullName": "playerShipTemplate402",
+        "currentMassKg": 6500189,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.37212,
+        "currentMaxDeltaVKps": 25.37212,
+        "cruiseAccelerationMps2": 0.09968941,
+        "combatAccelerationMps2": 2.392546,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 3,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-219",
+      "note": null,
+      "ship": {
+        "id": 49353,
+        "displayName": "Saru",
+        "hullName": "playerShipTemplate402",
+        "currentMassKg": 6500189,
+        "propellantTons": 2000,
+        "currentDeltaVKps": 25.37212,
+        "currentMaxDeltaVKps": 25.37212,
+        "cruiseAccelerationMps2": 0.09968941,
+        "combatAccelerationMps2": 2.392546,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 3,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-337",
+      "note": null,
+      "ship": {
+        "id": 65505,
+        "displayName": "Snook",
+        "hullName": "playerShipTemplate322",
+        "currentMassKg": 4657250,
+        "propellantTons": 2515.539,
+        "currentDeltaVKps": 53.60057,
+        "currentMaxDeltaVKps": 77.04496,
+        "cruiseAccelerationMps2": 0.09905664,
+        "combatAccelerationMps2": 2.377359,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "240 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 1,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4712,
+      "fleetName": "India-335",
+      "note": null,
+      "ship": {
+        "id": 56698,
+        "displayName": "Tongala",
+        "hullName": "playerShipTemplate112",
+        "currentMassKg": 9534917,
+        "propellantTons": 2367.508,
+        "currentDeltaVKps": 12.01602,
+        "currentMaxDeltaVKps": 29.8591,
+        "cruiseAccelerationMps2": 1.098342,
+        "combatAccelerationMps2": 5.491711,
+        "weaponLoadout": [
+          {
+            "role": "Missile",
+            "category": "Missile",
+            "count": 2,
+            "systems": [
+              "Copperhead Missile Bay"
+            ]
+          },
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "480 cm Green Laser Cannon"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 1,
+            "systems": [
+              "Point Defense Laser Turret"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4713,
+      "fleetName": "Sierra-132",
+      "note": "damaged hull: reported acceleration corresponds to no mass in the save",
+      "ship": {
+        "id": 53969,
+        "displayName": "Comet",
+        "hullName": "SubmitCouncilShipTemplate260 Refit 1114",
+        "currentMassKg": 5708538,
+        "propellantTons": 159.4629,
+        "currentDeltaVKps": 2.639096,
+        "currentMaxDeltaVKps": 42.41274,
+        "cruiseAccelerationMps2": 0.0001851625,
+        "combatAccelerationMps2": 0.0044439,
+        "weaponLoadout": [
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 3,
+            "systems": [
+              "Heavy Rail Cannon Mk3",
+              "Light Railgun Battery Mk3"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "faction": 4717,
+      "fleetName": "Victor-8",
+      "note": "alien hull: performance the design record does not explain",
+      "ship": {
+        "id": 53354,
+        "displayName": "Swift Retribution",
+        "hullName": "AlienCouncilShipTemplate566",
+        "currentMassKg": 20508050,
+        "propellantTons": 1600,
+        "currentDeltaVKps": 211.1973,
+        "currentMaxDeltaVKps": 211.1972,
+        "cruiseAccelerationMps2": 0.6279972,
+        "combatAccelerationMps2": 25.11989,
+        "weaponLoadout": [
+          {
+            "role": "Laser",
+            "category": "Laser",
+            "count": 3,
+            "systems": [
+              "Alien 1024 cm Violet Laser Cannon",
+              "Alien 384 cm Violet Laser Battery",
+              "Alien 64 cm Violet Laser Battery"
+            ]
+          },
+          {
+            "role": "Point Defense",
+            "category": "Laser",
+            "count": 2,
+            "systems": [
+              "Alien Point Defense Laser Turret",
+              "Alien Point Defense Particle Beam"
+            ]
+          },
+          {
+            "role": "Kinetic",
+            "category": "Kinetic",
+            "count": 1,
+            "systems": [
+              "Advanced Alien Light Mag Battery"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "designs": {
+    "playerShipTemplate401": {
+      "dataName": "playerShipTemplate401",
+      "_displayName": "Senegal",
+      "role": "MM_SpaceSuperiority",
+      "hullName": "Battlecruiser",
+      "driveName": "BurnerDrivex1",
+      "propellantTanks": 20,
+      "moduleTemplateEntries": [
+        {
+          "moduleName": "MoltenSaltHeatSink",
+          "slot": 2
+        },
+        {
+          "moduleName": "TargetingComputer2",
+          "slot": 10
+        },
+        {
+          "moduleName": "ElectronicCountermeasures2",
+          "slot": 12
+        },
+        {
+          "moduleName": "QuantumBattery",
+          "slot": 13
+        },
+        {
+          "moduleName": "RepairBay",
+          "slot": 15
+        }
+      ],
+      "noseWeaponTemplateEntries": [
+        {
+          "moduleName": "720cmGreenLaserCannon",
+          "slot": 8
+        }
+      ],
+      "hullWeaponTemplateEntries": [
+        {
+          "moduleName": "PointDefenseLaserTurret",
+          "slot": 14
+        },
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 11
+        }
+      ],
+      "factionId": 4712
+    },
+    "playerShipTemplate85": {
+      "dataName": "playerShipTemplate85",
+      "_displayName": "Huang He",
+      "role": "MM_SpaceSuperiority",
+      "hullName": "Battlecruiser",
+      "driveName": "BurnerDrivex6",
+      "propellantTanks": 15,
+      "moduleTemplateEntries": [
+        {
+          "moduleName": "MoltenSaltHeatSink",
+          "slot": 2
+        },
+        {
+          "moduleName": "TargetingComputer1",
+          "slot": 10
+        },
+        {
+          "moduleName": "ElectronicCountermeasures1",
+          "slot": 12
+        },
+        {
+          "moduleName": "QuantumBattery",
+          "slot": 13
+        },
+        {
+          "moduleName": "VectorThrusters",
+          "slot": 15
+        }
+      ],
+      "noseWeaponTemplateEntries": [
+        {
+          "moduleName": "HeavyRailCannonMk3",
+          "slot": 8
+        }
+      ],
+      "hullWeaponTemplateEntries": [
+        {
+          "moduleName": "PointDefenseLaserTurret",
+          "slot": 14
+        },
+        {
+          "moduleName": "60cmGreenLaserBattery",
+          "slot": 11
+        }
+      ],
+      "factionId": 4712
+    },
+    "playerShipTemplate1": {
+      "dataName": "playerShipTemplate1",
+      "_displayName": "Senegal Block 2",
+      "role": "MM_SpaceSuperiority",
+      "hullName": "Battlecruiser",
+      "driveName": "BurnerDrivex1",
+      "propellantTanks": 20,
+      "moduleTemplateEntries": [
+        {
+          "moduleName": "MoltenSaltHeatSink",
+          "slot": 2
+        },
+        {
+          "moduleName": "TargetingComputer2",
+          "slot": 10
+        },
+        {
+          "moduleName": "ElectronicCountermeasures2",
+          "slot": 12
+        },
+        {
+          "moduleName": "QuantumBattery",
+          "slot": 13
+        },
+        {
+          "moduleName": "RepairBay",
+          "slot": 15
+        }
+      ],
+      "noseWeaponTemplateEntries": [
+        {
+          "moduleName": "720cmGreenLaserCannon",
+          "slot": 8
+        }
+      ],
+      "hullWeaponTemplateEntries": [
+        {
+          "moduleName": "PointDefenseLaserTurret",
+          "slot": 14
+        },
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 11
+        }
+      ],
+      "factionId": 4712
+    },
+    "playerShipTemplate0": {
+      "dataName": "playerShipTemplate0",
+      "_displayName": "Huang He Block 2",
+      "role": "MM_SpaceSuperiority",
+      "hullName": "Battlecruiser",
+      "driveName": "BurnerDrivex6",
+      "propellantTanks": 15,
+      "moduleTemplateEntries": [
+        {
+          "moduleName": "MoltenSaltHeatSink",
+          "slot": 2
+        },
+        {
+          "moduleName": "TargetingComputer1",
+          "slot": 10
+        },
+        {
+          "moduleName": "ElectronicCountermeasures1",
+          "slot": 12
+        },
+        {
+          "moduleName": "QuantumBattery",
+          "slot": 13
+        },
+        {
+          "moduleName": "VectorThrusters",
+          "slot": 15
+        }
+      ],
+      "noseWeaponTemplateEntries": [
+        {
+          "moduleName": "HeavyRailCannonMk3",
+          "slot": 8
+        }
+      ],
+      "hullWeaponTemplateEntries": [
+        {
+          "moduleName": "PointDefenseLaserTurret",
+          "slot": 14
+        },
+        {
+          "moduleName": "60cmGreenLaserBattery",
+          "slot": 11
+        }
+      ],
+      "factionId": 4712
+    },
+    "playerShipTemplate209": {
+      "dataName": "playerShipTemplate209",
+      "_displayName": "Cimarron",
+      "role": "MM_SpaceSuperiority",
+      "hullName": "Monitor",
+      "driveName": "BurnerDrivex6",
+      "propellantTanks": 20,
+      "moduleTemplateEntries": [
+        {
+          "moduleName": "MoltenSaltHeatSink",
+          "slot": 2
+        },
+        {
+          "moduleName": "Magazine",
+          "slot": 13
+        },
+        {
+          "moduleName": "TargetingComputer1",
+          "slot": 11
+        }
+      ],
+      "noseWeaponTemplateEntries": [],
+      "hullWeaponTemplateEntries": [
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 10
+        },
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 7
+        },
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 12
+        },
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 9
+        }
+      ],
+      "factionId": 4712
+    },
+    "playerShipTemplate322": {
+      "dataName": "playerShipTemplate322",
+      "_displayName": "Sturgeon",
+      "role": "InnerSystemColonyShip",
+      "hullName": "Corvette",
+      "driveName": "BurnerDrivex6",
+      "propellantTanks": 44,
+      "moduleTemplateEntries": [
+        {
+          "moduleName": "FissionPlatformKit",
+          "slot": 2
+        },
+        {
+          "moduleName": "FissionPlatformKit",
+          "slot": 9
+        },
+        {
+          "moduleName": "FissionPlatformKit",
+          "slot": 10
+        }
+      ],
+      "noseWeaponTemplateEntries": [
+        {
+          "moduleName": "240cmGreenLaserCannon",
+          "slot": 7
+        }
+      ],
+      "hullWeaponTemplateEntries": [
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 8
+        }
+      ],
+      "factionId": 4712
+    },
+    "playerShipTemplate402": {
+      "dataName": "playerShipTemplate402",
+      "_displayName": "Cimarron Block 2",
+      "role": "MM_SpaceSuperiority",
+      "hullName": "Monitor",
+      "driveName": "BurnerDrivex6",
+      "propellantTanks": 20,
+      "moduleTemplateEntries": [
+        {
+          "moduleName": "MoltenSaltHeatSink",
+          "slot": 2
+        },
+        {
+          "moduleName": "Magazine",
+          "slot": 13
+        },
+        {
+          "moduleName": "TargetingComputer1",
+          "slot": 11
+        }
+      ],
+      "noseWeaponTemplateEntries": [],
+      "hullWeaponTemplateEntries": [
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 10
+        },
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 12
+        },
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 9
+        },
+        {
+          "moduleName": "PointDefenseLaserTurret",
+          "slot": 7
+        }
+      ],
+      "factionId": 4712
+    },
+    "playerShipTemplate112": {
+      "dataName": "playerShipTemplate112",
+      "_displayName": "Tongala",
+      "role": "TroopCarrier",
+      "hullName": "Cruiser",
+      "driveName": "OrionDrivex1",
+      "propellantTanks": 74,
+      "moduleTemplateEntries": [
+        {
+          "moduleName": "MarineAssaultUnit",
+          "slot": 2
+        },
+        {
+          "moduleName": "MoltenSaltHeatSink",
+          "slot": 9
+        },
+        {
+          "moduleName": "MarineAssaultUnit",
+          "slot": 11
+        },
+        {
+          "moduleName": "ElectronicCountermeasures2",
+          "slot": 12
+        },
+        {
+          "moduleName": "MarineAssaultUnit",
+          "slot": 14
+        },
+        {
+          "moduleName": "MarineAssaultUnit",
+          "slot": 16
+        },
+        {
+          "moduleName": "MarineAssaultUnit",
+          "slot": 17
+        }
+      ],
+      "noseWeaponTemplateEntries": [
+        {
+          "moduleName": "480cmGreenLaserCannon",
+          "slot": 7
+        }
+      ],
+      "hullWeaponTemplateEntries": [
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 10
+        },
+        {
+          "moduleName": "PointDefenseLaserTurret",
+          "slot": 13
+        },
+        {
+          "moduleName": "CopperheadMissileBay",
+          "slot": 15
+        }
+      ],
+      "factionId": 4712
+    },
+    "SubmitCouncilShipTemplate260 Refit 1114": {
+      "dataName": "SubmitCouncilShipTemplate260 Refit 1114",
+      "_displayName": "Comet",
+      "role": "LL_Bomber",
+      "hullName": "Battlecruiser",
+      "driveName": "BurnerDrivex6",
+      "propellantTanks": 32,
+      "moduleTemplateEntries": [
+        {
+          "moduleName": "LithiumHeatSink",
+          "slot": 2
+        },
+        {
+          "moduleName": "ElectronicCountermeasures2",
+          "slot": 10
+        },
+        {
+          "moduleName": "SlushHydrogenTankage",
+          "slot": 12
+        },
+        {
+          "moduleName": "Lithium-IonBattery",
+          "slot": 13
+        },
+        {
+          "moduleName": "TargetingComputer2",
+          "slot": 15
+        }
+      ],
+      "noseWeaponTemplateEntries": [
+        {
+          "moduleName": "HeavyRailCannonMk3",
+          "slot": 8
+        }
+      ],
+      "hullWeaponTemplateEntries": [
+        {
+          "moduleName": "LightRailgunBatteryMk3",
+          "slot": 11
+        },
+        {
+          "moduleName": "LightRailgunBatteryMk3",
+          "slot": 14
+        }
+      ],
+      "factionId": 4713
+    },
+    "AlienCouncilShipTemplate566": {
+      "dataName": "AlienCouncilShipTemplate566",
+      "_displayName": "Resolute Fate",
+      "role": "SS_Interceptor",
+      "hullName": "AlienDreadnought",
+      "driveName": "AlienFusionTorchx6",
+      "propellantTanks": 16,
+      "moduleTemplateEntries": [
+        {
+          "moduleName": "AlienLithiumHeatSink",
+          "slot": 2
+        },
+        {
+          "moduleName": "AlienMuonSpiker",
+          "slot": 11
+        },
+        {
+          "moduleName": "AlienTargetingComputer",
+          "slot": 12
+        },
+        {
+          "moduleName": "AlienHydronTrap",
+          "slot": 13
+        },
+        {
+          "moduleName": "AlienECM",
+          "slot": 14
+        },
+        {
+          "moduleName": "AlienExoticNanowireBattery",
+          "slot": 15
+        },
+        {
+          "moduleName": "SalamanderTerrorUnitPod",
+          "slot": 16
+        },
+        {
+          "moduleName": "AlienRepairBay",
+          "slot": 17
+        },
+        {
+          "moduleName": "AlienMagazine",
+          "slot": 18
+        }
+      ],
+      "noseWeaponTemplateEntries": [
+        {
+          "moduleName": "Alien1024cmVioletLaserCannon",
+          "slot": 9
+        }
+      ],
+      "hullWeaponTemplateEntries": [
+        {
+          "moduleName": "Alien384cmVioletLaserBattery",
+          "slot": 19
+        },
+        {
+          "moduleName": "AlienPointDefenseLaserTurret",
+          "slot": 21
+        },
+        {
+          "moduleName": "AlienPointDefenseParticleBeam",
+          "slot": 22
+        },
+        {
+          "moduleName": "AdvancedAlienLightMagBattery",
+          "slot": 23
+        },
+        {
+          "moduleName": "Alien64cmVioletLaserBattery",
+          "slot": 24
+        }
+      ],
+      "factionId": 4717
+    }
+  },
+  "driveStats": {
+    "BurnerDrivex1": {
+      "displayName": "Burner Drive x1",
+      "EV_kps": 69,
+      "thrust_N": 108000,
+      "thrustCap": 24,
+      "propellant": "Hydrogen",
+      "driveClassification": "Fission_Thermal",
+      "flatMass_tons": 0,
+      "requiredProjectName": "Project_BurnerDrive",
+      "disabled": false
+    },
+    "BurnerDrivex6": {
+      "displayName": "Burner Drive x6",
+      "EV_kps": 69,
+      "thrust_N": 648000,
+      "thrustCap": 24,
+      "propellant": "Hydrogen",
+      "driveClassification": "Fission_Thermal",
+      "flatMass_tons": 0,
+      "requiredProjectName": "Project_BurnerDrive",
+      "disabled": false
+    },
+    "OrionDrivex1": {
+      "displayName": "Orion Drive x1",
+      "EV_kps": 42.1,
+      "thrust_N": 16000000,
+      "thrustCap": 5,
+      "propellant": "ReactionProducts",
+      "driveClassification": "Fission_Pulse",
+      "flatMass_tons": 0,
+      "requiredProjectName": "Project_OrionDrive",
+      "disabled": false
+    },
+    "AlienFusionTorchx6": {
+      "displayName": "Alien Fusion Torch x6",
+      "EV_kps": 1300,
+      "thrust_N": 9540000,
+      "thrustCap": 40,
+      "propellant": "Hydrogen",
+      "driveClassification": "Fusion_Thermal",
+      "flatMass_tons": 60,
+      "requiredProjectName": "Project_AlienMasterProject",
+      "disabled": false
+    },
+    "PulsedPlasmoidDrivex6": {
+      "displayName": "Pulsed Plasmoid Drive x6",
+      "EV_kps": 425,
+      "thrust_N": 13200,
+      "thrustCap": 1,
+      "propellant": "Anything",
+      "driveClassification": "Electromagnetic",
+      "flatMass_tons": 0,
+      "requiredProjectName": "Project_PulsedPlasmoidDrive",
+      "disabled": false
+    },
+    "HeliconDrivex6": {
+      "displayName": "Helicon Drive x6",
+      "EV_kps": 314,
+      "thrust_N": 120000,
+      "thrustCap": 20,
+      "propellant": "NobleGases",
+      "driveClassification": "Electromagnetic",
+      "flatMass_tons": 0,
+      "requiredProjectName": "Project_HeliconDrive",
+      "disabled": false
+    },
+    "PionTorchx6": {
+      "displayName": "Pion Torch x6",
+      "EV_kps": 14720,
+      "thrust_N": 60000000,
+      "thrustCap": 60,
+      "propellant": "ReactionProducts",
+      "driveClassification": "Antimatter",
+      "flatMass_tons": 0,
+      "requiredProjectName": "Project_AntimatterBeamCoreTorch",
+      "disabled": false
+    },
+    "ApexSolidRocketx1": {
+      "displayName": "Apex Solid Rocket x1",
+      "EV_kps": 2.6,
+      "thrust_N": 14820000,
+      "thrustCap": 1,
+      "propellant": "ReactionProducts",
+      "driveClassification": "Chemical",
+      "flatMass_tons": 66,
+      "requiredProjectName": "Project_Solid-FuelSpaceRockets",
+      "disabled": false
+    },
+    "VASIMRx6": {
+      "displayName": "VASIMR x6",
+      "EV_kps": 147,
+      "thrust_N": 6000,
+      "thrustCap": 60,
+      "propellant": "Hydrogen",
+      "driveClassification": "Electromagnetic",
+      "flatMass_tons": 0,
+      "requiredProjectName": "Project_VASIMR",
+      "disabled": false
+    }
+  },
+  "propellantModules": {
+    "LiquidHydrogenContainment": {
+      "displayName": "Liquid Hydrogen Containment",
+      "evMultiplier": 1.2,
+      "requiresHydrogenPropellant": true,
+      "requiredProjectName": "Project_LiquidHydrogenContainment"
+    },
+    "SlushHydrogenTankage": {
+      "displayName": "Slush Hydrogen Tankage",
+      "evMultiplier": 1.35,
+      "requiresHydrogenPropellant": true,
+      "requiredProjectName": "Project_SlushHydrogenTankage"
+    },
+    "HydronTrap": {
+      "displayName": "Hydron Trap",
+      "evMultiplier": 1.5,
+      "requiresHydrogenPropellant": true,
+      "requiredProjectName": "Project_HydronTrap"
+    },
+    "AlienSlushHydrogenTankage": {
+      "displayName": "Alien Slush Hydrogen Tankage",
+      "evMultiplier": 1.5,
+      "requiresHydrogenPropellant": true,
+      "requiredProjectName": "Project_AlienMasterProject"
+    },
+    "AlienHydronTrap": {
+      "displayName": "Alien Hydron Trap",
+      "evMultiplier": 2,
+      "requiresHydrogenPropellant": true,
+      "requiredProjectName": "Project_AlienMasterProject"
+    }
+  }
+}

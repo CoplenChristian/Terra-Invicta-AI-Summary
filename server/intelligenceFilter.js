@@ -164,6 +164,15 @@ class IntelligenceFilter {
         // about them is observer-dependent, so they pass through unfiltered
         // in both modes.
         missionSpecs: rawSnapshot.missionSpecs,
+        // Likewise the unlock index, drive stats and propellant modules: they
+        // are the installed templates, identical for every faction and every
+        // mode. What IS observer-dependent -- which of these a faction has
+        // completed or may research -- lives on the faction record, which the
+        // player branch below redacts.
+        unlockIndex: rawSnapshot.unlockIndex,
+        driveStats: rawSnapshot.driveStats,
+        propellantModules: rawSnapshot.propellantModules,
+        projectGating: rawSnapshot.projectGating,
         miningScarcityWeights: rawSnapshot.miningScarcityWeights,
         isOmniscient: true
       };
@@ -516,6 +525,10 @@ class IntelligenceFilter {
       shipHullStats: rawSnapshot.shipHullStats,
       // Public game rules, not intelligence -- unfiltered in player mode too.
       missionSpecs: rawSnapshot.missionSpecs,
+      unlockIndex: rawSnapshot.unlockIndex,
+      driveStats: rawSnapshot.driveStats,
+      propellantModules: rawSnapshot.propellantModules,
+      projectGating: rawSnapshot.projectGating,
       miningScarcityWeights: rawSnapshot.miningScarcityWeights,
       isOmniscient: false
     };

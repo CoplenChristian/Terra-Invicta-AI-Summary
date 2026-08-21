@@ -67,6 +67,7 @@ import { logisticsResource } from './logistics.mjs';
 import { miningAnalysisResource, miningProspectsResource } from './mining.mjs';
 import { miningExpansionResource } from './miningExpansion.mjs';
 import { alienThreatResource } from './alienThreat.mjs';
+import { propulsionResource } from './propulsion.mjs';
 import { deltaResource } from './delta.mjs';
 import { mobilityResource } from './mobility.mjs';
 import { bodyStatusResource, theatersResource } from './theaters.mjs';
@@ -334,6 +335,12 @@ const INTEL_ENDPOINTS = Object.freeze([
       });
       return { count: prospects.ranked.length, items: prospects.ranked, ...prospects };
     }
+  },
+  {
+    key: 'propulsion',
+    example: `${OMNISCIENT}&limit=8`,
+    project: (snapshot, { observerId, mode, designId, limit }) =>
+      propulsionResource(snapshot, { observerId, mode, designId, limit })
   },
   {
     key: 'miningExpansion',
