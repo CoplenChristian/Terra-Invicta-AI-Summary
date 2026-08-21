@@ -1,14 +1,20 @@
-# Campaign settings — the dashboard is ignoring the multipliers
+# Campaign settings — measured, and the numbers are already right
 
-Written 2026-08-21 against `2b6e3d5`.
+Written 2026-08-21 against `2b6e3d5`. **Conclusion reached by measurement, 2026-08-21:
+no rate model needs changing.** What remains is a display and transparency fix.
 
-This campaign runs custom difficulty with several rates at 200%. The snapshot bakes the
-difficulty *label* and drops every multiplier, so any model that projects a duration, a
-rate, or a remaining cost is working from stock numbers.
+This campaign runs custom difficulty with four rates at 200%. The premise of this spec was
+that the dashboard, which bakes only the difficulty *label*, must therefore be projecting
+durations and rates from stock numbers. **That premise is wrong**, and implementing the
+"fix" would have introduced 2× errors into figures that are currently correct.
+
+The reason is structural: the dashboard **reads measured values from the save** almost
+everywhere rather than computing from base rates, so the multipliers are already baked into
+what it reads.
 
 ---
 
-## Measured
+## The settings
 
 `TIMetadataState` in the raw save:
 
@@ -26,142 +32,147 @@ missionControlBonusAI                  "0"
 averageMonthlyEvents                   "5"
 ```
 
-Only `metadata.difficulty` reaches the snapshot, and it reads **"Normal"** — which is
-actively misleading while `customDifficulty` is true. A reader sees a stock campaign.
+## Findings, one per multiplier
 
-## The parse trap
+| multiplier | verdict |
+| :-- | :-- |
+| `researchSpeedMultiplier` | **checked — unaffected.** Acts on output, not cost |
+| `miningProductivityMultiplier` | **checked — unaffected.** Site rates are realised extraction |
+| `nationalIPMultiplier` | **checked — unaffected.** `computeBaseIP` reproduces the save's own figure |
+| `alienProgressionSpeed` | **checked — unaffected.** Hate is `save-derived`; venting rate is measured or refused |
+| `controlPointMaintenanceFreebieBonus` | **not applicable.** No model computes control-point upkeep |
+| `averageMonthlyEvents` | **not applicable.** Nothing consumes an event rate |
 
-**These are strings carrying a percent sign or a bare numeral.** `Number("200%")` is
-`NaN`, so the usual `Number(x) ?? 0` / `|| 0` idiom yields a confident **zero** — and a
-zero multiplier is worse than no multiplier, because it silently annihilates whatever it
-touches.
+### Research — acts on output, not on cost
 
-This is the third instance of this class in this repo: comma-formatted `req power` on 92
-drives produced a fake power pin, and `researchCost: -1` sentinels made chains look
-cheaper. Strip the `%`, parse, and treat unparseable as **`null` — never `0`, and never a
-silent fallback to `1`.** A multiplier that cannot be read must make the affected figure
-report `unknown`, not quietly proceed at stock rate.
-
-## Research — measured, and it needs NO adjustment
-
-This was the assumed motivation for the whole spec, and the measurement reverses it.
-**Research costs and durations are already correct. Do not "fix" them.**
-
-**The multiplier acts on income, not on cost.** Scanning all 14 saves for the highest
-accumulated-versus-template-cost ratio on an item still in progress:
+Scanning all 14 saves for the highest accumulated-versus-template-cost ratio on an item
+still in progress:
 
 ```
-Fleet Logistics   accumulatedResearch 44,780  /  template researchCost 45,000  =  99.5%
+Fleet Logistics   accumulatedResearch 44,780 / template researchCost 45,000 = 99.5%
                   still in progress (First.gz)
 ```
 
-If a 200% rate halved the effective cost to 22,500, that project would have completed at
-22,500 and could never have reached 44,780. **Effective cost equals template cost.** Every
-remaining-cost figure the advisor prints — 3,000 for Colony Core, 15,000 for the Antimatter
-Microfission chain — is right as it stands.
+A halved effective cost of 22,500 would have completed that project long before it reached
+44,780. **Effective cost equals template cost**, so every remaining-cost figure the advisor
+prints is right.
 
-**And the income figure is already post-multiplier**, so durations are right too.
-`monthsAtCurrentIncome` derives from `cachedYearlyRevenue.Research`, and the measurement
-recorded in `ALLOCATION_MODEL.reproduction` (`shared/researchSlots.mjs`) compared delivery
-predicted from that revenue against delivery actually observed, over two consecutive
-intervals: **1.147× and 0.993×**. Had revenue been pre-multiplier while real delivery ran
-at 200%, those ratios would have been near 2.0. They are near 1.0. The revenue the save
-reports already includes the multiplier.
+Income is already post-multiplier too. `monthsAtCurrentIncome` derives from
+`cachedYearlyRevenue.Research`, and the reproduction recorded in `ALLOCATION_MODEL`
+(`shared/researchSlots.mjs`) compared predicted against observed delivery over two
+intervals at **1.147× and 0.993×**. Pre-multiplier revenue against real 200% delivery would
+have shown ~2.0.
 
-Both figures are therefore correct today, and applying a 2× correction to either would
-*introduce* the error this spec was written to remove.
+The player's report that "techs are half what they normally are" describes the experience
+accurately — research completes twice as fast — but that comes from doubled output, and the
+dashboard already reflects it.
 
-The player's report that "techs are half what they normally are" is a fair description of
-the experience — research completes twice as fast — but it comes from doubled output, not
-from halved cost, and the dashboard already reflects it.
+### Mining — site rates are realised extraction
 
-**Record research as checked-and-unaffected.** The remaining multipliers are still open.
-
-## Surfaces to check
-
-Each of these plausibly consumes a rate. **Check each; do not assume a uniform fix.**
-
-| multiplier | plausibly affects |
-| :-- | :-- |
-| `researchSpeedMultiplier` | **CHECKED — unaffected.** Costs are template costs and income is already post-multiplier. No adjustment; see the section above |
-| `miningProductivityMultiplier` | **OPEN.** Mining and economic value, tonnes/month, mining expansion board. One measurement attempted and discarded — see below |
-| `nationalIPMultiplier` | nation investment-point projections, Advise valuations |
-| `alienProgressionSpeed` | alien threat timelines, hate trajectory, any "months until" estimate |
-| `controlPointMaintenanceFreebieBonus` | control-point and mission-control budgets (note the AI variant is 0 — this is a player-only bonus of 150) |
-| `averageMonthlyEvents` | event-rate assumptions, if any model carries one |
-
-A surface that turns out **not** to consume the rate should be recorded as checked and
-unaffected, so the next reader does not re-derive it.
-
-### Mining — one approach tried and discarded, do not repeat it
-
-`siteMonthlyOutput` (`shared/intel/common.mjs:122`) reads per-resource rates straight off
-the site and applies only `rateMultiplier`, which is a **daily-to-monthly unit conversion**
-(×30 unless the unit already says "month"), not a difficulty factor. So the rates are
-save-measured, as research revenue was — which made comparing our computed total against
-the faction's observed `monthlyIncome` look like the same decisive test.
-
-It is not. Attempted and discarded:
+Observer-owned sites with a **completed** mine, per-day rates × 30, against the faction's
+own `monthlyIncome`:
 
 ```
-resource     our sum    faction monthlyIncome    ratio
-water         1229.4            703.56           0.572
-volatiles      931.1            895.69           0.962
-metals         411.4           1161.26           2.823
-nobles          91.0            291.56           3.204
-fissiles        10.9              6.78           0.622
+resource      rate/day   x30 = /month   actual income   ratio
+water            22.71          681.2          703.56   1.033
+volatiles        31.80          954.1          895.69   0.939
+metals           35.39         1061.8         1161.26   1.094
+nobleMetals       8.93          268.0          291.56   1.088
+fissiles          0.19            5.6            6.78   1.219
 ```
 
-No consistent factor, because the comparison is confounded three ways: the `mining`
-endpoint returns all **409 prospected sites**, not the observer's built mines; mining sites
-carry no `factionId`, so an owner filter silently matches everything; and the rate unit is
-**per day** while `monthlyIncome` is per month. Any of the three alone invalidates it.
+Five independent resources near 1.0; an omitted 200% would read ~2.0 throughout. The
+residual spread is consistent with small non-mining contributions and rounding.
 
-A cleaner test would compare a **single built mine's** save-reported rate against the base
-rate for that body in `TIMiningProfileTemplate.json`. Note also that
-`miningProductivityMultiplier` has no `...AI` counterpart — unlike
-`controlPointMaintenanceFreebieBonus` — which suggests it is global rather than
-player-only, so cross-faction comparison will not discriminate either.
+Two wrong turns, recorded so they are not repeated:
+
+1. The first comparison summed all **409 prospected sites** instead of the observer's 17
+   completed mines, and compared per-day rates against per-month income. It produced
+   ratios of 0.57–3.20 and meant nothing. Both faults must be fixed together.
+2. "All 280 unmined sites report rates, so these values are richness rather than
+   extraction" is **wrong**. Unmined sites report *projected* yield — exactly what a
+   prospecting board should show. The same field on a built mine carries the realised rate.
+
+For the next reader: `siteMonthlyOutput` (`shared/intel/common.mjs:122`) applies only
+`rateMultiplier`, which is a daily→monthly unit conversion (×30), not a difficulty term.
+That is correct, because the rates it reads are already actuals.
+
+### National IP — the formula reproduces the game's own figure
+
+This was the one genuine candidate, because `computeBaseIP`
+(`server/engine/adviseEconomics.js:34`) **derives** IP rather than reading it:
+
+```
+baseIP = max(0, GDP_bn^0.35 × unrestFactor − armyNavyDrag)
+```
+
+A derived value cannot inherit a multiplier the save applies. But the save carries
+`baseInvestmentPoints_month` per nation, so the formula can be tested directly. Across
+**295 nations, median actual/computed = 1.000**, with exact matches on nations carrying no
+army drag:
+
+```
+United Malay Nation   25.58 actual / 25.58 computed   1.000
+Brazil                19.08 / 19.08                   1.000
+Mexico                17.24 / 17.24                   1.000
+Colombia              15.71 / 15.72                   1.000
+```
+
+The 0.55–0.94 outliers come from a crude replication of the army-drag term (all armies
+assumed idle at 0.5); the shipped code distinguishes `atHome && !deployed` and should match
+at least as closely. **The formula already produces the game's real IP.**
+
+### Alien progression, control points, events
+
+`alienHateEconomics.mjs` reports `source: 'save-derived'`, and the venting rate is measured
+from a previous-save comparison and **explicitly refused when unmeasurable** — including in
+player mode, where the true hate figure is redacted. Nothing projects from a stock rate.
+
+No model computes control-point upkeep, so the 150-point player freebie has nothing to be
+misapplied to. Nothing consumes an event rate.
+
+---
 
 ## What to build
 
-**1. Bake the settings.** Carry the full `TIMetadataState` custom-difficulty block into the
-snapshot alongside `difficulty`, parsed to numbers with `null` for unparseable. Both
-runtimes.
+Correctness needs nothing. **The remaining defect is presentational and real:**
 
-**2. Say when difficulty is customised.** Anywhere the difficulty label renders, a
-`customDifficulty: true` campaign must not read as plain "Normal". Show the label plus the
-non-stock multipliers, or mark it customised.
+`metadata.difficulty` reads **"Normal"** while `customDifficulty` is true and four rates
+run at 200%. A reader sees a stock campaign. Anyone comparing this dashboard's figures
+against a stock-difficulty reference will draw wrong conclusions, and any future model that
+*computes* rather than reads will need these values.
 
-**3. Apply the rate where it belongs**, once the direction is settled, and **state the
-applied multiplier next to any figure it changed** so a surprising number is explicable.
-A duration that silently halves is indistinguishable from a bug.
+1. **Bake the settings.** Carry the `TIMetadataState` custom-difficulty block into the
+   snapshot alongside `difficulty`, parsed numerically, `null` where unparseable.
+2. **Never render a customised campaign as plain "Normal."** Show the label plus the
+   non-stock multipliers, or mark it customised.
+3. **Record the verdicts above in code**, next to the models they clear, so a future reader
+   does not re-derive them — or worse, "fix" a correct figure.
 
-**4. Where a multiplier is absent or unparseable, report `unknown`** for the derived
-figure rather than falling back to stock. Absent is not 100%.
+### The parse trap
+
+These are strings carrying a percent sign or a bare numeral. `Number("200%")` is `NaN`, so
+`Number(x) ?? 0` yields a confident **zero** — worse than no multiplier, because a zero
+annihilates whatever it touches.
+
+Third instance of this class here: comma-formatted `req power` on 92 drives produced a fake
+580/580 power pin, and `researchCost: -1` sentinels made tech chains look cheaper. Strip
+the `%`, parse, and treat unparseable as **`null` — never `0`, never a silent `1`.**
 
 ## Constraints
 
-- Both modes. These are campaign settings, not faction intel — they are not redacted, but
-  verify player mode carries them.
-- Absent stays null; `Number("200%")` is `NaN` and must never become `0` or `1`.
-- Nothing campaign-specific: read the values, never hardcode 200%. A new campaign at stock
-  rates must behave identically to today's output.
-- Templates are baked at snapshot-build time; the worker has no filesystem.
+- Both modes. These are campaign settings, not faction intel, but verify player mode
+  carries them.
+- Absent stays null.
+- Nothing campaign-specific: read the values, never hardcode 200%.
 - Read `docs/code-index.md`; update `Purpose:` lines and run `npm run index`.
 
 ## Acceptance
 
-- All ten `TIMetadataState` settings are baked, parsed numerically, with `null` for
-  unparseable. Assert `"200%"` → `200` (or `2.0`, stated explicitly) and never `0`.
-- A campaign with `customDifficulty: true` never renders as plain "Normal".
-- **Research figures are unchanged.** Assert that costs and `monthsAtCurrentIncome` produce
-  the same values before and after this change — the measurement above shows they are
-  already correct, and a regression here would be a 2× error introduced by the fix.
-- Each remaining multiplier is settled the same way: measure which side it acts on before
-  applying it, and record the evidence in this spec rather than assuming from the label.
-- Every affected figure states the multiplier applied to it.
-- Each surface in the table above is recorded as either adjusted or checked-and-unaffected.
-- With the settings absent, behaviour is unchanged and the affected figures report unknown.
-- A stock-rate campaign produces output identical to today's.
+- All ten settings baked and parsed; `"200%"` → a number, never `0`.
+- A `customDifficulty: true` campaign never renders as plain "Normal".
+- **Every existing figure is unchanged.** Research costs, `monthsAtCurrentIncome`, mining
+  tonnes/month and advise IP must produce byte-identical output before and after. This is
+  the most important criterion: the measurements above say they are already correct, and a
+  regression here would be a 2× error introduced by the change.
 - Both modes; full suite green with exact pass/fail/skip counts.

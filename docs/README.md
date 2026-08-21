@@ -10,7 +10,7 @@
 | `research-row-naming-spec.md` | shipped. Rows lead with `gateProjectName`, item parenthesised, `alsoUnlocks` badged when greater than one |
 | `research-tab-layout-spec.md` | shipped, with one follow-up outstanding: the type scale landed at 11/10/9.5/9, and three of the four steps sit within 1px, so the hierarchy still reads flat. Widening the gaps is a small CSS change |
 | `save-autodetect-spec.md` | shipped in `b0ec6dc`. `/api/save-state` plus a 5 s visibility-gated poller, opt-in auto-load, 503 retry on the load path |
-| `campaign-settings-spec.md` | **not implemented.** The save carries `researchSpeedMultiplier`, `miningProductivityMultiplier`, `nationalIPMultiplier` and `alienProgressionSpeed` all at 200%; only the difficulty label is baked, so every duration and rate projection uses stock numbers |
+| `campaign-settings-spec.md` | **measured: no rate model needs changing.** All four 200% multipliers are already reflected because the dashboard reads measured values rather than computing from base rates. Remaining work is presentational — `difficulty` renders as "Normal" while `customDifficulty` is true |
 | `risk-tolerance-spec.md` | **not implemented.** Mission odds are computed and used only to weight expected hate — no rule vetoes on a success floor, so the player cannot say how much risk they will accept |
 | `fleet-procurement-spec.md` | shipped (Part A: dedicated FLEET view procurement extraction; Part B: validated refit advisor with non-composability enforcement) |
 | `obsolete-marker-spec.md` | shipped (backend bake + candidate pool filtering + frontend obsolete marker and active-first sort order) |
