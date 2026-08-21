@@ -23,6 +23,38 @@
     unknown: 'unknown'
   });
 
+  const ARMOR_DATA = Object.freeze({
+    SteelArmor: { displayName: 'Steel Armor', xRay: 0.27, baryonic: 1.0 },
+    TitaniumArmor: { displayName: 'Titanium Armor', xRay: 0.44, baryonic: 1.11 },
+    SiliconCarbideArmor: { displayName: 'Silicon Carbide Armor', xRay: 0.72, baryonic: 4.61 },
+    BoronCarbideArmor: { displayName: 'Boron Carbide Armor', xRay: 1.0, baryonic: 0.62 },
+    CompositeArmor: { displayName: 'Composite Armor', xRay: 1.11, baryonic: 5.21 },
+    FoamedMetalArmor: { displayName: 'Foamed Metal Armor', xRay: 1.62, baryonic: 7.45 },
+    NanotubeArmor: { displayName: 'Nanotube Armor', xRay: 2.53, baryonic: 19.78 },
+    AdamantaneArmor: { displayName: 'Adamantane Armor', xRay: 4.82, baryonic: 31.02 },
+    ExoticArmor: { displayName: 'Exotic Armor', xRay: 2.0, baryonic: 4.62 },
+    HybridArmor: { displayName: 'Hybrid Armor', xRay: 1.8, baryonic: 4.4 },
+    AlienAdamantaneArmor: { displayName: 'Alien Adamantane Armor', xRay: 4.82, baryonic: 31.02 },
+    AlienExoticArmor: { displayName: 'Alien Exotic Armor', xRay: 2.0, baryonic: 4.62 }
+  });
+
+  function formatArmorName(armorId) {
+    if (!armorId) return '';
+    return ARMOR_DATA[armorId]?.displayName || String(armorId).replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
+
+  function computeArmorScore(armorId, isWeighted = true) {
+    if (!armorId) return 0;
+    const entry = ARMOR_DATA[armorId];
+    if (!entry) return 1.0;
+    // Threat weighting: 0.604 * XRayResistance + 0.396 * BaryonicResistance.
+    // When unweighted: equal 0.5 / 0.5 weighting.
+    // Never derived from baryonicHalfValue_cm * density_kgm3 (rejected derivation per research-advisor-spec.md).
+    const xRayWeight = isWeighted ? 0.604 : 0.5;
+    const baryonicWeight = isWeighted ? 0.396 : 0.5;
+    return xRayWeight * entry.xRay + baryonicWeight * entry.baryonic;
+  }
+
   const RULE_SCALAR_KIND = 'rule-scalar';
   const RULE_SCALAR_TITLE = 'This module family has no engineering axis: the game gives each module one '
     + 'shared rule value and names no unit for it. The ratio is only formed against a module carrying the '
@@ -238,9 +270,18 @@
     }
 
     if (rec.armor) {
+      const fittedId = rec.armor.currentArmor;
+      const recId = rec.armor.recommendedMaterialId || rec.armor.recommendedMaterial;
+      const fittedName = formatArmorName(fittedId) || fittedId || 'Fitted Armour';
+      const recName = rec.armor.recommendedMaterial || formatArmorName(recId) || recId;
+      const isMatch = fittedId && recId && (fittedId === recId || fittedName === recName);
+      const armorValue = isMatch
+        ? `Best available armour already fitted: ${recName} · ${rec.armor.threatBasis}`
+        : `${fittedName} → ${recName} · ${rec.armor.threatBasis} (Performance impact unknown due to mass changes)`;
+
       facts.push({
         label: 'ARMOUR RECOMMENDATION',
-        value: `Recommended Material: ${rec.armor.recommendedMaterial || UNAVAILABLE} · ${rec.armor.threatBasis} (Performance impact unknown)`
+        value: armorValue
       });
     }
 
@@ -338,13 +379,61 @@
         </div>`;
 
     const armorRec = rec.armor;
-    const armorText = armorRec && armorRec.recommendedMaterial
-      ? `<div class="fp-refit__armor">
-          <span class="fp-refit__label">Armour:</span>
-          <span>${escapeHtml(armorRec.recommendedMaterial)}</span>
-          <small class="fp-refit__threat" title="${attr(armorRec.threatBasis)}">${escapeHtml(armorRec.weighted ? 'threat-weighted' : 'unweighted')}</small>
-        </div>`
-      : '';
+    let armorText = '';
+    if (armorRec && (armorRec.recommendedMaterial || armorRec.recommendedMaterialId)) {
+      const fittedId = armorRec.currentArmor;
+      const recId = armorRec.recommendedMaterialId || armorRec.recommendedMaterial;
+      const fittedName = formatArmorName(fittedId) || fittedId || 'Fitted Armour';
+      const recName = armorRec.recommendedMaterial || formatArmorName(recId) || recId;
+      const isMatch = fittedId && recId && (fittedId === recId || fittedName === recName);
+
+      const threatBasisTitle = armorRec.threatBasis || (armorRec.weighted ? 'threat-weighted' : 'unweighted');
+      const threatLabel = armorRec.weighted ? 'threat-weighted' : 'unweighted';
+
+      if (isMatch) {
+        // State 1: Fitted matches recommendation — quiet confirmation, no alarm.
+        armorText = `
+          <div class="fp-refit__armor fp-refit__armor--optimal">
+            <span class="fp-refit__label">Armour:</span>
+            <span>Best armour fitted (${escapeHtml(fittedName)})</span>
+            <small class="fp-refit__threat" title="${attr(threatBasisTitle)}">${escapeHtml(threatLabel)}</small>
+          </div>
+        `;
+      } else {
+        // Mismatched armour: compute protection deficit ratio
+        const fittedScore = computeArmorScore(fittedId, armorRec.weighted);
+        const recScore = computeArmorScore(recId, armorRec.weighted);
+        const ratio = (fittedScore > 0 && recScore > 0) ? (recScore / fittedScore) : null;
+        const ratioStr = ratio !== null ? `${dec(ratio, 1)}× behind` : 'upgrade fittable';
+
+        // The 2x threshold between amber (ra-tag--warn) and red (ra-tag--deficit) is a
+        // presentation judgement for visual triage priority, not an in-game threshold.
+        let badgeHtml = '';
+        if (!isObsolete) {
+          if (armorRec.weighted) {
+            if (ratio !== null && ratio >= 2.0) {
+              badgeHtml = `<span class="ra-tag ra-tag--deficit">${escapeHtml(ratioStr)}</span>`;
+            } else if (ratio !== null && ratio > 1.0) {
+              badgeHtml = `<span class="ra-tag ra-tag--warn">${escapeHtml(ratioStr)}</span>`;
+            }
+          } else {
+            // When weighted is false (no alien loadout observable), do not show a red badge
+            if (ratio !== null && ratio > 1.0) {
+              badgeHtml = `<span class="ra-tag ra-tag--warn">${escapeHtml(ratioStr)}</span>`;
+            }
+          }
+        }
+
+        armorText = `
+          <div class="fp-refit__armor">
+            <span class="fp-refit__label">Armour:</span>
+            <span>${escapeHtml(fittedName)} → ${escapeHtml(recName)}</span>
+            ${badgeHtml}
+            <small class="fp-refit__threat" title="${attr(threatBasisTitle)}">${escapeHtml(threatLabel)}</small>
+          </div>
+        `;
+      }
+    }
 
     const powerInfo = design.budgets?.power;
     const powerText = powerInfo?.thrustScalingFactor !== null && powerInfo?.thrustScalingFactor < 1.0

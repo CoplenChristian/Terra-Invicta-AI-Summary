@@ -579,12 +579,17 @@
       });
     }
 
+    const reallocationText = slots.recommendation?.reason
+      || slots.model?.recommendationRefused
+      || ('Not offered. The published allocation formula does not reproduce measured delivery: no single '
+        + '(base, ProjectBonus) pair fits all three pip-carrying slots, and two of its four terms have no shipped '
+        + 'source. The stable relative share between slots (2.26216× / 2.26214×) leads because it cancels income '
+        + 'drift; the 1.147×/0.993× absolute swing is confounded by research-income drift, and the −0.209 project '
+        + 'bonus is confounded by the unvalidated Xenology CategoryBonus (at ≥ 0.2435 the contradiction collapses).');
+
     facts.push({
       label: 'REALLOCATION',
-      value: 'Not offered. The published allocation formula does not reproduce measured delivery: the '
-        + 'same slot with the same pips returned 1.147x the prediction over one 15.5-day interval and '
-        + '0.993x over the next, and the two project slots imply a project bonus of −0.209 — a penalty. '
-        + 'Two of the formula\'s four terms appear in no shipped template.'
+      value: reallocationText
     });
     return facts;
   }
@@ -814,6 +819,8 @@
 
   global.MissionControlResearchAdvisor = {
     render,
-    fetchResearchRanking
+    fetchResearchRanking,
+    openFullRanking,
+    slotFacts
   };
 })(window);

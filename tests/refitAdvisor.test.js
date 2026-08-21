@@ -424,14 +424,15 @@ test('fleet procurement frontend renders four distinct drive recommendation stat
 
   for (const item of advisor.items) {
     const cardHtml = renderRefitDesignCard(item);
-    if (cardHtml.includes('Best available drive already fitted')) {
+    const driveSection = cardHtml.match(/<div class="fp-refit__drive[\s\S]*?<\/div>/)?.[0] || '';
+    if (driveSection.includes('Best available drive already fitted')) {
       state2Count++;
-      assert.ok(!cardHtml.includes('→'), `Design ${item.displayName} in State 2 must not render an arrow`);
+      assert.ok(!driveSection.includes('→'), `Design ${item.displayName} drive in State 2 must not render an arrow`);
     }
-    if (cardHtml.includes('No available drive improves this design without unacceptable ΔV loss')) {
+    if (driveSection.includes('No available drive improves this design without unacceptable ΔV loss')) {
       state3Count++;
-      assert.match(cardHtml, /fails floor/, `Design ${item.displayName} in State 3 must render fails floor badge`);
-      assert.match(cardHtml, /deltaVKps falls from/, `Design ${item.displayName} in State 3 must render verbatim floor reason`);
+      assert.match(driveSection, /fails floor/, `Design ${item.displayName} drive in State 3 must render fails floor badge`);
+      assert.match(driveSection, /deltaVKps falls from/, `Design ${item.displayName} drive in State 3 must render verbatim floor reason`);
     }
   }
 
@@ -789,4 +790,243 @@ test('fleet procurement frontend renders obsolete markers, demotes retired cards
   assert.ok(actIndex !== -1 && obsIndex !== -1, 'Both cards must render');
   assert.ok(actIndex < obsIndex, 'Active design must sort before obsolete design in FLEET view grid');
 });
+
+test('armour mismatch indicator: renders fitted -> rec with graded severity badge and respects all constraints', () => {
+  const { renderRefitDesignCard } = loadFleetProcurementComponent();
+
+  // 1. State 1: Fitted matches recommendation -> quiet confirmation, no alarm/badge
+  const matchedDesign = {
+    designId: 'matched-1',
+    displayName: 'Sturgeon',
+    isObsolete: false,
+    role: DESIGN_ROLES.warship,
+    baseline: { drive: { driveId: 'BurnerDrivex6' }, deltaVKps: 77.0, combatAccelerationMps2: 2.3 },
+    recommendations: {
+      armor: {
+        currentArmor: 'AdamantaneArmor',
+        recommendedMaterial: 'Adamantane Armor',
+        recommendedMaterialId: 'AdamantaneArmor',
+        weighted: true,
+        threatBasis: 'Weighted against observed alien fleet weapon mix (60% energy/X-ray, 40% kinetic/baryonic)'
+      }
+    }
+  };
+  const matchedHtml = renderRefitDesignCard(matchedDesign);
+  const matchedArmor = matchedHtml.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
+  assert.match(matchedArmor, /Best armour fitted \(Adamantane Armor\)/, 'State 1 must render best armour fitted text');
+  assert.ok(!matchedArmor.includes('ra-tag--deficit'), 'State 1 must not render red deficit tag');
+  assert.ok(!matchedArmor.includes('ra-tag--warn'), 'State 1 must not render amber warning tag');
+
+  // 2. State 2: Mismatch under 2x (Nanotube 9.36 -> Adamantane 15.20 = 1.6x behind) -> ra-tag--warn (amber)
+  const warnDesign = {
+    designId: 'warn-1',
+    displayName: 'Tongala',
+    isObsolete: false,
+    role: DESIGN_ROLES.warship,
+    baseline: { drive: { driveId: 'BurnerDrivex6' }, deltaVKps: 15.0, combatAccelerationMps2: 1.0 },
+    recommendations: {
+      armor: {
+        currentArmor: 'NanotubeArmor',
+        recommendedMaterial: 'Adamantane Armor',
+        recommendedMaterialId: 'AdamantaneArmor',
+        weighted: true,
+        threatBasis: 'Weighted against observed alien fleet weapon mix (60% energy/X-ray, 40% kinetic/baryonic)'
+      }
+    }
+  };
+  const warnHtml = renderRefitDesignCard(warnDesign);
+  const warnArmor = warnHtml.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
+  assert.match(warnArmor, /Nanotube Armor\s*→\s*Adamantane Armor/, 'State 2 must render fitted -> recommended transition');
+  assert.match(warnArmor, /<span class="ra-tag ra-tag--warn">1\.6× behind<\/span>/, 'State 2 must render amber 1.6× behind tag');
+  assert.ok(!warnArmor.includes('ra-tag--deficit'), 'State 2 must not render red deficit tag');
+
+  // 3. State 3: Mismatch at 2x or worse (FoamedMetal 3.93 -> Adamantane 15.20 = 3.9x behind) -> ra-tag--deficit (red)
+  const deficitDesign1 = {
+    designId: 'deficit-1',
+    displayName: 'Patapsco',
+    isObsolete: false,
+    role: DESIGN_ROLES.warship,
+    baseline: { drive: { driveId: 'BurnerDrivex6' }, deltaVKps: 14.0, combatAccelerationMps2: 1.9 },
+    recommendations: {
+      armor: {
+        currentArmor: 'FoamedMetalArmor',
+        recommendedMaterial: 'Adamantane Armor',
+        recommendedMaterialId: 'AdamantaneArmor',
+        weighted: true,
+        threatBasis: 'Weighted against observed alien fleet weapon mix (60% energy/X-ray, 40% kinetic/baryonic)'
+      }
+    }
+  };
+  const deficitHtml1 = renderRefitDesignCard(deficitDesign1);
+  const deficitArmor1 = deficitHtml1.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
+  assert.match(deficitArmor1, /Foamed Metal Armor\s*→\s*Adamantane Armor/, 'State 3 must render fitted -> recommended transition');
+  assert.match(deficitArmor1, /<span class="ra-tag ra-tag--deficit">3\.9× behind<\/span>/, 'State 3 must render red 3.9× behind tag');
+
+  // State 3b: CompositeArmor (2.73 -> Adamantane 15.20 = 5.6x behind) -> ra-tag--deficit (red)
+  const deficitDesign2 = {
+    designId: 'deficit-2',
+    displayName: 'Devilfish',
+    isObsolete: false,
+    role: DESIGN_ROLES.warship,
+    baseline: { drive: { driveId: 'NervaDrivex5' } },
+    recommendations: {
+      armor: {
+        currentArmor: 'CompositeArmor',
+        recommendedMaterial: 'Adamantane Armor',
+        recommendedMaterialId: 'AdamantaneArmor',
+        weighted: true,
+        threatBasis: 'Weighted against observed alien fleet weapon mix (60% energy/X-ray, 40% kinetic/baryonic)'
+      }
+    }
+  };
+  const deficitHtml2 = renderRefitDesignCard(deficitDesign2);
+  const deficitArmor2 = deficitHtml2.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
+  assert.match(deficitArmor2, /<span class="ra-tag ra-tag--deficit">5\.6× behind<\/span>/, 'State 3b must render red 5.6× behind tag');
+
+  // 4. Constraint 1: Obsolete designs must not raise a red badge (quiet form)
+  const obsoleteDeficit = {
+    ...deficitDesign1,
+    isObsolete: true
+  };
+  const obsHtml = renderRefitDesignCard(obsoleteDeficit);
+  const obsArmor = obsHtml.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
+  assert.match(obsArmor, /Foamed Metal Armor\s*→\s*Adamantane Armor/, 'Obsolete design must still render transition');
+  assert.ok(!obsArmor.includes('ra-tag--deficit'), 'Obsolete design must not raise red deficit badge');
+  assert.ok(!obsArmor.includes('ra-tag--warn'), 'Obsolete design must not raise amber warning badge');
+
+  // 5. Constraint 2: When weighted === false (no observable alien loadout), do NOT show red badge
+  const unweightedDeficit = {
+    ...deficitDesign1,
+    isObsolete: false,
+    recommendations: {
+      armor: {
+        currentArmor: 'FoamedMetalArmor',
+        recommendedMaterial: 'Adamantane Armor',
+        recommendedMaterialId: 'AdamantaneArmor',
+        weighted: false,
+        threatBasis: 'unweighted (no alien weapon loadout observable in this snapshot)'
+      }
+    }
+  };
+  const unwHtml = renderRefitDesignCard(unweightedDeficit);
+  const unwArmor = unwHtml.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
+  assert.match(unwArmor, /Foamed Metal Armor\s*→\s*Adamantane Armor/);
+  assert.match(unwArmor, /unweighted/);
+  assert.ok(!unwArmor.includes('ra-tag--deficit'), 'Unweighted comparison must never raise red deficit badge');
+});
+
+test('non-vacuous live save verification of armour indicator in player and omniscient modes', () => {
+  const { renderRefitDesignCard } = loadFleetProcurementComponent();
+
+  for (const mode of ['player', 'omniscient']) {
+    const snapshot = snapshotLoader.loadFilteredSnapshot({ observer: 4712, mode });
+    const advisor = buildRefitAdvisor(snapshot, { observerId: 4712, mode });
+
+    assert.strictEqual(advisor.count, 24, `Expected 24 designs in ${mode} mode`);
+
+    const activeItems = advisor.items.filter(it => it.isObsolete !== true);
+    const obsoleteItems = advisor.items.filter(it => it.isObsolete === true);
+
+    assert.strictEqual(activeItems.length, 12, `Expected 12 active designs in ${mode} mode`);
+    assert.strictEqual(obsoleteItems.length, 12, `Expected 12 obsolete designs in ${mode} mode`);
+
+    let activeOptimalCount = 0;
+    let activeRedCount = 0;
+    let activeAmberCount = 0;
+
+    for (const item of activeItems) {
+      const html = renderRefitDesignCard(item);
+      const armorSection = html.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
+      if (armorSection.includes('Best armour fitted')) {
+        activeOptimalCount++;
+        assert.ok(!armorSection.includes('ra-tag--deficit'), `Active optimal design ${item.displayName} must have no red badge`);
+        assert.ok(!armorSection.includes('ra-tag--warn'), `Active optimal design ${item.displayName} must have no amber badge`);
+      } else if (armorSection.includes('ra-tag--deficit')) {
+        activeRedCount++;
+        assert.match(armorSection, /3\.9× behind|5\.6× behind/, `Active red design ${item.displayName} must state ratio`);
+      } else if (armorSection.includes('ra-tag--warn')) {
+        activeAmberCount++;
+        assert.match(armorSection, /1\.6× behind/, `Active amber design ${item.displayName} must state ratio`);
+      }
+    }
+
+    assert.strictEqual(activeOptimalCount, 6, `Expected exactly 6 active designs on optimal armour in ${mode} mode`);
+    assert.strictEqual(activeRedCount, 5, `Expected exactly 5 active designs with red armour deficit in ${mode} mode`);
+    assert.strictEqual(activeAmberCount, 1, `Expected exactly 1 active design with amber armour warning (Tongala) in ${mode} mode`);
+
+    // Obsolete designs: all 12 mismatched, all 12 render quiet (0 red, 0 amber)
+    let obsoleteRedCount = 0;
+    let obsoleteAmberCount = 0;
+    let obsoleteQuietTransitionCount = 0;
+
+    for (const item of obsoleteItems) {
+      const html = renderRefitDesignCard(item);
+      const armorSection = html.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
+      if (armorSection.includes('ra-tag--deficit')) obsoleteRedCount++;
+      if (armorSection.includes('ra-tag--warn')) obsoleteAmberCount++;
+      if (armorSection.includes('→')) obsoleteQuietTransitionCount++;
+    }
+
+    assert.strictEqual(obsoleteRedCount, 0, `Obsolete designs must have 0 red deficit badges in ${mode} mode`);
+    assert.strictEqual(obsoleteAmberCount, 0, `Obsolete designs must have 0 amber warning badges in ${mode} mode`);
+    assert.strictEqual(obsoleteQuietTransitionCount, 12, `All 12 obsolete designs must render transition quietly in ${mode} mode`);
+  }
+});
+
+test('research advisor: openSlotDetails displays un-confounded REALLOCATION reasoning matching ALLOCATION_MODEL', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const vm = require('vm');
+
+  const code = fs.readFileSync(path.join(__dirname, '../public/v2/js/components/research-advisor.js'), 'utf8');
+  const panelMock = {
+    open: payload => { panelPayload = payload; }
+  };
+  const context = {
+    window: {
+      MissionControlDetailPanel: panelMock,
+      MissionControlShared: { escapeHtml: s => s }
+    },
+    MissionControlShared: { escapeHtml: s => s },
+    MissionControlDetailPanel: panelMock,
+    console: { log: () => {}, warn: () => {} }
+  };
+  context.global = context.window;
+  vm.createContext(context);
+  vm.runInContext(code, context);
+
+  // 1. With slots.model / slots.recommendation from live queryIntel
+  const { queryIntel } = require('../server/snapshotLoader');
+  const intel = queryIntel({ endpoint: 'research-ranking', mode: 'player', observer: 4712 });
+  assert.ok(intel.slots, 'Intel payload must carry slots');
+
+  const factsFromIntel = context.window.MissionControlResearchAdvisor.slotFacts(intel.slots);
+  const reallocFact = factsFromIntel.find(f => f.label === 'REALLOCATION');
+  assert.ok(reallocFact, 'REALLOCATION fact must be present');
+  assert.match(reallocFact.value, /no reallocation is recommended/i);
+  assert.match(reallocFact.value, /no single \(base, ProjectBonus\) pair fits all three/);
+  assert.match(reallocFact.value, /relative share between slots/);
+  assert.match(reallocFact.value, /cancels income drift/);
+
+  // Also test openFullRanking integrates slotFacts
+  context.window.MissionControlResearchAdvisor.openFullRanking(intel);
+  assert.ok(panelPayload, 'Panel must have received open call');
+  const panelRealloc = panelPayload.facts.find(f => f.label === 'REALLOCATION');
+  assert.ok(panelRealloc, 'Panel must carry REALLOCATION fact');
+  assert.strictEqual(panelRealloc.value, reallocFact.value);
+
+  // 2. Fallback text when model and recommendation are absent
+  const fallbackFacts = context.window.MissionControlResearchAdvisor.slotFacts({
+    available: true,
+    slots: [{ index: 0, pips: 3, accumulatedResearch: 100, totalCost: 500, percent: 20, displayName: 'Test', kindLabel: 'Slot' }],
+    freeProjectSlots: 0,
+    projectSlotCapacity: 3
+  });
+  const fallbackRealloc = fallbackFacts.find(f => f.label === 'REALLOCATION');
+  assert.ok(fallbackRealloc, 'Fallback REALLOCATION fact must be present');
+  assert.match(fallbackRealloc.value, /2\.26216× \/ 2\.26214×/);
+  assert.match(fallbackRealloc.value, /confounded by research-income drift/);
+  assert.match(fallbackRealloc.value, /confounded by the unvalidated Xenology CategoryBonus/);
+});
+
 
