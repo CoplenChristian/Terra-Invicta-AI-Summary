@@ -173,6 +173,7 @@ class IntelligenceFilter {
         driveStats: rawSnapshot.driveStats,
         propellantModules: rawSnapshot.propellantModules,
         projectGating: rawSnapshot.projectGating,
+        componentStats: rawSnapshot.componentStats,
         miningScarcityWeights: rawSnapshot.miningScarcityWeights,
         isOmniscient: true
       };
@@ -529,6 +530,7 @@ class IntelligenceFilter {
       driveStats: rawSnapshot.driveStats,
       propellantModules: rawSnapshot.propellantModules,
       projectGating: rawSnapshot.projectGating,
+      componentStats: rawSnapshot.componentStats,
       miningScarcityWeights: rawSnapshot.miningScarcityWeights,
       isOmniscient: false
     };

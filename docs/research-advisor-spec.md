@@ -148,6 +148,48 @@ Compute from unlock stats, and state the formula next to the number:
 - **Hull:** `noseHardpoints + hullHardpoints` × best available weapon = throw weight; against `structuralIntegrity` and `mass_tons` for survivability-per-ton; `missionControl` is the ongoing cost, `baseConstructionTime_days` the delay.
 - **Drive:** `EV_kps` sets ΔV per unit propellant; `thrust_N / mass` sets acceleration. Both matter and they trade off — report both, never a blended "drive score".
 
+### Four corrections, measured 2026-08-21 while building phase 2
+
+**1. Hardpoint cost is per mount, not per weapon.** A weapon states a `mount`
+(`OneNose`, `ThreeNoseAngle`, `FourHull`, …) and that mount is what consumes
+hardpoints, so "hardpoints × best weapon" is really `hardpoints ×
+best output-per-hardpoint`. The per-mount costs (One 1, Two 2, Three 3, Four 4,
+Half 0.5) reproduce the hardpoint fill of **all 515 ship designs** in the
+sampled save exactly, nose and hull independently, with the game's `Empty`
+padding entries costing nothing. Perturbing one cost drops the match to 397/515,
+so the check is not vacuous. `HalfNose` and `HalfHull` are used by no design in
+the save and are labelled unverified rather than folded in with the seven that
+were checked.
+
+**2. Matter weapons state no damage; kinetic energy is the model, and it is
+exact.** `0.5 × warheadMass_kg × muzzleVelocity_kps²` reproduces the game's own
+`damage_MJ` for all 7 guns that carry it and `expectedDamage_MJ` for all 16
+plasma weapons at **ratio 1.000000**. That pin is what licenses applying the
+same formula to the 70 magnetic guns, which carry the same two inputs and no
+shipped figure. 31 of 57 missiles (Fragmentation and Penetrator warheads) state
+no damage figure and no inputs that yield one — they are reported as
+not-comparable, never scored zero.
+
+**3. The armour half-value derivation is wrong and was dropped.** Reading
+`baryonicHalfValue_cm` as a half-value layer and pricing it per unit area
+(`cm/100 × density_kgm3`) makes Steel (589 kg/m²) and Titanium (506) the most
+mass-efficient baryonic armours in the game and Nanotube (2,673) one of the
+worst — the exact reverse of the shipped `BaryonicResistance` ratings (Steel
+1.00, Titanium 1.11, Nanotube 19.78, Adamantane 31.02). All 12 armour templates
+carry `XRayResistance` and `BaryonicResistance` outright, so those are the axes
+and nothing is derived from the half-value fields. **Which of the two channels
+ranks first is set by the observed threat mix**, weighted by each hostile
+weapon's modelled sustained output; with nothing hostile observable the endpoint
+declines to rank rather than defaulting to a channel.
+
+**4. A rate needs its magazine beside it.** `AntimatterTorpedoLauncher` carries
+a 22.47 TJ warhead on a 7 s cycle, which is 3.2 GW of "sustained" output — held
+for 28 seconds, because the magazine is four rounds. Sustained output is
+reported with `sustainedOutputDurationS` and `magazineEnergyMJ` beside it. Beam
+weapons carry no magazine field at all; that is a fact about them
+(power-limited, not ammunition-limited) rather than a missing measurement, and
+the two are reported as different codes.
+
 **Comparison baseline is the observer's current best**, not an absolute scale. "3.2× your best" is actionable; "tier 4 weapon" is not.
 
 This connects to the Hold Ground directive, which already computes the dominant capability deficit (ΔV, armour, or hull count). **The research advisor should rank unlocks that close the measured deficit first** — if ΔV is the gap, drive techs outrank weapon techs regardless of raw value.
@@ -308,6 +350,15 @@ them into the middle one is the same error §3b exists to prevent:
 - **`researchCost: -1`** — marks a project that is never researched at all.
   Left alone it becomes `max(0, −1 − 0)` = 0 remaining, which renders as free.
 
+### A fifth state, found while building phase 2 — measured 2026-08-21
+
+**`ungated`.** 33 of the 125 laser templates carry no `requiredProjectName` at
+all, along with a handful of hulls, armours, reactors and radiators. Nothing
+unlocks them because nothing needs to: what makes them usable is whatever mounts
+them. Reporting these as `completed` claims the observer finished a project that
+does not exist; reporting them as `unknown` hides that they cost nothing. They
+get their own state, for the same reason the middle three above have theirs.
+
 `Project_AlienMasterProject` carries both. Its prerequisites are trivially met,
 so without this gate it reads as *"prerequisites clear, rolls at 100%/month,
 cost 0"* — an unreachable target rendered as imminent. On the sampled save this
@@ -376,7 +427,18 @@ Worth building **after** the value model — it is a smaller win and depends on 
 ## 9. Sequencing
 
 1. ~~Unlock index — reverse-map all 16 gated template families to their `requiredProjectName`. Everything else depends on it, and it is pure data with no judgement.~~ **Built 2026-08-21**, together with the propulsion model and `/api/intel/propulsion`. Note one correction: fifteen families carry `requiredProjectName`, but **orgs (83) carry `requiredTechName`** — the gate is a global tech, not a faction project, and the two must not be flattened. All sixteen counts verified against the installed templates: 1,223 gated entries across 436 gates.
-2. Military valuation against the observer's current best.
+2. ~~Military valuation against the observer's current best.~~ **Built
+   2026-08-21** as `/api/intel/military-value`, covering the fourteen unlock
+   families phase 1 did not: the six weapon families (split by role, because
+   point defence is a separate axis), ship hulls, ship armour, power plants,
+   radiators, heat sinks, batteries, utility modules and hab modules. 17
+   comparison classes over 661 catalogue items, each declaring one ranking axis
+   and a stated floor on the axis it trades against — never a blended score.
+   Baked payload `componentStats`: **+166.7 KB raw / +17.0 KB gzipped**, 4.9% of
+   the published player row. Utility and hab modules are compared *within* a
+   shared special rule and never across rules, because there is no exchange rate
+   between an exhaust-velocity multiplier and a targeting computer. Hab-module
+   income is deliberately not valued here; that is step 3.
 3. Economic valuation against live quantities.
 4. Ranking, deficit-aware ordering, and the UI panel.
 5. Slot allocation.

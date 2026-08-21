@@ -109,6 +109,8 @@ export const buildIntelResource = (result, resource, url) => {
   const rawLimit = url.searchParams.get('limit') || (usesQuantityAsLimit(resource) ? url.searchParams.get('quantity') : null);
   const limit = rawLimit && /^\d+$/.test(rawLimit) ? Number(rawLimit) : null;
   const destination = url.searchParams.get('destination');
+  // `military-value` narrows to one unlock family or weapon class.
+  const family = url.searchParams.get('family');
   const fleetId = url.searchParams.get('fleet') || url.searchParams.get('fleetId');
   const designId = url.searchParams.get('design') || url.searchParams.get('designId') || url.searchParams.get('target');
   const quantity = parseInt(url.searchParams.get('quantity'), 10) || 1;
@@ -123,6 +125,7 @@ export const buildIntelResource = (result, resource, url) => {
     theater: theater || null,
     limit,
     destination: destination || null,
+    family: family || null,
     fleet: fleetId || null,
     design: designId || null,
     quantity,
@@ -136,6 +139,7 @@ export const buildIntelResource = (result, resource, url) => {
     theater,
     limit,
     destination,
+    family,
     fleetId,
     designId,
     quantity,

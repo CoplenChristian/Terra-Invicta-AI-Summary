@@ -68,6 +68,7 @@ import { miningAnalysisResource, miningProspectsResource } from './mining.mjs';
 import { miningExpansionResource } from './miningExpansion.mjs';
 import { alienThreatResource } from './alienThreat.mjs';
 import { propulsionResource } from './propulsion.mjs';
+import { militaryValueResource } from './militaryValue.mjs';
 import { deltaResource } from './delta.mjs';
 import { mobilityResource } from './mobility.mjs';
 import { bodyStatusResource, theatersResource } from './theaters.mjs';
@@ -343,6 +344,16 @@ const INTEL_ENDPOINTS = Object.freeze([
       propulsionResource(snapshot, { observerId, mode, designId, limit })
   },
   {
+    key: 'militaryValue',
+    example: `${OMNISCIENT}&family=laser_weapon&detail=full&limit=8`,
+    // Detail-aware for the same reason `fleets` and `ships` are: the full
+    // seventeen-class candidate listing is a 300 KB response, and a discovery
+    // client cannot choose what to fetch if the big payload is the default.
+    detail: true,
+    project: (snapshot, { observerId, mode, family, limit, detail }) =>
+      militaryValueResource(snapshot, { observerId, mode, family, limit, detail })
+  },
+  {
     key: 'miningExpansion',
     example: `${OMNISCIENT}&theater=belt&limit=10`,
     project: (snapshot, { observerId, theater, body, limit }) => {
@@ -496,6 +507,9 @@ export const buildResourceProjection = (snapshot, resource, {
   theater = null,
   limit = null,
   destination = null,
+  // The unlock family (`laser_weapon`, `ship_hull`, ...) or a weapon class key
+  // (`laser_weapon:point-defense`) that `military-value` narrows to.
+  family = null,
   fleetId = null,
   designId = null,
   quantity = 1,
@@ -519,6 +533,7 @@ export const buildResourceProjection = (snapshot, resource, {
     theater,
     limit,
     destination,
+    family,
     fleetId,
     designId,
     quantity,

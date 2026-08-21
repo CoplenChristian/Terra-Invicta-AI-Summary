@@ -111,6 +111,10 @@ function register(app) {
         'mining prospects limit'
       );
       const destination = req.query.destination ? String(req.query.destination).trim() : null;
+      // `military-value` narrows to one unlock family or weapon class. An
+      // unknown value yields an empty class list rather than a 400, the same
+      // way an unmatched `?faction=` yields an empty item list.
+      const family = req.query.family ? String(req.query.family).trim() : null;
       const fleetId = req.query.fleet || req.query.fleetId || null;
       const designId = req.query.design || req.query.designId || req.query.target || null;
       const quantity = parseInt(req.query.quantity, 10) || 1;
@@ -138,6 +142,7 @@ function register(app) {
         theater,
         limit,
         destination,
+        family,
         fleetId,
         designId,
         quantity,

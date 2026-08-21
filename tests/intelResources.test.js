@@ -134,9 +134,15 @@ test('the ships manifest is a roll-up that never loses a ship', () => {
   assert.strictEqual(full.count, summary.shipsTotal, 'full returns one row per ship');
 });
 
-test('only fleets and ships honour detail, and the echo says so', async () => {
+test('only the three heavy endpoints honour detail, and the echo says so', async () => {
   const shared = await import('../shared/intelResources.mjs');
-  assert.deepStrictEqual(Array.from(shared.DETAIL_AWARE_RESOURCES).sort(), ['fleets', 'ships']);
+  // `military-value` joined fleets and ships on 2026-08-21: its full
+  // seventeen-class candidate listing is a 559 KB response against a 146 KB
+  // summary, which is the same reason the other two are detail-aware.
+  assert.deepStrictEqual(
+    Array.from(shared.DETAIL_AWARE_RESOURCES).sort(),
+    ['fleets', 'military-value', 'ships']
+  );
 
   const snapshot = omniscientSnapshot();
   const habs = localResources.buildResource(snapshot, 'habs', { mode: 'omniscient', detail: 'full' });

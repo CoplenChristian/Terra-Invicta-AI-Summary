@@ -63,6 +63,14 @@ export const AVAILABILITY_STATES = Object.freeze({
   // unreachable target rendered as imminent, which is the same class of error
   // §3b exists to prevent.
   factionRestricted: 'faction-restricted',
+  // Added while building phase 2, and for the same reason the two states above
+  // it exist: 33 of the 125 laser templates and a handful of hulls, armours and
+  // reactors carry NO `requiredProjectName` at all. They are not gated behind
+  // research and never were. Reporting them as `completed` would claim the
+  // observer finished a project that does not exist, and `unknown` would hide
+  // that they cost nothing -- both of which are the state-collapsing error
+  // section 3b exists to prevent. This state means "needs no research".
+  ungated: 'ungated',
   unknown: 'unknown'
 });
 

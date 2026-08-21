@@ -25,7 +25,8 @@ const {
   buildUnlockIndex,
   buildDriveStats,
   buildPropellantModules,
-  buildProjectGating
+  buildProjectGating,
+  buildComponentStats
 } = require('./templates');
 
 // Terra Invicta campaigns begin in 2022. The save's TIMetadataState does not
@@ -188,6 +189,9 @@ function buildRawSnapshot(saveData) {
     driveStats: buildDriveStats(),
     propellantModules: buildPropellantModules(),
     projectGating: buildProjectGating(),
+    // The fourteen non-drive unlock families, keyed by the same family names
+    // the unlock index uses so a gate resolves without a second lookup table.
+    componentStats: buildComponentStats(),
     techTree: buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions)
   };
 }

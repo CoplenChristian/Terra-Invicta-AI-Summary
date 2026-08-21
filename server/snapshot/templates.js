@@ -371,14 +371,352 @@ function buildProjectGating() {
   return gating;
 }
 
+// ---------------------------------------------------------------------------
+// Component stats -- phase 2 of the research advisor.
+//
+// The engineering numbers behind the fourteen non-drive unlock families, baked
+// for the same reason `buildDriveStats` is: the hosted worker has no template
+// directory, so a model that reads templates at request time works locally and
+// breaks the deployed site.
+//
+// THE FAMILY KEYS ARE THE UNLOCK-INDEX FAMILY KEYS. `componentStats[family][id]`
+// and `unlockIndex.gates[gate].unlocks[family][].id` are the same namespace, so
+// `shared/unlockIndex.buildItemGateMap` resolves the research gate for anything
+// in here. That is why NO component below carries `requiredProjectName`: the
+// index already holds the whole relation, and re-emitting it measured 14 KB of
+// pure duplication on every published row.
+//
+// Fields are chosen by what the model in `shared/militaryValue.mjs` reads, not
+// by what the template happens to carry. Nothing cosmetic (icon, model, sound,
+// effect resources), nothing the model does not use. Measured cost is reported
+// in tests/militaryValue.test.js, which fails if the payload grows past its
+// stated budget.
+//
+// Absent stays null throughout, and a null field is dropped rather than
+// emitted, so a stat the template omits is ABSENT from the record -- never a
+// zero that would rank the item last and hide it.
+// ---------------------------------------------------------------------------
+
+/** Finite numbers only. A missing or unparseable stat is absent, never zero. */
+const stat = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+
+/** Drops null/undefined/false/empty-array fields so absence stays absence. */
+function compact(record) {
+  const out = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (value === null || value === undefined || value === false) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * The six weapon template files, keyed by their unlock-index family.
+ *
+ * `templateLoader` already merges them into one `weaponModules` map and tags
+ * each entry with `templateFamily`, which is the only way to tell a magnetic
+ * gun from a gun -- both are category `Kinetic`.
+ */
+const WEAPON_FAMILIES = Object.freeze([
+  'laser_weapon', 'magnetic_gun', 'gun', 'particle_weapon', 'plasma_weapon', 'missile'
+]);
+
+function buildWeaponStats(family) {
+  const out = {};
+  for (const weapon of templateLoader.templates.weaponModules.values()) {
+    if (weapon.templateFamily !== family) continue;
+    const id = weapon.dataName;
+    if (!id) continue;
+    out[id] = compact({
+      displayName: weapon.friendlyName || weapon.displayName || id,
+      mount: weapon.mount || null,
+
+      // --- damage inputs -------------------------------------------------
+      // Beam weapons state the energy delivered per shot outright.
+      shotPowerMJ: stat(weapon.shotPower_MJ),
+      // Matter weapons do not; their damage is the projectile's kinetic
+      // energy, and three families ship a figure to check that against.
+      warheadMassKg: stat(weapon.warheadMass_kg),
+      muzzleVelocityKps: stat(weapon.muzzleVelocity_kps),
+      // The game's OWN damage number where it exists: `damage_MJ` on guns,
+      // `expectedDamage_MJ` on plasma, `flatDamage_MJ` on explosive and
+      // nuclear missiles. Carried so the model can be pinned against it
+      // rather than merely asserted -- see MILITARY_FORMULAE.kineticDamage.
+      statedDamageMJ: stat(weapon.damage_MJ) ?? stat(weapon.expectedDamage_MJ) ?? stat(weapon.flatDamage_MJ),
+      statedDamageField: typeof weapon.damage_MJ === 'number'
+        ? 'damage_MJ'
+        : (typeof weapon.expectedDamage_MJ === 'number'
+          ? 'expectedDamage_MJ'
+          : (typeof weapon.flatDamage_MJ === 'number' ? 'flatDamage_MJ' : null)),
+      // 31 of 57 missiles carry no damage figure at all (Fragmentation and
+      // Penetrator warheads). Their class is recorded so the model can say
+      // WHY it cannot price them instead of scoring them zero.
+      warheadClass: weapon.warheadClass || null,
+      missileDeltaVKps: stat(weapon.deltaV_kps),
+
+      // --- rate of fire --------------------------------------------------
+      cooldownS: stat(weapon.cooldown_s),
+      salvoShots: stat(weapon.salvo_shots),
+      intraSalvoCooldownS: stat(weapon.intraSalvoCooldown_s),
+      // Rounds carried. Absent on every laser and particle weapon, because
+      // beam weapons are power-limited rather than ammunition-limited -- a
+      // real distinction, not a missing field, and the model says which.
+      // Without it the antimatter torpedo's 22.5 TJ warhead reads as a
+      // 3.2 GW sustained output it can hold for 28 seconds.
+      magazine: stat(weapon.magazine),
+
+      // --- cost and reach ------------------------------------------------
+      massTons: stat(weapon.baseWeaponMass_tons),
+      targetingRangeKm: stat(weapon.targetingRange_km),
+      crew: stat(weapon.crew),
+      efficiency: stat(weapon.efficiency),
+      bombardmentValue: stat(weapon.bombardmentValue),
+
+      // --- role ----------------------------------------------------------
+      // Structural, not name-matched: a weapon that cannot attack but can
+      // defend is point defence. Point defence is a SEPARATE axis, never a
+      // weaker attack, so this decides which comparison class an entry
+      // joins rather than being folded into one score.
+      attackMode: weapon.attackMode === true,
+      defenseMode: weapon.defenseMode === true,
+      pointDefenseTargetable: weapon.isPointDefenseTargetable === true,
+
+      // --- optics (beam spread is MODELLED and never ranked) --------------
+      mirrorRadiusCm: stat(weapon.mirrorRadius_cm),
+      wavelengthNm: stat(weapon.wavelength_nm),
+      beamQuality: stat(weapon.beam_quality),
+      jitterRad: stat(weapon.jitter_Rad),
+      lensRadiusCm: stat(weapon.lensRadius_cm),
+      emittanceMrad: stat(weapon.emittance_mrad),
+      // Stated by the template, so it is reported rather than modelled.
+      doublingRangeKm: stat(weapon.doublingRange_km),
+      // Particle beams carry their own damage-channel split; everything else
+      // is inferred from the family. Used to pick which armour axis the
+      // observed threat mix loads.
+      xRayFraction: stat(weapon.xRayFraction),
+      baryonFraction: stat(weapon.baryonFraction),
+
+      disabled: weapon.disable === true
+    });
+  }
+  return out;
+}
+
+function buildHullComponentStats() {
+  const out = {};
+  for (const hull of templateLoader.templates.shipHulls.values()) {
+    const id = hull.dataName;
+    if (!id) continue;
+    out[id] = compact({
+      displayName: hull.friendlyName || hull.displayName || id,
+      noseHardpoints: stat(hull.noseHardpoints),
+      hullHardpoints: stat(hull.hullHardpoints),
+      internalModules: stat(hull.internalModules),
+      structuralIntegrity: stat(hull.structuralIntegrity),
+      massTons: stat(hull.mass_tons),
+      missionControl: stat(hull.missionControl),
+      baseConstructionTimeDays: stat(hull.baseConstructionTime_days),
+      consTier: stat(hull.consTier),
+      maxOfficers: stat(hull.maxOfficers),
+      crew: stat(hull.crew),
+      monthlyIncomeMoney: stat(hull.monthlyIncome_Money),
+      alien: hull.alien === true,
+      noShipyardBuild: hull.noShipyardBuild === true
+    });
+  }
+  return out;
+}
+
+function buildArmorStats() {
+  const out = {};
+  for (const armor of templateLoader.templates.shipArmor.values()) {
+    const id = armor.dataName;
+    if (!id) continue;
+    out[id] = compact({
+      displayName: armor.friendlyName || armor.displayName || id,
+      // Half-value layers: the thickness that halves the incoming flux. The
+      // two channels are separate because they are separate threats.
+      baryonicHalfValueCm: stat(armor.baryonicHalfValue_cm),
+      xRayHalfValueCm: stat(armor.xRayHalfValue_cm),
+      densityKgM3: stat(armor.density_kgm3),
+      heatOfVaporizationMJkg: stat(armor.heatofVaporization_MJkg),
+      // `[name, value]` pairs rather than objects: same information, and the
+      // object form cost 40% more on the wire for 12 rows x 3 entries.
+      specialties: (Array.isArray(armor.specialties) ? armor.specialties : [])
+        .filter(entry => entry && entry.armorSpecialty)
+        .map(entry => [entry.armorSpecialty, stat(entry.value)])
+    });
+  }
+  return out;
+}
+
+function buildPowerPlantStats() {
+  const out = {};
+  for (const plant of templateLoader.templates.reactors.values()) {
+    const id = plant.dataName;
+    if (!id) continue;
+    out[id] = compact({
+      displayName: plant.friendlyName || plant.displayName || id,
+      maxOutputGW: stat(plant.maxOutput_GW),
+      // Tonnes per gigawatt. Inverted by the model into GW per tonne so the
+      // axis reads "more is better" like every other output axis.
+      specificPowerTGW: stat(plant.specificPower_tGW),
+      efficiency: stat(plant.efficiency),
+      powerPlantClass: plant.powerPlantClass || null,
+      crew: stat(plant.crew),
+      disabled: plant.disable === true
+    });
+  }
+  return out;
+}
+
+function buildRadiatorStats() {
+  const out = {};
+  for (const radiator of templateLoader.templates.radiators.values()) {
+    const id = radiator.dataName;
+    if (!id) continue;
+    out[id] = compact({
+      displayName: radiator.friendlyName || radiator.displayName || id,
+      specificPowerKWkg: stat(radiator.specificPower_2s_KWkg),
+      specificMassKgM2: stat(radiator.specificMass_2s_kgm2),
+      operatingTempK: stat(radiator.operatingTemp_K),
+      emissivity: stat(radiator.emissivity),
+      // Lower is better; carried so the model can report it as its own axis
+      // instead of pretending heat rejection is the only thing that matters.
+      vulnerability: stat(radiator.vulnerability),
+      radiatorType: radiator.radiatorType || null,
+      crew: stat(radiator.crew),
+      disabled: radiator.disable === true
+    });
+  }
+  return out;
+}
+
+function buildHeatSinkStats() {
+  const out = {};
+  for (const sink of templateLoader.templates.heatSinks.values()) {
+    const id = sink.dataName;
+    if (!id) continue;
+    out[id] = compact({
+      displayName: sink.displayName || sink.friendlyName || id,
+      heatCapacityGJ: stat(sink.heatCapacity_GJ),
+      massTons: stat(sink.mass_tons),
+      crew: stat(sink.crew),
+      disabled: sink.disable === true
+    });
+  }
+  return out;
+}
+
+function buildBatteryStats() {
+  const out = {};
+  for (const battery of templateLoader.templates.batteries.values()) {
+    const id = battery.dataName;
+    if (!id) continue;
+    out[id] = compact({
+      displayName: battery.friendlyName || battery.displayName || id,
+      energyCapacityGJ: stat(battery.energyCapacity_GJ),
+      massTons: stat(battery.mass_tons),
+      rechargeRateGJs: stat(battery.rechargeRate_GJs),
+      hp: stat(battery.hp),
+      crew: stat(battery.crew),
+      disabled: battery.disable === true
+    });
+  }
+  return out;
+}
+
+function buildUtilityModuleStats() {
+  const out = {};
+  for (const module of templateLoader.templates.utilityModules.values()) {
+    const id = module.dataName;
+    if (!id) continue;
+    // `Empty` is the game's placeholder for an unfilled slot -- ship designs
+    // reference it by name where a hardpoint or module bay carries nothing. It
+    // is the ABSENCE of a component, and baking it would put "nothing" in the
+    // catalogue as an ungated, rule-less utility module a player could
+    // ostensibly choose. The utility-module template file is the only one that
+    // carries such a row.
+    if (id === 'Empty') continue;
+    out[id] = compact({
+      displayName: module.friendlyName || module.displayName || id,
+      massTons: stat(module.mass_tons),
+      powerRequirementMW: stat(module.powerRequirement_MW),
+      // 45 distinct rules across 58 modules. There is no exchange rate
+      // between an EV multiplier and a targeting computer, so the model
+      // compares within a rule and refuses to compare across rules.
+      specialModuleRules: (Array.isArray(module.specialModuleRules) ? module.specialModuleRules : [])
+        .filter(rule => typeof rule === 'string' && rule !== ''),
+      specialModuleValue: stat(module.specialModuleValue),
+      minConsTier: stat(module.minConsTier),
+      crew: stat(module.crew),
+      disabled: module.disable === true
+    });
+  }
+  return out;
+}
+
+function buildHabModuleStats() {
+  const out = {};
+  for (const module of templateLoader.templates.habModules.values()) {
+    const id = module.dataName;
+    if (!id) continue;
+    out[id] = compact({
+      displayName: module.friendlyName || module.displayName || id,
+      tier: stat(module.tier),
+      baseMassTons: stat(module.baseMass_tons),
+      crew: stat(module.crew),
+      power: stat(module.power),
+      missionControl: stat(module.missionControl),
+      spaceCombatModule: module.spaceCombatModule === true,
+      buildTimeDays: stat(module.buildTime_Days),
+      habType: module.habType || null,
+      specialRules: (Array.isArray(module.specialRules) ? module.specialRules : [])
+        .filter(rule => typeof rule === 'string' && rule !== ''),
+      specialRulesValue: stat(module.specialRulesValue),
+      // Deliberately NOT carried: the eleven `income*_month` fields. Hab
+      // module value is overwhelmingly ECONOMIC, and economic valuation is
+      // spec section 4 -- a later phase with its own payload. Reporting an
+      // income here would be valuing it against nothing.
+      disabled: module.disable === true
+    });
+  }
+  return out;
+}
+
+/**
+ * `family -> id -> stats` for the fourteen non-drive, non-org unlock families.
+ *
+ * Drives are already covered by `buildDriveStats` (phase 1) and orgs are
+ * tech-gated council equipment rather than ship or hab hardware, so neither
+ * appears here. The remaining fourteen keys match `UNLOCK_FAMILIES` exactly,
+ * which `tests/militaryValue.test.js` asserts rather than assumes.
+ */
+function buildComponentStats() {
+  const stats = {};
+  for (const family of WEAPON_FAMILIES) stats[family] = buildWeaponStats(family);
+  stats.ship_hull = buildHullComponentStats();
+  stats.ship_armor = buildArmorStats();
+  stats.power_plant = buildPowerPlantStats();
+  stats.radiator = buildRadiatorStats();
+  stats.heat_sink = buildHeatSinkStats();
+  stats.battery = buildBatteryStats();
+  stats.utility_module = buildUtilityModuleStats();
+  stats.hab_module = buildHabModuleStats();
+  return stats;
+}
+
 module.exports = {
   MISSION_HATE_SLOT,
   UNLOCK_FAMILIES,
+  WEAPON_FAMILIES,
   buildTraitStatMods,
   buildMissionSpecs,
   buildShipHullStats,
   buildUnlockIndex,
   buildDriveStats,
   buildPropellantModules,
-  buildProjectGating
+  buildProjectGating,
+  buildComponentStats
 };
