@@ -50,6 +50,13 @@
   // inverted.
   const ROLLING_STATE = 'prereq-clear-but-unrolled';
 
+  // The two reachability verdicts that are not a pass. `unknown` is separate
+  // from `beyond-horizon` on purpose: the first says the duration could not be
+  // formed, the second says it was and is too long, and reading the first as
+  // the second would report an unmeasured chain as measured-and-rejected.
+  const BEYOND_HORIZON = 'beyond-horizon';
+  const REACH_UNKNOWN = 'unknown';
+
   function num(value) {
     if (value === null || value === undefined || value === '') return null;
     const parsed = Number(value);
@@ -178,6 +185,22 @@
   const ACTIONABLE_GROUPS = ['buildable-now', 'researchable-now'];
   const ASPIRATIONAL_GROUPS = ['prereq-clear-but-unrolled', 'prereq-blocked'];
 
+  // A row standing behind unresearched prerequisites, shown in the group of the
+  // step the player would actually start. The badge is what separates it at a
+  // glance from a row that is startable as it stands, so it is not decoration.
+  const CHAIN_TITLE = 'This is a chain, not a single project. The name on the left is the step you can '
+    + 'start; the arrow points at what the chain ends in. The points and the months are for the WHOLE '
+    + 'remaining chain at your measured research income, not for the first step alone.';
+  const NEW_CAPABILITY_TITLE = 'A capability you field nothing comparable to, so no improvement multiple '
+    + 'exists to form. That is not a failed measurement — there is genuinely no baseline — and inventing '
+    + 'a ratio against a zero would be fabrication.';
+
+  /** A row whose payoff is more than one project away. Never a bare stepsCount read. */
+  function isChainRow(row) {
+    const steps = num(row && row.chain && row.chain.stepsCount);
+    return steps !== null && steps > 1;
+  }
+
   function getUnlockCount(row) {
     const unlocks = row.alsoUnlocks;
     if (!unlocks) return null;
@@ -191,6 +214,27 @@
   function formatMilitaryName(row) {
     const item = row.displayName ? String(row.displayName).trim() : 'unnamed candidate';
     const project = row.gateProjectName ? String(row.gateProjectName).trim() : null;
+
+    // A promoted chain leads with the step that can actually be STARTED, never
+    // with the destination. "Exotics" is the instruction; "Exotic Heat Sinks" is
+    // two projects away and cannot be begun this turn, so putting it in the lead
+    // position -- where every other row's lead IS startable -- is the misreading
+    // this whole promotion has to avoid. The destination follows the arrow so
+    // the row still says what the chain buys.
+    const next = row.chainPromoted === true && row.chain && row.chain.immediateNextStep
+      ? String(row.chain.immediateNextStep.displayName || '').trim()
+      : '';
+    if (next) {
+      const destination = row.chain.destinationDisplayName
+        ? String(row.chain.destinationDisplayName).trim()
+        : (project || item);
+      return {
+        lead: next,
+        sub: `→ ${destination}`,
+        tooltip: `Research ${next} next — the first of ${int(row.chain.stepsCount)} steps to ${destination}`
+          + `, which unlocks ${item}. ${destination} cannot be started today.`
+      };
+    }
 
     if (row.isZeroCost === true) {
       return {
@@ -252,20 +296,26 @@
       notes.push(`<span class="ra-tag" title="${attr(unlockTitle)}">${int(count)} items</span>`);
     }
 
-    if (row.chain && row.chain.stepsCount > 1) {
+    if (isChainRow(row)) {
       const chainTitle = `Prerequisite chain: ${int(row.chain.stepsCount)} steps, ${int(row.chain.totalRemainingCost)} pts total`
-        + (row.chain.immediateNextStep ? ` (Immediate next: ${row.chain.immediateNextStep.displayName} — ${int(row.chain.immediateNextStep.cost)} pts)` : '');
+        + ` (${months(row.chain.monthsAtCurrentIncome)} at current research income)`
+        + (row.chain.immediateNextStep ? ` (Immediate next: ${row.chain.immediateNextStep.displayName} — ${int(row.chain.immediateNextStep.cost)} pts)` : '')
+        + ` ${CHAIN_TITLE}`;
       notes.push(`<span class="ra-tag ra-tag--chain" title="${attr(chainTitle)}">${int(row.chain.stepsCount)} steps</span>`);
     }
 
     if (row.isFirstInClass) {
-      notes.push('<span class="ra-tag ra-tag--newcap">new</span>');
+      notes.push(`<span class="ra-tag ra-tag--newcap" title="${attr(NEW_CAPABILITY_TITLE)}">new</span>`);
     }
 
-    const meta = [
-      `${int(row.chain?.totalRemainingCost || row.remainingResearchCost)} pts`,
-      months(row.monthsAtCurrentIncome)
-    ];
+    // Cost and duration have to describe the SAME plan. The whole-chain total
+    // beside the destination project's own months is two numbers about two
+    // different things -- on the live save that read "1,300,325 pts · 63.6 mo",
+    // where the 63.6 belongs to the 200,000-point last step alone.
+    const chainMeta = isChainRow(row);
+    const meta = chainMeta
+      ? [`${int(row.chain.totalRemainingCost)} pts`, months(row.chain.monthsAtCurrentIncome)]
+      : [`${int(row.remainingResearchCost)} pts`, months(row.monthsAtCurrentIncome)];
     const roll = rollNote(row.unlockChance, row.availabilityState);
     if (roll) meta.push(roll);
 
@@ -386,6 +436,10 @@
     'no-improvement': 'no gain',
     'no-research-required': 'buildable now',
     'cost-unmeasured': 'cost unknown',
+    // Split out of `not-comparable`, which was counting these AND the panel's
+    // capabilities block was counting them again under a different name. Both
+    // now read one predicate, so the two totals agree.
+    'first-in-class': 'first of kind',
     'not-comparable': 'no baseline'
   };
 
@@ -393,7 +447,8 @@
     'no-improvement': 'measured, and no better than the best you already field on that axis',
     'no-research-required': 'behind a finished project, or behind no project at all — costs no research',
     'cost-unmeasured': 'the remaining research cost is not measurable, so no value-per-point ratio exists',
-    'not-comparable': 'you field nothing in that class, or the item lacks the stat the class ranks on'
+    'first-in-class': 'you field nothing in that class at all, so no multiple exists to form — the same rows the capability list counts',
+    'not-comparable': 'the class has a fielded baseline, but this item lacks the stat the class ranks on'
   };
 
   const CENSUS_TITLE = 'Never scored zero. A candidate that cannot be scored is carried as its own state, '
@@ -629,11 +684,17 @@
         const slotNote = row.slotNote ? ` · ${row.slotNote}` : '';
         const nameInfo = formatMilitaryName(row);
         const rowLabel = nameInfo.sub ? `${nameInfo.lead} ${nameInfo.sub}` : nameInfo.lead;
+        const chainDrill = isChainRow(row);
         facts.push({
           label: `MILITARY RESEARCH · ${group.label} · ${rowLabel}`,
           value: `${row.isFirstInClass ? 'First of kind' : `${mult(row.improvementMultiple)} ${row.axisLabel || 'unnamed axis'}`} · `
-            + `${int(row.chain?.totalRemainingCost || row.remainingResearchCost)} pts · ${months(row.monthsAtCurrentIncome)}`
-            + (row.chain && row.chain.stepsCount > 1 ? ` · ${int(row.chain.stepsCount)} steps` : '')
+            + (chainDrill
+              ? `${int(row.chain.totalRemainingCost)} pts · ${months(row.chain.monthsAtCurrentIncome)} (whole chain)`
+              : `${int(row.remainingResearchCost)} pts · ${months(row.monthsAtCurrentIncome)}`)
+            + (chainDrill ? ` · ${int(row.chain.stepsCount)} steps` : '')
+            + (row.chainPromoted === true && row.destinationAvailabilityLabel
+              ? ` · destination is ${String(row.destinationAvailabilityLabel).toLowerCase()}, not startable today`
+              : '')
             + (row.chain?.immediateNextStep ? ` · Next: ${row.chain.immediateNextStep.displayName}` : '')
             + (row.closesDeficit ? ' · closes the measured gap' : '')
             + (row.clearsFloor === false ? ' · fails its floor' : '')
@@ -646,22 +707,71 @@
       }
     }
     for (const cap of ((payload.military && payload.military.capabilities) || {}).items || []) {
-      const chainInfo = cap.chain && cap.chain.stepsCount > 1
-        ? ` · ${int(cap.chain.stepsCount)} steps (Next: ${cap.chain.immediateNextStep?.displayName || '—'})`
+      const capChain = isChainRow(cap);
+      const chainInfo = capChain
+        ? ` · ${int(cap.chain.stepsCount)} steps (Next: ${cap.chain.immediateNextStep?.displayName || UNAVAILABLE})`
         : '';
       facts.push({
         label: `CAPABILITY · New · ${cap.displayName || cap.id}`,
         value: `First capability of its kind — no baseline to compare against · `
-          + `${int(cap.chain?.totalRemainingCost || cap.remainingResearchCost)} pts · ${months(cap.monthsAtCurrentIncome)}`
+          + (capChain
+            ? `${int(cap.chain.totalRemainingCost)} pts · ${months(cap.chain.monthsAtCurrentIncome)} (whole chain)`
+            : `${int(cap.remainingResearchCost)} pts · ${months(cap.monthsAtCurrentIncome)}`)
           + chainInfo
       });
     }
+    // What the reachability gate refused, and why. A gate that silently removes
+    // the highest-ratio chain from the ranking is a truncation, and truncation
+    // announces itself -- without this the only visible effect on the live save
+    // is that a 231x candidate is not where its ratio says it should be.
+    const promotion = (payload.military && payload.military.chainPromotion) || null;
+    if (promotion) {
+      const horizon = promotion.horizon || {};
+      facts.push({
+        label: 'CHAIN REACH · planning horizon',
+        value: horizon.available === true
+          ? `${months(horizon.months)} of research at ${int(horizon.monthlyResearchIncome)}/mo — `
+            + `${int(horizon.points)} pts. A plan longer than the ${dec(horizon.campaignYearsElapsed, 0)} years `
+            + `this campaign has already run is past the horizon and is not promoted, however good its ratio. `
+            + `${horizon.horizonAssumed === true ? 'The campaign age rests on the documented start-year assumption, not a reading from the save. ' : ''}`
+            + 'Our inference, not a figure the game publishes.'
+          : 'No planning horizon could be formed for this snapshot, so no chain was promoted. An '
+            + 'unmeasured duration is not a duration that fits.'
+      });
+      for (const refused of promotion.declined || []) {
+        facts.push({
+          label: `CHAIN REACH · not promoted · ${refused.displayName || refused.id}`,
+          value: `${mult(refused.improvementMultiple)} ${refused.axisLabel || 'unnamed axis'} · `
+            + `${int(refused.stepsCount)} steps · ${int(refused.totalRemainingCost)} pts · `
+            + `${months(refused.monthsAtCurrentIncome)} at current income — beyond the horizon, so it is not `
+            + 'offered as advice however well it scores per point.'
+        });
+      }
+      const omitted = num(promotion.declinedOmittedCount);
+      if (omitted !== null && omitted > 0) {
+        facts.push({
+          label: 'CHAIN REACH · not listed',
+          value: `${int(omitted)} further chain${omitted === 1 ? ' was' : 's were'} refused and are not listed `
+            + 'here. A capped list that does not say it is capped is the same defect as inventing rows.'
+        });
+      }
+    }
     for (const chain of ((payload.military && payload.military.driveChains) || {}).items || []) {
+      // The same horizon the ranking applies. These rows are deliberately not
+      // filtered by it — a drive chain is a stated long-term option — but a
+      // chain the ranking refused as unreachable must not read here as advice.
+      const reach = (chain.chain && chain.chain.reachability) || null;
+      const reachNote = reach && reach.state === BEYOND_HORIZON
+        ? ` · ${months(reach.months)} at current income — beyond the ${months(reach.horizonMonths)} planning horizon, so it is not promoted into the ranking`
+        : (reach && reach.state === REACH_UNKNOWN
+          ? ' · time to complete could not be measured for this chain'
+          : (reach ? ` · ${months(reach.months)} at current income` : ''));
       facts.push({
         label: `DRIVE CHAIN · ${chain.displayName} on ${chain.referenceDesign}`,
         value: `${mult(chain.rankMetricMultiple)} ${chain.axisLabel} · `
           + `ΔV ${dec(chain.deltaVKps, 1)} km/s · Accel ${dec(chain.combatAccelerationMps2, 2)} m/s² · `
-          + `${int(chain.chain.totalRemainingCost)} pts · ${int(chain.chain.stepsCount)} steps (Immediate: ${chain.chain.immediateNextStep?.displayName || '—'})`
+          + `${int(chain.chain.totalRemainingCost)} pts · ${int(chain.chain.stepsCount)} steps (Immediate: ${chain.chain.immediateNextStep?.displayName || UNAVAILABLE})`
+          + reachNote
           + (chain.dryMassCaveat ? ` · ${chain.dryMassCaveat}` : '')
       });
     }

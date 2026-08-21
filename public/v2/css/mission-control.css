@@ -7163,6 +7163,28 @@ button.council-orders__row:focus-visible {
   color: var(--text-dim);
 }
 
+/* "N steps": the payoff is more than one project away, so the row's lead name
+   is the step you start and not the thing you get. Informational, not a
+   warning, so it takes --blue rather than --warning or --danger. Both of these
+   were emitted by research-advisor.js with no rule at all and rendered as a
+   bare .ra-tag, indistinguishable from the neutral badges beside them. Neither
+   sets a font-size: .ra-tag already carries var(--fs-tag), and a second size
+   here would be a hardcoded value competing with the scale. */
+.ra-tag--chain {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: rgba(143, 178, 189, 0.14);
+}
+
+/* "new": a capability with no fielded baseline, so it carries no multiple. Set
+   apart from every ranked row because it is not ranked at all -- the metric
+   column reads "First of kind" rather than a number. */
+.ra-tag--newcap {
+  border-color: var(--purple);
+  color: var(--purple);
+  background: rgba(179, 157, 189, 0.14);
+}
+
 .ra-track__foot {
   margin-top: auto;
   display: flex;

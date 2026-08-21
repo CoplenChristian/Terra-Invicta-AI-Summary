@@ -36,7 +36,7 @@
 import { DEFAULT_OBSERVER_FACTION_ID } from '../constants.mjs';
 import { asArray, round, sameId, toFiniteNumber } from '../util.mjs';
 import { summarizeFleetCapability } from '../fleetCapability.mjs';
-import { AVAILABILITY_STATES, buildAvailabilityResolver } from '../researchAvailability.mjs';
+import { AVAILABILITY_STATES, buildAvailabilityResolver, monthsAtIncome } from '../researchAvailability.mjs';
 import {
   ACTIONABLE_GROUPS,
   ASPIRATIONAL_GROUPS,
@@ -45,19 +45,27 @@ import {
   AXIS_KINDS,
   DELIVERY_FLOOR_ORDER,
   DEFICIT_RESEARCH_REMEDIES,
+  FIRST_IN_CLASS_LABEL,
   RANKING_FORMULAE,
   RANKING_METHOD,
   RANK_STATES,
+  chainAwareValuePerResearchPoint,
   closesDeficit,
   compareEconomicRows,
   compareMilitaryRows,
   economicRankRows,
   groupByAvailability,
+  isFirstInClassCandidate,
   militaryValuePerResearchPoint,
   orientEconomicRow,
   resolveDeficitOrdering,
   tallyUnrankable
 } from '../researchRanking.mjs';
+import {
+  REACHABILITY_STATES,
+  buildPlanningHorizon,
+  chainReachability
+} from '../researchReachability.mjs';
 import { buildResearchSlotAllocation } from '../researchSlots.mjs';
 import { buildTechPath, observerGraph } from '../techGraph.mjs';
 import { propulsionResource } from './propulsion.mjs';
@@ -100,7 +108,11 @@ function militaryRow({
   const scored = militaryValuePerResearchPoint(multiple, remainingResearchCost, availabilityState, context);
   const isZeroCost = scored.state === RANK_STATES.noResearchRequired && scored.gainMultiple !== null && scored.gainMultiple > 0;
   const effectiveState = isZeroCost ? 'buildable-now' : (availabilityState || AVAILABILITY_STATES.unknown);
-  const isFirstInClass = (multiple === null) && (context?.fieldedInClass === 0 || context?.fieldedInRule === 0 || (typeof context?.noBaselineNote === 'string' && context.noBaselineNote.length > 0));
+  // ONE predicate, shared with `militaryValuePerResearchPoint`, so the row flag
+  // and the census bucket cannot disagree about the same candidate. They did:
+  // the capabilities block counted 40 while the census filed all 40 under
+  // `not-comparable` and left `first-in-class` at zero.
+  const isFirstInClass = isFirstInClassCandidate(multiple, context);
   return {
     id,
     track: 'military',
@@ -125,8 +137,8 @@ function militaryRow({
     isZeroCost,
     isBuildableNow: isZeroCost,
     isFirstInClass,
-    verdict: isFirstInClass ? 'first-in-class' : null,
-    verdictLabel: isFirstInClass ? 'First capability of its kind — no baseline to compare against' : null,
+    verdict: isFirstInClass ? RANK_STATES.firstInClass : null,
+    verdictLabel: isFirstInClass ? FIRST_IN_CLASS_LABEL : null,
     rankState: scored.state,
     rankReason: scored.reason,
     availabilityState: effectiveState,
@@ -385,6 +397,152 @@ function militaryValueRows(military) {
   return rows;
 }
 
+// ---------------------------------------------------------------------------
+// CHAIN PROMOTION
+// ---------------------------------------------------------------------------
+
+const AVAILABILITY_RANK = new Map(AVAILABILITY_GROUP_ORDER.map((state, index) => [state, index]));
+
+/** Position of an availability state in the offered order; unknown states last. */
+const availabilityRank = (state) => (AVAILABILITY_RANK.has(state)
+  ? AVAILABILITY_RANK.get(state)
+  : AVAILABILITY_GROUP_ORDER.length);
+
+/**
+ * Moves a chain candidate into the availability group of the step the player
+ * would actually START.
+ *
+ * WHY. A candidate two projects away is filed under `prereq-blocked`, which is
+ * the truth about the DESTINATION and says nothing about the decision in front
+ * of the player -- which is whether to start the next step, and that step may be
+ * researchable this turn. Filed by its destination the row sits in a group the
+ * COMMAND panel never renders, so the whole chain feature was invisible on
+ * screen while being correct in the payload.
+ *
+ * WHAT MOVES. Only the group. The row keeps its own state on
+ * `destinationAvailabilityState`, carries `startableNow: false`, and is priced
+ * over the whole remaining chain rather than over its gate, so it can be read
+ * beside a genuinely startable row without being mistaken for one.
+ *
+ * THE GATE COMES FIRST, and this is the whole point of the exercise. Measured on
+ * the live save, `Pion Torch x6` beats every promoted chain on payoff per point
+ * of its chain (1.77e-4 against Exotic Heat Sink's 1.15e-4) and its chain is
+ * 1,300,325 points -- 413 months at the observer's measured income. Promoting it
+ * would put 34 years of research at the top of a panel that answers "what should
+ * I research next". Reachability is therefore evaluated BEFORE the ratio, and a
+ * chain that fails it is never promoted however good the ratio is.
+ *
+ * Every rejection records its reason, and `unknown` is a rejection: a chain
+ * whose duration could not be measured is not a chain known to fit.
+ */
+function applyChainPromotion(row) {
+  const chain = row.chain || null;
+  const steps = toFinite(chain?.stepsCount);
+  const fromState = row.availabilityState;
+
+  const decline = (reason, eligible = true) => {
+    row.chainPromoted = false;
+    row.chainPromotion = {
+      eligible,
+      promoted: false,
+      fromState,
+      fromLabel: AVAILABILITY_GROUP_LABELS[fromState] || fromState,
+      toState: null,
+      toLabel: null,
+      reachability: chain?.reachability ?? null,
+      reason
+    };
+    return row;
+  };
+
+  if (!chain || steps === null || steps <= 1) {
+    // A single-step candidate is already filed under the step it is: there is
+    // nothing to promote and nothing to explain.
+    row.chainPromoted = false;
+    row.chainPromotion = null;
+    return row;
+  }
+  if (!ASPIRATIONAL_GROUPS.includes(fromState)) {
+    return decline('this candidate is already in a group the player can act on, so its chain needs no '
+      + 'promotion', false);
+  }
+
+  const reachability = chain.reachability || null;
+  if (!reachability || reachability.state !== REACHABILITY_STATES.withinHorizon) {
+    return decline(reachability?.reason
+      || 'the time to complete this chain could not be measured, and an unmeasured duration is not a '
+        + 'duration that fits');
+  }
+
+  if (chainAwareValuePerResearchPoint(row) === null) {
+    return decline('the whole-chain payoff per research point could not be formed for this candidate, so '
+      + 'it cannot be ordered against the rows already in an actionable group');
+  }
+
+  const next = chain.immediateNextStep || null;
+  const toState = next?.availabilityState || null;
+  if (!toState || toState === AVAILABILITY_STATES.unknown) {
+    return decline('the availability of the immediate next step could not be resolved, so there is no '
+      + 'group to promote this candidate into');
+  }
+  if (availabilityRank(toState) >= availabilityRank(fromState)) {
+    return decline('the immediate next step is no more available than the destination, so promoting this '
+      + 'candidate would move it nowhere');
+  }
+
+  row.chainPromoted = true;
+  row.startableNow = false;
+  row.destinationAvailabilityState = fromState;
+  row.destinationAvailabilityLabel = AVAILABILITY_GROUP_LABELS[fromState] || fromState;
+  row.availabilityState = toState;
+  row.availabilityLabel = AVAILABILITY_GROUP_LABELS[toState] || toState;
+  row.chainPromotion = {
+    eligible: true,
+    promoted: true,
+    fromState,
+    fromLabel: row.destinationAvailabilityLabel,
+    toState,
+    toLabel: row.availabilityLabel,
+    reachability,
+    reason: `ordered in the group of its immediate next step (${next.displayName}), which is what the `
+      + `player would start; the destination itself stays ${row.destinationAvailabilityLabel.toLowerCase()} `
+      + `and the row is priced over all ${steps} remaining steps.`
+  };
+  return row;
+}
+
+/**
+ * The census row for a chain the promotion pass considered.
+ *
+ * Flat and small on purpose: the full row is already in its group, and this list
+ * exists so a reader can see WHAT was refused and why without reading the
+ * ranking twice.
+ */
+function chainPromotionSummary(row) {
+  const chain = row.chain || {};
+  const next = chain.immediateNextStep || null;
+  return {
+    id: row.id,
+    displayName: row.displayName,
+    gateProjectName: row.gateProjectName ?? null,
+    destinationDisplayName: chain.destinationDisplayName ?? null,
+    stepsCount: toFinite(chain.stepsCount),
+    totalRemainingCost: toFinite(chain.totalRemainingCost),
+    monthsAtCurrentIncome: toFinite(chain.monthsAtCurrentIncome),
+    improvementMultiple: toFinite(row.improvementMultiple),
+    axisLabel: row.axisLabel ?? null,
+    chainValuePerResearchPoint: chainAwareValuePerResearchPoint(row),
+    immediateNextStep: next
+      ? { id: next.id, displayName: next.displayName, availabilityState: next.availabilityState ?? null }
+      : null,
+    promoted: row.chainPromotion?.promoted === true,
+    fromState: row.chainPromotion?.fromState ?? null,
+    toState: row.chainPromotion?.toState ?? null,
+    reachabilityState: chain.reachability?.state ?? null,
+    reason: row.chainPromotion?.reason ?? null
+  };
+}
+
 /**
  * Deduplicates military rows by gate project WITHIN an availability group.
  *
@@ -541,6 +699,11 @@ export const researchRankingResource = (snapshot, {
   const observerFaction = asArray(snapshot?.factions).find(entry => sameId(entry?.ID, observerId)) || null;
   const monthlyResearch = toFinite(observerFaction?.totalResearch);
 
+  // --- how far ahead this campaign can be planned -------------------------
+  // The gate a multi-step chain has to pass BEFORE its ratio is looked at.
+  // Both terms are read from the save; see shared/researchReachability.mjs.
+  const planningHorizon = buildPlanningHorizon({ snapshot, monthlyResearchIncome: monthlyResearch });
+
   // --- the measured deficit, consumed not re-derived ----------------------
   // The same call the Hold Ground directive makes, against the same module.
   const fleetCapability = summarizeFleetCapability({
@@ -571,10 +734,20 @@ export const researchRankingResource = (snapshot, {
       }
       const free = slots.freeProjectSlots;
       const cap = slots.projectSlotCapacity;
+      // A promoted chain row is NOT startable: what a free slot buys is its
+      // immediate next step, so the note names that step and that step's own
+      // time. Saying "start now" of a candidate two projects away is the exact
+      // misreading promotion has to avoid.
+      const next = row.chainPromoted === true ? (row.chain?.immediateNextStep || null) : null;
+      const nextMonths = next && next.monthsAtCurrentIncome !== null && next.monthsAtCurrentIncome !== undefined
+        ? `${next.monthsAtCurrentIncome} mo`
+        : '—';
       if (free !== null && free > 0) {
         row.slotAction = 'free-slot';
         row.freeProjectSlots = free;
-        row.slotNote = `${free} of ${cap} project slots free — start now with nothing lost (${row.monthsAtCurrentIncome !== null ? `${row.monthsAtCurrentIncome} mo` : '—'} at current research income).`;
+        row.slotNote = next
+          ? `${free} of ${cap} project slots free — start ${next.displayName}, the first of ${row.chain.stepsCount} steps (${nextMonths} at current research income).`
+          : `${free} of ${cap} project slots free — start now with nothing lost (${row.monthsAtCurrentIncome !== null ? `${row.monthsAtCurrentIncome} mo` : '—'} at current research income).`;
       } else if (free !== null && free === 0 && cap > 0) {
         row.slotAction = 'occupied-slot';
         row.activeOccupants = asArray(slots.activeProjects).map(p => ({
@@ -584,7 +757,9 @@ export const researchRankingResource = (snapshot, {
           totalCost: p.totalCost,
           percent: p.percent
         }));
-        row.slotNote = `All ${cap} project slots active — starting this requires backlogging an active project (progress is retained).`;
+        row.slotNote = next
+          ? `All ${cap} project slots active — starting ${next.displayName}, the first of ${row.chain.stepsCount} steps, requires backlogging an active project (progress is retained).`
+          : `All ${cap} project slots active — starting this requires backlogging an active project (progress is retained).`;
       } else {
         row.slotAction = 'no-slot';
         row.slotNote = 'No project slots available to start this research.';
@@ -627,19 +802,40 @@ export const researchRankingResource = (snapshot, {
       if (path && path.remainingPath && path.remainingPath.length > 0) {
         const targetNode = byId.get(row.gateProjectId);
         const immediateNextNode = path.remainingPath[path.remainingPath.length - 1];
+        const nextResolved = resolver.resolve(immediateNextNode.id);
+        const nextState = nextResolved?.state || AVAILABILITY_STATES.unknown;
         row.chain = {
           destinationId: row.gateProjectId,
           destinationDisplayName: targetNode?.displayName || row.gateProjectName || row.gateProjectId,
           stepsCount: path.remainingPath.length,
           totalRemainingCost: path.totalRemainingResearchCost,
+          // The WHOLE chain's time to complete. The row's own
+          // `monthsAtCurrentIncome` is the destination project alone, which on a
+          // twelve-step chain is the last step with eleven left out -- printing
+          // that beside the chain total would put two numbers on screen that do
+          // not describe the same thing.
+          monthsAtCurrentIncome: path.researchCostComplete === false
+            ? null
+            : monthsAtIncome(path.totalRemainingResearchCost, monthlyResearch),
           researchCostComplete: path.researchCostComplete,
           uncostedNodes: path.uncostedNodes,
           routesEvaluated: path.routesEvaluated,
+          reachability: chainReachability({
+            totalRemainingCost: path.totalRemainingResearchCost,
+            researchCostComplete: path.researchCostComplete,
+            horizon: planningHorizon
+          }),
           immediateNextStep: {
             id: immediateNextNode.id,
             displayName: immediateNextNode.displayName,
             cost: immediateNextNode.cost,
-            status: immediateNextNode.status
+            status: immediateNextNode.status,
+            // The step the player would actually start, and its own availability
+            // -- read from the same resolver every other state on this row comes
+            // from, so the two cannot disagree.
+            availabilityState: nextState,
+            availabilityLabel: AVAILABILITY_GROUP_LABELS[nextState] || nextState,
+            monthsAtCurrentIncome: monthsAtIncome(immediateNextNode.cost, monthlyResearch)
           },
           steps: path.remainingPath.map(p => ({
             id: p.id,
@@ -648,6 +844,9 @@ export const researchRankingResource = (snapshot, {
             status: p.status
           }))
         };
+        // Priced over the whole chain rather than the gate alone. Derived by the
+        // one exported helper the comparator orders on, never a second division.
+        row.chainValuePerResearchPoint = chainAwareValuePerResearchPoint(row);
       }
     }
     return row;
@@ -664,9 +863,20 @@ export const researchRankingResource = (snapshot, {
     .filter(row => row.isFirstInClass === true)
     .map(attachSlotAction);
 
+  // Promotion happens BEFORE the slot action and before grouping, because both
+  // read `availabilityState`: a promoted row's slot advice is about the step it
+  // was promoted into, not about the destination it is still blocked behind.
   const militaryRanked = militaryAll
     .filter(row => !isZeroCostRow(row) && row.rankState === RANK_STATES.ranked)
+    .map(applyChainPromotion)
     .map(attachSlotAction);
+
+  const promotedChains = militaryRanked.filter(row => row.chainPromoted === true);
+  const declinedChains = militaryRanked
+    .filter(row => row.chainPromoted === false && row.chainPromotion?.eligible === true)
+    .sort((left, right) => (chainAwareValuePerResearchPoint(right) ?? -Infinity)
+      - (chainAwareValuePerResearchPoint(left) ?? -Infinity)
+      || String(left.id).localeCompare(String(right.id)));
 
   const militaryGroups = groupByAvailability(militaryRanked, compareMilitaryRows)
     .map(group => ({
@@ -706,6 +916,21 @@ export const researchRankingResource = (snapshot, {
             destinationDisplayName: byId.get(refit.requiredProjectName)?.displayName || refit.requiredProjectName,
             stepsCount: path.remainingPath.length,
             totalRemainingCost: path.totalRemainingResearchCost,
+            // The same horizon the promotion pass applies, on the same helper.
+            // These rows are NOT filtered by it -- a drive chain is a stated
+            // long-term option and the list exists to show them -- but they must
+            // not present a 413-month chain as advice while the ranking beside
+            // them refuses the identical chain for being unreachable. Two
+            // accountings of one fact that disagree is the drift this repo has
+            // already been bitten by.
+            monthsAtCurrentIncome: path.researchCostComplete === false
+              ? null
+              : monthsAtIncome(path.totalRemainingResearchCost, monthlyResearch),
+            reachability: chainReachability({
+              totalRemainingCost: path.totalRemainingResearchCost,
+              researchCostComplete: path.researchCostComplete,
+              horizon: planningHorizon
+            }),
             researchCostComplete: path.researchCostComplete,
             uncostedNodes: path.uncostedNodes,
             routesEvaluated: path.routesEvaluated,
@@ -797,7 +1022,8 @@ export const researchRankingResource = (snapshot, {
       availabilityLabels: AVAILABILITY_GROUP_LABELS,
       actionableGroups: ACTIONABLE_GROUPS,
       aspirationalGroups: ASPIRATIONAL_GROUPS,
-      axisKinds: Object.values(AXIS_KINDS)
+      axisKinds: Object.values(AXIS_KINDS),
+      reachability: Object.values(REACHABILITY_STATES)
     },
     ordering: {
       basis: 'two parallel rankings, concatenated in a fixed track order (military, then economic). '
@@ -808,7 +1034,8 @@ export const researchRankingResource = (snapshot, {
         + 'and rule-scalar candidates demoted behind every measured-axis one. Already-unlocked items '
         + 'are partitioned into procurement and not ranked against research.',
       deficitApplied: ordering.applied,
-      militaryKeys: ['closesDeficit', 'axisKind', 'deliveryFloor', 'valuePerResearchPoint', 'id'],
+      militaryKeys: ['closesDeficit', 'axisKind', 'deliveryFloor', 'chainValuePerResearchPoint', 'id'],
+      chainPromotion: RANKING_METHOD.chainPromotion,
       axisKindOrder: Object.values(AXIS_KINDS),
       deliveryFloorOrder: DELIVERY_FLOOR_ORDER,
       ruleScalarDemotion: RANKING_METHOD.ruleScalarDemotion,
@@ -906,9 +1133,34 @@ export const researchRankingResource = (snapshot, {
       capabilitiesCount: militaryCapabilities.length,
       capabilities: militaryCapabilities.length === 0 ? null : {
         label: 'New capabilities (no fielded baseline to compare against)',
+        // `unrankable.counts['first-in-class']` counts exactly these rows: both
+        // sides read `isFirstInClassCandidate`, so the census and this block
+        // cannot report different totals for the same candidates. They did --
+        // 40 here beside `first-in-class: 0` and `not-comparable: 40`.
+        censusState: RANK_STATES.firstInClass,
         count: militaryCapabilities.length,
         itemsShown: Math.min(groupLimit, militaryCapabilities.length),
         items: wantsFull ? militaryCapabilities : militaryCapabilities.slice(0, groupLimit)
+      },
+      // Which chains were moved into an actionable group, and -- the part that
+      // matters -- which were refused and why. A reachability gate that silently
+      // removes the highest-ratio chain from the ranking is a TRUNCATION, and
+      // truncation announces itself.
+      chainPromotion: {
+        basis: RANKING_METHOD.chainPromotion,
+        horizon: planningHorizon,
+        promotedCount: promotedChains.length,
+        promoted: promotedChains
+          .slice()
+          .sort(compareMilitaryRows)
+          .slice(0, wantsFull ? promotedChains.length : groupLimit)
+          .map(chainPromotionSummary),
+        promotedOmittedCount: wantsFull ? 0 : Math.max(0, promotedChains.length - groupLimit),
+        declinedCount: declinedChains.length,
+        declined: declinedChains
+          .slice(0, wantsFull ? declinedChains.length : groupLimit)
+          .map(chainPromotionSummary),
+        declinedOmittedCount: wantsFull ? 0 : Math.max(0, declinedChains.length - groupLimit)
       },
       driveChainsCount: driveChains.length,
       driveChains: driveChains.length === 0 ? null : {

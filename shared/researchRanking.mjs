@@ -58,9 +58,16 @@ import { round, toFiniteNumber } from './util.mjs';
  *   costUnmeasured      the remaining research cost is null. Section 3b's
  *                       `researchCost: -1` projects land here rather than
  *                       reading as free.
- *   notComparable       the value itself could not be measured: no fielded
- *                       baseline to compare against, or a stat the class ranks
- *                       on that this item does not carry.
+ *   notComparable       the value itself could not be measured: the class HAS a
+ *                       fielded baseline, but this item does not carry the stat
+ *                       the class ranks on.
+ *   firstInClass        the observer fields nothing in this class at all, so no
+ *                       ratio exists to form -- which is not a failure to
+ *                       measure but the most valuable kind of research there
+ *                       is, a capability you presently lack entirely. Split out
+ *                       of `notComparable` because the census and the
+ *                       capabilities block were counting the same 40 rows under
+ *                       two different names; see `isFirstInClassCandidate`.
  */
 export const RANK_STATES = Object.freeze({
   ranked: 'ranked',
@@ -303,6 +310,36 @@ export function closesDeficit(row, ordering) {
 }
 
 // ---------------------------------------------------------------------------
+// FIRST IN CLASS
+// ---------------------------------------------------------------------------
+
+/** The one sentence that describes a first-of-its-kind candidate, everywhere. */
+export const FIRST_IN_CLASS_LABEL = 'First capability of its kind — no baseline to compare against';
+
+/**
+ * Is this candidate a capability the observer has no equivalent of?
+ *
+ * ONE predicate, because there were two and they disagreed. The census bucketed
+ * these rows as `not-comparable` while the capabilities block counted them as
+ * first-in-class, so on the live save `military.capabilities` reported 40 beside
+ * `unrankable.counts['first-in-class']: 0` and `not-comparable: 40` -- two
+ * parallel accountings of the same 40 rows, contradicting each other in the same
+ * payload. That is the drift class CLAUDE.md records from the three
+ * hand-maintained lists in shared/intel/registry.mjs, and the fix is the same
+ * one: derive both from here.
+ *
+ * `not-comparable` is NOT retired by this. It remains the honest state for a
+ * candidate whose class HAS a fielded baseline but which does not carry the stat
+ * the class ranks on -- a real outcome, and a different fact from having no
+ * baseline at all.
+ */
+export function isFirstInClassCandidate(multiple, context = null) {
+  if (toFiniteNumber(multiple) !== null) return false;
+  if (context?.fieldedInClass === 0 || context?.fieldedInRule === 0) return true;
+  return typeof context?.noBaselineNote === 'string' && context.noBaselineNote.length > 0;
+}
+
+// ---------------------------------------------------------------------------
 // VALUE PER RESEARCH POINT
 // ---------------------------------------------------------------------------
 
@@ -316,6 +353,24 @@ export const RANKING_FORMULAE = Object.freeze({
     validatedAgainstGameOutput: false,
     note: 'A multiple of 3.2 is a gain of 2.2, which is why the -1 is there: a 1.0x multiple is not '
       + 'worth a single research point and must not score as though it were worth 1.0.'
+  }),
+  chainValuePerResearchPoint: Object.freeze({
+    formula: 'chainValuePerResearchPoint = (rankMetricMultiple - 1) / chain.totalRemainingCost',
+    reads: 'chain.totalRemainingCost is `buildTechPath`\'s own deduplicated, progress-aware total for '
+      + 'the whole remaining prerequisite closure, not the gate project alone. Identical to '
+      + 'militaryValuePerResearchPoint on every single-step row.',
+    unit: 'fractional improvement on that class\'s axis, per research point of the WHOLE chain',
+    validatedAgainstGameOutput: false,
+    note: 'null, never a number, when a step in the chain carries the `researchCost: -1` sentinel: the '
+      + 'sum is then a floor and the ratio would report the chain as cheaper than it is.'
+  }),
+  chainTimeToComplete: Object.freeze({
+    formula: 'chainMonths = chain.totalRemainingCost / observer.totalResearch',
+    reads: 'the observer\'s own measured monthly research income, unchanged.',
+    unit: 'months at current income',
+    validatedAgainstGameOutput: false,
+    note: 'evaluated as a GATE before the ratio, not as a term inside it. See '
+      + 'shared/researchReachability.mjs.'
   }),
   economicValuePerResearchPoint: Object.freeze({
     formula: 'economicValuePerResearchPoint = monthlyValueInUnit / remainingResearchCost',
@@ -336,12 +391,13 @@ export function militaryValuePerResearchPoint(multiple, remainingResearchCost, a
   const value = toFiniteNumber(multiple);
 
   if (value === null) {
+    const firstInClass = isFirstInClassCandidate(multiple, context);
     return {
-      state: RANK_STATES.notComparable,
+      state: firstInClass ? RANK_STATES.firstInClass : RANK_STATES.notComparable,
       perResearchPoint: null,
       gainMultiple: null,
-      reason: (context?.fieldedInClass === 0 || context?.fieldedInRule === 0)
-        ? 'First capability of its kind — no baseline to compare against'
+      reason: firstInClass
+        ? FIRST_IN_CLASS_LABEL
         : 'no comparison multiple: the observer fields nothing in this class, or this item does '
           + 'not carry the stat the class ranks on. Not scored zero, which would rank it last and hide it.'
     };
@@ -390,6 +446,43 @@ export function militaryValuePerResearchPoint(multiple, remainingResearchCost, a
     gainMultiple: round(value - 1, 6),
     reason: null
   };
+}
+
+/**
+ * The value per research point a row is ORDERED on, once its prerequisite chain
+ * is taken into account.
+ *
+ * `valuePerResearchPoint` prices the gate project alone. For a row standing one
+ * project away that is the whole cost and the two figures are identical, which
+ * is why every single-step row keeps exactly the number it had. For a row twelve
+ * projects away it is the cost of the LAST step with the other eleven left out,
+ * and ordering on it flatters a distant target: on the live save `Pion Torch x6`
+ * scores 1.15e-3 per point of its own 200,000-point gate and 1.77e-4 per point
+ * of the 1,300,325-point chain that actually reaches it.
+ * docs/research-chain-spec.md requires the second.
+ *
+ * DERIVED, never stored twice. The chain figures come from `buildTechPath`, and
+ * a caller that wants the number in a payload should stamp what this returns
+ * rather than recomputing the division.
+ *
+ * Three ways to get null, and none of them is a zero:
+ *   - the multiple could not be formed (the row is unrankable anyway)
+ *   - the chain total could not be formed
+ *   - `researchCostComplete: false` -- a step carries the `researchCost: -1`
+ *     sentinel, so the sum is a floor and dividing by it would report a chain as
+ *     CHEAPER than it is. That is the sentinel trap docs/research-chain-spec.md
+ *     names, and it is the one place a partial sum is worse than no sum.
+ */
+export function chainAwareValuePerResearchPoint(row) {
+  const steps = toFiniteNumber(row?.chain?.stepsCount);
+  const ownValue = toFiniteNumber(row?.valuePerResearchPoint);
+  // No chain, or a chain that is only the gate itself: nothing to re-price.
+  if (steps === null || steps <= 1) return ownValue;
+  if (row?.chain?.researchCostComplete === false) return null;
+  const multiple = toFiniteNumber(row?.improvementMultiple);
+  const chainCost = toFiniteNumber(row?.chain?.totalRemainingCost);
+  if (multiple === null || chainCost === null || !(chainCost > 0)) return null;
+  return round((multiple - 1) / chainCost, 10);
 }
 
 /**
@@ -490,8 +583,12 @@ export function compareMilitaryRows(left, right) {
   const leftDelivery = deliveryFloorRank(left);
   const rightDelivery = deliveryFloorRank(right);
   if (leftDelivery !== rightDelivery) return leftDelivery - rightDelivery;
-  const leftValue = toFiniteNumber(left.valuePerResearchPoint);
-  const rightValue = toFiniteNumber(right.valuePerResearchPoint);
+  // Priced over the WHOLE remaining chain, not the last step. Identical to
+  // `valuePerResearchPoint` for every single-step row, which is every row that
+  // was ordered here before chains existed -- see
+  // `chainAwareValuePerResearchPoint`.
+  const leftValue = chainAwareValuePerResearchPoint(left);
+  const rightValue = chainAwareValuePerResearchPoint(right);
   if (leftValue !== rightValue) {
     if (leftValue === null) return 1;
     if (rightValue === null) return -1;
@@ -661,6 +758,13 @@ export const RANKING_METHOD = Object.freeze({
     + 'non-drive unlocks that move delta-V.',
   unrankableVisible: 'anything that could not be scored is carried in its own bucket with the reason, '
     + 'never as a zero. A tech whose value silently computes to 0 gets ranked last and never surfaces.',
+  chainPromotion: 'a candidate standing behind unresearched prerequisites is ordered in the availability '
+    + 'group of the step the player would actually START, not the group of the destination, and is priced '
+    + 'over the whole remaining chain rather than over its own gate. It carries the step count, the '
+    + 'destination and the whole-chain cost so it cannot read as startable now. Reachability is a GATE '
+    + 'evaluated first: a chain that takes longer than the planning horizon this campaign\'s own age sets '
+    + 'is never promoted, however good its ratio, because advice nobody can act on is not advice. See '
+    + 'shared/researchReachability.mjs.',
   deliveryFloor: 'a point-defence-targetable munition carries a second floor: how much defensive fire '
     + 'each ARRIVING round has to survive, against the best such munition the observer already fields. '
     + 'Damage still leads the ordering, because it decides the outcome of an engagement; delivery is a '

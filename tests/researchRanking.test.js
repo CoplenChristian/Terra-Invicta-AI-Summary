@@ -624,8 +624,15 @@ test('a turn-1 save produces an empty-but-explained ranking rather than a crash 
 
     assert.equal(result.military.rankedCount, 0,
       'an observer who fields nothing has no baseline, so no military candidate can be compared');
-    assert.ok(result.military.unrankable.counts[RANK_STATES.notComparable] > 0,
+    // On turn one the observer fields NOTHING, so every uncomparable candidate
+    // is uncomparable for the same reason: there is no baseline at all. That is
+    // `first-in-class`, not `not-comparable` -- the second is for a class that
+    // HAS a baseline the item cannot be measured against.
+    assert.ok(result.military.unrankable.counts[RANK_STATES.firstInClass] > 0,
       'those candidates are counted in their own state, not dropped');
+    assert.equal(result.military.unrankable.counts[RANK_STATES.firstInClass],
+      result.military.capabilitiesCount,
+      'the census and the capabilities block count the same rows and must agree on how many');
     assert.ok(result.military.unrankable.reasons.length > 0, 'and the reason is stated');
 
     // The upstream phases still answered; the emptiness is about the campaign,
@@ -1048,14 +1055,18 @@ test('a unitless row is badged as such on the card, and a measured one is not', 
 
 test('the ordering declares the delivery term, in the position that makes it a floor', () => {
   const result = project(fleetScenario(SCENARIOS.armour));
+  // The value key is named `chainValuePerResearchPoint` since chains were
+  // promoted: the comparator prices the WHOLE remaining chain, which is the same
+  // number as the gate's own on every single-step row and a different one on a
+  // row standing several projects away.
   assert.deepEqual(result.ordering.militaryKeys,
-    ['closesDeficit', 'axisKind', 'deliveryFloor', 'valuePerResearchPoint', 'id']);
+    ['closesDeficit', 'axisKind', 'deliveryFloor', 'chainValuePerResearchPoint', 'id']);
   // AFTER axisKind, so a named engineering unit that fails delivery still
   // outranks a unitless rule scalar; BEFORE value, because that is the whole
   // point of a floor.
   const keys = result.ordering.militaryKeys;
   assert.ok(keys.indexOf('deliveryFloor') > keys.indexOf('axisKind'));
-  assert.ok(keys.indexOf('deliveryFloor') < keys.indexOf('valuePerResearchPoint'));
+  assert.ok(keys.indexOf('deliveryFloor') < keys.indexOf('chainValuePerResearchPoint'));
   assert.ok(keys.indexOf('closesDeficit') < keys.indexOf('deliveryFloor'));
   assert.ok(result.military.deliveryCaveat && result.military.deliveryCaveat.length > 0);
   assert.match(result.military.deliveryCaveat, /Only a MEASURED failure demotes/);
@@ -1552,6 +1563,7 @@ test('research-advisor frontend renders chain steps and capability tags', () => 
             chain: {
               stepsCount: 2,
               totalRemainingCost: 7844,
+              monthsAtCurrentIncome: 2.5,
               immediateNextStep: { id: 'Project_ColonyCore', displayName: 'Colony Core', cost: 2844, status: 'researching' }
             }
           },
@@ -1576,7 +1588,284 @@ test('research-advisor frontend renders chain steps and capability tags', () => 
   assert.ok(text.includes('2 steps'), 'Renders "2 steps" badge for multi-step chain');
   assert.ok(text.includes('new'), 'Renders "new" tag for first-in-class capability');
   assert.ok(text.includes('First of kind'), 'Renders "First of kind" for capability metric');
-  assert.match(html, /Prerequisite chain: 2 steps, 7,844 pts total \(Immediate next: Colony Core — 2,844 pts\)/, 'tooltip contains chain details');
+  assert.match(html, /Prerequisite chain: 2 steps, 7,844 pts total \(2\.5 mo at current research income\) \(Immediate next: Colony Core — 2,844 pts\)/, 'tooltip contains chain details');
+  // The cost and the duration on the row have to be about the same plan. The
+  // 7,844 is the whole chain, so the months beside it must be the chain's 2.5 --
+  // never the destination project's own 5, which is the last step alone.
+  assert.ok(text.includes('7,844 pts · 2.5 mo'),
+    'the chain total and the chain duration are printed together, not the chain cost beside the gate months');
+  assert.ok(!text.includes('7,844 pts · 5.0 mo'),
+    'the gate project\'s own duration must not be printed beside the whole-chain cost');
+});
+
+// ---------------------------------------------------------------------------
+// CHAIN VISIBILITY -- docs/chain-visibility-spec.md
+//
+// The chain feature was correct and invisible. Every row the card painted had
+// `stepsCount: 1`, the chain badge is gated on `stepsCount > 1`, and the only
+// group holding multi-step chains ("Prerequisites not met") is never among the
+// two the card renders. These tests pin the promotion that fixes that, and --
+// the part that carries the risk -- the reachability gate that stops it
+// recommending a chain nobody can finish.
+// ---------------------------------------------------------------------------
+
+const { REACHABILITY_STATES } = require('../shared/researchReachability.mjs');
+const {
+  FIRST_IN_CLASS_LABEL,
+  chainAwareValuePerResearchPoint,
+  isFirstInClassCandidate
+} = require('../shared/researchRanking.mjs');
+
+/** The live save, projected for one mode. */
+function liveResult(mode, options = {}) {
+  const snapshotLoader = require('../server/snapshotLoader');
+  const snapshot = snapshotLoader.loadFilteredSnapshot({ mode, observer: OBSERVER });
+  return project(snapshot, { mode, observerId: OBSERVER, ...options });
+}
+
+/** Every military row in the payload, whatever group it landed in. */
+const allMilitaryRows = (result) => (result.military.groups || []).flatMap(group => group.items || []);
+
+test('a chain is priced over the whole chain, and a single-step row keeps exactly the number it had', () => {
+  const single = {
+    valuePerResearchPoint: 0.002,
+    improvementMultiple: 42,
+    chain: { stepsCount: 1, totalRemainingCost: 20000, researchCostComplete: true }
+  };
+  assert.equal(chainAwareValuePerResearchPoint(single), 0.002,
+    'one step means the gate IS the chain, so the figure must not move for any row that had one before');
+
+  // The live save's Pion Torch shape: a very large multiple behind a gate that
+  // is a fraction of the chain which actually reaches it.
+  const chained = {
+    valuePerResearchPoint: 0.0011524075,
+    improvementMultiple: 231.4815,
+    chain: { stepsCount: 12, totalRemainingCost: 1300325, researchCostComplete: true }
+  };
+  const priced = chainAwareValuePerResearchPoint(chained);
+  assert.ok(priced < chained.valuePerResearchPoint,
+    'pricing over eleven further steps must cost the row value rather than flatter it');
+  assert.equal(priced, Number(((231.4815 - 1) / 1300325).toFixed(10)));
+
+  assert.equal(chainAwareValuePerResearchPoint({
+    improvementMultiple: 5, chain: { stepsCount: 3, totalRemainingCost: 100, researchCostComplete: false }
+  }), null, 'a chain with an uncosted step has no whole-chain ratio at all');
+  assert.equal(chainAwareValuePerResearchPoint({
+    improvementMultiple: null, chain: { stepsCount: 3, totalRemainingCost: 100, researchCostComplete: true }
+  }), null);
+});
+
+test('first-in-class and the capabilities block count the same rows, in both modes', () => {
+  for (const mode of ['player', 'omniscient']) {
+    const result = liveResult(mode, { detail: 'full' });
+    const counts = result.military.unrankable.counts;
+    assert.ok(result.military.capabilitiesCount > 0, `${mode}: the live save has uncomparable capabilities`);
+    // The defect: `capabilities` reported 40 while the census reported
+    // `first-in-class: 0` beside `not-comparable: 40` -- two accountings of the
+    // same rows, contradicting each other in one payload.
+    assert.equal(counts[RANK_STATES.firstInClass], result.military.capabilitiesCount,
+      `${mode}: the census and the capabilities block describe the same rows and must agree`);
+    assert.equal(counts[RANK_STATES.firstInClass], result.military.capabilities.count);
+    assert.equal(result.military.capabilities.censusState, RANK_STATES.firstInClass);
+    for (const cap of result.military.capabilities.items) {
+      assert.equal(isFirstInClassCandidate(cap.improvementMultiple, cap.context), true);
+      assert.equal(cap.rankState, RANK_STATES.firstInClass);
+      assert.equal(cap.verdictLabel, FIRST_IN_CLASS_LABEL);
+    }
+    // `not-comparable` is not retired: it stays the honest state for a class
+    // that HAS a fielded baseline the item cannot be measured against.
+    assert.ok(Object.prototype.hasOwnProperty.call(counts, RANK_STATES.notComparable));
+    const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+    assert.equal(total, result.military.candidatesConsidered,
+      `${mode}: every candidate still lands in exactly one state`);
+  }
+});
+
+test('the highest-scoring chain is refused when it cannot be finished, and the refusal is recorded', () => {
+  for (const mode of ['player', 'omniscient']) {
+    const result = liveResult(mode, { detail: 'full' });
+    const promotion = result.military.chainPromotion;
+    assert.equal(promotion.horizon.available, true, `${mode}: the live save can measure a horizon`);
+
+    const chains = allMilitaryRows(result).filter(row => row.chain && row.chain.stepsCount > 1);
+    assert.ok(chains.length > 1, `${mode}: the live save carries several multi-step chains`);
+
+    // Derived from the snapshot under test rather than named: the unreachable
+    // chain with the best whole-chain payoff per point. On the save this was
+    // written against that is `Pion Torch x6` -- 12 steps, 1,300,325 pts, 413.5
+    // months at the measured income against a 156-month horizon -- but the save
+    // moves, so the test finds it rather than pinning it.
+    const beyond = chains
+      .filter(row => row.chain.reachability.state === REACHABILITY_STATES.beyondHorizon)
+      .sort((a, b) => (chainAwareValuePerResearchPoint(b) ?? -Infinity)
+        - (chainAwareValuePerResearchPoint(a) ?? -Infinity));
+    assert.ok(beyond.length > 0, `${mode}: the live save has at least one unreachable chain`);
+
+    const worst = beyond[0];
+    assert.equal(worst.chainPromoted, false, `${mode}: ${worst.displayName} must not be promoted`);
+    assert.ok(worst.chain.reachability.months > promotion.horizon.months,
+      `${mode}: and the recorded reason must be that it measurably does not fit`);
+    assert.match(worst.chainPromotion.reason, /planning horizon/,
+      `${mode}: the refusal names the horizon rather than vanishing silently`);
+    assert.ok(promotion.declined.some(entry => entry.id === worst.id),
+      `${mode}: a refused chain is listed -- a gate that silently removes the top row is a truncation`);
+
+    // It is refused DESPITE outscoring rows that were promoted. Without this the
+    // gate would be untested: a rule that only ever rejects things nothing else
+    // beats proves nothing about the ordering.
+    const promotedValues = promotion.promoted
+      .map(entry => entry.chainValuePerResearchPoint)
+      .filter(value => value !== null && Number.isFinite(value));
+    assert.ok(promotedValues.length > 0, `${mode}: something was promoted`);
+    const worstValue = chainAwareValuePerResearchPoint(worst);
+    assert.ok(promotedValues.some(value => value < worstValue),
+      `${mode}: the refused chain outranks a promoted one on payoff per point, which is exactly why `
+      + 'reachability has to be evaluated before the ratio');
+
+    for (const group of result.military.groups) {
+      if (!ACTIONABLE_GROUPS.includes(group.state)) continue;
+      assert.ok(!group.items.some(row => row.id === worst.id),
+        `${mode}: an unreachable chain must never reach an actionable group`);
+    }
+  }
+});
+
+test('a promoted chain lands in its next step group, priced over the whole chain, never startable', () => {
+  for (const mode of ['player', 'omniscient']) {
+    const result = liveResult(mode, { detail: 'full' });
+    const promoted = allMilitaryRows(result).filter(row => row.chainPromoted === true);
+    assert.ok(promoted.length > 0, `${mode}: at least one chain is promoted on the live save`);
+
+    for (const row of promoted) {
+      assert.equal(row.startableNow, false, `${mode}: ${row.displayName} is not startable as it stands`);
+      assert.ok(ASPIRATIONAL_GROUPS.includes(row.destinationAvailabilityState),
+        `${mode}: the destination keeps its own blocked state`);
+      assert.equal(row.availabilityState, row.chain.immediateNextStep.availabilityState,
+        `${mode}: the row is filed under the step the player would actually start`);
+      assert.ok(AVAILABILITY_GROUP_ORDER.indexOf(row.availabilityState)
+        < AVAILABILITY_GROUP_ORDER.indexOf(row.destinationAvailabilityState),
+        `${mode}: promotion moves a row forward or not at all`);
+      assert.equal(row.chain.reachability.state, REACHABILITY_STATES.withinHorizon);
+      assert.ok(row.chain.stepsCount > 1);
+      assert.ok(row.chain.totalRemainingCost > 0);
+      assert.ok(row.chain.monthsAtCurrentIncome > 0,
+        `${mode}: a promoted row carries the WHOLE chain's duration, not the gate's`);
+      assert.equal(row.chainValuePerResearchPoint, chainAwareValuePerResearchPoint(row));
+      assert.ok(row.chainValuePerResearchPoint < row.valuePerResearchPoint,
+        `${mode}: the whole-chain price is the honest one and is always the smaller of the two`);
+      assert.ok(typeof row.chain.immediateNextStep.displayName === 'string'
+        && row.chain.immediateNextStep.displayName.length > 0,
+        `${mode}: the actionable instruction has a name`);
+      if (row.slotAction === 'free-slot' || row.slotAction === 'occupied-slot') {
+        assert.ok(row.slotNote.includes(row.chain.immediateNextStep.displayName),
+          `${mode}: slot advice for a promoted row is about the step it can start`);
+        assert.ok(!/start now with nothing lost/.test(row.slotNote),
+          `${mode}: "start now" must never be said of a candidate two projects away`);
+      }
+    }
+  }
+});
+
+test('a multi-step chain is visible in COMMAND without opening the drill-down, in both modes', () => {
+  for (const mode of ['player', 'omniscient']) {
+    // The panel's own request: `limit=6`, summary detail.
+    const payload = liveResult(mode, { limit: 6 });
+    const html = renderToString(payload);
+    assertNoPlaceholderText(html, `${mode} live payload`);
+    const text = visibleText(html);
+
+    // Which rows the card actually paints: the first two populated groups, two
+    // rows each. Read from the payload rather than assumed, so a change to the
+    // panel's budget surfaces here as a failure rather than a silent pass.
+    const populated = payload.military.groups.filter(group => group.items.length > 0);
+    const rendered = populated.slice(0, 2).flatMap(group => group.items.slice(0, 2));
+    const renderedChains = rendered.filter(row => row.chainPromoted === true);
+    assert.ok(renderedChains.length > 0,
+      `${mode}: a multi-step chain must reach the card itself, not only the full-ranking panel`);
+
+    for (const row of renderedChains) {
+      const next = row.chain.immediateNextStep.displayName;
+      const destination = row.chain.destinationDisplayName;
+      assert.ok(text.includes(`${next} → ${destination}`),
+        `${mode}: a promoted row leads with ${next} and names ${destination}`);
+      assert.ok(text.includes(`${row.chain.stepsCount} steps`),
+        `${mode}: the step count is on the card`);
+      assert.ok(html.includes('ra-tag--chain'), `${mode}: and it is badged, not buried in prose`);
+      const cost = Math.round(row.chain.totalRemainingCost).toLocaleString('en-US');
+      const duration = row.chain.monthsAtCurrentIncome < 1
+        ? '<1 mo'
+        : `${row.chain.monthsAtCurrentIncome.toFixed(1)} mo`;
+      assert.ok(text.includes(`${cost} pts · ${duration}`),
+        `${mode}: the whole-chain cost and its own duration are shown together`);
+      assert.ok(!text.includes(`${destination} → `),
+        `${mode}: the destination must never take the lead position, where every other row is startable`);
+    }
+  }
+});
+
+test('promotion changes no group budget: the card still paints two groups of two', () => {
+  for (const mode of ['player', 'omniscient']) {
+    const html = renderToString(liveResult(mode, { limit: 6 }));
+    // `ra-group ` with the trailing space, so `ra-group__label` and
+    // `ra-group__list` inside each group are not counted as groups themselves.
+    const groups = html.match(/class="ra-group /g) || [];
+    const rows = html.match(/<li class="ra-row">/g) || [];
+    // Two tracks, two groups each, two rows per group. Promotion MOVES a row
+    // between groups and never adds one, which is what keeps the COMMAND column
+    // inside its measured screen budget.
+    assert.equal(groups.length, 4, `${mode}: two groups per track and no more`);
+    assert.ok(rows.length <= 8, `${mode}: at most two rows per rendered group`);
+  }
+});
+
+test('the two chain badges have CSS of their own, resolving to real colours', () => {
+  // Not a check that the selectors exist -- that is what shipped broken, with
+  // both badges emitted and neither styled. This resolves each declaration
+  // through :root the way the browser does, because `--text-muted` was once
+  // defined self-referentially and 164 rules silently fell back to `inherit`.
+  // The computed-style check against a running page is in the verification run.
+  const css = fs.readFileSync(path.join(repoRoot, 'public', 'v2', 'css', 'mission-control.css'), 'utf8');
+  const rootBlock = css.match(/:root\s*\{([\s\S]*?)\}/);
+  assert.ok(rootBlock, ':root must define the palette');
+  const tokens = new Map();
+  for (const [, name, value] of rootBlock[1].matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
+    tokens.set(name, value.trim());
+  }
+
+  const resolve = (value, depth = 0) => {
+    const reference = /^var\((--[\w-]+)\)$/.exec(value);
+    if (!reference) return value;
+    assert.ok(depth < 8, `${value} resolves in a cycle, which renders as inherit and not as a colour`);
+    const target = tokens.get(reference[1]);
+    assert.ok(target !== undefined, `${reference[1]} is referenced and never defined`);
+    assert.notEqual(target, value, `${reference[1]} is defined in terms of itself`);
+    return resolve(target, depth + 1);
+  };
+
+  for (const selector of ['.ra-tag--chain', '.ra-tag--newcap']) {
+    const block = css.match(new RegExp(`\\${selector}\\s*\\{([\\s\\S]*?)\\}`));
+    assert.ok(block, `${selector} is emitted by research-advisor.js and needs a rule`);
+    const declarations = new Map();
+    for (const [, prop, value] of block[1].matchAll(/([\w-]+)\s*:\s*([^;]+);/g)) {
+      declarations.set(prop.trim(), value.trim());
+    }
+    for (const property of ['color', 'border-color']) {
+      const declared = declarations.get(property);
+      assert.ok(declared, `${selector} must set ${property} or it is indistinguishable from a bare .ra-tag`);
+      assert.match(resolve(declared), /^#[0-9a-f]{3,8}$|^rgba?\(/i,
+        `${selector} ${property} must resolve to a real colour, not to an undefined token`);
+    }
+    assert.ok(!/font-size\s*:\s*\d/.test(block[1]),
+      `${selector} must not hardcode a size; the scale lives in the --fs-* tokens`);
+  }
+
+  // ...and they are visibly different from each other and from the base tag.
+  const colorOf = (selector) => {
+    const block = css.match(new RegExp(`\\${selector}\\s*\\{([\\s\\S]*?)\\}`));
+    return resolve((/(?:^|[\s;])color\s*:\s*([^;]+);/.exec(block[1]) || [])[1].trim());
+  };
+  assert.notEqual(colorOf('.ra-tag--chain'), colorOf('.ra-tag--newcap'));
+  assert.notEqual(colorOf('.ra-tag--chain'), resolve(tokens.get('--text-muted')));
 });
 
 
