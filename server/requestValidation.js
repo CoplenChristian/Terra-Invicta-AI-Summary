@@ -1,6 +1,21 @@
+/**
+ * server/requestValidation.js -- CommonJS barrel over shared/requestValidation.mjs.
+ *
+ * The rules themselves moved to `shared/requestValidation.mjs` so the hosted
+ * Cloudflare worker can import the same ones; this file re-exports the SAME
+ * function objects (not wrappers) and adds only the two pieces that need Node:
+ * `resolveSavePath`, which touches the filesystem, and the configured default
+ * observer faction id.
+ *
+ * `tests/serverBarrels.test.js` pins the reference identity, because a wrapper
+ * passes every behavioural test while letting the barrel and the shared module
+ * drift apart.
+ */
+
 const path = require('path');
 const fs = require('fs');
 const { SUPPORTED_MODES } = require('../shared/constants.mjs');
+const shared = require('../shared/requestValidation.mjs');
 const { resolveConfig } = require('./config');
 
 const DEFAULT_OBSERVER_FACTION_ID = resolveConfig().campaign.defaultObserverFactionId;
@@ -8,44 +23,39 @@ const DEFAULT_OBSERVER_FACTION_ID = resolveConfig().campaign.defaultObserverFact
 const LOCAL_MODES = SUPPORTED_MODES;
 const HOSTED_MODES = SUPPORTED_MODES;
 
-class RequestValidationError extends Error {
-  constructor(message, statusCode = 400) {
-    super(message);
-    this.name = 'RequestValidationError';
-    this.statusCode = statusCode;
-  }
-}
+const {
+  RequestValidationError,
+  parseMode,
+  assertKnownObserver,
+  parseOptionalNumericQuery,
+  parseBodyQuery,
+  parseBoundedIntegerQuery
+} = shared;
 
-function parseMode(value, supportedModes = LOCAL_MODES) {
-  const mode = value === undefined || value === null || value === '' ? 'player' : String(value);
-  if (!supportedModes.has(mode)) {
-    throw new RequestValidationError(
-      `Invalid intelligence mode '${mode}'. Supported modes: ${Array.from(supportedModes).join(', ')}.`
-    );
-  }
-  return mode;
-}
-
+/**
+ * The ONE deliberate wrapper.
+ *
+ * The shared parser takes the default observer id as a parameter because the
+ * hosted worker resolves its own from the deployment environment. The local
+ * default is configuration (`campaign.defaultObserverFactionId`, overridable
+ * via `SUPABASE_OBSERVER_FACTION_ID`), so binding it here is what keeps that
+ * seam intact -- hard-coding `shared`'s 4712 fallback would silently ignore a
+ * configured observer. `tests/serverBarrels.test.js` asserts this is the only
+ * export that is not the shared module's own function object, and that it
+ * agrees with the shared function called with the same default.
+ */
 function parseObserverId(value, defaultId = DEFAULT_OBSERVER_FACTION_ID) {
-  const raw = value === undefined || value === null || value === '' ? String(defaultId) : String(value);
-  if (!/^\d+$/.test(raw)) {
-    throw new RequestValidationError(`Invalid observer faction id '${raw}'. Use a numeric faction id.`);
-  }
-  const id = Number(raw);
-  if (!Number.isSafeInteger(id) || id <= 0) {
-    throw new RequestValidationError(`Invalid observer faction id '${raw}'.`);
-  }
-  return id;
+  return shared.parseObserverId(value, defaultId);
 }
 
-function assertKnownObserver(snapshot, observerId) {
-  const known = (snapshot?.factions || []).some(faction => Number(faction.ID) === observerId);
-  if (!known) {
-    throw new RequestValidationError(`Observer faction '${observerId}' is not present in this save.`, 404);
-  }
-  return observerId;
-}
-
+/**
+ * Resolves a caller-supplied save name to an absolute path inside the
+ * configured save folder, or throws.
+ *
+ * Node-only, and deliberately not shared: the hosted worker has no filesystem
+ * and never selects a save by name -- it reads whichever snapshot the campaign
+ * pointer names. Sharing this would put `fs` into a module the worker imports.
+ */
 function resolveSavePath(saveParser, saveName) {
   if (saveName === undefined || saveName === null || saveName === '') return null;
 
@@ -75,41 +85,6 @@ function resolveSavePath(saveParser, saveName) {
   return resolved;
 }
 
-function parseOptionalNumericQuery(value, label) {
-  if (value === undefined || value === null || value === '') return null;
-  const raw = String(value);
-  if (!/^\d+$/.test(raw)) {
-    throw new RequestValidationError(`Invalid ${label} '${raw}'. Use a numeric id.`);
-  }
-  const parsed = Number(raw);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new RequestValidationError(`Invalid ${label} '${raw}'.`);
-  }
-  return parsed;
-}
-
-function parseBodyQuery(value) {
-  if (value === undefined || value === null || value === '') return null;
-  const body = String(value).trim();
-  if (body.length > 80 || /[\u0000-\u001f\u007f]/.test(body)) {
-    throw new RequestValidationError('Invalid body filter. Use a short body name such as Ceres.');
-  }
-  return body;
-}
-
-function parseBoundedIntegerQuery(value, label, { min = 1, max = 100, defaultValue = null } = {}) {
-  if (value === undefined || value === null || value === '') return defaultValue;
-  const raw = String(value);
-  if (!/^\d+$/.test(raw)) {
-    throw new RequestValidationError(`Invalid ${label} '${raw}'. Use an integer from ${min} to ${max}.`);
-  }
-  const parsed = Number(raw);
-  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
-    throw new RequestValidationError(`Invalid ${label} '${raw}'. Use an integer from ${min} to ${max}.`);
-  }
-  return parsed;
-}
-
 module.exports = {
   LOCAL_MODES,
   HOSTED_MODES,
@@ -120,5 +95,18 @@ module.exports = {
   resolveSavePath,
   parseOptionalNumericQuery,
   parseBodyQuery,
-  parseBoundedIntegerQuery
+  parseBoundedIntegerQuery,
+  // Shared rule primitives, re-exported so a local route needing the raw
+  // decision (rather than the throw) does not grow a third copy of it.
+  isPositiveIntegerId: shared.isPositiveIntegerId,
+  parsePositiveIntegerOrNull: shared.parsePositiveIntegerOrNull,
+  exceedsBodyFilterLimits: shared.exceedsBodyFilterLimits,
+  hasControlCharacters: shared.hasControlCharacters,
+  isBoundedInteger: shared.isBoundedInteger,
+  usesQuantityAsLimit: shared.usesQuantityAsLimit,
+  MINING_LIMIT_RESOURCES: shared.MINING_LIMIT_RESOURCES,
+  MINING_LIMIT_BOUNDS: shared.MINING_LIMIT_BOUNDS,
+  HISTORY_LIMIT_BOUNDS: shared.HISTORY_LIMIT_BOUNDS,
+  HISTORY_LIMIT_DEFAULT: shared.HISTORY_LIMIT_DEFAULT,
+  BODY_FILTER_MESSAGE: shared.BODY_FILTER_MESSAGE
 };

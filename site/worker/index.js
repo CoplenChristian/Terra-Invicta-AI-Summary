@@ -1,631 +1,66 @@
-import { staticAssets } from './static-assets.js';
-import {
-  SUPPORTED_MODES,
-  DEFAULT_OBSERVER_FACTION_ID,
-  INITIATIVE_DISPLAY_NAME
-} from '../shared/constants.mjs';
-import {
-  DEFAULT_CAMPAIGN_KEY,
-  buildIntelApiIndex,
-  renderIntelApiIndexHtml,
-  selectExportMarkdown,
-  resolveSupabaseReadKey
-} from '../shared/apiSurface.mjs';
-import {
-  SUPPORTED_RESOURCES,
-  INTEL_ENDPOINT_INDEX,
-  INTEL_ENDPOINT_EXAMPLES,
-  buildResourceProjection
-} from '../shared/intelResources.mjs';
-import {
-  buildTechTreeProjection,
-  buildTechPathProjection,
-  buildTechSearchProjection,
-  buildTechMilestonesProjection,
-  buildTechMatrixProjection,
-  buildTechOpportunitiesProjection,
-  buildResearchQueueProjection,
-  CATEGORIES
-} from '../shared/techGraph.mjs';
-import { buildStrategicDelta } from '../shared/strategicDelta.mjs';
-
-const HOSTED_MODES = SUPPORTED_MODES;
-
 /**
  * Hosted Cloudflare / Edge Worker API
  *
  * Exposes published Player Intel and explicitly enabled Omniscient data from
  * Supabase (when configured), or falls back to bundled static Player Intel
  * snapshot files.
+ *
+ * The 2026-08-20 review (section D) called this a monolith mixing routing,
+ * validation, caching, projection and HTML rendering. What is left here is the
+ * dispatcher: the order routes are tried in, and the degrade path each takes
+ * when Supabase is not configured. Everything else moved to siblings:
+ *
+ *   http.js             CORS policy and the three response shapes
+ *   assets.js           ASSETS binding, embedded fallback, static observer files
+ *   supabaseReader.js   every Supabase read and every consistency check on it
+ *   envelopes.js        the identity/snapshot/resource response envelopes
+ *   projections.js      hosted adapter over the shared projection registries
+ *   runtimeDefaults.js  deployment defaults and malformed-variable handling
+ *
+ * The siblings are ESM and import shared code as `../shared/...`, the exact
+ * prefix `scripts/build_static_snapshot.js` rewrites, and that build copies
+ * every `site/worker/*.js` beside the entry point. A module the worker and the
+ * Express server genuinely share still has to live under `shared/` -- the worker
+ * cannot `require` CommonJS. `shared/requestValidation.mjs` is the newest one:
+ * both runtimes now take their accept/reject decisions from it, so validation
+ * cannot drift between local and hosted.
  */
 
-const mimeTypeFor = (pathname) => {
-  const lowerPath = pathname.toLowerCase();
-  if (lowerPath.endsWith('.html')) return 'text/html; charset=utf-8';
-  if (lowerPath.endsWith('.css')) return 'text/css; charset=utf-8';
-  if (lowerPath.endsWith('.js')) return 'text/javascript; charset=utf-8';
-  if (lowerPath.endsWith('.json')) return 'application/json; charset=utf-8';
-  if (lowerPath.endsWith('.png')) return 'image/png';
-  return 'application/octet-stream';
-};
+import { DEFAULT_OBSERVER_FACTION_ID } from '../shared/constants.mjs';
+import {
+  DEFAULT_CAMPAIGN_KEY,
+  buildIntelApiIndex,
+  renderIntelApiIndexHtml,
+  selectExportMarkdown
+} from '../shared/apiSurface.mjs';
+import {
+  INTEL_ENDPOINT_INDEX,
+  INTEL_ENDPOINT_EXAMPLES
+} from '../shared/intelResources.mjs';
+import { isPositiveIntegerId } from '../shared/requestValidation.mjs';
+import { buildStrategicDelta } from '../shared/strategicDelta.mjs';
 
-const embeddedAsset = (pathname) => {
-  const key = pathname.replace(/^\/+/, '') || 'index.html';
-  const candidates = [
-    key,
-    key.endsWith('/') ? `${key}index.html` : `${key}/index.html`
-  ];
-  const assetKey = candidates.find(candidate => staticAssets[candidate] !== undefined);
-  const embedded = assetKey === undefined ? undefined : staticAssets[assetKey];
-  if (embedded === undefined) return null;
-
-  const body = embedded && typeof embedded === 'object' && embedded.encoding === 'base64'
-    ? Uint8Array.from(atob(embedded.data), character => character.charCodeAt(0))
-    : embedded;
-
-  return new Response(body, {
-    status: 200,
-    headers: {
-      'content-type': mimeTypeFor(assetKey),
-      'cache-control': assetKey === 'index.html' ? 'no-cache' : 'public, max-age=300'
-    }
-  });
-};
-
-// Only headers a static asset lookup can actually act on are forwarded.
-// Passing the whole inbound header set handed the assets binding the caller's
-// cookie, authorization and x-forwarded-* headers, none of which it needs and
-// any of which could end up in an upstream cache key or log line.
-const ASSET_REQUEST_HEADERS = ['accept', 'accept-encoding', 'accept-language', 'if-none-match', 'if-modified-since', 'range'];
-
-const assetRequestHeaders = (request) => {
-  const headers = new Headers();
-  for (const name of ASSET_REQUEST_HEADERS) {
-    const value = request.headers.get(name);
-    if (value) headers.set(name, value);
-  }
-  return headers;
-};
-
-const asset = async (env, request, pathname) => {
-  const url = new URL(request.url);
-  const assetPath = pathname === '/v2' ? '/v2/index.html' : pathname;
-  url.pathname = assetPath;
-
-  if (env?.ASSETS?.fetch) {
-    const response = await env.ASSETS.fetch(new Request(url.toString(), {
-      method: 'GET',
-      headers: assetRequestHeaders(request)
-    }));
-    if (response.status !== 404) return response;
-  }
-
-  return embeddedAsset(assetPath) || new Response('Not found', { status: 404 });
-};
-
-const observerFile = (observerId, suffix) => {
-  return `/data/${suffix}-player-${observerId}.json`;
-};
-
-// This site deliberately publishes read-only Player / Enhanced / Omniscient
-// intel, and CLAUDE.md documents /api/intel/* as the surface external analysis
-// clients call cross-origin. A wildcard origin is therefore the intended policy
-// and is NOT tightened here: an allowlist would silently break those documented
-// readers. What is tightened is everything that does not serve them --
-// credentials are never allowed (and are incompatible with '*' anyway), and the
-// advertised request headers are narrowed to what the endpoints actually read.
-// No route inspects Authorization, so advertising it only invited callers to
-// send credentials to a public endpoint.
-const corsHeaders = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET, POST, OPTIONS',
-  'access-control-allow-headers': 'Content-Type',
-  'access-control-max-age': '86400'
-};
-
-const jsonResponse = (body, status = 200) => {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      ...corsHeaders,
-      // Snapshot data is mutable: publishing a new save moves the campaign
-      // pointer and every focused endpoint must observe that same pointer.
-      // Edge/browser caching here can otherwise make /summary and /research
-      // appear to come from different saves for up to a minute.
-      'cache-control': 'no-store',
-      'x-content-type-options': 'nosniff',
-      'referrer-policy': 'no-referrer'
-    }
-  });
-};
-
-// The hosted worker only ever holds the public anon key. SUPABASE_PUBLISHABLE_KEY
-// is the documented name and wins; SUPABASE_ANON_KEY is the deprecated spelling
-// of the same key and is still accepted. SUPABASE_SERVICE_ROLE_KEY is local-only
-// and is deliberately never read here.
-const supabaseReadKey = (env) => resolveSupabaseReadKey(env).key;
-
-const isSupabaseReady = (env) => Boolean(env?.SUPABASE_URL && supabaseReadKey(env));
-
-async function querySupabase(env, pathWithParams) {
-  const supabaseUrl = env.SUPABASE_URL;
-  const anonKey = supabaseReadKey(env);
-
-  const url = `${supabaseUrl}/rest/v1/${pathWithParams}`;
-  const response = await fetch(url, {
-    cache: 'no-store',
-    headers: {
-      'apikey': anonKey,
-      'Authorization': `Bearer ${anonKey}`,
-      'Accept': 'application/json',
-      'Cache-Control': 'no-cache'
-    }
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Supabase API error (${response.status}): ${errorText}`);
-  }
-
-  return await response.json();
-}
-
-async function readPublicCampaign(env, campaignKey) {
-  const campaigns = await querySupabase(
-    env,
-    `campaigns?campaign_key=eq.${encodeURIComponent(campaignKey)}&is_public=eq.true&select=campaign_key,current_save_last_modified,current_game_time,current_save_filename,published_observers,tech_graph,tech_graph_fingerprint&limit=1`
-  );
-  return campaigns?.[0] || null;
-}
-
-const strategicHistoryMeta = (row) => ({
-  saveLastModified: row?.save_last_modified || null,
-  saveFilename: row?.save_filename || null,
-  gameTime: row?.game_time || null,
-  campaignDate: row?.campaign_date || null,
-  schemaVersion: row?.schema_version ?? null,
-  createdAt: row?.created_at || null
-});
-
-const boundedHistoryLimit = (value, fallback = 25) => {
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 1) return fallback;
-  return Math.min(parsed, 100);
-};
-
-async function readStrategicHistory(env, campaignKey, options = {}) {
-  const campaign = await readPublicCampaign(env, campaignKey);
-  if (!campaign) {
-    return {
-      found: false,
-      status: 404,
-      error: `Public campaign '${campaignKey}' not found.`
-    };
-  }
-
-  const select = options.includePayload
-    ? 'save_last_modified,save_filename,game_time,campaign_date,schema_version,created_at,payload'
-    : 'save_last_modified,save_filename,game_time,campaign_date,schema_version,created_at';
-  let query = `strategic_snapshots?campaign_key=eq.${encodeURIComponent(campaign.campaign_key)}&select=${select}&order=save_last_modified.desc&limit=${boundedHistoryLimit(options.limit)}`;
-  if (options.saveLastModified) {
-    query += `&save_last_modified=eq.${encodeURIComponent(options.saveLastModified)}`;
-  }
-
-  const rows = await querySupabase(env, query);
-  return { found: true, campaign, rows: Array.isArray(rows) ? rows : [] };
-}
-
-const timestampMs = (value) => {
-  const result = new Date(value || '').getTime();
-  return Number.isFinite(result) ? result : null;
-};
-
-const sameTimestamp = (left, right) => {
-  const leftMs = timestampMs(left);
-  const rightMs = timestampMs(right);
-  return leftMs !== null && rightMs !== null && leftMs === rightMs;
-};
-
-const consistencyError = (message) => ({
-  found: false,
-  status: 409,
-  error: `MIXED / STALE INTELLIGENCE: ${message}`
-});
-
-async function fetchFromSupabase(env, observerId, requestedMode = 'player') {
-  const campaignKey = env.SUPABASE_CAMPAIGN_KEY || DEFAULT_CAMPAIGN_KEY;
-  const safeObserverId = String(observerId);
-  const mode = requestedMode;
-
-  // Step 1: Query active public campaign pointer
-  const campaign = await readPublicCampaign(env, campaignKey);
-  if (!campaign) {
-    return { found: false, status: 404, error: `Public campaign '${campaignKey}' not found.` };
-  }
-
-  if (!campaign.current_save_last_modified) {
-    return { found: false, status: 404, error: `No active save recorded for campaign '${campaignKey}'.` };
-  }
-
-  // Step 2: Query the matching published snapshot row for the requested observer and mode.
-  const snapshots = await querySupabase(
-    env,
-    `player_intel_snapshots?campaign_key=eq.${encodeURIComponent(campaignKey)}&save_last_modified=eq.${encodeURIComponent(campaign.current_save_last_modified)}&observer_faction_id=eq.${safeObserverId}&visibility=eq.${encodeURIComponent(mode)}&select=snapshot,chatgpt_export,observer_faction_id,observer_faction_name,save_filename,save_last_modified,game_time,difficulty,campaign_start_year,visibility,generated_at&limit=2`
-  );
-
-  if (!snapshots || snapshots.length === 0) {
-    return {
-      found: false,
-      status: 404,
-      error: `No ${mode} snapshot found for observer ${safeObserverId} at timestamp ${campaign.current_save_last_modified}.`
-    };
-  }
-
-  if (snapshots.length > 1) {
-    return consistencyError(
-      `multiple ${mode} rows exist for observer ${safeObserverId} at active timestamp ${campaign.current_save_last_modified}; republish or repair the duplicate rows.`
-    );
-  }
-
-  const row = snapshots[0];
-  const payload = row.snapshot;
-
-  // Published rows carry only the per-save half of the tech tree; the static
-  // ~959 KB of nodes is stored once on the campaign. Splice it back before any
-  // consumer reads the graph, so tech endpoints behave identically to a row
-  // that embedded its own copy.
-  if (payload?.techTree?.graphRef && !Array.isArray(payload.techTree.nodes)) {
-    const shared = campaign.tech_graph;
-    if (shared && shared.fingerprint === payload.techTree.graphRef.fingerprint) {
-      payload.techTree = {
-        ...payload.techTree,
-        nodes: shared.nodes || [],
-        categories: shared.categories || {},
-        unlockClasses: shared.unlockClasses || {},
-        graphSource: 'campaign-shared'
-      };
-    } else {
-      // Do not silently serve an empty graph: leave the reference in place so
-      // graphFromTree reports the tree as unavailable rather than as empty.
-      payload.techTree = {
-        ...payload.techTree,
-        graphUnavailable: shared
-          ? 'stored tech graph fingerprint does not match this snapshot; republish the campaign'
-          : 'no shared tech graph stored for this campaign; republish to upload it'
-      };
-    }
-  }
-
-  const identity = {
-    snapshotId: payload?.snapshotId || null,
-    saveHash: payload?.saveHash || null,
-    saveModifiedAt: payload?.saveModifiedAt || row.save_last_modified || null,
-    generatedAt: payload?.generatedAt || row.generated_at || null
-  };
-  if (!identity.snapshotId || !identity.saveHash || !identity.saveModifiedAt || !identity.generatedAt) {
-    return {
-      found: false,
-      status: 409,
-      error: 'Published snapshot is missing its consistency identity. Republish the latest save before reading it.'
-    };
-  }
-  if (!sameTimestamp(row.save_last_modified, campaign.current_save_last_modified) ||
-      !sameTimestamp(identity.saveModifiedAt, campaign.current_save_last_modified) ||
-      !sameTimestamp(identity.saveModifiedAt, row.save_last_modified)) {
-    return consistencyError(
-      `campaign pointer is ${campaign.current_save_last_modified}, row is ${row.save_last_modified}, dataset is ${identity.saveModifiedAt}.`
-    );
-  }
-  if (row.visibility !== mode) {
-    return consistencyError(`requested mode is ${mode}, but the selected row is ${row.visibility}.`);
-  }
-
-  // Publishing uploads all rows first and advances the campaign pointer last,
-  // but it can still move while this request is in flight. Re-read the pointer
-  // before returning so a single response can never claim to be current after
-  // a newer publish committed.
-  const confirmedCampaign = await readPublicCampaign(env, campaignKey);
-  if (!confirmedCampaign ||
-      !sameTimestamp(confirmedCampaign.current_save_last_modified, campaign.current_save_last_modified) ||
-      confirmedCampaign.current_save_filename !== campaign.current_save_filename) {
-    return consistencyError(
-      `the active save changed while reading this request (started at ${campaign.current_save_last_modified}, now ${confirmedCampaign?.current_save_last_modified || 'unknown'}); retry.`
-    );
-  }
-  if (payload) {
-    payload.mode = mode;
-    payload.isOmniscient = mode === 'omniscient';
-  }
-
-  return {
-    found: true,
-    campaign,
-    row,
-    snapshot: payload,
-    chatgptExport: row.chatgpt_export,
-    mode,
-    isLatestSnapshot: true,
-    activeSnapshot: {
-      snapshotId: identity.snapshotId,
-      saveHash: identity.saveHash,
-      saveModifiedAt: campaign.current_save_last_modified,
-      saveFilename: campaign.current_save_filename || row.save_filename || null,
-      campaignDate: campaign.current_game_time || row.game_time || null,
-      generatedAt: identity.generatedAt,
-      isLatestSnapshot: true
-    }
-  };
-}
-
-const resultIdentity = (result) => {
-  const row = result.row || {};
-  const snapshot = result.snapshot || {};
-  const activeSnapshot = result.activeSnapshot || {};
-  const canonicalTimestamp = (value) => {
-    const parsed = new Date(value || '');
-    return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : (value || null);
-  };
-  return {
-    snapshotId: activeSnapshot.snapshotId || snapshot.snapshotId || row.snapshot?.snapshotId || null,
-    saveHash: activeSnapshot.saveHash || snapshot.saveHash || row.snapshot?.saveHash || null,
-    saveModifiedAt: canonicalTimestamp(activeSnapshot.saveModifiedAt || row.save_last_modified),
-    saveFilename: activeSnapshot.saveFilename || row.save_filename || null,
-    campaignDate: activeSnapshot.campaignDate || row.game_time || null,
-    generatedAt: canonicalTimestamp(activeSnapshot.generatedAt || snapshot.generatedAt || row.generated_at),
-    isLatestSnapshot: result.isLatestSnapshot === true,
-    activeSnapshot: {
-      snapshotId: activeSnapshot.snapshotId || snapshot.snapshotId || row.snapshot?.snapshotId || null,
-      saveHash: activeSnapshot.saveHash || snapshot.saveHash || row.snapshot?.saveHash || null,
-      saveModifiedAt: canonicalTimestamp(activeSnapshot.saveModifiedAt || row.save_last_modified),
-      saveFilename: activeSnapshot.saveFilename || row.save_filename || null,
-      campaignDate: activeSnapshot.campaignDate || row.game_time || null,
-      generatedAt: canonicalTimestamp(activeSnapshot.generatedAt || snapshot.generatedAt || row.generated_at),
-      isLatestSnapshot: result.isLatestSnapshot === true
-    }
-  };
-};
-
-const snapshotEnvelope = (result, format = 'compact') => {
-  const row = result.row;
-  const markdown = selectExportMarkdown(result.chatgptExport, format);
-
-  return {
-    success: true,
-    source: 'supabase',
-    ...resultIdentity(result),
-    difficulty: row.difficulty,
-    campaignStartYear: row.campaign_start_year,
-    observerFaction: {
-      id: row.observer_faction_id,
-      name: row.observer_faction_name
-    },
-    intelMode: result.mode || row.visibility || 'player',
-    visibility: row.visibility || result.mode || 'player',
-    snapshot: result.snapshot,
-    markdown,
-    snapshotId: result.snapshot?.snapshotId || row.snapshot?.snapshotId || null,
-    saveHash: result.snapshot?.saveHash || row.snapshot?.saveHash || null
-  };
-};
-
-const markdownSnapshotResponse = (envelope) => new Response(
-  `${envelope.markdown}\n`,
-  {
-    status: 200,
-    headers: {
-      'content-type': 'text/markdown; charset=utf-8',
-      ...corsHeaders,
-      'cache-control': 'no-store'
-    }
-  }
-);
-
-const numericQuery = (value) => {
-  if (!/^\d+$/.test(String(value || ''))) return null;
-  const number = Number(value);
-  return Number.isSafeInteger(number) && number > 0 ? number : null;
-};
-
-const validateResourceQuery = (url) => {
-  const faction = url.searchParams.get('faction') || url.searchParams.get('factionId');
-  if (faction !== null && numericQuery(faction) === null) {
-    return `Invalid faction filter '${faction}'. Use a positive numeric id.`;
-  }
-  const body = url.searchParams.get('body');
-  const theater = url.searchParams.get('theater') || body;
-  if ((body !== null && (body.length > 80 || /[\u0000-\u001f\u007f]/.test(body))) ||
-      (theater !== null && (theater.length > 80 || /[\u0000-\u001f\u007f]/.test(theater)))) {
-    return 'Invalid body filter. Use a short body name such as Ceres.';
-  }
-  const isMiningProspects = /\/api(?:\/intel)?\/(?:mining-prospects|mining-expansion)$/.test(url.pathname);
-  const limit = url.searchParams.get('limit') || (isMiningProspects ? url.searchParams.get('quantity') : null);
-  if (limit !== null && (!/^\d+$/.test(limit) || Number(limit) < 1 || Number(limit) > 100)) {
-    return 'Invalid mining prospects limit. Use an integer from 1 to 100.';
-  }
-  return null;
-};
-
-const resourceEnvelope = (result, resource, items, query = {}, extra = {}) => {
-  const row = result.row;
-  const snapshot = result.snapshot || {};
-  return {
-    success: true,
-    source: 'supabase',
-    resource,
-    ...resultIdentity(result),
-    difficulty: row.difficulty,
-    observerFaction: {
-      id: row.observer_faction_id,
-      name: row.observer_faction_name
-    },
-    intelMode: result.mode || row.visibility || 'player',
-    visibility: row.visibility || result.mode || 'player',
-    query,
-    count: items === null ? null : (Array.isArray(items) ? items.length : 0),
-    items: Array.isArray(items) ? items : [],
-    ...extra
-  };
-};
-
-const intelResource = (pathName) => {
-  const direct = pathName.match(/^\/api\/([^/]+)$/);
-  const grouped = pathName.match(/^\/api\/intel\/([^/]+)$/);
-  const resource = grouped?.[1] || direct?.[1];
-  return SUPPORTED_RESOURCES.has(resource) ? resource : null;
-};
-
-// The hosted adapter uses the same pure projection registry as the local
-// Express server. It only supplies the Supabase row and response envelope.
-const buildIntelResource = (result, resource, url) => {
-  const snapshot = result.snapshot || {};
-  const factionId = numericQuery(url.searchParams.get('faction') || url.searchParams.get('factionId'));
-  const body = url.searchParams.get('body');
-  const theater = url.searchParams.get('theater') || body;
-  const rawLimit = url.searchParams.get('limit') || ((resource === 'mining-prospects' || resource === 'mining-expansion') ? url.searchParams.get('quantity') : null);
-  const limit = rawLimit && /^\d+$/.test(rawLimit) ? Number(rawLimit) : null;
-  const destination = url.searchParams.get('destination');
-  const fleetId = url.searchParams.get('fleet') || url.searchParams.get('fleetId');
-  const designId = url.searchParams.get('design') || url.searchParams.get('designId') || url.searchParams.get('target');
-  const quantity = parseInt(url.searchParams.get('quantity'), 10) || 1;
-  const status = url.searchParams.get('status');
-  const sort = url.searchParams.get('sort');
-  const query = {
-    faction: factionId,
-    body: body || null,
-    theater: theater || null,
-    limit,
-    destination: destination || null,
-    fleet: fleetId || null,
-    design: designId || null,
-    quantity,
-    status: status || null,
-    sort: sort || null
-  };
-  const projection = buildResourceProjection(snapshot, resource, {
-    factionId,
-    body,
-    theater,
-    limit,
-    destination,
-    fleetId,
-    designId,
-    quantity,
-    status,
-    sort,
-    mode: result.mode || result.row?.visibility || 'player'
-  });
-  return resourceEnvelope(result, resource, projection.items, query, projection);
-};
-
-const productionPlanPaths = new Set(['/api/intel/production-plan', '/api/production-plan']);
-
-// Strict positive-integer parsing. `Number(x) || fallback` accepted a typo in
-// a deployment variable and silently answered about the default faction. The
-// worker cannot fail a deployment at startup -- refusing every request over a
-// misconfigured variable would be worse than serving the documented default --
-// so a malformed value is reported to the worker log instead of hidden.
-const positiveIntegerOr = (value, fallback, label) => {
-  if (value === undefined || value === null || String(value).trim() === '') return fallback;
-  const raw = String(value).trim();
-  const parsed = /^\d+$/.test(raw) ? Number(raw) : NaN;
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    // The value can come from a query string, so it is truncated and stripped
-    // of control characters before it reaches the log: a caller must not be
-    // able to forge log lines or flood them.
-    const safe = raw.replace(/[\u0000-\u001f\u007f]/g, '?').slice(0, 40);
-    console.warn(`[Worker] Ignoring malformed ${label}='${safe}'; falling back to ${fallback}.`);
-    return fallback;
-  }
-  return parsed;
-};
-
-const readRuntimeDefaults = async (env, request) => {
-  const fallback = {
-    campaignKey: env?.SUPABASE_CAMPAIGN_KEY || DEFAULT_CAMPAIGN_KEY,
-    defaultObserverFactionId: positiveIntegerOr(
-      env?.SUPABASE_OBSERVER_FACTION_ID,
-      DEFAULT_OBSERVER_FACTION_ID,
-      'SUPABASE_OBSERVER_FACTION_ID'
-    ),
-    defaultObserverFactionName: INITIATIVE_DISPLAY_NAME,
-    defaultMode: 'player',
-    supportedModes: Array.from(HOSTED_MODES)
-  };
-  try {
-    const response = await asset(env, request, '/data/runtime-config.json');
-    if (response.ok) return { ...fallback, ...(await response.json()) };
-  } catch (error) {
-    // A source worker without a generated static bundle uses the safe fallback.
-  }
-  return fallback;
-};
-
-const TECH_RESOURCES = new Set([
-  'tech-tree', 'tech-path', 'tech-search', 'tech-milestones',
-  'tech-matrix', 'tech-opportunities', 'research-queue'
-]);
-
-const techIntelResource = (pathName) => {
-  const direct = pathName.match(/^\/api\/([^/]+)$/);
-  const grouped = pathName.match(/^\/api\/intel\/([^/]+)$/);
-  const resource = grouped?.[1] || direct?.[1];
-  return resource && TECH_RESOURCES.has(resource) ? resource : null;
-};
-
-const buildTechIntelResource = (result, resource, snapshot, url) => {
-  const row = result.row;
-  const identity = resultIdentity(result);
-  const observerId = positiveIntegerOr(
-    url.searchParams.get('observer') || row.observer_faction_id,
-    DEFAULT_OBSERVER_FACTION_ID,
-    'observer faction id'
-  );
-  const mode = result.mode || row.visibility || 'player';
-
-  let projection;
-  if (resource === 'tech-tree') {
-    const category = String(url.searchParams.get('category') || 'all').toLowerCase();
-    if (!CATEGORIES.has(category)) {
-      return jsonResponse({ success: false, error: `Invalid category '${category}'.` }, 400);
-    }
-    const includeEffects = String(url.searchParams.get('includeEffects') ?? 'true') !== 'false';
-    projection = buildTechTreeProjection(snapshot, mode, observerId, { category, includeEffects });
-  } else if (resource === 'tech-path') {
-    const rawTarget = url.searchParams.get('target');
-    if (!rawTarget) {
-      return jsonResponse({ success: false, error: 'Missing required query parameter: target.' }, 400);
-    }
-    const targets = rawTarget.split(',').map(t => t.trim()).filter(Boolean);
-    projection = buildTechPathProjection(snapshot, mode, observerId, targets);
-  } else if (resource === 'tech-search') {
-    const query = url.searchParams.get('q') || '';
-    if (!query) {
-      return jsonResponse({ success: false, error: 'Missing required query parameter: q.' }, 400);
-    }
-    projection = buildTechSearchProjection(snapshot, mode, observerId, query);
-  } else if (resource === 'tech-milestones') {
-    const category = url.searchParams.get('category') ? String(url.searchParams.get('category')).toLowerCase() : null;
-    projection = buildTechMilestonesProjection(snapshot, mode, observerId, category);
-  } else if (resource === 'tech-matrix') {
-    projection = buildTechMatrixProjection(snapshot, mode, observerId);
-  } else if (resource === 'tech-opportunities') {
-    projection = buildTechOpportunitiesProjection(snapshot, mode, observerId);
-  } else {
-    projection = buildResearchQueueProjection(snapshot, mode, observerId);
-  }
-
-  return {
-    success: true,
-    source: 'supabase',
-    ...identity,
-    difficulty: row.difficulty,
-    observerFaction: { id: observerId, name: row.observer_faction_name || null },
-    intelMode: mode,
-    visibility: row.visibility || mode,
-    ...projection
-  };
-};
+import { corsHeaders, jsonResponse, htmlResponse, markdownSnapshotResponse } from './http.js';
+import { asset, observerFile } from './assets.js';
+import {
+  boundedHistoryLimit,
+  fetchFromSupabase,
+  isSupabaseReady,
+  querySupabase,
+  readPublicCampaign,
+  readStrategicHistory,
+  strategicHistoryMeta
+} from './supabaseReader.js';
+import { resultIdentity, snapshotEnvelope } from './envelopes.js';
+import {
+  buildIntelResource,
+  buildTechIntelResource,
+  intelResource,
+  productionPlanPaths,
+  techIntelResource,
+  validateResourceQuery
+} from './projections.js';
+import { HOSTED_MODES, positiveIntegerOr, readRuntimeDefaults } from './runtimeDefaults.js';
 
 export default {
   async fetch(request, env) {
@@ -641,7 +76,7 @@ export default {
       'runtime default observer faction id'
     );
     const observerId = url.searchParams.get('observer') || String(defaultObserverId);
-    if (!/^\d+$/.test(observerId) || !Number.isSafeInteger(Number(observerId)) || Number(observerId) <= 0) {
+    if (!isPositiveIntegerId(observerId)) {
       return jsonResponse({ success: false, error: `Invalid observer faction '${observerId}'.` }, 400);
     }
     const requestedMode = String(url.searchParams.get('mode') || 'player').toLowerCase();
@@ -705,16 +140,7 @@ export default {
         return jsonResponse(payload);
       }
 
-      return new Response(renderIntelApiIndexHtml(payload, { defaultObserverFactionId: defaultObserverId }), {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          'content-type': 'text/html; charset=utf-8',
-          'cache-control': 'no-store',
-          'x-content-type-options': 'nosniff',
-          'referrer-policy': 'no-referrer'
-        }
-      });
+      return htmlResponse(renderIntelApiIndexHtml(payload, { defaultObserverFactionId: defaultObserverId }));
     }
 
     // Compact strategic history is intentionally separate from the large

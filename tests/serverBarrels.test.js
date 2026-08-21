@@ -191,3 +191,95 @@ test('the Earth theater table stays separate from the space theater table', () =
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// The 2026-08-20 review's remaining section-D cluster: the two runtime entry
+// points and the publish script. Same invariant as above -- the original path
+// stays the public surface and re-exports the SAME function objects.
+// ---------------------------------------------------------------------------
+
+test('the publisher keeps its exported surface and re-exports its stage modules', () => {
+  const publisher = require('../scripts/push_latest_to_supabase');
+  const options = require('../scripts/publish/options');
+  const techGraph = require('../scripts/publish/techGraph');
+
+  assert.deepStrictEqual(Object.keys(publisher).sort(), [
+    'applyTechTreeMode',
+    'main',
+    'parseArgs',
+    'techGraphFingerprint',
+    'usage'
+  ]);
+
+  // Same objects, not re-implementations. tests/publisherArgs.test.js exercises
+  // these through the original path, so a wrapper there would keep passing
+  // while the stage module drifted underneath it.
+  assert.strictEqual(publisher.parseArgs, options.parseArgs);
+  assert.strictEqual(publisher.usage, options.usage);
+  assert.strictEqual(publisher.applyTechTreeMode, techGraph.applyTechTreeMode);
+  assert.strictEqual(publisher.techGraphFingerprint, techGraph.techGraphFingerprint);
+  assert.strictEqual(typeof publisher.main, 'function');
+});
+
+test('only the publisher stage that writes reads the service role key', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const publishDir = path.join(__dirname, '..', 'scripts', 'publish');
+  const stripComments = (source) => source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  const readers = fs.readdirSync(publishDir).filter(name => name.endsWith('.js'));
+  assert.ok(readers.length >= 4, 'the publisher was split into stages');
+
+  const usesServiceRole = readers.filter(name => stripComments(
+    fs.readFileSync(path.join(publishDir, name), 'utf8')
+  ).includes('SERVICE_ROLE'));
+
+  // CLAUDE.md: SUPABASE_SERVICE_ROLE_KEY is local-only. Keeping it to the one
+  // stage that performs writes means the parse, row-building and option stages
+  // can be reused or tested without ever touching it.
+  assert.deepStrictEqual(usesServiceRole, ['supabaseWriter.js']);
+});
+
+test('the local server keeps its HTTP layer behind server/index.js', () => {
+  const app = require('../server');
+  assert.equal(typeof app.listen, 'function', 'server/index.js still exports the Express app');
+
+  // The cache is the only mutable state in the HTTP layer, and its three
+  // consumers (snapshot routes, intel routes, strategic-delta) must all reach
+  // it through the same module instance -- two copies would serve two different
+  // parsed saves from one process.
+  const snapshotCache = require('../server/http/snapshotCache');
+  assert.deepStrictEqual(Object.keys(snapshotCache).sort(), [
+    'buildFilteredSnapshot',
+    'getPreviousRawSnapshot',
+    'loadOrGetSnapshot',
+    'resetCache'
+  ]);
+  assert.strictEqual(require('../server/http/snapshotCache'), snapshotCache, 'the cache module is a singleton');
+});
+
+test('every bundled worker module is a sibling the build copies and rewrites', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const workerDir = path.join(__dirname, '..', 'site', 'worker');
+  const modules = fs.readdirSync(workerDir).filter(name => name.endsWith('.js'));
+  assert.ok(modules.includes('index.js'), 'the entry point is present');
+  assert.ok(modules.length >= 6, 'the worker was split into siblings');
+
+  for (const name of modules) {
+    const source = fs.readFileSync(path.join(workerDir, name), 'utf8');
+    for (const match of source.matchAll(/from '([^']+)'/g)) {
+      const specifier = match[1];
+      // Only two shapes survive the build's flat copy plus its
+      // `../shared/` -> `./shared/` rewrite. A deeper relative path would
+      // resolve here and fail at request time in production.
+      assert.ok(
+        specifier.startsWith('./') || specifier.startsWith('../shared/'),
+        `${name} imports '${specifier}', which the hosted build cannot resolve`
+      );
+      assert.ok(!specifier.startsWith('../../'), `${name} reaches above site/worker/`);
+    }
+  }
+});

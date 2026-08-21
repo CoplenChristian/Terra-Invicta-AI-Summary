@@ -19,9 +19,16 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 function buildWorkerBundle() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ti-worker-'));
   fs.cpSync(path.join(PROJECT_ROOT, 'shared'), path.join(dir, 'shared'), { recursive: true });
-  const workerSource = fs.readFileSync(path.join(PROJECT_ROOT, 'site', 'worker', 'index.js'), 'utf8')
-    .replaceAll("from '../shared/", "from './shared/");
-  fs.writeFileSync(path.join(dir, 'index.js'), workerSource);
+  // Every sibling worker module, flat, with the same rewrite the build applies.
+  // The worker is no longer one file, and a module that only resolves in the
+  // repo layout would pass here and fail in production.
+  const workerSourceDir = path.join(PROJECT_ROOT, 'site', 'worker');
+  for (const name of fs.readdirSync(workerSourceDir)) {
+    if (!name.endsWith('.js') || name === 'static-assets.js') continue;
+    const source = fs.readFileSync(path.join(workerSourceDir, name), 'utf8')
+      .replaceAll("from '../shared/", "from './shared/");
+    fs.writeFileSync(path.join(dir, name), source);
+  }
   fs.writeFileSync(
     path.join(dir, 'static-assets.js'),
     'export const staticAssets = {"index.html":"<!doctype html>local","v2/index.html":"<!doctype html>v2"};\n'
@@ -172,7 +179,21 @@ test('the publishable key wins over the deprecated anon key, and the service rol
   const stripComments = (source) => source
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
-  for (const relative of [['site', 'worker', 'index.js'], ['shared', 'apiSurface.mjs']]) {
+
+  // EVERY file the hosted bundle contains, not just the entry point. The worker
+  // was split into sibling modules on 2026-08-20; checking index.js alone would
+  // now leave the Supabase reader -- the one module that actually resolves a key
+  // -- unguarded, which is precisely how a local-only key reaches a deployment.
+  const workerDir = path.join(PROJECT_ROOT, 'site', 'worker');
+  const workerFiles = fs.readdirSync(workerDir)
+    .filter(name => name.endsWith('.js'))
+    .map(name => ['site', 'worker', name]);
+  const sharedFiles = fs.readdirSync(path.join(PROJECT_ROOT, 'shared'))
+    .filter(name => name.endsWith('.mjs'))
+    .map(name => ['shared', name]);
+  assert.ok(workerFiles.length > 1, 'the worker split left more than one bundled module to check');
+
+  for (const relative of [...workerFiles, ...sharedFiles]) {
     const source = stripComments(fs.readFileSync(path.join(PROJECT_ROOT, ...relative), 'utf8'));
     assert.ok(
       !source.includes('SERVICE_ROLE'),

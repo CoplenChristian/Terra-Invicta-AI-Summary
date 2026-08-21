@@ -48,18 +48,40 @@ fs.cpSync(publicDir, distDir, { recursive: true });
 fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(path.join(distDir, 'server'), { recursive: true });
 fs.cpSync(path.join(projectRoot, 'shared'), path.join(distDir, 'shared'), { recursive: true });
-fs.copyFileSync(
-  path.join(projectRoot, 'site', 'worker', 'index.js'),
-  path.join(distDir, 'server', 'index.js')
-);
 // Sites executes dist/server/index.js as the worker entrypoint. Keep the
 // worker's ESM dependencies beside that entrypoint because some deployments
 // do not expose sibling directories under dist during module resolution.
 fs.cpSync(path.join(projectRoot, 'shared'), path.join(distDir, 'server', 'shared'), { recursive: true });
-const workerPath = path.join(distDir, 'server', 'index.js');
-const workerSource = fs.readFileSync(workerPath, 'utf8')
-  .replaceAll("from '../shared/", "from './shared/");
-fs.writeFileSync(workerPath, workerSource);
+
+// The worker is several sibling modules, not one file: index.js is the
+// dispatcher and http/assets/supabaseReader/envelopes/projections/runtimeDefaults
+// sit beside it. They are copied FLAT into dist/server/ so a sibling import
+// ('./http.js') resolves in the deployed bundle exactly as it does in the repo,
+// and every one gets the same `../shared/` -> `./shared/` rewrite, which is why
+// the split kept them siblings rather than putting them in a subdirectory.
+//
+// static-assets.js is generated further down and must not be copied from the
+// source tree, where it does not exist.
+const workerSourceDir = path.join(projectRoot, 'site', 'worker');
+const workerModules = fs.readdirSync(workerSourceDir)
+  .filter(name => name.endsWith('.js') && name !== 'static-assets.js')
+  .sort();
+if (!workerModules.includes('index.js')) {
+  throw new Error(`Worker entry point missing: ${path.join(workerSourceDir, 'index.js')}`);
+}
+for (const name of workerModules) {
+  const source = fs.readFileSync(path.join(workerSourceDir, name), 'utf8')
+    .replaceAll("from '../shared/", "from './shared/");
+  fs.writeFileSync(path.join(distDir, 'server', name), source);
+}
+// A worker module that still points at ../shared/ after the rewrite would fail
+// only at request time in production, so it fails the build instead.
+for (const name of workerModules) {
+  const written = fs.readFileSync(path.join(distDir, 'server', name), 'utf8');
+  if (written.includes("from '../")) {
+    throw new Error(`Worker module ${name} still imports from a parent directory after the shared-path rewrite.`);
+  }
+}
 
 const writeJson = (name, value) => {
   fs.writeFileSync(path.join(dataDir, name), JSON.stringify(value));
