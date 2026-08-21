@@ -150,6 +150,16 @@
   // ROWS
   // -------------------------------------------------------------------------
 
+  // A multiple whose axis has no unit. The templates give a utility or hab
+  // module ONE `specialModuleValue` shared across every rule it carries and
+  // never name the quantity, so "1.5x FleetECM" is a ratio of two unnamed
+  // scalars. These rows are ordered after every measured axis in their group;
+  // the badge says why a smaller-looking number sits above them.
+  const RULE_SCALAR_KIND = 'rule-scalar';
+  const RULE_SCALAR_TITLE = 'This module family has no engineering axis: the game gives each module one '
+    + 'shared rule value and names no unit for it. The ratio is only formed against a module carrying the '
+    + 'identical rule set. Ordered after every row whose axis has a unit.';
+
   function militaryRow(row) {
     const notes = [];
     if (row.closesDeficit === true) notes.push('<span class="ra-tag ra-tag--deficit">closes gap</span>');
@@ -157,6 +167,9 @@
     // trades against is phase 1's central finding, so it is a badge and not a
     // footnote.
     if (row.clearsFloor === false) notes.push('<span class="ra-tag ra-tag--warn">fails floor</span>');
+    if (row.axisKind === RULE_SCALAR_KIND) {
+      notes.push(`<span class="ra-tag ra-tag--unitless" title="${attr(RULE_SCALAR_TITLE)}">no unit</span>`);
+    }
     const duration = num(row.context && row.context.sustainedOutputDurationS);
     if (duration !== null) notes.push(`<span class="ra-tag">${attr(`${dec(duration, 0)}s of fire`)}</span>`);
 
@@ -328,6 +341,82 @@
   // FULL RANKING (detail panel)
   // -------------------------------------------------------------------------
 
+  /**
+   * The observer's slot allocation, in this file's own words.
+   *
+   * Spec section 6. The card has no room for a table, and the honest headline is
+   * short: how many of the weighted slots carry pips, and how many holdings are
+   * receiving nothing. The full layout and the reason no reallocation is
+   * recommended live in the detail panel.
+   *
+   * Returns null when the snapshot does not carry the weights, so the foot line
+   * shows the income alone rather than an invented "0 of 0 slots".
+   */
+  function slotSummary(slots) {
+    if (!slots || slots.available !== true) return null;
+    const withPips = num(slots.slotsWithPips);
+    const count = num(slots.slotCount);
+    if (withPips === null || count === null) return null;
+    const parts = [`${int(withPips)}/${int(count)} slots weighted`];
+    // Three counts, summed only if all three are measured. `num(x) || 0` would
+    // turn an unmeasured count into a confident zero and understate the total.
+    const idleParts = [slots.occupiedWithoutPips, slots.pipsWithoutOccupant, slots.unweightedOccupantCount]
+      .map(num);
+    if (!idleParts.includes(null)) {
+      const idle = idleParts.reduce((sum, value) => sum + value, 0);
+      if (idle > 0) parts.push(`${int(idle)} idle`);
+    }
+    return parts.join(' · ');
+  }
+
+  const SLOT_TITLE = 'Which research slots your pips are on, read from the save. No reallocation is '
+    + 'recommended: the published allocation formula does not reproduce your own measured research '
+    + 'delivery, so an "optimal" split would be a confident number resting on an unverified model. '
+    + 'Idle counts slots that hold something with no pips, pips with nothing to spend them on, and '
+    + 'projects parked beyond the last weighted slot.';
+
+  /** Slot rows for the detail panel. Every visible string is authored here. */
+  function slotFacts(slots) {
+    if (!slots) return [];
+    if (slots.available !== true) {
+      return [{
+        label: 'SLOT ALLOCATION',
+        value: 'Not available on this snapshot — the save\'s research slot weights were not published. '
+          + 'Re-publish the save to restore them.'
+      }];
+    }
+    const facts = [];
+    for (const slot of slots.slots || []) {
+      const pips = num(slot.pips);
+      const pipText = pips === null ? UNAVAILABLE : `${int(pips)} pip${pips === 1 ? '' : 's'}`;
+      const progress = num(slot.accumulatedResearch) === null
+        ? UNAVAILABLE
+        : `${int(slot.accumulatedResearch)}${num(slot.totalCost) === null ? '' : ` of ${int(slot.totalCost)}`} pts`;
+      const held = slot.displayName ? String(slot.displayName) : 'nothing assigned';
+      const category = slot.category ? ` · ${String(slot.category)}` : '';
+      const idle = slot.idleReason ? ' · receiving nothing' : '';
+      facts.push({
+        label: `SLOT ${int(slot.index)} · ${String(slot.kindLabel || 'Slot')}`,
+        value: `${held}${category} · ${pipText} · ${progress}${idle}`
+      });
+    }
+    for (const extra of slots.unweightedOccupants || []) {
+      facts.push({
+        label: `SLOT ${int(extra.index)} · beyond the weighted slots`,
+        value: `${String(extra.displayName || 'unnamed')} · no pips can be assigned here, and it was `
+          + 'measured to receive no research at all'
+      });
+    }
+    facts.push({
+      label: 'REALLOCATION',
+      value: 'Not offered. The published allocation formula does not reproduce measured delivery: the '
+        + 'same slot with the same pips returned 1.147x the prediction over one 15.5-day interval and '
+        + '0.993x over the next, and the two project slots imply a project bonus of −0.209 — a penalty. '
+        + 'Two of the formula\'s four terms appear in no shipped template.'
+    });
+    return facts;
+  }
+
   function openFullRanking(payload) {
     const panel = global.MissionControlDetailPanel;
     if (!panel || typeof panel.open !== 'function') return;
@@ -368,8 +457,10 @@
       summary: 'Two parallel rankings, never one score. Military value and economic value have no '
         + 'exchange rate, so they are ordered separately and the position of one below the other '
         + 'carries no claim about which is worth more. Within a track, ordering is by value per '
-        + 'research point inside one availability group.',
-      facts,
+        + 'research point inside one availability group, and a multiple on a module rule value — which '
+        + 'has no unit — is ordered after every multiple that does. The slot section below says where '
+        + 'your research currently goes.',
+      facts: [...facts, ...slotFacts(payload.slots)],
       // The detail panel closes on any action by default, so a bare label is
       // the whole contract here.
       actions: [{ label: 'Close' }]
@@ -445,6 +536,16 @@
     const incomeLabel = research.monthlyResearchIncome === null || research.monthlyResearchIncome === undefined
       ? 'research income not measurable — no completion times shown'
       : `${int(research.monthlyResearchIncome)} research/mo`;
+    // Section 6 rides on the existing foot line rather than taking a row of its
+    // own: the COMMAND column is measured against a 3.00-screen budget and was
+    // at 2.99 of it, so a new block would spend height this card does not have.
+    // Measured 2026-08-21 at 1920x1080: this line costs 0 px, because it fits
+    // beside the income figure the foot already carried.
+    const slotLabel = slotSummary(payload.slots);
+    const footLabel = slotLabel ? `${incomeLabel} · ${slotLabel}` : incomeLabel;
+    const footTitle = slotLabel
+      ? `Time to complete is against this figure. Absent income means no honest number of months, so the dash is shown instead of a zero. ${SLOT_TITLE}`
+      : 'Time to complete is against this figure. Absent income means no honest number of months, so the dash is shown instead of a zero.';
 
     container.innerHTML = `
       <div class="research-advisor">
@@ -473,7 +574,7 @@
           </section>
         </div>
         <div class="ra-foot">
-          <span title="Time to complete is against this figure. Absent income means no honest number of months, so the dash is shown instead of a zero.">${escapeHtml(incomeLabel)}</span>
+          <span title="${attr(footTitle)}">${escapeHtml(footLabel)}</span>
           <button type="button" class="init-btn ra-foot__btn" data-research-advisor-full>Full ranking</button>
         </div>
       </div>

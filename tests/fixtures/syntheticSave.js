@@ -37,7 +37,11 @@ function makeFaction(id, displayName, options = {}) {
       knownAlienSites: [],
       // The game's own annualised income rate. Omitted unless a test asks for
       // it, so the default fixture exercises the recomputed fallback.
-      ...(options.cachedYearlyRevenue ? { cachedYearlyRevenue: options.cachedYearlyRevenue } : {})
+      ...(options.cachedYearlyRevenue ? { cachedYearlyRevenue: options.cachedYearlyRevenue } : {}),
+      // Per-slot research pip weights. Omitted unless a test asks for them, so
+      // the default fixture exercises the "this snapshot carries no weights"
+      // path that a save published before phase 5 will take.
+      ...(options.researchWeights ? { researchWeights: options.researchWeights } : {})
     }
   };
 }
@@ -145,8 +149,8 @@ function makeSaveData({
       ],
       'PavonisInteractive.TerraInvicta.TIFactionState': [
         makeFaction(4712, 'the Initiative', { money, hate: 5, missionControlUsage: 10, finishedProjects: ['Project_TheirOperations'], ...(factionOptions[4712] || {}) }),
-        makeFaction(4713, 'the Servants', { money: 200, hate: 90, factionHate: [{ targetId: 4712, hate: 90 }] }),
-        makeFaction(4717, 'the Aliens', { money: 0, hate: 100, factionHate: [{ targetId: 4712, hate: 100 }] })
+        makeFaction(4713, 'the Servants', { money: 200, hate: 90, factionHate: [{ targetId: 4712, hate: 90 }], ...(factionOptions[4713] || {}) }),
+        makeFaction(4717, 'the Aliens', { money: 0, hate: 100, factionHate: [{ targetId: 4712, hate: 100 }], ...(factionOptions[4717] || {}) })
       ],
       'PavonisInteractive.TerraInvicta.TINationState': [
         {

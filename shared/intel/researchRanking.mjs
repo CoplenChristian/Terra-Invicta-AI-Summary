@@ -39,6 +39,7 @@ import {
   ACTIONABLE_GROUPS,
   AVAILABILITY_GROUP_LABELS,
   AVAILABILITY_GROUP_ORDER,
+  AXIS_KINDS,
   DEFICIT_RESEARCH_REMEDIES,
   RANKING_FORMULAE,
   RANKING_METHOD,
@@ -53,6 +54,7 @@ import {
   resolveDeficitOrdering,
   tallyUnrankable
 } from '../researchRanking.mjs';
+import { buildResearchSlotAllocation } from '../researchSlots.mjs';
 import { propulsionResource } from './propulsion.mjs';
 import { militaryValueResource } from './militaryValue.mjs';
 import { economicValueResource } from './economicValue.mjs';
@@ -85,9 +87,10 @@ const nameOr = (value, fallback) => {
  * requires every derived metric to state what it measured.
  */
 function militaryRow({
-  id, source, classKey, ruleKey, itemId, displayName, axisLabel, axisBasis,
+  id, source, classKey, ruleKey, itemId, displayName, axisLabel, axisKind, axisBasis,
   multiple, availabilityState, gateProjectId, gateProjectName, remainingResearchCost,
-  monthsAtCurrentIncome, unlockChance, clearsFloor, floorReason, alsoUnlocks, context
+  monthsAtCurrentIncome, unlockChance, clearsFloor, floorReason, alsoUnlocks, context,
+  ruleGroupSize
 }) {
   const scored = militaryValuePerResearchPoint(multiple, remainingResearchCost, availabilityState);
   return {
@@ -96,10 +99,17 @@ function militaryRow({
     source,
     classKey: classKey ?? null,
     ruleKey: ruleKey ?? null,
+    // Tie-break only: how many modules carry this row's rule. Null on every
+    // non-rule row, which is what keeps the tie-break inert for them rather
+    // than treating "no rule group" as a group of size zero.
+    ruleGroupSize: ruleGroupSize ?? null,
     itemId,
     displayName,
     // The unlocked item's own axis, named. Never a bare number.
     axisLabel,
+    // Whether that axis has a unit at all. `rule-scalar` rows are ordered after
+    // every `measured` row in the same group -- see AXIS_KINDS.
+    axisKind: axisKind ?? AXIS_KINDS.measured,
     axisBasis: axisBasis ?? null,
     improvementMultiple: toFinite(multiple),
     valuePerResearchPoint: scored.perResearchPoint,
@@ -276,14 +286,22 @@ function militaryValueRows(military) {
         source: 'military-value-rule',
         classKey: cls.classKey,
         ruleKey: group.rule,
+        ruleGroupSize: toFinite(group.itemCount),
         itemId: best.id,
         displayName: nameOr(best.displayName, best.id),
         // The rule name IS the axis here: the templates carry no numeric label
         // for a special-module rule, so the honest label is the rule's own name
         // rather than a prettier one this module would be inventing.
         axisLabel: `${group.rule} (rule value)`,
-        axisBasis: 'compared only WITHIN this special rule, never across rules: there is no exchange '
-          + 'rate between an exhaust-velocity multiplier and a targeting computer.',
+        // ...and because it has no unit, it never displaces a row that does.
+        axisKind: AXIS_KINDS.ruleScalar,
+        axisBasis: 'compared only WITHIN this special rule AND only against a module carrying the '
+          + `identical rule set (${nameOr(best.ruleSignature, 'no rules')}). The template gives each `
+          + 'module one specialModuleValue shared across every rule it carries and never says which rule '
+          + 'owns it, so only an identical rule set makes the ratio meaningful. There is no exchange rate '
+          + 'between an exhaust-velocity multiplier and a targeting computer, and none between a rule '
+          + 'scalar and a figure in GW/t either -- which is why this row is ordered after every measured '
+          + 'axis in its group.',
         multiple: best.vsFieldedInRule?.multiple,
         availabilityState: best.researchState,
         gateProjectId: best.gateProjectId,
@@ -297,12 +315,21 @@ function militaryValueRows(military) {
           family: cls.family,
           rule: group.rule,
           ruleValue: toFinite(best.ruleValue),
+          ruleSignature: best.ruleSignature ?? null,
           itemsInRule: toFinite(group.itemCount),
           fieldedInRule: toFinite(group.fieldedCount),
-          baselineDisplayName: group.fieldedBest?.displayName ?? null,
+          // The item the multiple is actually against, which is the
+          // same-signature baseline and NOT the group's highest-valued fielded
+          // module. Reading the second as the first is the defect this gate
+          // closed.
+          baselineDisplayName: best.vsFieldedInRule?.baselineDisplayName ?? null,
           noBaselineNote: best.vsFieldedInRule?.unavailable === 'no-fielded-baseline'
             ? 'the observer fields nothing carrying this rule, so there is no baseline and the multiple is null rather than 1'
-            : null
+            : (best.vsFieldedInRule?.unavailable === 'no-same-signature-baseline'
+              ? 'the observer fields modules carrying this rule, but none with this module\'s exact rule set, '
+                + 'so no ratio of two comparable scalars exists and the multiple is null rather than a number '
+                + 'formed across unlike quantities'
+              : null)
         }
       }));
     }
@@ -347,6 +374,7 @@ export function dedupeByGateProject(rows) {
       ruleKey: other.ruleKey,
       displayName: other.displayName,
       axisLabel: other.axisLabel,
+      axisKind: other.axisKind,
       improvementMultiple: other.improvementMultiple,
       rankState: other.rankState
     }];
@@ -566,15 +594,20 @@ export const researchRankingResource = (snapshot, {
       rank: Object.values(RANK_STATES),
       availability: Object.values(AVAILABILITY_STATES),
       availabilityLabels: AVAILABILITY_GROUP_LABELS,
-      actionableGroups: ACTIONABLE_GROUPS
+      actionableGroups: ACTIONABLE_GROUPS,
+      axisKinds: Object.values(AXIS_KINDS)
     },
     ordering: {
       basis: 'two parallel rankings, concatenated in a fixed track order (military, then economic). '
         + 'This is NOT a merged score and the position of an economic row below a military one carries '
         + 'no claim that the military one is worth more -- there is no exchange rate between them. '
         + 'Within a track, ordering is by value per research point inside one availability group, with '
-        + 'deficit-closing military candidates promoted ahead of the rest of their group.',
+        + 'deficit-closing military candidates promoted ahead of the rest of their group and rule-scalar '
+        + 'candidates demoted behind every measured-axis one.',
       deficitApplied: ordering.applied,
+      militaryKeys: ['closesDeficit', 'axisKind', 'valuePerResearchPoint', 'id'],
+      axisKindOrder: Object.values(AXIS_KINDS),
+      ruleScalarDemotion: RANKING_METHOD.ruleScalarDemotion,
       groupLimit,
       trackOrder: ['military', 'economic']
     },
@@ -602,6 +635,12 @@ export const researchRankingResource = (snapshot, {
       },
       remedyTable: DEFICIT_RESEARCH_REMEDIES
     },
+    // Section 6. WHERE the observer's research is currently pointed, which is a
+    // different question from what to research next and is answered from the
+    // save rather than from a model. No reallocation is recommended: the wiki
+    // allocation formula does not reproduce the observer's measured research
+    // delivery, and `slots.model.reproduction` carries the numbers that say so.
+    slots: buildResearchSlotAllocation(snapshot, { observerId }),
     research: {
       monthlyResearchIncome: monthlyResearch,
       monthlyResearchIncomeReason: monthlyResearch === null
@@ -636,8 +675,10 @@ export const researchRankingResource = (snapshot, {
       }
     },
     military: {
-      orderedBy: 'value per research point, inside one availability group, deficit-closing first',
+      orderedBy: 'value per research point, inside one availability group, deficit-closing first and '
+        + 'rule-scalar axes last',
       axisCaveat: RANKING_METHOD.crossAxisCaveat,
+      ruleScalarCaveat: RANKING_METHOD.ruleScalarDemotion,
       candidatesConsidered: militaryAll.length,
       rankedCount: militaryRanked.length,
       groups: militaryGroups,

@@ -580,10 +580,61 @@ function buildClass({
     }
     for (const group of Object.values(byRule)) {
       const fieldedInRule = group.items.filter(row => row.isFielded);
-      const best = bestOnAxis(fieldedInRule, 'ruleValue');
       group.itemsTotal = group.items.length;
       group.fieldedCount = fieldedInRule.length;
-      group.fieldedBest = best ? { id: best.id, displayName: best.displayName, ruleValue: best.ruleValue } : null;
+
+      // ONE BASELINE PER RULE SIGNATURE, not one per rule.
+      //
+      // The template carries a single `specialModuleValue` per module and never
+      // says which of that module's rules the value belongs to, so a value may
+      // only be divided by another value carrying the IDENTICAL rule set --
+      // then the attribution ambiguity is the same on both sides and cancels.
+      // See `ruleModuleMetrics` in shared/militaryValue.mjs for the measurement
+      // that forced this: the RadHardened group holds 14 valued members across
+      // 8 rule sets, and comparing across them made a Cyclotron's 20 particle-
+      // beam power bonus read as 40x a Magazine's 0.5 capacity multiplier.
+      const fieldedBestBySignature = new Map();
+      for (const row of fieldedInRule) {
+        if (!row.ruleSignature) continue;
+        const held = fieldedBestBySignature.get(row.ruleSignature);
+        const value = toFinite(row.ruleValue);
+        if (value === null) continue;
+        if (!held || value > toFinite(held.ruleValue)) fieldedBestBySignature.set(row.ruleSignature, row);
+      }
+      const signaturesFielded = [...fieldedBestBySignature.keys()].sort();
+      group.attribution = {
+        comparableWithin: 'rule signature',
+        basis: 'the template states one specialModuleValue per module across ALL of its rules and never '
+          + 'says which rule owns it, so a value is only divided by another value carrying the identical '
+          + 'rule set. An identical rule set also means identical applicability, so the two items really '
+          + 'are substitutes.',
+        // Counted over the members that CARRY a value, because that is the set
+        // the attribution question is about: a rule spanning one such rule set
+        // covers one quantity, and RadHardened's fourteen valued members span
+        // eight. Members with no value cannot produce a ratio either way.
+        signaturesInGroup: [...new Set(group.items
+          .filter(row => toFinite(row.ruleValue) !== null)
+          .map(row => row.ruleSignature)
+          .filter(Boolean))].sort(),
+        signaturesFielded,
+        validatedAgainstGameOutput: false
+      };
+      // Retained for callers that only need to know whether the observer flies
+      // anything in this group at all; the per-signature map above is what any
+      // multiple is actually formed against.
+      const overallBest = bestOnAxis(fieldedInRule, 'ruleValue');
+      group.fieldedBest = overallBest
+        ? {
+          id: overallBest.id,
+          displayName: overallBest.displayName,
+          ruleValue: overallBest.ruleValue,
+          ruleSignature: overallBest.ruleSignature,
+          // A caller must not read this as the comparison baseline for every
+          // row in the group; it is only the baseline for rows sharing its
+          // signature, and saying so here is cheaper than a wrong assumption.
+          isBaselineForSignatureOnly: true
+        }
+        : null;
       group.items = group.items
         .slice()
         .sort((a, b) => {
@@ -597,23 +648,46 @@ function buildClass({
         // full research record each time cost 183 KB on the hab-module class
         // alone, so the group carries the summary and `candidates` carries the
         // whole record once.
-        .map(row => ({
-          id: row.id,
-          displayName: row.displayName,
-          ruleValue: row.ruleValue,
-          massTons: row.massTons,
-          isFielded: row.isFielded,
-          fieldedCount: row.fieldedCount,
-          vsFieldedInRule: ratioAgainst(row.ruleValue, group.fieldedBest?.ruleValue ?? null, 'higher'),
-          researchState: row.research.state,
-          gateProjectId: row.research.gateProjectId,
-          remainingResearchCost: row.research.remainingResearchCost,
-          monthsAtCurrentIncome: row.research.monthsAtCurrentIncome
-        }));
+        .map(row => {
+          const baseline = row.ruleSignature ? fieldedBestBySignature.get(row.ruleSignature) ?? null : null;
+          const comparison = ratioAgainst(row.ruleValue, baseline?.ruleValue ?? null, 'higher');
+          return {
+            id: row.id,
+            displayName: row.displayName,
+            ruleValue: row.ruleValue,
+            ruleSignature: row.ruleSignature,
+            massTons: row.massTons,
+            isFielded: row.isFielded,
+            fieldedCount: row.fieldedCount,
+            vsFieldedInRule: {
+              ...comparison,
+              baselineId: baseline?.id ?? null,
+              baselineDisplayName: baseline?.displayName ?? null,
+              // Distinguishes "you fly nothing carrying this rule" from "you fly
+              // things carrying this rule but none with this item's rule set" --
+              // different facts, and the second is the one this gate introduced.
+              unavailable: comparison.unavailable === 'no-fielded-baseline' && signaturesFielded.length > 0
+                ? 'no-same-signature-baseline'
+                : comparison.unavailable
+            },
+            researchState: row.research.state,
+            gateProjectId: row.research.gateProjectId,
+            remainingResearchCost: row.research.remainingResearchCost,
+            monthsAtCurrentIncome: row.research.monthsAtCurrentIncome
+          };
+        });
       group.itemCount = group.itemsTotal;
       // Chosen from the WHOLE sorted group, before the limit is applied. Taking
       // it from the truncated list would silently answer "nothing to research
       // here" whenever the first N entries happened to be things already flown.
+      //
+      // Still the highest rule value, deliberately unchanged by the attribution
+      // gate: the gate's job is to refuse a MULTIPLE it cannot form, not to
+      // reorder what a group offers. Preferring a comparable sibling instead
+      // would bury a 20-value candidate behind a 0.5-value one scoring 1.0x --
+      // trading a missing number for a misleading offer. When the top candidate
+      // has no same-signature baseline it is surfaced with a null multiple, and
+      // the ranking carries it as not-comparable rather than scoring it.
       group.bestCandidate = group.items.find(row => !row.isFielded && toFinite(row.ruleValue) !== null) || null;
       group.items = group.items.slice(0, candidateLimit);
       group.itemsShown = group.items.length;
@@ -706,6 +780,12 @@ function buildClass({
           itemCount: group.itemCount,
           fieldedCount: group.fieldedCount,
           fieldedBest: group.fieldedBest,
+          // How many distinct rule sets this rule spans. One means every member
+          // of the group carries the same scalar quantity; eight -- which is
+          // what `RadHardened` spans -- means the rule name says nothing about
+          // what the number counts.
+          attribution: group.attribution,
+          signatureCount: asArray(group.attribution?.signaturesInGroup).length,
           // Highest rule value not already fielded, with its research state.
           // Null where every item with a measurable value is already flown.
           bestCandidate: group.bestCandidate

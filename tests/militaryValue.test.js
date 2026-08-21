@@ -34,6 +34,7 @@ const {
   mountCost,
   rankArmorAxis,
   ratioAgainst,
+  ruleSignatureOf,
   threatMix,
   weaponDamage,
   weaponMetrics,
@@ -955,4 +956,99 @@ test('weapon roles come from attack/defence mode, not from the weapon\'s name', 
     assert.equal(structural === WEAPON_ROLES.pointDefense, loaderSaysPointDefense,
       `${weapon.dataName}: structural role ${structural} vs loader role ${weapon.role}`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// RULE VALUE ATTRIBUTION
+//
+// The template ships ONE `specialModuleValue` per module and a LIST of
+// `specialModuleRules`, and never says which rule the value belongs to. Group
+// by rule and compare across the group and you divide unlike quantities: on the
+// live save the top military row in both modes read "Cyclotron 40.0x
+// RadHardened", which is a particle-beam power bonus of 20 over a magazine
+// capacity multiplier of 0.5, filed under a boolean radiation-hardening tag.
+// ---------------------------------------------------------------------------
+
+/** An observer whose only utility module is a Magazine, as the live save's is. */
+function magazineSnapshot(mode = 'player') {
+  const snapshot = fieldedSnapshot(mode);
+  snapshot.shipDesigns[0].moduleTemplateEntries = [
+    { moduleName: 'WaterHeatSink' },
+    { moduleName: 'Lithium-IonBattery' },
+    { moduleName: 'Magazine' }
+  ];
+  return snapshot;
+}
+
+const ruleGroup = (result, classKey, rule) =>
+  (classOf(result, classKey).byRule || {})[rule] || null;
+
+test('ruleSignatureOf is order-independent, and absent rules stay null', () => {
+  assert.equal(ruleSignatureOf(['RadHardened', 'Magazine']), ruleSignatureOf(['Magazine', 'RadHardened']));
+  assert.equal(ruleSignatureOf(['Magazine', 'RadHardened']), 'Magazine + RadHardened');
+  // No rules is not a rule set of one empty name.
+  assert.equal(ruleSignatureOf([]), null);
+  assert.equal(ruleSignatureOf(null), null);
+  assert.equal(ruleSignatureOf(['', '  ']), null);
+});
+
+test('the artifact this gate exists to stop is real: RadHardened spans eight unlike quantities', () => {
+  const result = project(magazineSnapshot(), { observerId: OBSERVER, detail: 'full' });
+  const group = ruleGroup(result, 'utility_module', 'RadHardened');
+  assert.ok(group, 'the templates carry a RadHardened group');
+  // Eight distinct rule sets: thrust multipliers, EV multipliers, magazine
+  // multipliers, armour fractions, troop counts and a particle-beam bonus, all
+  // wearing the same tag.
+  assert.equal(group.attribution.signaturesInGroup.length, 8);
+  // And the rule the value can be attributed to spans exactly one.
+  assert.equal(ruleGroup(result, 'utility_module', 'Magazine').attribution.signaturesInGroup.length, 1);
+  assert.equal(ruleGroup(result, 'utility_module', 'EVMultiplier').attribution.signaturesInGroup.length, 1);
+
+  // The number the gate refuses, stated so the test says what it is refusing.
+  assert.equal(ratioAgainst(20, 0.5, 'higher').multiple, 40);
+});
+
+test('a rule value is only divided by a value carrying the identical rule set', () => {
+  const result = project(magazineSnapshot(), { observerId: OBSERVER, detail: 'full', limit: 50 });
+  const group = ruleGroup(result, 'utility_module', 'RadHardened');
+  assert.equal(group.fieldedCount, 1, 'the observer flies exactly one RadHardened module: the Magazine');
+
+  const cyclotron = group.items.find(row => row.id === 'Cyclotron');
+  assert.ok(cyclotron, 'the Cyclotron is still listed, not hidden');
+  assert.equal(cyclotron.ruleValue, 20, 'and it keeps its own measured value');
+  assert.equal(cyclotron.vsFieldedInRule.multiple, null, 'but no multiple is formed across unlike rule sets');
+  assert.equal(cyclotron.vsFieldedInRule.unavailable, 'no-same-signature-baseline');
+  assert.equal(cyclotron.vsFieldedInRule.baselineId, null);
+
+  // A module that DOES share the Magazine's rule set is still compared.
+  const alien = group.items.find(row => row.id === 'AlienMagazine');
+  assert.equal(alien.vsFieldedInRule.baselineId, 'Magazine');
+  assert.equal(alien.vsFieldedInRule.multiple, 1);
+
+  // The group still names what the observer flies, and says the baseline only
+  // holds for its own signature rather than for the whole group.
+  assert.equal(group.fieldedBest.id, 'Magazine');
+  assert.equal(group.fieldedBest.isBaselineForSignatureOnly, true);
+});
+
+test('the attribution gate is not vacuous: dropping it restores the 40x', () => {
+  const result = project(magazineSnapshot(), { observerId: OBSERVER, detail: 'full' });
+  const group = ruleGroup(result, 'utility_module', 'RadHardened');
+  const cyclotron = group.items.find(row => row.id === 'Cyclotron');
+  // Exactly what the pre-gate code did: compare against the group's highest
+  // fielded value, whatever rule set carried it.
+  const ungated = ratioAgainst(cyclotron.ruleValue, group.fieldedBest.ruleValue, 'higher');
+  assert.equal(ungated.multiple, 40);
+  assert.notEqual(ungated.multiple, cyclotron.vsFieldedInRule.multiple);
+});
+
+test('a rule group with no same-signature baseline still offers a candidate, with no number', () => {
+  const result = project(magazineSnapshot(), { observerId: OBSERVER, detail: 'full' });
+  const group = ruleGroup(result, 'utility_module', 'RadHardened');
+  // The whole group is not silently emptied, and the gate did not reorder what
+  // it offers: the highest-valued candidate is still the one surfaced.
+  assert.equal(group.bestCandidate.id, 'Cyclotron', 'the gate refuses a multiple, it does not re-pick');
+  assert.equal(group.bestCandidate.ruleValue, 20, 'its own measured value survives');
+  assert.equal(group.bestCandidate.vsFieldedInRule.multiple, null,
+    'and it carries no multiple, so the ranking treats it as not-comparable rather than scoring it');
 });

@@ -215,6 +215,12 @@ function buildFactions(rawFactions, {
       return {
         projectId: p.projectTemplateName,
         displayName: projT?.friendlyName || p.projectTemplateName,
+        // Which research slot holds this project. The save states it, and it is
+        // the index into `researchWeights` below -- a project in a slot the
+        // weight array does not reach receives no research at all. Absent stays
+        // null: slot 0 is a real slot, so an unread slot must not become one.
+        slot: firstNumericOrNull(p.slot),
+        category: projT?.techCategory || null,
         accumulatedResearch: Math.round(acc),
         totalCost: cost,
         totalCostAvailable: cost !== null,
@@ -295,6 +301,17 @@ function buildFactions(rawFactions, {
       },
       completedProjects,
       currentProjects,
+      // The faction's pip weights, one entry per research slot, straight from
+      // the save. Not normalised and not reordered: `researchWeights[i]` is the
+      // weight for slot index `i`, and shared/researchSlots.mjs joins it to the
+      // global tech slots and to `currentProjects[].slot` by that index.
+      //
+      // A save that does not carry the array yields null rather than [], so
+      // "this faction assigns no pips anywhere" stays distinguishable from
+      // "this snapshot does not carry pip weights".
+      researchWeights: Array.isArray(f.researchWeights)
+        ? f.researchWeights.map(weight => firstNumericOrNull(weight))
+        : null,
       availableProjectsCount: availableProjects.length,
       availableProjectNames: availableProjects,
       missionControlUsage: Number.isFinite(Number(f.missionControlUsage)) ? Number(f.missionControlUsage) : null,

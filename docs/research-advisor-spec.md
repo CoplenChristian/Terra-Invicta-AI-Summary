@@ -494,6 +494,55 @@ The allocation formula above means the current pip distribution is probably not 
 
 Worth building **after** the value model — it is a smaller win and depends on knowing which categories matter.
 
+### The formula does not reproduce, so no reallocation is offered — measured 2026-08-21
+
+Every other formula in this feature is pinned to shipped data or to a stated
+save field. This one was not, so it was tested before anything was built on it.
+
+**What is pinned.** `researchWeights` is a **6-entry array on every faction in
+every save checked, 3/16/2023 through 1/1/2034**, and `researchWeights[i]` is
+the pip weight for slot index `i`: a global tech slot's index is its position in
+`TIGlobalResearchState.techProgress`, and a project's index is its own `slot`
+field. Verified by **six independent slot-level agreements** between "carries
+pips" and "received research", diffing accumulated research across two
+consecutive 15.5-day intervals (12/1/2033 → 12/16/2033 → 1/1/2034) with the pip
+layout unchanged at `[0,0,3,3,3,0]`. A **project parked in a slot beyond the
+weight array receives nothing** — Operations Research sat at 22.82 accumulated
+across both intervals without moving.
+
+**What did not.** With the same pips on the same slot:
+
+| interval | slot 2 (Coilguns, 3 pips) delivered / predicted |
+| :-- | --: |
+| 12/1 → 12/16/2033 | **1.147×** |
+| 12/16/2033 → 1/1/2034 | **0.993×** |
+
+A per-slot multiplier the formula treats as constant is not constant. Worse, the
+two project slots deliver a fixed **1.2073** ratio to each other; with their
+reconstructed category bonuses (Xenology 0.20, Energy 0.03 — summed from
+`techBonuses` on the observer's orgs, hab modules and councilor traits) the
+formula can only produce that ratio with **ProjectBonus = −0.209**, a project
+*penalty*, contradicting the term's own definition. No single `(base,
+ProjectBonus)` pair fits all three pip-carrying slots.
+
+**And two of its four terms have no source in the shipped data at all.**
+`TIGlobalConfig.json` carries only `globalResearchMultiplier: 1` — neither the
++5%-per-active-slot constant nor the `0.9^(n−1)` decay appears in any template —
+and no template or save field states a ProjectBonus.
+
+**One thing did reproduce, and it is recorded rather than used:** the *relative*
+share between two slots is stable to one part in 10⁴ (the project slot delivered
+2.26216× the tech slot in the first interval and 2.26214× in the second). The
+allocation has a stable structure; the wiki formula is not it.
+
+**Therefore the advisor reports the layout and refuses the optimisation.**
+`/api/intel/research-ranking` carries a `slots` block with the pip layout, what
+occupies each slot, each slot's **pip share** (explicitly *not* its research
+share), and the three idle states — occupied-without-pips, pips-without-occupant,
+and parked-beyond-the-weighted-slots. `recommendation.offered` is `false` with
+its reason, and `model.reproduction` carries the numbers above so the refusal is
+a measurement rather than a shrug.
+
 ---
 
 ## 7. Honesty requirements
@@ -556,6 +605,64 @@ roll that had already landed, described as still pending. It is now shown only
 in `prereq-clear-but-unrolled`, which is the one state where it is a fact about
 what happens next. This is §3b's state-collapsing error, inverted.
 
+### A third defect, found by reading the shipped panel — measured 2026-08-21
+
+**A rule value is not a capability axis, and it was leading the ranking.** The
+top military row in **both** modes read:
+
+```
+Cyclotron   40.0×   RadHardened (rule value)     5,000 pts · 1.6 mo
+```
+
+above a genuine 3.00× reactor improvement in GW/t. The cause is upstream of the
+ordering: the template ships **one `specialModuleValue` per module and a *list*
+of `specialModuleRules`**, and never says which rule the value belongs to.
+Cyclotron carries `[ParticleBeamPowerBonus, RadHardened]` with value 20; Magazine
+carries `[Magazine, RadHardened]` with value 0.5. Filed under `RadHardened` — a
+boolean hardening tag with no numeric meaning — 20/0.5 = 40×, which is a
+particle-beam power bonus divided by a magazine capacity multiplier. The
+`RadHardened` group holds **14 valued members across 8 distinct rule sets**,
+whose values are thrust multipliers, EV multipliers, magazine multipliers,
+armour fractions and troop counts.
+
+Two mechanisms, because there are two distinct defects:
+
+**1. Soundness — the comparison is gated on the whole rule signature.** A value
+is only divided by a value carrying the **identical rule set**. Then whichever
+rule owns the scalar in one item owns it in the other, so the attribution
+ambiguity is the same on both sides and cancels in the ratio; and an identical
+rule set also means identical *applicability*, so the two items really are
+substitutes (a 1.3× thrust multiplier requiring a nuclear drive is not an
+upgrade over a 1.1× requiring a fusion drive if the ship flies fusion). Anything
+else reports `no-same-signature-baseline` and a null multiple — listed, with the
+reason, never scored. This is what removes the Cyclotron row.
+
+**2. Ordering — a unitless multiple never displaces one with a unit.** Even a
+sound rule-value ratio has no named quantity, so `axisKind: 'rule-scalar'` rows
+sort after every `measured` row inside their availability group. `closesDeficit`
+still comes first, deliberately: the `EVMultiplier` modules are rule-scalar rows
+*and* the only non-drive unlocks that move delta-V, so a delta-V-deficit save
+must still be able to lead with one.
+
+The same artifact was checked for elsewhere and found twice more, both now
+demoted rather than removed because their signatures do match:
+`Agriculture Complex 5× Farm` and `Battlestations 1.5× FleetECM` moved from
+positions 3 and 6 of `prereq-blocked` to 10 and 11, below every measured axis.
+`Immortals 2.5× Assault` is the sole row in `faction-restricted` and stays.
+
+A third, smaller consequence: one module appears once per rule it carries, so
+the dedupe picks which rule *names* the row. It now prefers the rule carried by
+the **fewest** modules — `ParticleBeamPowerBonus` (1 carrier) over `RadHardened`
+(17), `Assault` (7) over `FullRepairCost` (8). That is a presentation judgement
+and is labelled as one; the alternative was alphabetical order, which got the
+right answer only by accident of spelling.
+
+`Antimatter Torpedo Launcher 6,687,503× sustained output per hardpoint` was
+checked as a possible instance of the same class and **is not one**: its axis is
+named and has a unit, both sides are the same quantity, and the number is real
+(3.21 PW held for 28 seconds against a Copperhead bay's 480 MW). It is §3's
+fourth correction working as intended, not an artifact.
+
 ### The panel
 
 COMMAND, not RECORDS: *"what do I research next"* is a decision taken this turn,
@@ -568,6 +675,14 @@ at 375 / 900 / 1366 / 1660 / 1920, zero console errors, zero 4xx, and zero
 forbidden tokens in a full-page `textContent` scan. The renderer's rule is that
 **only strings it authors reach the DOM** — several upstream `reason` fields use
 the word "null" as a technical term, so they travel as `title` tooltips instead.
+
+**Re-measured 2026-08-21 after the rule-value gate and the §6 slot line**, on
+ExitSave at 1920×1080: card **278 px**, COMMAND page **3,084 px (2.86 screens)**
+in omniscient and **3,103 px (2.87)** in player. The slot line costs **0 px** at
+1920 — it rides on the foot line the card already had — and 3 px at 375, where
+that line wraps. `document.scrollWidth === clientWidth` at 375 / 900 / 1366 /
+1920, zero console errors, zero non-200 responses, and zero forbidden tokens in
+`document.body.innerText` in both modes and in the detail panel.
 
 ## 8. Acceptance
 
@@ -607,4 +722,12 @@ the word "null" as a technical term, so they travel as `title` tooltips instead.
 4. ~~Ranking, deficit-aware ordering, and the UI panel.~~ **Built 2026-08-21**
    as `/api/intel/research-ranking` and the **RESEARCH ADVISOR** card in the v2
    COMMAND view. See §7a for what it measured.
-5. Slot allocation.
+5. ~~Slot allocation.~~ **Built 2026-08-21** as the `slots` block on
+   `/api/intel/research-ranking`, backed by `shared/researchSlots.mjs`. It
+   reports the layout and **refuses the optimisation**, because the wiki
+   allocation formula does not reproduce the observer's own measured research
+   delivery — see §6 for the numbers. The snapshot gained `researchWeights` per
+   faction and `slot` / `category` per current project: **+325 bytes raw / +50
+   bytes gzipped**, 0.0102% of the 3,124 KB published player row.
+   `researchWeights` is redacted for every non-observer faction in player mode,
+   as `null` and never as `[]`, and the filter's own leak assertion covers it.

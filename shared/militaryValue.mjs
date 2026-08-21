@@ -676,6 +676,19 @@ export function batteryMetrics(id, stats) {
 }
 
 /**
+ * The module's rule set as one canonical key, or null when it carries none.
+ *
+ * Sorted so `[Magazine, RadHardened]` and `[RadHardened, Magazine]` produce the
+ * same key, and joined with a separator no rule name contains. This is the
+ * comparison key for a rule value -- see `ruleModuleMetrics` for why the rule
+ * alone is not enough.
+ */
+export function ruleSignatureOf(rules) {
+  const list = asArray(rules).map(rule => String(rule).trim()).filter(rule => rule !== '');
+  return list.length === 0 ? null : [...list].sort().join(' + ');
+}
+
+/**
  * Utility and hab modules: no scalar, only rules.
  *
  * 45 distinct special rules across 58 utility modules and 100+ across the hab
@@ -683,6 +696,26 @@ export function batteryMetrics(id, stats) {
  * computer, and inventing one would be exactly the blended score this module
  * exists to refuse. So these carry their rule list and their rule value, and
  * the comparison happens WITHIN a rule.
+ *
+ * THE ATTRIBUTION PROBLEM, measured 2026-08-21. The template ships **one**
+ * `specialModuleValue` per module and a **list** of `specialModuleRules`, and
+ * never says which rule the value belongs to. Cyclotron carries
+ * `[ParticleBeamPowerBonus, RadHardened]` with value 20; Magazine carries
+ * `[Magazine, RadHardened]` with value 0.5. Grouped by `RadHardened` -- a
+ * boolean hardening tag that has no numeric meaning at all -- those two compare
+ * as 40x, which is a particle-beam power bonus divided by a magazine capacity
+ * multiplier. The RadHardened group holds 14 valued members across **8**
+ * distinct rule sets whose values are thrust multipliers, EV multipliers,
+ * magazine multipliers, armour fractions and troop counts.
+ *
+ * `ruleSignature` is the fix: a value may only be compared against another
+ * value carrying the IDENTICAL rule set. Then whichever rule owns the scalar in
+ * one item owns it in the other, so the attribution ambiguity is the same on
+ * both sides and cancels in the ratio -- and an identical rule set also means
+ * identical applicability, so the two really are substitutes (a 1.3x thrust
+ * multiplier that requires a nuclear drive is not an upgrade over a 1.1x that
+ * requires a fusion drive if the ship flies fusion). Everything else reports
+ * no multiple with the reason, and is never scored.
  */
 export function ruleModuleMetrics(id, stats, family) {
   const rules = family === 'hab_module' ? asArray(stats?.specialRules) : asArray(stats?.specialModuleRules);
@@ -692,6 +725,7 @@ export function ruleModuleMetrics(id, stats, family) {
     displayName: stats?.displayName || id,
     family,
     rules,
+    ruleSignature: ruleSignatureOf(rules),
     ruleValue: value,
     massTons: toFinite(stats?.massTons) ?? toFinite(stats?.baseMassTons),
     powerRequirementMW: toFinite(stats?.powerRequirementMW),

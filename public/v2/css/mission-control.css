@@ -6827,6 +6827,12 @@ button.council-orders__row:focus-visible {
   color: var(--warning);
 }
 
+/* A multiple whose axis carries no unit. Deliberately the quietest of the
+   three tags: it marks a row as less comparable, not as a warning. */
+.ra-tag--unitless {
+  border-style: dashed;
+}
+
 .ra-census,
 .ra-empty-group {
   font-family: var(--mono);

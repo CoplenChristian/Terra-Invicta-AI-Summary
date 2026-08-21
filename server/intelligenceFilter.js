@@ -279,6 +279,12 @@ class IntelligenceFilter {
         alienHate: hateObj,
         completedProjects: completedProjs,
         currentProjects: isObserver ? f.currentProjects : [],
+        // Same class as `currentProjects`: how a rival distributes its research
+        // pips across slots is their internal allocation, not something the
+        // player observes. Null rather than [] -- an enemy reported with an
+        // empty weight array reads as "assigns no research anywhere", which is
+        // a confident claim from no evidence.
+        researchWeights: isEnhanced || isObserver ? f.researchWeights : null,
         availableProjectNames: isObserver ? f.availableProjectNames : [],
         // Same class as the alien-hate leak: `availableProjectNames` was
         // redacted to [] for enemies while the count derived from that very
@@ -659,6 +665,9 @@ class IntelligenceFilter {
       }
       if ((faction.availableProjectNames || []).length) {
         factionLeaks.push(`${faction.ID}:availableProjectNames[${faction.availableProjectNames.length}]`);
+      }
+      if (Array.isArray(faction.researchWeights)) {
+        factionLeaks.push(`${faction.ID}:researchWeights[${faction.researchWeights.length}]`);
       }
       if (this.toFiniteOrNull(faction.availableProjectsCount) !== null) {
         factionLeaks.push(`${faction.ID}:availableProjectsCount`);

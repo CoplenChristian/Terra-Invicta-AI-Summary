@@ -69,6 +69,39 @@ export const RANK_STATES = Object.freeze({
 });
 
 /**
+ * What KIND of quantity a military row's multiple is a multiple OF.
+ *
+ * `measured` rows carry a named engineering axis with a unit -- output per
+ * hardpoint in MW, heat capacity per tonne in GJ/t, combat acceleration in
+ * m/s^2. `ruleScalar` rows carry the ratio of two `specialModuleValue` scalars,
+ * and the templates name no quantity for those at all: the value is one number
+ * per module shared across every rule the module carries, so the best that can
+ * be said of a 1.25x is "a quarter more of whatever this rule set's scalar
+ * counts".
+ *
+ * The distinction exists because the two are NOT commensurable, and sorting
+ * them together let a rule-tag ratio lead a capability ranking. Measured
+ * 2026-08-21 on the live save: the top military row in both modes read
+ * "Cyclotron 40.0x RadHardened (rule value)" -- a particle-beam power bonus of
+ * 20 divided by a magazine capacity multiplier of 0.5, filed under a boolean
+ * radiation-hardening tag -- outranking a genuine 3.00x reactor improvement in
+ * GW/t. The rows are still ranked and still shown; they are ordered after every
+ * row that names a real axis, inside the same availability group.
+ */
+export const AXIS_KINDS = Object.freeze({
+  measured: 'measured',
+  ruleScalar: 'rule-scalar'
+});
+
+export const AXIS_KIND_ORDER = Object.freeze([AXIS_KINDS.measured, AXIS_KINDS.ruleScalar]);
+
+/** Position of a row's axis kind in the ordering. Unknown kinds sort last. */
+export function axisKindRank(axisKind) {
+  const index = AXIS_KIND_ORDER.indexOf(axisKind);
+  return index === -1 ? AXIS_KIND_ORDER.length : index;
+}
+
+/**
  * Availability groups, in the order they are offered.
  *
  * Section 3b: these are not tiers of quality, they are different PROPOSITIONS, and
@@ -366,20 +399,49 @@ export function economicRankRows(item) {
 
 /**
  * Deterministic comparator for ranked military rows inside one availability
- * group: deficit-closing first, then value per research point, then id.
+ * group: deficit-closing first, then axis kind, then value per research point,
+ * then id.
  *
- * The deficit key comes ahead of the value on purpose and that is section 3's
+ * The deficit key comes ahead of everything on purpose and that is section 3's
  * requirement, not an optimisation -- "a save where armour is the gap must not
- * lead with drives" only holds if the measured gap outranks the raw number.
+ * lead with drives" only holds if the measured gap outranks the raw number. It
+ * stays ahead of the axis-kind tier too, because `EVMultiplier` is a rule-
+ * scalar row AND the only unlock family besides drives that moves delta-V; a
+ * delta-V-deficit save must still be able to lead with it.
+ *
+ * Axis kind comes second: a ratio of two unnamed module scalars is not
+ * commensurable with a ratio of two figures in GW/t, so it never displaces one.
+ * See `AXIS_KINDS`.
  */
 export function compareMilitaryRows(left, right) {
   if (left.closesDeficit !== right.closesDeficit) return left.closesDeficit ? -1 : 1;
+  const leftAxis = axisKindRank(left.axisKind);
+  const rightAxis = axisKindRank(right.axisKind);
+  if (leftAxis !== rightAxis) return leftAxis - rightAxis;
   const leftValue = toFiniteNumber(left.valuePerResearchPoint);
   const rightValue = toFiniteNumber(right.valuePerResearchPoint);
   if (leftValue !== rightValue) {
     if (leftValue === null) return 1;
     if (rightValue === null) return -1;
     return rightValue - leftValue;
+  }
+  // A PRESENTATION tie-break, and our judgement rather than shipped data.
+  //
+  // The same module appears once per rule it carries, so two rows can be the
+  // same item, the same gate and the same number under different rule names,
+  // and the dedupe keeps whichever this comparator puts first -- which is the
+  // name the reader sees. Prefer the rule carried by the FEWEST modules: a tag
+  // that 17 of 57 utility modules carry (`RadHardened`) or that 8 carry
+  // (`FullRepairCost`) says almost nothing about the one in front of you, while
+  // `ParticleBeamPowerBonus` with a single carrier says what the number is.
+  //
+  // It changes no multiple and reorders nothing that is not already tied; the
+  // alternative was alphabetical order, which got the right answer here only by
+  // accident of spelling.
+  const leftGroup = toFiniteNumber(left.ruleGroupSize);
+  const rightGroup = toFiniteNumber(right.ruleGroupSize);
+  if (leftGroup !== null && rightGroup !== null && leftGroup !== rightGroup) {
+    return leftGroup - rightGroup;
   }
   return String(left.id).localeCompare(String(right.id));
 }
@@ -518,6 +580,13 @@ export const RANKING_METHOD = Object.freeze({
   crossAxisCaveat: 'a multiple on one class\'s axis is NOT commensurable with a multiple on another\'s: '
     + '3.2x armour and 3.2x laser output are different things. Every row names its own axis, and this '
     + 'ordering is a triage aid rather than an exchange rate. It is our inference, not shipped data.',
+  ruleScalarDemotion: 'utility and hab modules have no engineering axis at all -- the templates give each '
+    + 'module ONE specialModuleValue shared across every rule it carries, and name no quantity for it. A '
+    + 'ratio of two such scalars is therefore ordered after every row that names a measured axis, inside '
+    + 'the same availability group. It is still ranked and still shown, because within one rule set the '
+    + 'ratio is real; it just cannot outrank a figure that has a unit. The exception is a deficit-closing '
+    + 'row, which stays first: the EVMultiplier modules are rule-scalar rows and are also the only '
+    + 'non-drive unlocks that move delta-V.',
   unrankableVisible: 'anything that could not be scored is carried in its own bucket with the reason, '
     + 'never as a zero. A tech whose value silently computes to 0 gets ranked last and never surfaces.'
 });

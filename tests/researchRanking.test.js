@@ -38,8 +38,10 @@ const { dedupeByGateProject } = require('../shared/intel/researchRanking.mjs');
 const {
   ACTIONABLE_GROUPS,
   AVAILABILITY_GROUP_ORDER,
+  AXIS_KINDS,
   DEFICIT_RESEARCH_REMEDIES,
   RANK_STATES,
+  axisKindRank,
   closesDeficit,
   compareEconomicRows,
   compareMilitaryRows,
@@ -811,4 +813,139 @@ test('a payload with no valuation inputs renders unavailable rather than an empt
   assertNoPlaceholderText(html, 'no-inputs payload');
   assert.match(visibleText(html), /UNAVAILABLE/);
   assert.match(visibleText(html), /Re-publish/);
+});
+
+// ---------------------------------------------------------------------------
+// AXIS KIND: A RULE VALUE IS NOT A CAPABILITY AXIS
+//
+// Utility and hab modules carry ONE `specialModuleValue` shared across every
+// rule they carry, and the templates name no quantity for it. A ratio of two
+// such scalars has no unit, so it must not displace a ratio of two figures in
+// GW/t. Measured on the live save before this gate: the top military row in
+// both modes read "Cyclotron 40.0x RadHardened (rule value)", above a 3.00x
+// reactor improvement.
+// ---------------------------------------------------------------------------
+
+const militaryRowStub = (overrides = {}) => ({
+  id: 'row',
+  closesDeficit: false,
+  axisKind: AXIS_KINDS.measured,
+  valuePerResearchPoint: 1,
+  ruleGroupSize: null,
+  ...overrides
+});
+
+test('a unitless rule value never outranks a measured axis, however big the number', () => {
+  const ruleScalar = militaryRowStub({ id: 'a-rule', axisKind: AXIS_KINDS.ruleScalar, valuePerResearchPoint: 0.0078 });
+  const measured = militaryRowStub({ id: 'z-measured', axisKind: AXIS_KINDS.measured, valuePerResearchPoint: 0.0008 });
+  // The live save's exact pairing: 40x on a rule tag scoring 0.0078 per point
+  // against 3.00x in GW/t scoring 0.0008. Value alone would put the rule first.
+  assert.ok(ruleScalar.valuePerResearchPoint > measured.valuePerResearchPoint,
+    'the rule row must genuinely score higher, or the test proves nothing');
+  assert.ok(compareMilitaryRows(ruleScalar, measured) > 0, 'the measured axis leads');
+  assert.ok(compareMilitaryRows(measured, ruleScalar) < 0, 'and the comparator is antisymmetric about it');
+});
+
+test('but the measured deficit still outranks the axis kind', () => {
+  // EVMultiplier modules are rule-scalar rows AND the only non-drive unlocks
+  // that move delta-V. A delta-V-deficit save must still be able to lead with
+  // one, or section 3's requirement and this demotion contradict each other.
+  const deficitRule = militaryRowStub({
+    id: 'ev', axisKind: AXIS_KINDS.ruleScalar, closesDeficit: true, valuePerResearchPoint: 0.0001
+  });
+  const measured = militaryRowStub({ id: 'other', axisKind: AXIS_KINDS.measured, valuePerResearchPoint: 5 });
+  assert.ok(compareMilitaryRows(deficitRule, measured) < 0);
+});
+
+test('an unknown axis kind sorts last rather than sorting as a measured one', () => {
+  const unknown = militaryRowStub({ id: 'q', axisKind: 'something-added-later', valuePerResearchPoint: 99 });
+  const ruleScalar = militaryRowStub({ id: 'r', axisKind: AXIS_KINDS.ruleScalar, valuePerResearchPoint: 0.1 });
+  assert.equal(axisKindRank('something-added-later'), 2);
+  assert.ok(compareMilitaryRows(unknown, ruleScalar) > 0);
+});
+
+test('a tied row is labelled by the most specific rule it carries, not the broadest tag', () => {
+  // One module appears once per rule, so the same item/gate/number arrives under
+  // several names and the dedupe keeps whichever sorts first. `RadHardened` is
+  // carried by 17 of 57 utility modules and says nothing; `ParticleBeamPowerBonus`
+  // is carried by one and says what the number is.
+  const broad = militaryRowStub({ id: 'a', axisKind: AXIS_KINDS.ruleScalar, ruleGroupSize: 17 });
+  const specific = militaryRowStub({ id: 'z', axisKind: AXIS_KINDS.ruleScalar, ruleGroupSize: 1 });
+  assert.ok(compareMilitaryRows(specific, broad) < 0, 'the specific rule wins despite sorting later by id');
+  // And it is inert where there is no rule group at all, rather than treating
+  // "not a rule row" as a group of size zero.
+  const measuredA = militaryRowStub({ id: 'a', ruleGroupSize: null });
+  const measuredZ = militaryRowStub({ id: 'z', ruleGroupSize: null });
+  assert.ok(compareMilitaryRows(measuredZ, measuredA) > 0, 'non-rule rows still fall back to id');
+});
+
+test('inside every group, no unitless row precedes a measured one unless it closes the gap', () => {
+  for (const mode of ['player', 'omniscient']) {
+    const result = project(fleetScenario(SCENARIOS.deltaV, mode), { mode, detail: 'full' });
+    for (const group of result.military.groups) {
+      let seenRuleScalar = false;
+      for (const row of group.items) {
+        assert.ok(['measured', 'rule-scalar'].includes(row.axisKind),
+          `${row.id}: every military row must declare an axis kind`);
+        if (row.axisKind === 'rule-scalar' && !row.closesDeficit) seenRuleScalar = true;
+        else if (row.axisKind === 'measured' && !row.closesDeficit) {
+          assert.equal(seenRuleScalar, false,
+            `${mode}/${group.state}: ${row.id} names a measured axis but sits below a unitless one`);
+        }
+      }
+    }
+  }
+});
+
+test('a rule row that cannot be compared is carried with its reason, never dropped or scored', () => {
+  const result = project(fleetScenario(SCENARIOS.deltaV, 'player'), { detail: 'full' });
+  const ruleRows = [
+    ...result.military.groups.flatMap(group => group.items),
+    ...result.military.unrankableItems
+  ].filter(row => row.source === 'military-value-rule');
+  assert.ok(ruleRows.length > 0, 'the fixture must produce rule rows, or this test is vacuous');
+  for (const row of ruleRows) {
+    if (row.rankState === RANK_STATES.ranked) {
+      assert.notEqual(row.improvementMultiple, null);
+      // A ranked rule row names the module it was actually measured against.
+      assert.ok(row.context.baselineDisplayName, `${row.id}: a ranked rule row must name its baseline`);
+    } else {
+      assert.equal(row.valuePerResearchPoint, null, `${row.id}: never scored`);
+      assert.ok(row.rankReason, `${row.id}: and never silent about why`);
+    }
+    assert.match(row.axisBasis, /identical rule set/,
+      'every rule row must state the comparison rule it was formed under');
+  }
+});
+
+test('a unitless row is badged as such on the card, and a measured one is not', () => {
+  const row = (overrides) => ({
+    id: 'r', displayName: 'A Module', axisLabel: 'Farm (rule value)', axisBasis: 'basis',
+    improvementMultiple: 5, valuePerResearchPoint: 0.0008, remainingResearchCost: 5000,
+    monthsAtCurrentIncome: 1.6, unlockChance: null, clearsFloor: null, gateProjectId: null,
+    gateProjectName: null, availabilityState: 'researchable-now', context: null, closesDeficit: false,
+    ...overrides
+  });
+  const payload = (axisKind) => ({
+    success: true,
+    sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
+    research: { monthlyResearchIncome: 3150 },
+    ordering: { deficitApplied: false },
+    deficit: { applied: false, capability: { canContest: 'unknown' } },
+    military: {
+      rankedCount: 1, candidatesConsidered: 1, unrankable: { counts: {} },
+      groups: [{ state: 'researchable-now', label: 'Researchable now', actionable: true, count: 1,
+        items: [row({ axisKind })] }]
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  });
+
+  const unitless = renderToString(payload('rule-scalar'));
+  assert.match(unitless, /ra-tag--unitless/);
+  assert.match(visibleText(unitless), /no unit/);
+  assert.match(unitless, /no engineering axis/, 'the badge must carry its explanation as a tooltip');
+  assertNoPlaceholderText(unitless, 'rule-scalar row');
+
+  const measured = renderToString(payload('measured'));
+  assert.ok(!/ra-tag--unitless/.test(measured), 'a measured axis carries no badge');
 });
