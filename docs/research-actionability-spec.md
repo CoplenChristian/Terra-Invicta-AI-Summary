@@ -52,9 +52,34 @@ Every recommendation resolves to one of three cases, and must say which:
 | **occupied slot** | start it by displacing something | what is displaced, its accumulated progress, and whether that progress is lost or retained |
 | **no slot of the right kind** | cannot be started at all | which kind is exhausted |
 
-**Whether displaced progress survives is the load-bearing unknown.** Do not guess it. `Project_OperationsResearch` sat at 22.82 accumulated across two consecutive saves without moving — consistent with progress being retained on an unslotted project, but that is one observation, not a rule. Check whether a project that left a slot retained its accumulation across saves; if it cannot be established, say "unknown whether progress is retained" rather than asserting either. A recommendation that silently assumes 12,412 points are safe, or silently assumes they are lost, is wrong in a way the player cannot see.
+**Whether displaced progress survives is the load-bearing unknown, and it could not be established.** Eight saves spanning 2029-09-10 to 2034-02-01 were checked: six projects left a slot in that window and **all six were completed, none displaced**. There is no natural experiment in this campaign, so **report it unknown — that work is done, do not repeat it.**
+
+A recommendation that silently assumes 13,790 points are safe, or silently assumes they are lost, is wrong in a way the player cannot see. If a future save ever does displace an in-progress project, the comparison becomes available and the state can be tightened then.
+
+`displaceCandidate` needs the same care. Under unknown retention, proposing the occupant with the **least accumulated progress** minimises what is at risk, which makes it a defensible default — but it is a heuristic chosen under uncertainty, not the correct answer, and must be labelled as one. The player may well prefer to drop a 46%-complete project they no longer want over a 12% one they do.
 
 Project slots and global tech slots are **different pools** and must not be conflated: a global tech cannot displace a faction project.
+
+### 2b-bis. Stalled slots — measured, and the highest-value thing this panel can say
+
+A slot can hold a project and receive **nothing**. Measured across eight saves spanning 2029-09-10 to 2034-02-01:
+
+```
+researchWeights: [0,0,3,3,3,0]
+
+slot 3   3 pips   PherocyteResistance     13,790 / 30,000  (46%)  advancing
+slot 4   3 pips   240cmUVLaserCannon         912 /  7,500  (12%)  advancing
+slot 5   0 pips   AudienceResearch            43 /    100  (43%)  FROZEN since 2029
+slot 7   no entry OperationsResearch          23 /    100  (23%)  FROZEN since 2029
+```
+
+`AudienceResearch: 43` and `OperationsResearch: 23` are byte-identical in every save across **four and a half years**. Slot 5 carries zero pips; slot 7 is beyond the length-6 weight array and receives nothing at all.
+
+So two of four project slots are consumed by work that cannot finish, while the advisor recommends starting more. **Detecting this is worth more than any ranking improvement in this document** — it is capacity the player already owns and is not using.
+
+Emit a `stalled` state for any slotted project receiving zero delivery, distinguishing the two causes (zero pips assigned, versus slot index outside the weight array — they have different fixes), and surface it above the recommendations. Detect it from the data, not from a hardcoded slot count: read the weight array's own length.
+
+Do **not** state what the player should do about it beyond naming the cause. Whether to assign pips or clear the slot depends on whether that project is still wanted, which the snapshot does not know.
 
 ### 2c. Lead with what needs no research
 
@@ -79,6 +104,7 @@ The live example: Orion Drive x1 — completed, fittable now, **5.1× combat acc
 ## 4. Acceptance
 
 - The panel shows the current queue with progress before any recommendation.
+- **Stalled slots are detected and surfaced above the recommendations**, with the cause named (zero pips versus slot index outside the weight array). On the sampled save this must find Audience Research and Operations Research; on a save with none it must say none, not omit the section.
 - Every recommendation states free-slot / displaces-X / no-slot, and names what would be displaced.
 - Whether displaced progress is retained is either established from saves and stated, or reported as unknown — never assumed.
 - Zero-research options (already unlocked, merely unbuilt) lead the ranking, with the refit named.
