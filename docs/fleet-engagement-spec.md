@@ -61,6 +61,34 @@ the band as a measurement.
 **4. Fifty-seven rows is not advice.** Rank and truncate, and announce it —
 `*TotalCount` / `*OmittedCount` to the consumer, per `CLAUDE.md`.
 
+## The measured answer today: hulls are not the constraint
+
+Worth stating up front, because it decides what the panel is actually for. The existing
+tier output, measured on the live save:
+
+```
+tier                       player    omniscient
+median-alien-escort        1 hull    1
+typical-alien-combatant    2         2
+two-typical-aliens         3–4       3
+heavy-alien-capital        7         4–5
+three-typical-aliens       5         4
+```
+
+Player mode is *more pessimistic* than omniscient — 7 hulls against 4–5 for a heavy capital
+— which is correct: it uses the uncalibrated `×1.5` opponent assumption where omniscient
+uses true design CVs. Do not "fix" that gap; it is the cost of not knowing the enemy.
+
+**The observer has 38 ships. The hardest tier needs 7.** Hull count is not the binding
+constraint and a panel that leads with hull counts answers a question the player does not
+have. What binds is that 35 of those 38 sit in one Mercury fleet at 9.5 km/s against an
+alien median of 211 km/s, reaching only Earth, Luna and Venus.
+
+So the honest headline for this campaign is closer to *"you have the hulls for any single
+alien fleet; you can reach three destinations"* than to any per-fleet number. Build the
+panel so that reads naturally when it is true, rather than burying it under 57 rows of
+hull counts.
+
 ## Reachability gates the whole thing
 
 The observer has **4 fleets against 57**. For most alien fleets the honest answer is not a
