@@ -6,6 +6,28 @@ Written 2026-08-21 against `f5a0731`. Every data claim below is measured against
 
 ---
 
+## 0. Everything is snapshot-driven; nothing is campaign-specific
+
+**This advisor must work on a fresh campaign comparing chemical rockets, not just on a late save comparing fusion torches.** Every number in this document is an example measured from one save, included as evidence that the model works — none of them is a constant.
+
+Concretely, the following must all be **read from the snapshot at request time**, never hardcoded:
+
+| never hardcode | always derive from |
+| :-- | :-- |
+| the observer's current best drive / weapon / hull | their designs actually in service |
+| the comparison baseline | the observer's own fielded equipment, whatever it is |
+| which projects are candidates | `availableProjectNames` for this faction, this save |
+| what "good" ΔV or acceleration is | the observer's current figures and the measured deficit |
+| the alien capability benchmark | observed alien fleets, respecting mode redaction |
+| observer faction id | the requested observer, not `4712` |
+| the tech/effect/unlock tables | the installed templates, baked onto the snapshot at build time |
+
+The templates are static per game version and are already resolved at snapshot-build time — `buildShipHullStats` and `buildMissionSpecs` set the precedent, and it exists because the hosted worker has no template directory. Follow it: the advisor must run identically against a published snapshot with no filesystem.
+
+A useful test of whether this has been done properly: **the module should produce sensible output on a turn-1 save**, where the observer flies nothing, has completed nothing, and the only available drives are chemical. If it needs a late-game save to say anything, it has been written against this campaign rather than against the data.
+
+---
+
 ## 1. The key finding: this is derivable, not editorial
 
 The instinct is that "what's worth researching" needs meta knowledge scraped from guides. It mostly doesn't. **The game ships its own classification, and every effect is quantified.**
@@ -187,9 +209,50 @@ Everything else is dominated. **No reachable drive closes the alien gap** — th
 
 ### Output
 
-Per design in service: current ΔV / cruise / combat, the same three under each candidate refit, the role-appropriate ranking, and the research cost and prerequisite gap for each. Per candidate drive: whether it is unlocked, reachable (all prereqs met), or how many steps away.
+Per design in service: current ΔV / cruise / combat, the same three under each candidate refit, the role-appropriate ranking, and the research cost and availability state for each. Per candidate drive: whether it is researchable **now**, prerequisite-blocked, or prerequisite-clear but not yet unlocked (§3b).
 
-Verified reachability on the current save — `PulsedPlasmoid`, `Helicon`, `FissionFrag`, `VASIMR`, `Lorentz`, `PlasmaWave` all have zero unmet prerequisites; `GridDrive`, `AdvancedMinimagOrion` and the microfission line are one prerequisite away.
+Every drive name, threshold and comparison above is an **example from one save, not a constant**. The observer's current best is whatever their designs actually fly; the candidate set is whatever the snapshot says is available. An early-campaign save comparing chemical rockets must work identically — see §0.
+
+---
+
+## 3b. Availability is rolled monthly, not derived from prerequisites
+
+**Prerequisites met does not mean researchable.** Every one of the 750 projects carries unlock-chance fields:
+
+```json
+{ "dataName": "Project_AntimatterBeamCoreTorch",
+  "initialUnlockChance": 0, "deltaUnlockChance": 5, "maxUnlockChance": 10,
+  "factionAvailableChance": 100,
+  "prereqs": ["AntimatterPropulsion","MagneticNozzles","Project_AntimatterBeamCoreReactor"] }
+```
+
+Once prerequisites are satisfied the project rolls each month — starting at `initialUnlockChance`, rising by `deltaUnlockChance`, capped at `maxUnlockChance`. A project capped at 50% may **never** appear in a given campaign. Distribution across all projects: 351 cap at 100%, 249 at 50%, and 92 lower still.
+
+Measured on one save, computing availability from prerequisites instead of reading it:
+
+```
+uncompleted projects with ALL prereqs met:  274
+  ...of which NOT actually available:       104   (38% wrongly offered)
+  available despite unmet prereqs:            5   (wrongly hidden)
+```
+
+`Project_ANewHome`, `Project_AppeaseVictory`, `Project_TheirWeakness` all have every prerequisite satisfied and are not available.
+
+**The authoritative source is the snapshot**: `factions[observer].availableProjectNames` (175 entries on the sampled save) and `availableProjectsCount`. Read it. Do not recompute it, and never present a prerequisite-derived list as "what you can research".
+
+Three distinct states, and the UI must distinguish them:
+
+| state | source | how it reads |
+| :-- | :-- | :-- |
+| **Researchable now** | in `availableProjectNames` | offer it, with cost and time |
+| **Prereq-clear, not yet rolled** | prereqs met, absent from the list | "not yet available — up to N%/month once prerequisites hold, capped at M%" |
+| **Prereq-blocked** | unmet prereqs | name the missing prerequisites |
+
+Collapsing the middle state into either neighbour is the failure mode. Reporting it as researchable offers something the player cannot select; reporting it as blocked hides a target they should be steering toward.
+
+Because global tech completion does not imply personal visibility, **never infer availability from `globalResearch.finishedTechsNames`**. That set reflects the world, not this faction.
+
+Where a long-term target is prereq-clear but unrolled, the advisor may still recommend the *path* — but must say the final step depends on a monthly roll and state the cap. A plan whose last step is a 50% coin-flip that may never land is a different proposition from a plan that merely costs research, and the player is entitled to know which one they are being handed.
 
 ---
 
@@ -239,7 +302,8 @@ Worth building **after** the value model — it is a smaller win and depends on 
 
 ## 8. Acceptance
 
-- Ranks candidates by value-per-research-point, in **both** modes, on the live save.
+- Ranks candidates by value-per-research-point, in **both** modes, on the live save AND on an early-campaign save where the only drives are chemical.
+- Candidate set comes from `availableProjectNames`; a prerequisite-derived list is a defect. Prereq-clear-but-unrolled renders as its own state with the monthly chance and cap stated.
 - Every recommendation shows: remaining cost, prereq chain, time at current income, and the specific unlock or effect driving it.
 - Military ranking shifts when the measured capability deficit shifts — a save where armour is the gap must not recommend drives.
 - A tech whose benefit cannot be quantified is surfaced as such, not ranked last with a silent 0.
