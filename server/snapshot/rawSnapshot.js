@@ -26,7 +26,8 @@ const {
   buildDriveStats,
   buildPropellantModules,
   buildProjectGating,
-  buildComponentStats
+  buildComponentStats,
+  buildEffectIndex
 } = require('./templates');
 
 // Terra Invicta campaigns begin in 2022. The save's TIMetadataState does not
@@ -192,6 +193,12 @@ function buildRawSnapshot(saveData) {
     // The fourteen non-drive unlock families, keyed by the same family names
     // the unlock index uses so a gate resolves without a second lookup table.
     componentStats: buildComponentStats(),
+    // The effect templates a tech or project can actually reference, carrying
+    // only the fields the tech tree's own per-node effect records omit --
+    // `contexts`, `stackable`, `instantEffect` and a non-permanent duration --
+    // plus the `resourcesGranted` / `orgGranted` rows, which are project fields
+    // the tech tree does not carry at all.
+    effectIndex: buildEffectIndex(),
     techTree: buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions)
   };
 }

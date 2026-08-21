@@ -134,14 +134,17 @@ test('the ships manifest is a roll-up that never loses a ship', () => {
   assert.strictEqual(full.count, summary.shipsTotal, 'full returns one row per ship');
 });
 
-test('only the three heavy endpoints honour detail, and the echo says so', async () => {
+test('only the four heavy endpoints honour detail, and the echo says so', async () => {
   const shared = await import('../shared/intelResources.mjs');
   // `military-value` joined fleets and ships on 2026-08-21: its full
   // seventeen-class candidate listing is a 559 KB response against a 146 KB
   // summary, which is the same reason the other two are detail-aware.
+  // `economic-value` joined the same day: its full listing carries a per-effect
+  // row for every uncompleted node that carries an effect, 603 KB unfiltered
+  // against a 75 KB summary.
   assert.deepStrictEqual(
     Array.from(shared.DETAIL_AWARE_RESOURCES).sort(),
-    ['fleets', 'military-value', 'ships']
+    ['economic-value', 'fleets', 'military-value', 'ships']
   );
 
   const snapshot = omniscientSnapshot();

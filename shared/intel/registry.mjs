@@ -69,6 +69,7 @@ import { miningExpansionResource } from './miningExpansion.mjs';
 import { alienThreatResource } from './alienThreat.mjs';
 import { propulsionResource } from './propulsion.mjs';
 import { militaryValueResource } from './militaryValue.mjs';
+import { economicValueResource } from './economicValue.mjs';
 import { deltaResource } from './delta.mjs';
 import { mobilityResource } from './mobility.mjs';
 import { bodyStatusResource, theatersResource } from './theaters.mjs';
@@ -354,6 +355,18 @@ const INTEL_ENDPOINTS = Object.freeze([
       militaryValueResource(snapshot, { observerId, mode, family, limit, detail })
   },
   {
+    key: 'economicValue',
+    example: `${OMNISCIENT}&status=researchable-now&detail=full&limit=25`,
+    // Detail-aware for the same reason `military-value` is: the full listing
+    // carries a per-effect row for every uncompleted node that carries an
+    // effect, which is an order of magnitude larger than the summary.
+    // `family` narrows to one effect context and `status` to one availability
+    // state; both are already parsed by each runtime adapter.
+    detail: true,
+    project: (snapshot, { observerId, mode, family, status, limit, detail }) =>
+      economicValueResource(snapshot, { observerId, mode, family, status, limit, detail })
+  },
+  {
     key: 'miningExpansion',
     example: `${OMNISCIENT}&theater=belt&limit=10`,
     project: (snapshot, { observerId, theater, body, limit }) => {
@@ -508,7 +521,8 @@ export const buildResourceProjection = (snapshot, resource, {
   limit = null,
   destination = null,
   // The unlock family (`laser_weapon`, `ship_hull`, ...) or a weapon class key
-  // (`laser_weapon:point-defense`) that `military-value` narrows to.
+  // (`laser_weapon:point-defense`) that `military-value` narrows to, and the
+  // effect context (`SpaceMiningBonus`, ...) that `economic-value` narrows to.
   family = null,
   fleetId = null,
   designId = null,

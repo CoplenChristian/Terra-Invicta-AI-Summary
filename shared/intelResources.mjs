@@ -31,6 +31,10 @@
 //   intel/mobility.mjs        fleet transfer feasibility
 //   intel/alienThreat.mjs     hate math, floor, retaliation
 //   intel/delta.mjs           turn-to-turn comparison
+//   intel/propulsion.mjs      research advisor phase 1: delta-V, thrust, refits
+//   intel/militaryValue.mjs   research advisor phase 2: what a gate lets you build
+//   intel/economicValue.mjs   research advisor phase 3: what a tech DOES, priced
+//                             against the observer's own live figures
 //   intel/registry.mjs        the ONE endpoint table: route, discovery index,
 //                             example, and dispatch, all derived from it
 //

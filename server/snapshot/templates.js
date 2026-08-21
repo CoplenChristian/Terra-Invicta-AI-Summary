@@ -685,6 +685,140 @@ function buildHabModuleStats() {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// The effect index -- phase 3 of the research advisor.
+//
+// The tech tree already publishes each node's effect ids, with `operation`,
+// `value`, `effectTarget` and `strValue` on every one. What it does NOT carry
+// is the four fields economic valuation turns on:
+//
+//   contexts        WHICH live quantity the modifier scales. Without it every
+//                   effect is an unlabelled number.
+//   stackable       whether a second copy compounds or does nothing.
+//   instantEffect   the one-time grant kind.
+//   effectDuration  permanent versus instant versus temporary.
+//
+// So only those are baked, keyed by effect dataName, and the tech tree's
+// existing per-node effect list is the join. Re-publishing the project ->
+// effect relation a second time would have cost ~40 KB of pure duplication for
+// a mapping the snapshot already carries.
+//
+// ONLY EFFECTS REACHABLE FROM A TECH OR PROJECT ARE BAKED. 444 of the 719
+// effect templates are never referenced by either -- they belong to narrative
+// events, missions and orgs -- and the research advisor can never be asked
+// about one. The reachable 275 cost 42.1 KB of effect rows; all 719 would cost
+// 68 KB for a set the endpoint cannot reach. With the grant rows and the census
+// the whole payload is 51.1 KB raw / 6.8 KB gzipped -- 2.1% of the 2,480 KB
+// published player row, against phase 2's 166.6 KB and phase 1's 135.4 KB
+// (measured 2026-08-21). The census below records BOTH the effect-file total
+// and the reachable count, so the omission is visible rather than looking like
+// a family that quietly stopped loading.
+// ---------------------------------------------------------------------------
+
+function buildEffectIndex() {
+  const techs = [...templateLoader.templates.techs.values()];
+  const projects = [...templateLoader.templates.projects.values()];
+
+  // The projects and techs maps are keyed by BOTH dataName and friendlyName,
+  // so entries are visited twice; the `seen` set keeps one pass per template.
+  const reachable = new Set();
+  const seen = new Set();
+  const collectFrom = (templates) => {
+    for (const template of templates) {
+      const id = template?.dataName;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      for (const effectId of (Array.isArray(template.effects) ? template.effects : [])) {
+        if (typeof effectId === 'string' && effectId !== '') reachable.add(effectId);
+      }
+    }
+  };
+  collectFrom(techs);
+  collectFrom(projects);
+
+  const effects = {};
+  const contextCounts = {};
+  const instantCounts = {};
+  const unresolved = [];
+  for (const effectId of reachable) {
+    const template = templateLoader.templates.effects.get(effectId);
+    if (!template) {
+      // A referenced effect with no template is a hole in the data, not an
+      // effect that does nothing. It is recorded so the consumer can report
+      // `effect-not-indexed` rather than pricing it at zero.
+      unresolved.push({ effectId, reason: 'referenced by a tech or project but absent from TIEffectTemplate.json' });
+      continue;
+    }
+    const contexts = (Array.isArray(template.contexts) ? template.contexts : [])
+      .filter(context => typeof context === 'string' && context !== '');
+    for (const context of contexts) contextCounts[context] = (contextCounts[context] || 0) + 1;
+    if (template.instantEffect) {
+      instantCounts[template.instantEffect] = (instantCounts[template.instantEffect] || 0) + 1;
+    }
+    effects[effectId] = compact({
+      contexts,
+      operation: template.operation || null,
+      // Absent stays null. `stat()` refuses a non-number, so an effect with no
+      // value is ABSENT from the record rather than carrying a zero that would
+      // price as "changes nothing" when it is really "unknown".
+      value: stat(template.value),
+      // Only `true` is emitted; `compact` drops false. The consumer reads a
+      // missing key as not-stackable, which matches the 65 reachable effects
+      // that state no `stackable` field at all and are all instant grants.
+      stackable: template.stackable === true,
+      instantEffect: template.instantEffect || null,
+      effectTarget: template.effectTarget || null,
+      // `permanent` is the majority; emitting it on 209 rows costs more than
+      // the two exceptions are worth, so only the exceptions are carried.
+      effectDuration: template.effectDuration === 'permanent' ? null : (template.effectDuration || null),
+      durationMonths: typeof template.duration_months === 'number' && template.duration_months > 0
+        ? template.duration_months
+        : null,
+      // Names the region, attribute or trait an instant grant targets.
+      strValue: typeof template.strValue === 'string' && template.strValue !== '' ? template.strValue : null
+    });
+  }
+
+  // `resourcesGranted` and `orgGranted` are project fields, not effects, and
+  // the tech tree does not carry either. 57 projects grant resources and 19
+  // grant an org, so only those rows exist -- an absent row means the project
+  // grants nothing, which is safe because the pass below is complete.
+  const grants = {};
+  const grantSeen = new Set();
+  for (const project of projects) {
+    const id = project?.dataName;
+    if (!id || grantSeen.has(id)) continue;
+    grantSeen.add(id);
+    const resources = (Array.isArray(project.resourcesGranted) ? project.resourcesGranted : [])
+      .filter(entry => entry && typeof entry.resource === 'string' && typeof entry.value === 'number')
+      // `[resource, value]` pairs rather than objects, the same choice
+      // `buildArmorStats` makes for armour specialties and for the same reason.
+      .map(entry => [entry.resource, entry.value]);
+    const org = typeof project.orgGranted === 'string' && project.orgGranted !== '' ? project.orgGranted : null;
+    if (resources.length === 0 && !org) continue;
+    grants[id] = compact({ resources, org });
+  }
+
+  return {
+    effects,
+    grants,
+    unresolved,
+    census: {
+      // Both numbers, deliberately: `indexed` alone reads like the whole file.
+      effectTemplatesTotal: templateLoader.templates.effects.size,
+      reachableFromResearch: reachable.size,
+      indexed: Object.keys(effects).length,
+      distinctContexts: Object.keys(contextCounts).length,
+      distinctInstantEffects: Object.keys(instantCounts).length,
+      contextCounts,
+      instantEffectCounts: instantCounts,
+      projectsGrantingResources: Object.values(grants).filter(row => Array.isArray(row.resources)).length,
+      projectsGrantingOrgs: Object.values(grants).filter(row => row.org).length,
+      basis: 'effects referenced by at least one TITechTemplate or TIProjectTemplate `effects` array. Effects reachable only from narrative events, missions or orgs are deliberately omitted; the research advisor cannot be asked about one.'
+    }
+  };
+}
+
 /**
  * `family -> id -> stats` for the fourteen non-drive, non-org unlock families.
  *
@@ -718,5 +852,6 @@ module.exports = {
   buildDriveStats,
   buildPropellantModules,
   buildProjectGating,
-  buildComponentStats
+  buildComponentStats,
+  buildEffectIndex
 };

@@ -388,6 +388,96 @@ Multiply the effect by the observer's actual figure. Where the target quantity i
 
 ---
 
+## 4a. What phase 3 substantiated, and what it did not — measured 2026-08-21
+
+### The candidate set is far smaller than 719
+
+Only **275 of the 719** effect templates are referenced by any tech or project;
+the other 444 belong to narrative events, missions and orgs and the advisor can
+never be asked about one. Of the 275, **209 are context-scoped and 66 are
+instant grants**, spanning **140 contexts** and **20 instant-effect kinds**.
+Three of the four instant families §4 named — `NationGDPPctChange`,
+`GainMoneyIncome`, `CouncilorModifyAttribute` — turn out to be **unreachable
+from research entirely**; only `MapRegionGDPPctChange_StrValue` (30) and
+`FactionAllCouncilorsModifyAttribute` (11) are significant.
+
+### The fourteen substantiated mappings
+
+| context | live quantity | snapshot field |
+| :-- | :-- | :-- |
+| `SpaceMiningBonus` | total mined output | `habSites[owned]` summed × 30 |
+| `Mining{Water,Volatiles,Metals,Nobles,Fissiles}Bonus` | per-resource output | `habSites[owned].<resource>` × 30 |
+| `Economy_BasePCGDPIncrease` | controlled-nation GDP | `nations[].GDP` where the observer holds a control point |
+| `ControlPointResearch` | control-point research | `researchBreakdown.earthControlPointShare` |
+| `HabResearchProduction` | orbital-lab research | `habModules[owned].researchIncomeMonth` |
+| `ShipConstructionTime` | queued build days | `shipyardQueues[owned].daysToCompletion` |
+| `MCFreeSpaceMineNetwork` | mines beyond the free allowance | mine count vs the additive allowance |
+| `HabMissionControlReduction` | hab-core MC cost | negative `componentStats.hab_module[].missionControl` |
+| `ShipMissionControlReduction` | ship MC cost | `fleets[owned].ships[].missionControlConsumption` |
+| `CouncilSize` | council size | `councilors[owned]` |
+
+`resourcesGranted` is priced separately, in **months of the observer's own
+income** in that resource, and kept out of the per-month totals because a
+windfall is not a rate.
+
+### The 126 that were not
+
+Named individually in the response with the count of effects using each, grouped
+by why: **mission modifiers** (a covert-operations axis with its own odds model),
+**nation priorities** (the snapshot carries no priority sliders), **ground and
+orbital combat**, **capability unlocks** (booleans, not rates), **space
+operations** (phases 1 and 2 own those), and **council/org parameters** (no
+recruit pool or org market in the snapshot). `ControlPointMaintenance` was
+considered and rejected: the observer's Influence expense is measured but the
+ledger is not decomposed into maintenance versus org upkeep versus mission cost,
+so no mapping was invented for it.
+
+Priced contexts cover **18 of 211** context effect references (8.5%). That
+number is low and is reported rather than hidden — most of what research does is
+not an economic flow.
+
+### What is pinned
+
+**`missionControlUsage` is pinned exactly.** Summing each ship's
+`missionControlConsumption` and the negative `missionControl` of every hab core
+reproduces the save's own figure for **7 of the 8 factions**: Resistance 65=65,
+Humanity First 147=147, Initiative 147=147, Protectorate 143=143, Academy 79=79,
+Project Exodus 93=93, Aliens 412=412. The Servants carry a **+40 residual the
+model does not explain**, surfaced with the residual visible rather than
+absorbed — the same treatment phase 1 gives alien hulls whose acceleration it
+cannot reproduce. Perturbing one hab core by one point drops the match, so the
+check is not vacuous.
+
+**Two cross-checks, which are internal consistency and not game output.**
+Summed controlled-nation GDP equals `faction.totalGdp` for all 8 factions in
+both modes. The reconstructed active-effect baseline yields exactly the 72
+distinct effects `capabilities.activeEffects` lists — the reconstruction exists
+anyway because that list is a *set* and loses multiplicity, and a stackable
+effect held three times is not the state of holding it once.
+
+**Mining is NOT pinned, and says so.** Faction resource income also carries
+transfers, alien resource sharing and in-situ production; the ratio of summed
+site output to reported income runs **0.81 to 4.43** across the eight factions,
+so no arithmetic isolates the mining term. The quantity is the summed *site*
+output, labelled as that.
+
+**The operation semantics are MODELLED.** `Additive` / `Multiplicative` /
+`IncreaseToValue` / `DecreaseToValue` / `SetToFixedValue` are read from their
+names; the game publishes no statement of what they mean. Every derivation that
+depends on the reading carries `validatedAgainstGameOutput: false`, and exactly
+one formula in the module carries `true`.
+
+### Three states, never two
+
+`inert` — a **measured** zero — is a separate state from `unpriceable`, because
+"worth nothing right now" and "not measurable" are different facts. The live
+save exercises both: the observer's build queue is empty, so a 20%
+construction-time reduction is `inert / quantity-is-zero`; and their 16 mines sit
+inside an 18-mine free allowance, so more free mines are
+`inert / allowance-not-binding`. Neither is a silent zero and neither is a null.
+
+---
+
 ## 5. Player mode
 
 `AI_techRole`, effects, unlock stats and the tech graph are all **static template data**, so they are equally available in both modes — the advisor's core is not mode-sensitive.
@@ -439,6 +529,15 @@ Worth building **after** the value model — it is a smaller win and depends on 
    shared special rule and never across rules, because there is no exchange rate
    between an exhaust-velocity multiplier and a targeting computer. Hab-module
    income is deliberately not valued here; that is step 3.
-3. Economic valuation against live quantities.
+3. ~~Economic valuation against live quantities.~~ **Built 2026-08-21** as
+   `/api/intel/economic-value`. Prices each candidate's effects, resource grants
+   and org grant against the observer's own figures, in three states that never
+   share a value: `priced` (a number), `inert` (a **measured** zero with the
+   reason it is zero) and `unpriceable` (null, with the context named). Baked
+   payload `effectIndex`: **+51.1 KB raw / +6.8 KB gzipped**, 2.1% of the
+   2,480 KB published player row — only the four fields the tech tree's own effect
+   records omit (`contexts`, `stackable`, `instantEffect`, non-permanent
+   duration), and only for the **275 of 719** effects a tech or project can
+   actually reference. See §4a for what was and was not substantiated.
 4. Ranking, deficit-aware ordering, and the UI panel.
 5. Slot allocation.

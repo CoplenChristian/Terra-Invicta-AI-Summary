@@ -174,6 +174,7 @@ class IntelligenceFilter {
         propellantModules: rawSnapshot.propellantModules,
         projectGating: rawSnapshot.projectGating,
         componentStats: rawSnapshot.componentStats,
+        effectIndex: rawSnapshot.effectIndex,
         miningScarcityWeights: rawSnapshot.miningScarcityWeights,
         isOmniscient: true
       };
@@ -531,6 +532,13 @@ class IntelligenceFilter {
       propellantModules: rawSnapshot.propellantModules,
       projectGating: rawSnapshot.projectGating,
       componentStats: rawSnapshot.componentStats,
+      // The effect index is template data too. What a given faction has
+      // ALREADY activated is not, and that is read from the faction record's
+      // completed-project list, which this branch redacts for everyone but the
+      // observer -- so an economic baseline can only ever be built for the
+      // observer in player mode, and the endpoint says so rather than
+      // silently pricing a rival's research against our own figures.
+      effectIndex: rawSnapshot.effectIndex,
       miningScarcityWeights: rawSnapshot.miningScarcityWeights,
       isOmniscient: false
     };
