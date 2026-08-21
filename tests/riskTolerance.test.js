@@ -442,6 +442,41 @@ test('the held-back list announces its truncation rather than presenting a slice
   );
 });
 
+test('the benched list announces its truncation rather than presenting a slice as the whole set', () => {
+  // 20 distinct candidates against a single operative: one is assigned and the
+  // other 19 land on the bench, well past the 8-entry transport cap. On the
+  // live save this cap bites at 46 (player) and 427 (omniscient), so a bench
+  // presented without its total is 8 rows standing in for hundreds.
+  const candidates = Array.from({ length: 20 }, (_, i) => straddlingCandidate({
+    id: `synthetic-purge-${i}`,
+    title: `Purge rival cell ${i}`,
+    target: { kind: 'councilor', councilorName: `Target ${i}` }
+  }));
+  const plan = planWith(0, candidates, [operative()]);
+
+  assert.strictEqual(plan.benched.length, 8, 'the bench is capped at 8 for transport');
+  assert.strictEqual(plan.benchedTotalCount, 19, 'the true bench total travels with the capped list');
+  assert.strictEqual(plan.benchedOmittedCount, 11);
+  assert.strictEqual(
+    plan.benched.length + plan.benchedOmittedCount,
+    plan.benchedTotalCount,
+    'shown + omitted must reconstruct the total'
+  );
+
+  // `committed` and `unassigned` are bounded by the councilor roster rather
+  // than by candidate breadth, so they are emitted whole and must NOT sprout
+  // counts that would imply a cap they do not have.
+  assert.strictEqual(plan.committedTotalCount, undefined);
+  assert.strictEqual(plan.unassignedTotalCount, undefined);
+});
+
+test('an uncapped bench reports zero omitted rather than omitting the field', () => {
+  const plan = planWith(0, [straddlingCandidate(), straddlingCandidate({ id: 'synthetic-purge-b' })], [operative()]);
+  assert.ok(plan.benched.length < 8, 'this fixture must sit under the cap or it proves nothing');
+  assert.strictEqual(plan.benchedTotalCount, plan.benched.length);
+  assert.strictEqual(plan.benchedOmittedCount, 0);
+});
+
 // ---------------------------------------------------------------------------
 // CONFIGURATION: absent means the configured default, and 0 is a real choice
 // ---------------------------------------------------------------------------

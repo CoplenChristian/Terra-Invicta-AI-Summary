@@ -25,12 +25,17 @@ Last updated 2026-08-21.
 
 ### Small follow-ups, unassigned
 
-- **Type scale.** `research-tab-layout-spec.md` shipped, but the scale landed at
-  11/10/9.5/9 and three of the four steps sit within 1px, so hierarchy still reads flat.
-  Small CSS change.
-- **`benched` truncation.** `server/engine/assignment.js:782` slices to 8 with no
-  `benchedTotalCount` / `benchedOmittedCount`, and the cap is biting on the live save.
-  This is the truncation rule in `CLAUDE.md`.
+- **`res.sendFile` refuses to serve the shell from a dot-directory.** `server/index.js`
+  passes an absolute path to `res.sendFile`, and `send` defaults to `dotfiles: 'ignore'`,
+  so `/` and `/v2/` return 404 for any checkout living under a path segment that starts
+  with a dot — an agent worktree in `.claude/worktrees/`, for instance. The API routes and
+  `express.static` are unaffected, so it presents as a blank dashboard rather than an
+  error. `tests/cssComputedStyle.test.js` fails there for the same reason.
+- **A fresh checkout fails two byte-comparison tests.** `core.autocrlf=true` with no
+  `.gitattributes` gives a new clone or worktree CRLF copies of `docs/code-index.md` and
+  `tests/fixtures/frozen-snapshot-*.md`, while the generators emit LF. The checked-in
+  index test and the frozen-snapshot test both compare bytes and both fail until the files
+  are normalised by hand. A `.gitattributes` pinning those paths to LF would close it.
 
 ## Shipped
 
@@ -47,6 +52,8 @@ Last updated 2026-08-21.
 | `research-row-naming-spec.md` | — | was already implemented; this table previously said otherwise |
 | `model-verification-review.md` | `b0ec6dc` `e98413f` | all findings actioned |
 | `research-advisor-spec.md` | through §9 | still the governing document: §0 (nothing campaign-specific) and §3b (availability is rolled, not derived) bind any further work |
+| type scale follow-up | — | 11/10/9.5/9 → 12.5/11/10/9; every step now ≥1px apart. COMMAND at 1920 measured 2.858 (player) / 2.915 (omniscient) screens, 0 leaf overflows |
+| `benched` truncation follow-up | — | `benchedTotalCount` / `benchedOmittedCount` on the cycle plan and through the board. Live save: 8 of 46 shown (player), 8 of 427 (omniscient). Also fixed `counts.assigned` / `counts.benched`, which were read off a `counts` object that never carried them and rendered a confident "0 allocated · 0 benched" on every plan |
 
 ## Closed as needing no work
 

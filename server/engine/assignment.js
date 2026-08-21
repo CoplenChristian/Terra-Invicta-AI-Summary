@@ -59,6 +59,15 @@ const UNASSIGNED_REASON_DETAIL = Object.freeze({
 const RISK_FLOOR_LIST_LIMIT = 25;
 
 /**
+ * How many benched candidates the plan carries. Same contract as
+ * RISK_FLOOR_LIST_LIMIT: the cap bounds the payload, and the true total plus
+ * the number omitted travel beside the list so eight rows are never mistaken
+ * for the whole bench. On the live save the bench runs well past this, so the
+ * cap is load-bearing rather than theoretical.
+ */
+const BENCHED_LIST_LIMIT = 8;
+
+/**
  * Extracts active mission details from a councilor object.
  * Distinguishes "Prior: <Mission>" (completed previous cycle) from active persistent assignments.
  */
@@ -772,6 +781,13 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
   const cappedRiskFloorVetoed = [...riskFloorVetoed].sort(byExpectedValueDesc).slice(0, RISK_FLOOR_LIST_LIMIT);
   const cappedRiskFloorUnverified = [...riskFloorUnverified].sort(byExpectedValueDesc).slice(0, RISK_FLOOR_LIST_LIMIT);
 
+  // The bench is capped for the same reason and reported the same way. The
+  // slice is deliberately NOT re-sorted: `benched` is emitted in candidate
+  // generation order, and `applyRules`/`scoreCandidates` order is load-bearing
+  // for every explanation the reader sees, so re-ranking here would silently
+  // reshuffle which eight appear. Only the counts are new.
+  const cappedBenched = benched.slice(0, BENCHED_LIST_LIMIT);
+
   return {
     assignments,
     unassigned,
@@ -779,7 +795,13 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     committed,
     reassignedFromCommitment,
     heldCommitments,
-    benched: benched.slice(0, 8),
+    // Capped for transport, with the true total and the number omitted beside
+    // it. `committed` and `unassigned` above are deliberately uncapped -- they
+    // are bounded by the councilor roster, not by candidate breadth -- so they
+    // carry no such counts.
+    benched: cappedBenched,
+    benchedTotalCount: benched.length,
+    benchedOmittedCount: benched.length - cappedBenched.length,
     budgetDisplaced,
     budgets: budgets.getSummary(),
     budgetChecksUnevaluated,
