@@ -136,7 +136,15 @@ function buildWorld({
   // measured input at all in the mode the dashboard defaults to.
   alienHateEconomics = null,
   usedMC = null,
-  mcCapacity = null
+  mcCapacity = null,
+  // The player's success-odds floor, 0..100, or null when none was resolved.
+  // NOT defaulted to 0 here: 0 is a value the player can choose ("no floor")
+  // and null is the absence of a choice, and only the caller that can read
+  // configuration (server/briefingGenerator.js) knows which one applies. The
+  // two behave identically -- neither holds anything back -- but they are
+  // reported differently, and collapsing them here would be exactly the
+  // `Number(null) === 0` mistake this repo keeps re-fixing.
+  riskFloorPercent = null
 } = {}) {
   return Object.freeze({
     observerId,
@@ -157,7 +165,8 @@ function buildWorld({
     alienThreat: alienThreat || null,
     alienHateEconomics: alienHateEconomics || null,
     usedMC: usedMC === null || usedMC === undefined ? null : usedMC,
-    mcCapacity: mcCapacity === null || mcCapacity === undefined ? null : mcCapacity
+    mcCapacity: mcCapacity === null || mcCapacity === undefined ? null : mcCapacity,
+    riskFloorPercent: riskFloorPercent === null || riskFloorPercent === undefined ? null : riskFloorPercent
   });
 }
 

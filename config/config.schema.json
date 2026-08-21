@@ -58,7 +58,7 @@
     },
     "analysis": {
       "type": "object",
-      "required": ["effects", "strategicProjects", "rules", "powerScore", "opportunityScoring", "miningScarcityWeights", "directiveWeights", "strategicHistory"],
+      "required": ["effects", "strategicProjects", "rules", "powerScore", "opportunityScoring", "miningScarcityWeights", "directiveWeights", "riskTolerance", "strategicHistory"],
       "additionalProperties": false,
       "properties": {
         "effects": { "type": "object", "additionalProperties": { "$ref": "#/$defs/effect" } },
@@ -242,6 +242,19 @@
             },
             "resourcePoints": { "type": "number", "minimum": 0 },
             "topNCouncilTargets": { "type": "integer", "minimum": 1, "maximum": 100 }
+          }
+        },
+        "riskTolerance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["riskFloorPercent"],
+          "properties": {
+            "riskFloorPercent": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Minimum success chance, in percent, a councilor action must clear at the LOW end of its odds band before the directive engine will recommend it. 0 means no floor -- it does not veto everything. Overridable per request with ?riskFloor=<0-100>; an absent parameter resolves to this value, never to 0."
+            }
           }
         },
         "strategicHistory": {

@@ -1,8 +1,8 @@
 /**
  * server/http/requestContext.js -- request in, parameters out; snapshot in,
  * identity envelope out.
- * Purpose: request->(mode, observer, save) and snapshot->identity envelope
- *   conversions shared by the local routes.
+ * Purpose: request->(mode, observer, save, risk floor) and snapshot->identity
+ *   envelope conversions shared by the local routes.
  *
  * These three helpers are what every route in the local server calls before and
  * after doing its actual work. They are deliberately free of Express response
@@ -13,13 +13,32 @@
 const saveParser = require('../saveParser');
 const snapshotIdentity = require('../snapshotIdentity');
 const requestValidation = require('../requestValidation');
+const { resolveConfig } = require('../config');
 
 /**
- * The three parameters every save-backed route needs.
+ * The configured success-odds floor, used when `?riskFloor=` is absent.
+ *
+ * Read once, like `requestValidation`'s default observer id. Bound HERE rather
+ * than by adding a second wrapper to `server/requestValidation.js`, which
+ * documents `parseObserverId` as its ONE deliberate wrapper and is pinned as
+ * such by tests/requestValidationParity.test.js -- the shared bounded-integer
+ * parser already has exactly the semantics needed, so it is called directly
+ * with the configured default rather than re-exported around.
+ */
+const DEFAULT_RISK_FLOOR_PERCENT = resolveConfig().analysis?.riskTolerance?.riskFloorPercent ?? null;
+
+/**
+ * The four parameters every save-backed route needs.
  *
  * `targetPath` is null for "the latest save", which is also what flips
  * `isLatestSnapshot` in the response envelope -- so the null is load-bearing
  * and must not be defaulted to a path.
+ *
+ * `riskFloorPercent` is 0..100. An ABSENT parameter resolves to the configured
+ * default, NOT to 0: `Number(null) === 0` and 0 is a floor the player can
+ * legitimately choose ("no floor"), so the two must not collapse. A malformed
+ * or out-of-range value is rejected with a 400 rather than being clamped into
+ * a floor nobody set.
  */
 function requestContext(req) {
   const mode = requestValidation.parseMode(req.query.mode);
@@ -27,7 +46,12 @@ function requestContext(req) {
   return {
     mode,
     observerId,
-    targetPath: requestValidation.resolveSavePath(saveParser, req.query.save)
+    targetPath: requestValidation.resolveSavePath(saveParser, req.query.save),
+    riskFloorPercent: requestValidation.parseBoundedIntegerQuery(req.query.riskFloor, 'risk floor', {
+      min: 0,
+      max: 100,
+      defaultValue: DEFAULT_RISK_FLOOR_PERCENT
+    })
   };
 }
 

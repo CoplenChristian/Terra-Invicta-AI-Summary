@@ -1,7 +1,7 @@
 // server/engine/selection.js
 //
 // Purpose: the middle two stages of the engine pipeline — applying the rules
-//   and scoring what survives.
+//   (candidate-scoped and pairing-scoped) and scoring what survives.
 //
 // Applying the rules and scoring what survives: the middle two stages of
 // `world -> generateCandidates -> applyRules -> scoreCandidates -> primary`.
@@ -11,13 +11,80 @@
 // than by any one candidate.
 
 const { toFiniteNumber } = require('../../shared/util.mjs');
-const { RULES } = require('./rules');
+const { RULES, ruleScope } = require('./rules');
 const { getWeights } = require('./weights');
 
+/**
+ * Candidate-scoped vetoes only.
+ *
+ * The scope filter is not decoration. A pairing-scoped rule reads success odds,
+ * which do not exist until a councilor is named, so evaluating one here could
+ * only ever return 'unknown' -- and that would sweep EVERY candidate into the
+ * `uncertain` bucket and out of the cycle plan. The filter is what keeps
+ * "this rule cannot be answered yet" from being mistaken for "this rule was
+ * answered and the answer was unknown".
+ */
 function evaluateVetoes(world, candidate) {
   return RULES
-    .filter((rule) => rule.kind === 'veto' && rule.appliesTo(candidate))
+    .filter((rule) => rule.kind === 'veto' && ruleScope(rule) === 'candidate' && rule.appliesTo(candidate))
     .map((rule) => ({ rule, outcome: rule.evaluate(world, candidate) }));
+}
+
+/**
+ * Pairing-scoped vetoes, in the SAME registry order.
+ *
+ * A pairing is `{ candidate, councilor, odds, ... }` from server/engine/pairing.js.
+ * The three outcomes mean here exactly what they mean for a candidate: 'veto'
+ * rejects the pairing, 'unknown' means the rule's input was unmeasurable and
+ * the pairing survives carrying a reason that says so, 'pass' clears it.
+ * `unknown` is NEVER read as `pass`.
+ *
+ * Each entry also carries the rule's structured `detail` when it publishes one,
+ * so a consumer renders the numbers the veto actually decided on instead of
+ * recomputing them from the odds and drifting.
+ */
+function evaluatePairingVetoes(world, pairing) {
+  return RULES
+    .filter((rule) => rule.kind === 'veto' && ruleScope(rule) === 'pairing' && rule.appliesTo(pairing))
+    .map((rule) => {
+      // One assessment, not three. A rule offering `assess` computes its
+      // outcome, its reason and its structured detail together, so the three
+      // can never disagree -- and so the allocator does not pay for the same
+      // derivation three times over several thousand pairings.
+      const assessment = typeof rule.assess === 'function' ? rule.assess(world, pairing) : null;
+      return {
+        rule,
+        assessment,
+        outcome: assessment ? assessment.outcome : rule.evaluate(world, pairing)
+      };
+    });
+}
+
+/**
+ * pairing -> { outcome, entries }.
+ *
+ * `outcome` is 'veto' if any pairing rule vetoes, else 'unknown' if any returns
+ * unknown, else 'pass'. It is null when no pairing-scoped rule applied at all,
+ * which is a fourth, honest answer: nothing was checked, so nothing may be
+ * claimed. Entries stay in registry order.
+ */
+function applyPairingRules(world, pairing) {
+  const results = evaluatePairingVetoes(world, pairing);
+  if (results.length === 0) return { outcome: null, entries: [] };
+
+  const entries = results.map(({ rule, outcome, assessment }) => ({
+    ruleId: rule.id,
+    outcome,
+    reason: assessment ? assessment.reason : rule.because(world, pairing),
+    source: rule.source,
+    detail: assessment || (typeof rule.detail === 'function' ? rule.detail(world, pairing) : null)
+  }));
+
+  const outcome = entries.some((entry) => entry.outcome === 'veto')
+    ? 'veto'
+    : (entries.some((entry) => entry.outcome === 'unknown') ? 'unknown' : 'pass');
+
+  return { outcome, entries };
 }
 
 /**
@@ -179,6 +246,8 @@ function buildDecisionReasoning(primary, alternatives, rejected, uncertain, futu
 
 module.exports = {
   evaluateVetoes,
+  evaluatePairingVetoes,
+  applyPairingRules,
   applyRules,
   computeResourceCost,
   scoreCandidates,

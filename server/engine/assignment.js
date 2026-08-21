@@ -1,7 +1,8 @@
 /**
  * server/engine/assignment.js
  * Purpose: the cycle-plan assignment allocator that binds candidates to
- *   councilors across the allocation cycle.
+ *   councilors across the allocation cycle, including the pairing-scoped
+ *   success-odds floor.
  *
  * Implements the cycle plan assignment allocator:
  * 1. Greedy expected-value allocation under shared portfolio budgets.
@@ -10,12 +11,17 @@
  * 4. Opportunity cost and switching penalty computation for every assignment.
  * 5. Benched and budget-displaced alternative tracking with explicit reasons.
  * 6. Free-action assignment suggestions for unallocated councilors.
+ * 7. The player's configured success-odds floor, applied as a pairing-scoped
+ *    veto (server/engine/rules/risk.js) once odds exist -- which is here,
+ *    because odds need a councilor and a candidate alone does not have one.
  */
 
 const { BudgetPoolManager } = require('./budgets');
 const { computeStrategicClocks } = require('./clocks');
 const { isCouncilorFree } = require('./feasibility');
 const { generateAllPairings, resolveCouncilorId } = require('./pairing');
+const { applyPairingRules } = require('./selection');
+const { resolveRiskFloorPercent, riskFloorInForce } = require('./rules/risk');
 const {
   computeAdviseNationBonuses,
   computeAdviseHabBonuses,
@@ -36,8 +42,21 @@ const PERSISTENT_HORIZON_TURNS = 2; // Stated heuristic planning horizon
 const UNASSIGNED_REASON_DETAIL = Object.freeze({
   'no-feasible-candidate': 'Every candidate this cycle failed feasibility for this operative.',
   'all-candidates-claimed': 'Feasible candidates existed, but higher-value pairings claimed all of them.',
-  'budget-exhausted': 'Feasible and unclaimed candidates remained, but no resource pool could pay for them.'
+  'budget-exhausted': 'Feasible and unclaimed candidates remained, but no resource pool could pay for them.',
+  // The floor is a deliberate choice, so an empty slot caused by it must say so
+  // rather than reading as "nothing was available" -- and must never fall back
+  // to a below-floor suggestion.
+  'risk-floor': 'No action clears your risk floor for this operative this cycle.'
 });
+
+/**
+ * How many risk-floor entries the plan carries per list. These exist to show a
+ * reader WHY an action is missing; several hundred near-identical rows do not
+ * explain better than the highest-value few plus a count. Every capped list is
+ * emitted with its true total and the number omitted -- a bounded view, never a
+ * quiet truncation.
+ */
+const RISK_FLOOR_LIST_LIMIT = 25;
 
 /**
  * Extracts active mission details from a councilor object.
@@ -95,8 +114,15 @@ function buildRoster(ownCouncilors) {
   });
 }
 
+/**
+ * The risk floor is checked FIRST among the causes, because it is the only one
+ * the player set themselves. A councilor whose every option was held back by
+ * the floor has not "run out of candidates" -- reporting that would hide the
+ * setting that actually emptied the slot.
+ */
 function classifyUnassigned(ownPairings, claimedCandidateIds) {
   if (ownPairings.length === 0) return 'no-feasible-candidate';
+  if (ownPairings.every((p) => p.riskFloorVetoed === true)) return 'risk-floor';
   if (ownPairings.every((p) => claimedCandidateIds.has(p.candidateId))) return 'all-candidates-claimed';
   return 'budget-exhausted';
 }
@@ -324,6 +350,67 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     }
   }
 
+  // Pairing-scoped rules (currently only risk/success-floor). Odds belong to a
+  // councilor doing a mission, not to the mission, so this is the first point
+  // in the pipeline where they can be judged at all -- `applyRules` ran before
+  // any councilor was named.
+  //
+  // It sits AFTER the continuity/switching pass so the expected value recorded
+  // on a held-back action is the final one a reader would have seen, and
+  // BEFORE the greedy allocation so a below-floor pairing never reaches it.
+  //
+  // The registry walk runs unconditionally, even with no floor set, so the
+  // decision always comes from the rule rather than from a shortcut here that
+  // could disagree with it. The verdict is only ATTACHED to a pairing when a
+  // floor is actually in force, so a default plan carries no extra payload and
+  // reads exactly as it did before this rule existed.
+  const riskFloorPercent = resolveRiskFloorPercent(world);
+  const floorInForce = riskFloorInForce(world);
+  const riskFloorVetoed = [];
+  const riskFloorUnverified = [];
+  for (const pairing of pairings) {
+    const verdict = applyPairingRules(world, pairing);
+    const riskEntry = verdict.entries.find((entry) => entry.ruleId === 'risk/success-floor') || null;
+    pairing.riskFloorVetoed = verdict.outcome === 'veto';
+    if (!floorInForce) continue;
+
+    pairing.riskFloor = riskEntry ? riskEntry.detail : null;
+    const held = {
+      candidateId: pairing.candidateId,
+      councilorId: pairing.councilorId,
+      councilorName: pairing.councilor?.name || null,
+      title: pairing.candidate?.title || pairing.candidate?.friendlyName || pairing.candidate?.missionType || 'Candidate',
+      expectedValue: pairing.expectedValue,
+      floorPercent: riskFloorPercent,
+      point: riskEntry?.detail?.point ?? null,
+      bandLow: riskEntry?.detail?.bandLow ?? null,
+      bandHigh: riskEntry?.detail?.bandHigh ?? null,
+      assumed: riskEntry?.detail?.assumed ?? null,
+      unmodeledModifiers: riskEntry?.detail?.unmodeledModifiers || [],
+      reason: riskEntry?.reason || null
+    };
+
+    if (verdict.outcome === 'veto') {
+      riskFloorVetoed.push({
+        ...held,
+        reason: held.reason || 'Held back by the configured success-odds floor.'
+      });
+    } else if (verdict.outcome === 'unknown') {
+      // Neither admitted as clearing the floor nor rejected as failing it. The
+      // pairing stays eligible -- an unmeasured chance is not a proven bad one,
+      // and pairing.js's 0.5 planning prior is a ranking convenience, not
+      // evidence -- but it is recorded here and stated on the card, so the
+      // admission is never silent.
+      riskFloorUnverified.push({
+        ...held,
+        reason: held.reason || 'Success odds could not be computed, so the floor could not be checked.'
+      });
+      if (Array.isArray(pairing.why) && held.reason) pairing.why.push(held.reason);
+    } else if (riskEntry?.detail?.marginal === true && Array.isArray(pairing.why) && held.reason) {
+      pairing.why.push(held.reason);
+    }
+  }
+
   // Deterministic sort: expectedValue DESC, councilorId ASC, candidateId ASC
   pairings.sort((a, b) => {
     if (b.expectedValue !== a.expectedValue) {
@@ -355,6 +442,10 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     const councilorKey = String(pairing.councilorId);
     if (assignedCouncilorIds.has(councilorKey)) continue;
     if (claimedCandidateIds.has(pairing.candidateId)) continue;
+    // Below the player's success floor. Already recorded above with the two
+    // numbers that decided it, so the veto stays explicable rather than
+    // becoming a silently missing row.
+    if (pairing.riskFloorVetoed === true) continue;
     // A switch that destroys more than it returns, or whose cost could not be
     // priced at all, is not an action -- keeping the councilor where they are
     // is strictly better. Recorded so the rejected trade stays visible.
@@ -425,7 +516,12 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
         const swappedA = pairings.find(p => p.councilorId === b.councilorId && p.candidateId === a.candidateId);
         const swappedB = pairings.find(p => p.councilorId === a.councilorId && p.candidateId === b.candidateId);
 
-        if (swappedA && swappedB && !swappedA.switchRejected && !swappedB.switchRejected) {
+        // A swap must not smuggle a below-floor pairing into the plan through
+        // the back door: the greedy pass refuses them, so the optimiser has to
+        // as well.
+        if (swappedA && swappedB
+          && !swappedA.switchRejected && !swappedB.switchRejected
+          && swappedA.riskFloorVetoed !== true && swappedB.riskFloorVetoed !== true) {
           const currentTotal = a.expectedValue + b.expectedValue;
           const swappedTotal = swappedA.expectedValue + swappedB.expectedValue;
 
@@ -519,6 +615,16 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
       .filter((h) => sameId(h.councilorId, entry.councilorId))
       .sort((a, b) => (b.netExpectedValue ?? -Infinity) - (a.netExpectedValue ?? -Infinity));
 
+    // "No higher-value reassignment cleared this cycle" would be the wrong
+    // reason when the player's own floor is what cleared the board. Naming
+    // value where risk was the cause hides the setting that produced the plan.
+    const ownPairings = pairingsByCouncilor.get(String(entry.key))
+      || pairingsByCouncilor.get(String(entry.councilorId))
+      || [];
+    const allAlternativesBelowFloor = floorInForce
+      && ownPairings.length > 0
+      && ownPairings.every((pairing) => pairing.riskFloorVetoed === true);
+
     committed.push({
       councilorId: entry.councilorId,
       name: entry.name,
@@ -527,14 +633,21 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
       ongoingBenefit: entry.ongoingBenefit,
       planDecision,
       rejectedSwitch: rejectedSwitches[0] || null,
+      riskFloorHeld: allAlternativesBelowFloor
+        ? { floorPercent: riskFloorPercent, heldCount: ownPairings.length }
+        : null,
       reasonDetail: planDecision === 'continue'
         ? `The plan keeps ${entry.name} on ${entry.activeMissionName} `
           + `(${entry.activeMissionTarget || 'target'}); the continuation is re-affirmed in this cycle's orders.`
-        : rejectedSwitches.length > 0
+        : allAlternativesBelowFloor
           ? `The plan leaves ${entry.name} on ${entry.activeMissionName} `
-            + `(${entry.activeMissionTarget || 'target'}). ${rejectedSwitches[0].reason}`
-          : `The plan leaves ${entry.name} on ${entry.activeMissionName} `
-            + `(${entry.activeMissionTarget || 'target'}); no higher-value reassignment cleared this cycle.`
+            + `(${entry.activeMissionTarget || 'target'}); no action clears your ${riskFloorPercent}% risk floor `
+            + `for this operative (${ownPairings.length} held back).`
+          : rejectedSwitches.length > 0
+            ? `The plan leaves ${entry.name} on ${entry.activeMissionName} `
+              + `(${entry.activeMissionTarget || 'target'}). ${rejectedSwitches[0].reason}`
+            : `The plan leaves ${entry.name} on ${entry.activeMissionName} `
+              + `(${entry.activeMissionTarget || 'target'}); no higher-value reassignment cleared this cycle.`
     });
   }
   const committedCouncilorKeys = new Set(committed.map((c) => String(c.councilorId)));
@@ -544,11 +657,29 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
   for (const candidate of candidates) {
     const candId = candidate.id || candidate.key || candidate.title;
     if (!claimedCandidateIds.has(candId)) {
-      const bestPairing = pairings.find(p => p.candidateId === candId);
+      const ownPairings = pairings.filter(p => p.candidateId === candId);
+      const bestPairing = ownPairings[0];
       const score = Number(candidate.score ?? candidate.baseValue ?? bestPairing?.expectedValue ?? 0);
 
+      // "Displaced by a higher-value allocation" is a claim about VALUE. When
+      // the risk floor is what removed every way of running this mission,
+      // saying that instead would name the wrong cause and hide the setting
+      // the player chose.
+      const allBelowFloor = floorInForce
+        && ownPairings.length > 0
+        && ownPairings.every((pairing) => pairing.riskFloorVetoed === true);
+
       let displacedBy = 'Displaced by higher expected value allocation across team.';
-      if (assignments.length > 0) {
+      if (allBelowFloor) {
+        const bandLows = ownPairings
+          .map((pairing) => (typeof pairing.riskFloor?.bandLow === 'number' ? pairing.riskFloor.bandLow : null))
+          .filter((value) => value !== null);
+        const closest = bandLows.length > 0 ? Math.max(...bandLows) : null;
+        displacedBy = `Held back by your ${riskFloorPercent}% risk floor`
+          + (closest === null
+            ? ' — no operative produced a readable odds band for it.'
+            : ` — the best available operative reads ${closest}% at the low end of its band.`);
+      } else if (assignments.length > 0) {
         displacedBy = `Displaced by ${assignments[0].councilor.name} assigned to direct high-priority mission.`;
       }
 
@@ -556,6 +687,9 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
         candidateId: candId,
         title: candidate.title || candidate.friendlyName || candidate.missionType || 'Alternative Candidate',
         score: Number(score.toFixed(2)),
+        // True only when the floor removed EVERY way of running this mission,
+        // so a consumer can separate a risk hold from a value trade-off.
+        riskFloorHeld: allBelowFloor,
         displacedBy
       });
     }
@@ -574,13 +708,38 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     const ownPairings = pairingsByCouncilor.get(entry.key) || [];
     const reason = classifyUnassigned(ownPairings, claimedCandidateIds);
 
+    // An empty slot the floor caused names the floor, the number of actions it
+    // held, and the closest one -- so the player can see what lowering it would
+    // buy them. It deliberately does NOT name the closest action as a
+    // suggestion: offering a below-floor mission is the fallback this whole
+    // rule exists to prevent.
+    let reasonDetail = UNASSIGNED_REASON_DETAIL[reason];
+    let riskFloorHeld = null;
+    if (reason === 'risk-floor') {
+      const bandLows = ownPairings
+        .map((p) => (typeof p.riskFloor?.bandLow === 'number' ? p.riskFloor.bandLow : null))
+        .filter((value) => value !== null);
+      const closest = bandLows.length > 0 ? Math.max(...bandLows) : null;
+      riskFloorHeld = {
+        floorPercent: riskFloorPercent,
+        heldCount: ownPairings.length,
+        closestBandLow: closest
+      };
+      reasonDetail = `No action clears your ${riskFloorPercent}% risk floor for this operative this cycle. `
+        + `${ownPairings.length} action${ownPairings.length === 1 ? '' : 's'} were held back`
+        + (closest === null
+          ? ', and none of them carried a readable odds band.'
+          : `; the closest read ${closest}% at the low end of its band.`);
+    }
+
     unassigned.push({
       councilorId: resolveCouncilorId(entry.councilor),
       name: entry.councilor.displayName || entry.councilor.name || 'Councilor',
       profession: entry.councilor.profession || entry.councilor.typeTemplateName || 'Operative',
       location: entry.councilor.location || entry.councilor.locationName || 'Earth',
       reason,
-      reasonDetail: UNASSIGNED_REASON_DETAIL[reason],
+      reasonDetail,
+      riskFloorHeld,
       suggestedFreeAction: FREE_ACTIONS[0],
       freeActionOptions: [...FREE_ACTIONS]
     });
@@ -606,6 +765,13 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     assignments.reduce((sum, a) => sum + a.expectedValue, 0).toFixed(2)
   );
 
+  // Highest expected value first, so the bounded view shows the actions the
+  // floor cost the most rather than an arbitrary slice of generation order.
+  const byExpectedValueDesc = (a, b) => (Number.isFinite(b.expectedValue) ? b.expectedValue : -Infinity)
+    - (Number.isFinite(a.expectedValue) ? a.expectedValue : -Infinity);
+  const cappedRiskFloorVetoed = [...riskFloorVetoed].sort(byExpectedValueDesc).slice(0, RISK_FLOOR_LIST_LIMIT);
+  const cappedRiskFloorUnverified = [...riskFloorUnverified].sort(byExpectedValueDesc).slice(0, RISK_FLOOR_LIST_LIMIT);
+
   return {
     assignments,
     unassigned,
@@ -620,7 +786,25 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     droppedPairings,
     clocks,
     horizon,
-    totalExpectedValue
+    totalExpectedValue,
+    // The floor in force, so a surprising plan is explicable. `inForce` is what
+    // separates "the player chose 0, meaning no floor" from "nothing was
+    // configured": both hold nothing back, and neither is a floor of zero that
+    // rejects everything.
+    riskFloor: {
+      percent: riskFloorPercent,
+      inForce: floorInForce,
+      configured: riskFloorPercent !== null
+    },
+    // Actions held back by the floor, and actions the floor could not be
+    // checked against. Both are capped for transport and both carry their true
+    // total and the number omitted.
+    riskFloorVetoed: cappedRiskFloorVetoed,
+    riskFloorVetoedTotalCount: riskFloorVetoed.length,
+    riskFloorVetoedOmittedCount: riskFloorVetoed.length - cappedRiskFloorVetoed.length,
+    riskFloorUnverified: cappedRiskFloorUnverified,
+    riskFloorUnverifiedTotalCount: riskFloorUnverified.length,
+    riskFloorUnverifiedOmittedCount: riskFloorUnverified.length - cappedRiskFloorUnverified.length
   };
 }
 

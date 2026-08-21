@@ -136,6 +136,9 @@ test('briefingGenerator keeps its full method surface after the split', () => {
     'isIdleCouncilor',
     'isOwnCouncilor',
     'readObserverHateTrend',
+    // Reads `this.config` for the success-odds floor default, so an absent
+    // request parameter resolves to the configured value rather than to 0.
+    'resolveRiskFloorPercent',
     'sameId',
     'toFiniteNumber',
     'visibleSkill'

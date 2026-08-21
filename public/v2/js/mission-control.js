@@ -8,6 +8,10 @@
 const state = {
   mode: 'player',
   observer: 4712,
+  // The success-odds floor the player chose, or null for "no choice stored,
+  // use whatever the server has configured". Null and 0 are NOT the same:
+  // `Number(null) === 0`, and 0 is a real choice meaning "no floor".
+  riskFloorPercent: null,
   briefing: null,
   rawSnapshot: null,
   snapshotIdentity: null,
@@ -46,6 +50,38 @@ let libraryModalTrigger = null;
 const SAVE_POLL_INTERVAL_MS = 5000;
 const SAVE_AUTOLOAD_STORAGE_KEY = 'ti-save-autoload';
 let savePollTimer = null;
+
+// The player's success-odds floor for councilor actions, persisted the same way
+// the autoload toggle is. ABSENT IS NOT ZERO: no stored value means "send no
+// riskFloor parameter", which the server resolves to the configured default
+// (config/defaults.json -> analysis.riskTolerance.riskFloorPercent). A stored
+// 0 is a different statement -- the player choosing no floor -- and both are
+// distinct from a floor of 0 that would reject everything.
+const RISK_FLOOR_STORAGE_KEY = 'ti-risk-floor';
+
+function storedRiskFloorPercent() {
+  try {
+    const raw = localStorage.getItem(RISK_FLOOR_STORAGE_KEY);
+    if (raw === null || raw === '') return null;
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredRiskFloorPercent(percent) {
+  try {
+    if (percent === null || percent === undefined || percent === '') {
+      localStorage.removeItem(RISK_FLOOR_STORAGE_KEY);
+    } else {
+      localStorage.setItem(RISK_FLOOR_STORAGE_KEY, String(percent));
+    }
+  } catch {
+    // Storage unavailable; the preference simply cannot be persisted.
+  }
+}
 
 function autoloadNewSaves() {
   try {
@@ -282,8 +318,24 @@ document.addEventListener('DOMContentLoaded', () => {
   initViewNavigation();
   initEventListeners();
   initSaveAutodetect();
+  state.riskFloorPercent = storedRiskFloorPercent();
   loadRuntime().finally(loadData);
 });
+
+/**
+ * Called by the Directive Engine card's risk-floor control.
+ *
+ * `null` clears the stored preference so the next request omits the parameter
+ * and the server's configured default applies again -- which is a different
+ * statement from storing 0.
+ */
+function setRiskFloorPercent(percent) {
+  const next = percent === null || percent === undefined || percent === '' ? null : Number(percent);
+  if (next !== null && (!Number.isInteger(next) || next < 0 || next > 100)) return;
+  state.riskFloorPercent = next;
+  setStoredRiskFloorPercent(next);
+  loadData();
+}
 
 async function loadRuntime() {
   try {
@@ -848,7 +900,17 @@ async function loadData() {
   const controller = new AbortController();
   state.abortController = controller;
   try {
-    const res = await fetch(`/api/v2/briefing?mode=${state.mode}&observer=${state.observer}`, { signal: controller.signal });
+    // The floor rides on the request rather than being applied in the browser:
+    // the engine has to VETO below-floor pairings before allocation, so a
+    // client-side filter would show a plan the engine never actually produced.
+    // Omitted entirely when unset, so the server's configured default applies.
+    const riskFloorParam = state.riskFloorPercent === null || state.riskFloorPercent === undefined
+      ? ''
+      : `&riskFloor=${encodeURIComponent(state.riskFloorPercent)}`;
+    const res = await fetch(
+      `/api/v2/briefing?mode=${state.mode}&observer=${state.observer}${riskFloorParam}`,
+      { signal: controller.signal }
+    );
     const json = await res.json();
     if (!res.ok || !json.success) throw new Error(json.error || `Failed to load telemetry (${res.status})`);
     if (requestId !== state.requestSequence) return;
@@ -1010,7 +1072,16 @@ function renderDashboard() {
       document.getElementById('directiveBoard'),
       // /api/v2/briefing returns { briefing, data }; the engine output rides
       // on the briefing, not on the raw snapshot.
-      { engineDirectives: state.briefing?.engineDirectives, briefing: state.briefing }
+      {
+        engineDirectives: state.briefing?.engineDirectives,
+        briefing: state.briefing,
+        // The board owns the risk-floor control; the controller owns the
+        // request. `riskFloorPreference` is what the PLAYER stored (null =
+        // "use the server default"), which is not the same as the floor the
+        // server resolved -- that one rides on cyclePlan.riskFloor.
+        riskFloorPreference: state.riskFloorPercent,
+        onRiskFloorChange: setRiskFloorPercent
+      }
     );
   }
   if (window.MissionControlMcBudget?.render) {

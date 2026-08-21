@@ -1,7 +1,8 @@
 // server/engine/rules/index.js
 //
 // Purpose: the rule registry — the one ordered list whose sequence is
-//   load-bearing for veto collection and score breakdown.
+//   load-bearing for veto collection and score breakdown, plus the
+//   candidate/pairing scope each rule is evaluated against.
 //
 // The rule registry.
 //
@@ -16,6 +17,13 @@
 //
 // A score rule returns a number, positive for value and negative for cost.
 //
+// A rule also declares its SCOPE, defaulting to 'candidate' when it does not
+// say. A 'candidate' rule is evaluated by `applyRules` against a bare
+// candidate; a 'pairing' rule is evaluated by `applyPairingRules` against a
+// (candidate, councilor) pairing, because what it reads -- success odds --
+// does not exist until a councilor is named. Both walk THIS list in order, so
+// the two passes cannot disagree about sequence.
+//
 // ORDER IS LOAD-BEARING. `applyRules` collects veto reasons in registry order
 // and `scoreCandidates` emits `scoreBreakdown` in registry order, so both
 // appear in a briefing in exactly this sequence. It is NOT grouped by family:
@@ -24,12 +32,20 @@
 // per line rather than spread per module so that the order is visible here
 // and cannot drift when a module gains a rule.
 // `tests/directiveEngine.test.js` pins this exact sequence.
+//
+// `risk/success-floor` is APPENDED rather than slotted beside the other
+// vetoes: like `cost/affordability` it is a veto that reads after every score,
+// and it is the last thing a reader should see because it answers "and are you
+// willing to take this bet" about an action that already cleared everything
+// else. Appending also leaves the twelve existing positions untouched, which
+// is what keeps every existing explanation reading exactly as it did.
 
 const hate = require('./hate');
 const legality = require('./legality');
 const value = require('./value');
 const readiness = require('./readiness');
 const portfolio = require('./portfolio');
+const risk = require('./risk');
 
 const RULES = Object.freeze([
   hate.totalWarBudget,
@@ -43,7 +59,15 @@ const RULES = Object.freeze([
   readiness.unmetPreconditions,
   value.unblockAlienResponse,
   value.advisoryPotential,
-  portfolio.affordability
+  portfolio.affordability,
+  risk.successFloor
 ]);
 
-module.exports = { RULES };
+/** A rule that does not declare a scope is evaluated against a candidate. */
+const DEFAULT_RULE_SCOPE = 'candidate';
+
+function ruleScope(rule) {
+  return rule?.scope || DEFAULT_RULE_SCOPE;
+}
+
+module.exports = { RULES, DEFAULT_RULE_SCOPE, ruleScope };

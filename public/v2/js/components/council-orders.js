@@ -116,13 +116,36 @@
     };
   }
 
-  function renderOddsCell(odds) {
+  /**
+   * The risk-floor annotation, when there is one worth making.
+   *
+   * A floor that could not be CHECKED and a floor cleared only marginally on an
+   * assumed estimate are both weaker readings than the odds number beside them
+   * suggests, so they get a tag. A comfortable pass gets nothing.
+   */
+  function riskFloorTag(riskFloor) {
+    if (!riskFloor) return '';
+    if (riskFloor.outcome === 'unknown') {
+      return `<span class="council-orders__tag council-orders__tag--unknown" title="${
+        escapeHtml(riskFloor.reason || 'Your risk floor could not be checked against this action.')
+      }">FLOOR UNVERIFIED</span>`;
+    }
+    if (riskFloor.outcome === 'pass' && riskFloor.marginal === true) {
+      return `<span class="council-orders__tag council-orders__tag--marginal" title="${
+        escapeHtml(riskFloor.reason || '')
+      }">MARGINAL</span>`;
+    }
+    return '';
+  }
+
+  function renderOddsCell(odds, riskFloor) {
     const reading = readOdds(odds);
+    const riskTag = riskFloorTag(riskFloor);
     if (reading.kind === 'automatic') {
-      return `<span class="council-orders__tag council-orders__tag--auto" title="${escapeHtml(reading.basis)}">GUARANTEED</span>`;
+      return `<span class="council-orders__tag council-orders__tag--auto" title="${escapeHtml(reading.basis)}">GUARANTEED</span>${riskTag}`;
     }
     if (reading.kind === 'unavailable') {
-      return `<span class="council-orders__tag council-orders__tag--unknown" title="${escapeHtml(reading.basis)}">ODDS UNAVAILABLE</span>`;
+      return `<span class="council-orders__tag council-orders__tag--unknown" title="${escapeHtml(reading.basis)}">ODDS UNAVAILABLE</span>${riskTag}`;
     }
     const pt = reading.point;
     let tone = 'council-orders__pct--good';
@@ -131,7 +154,7 @@
     const shown = pt >= 100 ? '&gt;99%' : `${pt}%`;
     const band = reading.band ? `<small>[${reading.band[0]}–${reading.band[1]}%]</small>` : '';
     const title = reading.basis ? ` title="${escapeHtml(reading.basis)}"` : '';
-    return `<span class="council-orders__pct ${tone}"${title}><strong>${shown}</strong>${band}</span>`;
+    return `<span class="council-orders__pct ${tone}"${title}><strong>${shown}</strong>${band}</span>${riskTag}`;
   }
 
   /**
@@ -184,7 +207,7 @@
           </span>
           <span class="council-orders__target">${target ? escapeHtml(target) : 'No fixed target'}</span>
         </div>
-        <div class="council-orders__cell council-orders__cell--odds">${renderOddsCell(assignment.odds)}</div>
+        <div class="council-orders__cell council-orders__cell--odds">${renderOddsCell(assignment.odds, assignment.riskFloor)}</div>
         <div class="council-orders__cell council-orders__cell--hate">${renderHateCell(assignment.expectedHate)}</div>
       </button>`;
   }

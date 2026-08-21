@@ -5207,6 +5207,152 @@ body.intelligence-library-open {
   border-color: var(--blue);
 }
 
+/* Risk tolerance (docs/risk-tolerance-spec.md). The floor in force is a header
+   badge so a surprising plan is explicable at a glance. */
+.directive-status-badge--risk {
+  background: rgba(212, 163, 94, 0.12);
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.directive-risk-floor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.directive-risk-floor--active {
+  border-color: var(--gold);
+}
+
+.directive-risk-floor__readout .directive-subheading {
+  margin-bottom: 4px;
+}
+
+.directive-risk-floor__status {
+  display: block;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.directive-risk-floor__control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.directive-risk-floor__control select {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 8px;
+  color: var(--text);
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
+/* A floor that could not be CHECKED is not a floor that was cleared: dashed and
+   muted, the same visual language the unavailable-odds tag uses. */
+.directive-risk-note {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.directive-risk-note--unknown {
+  border: 1px dashed var(--text-dim);
+  background: transparent;
+}
+
+.directive-risk-note--marginal {
+  border: 1px solid var(--gold);
+  background: rgba(212, 163, 94, 0.1);
+}
+
+.directive-risk-note__tag {
+  display: inline-block;
+  margin-right: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+.directive-risk-note--unknown .directive-risk-note__tag {
+  color: var(--text-muted);
+}
+
+.directive-risk-held-section {
+  margin-top: 18px;
+}
+
+.directive-risk-held-list {
+  display: grid;
+  gap: 6px;
+}
+
+.directive-risk-held-item {
+  padding: 8px 10px;
+  border-radius: 3px;
+  border-left: 3px solid var(--gold);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.directive-risk-held-item--unknown {
+  border-left-style: dashed;
+  border-left-color: var(--text-dim);
+}
+
+.directive-risk-held-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.directive-risk-held-title {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.directive-risk-held-who {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.directive-risk-held-reason {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+/* A capped list says so. A 25-row slice presented as the whole set is the same
+   defect class as fabricating the number. */
+.directive-risk-held-omitted {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* Portfolio Budgets Bar */
 .directive-budgets-bar {
   display: grid;
@@ -6088,6 +6234,16 @@ button.council-orders__row:focus-visible {
   border: 1px dashed var(--text-dim);
   color: var(--text-muted);
   background: transparent;
+  cursor: help;
+}
+
+/* Clears the risk floor, but only just, and on an assumed estimate. Warned
+   rather than green: the odds number beside it reads more confident than the
+   evidence behind it. */
+.council-orders__tag--marginal {
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  background: rgba(212, 163, 94, 0.1);
   cursor: help;
 }
 

@@ -85,12 +85,15 @@ function registerReadOnlyExports(app) {
   // 6. Mission Control v2 Briefing endpoint
   app.get('/api/v2/briefing', (req, res) => {
     try {
-      const { mode, observerId, targetPath } = requestContext(req);
+      const { mode, observerId, targetPath, riskFloorPercent } = requestContext(req);
 
       const rawSnapshot = snapshotCache.loadOrGetSnapshot(targetPath);
       assertObserver(rawSnapshot, observerId);
       const filtered = snapshotCache.buildFilteredSnapshot(rawSnapshot, mode, observerId);
-      const briefing = briefingGenerator.generateMissionControlBriefing(filtered, rawSnapshot);
+      // The briefing is regenerated per request, so the floor is a request
+      // parameter rather than server state -- two browsers can hold different
+      // risk tolerances against the same cached save.
+      const briefing = briefingGenerator.generateMissionControlBriefing(filtered, rawSnapshot, { riskFloorPercent });
 
       res.json({ success: true, ...responseIdentity(filtered, targetPath === null), briefing, data: filtered });
     } catch (err) {

@@ -780,12 +780,24 @@ test('the rule registry preserves its exact order and each rule keeps its kind',
     'readiness/unmet-preconditions',
     'value/unblock-alien-response',
     'value/advisory-potential',
-    'cost/affordability'
+    'cost/affordability',
+    'risk/success-floor'
   ]);
 
   assert.deepStrictEqual(RULES.map((rule) => rule.kind), [
     'veto', 'score', 'veto', 'veto', 'veto', 'score',
-    'score', 'score', 'score', 'score', 'score', 'veto'
+    'score', 'score', 'score', 'score', 'score', 'veto', 'veto'
+  ]);
+
+  // Scope is part of the contract: a rule that does not declare one is
+  // evaluated against a bare candidate by `applyRules`, and only a rule that
+  // says 'pairing' is evaluated by `applyPairingRules` once a councilor is
+  // named. Mislabelling risk/success-floor as candidate-scoped would make it
+  // return 'unknown' for every candidate on the board and sweep them all out
+  // of the cycle plan.
+  assert.deepStrictEqual(RULES.map((rule) => rule.scope ?? null), [
+    null, null, null, null, null, null,
+    null, null, null, null, null, null, 'pairing'
   ]);
 
   for (const rule of RULES) {

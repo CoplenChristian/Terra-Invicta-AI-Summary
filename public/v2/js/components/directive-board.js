@@ -10,6 +10,15 @@
  *   - Strategic Clocks: tracks expiring wards, alien passive hate acceleration, and countdowns
  *   - Multi-Cycle Horizon: explains forward-looking enablement chains (e.g. Investigate -> Turn)
  *   - Benched Candidates: names what was displaced and why
+ *   - Risk floor: the player's minimum success chance, the control that sets
+ *     it, and every action it held back (docs/risk-tolerance-spec.md)
+ *
+ * The risk floor is rendered from `cyclePlan.riskFloor` -- the floor the SERVER
+ * resolved -- not from the browser's stored preference, because an absent
+ * preference means "use the configured default" and only the server knows what
+ * that is. `null` percent is "not configured", `0` is "the player chose no
+ * floor"; neither is a floor of zero that rejects everything, and the card must
+ * not blur the three.
  */
 (function exposeDirectiveBoard(global) {
   'use strict';
@@ -86,6 +95,119 @@
         <span class="directive-odds-label ${colorClass}">
           <strong>${pt >= 100 ? '&gt;99%' : `${pt}%`}</strong> <small>${escapeHtml(bandText)}</small>
         </span>
+      </div>`;
+  }
+
+  // Offered floors. `''` is the deliberate "no stored preference" option: it
+  // clears the setting so the request omits the parameter and the server's
+  // configured default applies, which is NOT the same as choosing 0.
+  const RISK_FLOOR_CHOICES = [50, 60, 70, 75, 80, 85, 90, 95];
+
+  /**
+   * The floor the server actually applied, plus the control that changes it.
+   *
+   * `inForce` is the honest three-way readout: a floor of 0 and an unconfigured
+   * floor both hold nothing back, and saying "0% floor" for the unconfigured
+   * case would report a setting nobody made.
+   */
+  function renderRiskFloor(riskFloor, preference, onChange) {
+    const percent = num(riskFloor?.percent);
+    const inForce = riskFloor?.inForce === true;
+    const configured = riskFloor?.configured === true;
+
+    const statusText = inForce
+      ? `Actions must clear ${percent}% at the LOW end of their odds band.`
+      : (configured
+        ? 'No floor: every action is offered regardless of its success odds.'
+        : 'No floor is configured for this snapshot, so nothing is held back on odds.');
+
+    const selected = preference === null || preference === undefined ? '' : String(preference);
+    const options = [
+      `<option value=""${selected === '' ? ' selected' : ''}>Server default${percent === null ? '' : ` (${percent}%)`}</option>`,
+      `<option value="0"${selected === '0' ? ' selected' : ''}>Off — no floor</option>`,
+      ...RISK_FLOOR_CHOICES.map(value =>
+        `<option value="${value}"${selected === String(value) ? ' selected' : ''}>${value}% minimum</option>`)
+    ].join('');
+
+    return `
+      <div class="directive-risk-floor ${inForce ? 'directive-risk-floor--active' : ''}">
+        <div class="directive-risk-floor__readout">
+          <span class="directive-subheading">RISK TOLERANCE</span>
+          <span class="directive-risk-floor__status">${escapeHtml(statusText)}</span>
+        </div>
+        ${typeof onChange === 'function' ? `
+          <label class="directive-risk-floor__control">
+            <span>Minimum success odds</span>
+            <select data-risk-floor-select aria-label="Minimum success odds for a recommended action">
+              ${options}
+            </select>
+          </label>` : ''}
+      </div>`;
+  }
+
+  /**
+   * The per-assignment risk note.
+   *
+   * Only three states earn a line: a floor that could not be CHECKED (an
+   * unmeasured chance is not an acceptable one), a marginal clearance on an
+   * assumed estimate, and nothing at all otherwise. A comfortable pass says
+   * nothing, because a card that annotates everything annotates nothing.
+   */
+  function renderRiskNote(riskFloor) {
+    if (!riskFloor) return '';
+    if (riskFloor.outcome === 'unknown') {
+      return `<div class="directive-risk-note directive-risk-note--unknown">
+          <span class="directive-risk-note__tag">FLOOR NOT VERIFIED</span>
+          ${escapeHtml(riskFloor.reason || 'Success odds could not be computed for this action.')}
+        </div>`;
+    }
+    if (riskFloor.outcome === 'pass' && riskFloor.marginal === true) {
+      return `<div class="directive-risk-note directive-risk-note--marginal">
+          <span class="directive-risk-note__tag">MARGINAL</span>
+          ${escapeHtml(riskFloor.reason || '')}
+        </div>`;
+    }
+    return '';
+  }
+
+  /**
+   * Actions the floor held back. Capped by the engine, so the true total and
+   * the omitted count are printed rather than letting a 25-row slice read as
+   * the whole set.
+   */
+  function renderRiskFloorHeld(cyclePlan) {
+    const held = Array.isArray(cyclePlan.riskFloorVetoed) ? cyclePlan.riskFloorVetoed : [];
+    const unverified = Array.isArray(cyclePlan.riskFloorUnverified) ? cyclePlan.riskFloorUnverified : [];
+    const heldTotal = num(cyclePlan.riskFloorVetoedTotalCount) ?? held.length;
+    const heldOmitted = num(cyclePlan.riskFloorVetoedOmittedCount) ?? 0;
+    const unverifiedTotal = num(cyclePlan.riskFloorUnverifiedTotalCount) ?? unverified.length;
+    const unverifiedOmitted = num(cyclePlan.riskFloorUnverifiedOmittedCount) ?? 0;
+    if (heldTotal === 0 && unverifiedTotal === 0) return '';
+
+    const row = (entry, tone) => `
+      <div class="directive-risk-held-item directive-risk-held-item--${tone}">
+        <div class="directive-risk-held-head">
+          <span class="directive-risk-held-title">${escapeHtml(entry.title || 'Action')}</span>
+          <span class="directive-risk-held-who">${escapeHtml(entry.councilorName || 'Operative')}</span>
+        </div>
+        <div class="directive-risk-held-reason">${escapeHtml(entry.reason || '')}</div>
+      </div>`;
+
+    return `
+      <div class="directive-risk-held-section">
+        <div class="directive-subheading">
+          HELD BACK BY YOUR RISK FLOOR (${heldTotal}${unverifiedTotal ? ` + ${unverifiedTotal} UNVERIFIED` : ''})
+        </div>
+        <div class="directive-risk-held-list">
+          ${held.map(entry => row(entry, 'veto')).join('')}
+          ${unverified.map(entry => row(entry, 'unknown')).join('')}
+        </div>
+        ${heldOmitted > 0 || unverifiedOmitted > 0 ? `
+          <div class="directive-risk-held-omitted">
+            Showing ${held.length} of ${heldTotal} held back${unverifiedTotal
+              ? ` and ${unverified.length} of ${unverifiedTotal} unverified` : ''};
+            ${heldOmitted + unverifiedOmitted} further entr${heldOmitted + unverifiedOmitted === 1 ? 'y is' : 'ies are'} omitted from this view.
+          </div>` : ''}
       </div>`;
   }
 
@@ -231,6 +353,8 @@
           </div>
         </div>
 
+        ${renderRiskNote(assignment.riskFloor)}
+
         ${whyList.length ? `
           <ul class="directive-why-list">
             ${whyList.map(w => `<li>${escapeHtml(w)}</li>`).join('')}
@@ -369,6 +493,11 @@
     const horizon = Array.isArray(cyclePlan.horizon) ? cyclePlan.horizon : [];
     const budgets = cyclePlan.budgets || {};
     const reasoning = cyclePlan.decisionReasoning || engineDirectives?.decisionReasoning;
+    const riskFloor = cyclePlan.riskFloor || null;
+    const riskFloorPercent = num(riskFloor?.percent);
+    const riskFloorInForce = riskFloor?.inForce === true;
+    const riskHeldTotal = num(cyclePlan.riskFloorVetoedTotalCount) ?? 0;
+    const onRiskFloorChange = payload?.onRiskFloorChange;
 
     root.innerHTML = `
       <div class="directive-engine-v2">
@@ -380,8 +509,14 @@
           <div class="directive-header-badges">
             <span class="directive-status-badge directive-status-badge--assigned">${assignments.length} ASSIGNED</span>
             ${unassigned.length ? `<span class="directive-status-badge directive-status-badge--idle">${unassigned.length} IDLE</span>` : ''}
+            ${riskFloorInForce
+              ? `<span class="directive-status-badge directive-status-badge--risk">RISK FLOOR ${riskFloorPercent}%${
+                  riskHeldTotal ? ` · ${riskHeldTotal} HELD` : ''}</span>`
+              : ''}
           </div>
         </div>
+
+        ${renderRiskFloor(riskFloor, payload?.riskFloorPreference, onRiskFloorChange)}
 
         ${renderBudgets(budgets)}
 
@@ -398,12 +533,21 @@
 
         ${renderUnassigned(unassigned)}
 
+        ${renderRiskFloorHeld(cyclePlan)}
+
         ${renderHorizon(horizon)}
 
         ${renderBenched(benched)}
 
         ${renderDecisionReasoning(reasoning)}
       </div>`;
+
+    const riskSelect = root.querySelector('[data-risk-floor-select]');
+    if (riskSelect && typeof onRiskFloorChange === 'function') {
+      riskSelect.addEventListener('change', () => {
+        onRiskFloorChange(riskSelect.value === '' ? null : Number(riskSelect.value));
+      });
+    }
 
     // Interactive inspection of assignments
     root.querySelectorAll('.directive-assignment-card').forEach(card => {
@@ -429,6 +573,14 @@
             { label: 'Mission', value: candidate.missionType || 'UNAVAILABLE' },
             { label: 'Target', value: candidate.target?.name || candidate.target?.nation || 'Identified Target' },
             { label: 'Success odds', value: formatOddsFact(odds) },
+            {
+              label: 'Risk floor',
+              // Three readings, never blurred: no floor set, a floor that could
+              // not be checked, and a floor this action actually cleared.
+              value: !riskFloorInForce
+                ? 'No floor in force — success odds did not gate this recommendation.'
+                : (a.riskFloor?.reason || `Cleared your ${riskFloorPercent}% floor.`)
+            },
             { label: 'Expected Value', value: ev !== null ? `${ev.toFixed(2)} pts` : '—' },
             { label: 'Expected Hate', value: hateExp !== null ? (hateExp === 0 ? '0 hate (Safe)' : `+${hateExp.toFixed(2)} hate`) : 'Not computable without mission odds' },
             { label: 'Resource cost', value: formatCost(candidate.cost) },

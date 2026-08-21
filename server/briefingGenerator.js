@@ -64,7 +64,28 @@ class BriefingGenerator {
     this.config = config;
   }
 
-  generateMissionControlBriefing(snapshot = {}, rawSnapshot = null) {
+  /**
+   * The player's success-odds floor for this briefing.
+   *
+   * Presence, then coercion. `Number(null)` and `Number('')` are both 0, and 0
+   * is a value the player can legitimately choose ("no floor"), so an ABSENT
+   * request parameter must land on the configured default and never on zero --
+   * the two are indistinguishable after coercion and mean different things.
+   * A supplied value outside 0..100 is not a floor this engine can act on and
+   * falls back to the configured default rather than being clamped into a
+   * number nobody asked for; the request layer rejects those before they get
+   * here, so this is the second line, not the first.
+   */
+  resolveRiskFloorPercent(requested) {
+    const configured = this.config?.analysis?.riskTolerance?.riskFloorPercent;
+    const fallback = typeof configured === 'number' && Number.isFinite(configured) ? configured : null;
+    if (requested === null || requested === undefined || requested === '') return fallback;
+    const parsed = Number(requested);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return fallback;
+    return parsed;
+  }
+
+  generateMissionControlBriefing(snapshot = {}, rawSnapshot = null, options = {}) {
     const metadata = snapshot.metadata || {};
     const factions = this.asArray(snapshot.factions);
     const requestedObserverId = this.toFiniteNumber(snapshot.observerFactionId);
@@ -132,7 +153,13 @@ class BriefingGenerator {
       // and silently fell back to treating hate as zero.
       alienHateEconomics: snapshot.alienHateEconomics || null,
       usedMC: this.toFiniteNumber(observer.missionControlUsage),
-      mcCapacity: this.toFiniteNumber(observer.missionControlCapacity)
+      mcCapacity: this.toFiniteNumber(observer.missionControlCapacity),
+      // The one place that can see BOTH the request and the configuration, so
+      // it is the one place the "absent means the configured default, not 0"
+      // rule can be enforced. Every caller of this method -- the local briefing
+      // route, the publisher, the static site build -- therefore gets the
+      // configured floor without having to know about it.
+      riskFloorPercent: this.resolveRiskFloorPercent(options?.riskFloorPercent)
     });
     const engineResult = directiveEngine.runEngine(engineWorld);
 

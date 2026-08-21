@@ -175,6 +175,9 @@
       "resourcePoints": 1,
       "topNCouncilTargets": 3
     },
+    "riskTolerance": {
+      "riskFloorPercent": 0
+    },
     "strategicHistory": {
       "retention": 20,
       "friendlyFleetDetail": true,
