@@ -1,5 +1,8 @@
 // shared/intel/production.mjs
 //
+// Purpose: ship designs and the procurement plan derived from them, refusing to
+//   fabricate a bill of materials.
+//
 // Ship designs and the procurement plan derived from them. Both refuse to
 // fabricate a bill of materials: the save records a design as a component
 // list, not a resource cost, and every affordability figure downstream of an

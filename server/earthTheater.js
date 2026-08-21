@@ -1,5 +1,8 @@
 // server/earthTheater.js
 //
+// Purpose: the Earth theater partition — six regional groupings of nations and
+//   their contested/secured status.
+//
 // The EARTH theater partition: six regional groupings of nations, and the
 // per-theater contested/secured status the briefing renders.
 //

@@ -1,6 +1,8 @@
 /*
  * Council Orders
  * --------------
+ * Purpose: renders the at-a-glance answer to "what should each councilor do
+ *   this cycle".
  * The at-a-glance answer to "what should each councilor do this cycle".
  *
  * The full DIRECTIVE ENGINE card (components/directive-board.js) carries the

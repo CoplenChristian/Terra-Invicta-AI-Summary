@@ -1,5 +1,6 @@
 /*
  * COMPONENT DIRECTION
+ * Purpose: faction intelligence as a scan-first decision surface.
  * THESIS: Make faction intelligence a scan-first decision surface, not a second dashboard.
  * OWN-WORLD: Quiet command-console structure, hard data labels, and faction accents supplied by the save.
  * STORY: The observer can select one faction, see only the current filtered truth, and leave with a next move.

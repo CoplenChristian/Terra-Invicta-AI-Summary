@@ -1,5 +1,8 @@
 // server/engine/candidates/normalize.js
 //
+// Purpose: one candidate schema for every candidate, whatever generator
+//   produced it.
+//
 // One schema for every candidate, whatever generator produced it.
 //
 // Before this existed the hand-written generators emitted `value.*`,

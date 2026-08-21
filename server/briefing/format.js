@@ -1,5 +1,7 @@
 // server/briefing/format.js
 //
+// Purpose: coercion and presentation primitives for the briefing layer.
+//
 // Coercion and presentation primitives for the briefing layer.
 //
 // Every formatter here answers 'UNAVAILABLE' for an unmeasured input rather

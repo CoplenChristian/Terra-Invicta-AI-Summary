@@ -1,5 +1,8 @@
 // server/briefing/sitrep.js
 //
+// Purpose: the Executive SITREP — four prose paragraphs, a DEFCON tone, three
+//   threat cards and the key-metric block.
+//
 // The Executive SITREP: four prose paragraphs, a DEFCON tone, three threat
 // cards and the key-metric block.
 //

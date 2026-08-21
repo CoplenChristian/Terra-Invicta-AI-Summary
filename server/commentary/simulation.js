@@ -1,5 +1,7 @@
 /**
  * server/commentary/simulation.js
+ * Purpose: Layer 3 of the strategic commentary — the Monte Carlo threshold
+ *   cruncher and projection simulator.
  *
  * Layer 3 — Monte Carlo threshold cruncher and projection simulator.
  *

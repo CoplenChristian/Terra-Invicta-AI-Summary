@@ -1,5 +1,7 @@
 /**
  * server/engine/candidates/missions.js
+ * Purpose: the generic data-driven candidate generator pairing MissionSpecs
+ *   with world targets.
  *
  * Generic data-driven candidate generator pairing MissionSpecs with world targets.
  *

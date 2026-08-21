@@ -1,5 +1,8 @@
 // shared/intel/propulsion.mjs
 //
+// Purpose: /api/intel/propulsion — phase 1 of the research advisor, pairing the
+//   unlock index with the propulsion model.
+//
 // `/api/intel/propulsion` -- phase 1 of the research advisor.
 //
 // Two things, and deliberately not a third: the unlock index (what research

@@ -1,3 +1,7 @@
+// public/js/api.js
+//
+// Purpose: the legacy v1 API client — runtime probe and the fetch wrapper the
+//   v1 dashboard uses.
 const API = {
   staticOnly: false,
   // Set once the runtime probe has run. 'local'/'dev' -> live API present,

@@ -1,5 +1,7 @@
 /**
  * server/http/routes/tech.js -- everything answered from the game templates.
+ * Purpose: routes answered from the game templates — the tech-tree family and
+ *   the /api/templates/effects surface.
  *
  * Two things live here, and they belong together for the same reason:
  *

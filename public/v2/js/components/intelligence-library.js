@@ -1,3 +1,7 @@
+// public/v2/js/components/intelligence-library.js
+//
+// Purpose: renders the intelligence library — the drillable intelligence
+//   surface over the intel endpoints.
 (function exposeIntelligenceLibrary(global) {
   'use strict';
 

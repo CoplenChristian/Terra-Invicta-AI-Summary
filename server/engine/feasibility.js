@@ -1,5 +1,7 @@
 /**
  * server/engine/feasibility.js
+ * Purpose: evaluates candidate-councilor pairing feasibility against
+ *   TIMissionCondition rules.
  *
  * Evaluates candidate-councilor pairing feasibility against TIMissionCondition rules.
  * Emits a three-outcome signal ('pass', 'fail', 'unknown') rather than binary pass/fail.

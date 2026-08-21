@@ -1,5 +1,8 @@
 // server/snapshot/research.js
 //
+// Purpose: global research — the shared tech slots every faction contributes
+//   to, and the normalized tech dependency graph served to the tech endpoints.
+//
 // Global research: the shared tech slots every faction contributes to, and the
 // normalized tech dependency graph the tech-tree endpoints are served from.
 //

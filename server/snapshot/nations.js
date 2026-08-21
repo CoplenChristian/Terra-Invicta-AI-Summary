@@ -1,5 +1,8 @@
 // server/snapshot/nations.js
 //
+// Purpose: the Earth-side reducer — one row per nation, joined to the control
+//   points that determine who collects its output.
+//
 // The Earth-side reducer: one row per nation, joined to the control points
 // that determine who collects its output.
 

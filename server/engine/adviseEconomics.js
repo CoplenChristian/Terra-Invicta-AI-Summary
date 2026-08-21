@@ -1,5 +1,6 @@
 /**
  * server/engine/adviseEconomics.js
+ * Purpose: pure calculations for the Advise mission on Nations and Habs.
  *
  * Implements pure calculations for the Advise mission on Nations and Habs.
  * Verified against Terra Invicta 1.0 wiki (Nations / Missions) and Notion Page 09.

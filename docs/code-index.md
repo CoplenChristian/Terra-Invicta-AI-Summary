@@ -10,309 +10,190 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**159 modules.**
+**160 modules.**
 
-## `public/js/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `public/js/api.js` | BS | Browser (legacy, non-module) | 125 | **MISSING** | — | — |
-| `public/js/app.js` | BS | Browser (legacy, non-module) | 1507 | **MISSING** | — | — |
-
-## `public/v2/js/components/`
+## `public/`
 
 | module | B/E/C | runtime | lines | purpose | exports | test |
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `public/v2/js/components/alien-hate-economics.js` | BS | Browser (ESM) | 307 | **MISSING** | — | — |
-| `public/v2/js/components/council-orders.js` | BS | Browser (ESM) | 324 | **MISSING** | — | — |
-| `public/v2/js/components/detail-panel.js` | BS | Browser (ESM) | 149 | **MISSING** | — | — |
-| `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 450 | **MISSING** | — | — |
-| `public/v2/js/components/executive-boards.js` | BS | Browser (ESM) | 412 | **MISSING** | — | — |
-| `public/v2/js/components/faction-intel.js` | BS | Browser (ESM) | 1261 | **MISSING** | — | — |
-| `public/v2/js/components/intelligence-library.js` | BS | Browser (ESM) | 572 | **MISSING** | — | — |
-| `public/v2/js/components/mc-budget.js` | BS | Browser (ESM) | 186 | **MISSING** | — | — |
-| `public/v2/js/components/mining-expansion.js` | BS | Browser (ESM) | 381 | **MISSING** | — | — |
-| `public/v2/js/components/research-advisor.js` | BS | Browser (ESM) | 882 | **MISSING** | — | — |
-| `public/v2/js/components/strategic-commentary.js` | BS | Browser (ESM) | 125 | **MISSING** | — | — |
-| `public/v2/js/components/world-map.js` | BS | Browser (ESM) | 490 | **MISSING** | — | — |
-
-## `public/v2/js/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 1603 | **MISSING** | `onCopyExport, onOpenFaction` | — |
-| `public/v2/js/shared.js` | BS | Browser (ESM) | 196 | **MISSING** | — | — |
+| `public/index.html` | — | Browser (legacy v1) | 535 | legacy v1 dashboard shell -- DO NOT EDIT | — | — |
+| `public/js/api.js` | BS | Browser (legacy, non-module) | 129 | the legacy v1 API client — runtime probe and the fetch wrapper the | — | — |
+| `public/js/app.js` | BS | Browser (legacy, non-module) | 1511 | the legacy v1 dashboard controller — renders the old UI and must not | — | — |
+| `public/v2/js/components/alien-hate-economics.js` | BS | Browser (ESM) | 309 | renders the save-derived Mission Control hate floor without | — | — |
+| `public/v2/js/components/council-orders.js` | BS | Browser (ESM) | 326 | renders the at-a-glance answer to "what should each councilor do | — | — |
+| `public/v2/js/components/detail-panel.js` | BS | Browser (ESM) | 150 | the shared detail surface for clickable Mission Control modules. | — | — |
+| `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 451 | renders the Directive Engine v2 Cycle Plan. | — | — |
+| `public/v2/js/components/executive-boards.js` | BS | Browser (ESM) | 416 | renders the executive boards — faction power, resources, and the | — | — |
+| `public/v2/js/components/faction-intel.js` | BS | Browser (ESM) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
+| `public/v2/js/components/intelligence-library.js` | BS | Browser (ESM) | 576 | renders the intelligence library — the drillable intelligence | — | — |
+| `public/v2/js/components/mc-budget.js` | BS | Browser (ESM) | 188 | the Mission Control budget planner — MC is the sole input to the | — | — |
+| `public/v2/js/components/mining-expansion.js` | BS | Browser (ESM) | 383 | the mining expansion board — capacity, runways, and need-weighted | — | — |
+| `public/v2/js/components/research-advisor.js` | BS | Browser (ESM) | 883 | phase 4 of the research advisor, on screen. | — | — |
+| `public/v2/js/components/strategic-commentary.js` | BS | Browser (ESM) | 126 | renders the non-LLM four-layer Strategic Commentary Engine output. | — | — |
+| `public/v2/js/components/world-map.js` | BS | Browser (ESM) | 493 | renders the interactive world/space theater map surface. | — | — |
+| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 1605 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/shared.js` | BS | Browser (ESM) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
 
 | module | B/E/C | runtime | lines | purpose | exports | test |
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `scripts/backfill_strategic_history.js` | C | Node (CommonJS) | 194 | **MISSING** | `main` | — |
-| `scripts/build_static_snapshot.js` | C | Node (CommonJS) | 249 | **MISSING** | — | — |
-| `scripts/derive_snapshot_fixtures.js` | C | Node (CommonJS) | 162 | **MISSING** | — | — |
-| `scripts/export_intel_snapshots.js` | C | Node (CommonJS) | 155 | **MISSING** | `main` | — |
-| `scripts/generate_code_index.js` | C | Node (CommonJS) | 323 | Generate docs/code-index.md, the required-reading map of what lives | `collect, render` | — |
-| `scripts/parse_save.js` | C | Node (CommonJS) | 200 | **MISSING** | `formatOutput, main, parseArgs, resolveNestedField` | — |
-
-## `scripts/publish/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `scripts/publish/options.js` | C | Node (CommonJS) | 170 | **MISSING** | `PUBLISH_POLICY, parseArgs, parsePositiveInteger, retentionFromEnv, usage` | — |
-| `scripts/publish/parseStage.js` | C | Node (CommonJS) | 122 | **MISSING** | `parseTargetSave, resolveTargetSave` | — |
-| `scripts/publish/rows.js` | C | Node (CommonJS) | 154 | **MISSING** | `MAX_SNAPSHOT_ROW_BYTES, MEGABYTE, buildSnapshotRows, campaignDateIso, discoverObserverFactions, modesForObserver, validateSnapshotRows` | — |
-| `scripts/publish/supabaseWriter.js` | C | Node (CommonJS) | 340 | **MISSING** | `MAX_COMPACT_HISTORY_BYTES, MAX_UPSERT_BATCH_BYTES, MAX_UPSERT_BATCH_ROWS, batchSnapshotRows, buildCampaignPayload, commitCampaignPointer, createServiceClient, readExistingCampaign, shouldAdvancePointer, sleep, storeStrategicHistoryAndPrune, upsertSnapshotRows, …(+1)` | — |
-| `scripts/publish/techGraph.js` | C | Node (CommonJS) | 100 | **MISSING** | `applyTechTreeMode, buildSharedTechGraph, splitTechTree, techGraphFingerprint` | `tests/techGraph.test.js` |
-
-## `scripts/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 254 | **MISSING** | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
-| `scripts/verify_research_actionability.js` | C | Node (CommonJS) | 194 | **MISSING** | — | — |
-| `scripts/verify_research_vs_procurement.js` | C | Node (CommonJS) | 331 | **MISSING** | — | — |
-| `scripts/verify_supabase_rls.js` | C | Node (CommonJS) | 194 | **MISSING** | `main` | — |
-| `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 283 | **MISSING** | — | — |
+| `scripts/backfill_strategic_history.js` | C | Node (CommonJS) | 196 | backfill the strategic-history table from full snapshots already | `main` | — |
+| `scripts/build_static_snapshot.js` | C | Node (CommonJS) | 253 | build the static snapshot bundle — flatten the worker entry point, | — | — |
+| `scripts/derive_snapshot_fixtures.js` | C | Node (CommonJS) | 165 | derive the committed filtered-snapshot fixtures the markdown export | — | — |
+| `scripts/export_intel_snapshots.js` | C | Node (CommonJS) | 157 | export full snapshots from Supabase to local gzipped JSON as the | `main` | — |
+| `scripts/generate_code_index.js` | C | Node (CommonJS) | 357 | Generate docs/code-index.md, the required-reading map of what lives | `collect, render` | — |
+| `scripts/parse_save.js` | C | Node (CommonJS) | 202 | the universal save-parser CLI — inspect save state, execute intel | `formatOutput, main, parseArgs, resolveNestedField` | — |
+| `scripts/publish/options.js` | C | Node (CommonJS) | 172 | publish stage 1 — decide what this run was asked to do from CLI | `PUBLISH_POLICY, parseArgs, parsePositiveInteger, retentionFromEnv, usage` | — |
+| `scripts/publish/parseStage.js` | C | Node (CommonJS) | 124 | publish stage 2 — turn a chosen save file into the raw snapshot | `parseTargetSave, resolveTargetSave` | — |
+| `scripts/publish/rows.js` | C | Node (CommonJS) | 156 | publish stage 3 — build the rows this publish will write and refuse | `MAX_SNAPSHOT_ROW_BYTES, MEGABYTE, buildSnapshotRows, campaignDateIso, discoverObserverFactions, modesForObserver, validateSnapshotRows` | — |
+| `scripts/publish/supabaseWriter.js` | C | Node (CommonJS) | 342 | publish stage 4 — every network write the publish makes, ordered to | `MAX_COMPACT_HISTORY_BYTES, MAX_UPSERT_BATCH_BYTES, MAX_UPSERT_BATCH_ROWS, batchSnapshotRows, buildCampaignPayload, commitCampaignPointer, createServiceClient, readExistingCampaign, shouldAdvancePointer, sleep, storeStrategicHistoryAndPrune, upsertSnapshotRows, …(+1)` | — |
+| `scripts/publish/techGraph.js` | C | Node (CommonJS) | 102 | publish stage 3a — apply the shared/inline/omitted tech-tree mode | `applyTechTreeMode, buildSharedTechGraph, splitTechTree, techGraphFingerprint` | `tests/techGraph.test.js` |
+| `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 256 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
+| `scripts/verify_research_actionability.js` | C | Node (CommonJS) | 196 | browser verification of research-advisor actionability against a | — | — |
+| `scripts/verify_research_vs_procurement.js` | C | Node (CommonJS) | 333 | browser verification of separating procurement from research and of | — | — |
+| `scripts/verify_supabase_rls.js` | C | Node (CommonJS) | 196 | verify Supabase RLS policies and hosted endpoints behave as | `main` | — |
+| `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 285 | browser verification of the v2 navigation acceptance checks against a | — | — |
 
 ## `server/`
 
 | module | B/E/C | runtime | lines | purpose | exports | test |
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
 | `server/alienHateEconomics.js` | C | Node (CommonJS) | 8 | CommonJS re-export of the shared alien-hate economics implementation. | — | `tests/alienHateEconomics.test.js` |
-
-## `server/briefing/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/briefing/format.js` | C | Node (CommonJS) | 129 | **MISSING** | `ONE_TRILLION, firstAvailableNumber, formatCount, formatFactionGdp, formatNumber, formatPower, formatResourceSummary, formatTargetGdp, getResourceSnapshot, getTopSkillString, sameId, toFiniteNumber` | — |
-| `server/briefing/readers.js` | C | Node (CommonJS) | 186 | **MISSING** | `buildAdvisableHabs, getControlledNationData, getFleetCombatPower, getMiningRateSummary, getResearchSlots, isFilteredDataAvailable, readObserverHateTrend` | — |
-| `server/briefing/roster.js` | C | Node (CommonJS) | 135 | **MISSING** | `NOTABLE_SKILL_THRESHOLD, buildOperativeRoster, eligibleOperatives, isIdleCouncilor, isOwnCouncilor, visibleSkill` | — |
-| `server/briefing/sitrep.js` | C | Node (CommonJS) | 253 | **MISSING** | `buildExecutiveSitrep` | — |
-
-## `server/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/briefingGenerator.js` | **B** C | Node (CommonJS) | 389 | **MISSING** | `buildAdvisableHabs, buildCouncilDirectives, buildGeopoliticalDirectives, buildHoldGroundDirective, buildOperativeRoster, buildSpaceDirectives, buildTheaterStatus, eligibleOperatives, firstAvailableNumber, formatCount, formatFactionGdp, formatNumber, …(+14)` | — |
+| `server/briefing/format.js` | C | Node (CommonJS) | 131 | coercion and presentation primitives for the briefing layer. | `ONE_TRILLION, firstAvailableNumber, formatCount, formatFactionGdp, formatNumber, formatPower, formatResourceSummary, formatTargetGdp, getResourceSnapshot, getTopSkillString, sameId, toFiniteNumber` | — |
+| `server/briefing/readers.js` | C | Node (CommonJS) | 189 | snapshot-shaped readers — the joins and roll-ups the briefing and | `buildAdvisableHabs, getControlledNationData, getFleetCombatPower, getMiningRateSummary, getResearchSlots, isFilteredDataAvailable, readObserverHateTrend` | — |
+| `server/briefing/roster.js` | C | Node (CommonJS) | 138 | reading the councilor roster — who is ours, who is free, what a | `NOTABLE_SKILL_THRESHOLD, buildOperativeRoster, eligibleOperatives, isIdleCouncilor, isOwnCouncilor, visibleSkill` | — |
+| `server/briefing/sitrep.js` | C | Node (CommonJS) | 256 | the Executive SITREP — four prose paragraphs, a DEFCON tone, three | `buildExecutiveSitrep` | — |
+| `server/briefingGenerator.js` | **B** C | Node (CommonJS) | 391 | the Mission Control briefing and SITREP synthesis entry point — the | `buildAdvisableHabs, buildCouncilDirectives, buildGeopoliticalDirectives, buildHoldGroundDirective, buildOperativeRoster, buildSpaceDirectives, buildTheaterStatus, eligibleOperatives, firstAvailableNumber, formatCount, formatFactionGdp, formatNumber, …(+14)` | — |
 | `server/capabilityResolver.js` | C | Node (CommonJS) | 212 | resolve which intelligence capabilities a faction has from the templates and config. | — | — |
-
-## `server/commentary/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/commentary/beats.js` | C | Node (CommonJS) | 160 | **MISSING** | `BEAT_DEFINITIONS, evaluateBeats, hasRequiredFacts, isStanceCoherentWithHoldGround` | — |
-| `server/commentary/facts.js` | C | Node (CommonJS) | 175 | **MISSING** | `extractFacts, medianOf, resolveHullTier` | — |
-| `server/commentary/grammar.js` | C | Node (CommonJS) | 164 | **MISSING** | `formatSimulatedThreshold, generateGrammar` | — |
-| `server/commentary/index.js` | C | Node (CommonJS) | 75 | **MISSING** | `generateStrategicCommentary` | — |
-| `server/commentary/prng.js` | C | Node (CommonJS) | 102 | **MISSING** | `createPrng, hashString, samplePercentile` | — |
-| `server/commentary/simulation.js` | C | Node (CommonJS) | 339 | **MISSING** | `MAX_SIMULATED_HULLS, SIMULATION_SEEDS_COUNT, buildOmniscientOpponentTiers, buildPlayerOpponentTiers, findRequiredHullsForTier, runMonteCarloSimulation, simulateEngagement` | — |
-
-## `server/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
+| `server/commentary/beats.js` | C | Node (CommonJS) | 162 | Layer 2 of the strategic commentary — deterministic narrative beats | `BEAT_DEFINITIONS, evaluateBeats, hasRequiredFacts, isStanceCoherentWithHoldGround` | — |
+| `server/commentary/facts.js` | C | Node (CommonJS) | 177 | Layer 1 of the strategic commentary — fact extraction and | `extractFacts, medianOf, resolveHullTier` | — |
+| `server/commentary/grammar.js` | C | Node (CommonJS) | 166 | Layer 4 of the strategic commentary — templated phrasing, | `formatSimulatedThreshold, generateGrammar` | — |
+| `server/commentary/index.js` | C | Node (CommonJS) | 77 | the strategic commentary engine's top-level orchestrator, combining | `generateStrategicCommentary` | — |
+| `server/commentary/prng.js` | C | Node (CommonJS) | 104 | the deterministic Mulberry32 PRNG used for strategic commentary | `createPrng, hashString, samplePercentile` | — |
+| `server/commentary/simulation.js` | C | Node (CommonJS) | 341 | Layer 3 of the strategic commentary — the Monte Carlo threshold | `MAX_SIMULATED_HULLS, SIMULATION_SEEDS_COUNT, buildOmniscientOpponentTiers, buildPlayerOpponentTiers, findRequiredHullsForTier, runMonteCarloSimulation, simulateEngagement` | — |
 | `server/config.js` | C | Node (CommonJS) | 326 | resolve, validate and migrate the server's config from config.json and environment. | `DEFAULTS_PATH, DEFAULT_CONFIG_PATH, LEGACY_KEYS, PROJECT_ROOT, SCHEMA_PATH, envPresent, migrateLegacyConfig, parseIntegerEnv, readJson, resolveConfig, resolvePublishableKey, safeRuntimeConfig, …(+2)` | `tests/config.test.js` |
-| `server/directiveAdvisor.js` | C | Node (CommonJS) | 997 | **MISSING** | `ALIEN_CONTACT_PROJECT, CAPABILITY_AXES, CHEAPEST_HATE_ACTION, CHEAPEST_HATE_ACTION_LOW, DECISIVE_CAPABILITY_RATIO, FRAGILE_OWN_SHIPS, HATE_DELTA_VARIANCE, MISSION_SUCCESS_HATE, PROXY_ALIEN_HATE_SHARE, PROXY_OFFENSIVE_MISSIONS, TOTAL_WAR_APPROACH_HATE, assessCampaignPosture, …(+11)` | `tests/directiveAdvisor.test.js` |
-| `server/directiveEngine.js` | **B** C | Node (CommonJS) | 309 | **MISSING** | `RULES, WEIGHTS, applyRules, buildDecisionReasoning, buildWorld, generateCandidates, generateCouncilCandidates, generateDefendInterestsCandidates, generateIntelligenceCandidates, generateOpenControlPointCandidates, runEngine, scoreCandidates` | `tests/directiveEngine.test.js` |
-
-## `server/directives/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/directives/council.js` | C | Node (CommonJS) | 77 | **MISSING** | `buildCouncilDirectives` | — |
-| `server/directives/geopolitical.js` | C | Node (CommonJS) | 181 | **MISSING** | `attachHateEstimate, buildGeopoliticalDirectives` | — |
-| `server/directives/holdGround.js` | C | Node (CommonJS) | 62 | **MISSING** | `buildHoldGroundDirective` | `tests/holdGround.test.js` |
-| `server/directives/index.js` | **B** C | Node (CommonJS) | 30 | **MISSING** | `attachHateEstimate, buildCouncilDirectives, buildGeopoliticalDirectives, buildHoldGroundDirective, buildResearchDirectives, buildSpaceDirectives` | — |
-| `server/directives/research.js` | C | Node (CommonJS) | 87 | **MISSING** | `buildResearchDirectives` | — |
-| `server/directives/space.js` | C | Node (CommonJS) | 70 | **MISSING** | `buildSpaceDirectives` | — |
-
-## `server/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/earthTheater.js` | C | Node (CommonJS) | 103 | **MISSING** | `EARTH_THEATERS, buildTheaterStatus` | — |
-
-## `server/engine/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/engine/adviseEconomics.js` | C | Node (CommonJS) | 222 | **MISSING** | `computeAdviseHabBonuses, computeAdviseNationBonuses, computeBaseIP, evaluateAdviseValue, getCouncilorAttribute` | `tests/adviseEconomics.test.js` |
-| `server/engine/assignment.js` | C | Node (CommonJS) | 630 | **MISSING** | `allocateCyclePlan, computeOngoingMissionBenefit, getActiveMissionInfo` | — |
-| `server/engine/budgets.js` | C | Node (CommonJS) | 257 | **MISSING** | `BudgetPoolManager, readPoolCapacity` | — |
-| `server/engine/campaignDate.js` | C | Node (CommonJS) | 62 | **MISSING** | `defenseStatus, parseCampaignDate` | — |
-
-## `server/engine/candidates/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/engine/candidates/controlPoints.js` | C | Node (CommonJS) | 104 | **MISSING** | `buildControlNationCandidate, generateOpenControlPointCandidates` | — |
-| `server/engine/candidates/council.js` | C | Node (CommonJS) | 194 | **MISSING** | `buildInvestigateCandidate, buildTurnCandidate, generateCouncilCandidates, isProxyFaction, loyaltyOf` | — |
-| `server/engine/candidates/defense.js` | C | Node (CommonJS) | 106 | **MISSING** | `generateDefendInterestsCandidates` | — |
-| `server/engine/candidates/index.js` | C | Node (CommonJS) | 81 | **MISSING** | `generateCandidates` | — |
-| `server/engine/candidates/intelligence.js` | C | Node (CommonJS) | 123 | **MISSING** | `ALIEN_DETAIN_STORY_GATE, generateIntelligenceCandidates` | — |
-| `server/engine/candidates/missions.js` | C | Node (CommonJS) | 516 | **MISSING** | `generateMissionCandidatesFromSpecs, resolveControlPointId, resolveEntityId` | — |
-| `server/engine/candidates/normalize.js` | C | Node (CommonJS) | 146 | **MISSING** | `CANDIDATE_FAMILIES, hateEnvelopeFromSlots, looksUnresolved, normalizeCandidate` | — |
-
-## `server/engine/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/engine/clocks.js` | C | Node (CommonJS) | 113 | **MISSING** | `computeStrategicClocks, getUrgencyMultiplier` | — |
-| `server/engine/feasibility.js` | C | Node (CommonJS) | 162 | **MISSING** | `evaluateCondition, evaluatePairingFeasibility, isCouncilorFree, isCouncilorHuman, isCouncilorOnEarth` | — |
-| `server/engine/missionCatalogue.js` | C | Node (CommonJS) | 92 | **MISSING** | `MissionCatalogue` | — |
-| `server/engine/odds.js` | C | Node (CommonJS) | 219 | **MISSING** | `CAMPAIGN_ATTRIBUTE_MEDIANS, calculateRollChance, computeMissionOdds, getCouncilorAttribute, oddsUnavailable` | — |
-| `server/engine/pairing.js` | C | Node (CommonJS) | 245 | **MISSING** | `buildCandidatePairing, buildCouncilorSummary, generateAllPairings, resolveCouncilorId` | — |
-
-## `server/engine/rules/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/engine/rules/hate.js` | C | Node (CommonJS) | 172 | **MISSING** | `totalWarBudget, warThresholdCrossing` | — |
-| `server/engine/rules/index.js` | C | Node (CommonJS) | 47 | **MISSING** | `RULES` | — |
-| `server/engine/rules/legality.js` | C | Node (CommonJS) | 97 | **MISSING** | `executiveLast, noTerritory, storyGate` | — |
-| `server/engine/rules/portfolio.js` | C | Node (CommonJS) | 51 | **MISSING** | `affordability` | — |
-| `server/engine/rules/readiness.js` | C | Node (CommonJS) | 32 | **MISSING** | `unmetPreconditions` | — |
-| `server/engine/rules/value.js` | C | Node (CommonJS) | 170 | **MISSING** | `advisoryPotential, counterCouncilor, defendInterests, gdpPerCpCost, unblockAlienResponse` | — |
-
-## `server/engine/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/engine/selection.js` | C | Node (CommonJS) | 185 | **MISSING** | `applyRules, buildDecisionReasoning, buildPreparationFallbackCandidate, computeResourceCost, evaluateVetoes, scoreCandidates` | — |
-| `server/engine/weights.js` | C | Node (CommonJS) | 134 | **MISSING** | `WEIGHTS, getWeights` | — |
-
-## `server/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
+| `server/directiveAdvisor.js` | C | Node (CommonJS) | 999 | campaign-aware ranking and posture assessment behind Mission Control | `ALIEN_CONTACT_PROJECT, CAPABILITY_AXES, CHEAPEST_HATE_ACTION, CHEAPEST_HATE_ACTION_LOW, DECISIVE_CAPABILITY_RATIO, FRAGILE_OWN_SHIPS, HATE_DELTA_VARIANCE, MISSION_SUCCESS_HATE, PROXY_ALIEN_HATE_SHARE, PROXY_OFFENSIVE_MISSIONS, TOTAL_WAR_APPROACH_HATE, assessCampaignPosture, …(+11)` | `tests/directiveAdvisor.test.js` |
+| `server/directiveEngine.js` | **B** C | Node (CommonJS) | 311 | the v2 directive rule engine orchestration and public entry point — | `RULES, WEIGHTS, applyRules, buildDecisionReasoning, buildWorld, generateCandidates, generateCouncilCandidates, generateDefendInterestsCandidates, generateIntelligenceCandidates, generateOpenControlPointCandidates, runEngine, scoreCandidates` | `tests/directiveEngine.test.js` |
+| `server/directives/council.js` | C | Node (CommonJS) | 80 | the council-department ladder — exploit an embedded mole, assign an | `buildCouncilDirectives` | — |
+| `server/directives/geopolitical.js` | C | Node (CommonJS) | 184 | the Earth-facing policyRank ladder — hold ground, the escalate-late | `attachHateEstimate, buildGeopoliticalDirectives` | — |
+| `server/directives/holdGround.js` | C | Node (CommonJS) | 64 | Hold Ground as a first-class directive. | `buildHoldGroundDirective` | `tests/holdGround.test.js` |
+| `server/directives/index.js` | **B** C | Node (CommonJS) | 33 | the policyRank directive ladder — the v1 hand-tuned board running | `attachHateEstimate, buildCouncilDirectives, buildGeopoliticalDirectives, buildHoldGroundDirective, buildResearchDirectives, buildSpaceDirectives` | — |
+| `server/directives/research.js` | C | Node (CommonJS) | 90 | the research-department ladder — the two alien-intelligence unlocks | `buildResearchDirectives` | — |
+| `server/directives/space.js` | C | Node (CommonJS) | 73 | the space-department ladder — the off-world mining grid and orbital | `buildSpaceDirectives` | — |
+| `server/earthTheater.js` | C | Node (CommonJS) | 106 | the Earth theater partition — six regional groupings of nations and | `EARTH_THEATERS, buildTheaterStatus` | — |
+| `server/engine/adviseEconomics.js` | C | Node (CommonJS) | 223 | pure calculations for the Advise mission on Nations and Habs. | `computeAdviseHabBonuses, computeAdviseNationBonuses, computeBaseIP, evaluateAdviseValue, getCouncilorAttribute` | `tests/adviseEconomics.test.js` |
+| `server/engine/assignment.js` | C | Node (CommonJS) | 632 | the cycle-plan assignment allocator that binds candidates to | `allocateCyclePlan, computeOngoingMissionBenefit, getActiveMissionInfo` | — |
+| `server/engine/budgets.js` | C | Node (CommonJS) | 259 | tracks the shared portfolio budget pools across the entire | `BudgetPoolManager, readPoolCapacity` | — |
+| `server/engine/campaignDate.js` | C | Node (CommonJS) | 65 | campaign-date parsing and the Defend Interests ward status derived | `defenseStatus, parseCampaignDate` | — |
+| `server/engine/candidates/controlPoints.js` | C | Node (CommonJS) | 107 | the open control-point candidate generator — neutral control points | `buildControlNationCandidate, generateOpenControlPointCandidates` | — |
+| `server/engine/candidates/council.js` | C | Node (CommonJS) | 197 | the council candidate generator — Investigate then Turn, the | `buildInvestigateCandidate, buildTurnCandidate, generateCouncilCandidates, isProxyFaction, loyaltyOf` | — |
+| `server/engine/candidates/defense.js` | C | Node (CommonJS) | 109 | the Defend Interests candidate generator — protecting holdings the | `generateDefendInterestsCandidates` | — |
+| `server/engine/candidates/index.js` | C | Node (CommonJS) | 84 | the generation pass — run every generator, attach mission specs, | `generateCandidates` | — |
+| `server/engine/candidates/intelligence.js` | C | Node (CommonJS) | 126 | the intelligence candidate generator — capability without a | `ALIEN_DETAIN_STORY_GATE, generateIntelligenceCandidates` | — |
+| `server/engine/candidates/missions.js` | C | Node (CommonJS) | 518 | the generic data-driven candidate generator pairing MissionSpecs | `generateMissionCandidatesFromSpecs, resolveControlPointId, resolveEntityId` | — |
+| `server/engine/candidates/normalize.js` | C | Node (CommonJS) | 149 | one candidate schema for every candidate, whatever generator | `CANDIDATE_FAMILIES, hateEnvelopeFromSlots, looksUnresolved, normalizeCandidate` | — |
+| `server/engine/clocks.js` | C | Node (CommonJS) | 115 | computes strategic clocks, ward expirations, passive accrual rates, | `computeStrategicClocks, getUrgencyMultiplier` | — |
+| `server/engine/feasibility.js` | C | Node (CommonJS) | 164 | evaluates candidate-councilor pairing feasibility against | `evaluateCondition, evaluatePairingFeasibility, isCouncilorFree, isCouncilorHuman, isCouncilorOnEarth` | — |
+| `server/engine/missionCatalogue.js` | C | Node (CommonJS) | 94 | structured query access to the MissionSpec objects baked into the | `MissionCatalogue` | — |
+| `server/engine/odds.js` | C | Node (CommonJS) | 221 | the Terra Invicta wiki roll success curve and the documented | `CAMPAIGN_ATTRIBUTE_MEDIANS, calculateRollChance, computeMissionOdds, getCouncilorAttribute, oddsUnavailable` | — |
+| `server/engine/pairing.js` | C | Node (CommonJS) | 247 | binds candidates to available councilors and computes success odds | `buildCandidatePairing, buildCouncilorSummary, generateAllPairings, resolveCouncilorId` | — |
+| `server/engine/rules/hate.js` | C | Node (CommonJS) | 175 | alien-hate exposure — the one veto that must reach every candidate, | `totalWarBudget, warThresholdCrossing` | — |
+| `server/engine/rules/index.js` | C | Node (CommonJS) | 50 | the rule registry — the one ordered list whose sequence is | `RULES` | — |
+| `server/engine/rules/legality.js` | C | Node (CommonJS) | 100 | the three "is this move even allowed" vetoes — executive-last | `executiveLast, noTerritory, storyGate` | — |
+| `server/engine/rules/portfolio.js` | C | Node (CommonJS) | 54 | resource-portfolio constraints — can the observer pay for this | `affordability` | — |
+| `server/engine/rules/readiness.js` | C | Node (CommonJS) | 35 | the "can we actually do this right now" rule — an unconfirmable | `unmetPreconditions` | — |
+| `server/engine/rules/value.js` | C | Node (CommonJS) | 172 | the score rules that say what an action is worth. | `advisoryPotential, counterCouncilor, defendInterests, gdpPerCpCost, unblockAlienResponse` | — |
+| `server/engine/selection.js` | C | Node (CommonJS) | 188 | the middle two stages of the engine pipeline — applying the rules | `applyRules, buildDecisionReasoning, buildPreparationFallbackCandidate, computeResourceCost, evaluateVetoes, scoreCandidates` | — |
+| `server/engine/weights.js` | C | Node (CommonJS) | 137 | the engine's tunable weights, kept in one exported config object per | `WEIGHTS, getWeights` | — |
 | `server/exportGenerator.js` | C | Node (CommonJS) | 31 | CommonJS adapter exposing the shared markdown export renderers to the server. | — | — |
-
-## `server/http/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/http/publishControl.js` | C | Node (CommonJS) | 149 | **MISSING** | `handlePublish, isPublishAuthorized, publishToken, register` | — |
-| `server/http/requestContext.js` | C | Node (CommonJS) | 64 | **MISSING** | `assertObserver, requestContext, responseIdentity` | — |
-
-## `server/http/routes/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/http/routes/intel.js` | C | Node (CommonJS) | 192 | **MISSING** | `register` | — |
-| `server/http/routes/runtime.js` | C | Node (CommonJS) | 53 | **MISSING** | `register` | — |
-| `server/http/routes/snapshot.js` | C | Node (CommonJS) | 166 | **MISSING** | `register, registerReadOnlyExports` | — |
-| `server/http/routes/strategicHistory.js` | C | Node (CommonJS) | 135 | **MISSING** | `register, strategicHistory` | — |
-| `server/http/routes/tech.js` | C | Node (CommonJS) | 104 | **MISSING** | `TECH_ROUTES, register` | — |
-
-## `server/http/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/http/snapshotCache.js` | C | Node (CommonJS) | 150 | **MISSING** | `buildFilteredSnapshot, getPreviousRawSnapshot, loadOrGetSnapshot, resetCache` | — |
-
-## `server/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/index.js` | **B** C | Node (CommonJS) | 96 | **MISSING** | — | — |
+| `server/http/publishControl.js` | C | Node (CommonJS) | 151 | the local-only, service-role-backed publish route and its | `handlePublish, isPublishAuthorized, publishToken, register` | — |
+| `server/http/requestContext.js` | C | Node (CommonJS) | 66 | request->(mode, observer, save) and snapshot->identity envelope | `assertObserver, requestContext, responseIdentity` | — |
+| `server/http/routes/intel.js` | C | Node (CommonJS) | 194 | the focused-projection route surface — one discovery directory page | `register` | — |
+| `server/http/routes/runtime.js` | C | Node (CommonJS) | 55 | routes that describe the local install — /api/runtime, /api/publish, | `register` | — |
+| `server/http/routes/snapshot.js` | C | Node (CommonJS) | 168 | routes returning the whole filtered snapshot or a rendering of it, | `register, registerReadOnlyExports` | — |
+| `server/http/routes/strategicHistory.js` | C | Node (CommonJS) | 137 | the Supabase-backed strategic-history routes — compact snapshot | `register, strategicHistory` | — |
+| `server/http/routes/tech.js` | C | Node (CommonJS) | 106 | routes answered from the game templates — the tech-tree family and | `TECH_ROUTES, register` | — |
+| `server/http/snapshotCache.js` | C | Node (CommonJS) | 151 | the local server's one parsed-save cache and its reset rules. | `buildFilteredSnapshot, getPreviousRawSnapshot, loadOrGetSnapshot, resetCache` | — |
+| `server/index.js` | **B** C | Node (CommonJS) | 98 | the local Express composition root — process error handlers, | — | — |
 | `server/intelligenceFilter.js` | C | Node (CommonJS) | 890 | redact and filter a raw snapshot down to what the observer is allowed to see. | — | `tests/intelligenceFilter.test.js` |
 | `server/intelResources.js` | **B** C | Node (CommonJS) | 111 | CommonJS barrel exposing the shared intel projections to the local Express server. | `DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, SUPPORTED_RESOURCES, buildResource, isDetailLevel, measureIntelEndpointSizes, parseDetailLevel` | `tests/intelResources.test.js` |
-| `server/miningExpansion.js` | **B** C | Node (CommonJS) | 81 | **MISSING** | `MINE_LIMIT_GRANTS, MISSION_TECH_NAMES, THEATER_ACCESSIBILITY, buildMiningCapacity, buildMiningExpansion, buildResourceRunways, compareMiningCandidates, evaluateUtility, getDestinationTechForBody, resolveBodyDestinationTech, scoreSiteCandidate` | `tests/miningExpansion.test.js` |
+| `server/miningExpansion.js` | **B** C | Node (CommonJS) | 83 | CommonJS adapter exposing the shared mining-expansion projection to | `MINE_LIMIT_GRANTS, MISSION_TECH_NAMES, THEATER_ACCESSIBILITY, buildMiningCapacity, buildMiningExpansion, buildResourceRunways, compareMiningCandidates, evaluateUtility, getDestinationTechForBody, resolveBodyDestinationTech, scoreSiteCandidate` | `tests/miningExpansion.test.js` |
 | `server/opportunityScorer.js` | C | Node (CommonJS) | 192 | score nations as takeover opportunities for the observer faction. | — | — |
-| `server/requestValidation.js` | **B** C | Node (CommonJS) | 113 | **MISSING** | `BODY_FILTER_MESSAGE, HISTORY_LIMIT_BOUNDS, HISTORY_LIMIT_DEFAULT, HOSTED_MODES, LOCAL_MODES, MINING_LIMIT_BOUNDS, MINING_LIMIT_RESOURCES, RequestValidationError, assertKnownObserver, exceedsBodyFilterLimits, hasControlCharacters, isBoundedInteger, …(+8)` | `tests/requestValidation.test.js` |
+| `server/requestValidation.js` | **B** C | Node (CommonJS) | 115 | CommonJS barrel over shared/requestValidation.mjs, adding only the | `BODY_FILTER_MESSAGE, HISTORY_LIMIT_BOUNDS, HISTORY_LIMIT_DEFAULT, HOSTED_MODES, LOCAL_MODES, MINING_LIMIT_BOUNDS, MINING_LIMIT_RESOURCES, RequestValidationError, assertKnownObserver, exceedsBodyFilterLimits, hasControlCharacters, isBoundedInteger, …(+8)` | `tests/requestValidation.test.js` |
 | `server/saveComparison.js` | C | Node (CommonJS) | 97 | choose which earlier save the "since last save" comparison should use. | `DEFAULT_MAX_PROBE, selectComparisonSave` | `tests/saveComparison.test.js` |
 | `server/saveParser.js` | C | Node (CommonJS) | 141 | locate, decompress and parse a Terra Invicta save file into raw game state. | — | — |
-
-## `server/snapshot/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/snapshot/councilors.js` | C | Node (CommonJS) | 167 | **MISSING** | `buildCouncilors` | — |
-| `server/snapshot/factions.js` | C | Node (CommonJS) | 453 | **MISSING** | `buildActiveXenoforming, buildAlienFacilities, buildDefaultTargets, buildFactionIntelligence, buildFactionRelationships, buildFactions, buildTechMatrix, collectShipDesigns, normalizeFactionIntelligence` | — |
-| `server/snapshot/lookups.js` | C | Node (CommonJS) | 355 | **MISSING** | `FACTION_COLORS, SATURN_ORBIT_TOLERANCE_AU, UNKNOWN_FACTION_COLOR, buildControlPoints, buildIdMaps, getCollection, getFactionColor, readRawCollections, resolveFactionName, resolveOrbitBody, resolveOrbitBodyDistanceAU, resolveOrbitBodyId` | — |
-| `server/snapshot/nations.js` | C | Node (CommonJS) | 64 | **MISSING** | `buildNations` | — |
-| `server/snapshot/numbers.js` | C | Node (CommonJS) | 189 | **MISSING** | `completionPercent, dateValueToIso, firstNumericOrNull, lastFiniteNumber, normalizeResourceCosts, normalizedScore, roundNumber, roundResourceMap, scaleResourceMap, sumOrNull, summarizeRecentTransactions` | — |
-| `server/snapshot/rawSnapshot.js` | C | Node (CommonJS) | 207 | **MISSING** | `ASSUMED_CAMPAIGN_START_YEAR, buildRawSnapshot` | — |
-| `server/snapshot/research.js` | C | Node (CommonJS) | 123 | **MISSING** | `buildGlobalResearchSlots, buildTechTree` | — |
-| `server/snapshot/space.js` | C | Node (CommonJS) | 722 | **MISSING** | `buildFleets, buildHabModules, buildHabSites, buildHabs, buildResourceTransfers, buildShipyardQueues, buildShipyardStations, buildWeaponLoadout, classifyHabModule, daysRemainingForStatus, formatWeaponSummary, getDominantWeaponType, …(+10)` | — |
-| `server/snapshot/templates.js` | C | Node (CommonJS) | 879 | **MISSING** | `MISSION_HATE_SLOT, UNLOCK_FAMILIES, WEAPON_FAMILIES, buildComponentStats, buildDriveStats, buildEffectIndex, buildMissionSpecs, buildProjectGating, buildPropellantModules, buildShipHullStats, buildTraitStatMods, buildUnlockIndex` | — |
-
-## `server/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `server/snapshotBuilder.js` | **B** C | Node (CommonJS) | 114 | **MISSING** | `buildMissionSpecs, buildRawSnapshot, buildShipHullStats, buildTechTree, buildWeaponLoadout, classifyHabModule, completionPercent, dateValueToIso, daysRemainingForStatus, firstNumericOrNull, formatWeaponSummary, getDominantWeaponType, …(+21)` | `tests/snapshotBuilder.test.js` |
+| `server/snapshot/councilors.js` | C | Node (CommonJS) | 170 | the councilor roster reducer, including the org join and the | `buildCouncilors` | — |
+| `server/snapshot/factions.js` | C | Node (CommonJS) | 456 | the faction-level roll-up — relationships, resources and income, | `buildActiveXenoforming, buildAlienFacilities, buildDefaultTargets, buildFactionIntelligence, buildFactionRelationships, buildFactions, buildTechMatrix, collectShipDesigns, normalizeFactionIntelligence` | — |
+| `server/snapshot/lookups.js` | C | Node (CommonJS) | 358 | everything that turns the save's flat gamestates bag into the id | `FACTION_COLORS, SATURN_ORBIT_TOLERANCE_AU, UNKNOWN_FACTION_COLOR, buildControlPoints, buildIdMaps, getCollection, getFactionColor, readRawCollections, resolveFactionName, resolveOrbitBody, resolveOrbitBodyDistanceAU, resolveOrbitBodyId` | — |
+| `server/snapshot/nations.js` | C | Node (CommonJS) | 67 | the Earth-side reducer — one row per nation, joined to the control | `buildNations` | — |
+| `server/snapshot/numbers.js` | C | Node (CommonJS) | 192 | the numeric, date and resource-map primitives every snapshot | `completionPercent, dateValueToIso, firstNumericOrNull, lastFiniteNumber, normalizeResourceCosts, normalizedScore, roundNumber, roundResourceMap, scaleResourceMap, sumOrNull, summarizeRecentTransactions` | — |
+| `server/snapshot/rawSnapshot.js` | C | Node (CommonJS) | 210 | the orchestration pass — read the save's collections once, build the | `ASSUMED_CAMPAIGN_START_YEAR, buildRawSnapshot` | — |
+| `server/snapshot/research.js` | C | Node (CommonJS) | 126 | global research — the shared tech slots every faction contributes | `buildGlobalResearchSlots, buildTechTree` | — |
+| `server/snapshot/space.js` | C | Node (CommonJS) | 725 | everything above the atmosphere — fleets and ships, habs, hab sites | `buildFleets, buildHabModules, buildHabSites, buildHabs, buildResourceTransfers, buildShipyardQueues, buildShipyardStations, buildWeaponLoadout, classifyHabModule, daysRemainingForStatus, formatWeaponSummary, getDominantWeaponType, …(+10)` | — |
+| `server/snapshot/templates.js` | C | Node (CommonJS) | 882 | the three template-derived static builders — they read the installed | `MISSION_HATE_SLOT, UNLOCK_FAMILIES, WEAPON_FAMILIES, buildComponentStats, buildDriveStats, buildEffectIndex, buildMissionSpecs, buildProjectGating, buildPropellantModules, buildShipHullStats, buildTraitStatMods, buildUnlockIndex` | — |
+| `server/snapshotBuilder.js` | **B** C | Node (CommonJS) | 117 | public entry point for the raw-snapshot reducer — a barrel that | `buildMissionSpecs, buildRawSnapshot, buildShipHullStats, buildTechTree, buildWeaponLoadout, classifyHabModule, completionPercent, dateValueToIso, daysRemainingForStatus, firstNumericOrNull, formatWeaponSummary, getDominantWeaponType, …(+21)` | `tests/snapshotBuilder.test.js` |
 | `server/snapshotDelta.js` | C | Node (CommonJS) | 241 | compute compact turn-to-turn resource and fleet deltas between two snapshots. | `build` | `tests/snapshotDelta.test.js` |
 | `server/snapshotIdentity.js` | C | Node (CommonJS) | 85 | fingerprint save files and derive the snapshot identity envelope (id, hashes, timestamps). | `attachSnapshotIdentity, createFileFingerprint, createSnapshotIdentity, hasCompleteIdentity, hashFile, readSnapshotIdentity` | `tests/snapshotIdentity.test.js` |
 | `server/snapshotLoader.js` | C | Node (CommonJS) | 329 | orchestrate parsing, building, filtering and caching of the live save into snapshots. | `UnknownObserverError, clearCache, ensureTemplatesLoaded, loadFilteredSnapshot, loadSnapshot, queryIntel, resolveObserverId, selectPreviousRawSnapshot` | `tests/snapshotLoader.test.js` |
 | `server/spaceTheater.js` | C | Node (CommonJS) | 43 | map solar-system bodies into orbital theaters for the space briefing. | `THEATERS, classifyBody, normalizeBodyName, theaterForBody` | `tests/spaceTheater.test.js` |
 | `server/strategicIntelligence.js` | C | Node (CommonJS) | 254 | project resource position, fleet capability and alien-hate posture for strategic review. | `build` | — |
-| `server/supabaseAdapter.js` | C | Node (CommonJS) | 228 | **MISSING** | `requireOptionalInteger` | — |
-| `server/techIntel.js` | **B** C | Node (CommonJS) | 72 | **MISSING** | `CATEGORIES, buildMatrix, buildMilestones, buildOpportunities, buildPath, buildQueue, buildSearch, buildTechTree, mode, observerId` | — |
+| `server/supabaseAdapter.js` | C | Node (CommonJS) | 230 | read sanitized, strictly technology-gated Player Intel snapshots and | `requireOptionalInteger` | — |
+| `server/techIntel.js` | C | Node (CommonJS) | 75 | local Express wrapper projecting the tech-tree endpoints from the | `CATEGORIES, buildMatrix, buildMilestones, buildOpportunities, buildPath, buildQueue, buildSearch, buildTechTree, mode, observerId` | — |
 | `server/templateLoader.js` | C | Node (CommonJS) | 494 | load and validate the installed game templates into the maps the snapshot reducers read. | — | `tests/templateLoader.test.js` |
 
 ## `shared/`
 
 | module | B/E/C | runtime | lines | purpose | exports | test |
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `shared/alienHateEconomics.mjs` | E | Node + Cloudflare worker (ESM) | 281 | **MISSING** | `ALIEN_HATE_CONCEALMENT_FACTOR, ALIEN_HATE_REDUCTION_PROJECTS, ALIEN_HATE_WAR_THRESHOLD, ALIEN_MAX_HATE, ALIEN_TOTAL_WAR_HATE, ALIEN_TOTAL_WAR_YEARS, DIFFICULTY_MULTIPLIERS, buildAlienHateEconomics, buildTotalWarState` | `tests/alienHateEconomics.test.js` |
-| `shared/apiSurface.mjs` | E | Node + Cloudflare worker (ESM) | 128 | **MISSING** | `DEFAULT_CAMPAIGN_KEY, INTEL_API_TITLE, buildIntelApiIndex, hasExportMarkdown, renderIntelApiIndexHtml, resolveSupabaseReadKey, selectExportMarkdown` | — |
-| `shared/constants.mjs` | E | Node + Cloudflare worker (ESM) | 9 | **MISSING** | `ALIEN_FACTION_DISPLAY_NAME, ALIEN_FACTION_ID, DEFAULT_OBSERVER_FACTION_ID, INITIATIVE_DISPLAY_NAME, INTELLIGENCE_MODES, SERVANTS_DISPLAY_NAME, SUPPORTED_MODES` | — |
-| `shared/councilorAttributes.mjs` | E | Node + Cloudflare worker (ESM) | 344 | **MISSING** | `ATTRIBUTE_MAX, ATTRIBUTE_MIN, ATTRIBUTE_NAMES, ORG_STAT_TO_ATTRIBUTE, buildCouncilorAttributes, effectiveAttributes, orgsAreActive, rankByAttribute, sumOrgBonuses, sumTraitBonuses` | `tests/councilorAttributes.test.js` |
-| `shared/economicValue.mjs` | E | Node + Cloudflare worker (ESM) | 1208 | **MISSING** | `CONTEXT_KINDS, CONTEXT_QUANTITY_MAP, ECONOMIC_FORMULAE, INERT_CODES, MINED_RESOURCES, OPERATION_SEMANTICS, PRICED_CONTEXTS, PRICING_STATES, UNPRICEABLE_CODES, buildEffectBaseline, buildLiveQuantities, priceContextEffect, …(+4)` | `tests/economicValue.test.js` |
-| `shared/fleetCapability.mjs` | E | Node + Cloudflare worker (ESM) | 351 | **MISSING** | `CAPABILITY_AXES, DECISIVE_CAPABILITY_RATIO, countShips, dominantWeaponOf, findAlienFaction, formatAxisValue, isAlienFaction, medianArmour, medianDeltaV, medianOf, summarizeFleetCapability` | — |
+| `shared/alienHateEconomics.mjs` | E | Node + Cloudflare worker (ESM) | 284 | pure alien minimum-hate floor calculation from used Mission Control, | `ALIEN_HATE_CONCEALMENT_FACTOR, ALIEN_HATE_REDUCTION_PROJECTS, ALIEN_HATE_WAR_THRESHOLD, ALIEN_MAX_HATE, ALIEN_TOTAL_WAR_HATE, ALIEN_TOTAL_WAR_YEARS, DIFFICULTY_MULTIPLIERS, buildAlienHateEconomics, buildTotalWarState` | `tests/alienHateEconomics.test.js` |
+| `shared/apiSurface.mjs` | E | Node + Cloudflare worker (ESM) | 130 | the /api/intel discovery index and export-markdown selection shared | `DEFAULT_CAMPAIGN_KEY, INTEL_API_TITLE, buildIntelApiIndex, hasExportMarkdown, renderIntelApiIndexHtml, resolveSupabaseReadKey, selectExportMarkdown` | — |
+| `shared/constants.mjs` | E | Node + Cloudflare worker (ESM) | 10 | shared constants — faction ids, intelligence modes, display names. | `ALIEN_FACTION_DISPLAY_NAME, ALIEN_FACTION_ID, DEFAULT_OBSERVER_FACTION_ID, INITIATIVE_DISPLAY_NAME, INTELLIGENCE_MODES, SERVANTS_DISPLAY_NAME, SUPPORTED_MODES` | — |
+| `shared/councilorAttributes.mjs` | E | Node + Cloudflare worker (ESM) | 347 | resolve a councilor's effective attributes from base stats plus org | `ATTRIBUTE_MAX, ATTRIBUTE_MIN, ATTRIBUTE_NAMES, ORG_STAT_TO_ATTRIBUTE, buildCouncilorAttributes, effectiveAttributes, orgsAreActive, rankByAttribute, sumOrgBonuses, sumTraitBonuses` | `tests/councilorAttributes.test.js` |
+| `shared/economicValue.mjs` | E | Node + Cloudflare worker (ESM) | 1211 | economic valuation of what a researched tech does, priced against | `CONTEXT_KINDS, CONTEXT_QUANTITY_MAP, ECONOMIC_FORMULAE, INERT_CODES, MINED_RESOURCES, OPERATION_SEMANTICS, PRICED_CONTEXTS, PRICING_STATES, UNPRICEABLE_CODES, buildEffectBaseline, buildLiveQuantities, priceContextEffect, …(+4)` | `tests/economicValue.test.js` |
+| `shared/fleetCapability.mjs` | E | Node + Cloudflare worker (ESM) | 353 | the measured observer-vs-alien fleet capability comparison and the | `CAPABILITY_AXES, DECISIVE_CAPABILITY_RATIO, countShips, dominantWeaponOf, findAlienFaction, formatAxisValue, isAlienFaction, medianArmour, medianDeltaV, medianOf, summarizeFleetCapability` | — |
+| `shared/intel/alienThreat.mjs` | E | Node + Cloudflare worker (ESM) | 195 | the alien-threat projection — hate math, floor and retaliation — | `alienThreatResource` | — |
+| `shared/intel/common.mjs` | E | Node + Cloudflare worker (ESM) | 185 | the primitives every intel projection shares — the mining resource | `COMBAT_POWER_SOURCE, MINING_RESOURCES, bodyMatches, combatPowerTotal, destinationMatches, factionMatches, findAlienFaction, normalizeBody, normalizeCostObject, rateMultiplier, siteMonthlyOutput, zeroedBySaveKey` | — |
+| `shared/intel/construction.mjs` | E | Node + Cloudflare worker (ESM) | 132 | shipyards, their queues, and the consolidated build board that | `constructionResource, shipyardResourceRow, shipyardStationResourceRow` | — |
+| `shared/intel/delta.mjs` | E | Node + Cloudflare worker (ESM) | 100 | three-state turn-to-turn comparison between two snapshots, where a | `deltaResource` | — |
+| `shared/intel/economicValue.mjs` | E | Node + Cloudflare worker (ESM) | 603 | /api/intel/economic-value — phase 3 of the research advisor, pricing | `CONTEXT_KINDS, MINED_RESOURCES, UNPRICED_CONTEXT_GROUPS, economicValueResource` | `tests/economicValue.test.js` |
+| `shared/intel/factions.mjs` | E | Node + Cloudflare worker (ESM) | 179 | the political/strategic half of the intel surface — factions, | `councilorResourceRow, factionResourceRow, nationResourceRow, researchResourceRows, summaryResource` | — |
+| `shared/intel/fleets.mjs` | E | Node + Cloudflare worker (ESM) | 347 | fleets, the ships inside them, inbound arrivals, and the orbital | `FLEET_SUMMARY_OMITTED_FIELDS, SHIP_SUMMARY_OMITTED_FIELDS, arrivalResourceRow, fleetResourceRow, fleetSummaryProjection, fleetSummaryRow, friendlyStrengthAtDestination, shipResourceRow, shipResourceRows, shipSummaryProjection, transferResourceRow, transfersResource` | — |
+| `shared/intel/habs.mjs` | E | Node + Cloudflare worker (ESM) | 163 | habs, hab sites (the mining deposits), hab modules, and the per-hab | `habModuleResourceRow, habResourceRow, habSiteResourceRow, infrastructureResource` | — |
+| `shared/intel/logistics.mjs` | E | Node + Cloudflare worker (ESM) | 154 | the war economy — stockpiles, gross vs net flows, resources | `logisticsResource` | — |
+| `shared/intel/militaryValue.mjs` | E | Node + Cloudflare worker (ESM) | 1422 | /api/intel/military-value — phase 2 of the research advisor, pricing | `militaryValueResource` | `tests/militaryValue.test.js` |
+| `shared/intel/mining.mjs` | E | Node + Cloudflare worker (ESM) | 197 | the mining economy as it stands — per-site yields, the sortable | `MINING_SCARCITY_WEIGHTS, miningAnalysisResource, miningProspectsResource, miningResourceRow` | — |
+| `shared/intel/miningExpansion.mjs` | E | Node + Cloudflare worker (ESM) | 563 | the forward-looking mining expansion board — mine-limit capacity and | `EXPANSION_MINE_LIMIT_GRANTS, EXPANSION_MISSION_TECH_NAMES, EXPANSION_THEATER_ACCESSIBILITY, buildMiningCapacity, buildMiningResourceRunways, compareMiningCandidates, evaluateSaturatingUtility, miningExpansionResource, resolveBodyDestinationTech, scoreMiningSiteCandidate` | `tests/miningExpansion.test.js` |
+| `shared/intel/mobility.mjs` | E | Node + Cloudflare worker (ESM) | 126 | fleet transfer feasibility, with a destination table that is a | `mobilityResource` | — |
+| `shared/intel/production.mjs` | E | Node + Cloudflare worker (ESM) | 284 | ship designs and the procurement plan derived from them, refusing to | `productionPlanResource, shipDesignsResource` | — |
+| `shared/intel/propulsion.mjs` | E | Node + Cloudflare worker (ESM) | 458 | /api/intel/propulsion — phase 1 of the research advisor, pairing the | `propulsionResource` | — |
+| `shared/intel/registry.mjs` | E | Node + Cloudflare worker (ESM) | 576 | the ONE endpoint table from which route, discovery index, example | `DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, SUPPORTED_RESOURCES, buildResourceProjection, isDetailLevel, measureIntelEndpointSizes, parseDetailLevel` | — |
+| `shared/intel/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 880 | the /api/intel/research-ranking projection composing the phase-4 | `dedupeByGateProject, researchRankingResource` | `tests/researchRanking.test.js` |
+| `shared/intel/theaters.mjs` | E | Node + Cloudflare worker (ESM) | 196 | body-by-body posture — the twelve-body theater board and the | `bodyStatusResource, theatersResource` | — |
+| `shared/intelResources.mjs` | **B** E | Node + Cloudflare worker (ESM) | 151 | public entry point for the intel projections — a barrel re-exporting | `COMBAT_POWER_SOURCE, DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, EXPANSION_MINE_LIMIT_GRANTS, EXPANSION_MISSION_TECH_NAMES, EXPANSION_THEATER_ACCESSIBILITY, FLEET_SUMMARY_OMITTED_FIELDS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, MINING_RESOURCES, MINING_SCARCITY_WEIGHTS, …(+58)` | `tests/intelResources.test.js` |
+| `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 1687 | shared markdown export renderers for the model-facing .md endpoints | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, normalizeBody, …(+6)` | `tests/markdownExports.test.js` |
+| `shared/militaryValue.mjs` | E | Node + Cloudflare worker (ESM) | 1227 | military valuation of the unlock families phase 1 did not cover — | `AXIS_SETS, CLASS_KINDS, COMPONENT_CLASS_SPECS, MAGAZINE_BASIS_CODES, MILITARY_CLASS_SPECS, MILITARY_FORMULAE, MOUNT_HARDPOINTS, RATIO_UNAVAILABLE_CODES, WEAPON_CLASS_SPECS, WEAPON_ROLES, armorMetrics, batteryMetrics, …(+15)` | `tests/militaryValue.test.js` |
+| `shared/munitionDelivery.mjs` | E | Node + Cloudflare worker (ESM) | 649 | research advisor phase 5 — whether a munition round actually | `DELIVERY_BASIS_CODES, DELIVERY_FORMULAE, MUNITION_DELIVERY_AXES, buildPointDefenseProfile, munitionDelivery` | `tests/munitionDelivery.test.js` |
+| `shared/propulsion.mjs` | E | Node + Cloudflare worker (ESM) | 632 | the propulsion model — delta-V and acceleration per ship/design, | `DESIGN_ROLES, MODEL_AGREEMENT_TOLERANCE, PROPULSION_FORMULAE, RANKING_BY_ROLE, accelerationMps2, deltaVKps, effectiveExhaustVelocity, inferDesignRole, rankRefits, refitOntoDrive, resolveShipMass, shipPropulsion` | — |
+| `shared/requestValidation.mjs` | E | Node + Cloudflare worker (ESM) | 274 | the accept/reject request-validation rules shared by the local | `BODY_FILTER_MAX_LENGTH, BODY_FILTER_MESSAGE, HISTORY_LIMIT_BOUNDS, HISTORY_LIMIT_DEFAULT, MINING_LIMIT_BOUNDS, MINING_LIMIT_RESOURCES, RequestValidationError, assertKnownObserver, exceedsBodyFilterLimits, hasControlCharacters, isAbsent, isBoundedInteger, …(+9)` | `tests/requestValidation.test.js` |
+| `shared/researchAvailability.mjs` | E | Node + Cloudflare worker (ESM) | 301 | which projects a faction can actually research, in the three states | `AVAILABILITY_STATES, buildAvailabilityResolver, monthsAtIncome, tallyAvailabilityStates` | — |
+| `shared/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 670 | the research-advisor phase-4 ranking rules that order candidates by | `ACTIONABLE_GROUPS, ASPIRATIONAL_GROUPS, AVAILABILITY_GROUP_LABELS, AVAILABILITY_GROUP_ORDER, AXIS_KINDS, AXIS_KIND_ORDER, DEFICIT_RESEARCH_REMEDIES, DELIVERY_FLOOR_ORDER, RANKING_FORMULAE, RANKING_METHOD, RANK_STATES, axisKindRank, …(+10)` | `tests/researchRanking.test.js` |
+| `shared/researchSlots.mjs` | E | Node + Cloudflare worker (ESM) | 379 | research-advisor phase-5 allocation of research to slots. | `ALLOCATION_MODEL, SLOT_INDEX_PIN, SLOT_KINDS, SLOT_KIND_LABELS, buildResearchSlotAllocation` | `tests/researchSlots.test.js` |
+| `shared/strategicDelta.mjs` | E | Node + Cloudflare worker (ESM) | 418 | compute the difference between two strategic_snapshot_v1 documents | `buildStrategicDelta, deriveStructuredEvents, totalWarActive, totalWarStateOf` | `tests/strategicDelta.test.js` |
+| `shared/strategicSnapshot.mjs` | E | Node + Cloudflare worker (ESM) | 602 | reduce a full raw snapshot to a compact strategic_snapshot_v1 | `DEFAULT_HISTORY_POLICY, HAB_CONSTRUCTION_MODULES, MINE_LIMIT_GRANTS, SHIP_CONSTRUCTION_MODULES, STRATEGIC_SNAPSHOT_SCHEMA, STRATEGIC_SNAPSHOT_VERSION, buildStrategicSnapshot, deriveEvents` | `tests/strategicSnapshot.test.js` |
+| `shared/techGraph.mjs` | E | Node + Cloudflare worker (ESM) | 874 | pure tech-tree normalisation and dependency-graph helpers shared by | `CATEGORIES, STATUSES, UNLOCK_CLASSES, applySaveState, asArray, buildProjectOpportunities, buildResearchQueue, buildResearchQueueProjection, buildTechGraph, buildTechMatrix, buildTechMatrixProjection, buildTechMilestones, …(+12)` | `tests/techGraph.test.js` |
+| `shared/unlockIndex.mjs` | E | Node + Cloudflare worker (ESM) | 116 | read accessors over the baked unlock index built at snapshot-build | `buildItemGateMap, gateForItem, gatesForFamily, unlockIndexCensus, unlockIndexUnavailableReason, unlocksForGate` | `tests/unlockIndex.test.js` |
+| `shared/util.mjs` | E | Node + Cloudflare worker (ESM) | 167 | the one home for the small helpers copied across the repo — asArray, | `METERS_PER_AU, MS_PER_DAY, ONE_TRILLION, asArray, resolveObserverFaction, round, sameId, strictFiniteNumber, toFiniteNumber` | — |
 
-## `shared/intel/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `shared/intel/alienThreat.mjs` | E | Node + Cloudflare worker (ESM) | 192 | **MISSING** | `alienThreatResource` | — |
-| `shared/intel/common.mjs` | E | Node + Cloudflare worker (ESM) | 182 | **MISSING** | `COMBAT_POWER_SOURCE, MINING_RESOURCES, bodyMatches, combatPowerTotal, destinationMatches, factionMatches, findAlienFaction, normalizeBody, normalizeCostObject, rateMultiplier, siteMonthlyOutput, zeroedBySaveKey` | — |
-| `shared/intel/construction.mjs` | E | Node + Cloudflare worker (ESM) | 129 | **MISSING** | `constructionResource, shipyardResourceRow, shipyardStationResourceRow` | — |
-| `shared/intel/delta.mjs` | E | Node + Cloudflare worker (ESM) | 97 | **MISSING** | `deltaResource` | — |
-| `shared/intel/economicValue.mjs` | E | Node + Cloudflare worker (ESM) | 600 | **MISSING** | `CONTEXT_KINDS, MINED_RESOURCES, UNPRICED_CONTEXT_GROUPS, economicValueResource` | `tests/economicValue.test.js` |
-| `shared/intel/factions.mjs` | E | Node + Cloudflare worker (ESM) | 176 | **MISSING** | `councilorResourceRow, factionResourceRow, nationResourceRow, researchResourceRows, summaryResource` | — |
-| `shared/intel/fleets.mjs` | E | Node + Cloudflare worker (ESM) | 344 | **MISSING** | `FLEET_SUMMARY_OMITTED_FIELDS, SHIP_SUMMARY_OMITTED_FIELDS, arrivalResourceRow, fleetResourceRow, fleetSummaryProjection, fleetSummaryRow, friendlyStrengthAtDestination, shipResourceRow, shipResourceRows, shipSummaryProjection, transferResourceRow, transfersResource` | — |
-| `shared/intel/habs.mjs` | E | Node + Cloudflare worker (ESM) | 160 | **MISSING** | `habModuleResourceRow, habResourceRow, habSiteResourceRow, infrastructureResource` | — |
-| `shared/intel/logistics.mjs` | E | Node + Cloudflare worker (ESM) | 151 | **MISSING** | `logisticsResource` | — |
-| `shared/intel/militaryValue.mjs` | E | Node + Cloudflare worker (ESM) | 1419 | **MISSING** | `militaryValueResource` | `tests/militaryValue.test.js` |
-| `shared/intel/mining.mjs` | E | Node + Cloudflare worker (ESM) | 194 | **MISSING** | `MINING_SCARCITY_WEIGHTS, miningAnalysisResource, miningProspectsResource, miningResourceRow` | — |
-| `shared/intel/miningExpansion.mjs` | E | Node + Cloudflare worker (ESM) | 560 | **MISSING** | `EXPANSION_MINE_LIMIT_GRANTS, EXPANSION_MISSION_TECH_NAMES, EXPANSION_THEATER_ACCESSIBILITY, buildMiningCapacity, buildMiningResourceRunways, compareMiningCandidates, evaluateSaturatingUtility, miningExpansionResource, resolveBodyDestinationTech, scoreMiningSiteCandidate` | `tests/miningExpansion.test.js` |
-| `shared/intel/mobility.mjs` | E | Node + Cloudflare worker (ESM) | 123 | **MISSING** | `mobilityResource` | — |
-| `shared/intel/production.mjs` | E | Node + Cloudflare worker (ESM) | 281 | **MISSING** | `productionPlanResource, shipDesignsResource` | — |
-| `shared/intel/propulsion.mjs` | E | Node + Cloudflare worker (ESM) | 455 | **MISSING** | `propulsionResource` | — |
-| `shared/intel/registry.mjs` | E | Node + Cloudflare worker (ESM) | 573 | **MISSING** | `DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, SUPPORTED_RESOURCES, buildResourceProjection, isDetailLevel, measureIntelEndpointSizes, parseDetailLevel` | — |
-| `shared/intel/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 878 | **MISSING** | `dedupeByGateProject, researchRankingResource` | `tests/researchRanking.test.js` |
-| `shared/intel/theaters.mjs` | E | Node + Cloudflare worker (ESM) | 193 | **MISSING** | `bodyStatusResource, theatersResource` | — |
-
-## `shared/`
-
-| module | B/E/C | runtime | lines | purpose | exports | test |
-| :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `shared/intelResources.mjs` | **B** E | Node + Cloudflare worker (ESM) | 148 | **MISSING** | `COMBAT_POWER_SOURCE, DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, EXPANSION_MINE_LIMIT_GRANTS, EXPANSION_MISSION_TECH_NAMES, EXPANSION_THEATER_ACCESSIBILITY, FLEET_SUMMARY_OMITTED_FIELDS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, MINING_RESOURCES, MINING_SCARCITY_WEIGHTS, …(+58)` | `tests/intelResources.test.js` |
-| `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 1684 | **MISSING** | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, normalizeBody, …(+6)` | `tests/markdownExports.test.js` |
-| `shared/militaryValue.mjs` | E | Node + Cloudflare worker (ESM) | 1224 | **MISSING** | `AXIS_SETS, CLASS_KINDS, COMPONENT_CLASS_SPECS, MAGAZINE_BASIS_CODES, MILITARY_CLASS_SPECS, MILITARY_FORMULAE, MOUNT_HARDPOINTS, RATIO_UNAVAILABLE_CODES, WEAPON_CLASS_SPECS, WEAPON_ROLES, armorMetrics, batteryMetrics, …(+15)` | `tests/militaryValue.test.js` |
-| `shared/munitionDelivery.mjs` | E | Node + Cloudflare worker (ESM) | 646 | **MISSING** | `DELIVERY_BASIS_CODES, DELIVERY_FORMULAE, MUNITION_DELIVERY_AXES, buildPointDefenseProfile, munitionDelivery` | `tests/munitionDelivery.test.js` |
-| `shared/propulsion.mjs` | E | Node + Cloudflare worker (ESM) | 629 | **MISSING** | `DESIGN_ROLES, MODEL_AGREEMENT_TOLERANCE, PROPULSION_FORMULAE, RANKING_BY_ROLE, accelerationMps2, deltaVKps, effectiveExhaustVelocity, inferDesignRole, rankRefits, refitOntoDrive, resolveShipMass, shipPropulsion` | — |
-| `shared/requestValidation.mjs` | E | Node + Cloudflare worker (ESM) | 272 | **MISSING** | `BODY_FILTER_MAX_LENGTH, BODY_FILTER_MESSAGE, HISTORY_LIMIT_BOUNDS, HISTORY_LIMIT_DEFAULT, MINING_LIMIT_BOUNDS, MINING_LIMIT_RESOURCES, RequestValidationError, assertKnownObserver, exceedsBodyFilterLimits, hasControlCharacters, isAbsent, isBoundedInteger, …(+9)` | `tests/requestValidation.test.js` |
-| `shared/researchAvailability.mjs` | E | Node + Cloudflare worker (ESM) | 298 | **MISSING** | `AVAILABILITY_STATES, buildAvailabilityResolver, monthsAtIncome, tallyAvailabilityStates` | — |
-| `shared/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 668 | **MISSING** | `ACTIONABLE_GROUPS, ASPIRATIONAL_GROUPS, AVAILABILITY_GROUP_LABELS, AVAILABILITY_GROUP_ORDER, AXIS_KINDS, AXIS_KIND_ORDER, DEFICIT_RESEARCH_REMEDIES, DELIVERY_FLOOR_ORDER, RANKING_FORMULAE, RANKING_METHOD, RANK_STATES, axisKindRank, …(+10)` | `tests/researchRanking.test.js` |
-| `shared/researchSlots.mjs` | E | Node + Cloudflare worker (ESM) | 378 | **MISSING** | `ALLOCATION_MODEL, SLOT_INDEX_PIN, SLOT_KINDS, SLOT_KIND_LABELS, buildResearchSlotAllocation` | `tests/researchSlots.test.js` |
-| `shared/strategicDelta.mjs` | E | Node + Cloudflare worker (ESM) | 415 | **MISSING** | `buildStrategicDelta, deriveStructuredEvents, totalWarActive, totalWarStateOf` | `tests/strategicDelta.test.js` |
-| `shared/strategicSnapshot.mjs` | E | Node + Cloudflare worker (ESM) | 599 | **MISSING** | `DEFAULT_HISTORY_POLICY, HAB_CONSTRUCTION_MODULES, MINE_LIMIT_GRANTS, SHIP_CONSTRUCTION_MODULES, STRATEGIC_SNAPSHOT_SCHEMA, STRATEGIC_SNAPSHOT_VERSION, buildStrategicSnapshot, deriveEvents` | `tests/strategicSnapshot.test.js` |
-| `shared/techGraph.mjs` | E | Node + Cloudflare worker (ESM) | 871 | **MISSING** | `CATEGORIES, STATUSES, UNLOCK_CLASSES, applySaveState, asArray, buildProjectOpportunities, buildResearchQueue, buildResearchQueueProjection, buildTechGraph, buildTechMatrix, buildTechMatrixProjection, buildTechMilestones, …(+12)` | `tests/techGraph.test.js` |
-| `shared/unlockIndex.mjs` | E | Node + Cloudflare worker (ESM) | 113 | **MISSING** | `buildItemGateMap, gateForItem, gatesForFamily, unlockIndexCensus, unlockIndexUnavailableReason, unlocksForGate` | `tests/unlockIndex.test.js` |
-| `shared/util.mjs` | E | Node + Cloudflare worker (ESM) | 164 | **MISSING** | `METERS_PER_AU, MS_PER_DAY, ONE_TRILLION, asArray, resolveObserverFaction, round, sameId, strictFiniteNumber, toFiniteNumber` | — |
-
-## `site/worker/`
+## `site/`
 
 | module | B/E/C | runtime | lines | purpose | exports | test |
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `site/worker/assets.js` | E | Cloudflare worker only (ESM) | 82 | **MISSING** | `ASSET_REQUEST_HEADERS, asset, embeddedAsset, mimeTypeFor, observerFile` | — |
-| `site/worker/envelopes.js` | E | Cloudflare worker only (ESM) | 90 | **MISSING** | `resourceEnvelope, resultIdentity, snapshotEnvelope` | — |
-| `site/worker/http.js` | E | Cloudflare worker only (ESM) | 71 | **MISSING** | `corsHeaders, htmlResponse, jsonResponse, markdownSnapshotResponse` | — |
-| `site/worker/index.js` | E | Cloudflare worker only (ESM) | 607 | **MISSING** | — | — |
-| `site/worker/projections.js` | E | Cloudflare worker only (ESM) | 207 | **MISSING** | `TECH_RESOURCES, buildIntelResource, buildTechIntelResource, intelResource, productionPlanPaths, techIntelResource, validateResourceQuery` | — |
-| `site/worker/runtimeDefaults.js` | E | Cloudflare worker only (ESM) | 67 | **MISSING** | `HOSTED_MODES, positiveIntegerOr, readRuntimeDefaults` | — |
-| `site/worker/supabaseReader.js` | E | Cloudflare worker only (ESM) | 247 | **MISSING** | `boundedHistoryLimit, consistencyError, isSupabaseReady, sameTimestamp, strategicHistoryMeta, supabaseReadKey, timestampMs` | — |
+| `site/worker/assets.js` | E | Cloudflare worker only (ESM) | 84 | static asset delivery — the Sites ASSETS binding first, then the | `ASSET_REQUEST_HEADERS, asset, embeddedAsset, mimeTypeFor, observerFile` | — |
+| `site/worker/envelopes.js` | E | Cloudflare worker only (ESM) | 92 | the response envelopes wrapped around a Supabase result, including | `resourceEnvelope, resultIdentity, snapshotEnvelope` | — |
+| `site/worker/http.js` | E | Cloudflare worker only (ESM) | 73 | the hosted runtime's response shapes — CORS policy, no-store rule, | `corsHeaders, htmlResponse, jsonResponse, markdownSnapshotResponse` | — |
+| `site/worker/index.js` | E | Cloudflare worker only (ESM) | 609 | the hosted worker's dispatcher — the order routes are tried in and | — | — |
+| `site/worker/projections.js` | E | Cloudflare worker only (ESM) | 209 | the hosted adapter over the shared projection registries — what this | `TECH_RESOURCES, buildIntelResource, buildTechIntelResource, intelResource, productionPlanPaths, techIntelResource, validateResourceQuery` | — |
+| `site/worker/runtimeDefaults.js` | E | Cloudflare worker only (ESM) | 69 | what this deployment believes its defaults are, and how a malformed | `HOSTED_MODES, positiveIntegerOr, readRuntimeDefaults` | — |
+| `site/worker/supabaseReader.js` | E | Cloudflare worker only (ESM) | 249 | every Supabase read the hosted runtime makes, plus the consistency | `boundedHistoryLimit, consistencyError, isSupabaseReady, sameTimestamp, strategicHistoryMeta, supabaseReadKey, timestampMs` | — |
 

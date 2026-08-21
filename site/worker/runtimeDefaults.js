@@ -1,6 +1,8 @@
 /**
  * site/worker/runtimeDefaults.js -- what this deployment believes its defaults
  * are, and how a malformed one is handled.
+ * Purpose: what this deployment believes its defaults are, and how a malformed
+ *   environment variable is handled without failing the deployment.
  *
  * The worker cannot fail a deployment at startup, so a bad environment variable
  * cannot be turned into a hard error the way `server/config.js` does locally.

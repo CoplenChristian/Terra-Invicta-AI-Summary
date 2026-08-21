@@ -1,5 +1,7 @@
 /**
  * Campaign-aware ranking for Mission Control action suggestions.
+ * Purpose: campaign-aware ranking and posture assessment behind Mission Control
+ *   action suggestions and the Hold Ground directive.
  *
  * Sources, kept separate on purpose:
  * - Notion 02: expand aggressively, interdict early, escalate late. Fleet

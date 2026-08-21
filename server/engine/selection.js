@@ -1,5 +1,8 @@
 // server/engine/selection.js
 //
+// Purpose: the middle two stages of the engine pipeline — applying the rules
+//   and scoring what survives.
+//
 // Applying the rules and scoring what survives: the middle two stages of
 // `world -> generateCandidates -> applyRules -> scoreCandidates -> primary`.
 //

@@ -1,5 +1,7 @@
 /**
  * Browser verification script for Research Advisor: Separate Procurement from Research
+ * Purpose: browser verification of separating procurement from research and of
+ *   dashboard-wide CSS variable resolution across all four views.
  * and Dashboard-wide CSS variable resolution & contrast across all 4 views.
  */
 

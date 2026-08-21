@@ -1,5 +1,8 @@
 // server/snapshot/councilors.js
 //
+// Purpose: the councilor roster reducer, including the org join and the
+//   base-versus-resolved attribute split.
+//
 // The councilor roster reducer, including the org join and the base-versus-
 // resolved attribute split.
 //

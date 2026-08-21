@@ -1,5 +1,8 @@
 // server/engine/candidates/defense.js
 //
+// Purpose: the Defend Interests candidate generator — protecting holdings the
+//   observer already owns.
+//
 // Defend Interests -- protecting holdings the observer already owns.
 //
 // A holding whose wards are ALL measurably active is skipped, because renewing

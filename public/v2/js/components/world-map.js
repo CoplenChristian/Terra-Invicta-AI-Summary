@@ -1,3 +1,6 @@
+// public/v2/js/components/world-map.js
+//
+// Purpose: renders the interactive world/space theater map surface.
 (function exposeWorldTheaterMap(global) {
   'use strict';
 

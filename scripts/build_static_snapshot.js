@@ -1,3 +1,7 @@
+// scripts/build_static_snapshot.js
+//
+// Purpose: build the static snapshot bundle — flatten the worker entry point,
+//   copy shared/ beside it, and emit the embedded snapshot assets.
 const fs = require('fs');
 const path = require('path');
 const saveParser = require('../server/saveParser');

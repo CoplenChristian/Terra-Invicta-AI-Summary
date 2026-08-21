@@ -1,5 +1,7 @@
 /**
  * THE INITIATIVE // EXECUTIVE BRIEFING CLIENT
+ * Purpose: the v2 dashboard controller — briefing fetch, mode switching, and
+ *   component mounting.
  * The server generates a fresh briefing for every save/mode/observer request.
  */
 

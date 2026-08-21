@@ -1,5 +1,8 @@
 // shared/util.mjs
 //
+// Purpose: the one home for the small helpers copied across the repo — asArray,
+//   toFiniteNumber, round, sameId, and the shared constants.
+//
 // The one home for the small helpers that had been copy-pasted across the
 // repo: `asArray` existed five times, the presence-guarded numeric coercion
 // eight times, `round` twice, and `sameId` four times under two different

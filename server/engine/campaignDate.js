@@ -1,5 +1,8 @@
 // server/engine/campaignDate.js
 //
+// Purpose: campaign-date parsing and the Defend Interests ward status derived
+//   from it.
+//
 // Campaign-date parsing and the Defend Interests ward status derived from it.
 //
 // Shared by the defense candidate generator (which needs to know whether a

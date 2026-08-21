@@ -1,5 +1,8 @@
 // server/snapshot/numbers.js
 //
+// Purpose: the numeric, date and resource-map primitives every snapshot
+//   reducer shares — the home of the absent-stays-null guards.
+//
 // The numeric, date and resource-map primitives every snapshot reducer shares.
 //
 // These are the guards that implement this repo's "absent stays null" rule at

@@ -1,4 +1,5 @@
-/* Shared detail surface for clickable Mission Control modules. */
+/* Shared detail surface for clickable Mission Control modules.
+ * Purpose: the shared detail surface for clickable Mission Control modules. */
 (function attachDetailPanel(global) {
   const escapeHtml = (global.MissionControlShared && global.MissionControlShared.escapeHtml) ||
     ((value) => String(value ?? '')

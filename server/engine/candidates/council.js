@@ -1,5 +1,8 @@
 // server/engine/candidates/council.js
 //
+// Purpose: the council candidate generator — Investigate then Turn, the
+//   zero-hate offensive.
+//
 // (b) Council: Investigate -> Turn -- the zero-hate offensive.
 //
 // Verified from TIMissionTemplate (six-slot outcome array; slot 4 = normal

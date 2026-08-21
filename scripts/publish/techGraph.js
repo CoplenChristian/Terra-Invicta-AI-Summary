@@ -1,6 +1,8 @@
 /**
  * scripts/publish/techGraph.js -- stage 3a: what happens to the tech tree on
  * the way into a published row.
+ * Purpose: publish stage 3a — apply the shared/inline/omitted tech-tree mode
+ *   when building a published row.
  *
  * Isolated because all three tech-tree modes -- shared, inline, omitted -- have
  * to agree on one fingerprint, and the fingerprint is what a reader uses to

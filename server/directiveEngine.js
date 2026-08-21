@@ -1,5 +1,7 @@
 /**
  * Directive Rule Engine — orchestration and public entry point.
+ * Purpose: the v2 directive rule engine orchestration and public entry point —
+ *   turning a frozen world snapshot into ranked directives.
  *
  * Turns a frozen "world" snapshot into a ranked set of concrete action
  * candidates, using data-driven rules instead of the hand-tuned policyRank

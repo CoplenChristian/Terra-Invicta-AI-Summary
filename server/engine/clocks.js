@@ -1,5 +1,7 @@
 /**
  * server/engine/clocks.js
+ * Purpose: computes strategic clocks, ward expirations, passive accrual rates,
+ *   and the derived schedule the engine runs on.
  *
  * Computes strategic clocks, ward expirations, passive accrual rates, and
  * urgency multipliers on candidate valuations.

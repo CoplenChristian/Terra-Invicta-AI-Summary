@@ -1,5 +1,7 @@
 /**
  * server/engine/missionCatalogue.js
+ * Purpose: structured query access to the MissionSpec objects baked into the
+ *   snapshot.
  *
  * Provides structured query access to MissionSpec objects baked into the
  * snapshot. Works in both local and hosted environments without filesystem

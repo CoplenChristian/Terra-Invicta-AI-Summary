@@ -1,5 +1,7 @@
 /**
  * server/index.js -- the local Express composition root.
+ * Purpose: the local Express composition root — process error handlers,
+ *   middleware order, route registration order, and listen.
  *
  * The 2026-08-20 review (section D) called this a monolith mixing routing,
  * validation, caching, projection and HTML rendering. Those now live under

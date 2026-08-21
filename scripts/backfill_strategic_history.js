@@ -2,6 +2,8 @@
 /**
  * Backfill `strategic_snapshots` from the full snapshots already stored in
  * `player_intel_snapshots`.
+ * Purpose: backfill the strategic-history table from full snapshots already
+ *   stored in Supabase, reducing each to a strategic_snapshot_v1 document.
  *
  * Reduces each historical save to a strategic_snapshot_v1 document so the
  * campaign trend survives pruning the large table. Processes oldest -> newest

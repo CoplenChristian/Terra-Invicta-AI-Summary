@@ -1,6 +1,8 @@
 /*
  * Alien Hate Economics
  * --------------------
+ * Purpose: renders the save-derived Mission Control hate floor without
+ *   embedding the floor calculation in the dashboard.
  * Renders the save-derived Mission Control hate floor without embedding the
  * calculation in the page controller. The API owns the numbers; this module
  * only presents them and makes the derivation expandable.

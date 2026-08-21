@@ -1,5 +1,7 @@
 /**
  * scripts/publish/options.js -- stage 1: what this publish run was asked to do.
+ * Purpose: publish stage 1 — decide what this run was asked to do from CLI
+ *   flags and environment, before any save is opened.
  *
  * Everything here is decided before a save is opened, and nothing here touches
  * the network. That is the boundary: CLI flags, environment overrides and the

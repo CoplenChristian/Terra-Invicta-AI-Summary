@@ -1,5 +1,8 @@
 // scripts/derive_snapshot_fixtures.js
 //
+// Purpose: derive the committed filtered-snapshot fixtures the markdown export
+//   tests use instead of reading the live save.
+//
 // Derives the committed filtered-snapshot fixtures that the markdown export
 // tests use instead of reading the live save.
 //

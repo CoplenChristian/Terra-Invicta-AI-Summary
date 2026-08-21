@@ -1,5 +1,8 @@
 // shared/intel/registry.mjs
 //
+// Purpose: the ONE endpoint table from which route, discovery index, example
+//   and dispatch are all derived.
+//
 // ---------------------------------------------------------------------------
 // ONE endpoint table. Four derived views. No hand-maintained parallel lists.
 //

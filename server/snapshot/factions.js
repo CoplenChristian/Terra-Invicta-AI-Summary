@@ -1,5 +1,8 @@
 // server/snapshot/factions.js
 //
+// Purpose: the faction-level roll-up — relationships, resources and income,
+//   power scores, project state, and alien-activity rows.
+//
 // The faction-level roll-up: relationships, resources and income, power
 // scores, project state, and the alien-activity rows that hang off regions.
 //

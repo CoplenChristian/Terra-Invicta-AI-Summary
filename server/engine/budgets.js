@@ -1,5 +1,7 @@
 /**
  * server/engine/budgets.js
+ * Purpose: tracks the shared portfolio budget pools across the entire
+ *   allocation cycle.
  *
  * Tracks shared portfolio budget pools across the entire allocation cycle.
  * Prevents multiple individually affordable missions from jointly exceeding

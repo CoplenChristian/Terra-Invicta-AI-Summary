@@ -1,5 +1,8 @@
 // server/snapshotBuilder.js
 //
+// Purpose: public entry point for the raw-snapshot reducer — a barrel that
+//   re-exports the server/snapshot/ domain modules on one singleton.
+//
 // Public entry point for the raw-snapshot reducer. Exports the same singleton
 // object it always did, so `server/snapshotLoader.js`, `server/index.js`,
 // `scripts/build_static_snapshot.js`, `scripts/push_latest_to_supabase.js` and

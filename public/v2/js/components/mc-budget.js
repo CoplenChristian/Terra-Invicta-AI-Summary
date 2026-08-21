@@ -1,6 +1,8 @@
 /*
  * Mission Control Budget Planner
  * ------------------------------
+ * Purpose: the Mission Control budget planner — MC is the sole input to the
+ *   alien minimum-hate floor, so its allocation is shown and budgeted.
  * Mission Control is the sole input to the alien minimum-hate floor, so every
  * build decision is also a diplomacy decision. The hate card states where we
  * are; this states what a planned fleet would do to it.

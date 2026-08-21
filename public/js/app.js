@@ -1,3 +1,7 @@
+// public/js/app.js
+//
+// Purpose: the legacy v1 dashboard controller — renders the old UI and must not
+//   be edited.
 // Main Application Controller
 let state = {
   mode: 'player',

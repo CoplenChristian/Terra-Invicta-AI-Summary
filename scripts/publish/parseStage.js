@@ -1,6 +1,8 @@
 /**
  * scripts/publish/parseStage.js -- stage 2: turn a chosen save file into the
  * raw snapshot everything downstream reads.
+ * Purpose: publish stage 2 — turn a chosen save file into the raw snapshot
+ *   everything downstream reads.
  *
  * Deliberately NOT unified with `server/snapshotLoader.js`, and the reason is
  * worth keeping visible rather than rediscovering:

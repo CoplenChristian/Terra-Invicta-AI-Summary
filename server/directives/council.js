@@ -1,5 +1,8 @@
 // server/directives/council.js
 //
+// Purpose: the council-department ladder — exploit an embedded mole, assign an
+//   idle operative, and leverage the highest-skill councilor.
+//
 // The council-department ladder: exploit an embedded mole, assign an idle
 // operative, and leverage the highest-skill councilor.
 //

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
  * Export full snapshots from `player_intel_snapshots` to local gzipped JSON.
+ * Purpose: export full snapshots from Supabase to local gzipped JSON as the
+ *   safety net before pruning.
  *
  * Intended as the safety net before pruning: by default it exports exactly the
  * rows that `prune_intel_snapshots(campaign, keep)` would delete, so nothing is

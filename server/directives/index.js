@@ -1,5 +1,8 @@
 // server/directives/index.js
 //
+// Purpose: the policyRank directive ladder — the v1 hand-tuned board running
+//   alongside server/directiveEngine.js.
+//
 // The policyRank directive ladder -- the v1 hand-tuned board that runs
 // alongside server/directiveEngine.js rather than being replaced by it.
 //

@@ -1,5 +1,7 @@
 /**
  * server/commentary/grammar.js
+ * Purpose: Layer 4 of the strategic commentary — templated phrasing,
+ *   connective assembly, and prose generation.
  *
  * Layer 4 — Templated phrasing, connective assembly, and prose generation.
  *

@@ -1,5 +1,7 @@
 /**
  * `/api/intel/research-ranking` -- phase 4 of the research advisor.
+ * Purpose: the /api/intel/research-ranking projection composing the phase-4
+ *   ranking of research candidates.
  *
  * Spec: docs/research-advisor-spec.md sections 2, 3, 3a, 3b, 7, 9 step 4.
  *

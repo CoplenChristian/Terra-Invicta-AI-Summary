@@ -1,5 +1,7 @@
 /**
  * Supabase Adapter for Hosted Runtime
+ * Purpose: read sanitized, strictly technology-gated Player Intel snapshots and
+ *   exports from Supabase using only the public/anon key.
  *
  * Reads sanitized Player Intel snapshots and exports from Supabase.
  * Uses only the public/anon key and guarantees that all returned data

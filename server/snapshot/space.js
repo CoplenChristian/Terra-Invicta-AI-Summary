@@ -1,5 +1,8 @@
 // server/snapshot/space.js
 //
+// Purpose: everything above the atmosphere — fleets and ships, habs, hab sites
+//   and mines, hab modules, shipyard queues and stations, transfers.
+//
 // Everything above the atmosphere: fleets and their ships, habs, hab sites and
 // their mines, hab modules, shipyard queues and stations, and the inter-faction
 // resource transfers that ride on them.

@@ -1,6 +1,8 @@
 /**
  * site/worker/projections.js -- the hosted adapter over the two pure projection
  * registries.
+ * Purpose: the hosted adapter over the shared projection registries — what this
+ *   module owns is request parsing and response envelopes.
  *
  * The projections themselves are shared with the local Express server
  * (`shared/intelResources.mjs`, `shared/techGraph.mjs`). What this module owns is

@@ -1,5 +1,7 @@
 // server/engine/rules/value.js
 //
+// Purpose: the score rules that say what an action is worth.
+//
 // The score rules that say what an action is WORTH. Only the expansion rule
 // falls out of a real formula (GDP value density); the rest are calibrated
 // judgement collected in WEIGHTS and marked estimateClass 'heuristic' so a

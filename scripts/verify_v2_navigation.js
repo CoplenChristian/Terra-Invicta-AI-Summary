@@ -1,5 +1,7 @@
 /**
  * Verification script for v2 Navigation Acceptance Checks (§5 of v2-navigation-plan.md).
+ * Purpose: browser verification of the v2 navigation acceptance checks against a
+ *   fresh local server using Playwright.
  * Runs against a fresh local server on port 3888 using Playwright.
  */
 

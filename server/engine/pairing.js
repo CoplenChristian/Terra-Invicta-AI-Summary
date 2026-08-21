@@ -1,5 +1,7 @@
 /**
  * server/engine/pairing.js
+ * Purpose: binds candidates to available councilors and computes success odds
+ *   via the odds model.
  *
  * Binds candidates to available councilors, computes success odds via the
  * Wiki roll formula, outcome-weighted expected hate, and net expected value.

@@ -1,5 +1,7 @@
 /*
  * MISSION CONTROL / SHARED UTILITIES
+ * Purpose: the v2 single source of truth for HTML escaping, numeric
+ *   formatting, faction lookups, and the space-body to theater map.
  * Single source of truth for HTML escaping, numeric formatting, faction
  * lookups, and the space-body to theater map. Loaded before all components.
  * Exposed as window.MissionControlShared.

@@ -2,6 +2,8 @@
 
 /**
  * Verification Script for Supabase RLS Policies and Hosted Endpoints
+ * Purpose: verify Supabase RLS policies and hosted endpoints behave as
+ *   documented.
  *
  * Tests:
  * 1. Anon/public client can SELECT public campaigns and published Player Intel

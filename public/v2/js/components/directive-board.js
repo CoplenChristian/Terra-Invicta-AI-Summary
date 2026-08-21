@@ -1,6 +1,7 @@
 /*
  * Directive Board v2
  * ------------------
+ * Purpose: renders the Directive Engine v2 Cycle Plan.
  * Renders the Directive Engine v2 Cycle Plan (server/directiveEngine.js).
  *
  * Implements the cycle allocation model from docs/archive/directive-engine-v2.md:

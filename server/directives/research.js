@@ -1,5 +1,8 @@
 // server/directives/research.js
 //
+// Purpose: the research-department ladder — the two alien-intelligence unlocks
+//   and the global tech slot the observer is contributing to.
+//
 // The research-department ladder: the two alien-intelligence unlocks and the
 // global tech slot the observer is contributing to.
 //

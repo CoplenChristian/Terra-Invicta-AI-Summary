@@ -1,6 +1,8 @@
 /**
  * site/worker/envelopes.js -- the response envelopes wrapped around a Supabase
  * result.
+ * Purpose: the response envelopes wrapped around a Supabase result, including
+ *   the identity envelope clients use to tell which save they are reading.
  *
  * `resultIdentity` is the one that matters: every hosted data response carries
  * it so an external client can tell which save it is reading and whether that

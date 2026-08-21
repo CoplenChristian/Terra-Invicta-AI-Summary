@@ -1,6 +1,7 @@
 /*
  * Research Advisor Panel
  * ----------------------
+ * Purpose: phase 4 of the research advisor, on screen.
  * Phase 4 of the research advisor, on screen. Renders
  * `/api/intel/research-ranking`: what to research next, in two parallel
  * rankings that are never added together.

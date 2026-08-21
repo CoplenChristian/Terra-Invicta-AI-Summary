@@ -1,5 +1,8 @@
 // server/briefing/roster.js
 //
+// Purpose: reading the councilor roster — who is ours, who is free, what a
+//   masked stat says, and the per-councilor recommendation card.
+//
 // Reading the councilor roster: who is ours, who is free, what a masked stat
 // actually says, and the per-councilor recommendation card.
 //

@@ -1,5 +1,8 @@
 // server/engine/rules/legality.js
 //
+// Purpose: the three "is this move even allowed" vetoes — executive-last
+//   ordering, no-territory, and the story gate.
+//
 // The three "is this move even allowed" vetoes: the executive-last ordering
 // constraint, the no-territory filter that separates a takeable control point
 // from a ghost, and the alien-Detain story gate.

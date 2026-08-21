@@ -1,6 +1,8 @@
 /*
  * Mining Expansion Board Component
  * --------------------------------
+ * Purpose: the mining expansion board — capacity, runways, and need-weighted
+ *   site scoring on screen.
  * Answers three core strategic questions:
  *   1. How much mining capacity do I have left? (Mine limit, headroom, quadratic MC & hate cost)
  *   2. Which sites are open? (Unowned sites, reachability filtered)

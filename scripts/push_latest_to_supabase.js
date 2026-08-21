@@ -2,6 +2,8 @@
 
 /**
  * Push Latest Terra Invicta intelligence snapshots to Supabase
+ * Purpose: the publish CLI — build Player/Enhanced/Omniscient payloads per
+ *   observer and push them to Supabase.
  *
  * Reuses the local parser/filter pipeline to build separately labeled Player,
  * Enhanced, and explicitly enabled Omniscient payloads for every discovered

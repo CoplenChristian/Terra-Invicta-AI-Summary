@@ -1,6 +1,8 @@
 /**
  * scripts/publish/rows.js -- stage 3: build the rows this publish will write,
  * then refuse to write them if they do not describe the save they claim to.
+ * Purpose: publish stage 3 — build the rows this publish will write and refuse
+ *   to write them if they do not describe the save they claim to.
  *
  * Generation and validation live together on purpose. The validation is not a
  * style check: it is the last point at which a row that mixes two saves, or

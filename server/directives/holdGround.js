@@ -1,5 +1,7 @@
 // server/directives/holdGround.js
 //
+// Purpose: Hold Ground as a first-class directive.
+//
 // Hold Ground as a first-class directive (docs/archive/directive-engine-v2-plan.md §4f).
 //
 // It is ranked above the deferred-crackdown hold because it is the same

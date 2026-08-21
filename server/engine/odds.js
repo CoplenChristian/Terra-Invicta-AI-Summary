@@ -1,5 +1,7 @@
 /**
  * server/engine/odds.js
+ * Purpose: the Terra Invicta wiki roll success curve and the documented
+ *   modifier calculations.
  *
  * Implements the Terra Invicta Wiki Roll success curve and documented modifier calculations.
  *

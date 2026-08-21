@@ -1,5 +1,8 @@
 // server/techIntel.js
 //
+// Purpose: local Express wrapper projecting the tech-tree endpoints from the
+//   filtered snapshot's embedded techTree graph.
+//
 // Local Express wrapper that projects the tech-tree endpoints from the filtered
 // snapshot's embedded techTree graph. The pure projection logic lives in
 // shared/techGraph.mjs so the hosted worker can reuse it over published data.

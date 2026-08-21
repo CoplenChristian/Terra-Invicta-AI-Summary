@@ -1,3 +1,7 @@
+// public/v2/js/components/executive-boards.js
+//
+// Purpose: renders the executive boards — faction power, resources, and the
+//   strategic ranking surface.
 (function () {
   'use strict';
 

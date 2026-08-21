@@ -1,5 +1,8 @@
 // server/engine/candidates/index.js
 //
+// Purpose: the generation pass — run every generator, attach mission specs,
+//   add catalogue-derived candidates, then normalise and dedupe.
+//
 // The generation pass: run every generator, attach the mission spec each
 // hand-written candidate names but does not carry, add the catalogue-derived
 // candidates, then normalise and dedupe.

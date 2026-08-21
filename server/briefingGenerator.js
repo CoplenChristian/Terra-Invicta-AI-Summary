@@ -1,5 +1,7 @@
 /**
  * Mission Control Briefing & SITREP Synthesis Engine
+ * Purpose: the Mission Control briefing and SITREP synthesis entry point — the
+ *   barrel over the briefing domain modules.
  *
  * Compiles raw game-state snapshot data into immersive, actionable,
  * natural-language intelligence statements and strategic directives

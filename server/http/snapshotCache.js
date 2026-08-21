@@ -1,5 +1,6 @@
 /**
  * server/http/snapshotCache.js -- the local server's one parsed-save cache.
+ * Purpose: the local server's one parsed-save cache and its reset rules.
  *
  * Every route that answers from the live save reaches it through this module.
  * That is the boundary: routing decides *what* to project, this decides *when a

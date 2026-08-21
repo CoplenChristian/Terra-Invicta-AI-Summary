@@ -1,6 +1,8 @@
 /**
  * server/miningExpansion.js — CommonJS adapter over the ONE mining-expansion
  * implementation.
+ * Purpose: CommonJS adapter exposing the shared mining-expansion projection to
+ *   the local Express server.
  *
  * There used to be two. This file carried a full second copy of the capacity
  * model, the runway model and the saturating scorer, while the endpoint the

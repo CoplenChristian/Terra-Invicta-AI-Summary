@@ -1,5 +1,7 @@
 /**
  * server/http/routes/intel.js -- the focused-projection surface.
+ * Purpose: the focused-projection route surface — one discovery directory page
+ *   plus the generic handler for all intel resources.
  *
  * One directory page plus one generic handler for all 30 resources plus the
  * production-plan POST. The projections themselves are pure and live in

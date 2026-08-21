@@ -1,5 +1,8 @@
 // server/directives/space.js
 //
+// Purpose: the space-department ladder — the off-world mining grid and orbital
+//   fleet posture.
+//
 // The space-department ladder: the off-world mining grid and orbital fleet
 // posture.
 //

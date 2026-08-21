@@ -1,5 +1,7 @@
 /**
  * server/commentary/index.js
+ * Purpose: the strategic commentary engine's top-level orchestrator, combining
+ *   the four layers.
  *
  * Strategic Commentary Engine — Top-level Orchestrator.
  *

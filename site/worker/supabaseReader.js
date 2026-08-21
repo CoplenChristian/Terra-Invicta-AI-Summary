@@ -1,6 +1,8 @@
 /**
  * site/worker/supabaseReader.js -- every read the hosted runtime makes against
  * Supabase, and every consistency check on what comes back.
+ * Purpose: every Supabase read the hosted runtime makes, plus the consistency
+ *   checks on what comes back.
  *
  * The boundary is "what can this response honestly claim to be". A published
  * snapshot is only servable if its identity is complete AND the campaign

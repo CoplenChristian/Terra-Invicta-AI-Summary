@@ -1,5 +1,8 @@
 // server/briefing/readers.js
 //
+// Purpose: snapshot-shaped readers — the joins and roll-ups the briefing and
+//   directive builders both need.
+//
 // Snapshot-shaped readers: the joins and roll-ups the briefing and the
 // directive builders both need, kept apart from the prose that consumes them.
 //

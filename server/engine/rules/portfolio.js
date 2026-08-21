@@ -1,5 +1,8 @@
 // server/engine/rules/portfolio.js
 //
+// Purpose: resource-portfolio constraints — can the observer pay for this
+//   action out of the stock it actually holds.
+//
 // Resource-portfolio constraints: can the observer pay for this action out of
 // the stock it actually holds?
 //

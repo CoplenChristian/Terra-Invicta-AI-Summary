@@ -2,6 +2,8 @@
 
 /**
  * Universal Terra Invicta Save Parser & Intelligence CLI
+ * Purpose: the universal save-parser CLI — inspect save state, execute intel
+ *   projections, and format data for agents and humans.
  *
  * Inspects save game state, executes intel projections, and formats data for agents and humans.
  *

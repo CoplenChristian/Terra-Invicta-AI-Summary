@@ -1,5 +1,8 @@
 // server/engine/candidates/controlPoints.js
 //
+// Purpose: the open control-point candidate generator — neutral control points
+//   the observer can take.
+//
 // (a) Open control points -- server/snapshotBuilder.js nations[].controlPoints[]
 // where factionId is null (neutral).
 //

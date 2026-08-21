@@ -1,5 +1,8 @@
 // server/snapshot/rawSnapshot.js
 //
+// Purpose: the orchestration pass — read the save's collections once, build the
+//   shared id maps, run each domain reducer in dependency order.
+//
 // The orchestration pass: read the save's collections once, build the shared
 // id maps, then run each domain reducer in dependency order and assemble the
 // raw snapshot every other server module consumes.

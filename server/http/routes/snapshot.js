@@ -1,6 +1,8 @@
 /**
  * server/http/routes/snapshot.js -- routes that return the whole filtered
  * snapshot, or a rendering of it.
+ * Purpose: routes returning the whole filtered snapshot or a rendering of it,
+ *   plus the read-only export routes.
  *
  * They all do the same four things: parse the request, load or reuse the raw
  * save, assert the observer exists, filter for (mode, observer). What differs is

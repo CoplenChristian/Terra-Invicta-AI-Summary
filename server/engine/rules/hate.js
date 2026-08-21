@@ -1,5 +1,8 @@
 // server/engine/rules/hate.js
 //
+// Purpose: alien-hate exposure — the one veto that must reach every candidate,
+//   plus the score rule pricing how close an action pushes hate upward.
+//
 // Alien-hate exposure: the one veto that must reach EVERY candidate, and the
 // score rule that prices how close an action pushes hate to the next threshold.
 //

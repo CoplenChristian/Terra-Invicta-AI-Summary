@@ -1,6 +1,8 @@
 /**
  * server/http/routes/strategicHistory.js -- the only local routes backed by
  * Supabase rather than by the save on disk.
+ * Purpose: the Supabase-backed strategic-history routes — compact snapshot
+ *   documents for trend analysis, with deltas computed on demand.
  *
  * Compact strategic_snapshot_v1 documents for trend analysis. Deltas are
  * computed on demand; storing them would defeat the point of a compact format.

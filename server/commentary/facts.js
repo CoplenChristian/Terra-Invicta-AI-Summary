@@ -1,5 +1,7 @@
 /**
  * server/commentary/facts.js
+ * Purpose: Layer 1 of the strategic commentary — fact extraction and
+ *   null-honest metrics.
  *
  * Layer 1 — Fact extraction and null-honest metrics for strategic commentary.
  *

@@ -1,5 +1,8 @@
 // server/engine/candidates/intelligence.js
 //
+// Purpose: the intelligence candidate generator — capability without a
+//   sighting.
+//
 // (c) Intelligence: capability without sighting.
 //
 // capabilities.canDirectlyDetectAlienCouncilors (Project_TheirMovements) can

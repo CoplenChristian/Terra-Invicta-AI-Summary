@@ -1,5 +1,8 @@
 // server/directives/geopolitical.js
 //
+// Purpose: the Earth-facing policyRank ladder — hold ground, the escalate-late
+//   deferral, the non-proxy alternative, the containment sweep.
+//
 // The Earth-facing policyRank ladder: hold ground, the escalate-late deferral,
 // the non-proxy alternative, the containment sweep, and the standing
 // Defend Interests order.

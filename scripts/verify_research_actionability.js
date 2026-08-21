@@ -1,5 +1,7 @@
 /**
  * Browser verification script for Research Advisor Actionability (§4 of research-actionability-spec.md).
+ * Purpose: browser verification of research-advisor actionability against a
+ *   fresh local server using Playwright.
  * Runs against a fresh local server on port 3888 using Playwright.
  */
 

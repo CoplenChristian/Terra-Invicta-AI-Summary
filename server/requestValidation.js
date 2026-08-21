@@ -1,5 +1,7 @@
 /**
  * server/requestValidation.js -- CommonJS barrel over shared/requestValidation.mjs.
+ * Purpose: CommonJS barrel over shared/requestValidation.mjs, adding only the
+ *   two pieces that need Node (save-path resolution and the configured observer).
  *
  * The rules themselves moved to `shared/requestValidation.mjs` so the hosted
  * Cloudflare worker can import the same ones; this file re-exports the SAME

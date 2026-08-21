@@ -1,5 +1,8 @@
 // server/snapshot/templates.js
 //
+// Purpose: the three template-derived static builders — they read the installed
+//   game templates and depend on no save data.
+//
 // The three template-derived static builders. They read the installed game
 // templates and depend on no save data at all, which is why they can be called
 // standalone by tests and why their output is baked onto every snapshot: the

@@ -1,6 +1,8 @@
 /**
  * scripts/publish/supabaseWriter.js -- stage 4: every network write this
  * publish makes, in the order that keeps a reader consistent.
+ * Purpose: publish stage 4 — every network write the publish makes, ordered to
+ *   keep a reader consistent; the only stage that touches the service role key.
  *
  * The ordering is the point of the module, and it is not arbitrary:
  *

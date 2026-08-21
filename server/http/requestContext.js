@@ -1,6 +1,8 @@
 /**
  * server/http/requestContext.js -- request in, parameters out; snapshot in,
  * identity envelope out.
+ * Purpose: request->(mode, observer, save) and snapshot->identity envelope
+ *   conversions shared by the local routes.
  *
  * These three helpers are what every route in the local server calls before and
  * after doing its actual work. They are deliberately free of Express response

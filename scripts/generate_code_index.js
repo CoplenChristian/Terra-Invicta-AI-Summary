@@ -205,11 +205,12 @@ function isBarrel(src, rel, esm) {
   if (own === 0 && exported.length === 0) return true;
   if (exported.length === 0) return false;
   // A barrel re-exports most of its surface. Count the share of exported names
-  // that are NOT defined in this file -- those come from the local modules it
-  // imports. An implementation (commentary/index.js, rules/index.js) defines
-  // its own exports, so its re-export share is low.
+  // that are re-exported rather than defined here: the module.exports value is
+  // a bare identifier, a shorthand, or a member expression on an imported
+  // module -- NOT an inline function body. An implementation (commentary/
+  // index.js, rules/index.js) defines its own exports as real bodies.
   const local = locallyDefinedNames(src);
-  const reexported = exported.filter(name => !local.has(name)).length;
+  const reexported = exported.filter(name => isReexportedName(src, name, local)).length;
   return reexported / exported.length >= 0.5;
 }
 
@@ -220,6 +221,22 @@ function locallyDefinedNames(src) {
   for (const m of src.matchAll(/^(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/gm)) names.add(m[1]);
   for (const m of src.matchAll(/^class\s+([A-Za-z_$][\w$]*)/gm)) names.add(m[1]);
   return names;
+}
+
+// True for an exported name whose module.exports binding is a re-export: the
+// shorthand form, a bare identifier, or `module.member` -- as opposed to an
+// inline function/arrow body that defines the value here. A name defined at
+// module scope in this file is never a re-export, even in shorthand form.
+function isReexportedName(src, name, local) {
+  if (local.has(name)) return false;
+  const re = new RegExp(`(?:^|,|\\{)\\s*${name}\\s*(?::\\s*[A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*|,|\\}|$)`, 'm');
+  const m = src.match(re);
+  if (!m) return false;
+  // The captured value (if any) must be a bare identifier / member expression,
+  // which the regex above already guarantees: it only matches a `:` followed by
+  // an identifier chain. A value of `name: (…) =>`, `name: {`, `name: function`
+  // does not match, so those count as local definitions.
+  return true;
 }
 
 // Test file for a module, if one exists.
@@ -262,6 +279,23 @@ function collect() {
       });
     }
   }
+  // public/index.html is the legacy v1 dashboard shell. It is not a module the
+  // index parses, but it must be listed and marked do-not-edit so an agent does
+  // not mistake it for the live v2 entry point.
+  const legacyShell = path.join(ROOT, 'public', 'index.html');
+  if (fs.existsSync(legacyShell)) {
+    modules.push({
+      rel: 'public/index.html',
+      runtime: 'Browser (legacy v1)',
+      esm: false,
+      sys: '—',
+      lines: lineCount(legacyShell),
+      purpose: 'legacy v1 dashboard shell -- DO NOT EDIT',
+      exports: [],
+      barrel: false,
+      testFile: null
+    });
+  }
   modules.sort((a, b) => a.rel.localeCompare(b.rel));
   return modules;
 }
@@ -285,7 +319,7 @@ function render(modules) {
 
   let currentDir = null;
   for (const m of modules) {
-    const dir = path.dirname(m.rel);
+    const dir = m.rel.split('/')[0];
     if (dir !== currentDir) {
       if (currentDir !== null) lines.push('');
       lines.push(`## \`${dir}/\``);

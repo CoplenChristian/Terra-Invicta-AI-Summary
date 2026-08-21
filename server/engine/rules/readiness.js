@@ -1,5 +1,8 @@
 // server/engine/rules/readiness.js
 //
+// Purpose: the "can we actually do this right now" rule — an unconfirmable
+//   precondition is a discount, not a veto.
+//
 // Can we actually do this right now? A precondition the snapshot cannot
 // confirm is a discount, not a veto -- the action may well be available
 // in-game, so burying it would hide a real option, but an equally valuable

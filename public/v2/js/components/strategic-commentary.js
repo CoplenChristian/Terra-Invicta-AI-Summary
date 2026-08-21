@@ -1,6 +1,7 @@
 /*
  * Strategic Commentary Component v2
  * ---------------------------------
+ * Purpose: renders the non-LLM four-layer Strategic Commentary Engine output.
  * Renders the non-LLM 4-layer Strategic Commentary Engine output
  * (server/commentary) beneath Hold Ground / Priority Brief in COMMAND view.
  */

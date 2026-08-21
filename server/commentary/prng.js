@@ -1,5 +1,7 @@
 /**
  * server/commentary/prng.js
+ * Purpose: the deterministic Mulberry32 PRNG used for strategic commentary
+ *   simulations and phrasing.
  *
  * Deterministic Mulberry32 PRNG for strategic commentary simulations and phrasing.
  *

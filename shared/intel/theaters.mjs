@@ -1,5 +1,8 @@
 // shared/intel/theaters.mjs
 //
+// Purpose: body-by-body posture — the twelve-body theater board and the
+//   single-body briefing behind it.
+//
 // Body-by-body posture: the twelve-body theater board and the single-body
 // briefing behind it. Both read the same fleet/hab/site/queue lists and answer
 // "who holds this rock, and what is coming for it".

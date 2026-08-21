@@ -1,5 +1,7 @@
 /**
  * site/worker/assets.js -- static asset delivery for the hosted runtime.
+ * Purpose: static asset delivery — the Sites ASSETS binding first, then the
+ *   embedded static-assets bundle fallback.
  *
  * Two sources, in order: the Sites `ASSETS` binding when the deployment mounts
  * one, and the generated `static-assets.js` bundle when it does not. The

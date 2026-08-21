@@ -1,5 +1,8 @@
 // shared/intelResources.mjs
 //
+// Purpose: public entry point for the intel projections — a barrel re-exporting
+//   the shared/intel/ domain modules for both runtimes.
+//
 // Public entry point for the intel projections shared by the local Express
 // server (loaded via require(esm)) and the hosted Cloudflare worker (ESM
 // import). Keep this file, and everything under `shared/intel/`, free of any

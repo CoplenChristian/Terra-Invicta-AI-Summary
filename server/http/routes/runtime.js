@@ -1,6 +1,8 @@
 /**
  * server/http/routes/runtime.js -- routes that describe the local install
  * rather than the contents of a save.
+ * Purpose: routes that describe the local install — /api/runtime, /api/publish,
+ *   /api/saves — rather than a save's contents.
  *
  * None of these three reads a filtered snapshot: /api/runtime reports what this
  * runtime can do, /api/publish is the local-only publish capability, and

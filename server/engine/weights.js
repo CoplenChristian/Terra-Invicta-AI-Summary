@@ -1,5 +1,8 @@
 // server/engine/weights.js
 //
+// Purpose: the engine's tunable weights, kept in one exported config object per
+//   the plan's instruction.
+//
 // The engine's tunable weights, in one place per the plan's instruction
 // ("Weights live in ONE exported config object, not scattered literals"), plus
 // the per-world override merge.

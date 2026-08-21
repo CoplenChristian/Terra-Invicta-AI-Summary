@@ -1,5 +1,7 @@
 /**
  * Hosted Cloudflare / Edge Worker API
+ * Purpose: the hosted worker's dispatcher — the order routes are tried in and
+ *   the degrade path each takes when Supabase is not configured.
  *
  * Exposes published Player Intel and explicitly enabled Omniscient data from
  * Supabase (when configured), or falls back to bundled static Player Intel

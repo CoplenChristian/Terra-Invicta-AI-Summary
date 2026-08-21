@@ -1,5 +1,7 @@
 /**
  * server/commentary/beats.js
+ * Purpose: Layer 2 of the strategic commentary — deterministic narrative beats
+ *   and Hold Ground stance coherence.
  *
  * Layer 2 — Deterministic narrative beats and Hold Ground stance coherence.
  *

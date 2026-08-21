@@ -1,5 +1,8 @@
 // server/snapshot/lookups.js
 //
+// Purpose: everything that turns the save's flat gamestates bag into the id
+//   maps the domain reducers read, plus the reference-resolving accessors.
+//
 // Everything that turns the save's flat `gamestates` bag into the id maps the
 // domain reducers read, plus the small accessors that resolve a reference back
 // to a name, a colour, or an orbital position.

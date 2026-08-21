@@ -1,5 +1,8 @@
 // server/engine/rules/index.js
 //
+// Purpose: the rule registry — the one ordered list whose sequence is
+//   load-bearing for veto collection and score breakdown.
+//
 // The rule registry.
 //
 // A veto rule returns one of THREE outcomes, never collapsed to two:

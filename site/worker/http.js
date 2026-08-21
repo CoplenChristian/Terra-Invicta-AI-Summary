@@ -1,5 +1,7 @@
 /**
  * site/worker/http.js -- the hosted runtime's response shapes.
+ * Purpose: the hosted runtime's response shapes — CORS policy, no-store rule,
+ *   hardening headers, decided once per response helper.
  *
  * Every JSON body the worker returns goes out through `jsonResponse`, so the
  * CORS policy, the no-store rule and the two hardening headers are decided once

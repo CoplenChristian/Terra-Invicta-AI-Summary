@@ -1,5 +1,7 @@
 /**
  * server/engine/assignment.js
+ * Purpose: the cycle-plan assignment allocator that binds candidates to
+ *   councilors across the allocation cycle.
  *
  * Implements the cycle plan assignment allocator:
  * 1. Greedy expected-value allocation under shared portfolio budgets.

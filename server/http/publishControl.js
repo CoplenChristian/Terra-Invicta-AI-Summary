@@ -1,5 +1,7 @@
 /**
  * server/http/publishControl.js -- the local-only publish capability.
+ * Purpose: the local-only, service-role-backed publish route and its
+ *   capability gate.
  *
  * This is the one route in the local server that runs a process holding
  * SUPABASE_SERVICE_ROLE_KEY, so it is kept as a single file that can be read end
