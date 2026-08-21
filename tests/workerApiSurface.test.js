@@ -188,9 +188,18 @@ test('the publishable key wins over the deprecated anon key, and the service rol
   const workerFiles = fs.readdirSync(workerDir)
     .filter(name => name.endsWith('.js'))
     .map(name => ['site', 'worker', name]);
-  const sharedFiles = fs.readdirSync(path.join(PROJECT_ROOT, 'shared'))
-    .filter(name => name.endsWith('.mjs'))
-    .map(name => ['shared', name]);
+  // RECURSIVE. `shared/` gained an `intel/` subdirectory in the 2026-08-20
+  // split and this guard only ever listed the top level, so fourteen bundled
+  // modules stopped being covered without the test failing -- the same shape
+  // of gap this guard was written to close.
+  const sharedRoot = path.join(PROJECT_ROOT, 'shared');
+  const sharedFiles = fs.readdirSync(sharedRoot, { recursive: true })
+    .filter(name => String(name).endsWith('.mjs'))
+    .map(name => ['shared', ...String(name).split(path.sep)]);
+  assert.ok(
+    sharedFiles.some(parts => parts.includes('intel')),
+    'the recursive scan must reach shared/intel/, which the hosted bundle also ships'
+  );
   assert.ok(workerFiles.length > 1, 'the worker split left more than one bundled module to check');
 
   for (const relative of [...workerFiles, ...sharedFiles]) {
@@ -239,4 +248,68 @@ test('shared export markdown selection matches the behaviour it replaced', async
   assert.equal(hasExportMarkdown({}), false);
   assert.equal(hasExportMarkdown({ compact: '' }), false);
   assert.equal(hasExportMarkdown({ compact: 'c' }), true);
+});
+
+// --- detail=summary|full on the hosted path -------------------------------
+// The hosted adapter is a genuinely separate code path from the local Express
+// route: its own query parsing, its own rejection wording, its own envelope.
+// A `detail` parameter verified only against localhost is not verified.
+
+test('the hosted adapter defaults to the small payload and honours detail=full', async () => {
+  const dir = buildWorkerBundle();
+  const projections = await import(pathToFileURL(path.join(dir, 'projections.js')).href);
+
+  const result = {
+    mode: 'player',
+    row: { observer_faction_id: 4712, observer_faction_name: 'the Initiative', visibility: 'player', difficulty: 'Normal' },
+    snapshot: {
+      observerFactionId: 4712,
+      fleets: [{
+        ID: 1, displayName: 'Belt Patrol', factionId: 4712, factionName: 'the Initiative',
+        orbitBody: 'Ceres', shipsCount: 2,
+        ships: [{ id: 9, hullName: 'Hull_Corvette' }, { id: 10, hullName: 'Hull_Corvette' }]
+      }]
+    }
+  };
+
+  const summary = projections.buildIntelResource(result, 'fleets', new URL('https://example.test/api/intel/fleets'));
+  assert.equal(summary.detail, 'summary', 'the hosted default must be the small one too');
+  assert.equal(summary.query.detail, 'summary');
+  assert.equal('shipManifest' in summary.items[0], false);
+  assert.equal(summary.shipsTotal, 2);
+
+  const full = projections.buildIntelResource(result, 'fleets', new URL('https://example.test/api/intel/fleets?detail=full'));
+  assert.equal(full.detail, 'full');
+  assert.equal(full.items[0].shipManifest.length, 2);
+
+  const ships = projections.buildIntelResource(result, 'ships', new URL('https://example.test/api/intel/ships'));
+  assert.equal(ships.detail, 'summary');
+  assert.equal(ships.shipsTotal, 2);
+  assert.equal(ships.items.length, 1, 'two corvettes in one fleet at one body are one roll-up row');
+  assert.deepEqual(ships.factions, [{ id: 4712, name: 'the Initiative' }],
+    'the id-only rows stay resolvable through the legend');
+
+  // Rejected in the hosted wording, not silently defaulted.
+  assert.equal(projections.validateResourceQuery(new URL('https://example.test/api/intel/fleets')), null);
+  assert.equal(projections.validateResourceQuery(new URL('https://example.test/api/intel/fleets?detail=full')), null);
+  assert.match(
+    projections.validateResourceQuery(new URL('https://example.test/api/intel/fleets?detail=everything')),
+    /Invalid detail level 'everything'/
+  );
+});
+
+test('the hosted index advertises detail and says why sizes are missing', async () => {
+  const worker = await loadWorker();
+  const response = await worker.fetch(request('https://example.test/api/intel?format=json'), {});
+  const payload = await response.json();
+
+  assert.deepEqual(payload.detail.levels, ['summary', 'full']);
+  assert.equal(payload.detail.default, 'summary');
+  assert.deepEqual(payload.detail.appliesTo, ['fleets', 'ships']);
+
+  // No Supabase in this environment, so there is no snapshot to measure. The
+  // index must say that rather than publishing a guess, and must still answer.
+  assert.equal(payload.responseSizes, undefined, 'no invented sizes without a snapshot');
+  assert.match(payload.responseSizesUnavailable.all, /requires the hosted Supabase backend/);
+  assert.equal(payload.success, true, 'an unmeasurable index is still a usable index');
 });
