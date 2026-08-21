@@ -295,3 +295,88 @@ if the fixture doesn't already force the null path (the two tests do).
 5. **Pins** — propulsion, kinetic damage, and mission control are all real, non-vacuous, and
    reproduce. Claim 4's rejection is right but on a flawed justification; Claim 7's band is
    honest but narrower than its label implies.
+
+---
+
+# Resolution of Claim 1 — measured 2026-08-21, against `bbef9f0`
+
+**Verdict: the ×1.35 is real and reproduces, but it must NOT be applied. The review's
+implied fix — add a constant alien thrust term — would break 153 ships that currently agree.**
+
+## What reproduces
+
+The review's arithmetic is correct, and my own earlier estimate of "explains ~30%" was
+wrong — it divided by all 416 alien ships including those that already agree, which is the
+wrong denominator. Re-measured through the shipped `shipPropulsion()` on the latest save,
+omniscient, all factions:
+
+```
+faction            ships   dV ok   acc ok   acc BAD   of BAD: x1.35 fixes
+the Aliens           416     416      153       263    239   (91%)
+the Servants          73       73       71         2      0
+the Protectorate      69       69       69         0      0
+Humanity First        52       52       52         0      0
+the Initiative        42       42       42         0      0
+Project Exodus        32       32       32         0      0
+the Academy           17       17       17         0      0
+the Resistance        16       16       16         0      0
+
+TOTAL acc disagreements 265 -- explained by x1.35: 239 (90.2%)
+disagreement ratio p25/p50/p75 = 1.3500 / 1.3500 / 1.3500
+```
+
+Delta-V agrees **416/416** for aliens while combat acceleration disagrees on 263 of the
+same ships. That split is the diagnostic: delta-V depends on exhaust velocity and mass,
+acceleration additionally on thrust. The error is in the thrust path only.
+
+## Why it cannot be applied as a constant
+
+**153 alien ships already agree without it.** A blanket ×1.35 trades 239 fixes for 153
+new breaks. So the question is whether something selects the two groups. Three hypotheses,
+all tested:
+
+1. **Fuel state — rejected.** The model computes combat acceleration against
+   `fullWetMassKg` while the save reports it at current mass, so partial fuel would inflate
+   the ratio. It does not: the 1.3500 ships are at **full tanks**
+   (`fullWetMass/currentWetMass = 1.0000`). Note the naive check "acc ratio == mass ratio"
+   scores 38.9%, but that is the same wrong-denominator trap — agreeing ships satisfy it
+   trivially with both ratios at 1.0.
+
+2. **Drive — rejected.** Grouped by drive, every class is mixed:
+   `AlienFusionTorchx2` splits 38 agree / 60 need ×1.35 at identical `thrustCap: 40`.
+
+3. **Hull design template — CONFIRMED deterministic.** Grouped by `hullName`, the split is
+   perfectly clean: **21 alien design templates agree uniformly, 35 need ×1.35 uniformly,
+   and zero are mixed.** The factor is a per-design property, not per-ship state.
+
+**But the discriminating field is not in the snapshot.** Diffing the two groups across
+every `shipDesigns` and `shipHullStats` field, nothing separates them — `hullName`
+(`AlienFrigate` appears in both), `constructionTier`, `noseHardpoints`, `hullHardpoints`,
+`structuralIntegrity` and `baseConstructionTimeDays` all overlap. The review's note that
+alien hulls carry `thrusterMultiplier: 1` is consistent with this: the templates do not
+express the factor.
+
+## What to do instead
+
+Hardcoding the 35 template names would be **campaign-specific**, which the governing
+constraint in `research-advisor-spec.md` §0 forbids and which the user has stated directly
+("I want this to be generalized, not specific to my game"). `AlienCouncilShipTemplate5xx`
+ids are not stable across campaigns.
+
+So, per the house rule that **unknown is not the same as safe**:
+
+- Do **not** add the factor.
+- Mark modelled combat acceleration as **unverified for alien designs**, with the reason
+  recorded — a known per-design discrepancy of ×1.35 affecting 35 of 56 observed templates,
+  cause not present in the snapshot.
+- Where the save reports a measured `combatAccelerationMps2`, **prefer the measured value**.
+  The shipped `alienBenchmark` already reads the save's reported medians rather than
+  modelled values, so this gap does not currently reach the user-facing dashboard.
+
+The delta-V pin is unaffected and stands at 416/416 for aliens.
+
+**Reproduction:** all figures above are from `loadFilteredSnapshot({latest:true,
+mode:'omniscient', observer:4712})` fed to `shipPropulsion({ship, design, driveStats,
+propellantModules})`, comparing `agreement.combatAcceleration` against
+`measured.combatAccelerationMps2`. Note the function takes a **single options object** —
+calling it positionally returns `resolved: false` and silently yields an empty sample.

@@ -116,7 +116,7 @@ per slot X:  base
 
 Eight categories: energy, life, information, material, military, social, space, xenology.
 
-That formula makes **slot allocation itself optimisable** — the `+5%` per active slot rewards breadth while `0.9^(n−1)` penalises stacking one category. §6.
+That formula *would* make **slot allocation itself optimisable** — the `+5%` per active slot rewards breadth while `0.9^(n−1)` penalises stacking one category. It was then tested against the observer's own measured delivery and **did not reproduce**, so no reallocation is offered; the formula is kept here as the rejected model, with its evidence, in §6.
 
 **Not useful:** the wiki's own meta sections — "AI First Tech Picks" and "Tech Tree Colors" — both carry `{{ObsoleteBox}}` and the first says "This entire section is outdated." Do not build on them. This is the main reason the value model derives from templates rather than from guides.
 
@@ -730,38 +730,73 @@ layout unchanged at `[0,0,3,3,3,0]`. A **project parked in a slot beyond the
 weight array receives nothing** — Operations Research sat at 22.82 accumulated
 across both intervals without moving.
 
-**What did not.** With the same pips on the same slot:
+The evidence below was **reordered on 2026-08-21** after
+`model-verification-review.md` Claim 3 found two of the three numbers originally
+cited being presented as independent pins when each is confounded. The refusal is
+unchanged; what licenses it is now stated first, and every confounded figure
+names its confound. The code-side statement of the same ordering is
+`ALLOCATION_MODEL` in `shared/researchSlots.mjs` — the two must stay consistent.
+
+**What did reproduce — and it is the strongest evidence in this section.** The
+*relative* share between two slots is stable: the project slot delivered
+**2.26216×** the tech slot in the first interval and **2.26214×** in the second,
+one part in 10⁴ apart. A relative measure cancels any global change in research
+income, which makes this the one figure here that no confound touches. A stable
+relative share beside an unstable *absolute* share is the signature of a changing
+total income over a constant per-slot allocation ratio. The allocation has a
+stable structure; the wiki formula is not it.
+
+**What did not — and this part is unconfounded.** No single `(base,
+ProjectBonus)` pair fits all three pip-carrying slots at once, and two of the
+formula's four terms have no source in the shipped data at all:
+`TIGlobalConfig.json` carries only `globalResearchMultiplier: 1` — neither the
++5%-per-active-slot constant nor the `0.9^(n−1)` decay appears in any template —
+and no template or save field states a ProjectBonus. **This pair is what the
+refusal rests on.**
+
+**Two further numbers corroborate, and each is confounded.** They are kept on the
+record because they agree with the mis-fit above, but neither is a pin on its
+own.
+
+*Confounded by research-income drift.* With the same pips on the same slot:
 
 | interval | slot 2 (Coilguns, 3 pips) delivered / predicted |
 | :-- | --: |
 | 12/1 → 12/16/2033 | **1.147×** |
 | 12/16/2033 → 1/1/2034 | **0.993×** |
 
-A per-slot multiplier the formula treats as constant is not constant. Worse, the
-two project slots deliver a fixed **1.2073** ratio to each other; with their
-reconstructed category bonuses (Xenology 0.20, Energy 0.03 — summed from
-`techBonuses` on the observer's orgs, hab modules and councilor traits) the
-formula can only produce that ratio with **ProjectBonus = −0.209**, a project
-*penalty*, contradicting the term's own definition. No single `(base,
-ProjectBonus)` pair fits all three pip-carrying slots.
+A per-slot multiplier the formula treats as constant is not constant — **but this
+is an ABSOLUTE measure**, delivered / predicted, with predicted derived from the
+annual research rate. Any change in the observer's research income between the
+two 15.5-day intervals — a new org, trait, hab module or nation stat — moves it
+even under a perfect formula. It is independent of CategoryBonus; it is *not*
+independent of income drift.
 
-**And two of its four terms have no source in the shipped data at all.**
-`TIGlobalConfig.json` carries only `globalResearchMultiplier: 1` — neither the
-+5%-per-active-slot constant nor the `0.9^(n−1)` decay appears in any template —
-and no template or save field states a ProjectBonus.
+*Confounded by the unvalidated Xenology CategoryBonus.* The two project slots
+deliver a fixed **1.2073** ratio to each other; with their reconstructed category
+bonuses (Xenology 0.20, Energy 0.03 — summed from `techBonuses` on the observer's
+orgs, hab modules and councilor traits) the formula can only produce that ratio
+with **ProjectBonus = −0.209**, a project *penalty*, contradicting the term's own
+definition. **But −0.209 is a consequence of assuming the reconstructed 0.20, not
+an independent refutation.** For `ProjectBonus = 0` to reproduce the same ratio
+the Xenology bonus need only be `1.2073 × 1.03 − 1 = 0.2435`, and that
+reconstruction is itself unvalidated. At a true Xenology bonus of **≥ 0.2435 this
+contradiction collapses entirely**.
 
-**One thing did reproduce, and it is recorded rather than used:** the *relative*
-share between two slots is stable to one part in 10⁴ (the project slot delivered
-2.26216× the tech slot in the first interval and 2.26214× in the second). The
-allocation has a stable structure; the wiki formula is not it.
+**The honest bottom line:** the formula does not reproduce; the residual is partly
+income drift and partly a real mis-fit, and the relative-share stability suggests
+the allocation has a structure the wiki formula does not capture.
 
-**Therefore the advisor reports the layout and refuses the optimisation.**
-`/api/intel/research-ranking` carries a `slots` block with the pip layout, what
-occupies each slot, each slot's **pip share** (explicitly *not* its research
-share), and the three idle states — occupied-without-pips, pips-without-occupant,
-and parked-beyond-the-weighted-slots. `recommendation.offered` is `false` with
-its reason, and `model.reproduction` carries the numbers above so the refusal is
-a measurement rather than a shrug.
+**Therefore the advisor reports the layout and refuses the optimisation — and the
+refusal stands unweakened by the reframing,** because it never rested on the two
+confounded figures. `/api/intel/research-ranking` carries a `slots` block with the
+pip layout, what occupies each slot, each slot's **pip share** (explicitly *not*
+its research share), and the three idle states — occupied-without-pips,
+pips-without-occupant, and parked-beyond-the-weighted-slots.
+`recommendation.offered` is `false` with its reason, and `model.reproduction`
+carries the numbers above — the unconfounded mis-fit first, each confounded
+figure labelled with its confound — so the refusal is a measurement rather than a
+shrug.
 
 ---
 

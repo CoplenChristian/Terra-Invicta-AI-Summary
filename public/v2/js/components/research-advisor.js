@@ -253,8 +253,6 @@
     const notes = [];
     if (row.slotAction === 'free-slot') {
       notes.push('<span class="ra-tag ra-tag--free">free slot</span>');
-    } else if (row.slotAction === 'occupied-slot') {
-      notes.push('<span class="ra-tag">backlogs active</span>');
     }
 
     if (row.closesDeficit === true) notes.push('<span class="ra-tag ra-tag--deficit">closes gap</span>');
@@ -313,8 +311,6 @@
     const notes = [];
     if (row.slotAction === 'free-slot') {
       notes.push('<span class="ra-tag ra-tag--free">free slot</span>');
-    } else if (row.slotAction === 'occupied-slot') {
-      notes.push('<span class="ra-tag">backlogs active</span>');
     }
 
     const meta = [
@@ -383,6 +379,9 @@
       const pctStr = pct === null ? '' : ` (${int(pct)}%)`;
       return `<span class="ra-queue__item">${escapeHtml(String(p.displayName || p.projectId))}<span class="ra-queue__item-val">${escapeHtml(pctStr)}</span></span>`;
     });
+    if (!isFree && active.length > 0) {
+      active.push('<span class="ra-tag" title="All slots are currently occupied — starting a new project will backlog an active one">backlogs active</span>');
+    }
     const itemsHtml = active.length > 0
       ? active.join(' · ')
       : '<span class="ra-queue__item">no active projects</span>';
@@ -834,8 +833,10 @@
               <small title="A multiple on one class's axis is not commensurable with a multiple on another's. Every row names its own axis; this ordering is a triage aid, not an exchange rate.">× your best, per point</small>
             </div>
             ${militaryBody}
-            ${renderCensus(payload.military.unrankable, `${int(payload.military.rankedCount)} of ${int(payload.military.candidatesConsidered)} ranked`)}
-            ${renderDeliveryDemoted(payload.military.deliveryDemoted)}
+            <div class="ra-track__foot">
+              ${renderCensus(payload.military.unrankable, `${int(payload.military.rankedCount)} of ${int(payload.military.candidatesConsidered)} ranked`)}
+              ${renderDeliveryDemoted(payload.military.deliveryDemoted)}
+            </div>
           </section>
           <section class="ra-track">
             <div class="ra-track__head">
@@ -843,12 +844,14 @@
               <small title="Units are never summed and never ranked against each other. Tonnes per month and dollars per year have no exchange rate.">${escapeHtml(economicCaption)}</small>
             </div>
             ${economicBody}
-            ${renderCensus(
-              payload.economic.unrankable,
-              `${int(payload.economic.rankedCount)} of ${int(payload.economic.candidatesConsidered)} ranked`,
-              otherUnits.length > 0 ? `+${int(otherUnits.length)} more units` : null,
-              otherUnits.length > 0 ? `Also priced in ${otherUnits.join(', ')}. Open the full ranking for those.` : null
-            )}
+            <div class="ra-track__foot">
+              ${renderCensus(
+                payload.economic.unrankable,
+                `${int(payload.economic.rankedCount)} of ${int(payload.economic.candidatesConsidered)} ranked`,
+                otherUnits.length > 0 ? `+${int(otherUnits.length)} more units` : null,
+                otherUnits.length > 0 ? `Also priced in ${otherUnits.join(', ')}. Open the full ranking for those.` : null
+              )}
+            </div>
           </section>
         </div>
         <div class="ra-foot">

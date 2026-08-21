@@ -101,6 +101,11 @@
             title="Parse and publish the newest save to the hosted site">
             Publish latest
           </button>
+          <label class="init-new-save-toggle" for="initNewSaveAutoload"
+            title="Automatically load a newly written save into this dashboard. Off by default so an auto-reload cannot steal your place while reading.">
+            <input type="checkbox" id="initNewSaveAutoload">
+            <span>Auto-load new saves</span>
+          </label>
           <a href="/api/intel" class="init-btn" target="_blank" rel="noopener" title="Machine-readable API endpoint index">
             API index
           </a>
@@ -108,6 +113,14 @@
             Classic view
           </a>
         </div>
+      </div>
+
+      <!-- New save detected: non-blocking affordance. Hidden until the poller
+           finds a save on disk newer than the one displayed. -->
+      <div id="initNewSaveBanner" class="init-new-save-banner" hidden inert role="status" aria-live="polite">
+        <span class="init-new-save-banner__kicker">NEW SAVE</span>
+        <span id="initNewSaveMeta" class="init-new-save-banner__meta"></span>
+        <button id="initNewSaveLoadBtn" class="init-btn init-btn-cyan" type="button">Load</button>
       </div>
     </div>
   </header>

@@ -391,7 +391,11 @@ export const propulsionResource = (snapshot, {
             deltaVKps: ship.modelled.deltaVKps,
             maxDeltaVKps: ship.modelled.maxDeltaVKps,
             cruiseAccelerationMps2: ship.modelled.cruiseAccelerationMps2,
-            combatAccelerationMps2: ship.modelled.combatAccelerationMps2
+            combatAccelerationMps2: ship.modelled.combatAccelerationMps2,
+            // Travels with the figure, not only in `agreement`: a client that
+            // reads the modelled acceleration alone must still be able to tell
+            // "confirmed against the save" from "contradicted by the save".
+            combatAccelerationConfidence: ship.modelled.combatAccelerationConfidence
           },
           mass: ship.mass,
           agreement: ship.agreement

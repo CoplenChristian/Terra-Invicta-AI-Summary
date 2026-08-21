@@ -20,6 +20,31 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
+
+// The /api/save-state tests need a deterministic newest save. Point the
+// save-path config at a throwaway folder BEFORE the server is required, so the
+// module-level config resolution in server/saveParser.js, snapshotCache.js and
+// requestValidation.js all see it. server/index.js's dotenv load only fills
+// unset variables, so it will not override this.
+const TEST_SAVE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ti-save-state-'));
+process.env.TI_SAVE_PATH = TEST_SAVE_DIR;
+
+const { makeSaveData } = require('./fixtures/syntheticSave');
+
+function writeSyntheticSave(filename, mtime) {
+  const saveJson = JSON.stringify({ gamestates: makeSaveData().gamestates });
+  const filePath = path.join(TEST_SAVE_DIR, filename);
+  fs.writeFileSync(filePath, saveJson);
+  fs.utimesSync(filePath, mtime, mtime);
+}
+
+// Two saves with controlled mtimes so "newest" is deterministic and the
+// selection actually has to decide between them.
+writeSyntheticSave('Older.json', new Date('2026-01-01T00:00:00Z'));
+writeSyntheticSave('Autosave.json', new Date('2026-01-02T00:00:00Z'));
 
 const app = require('../server');
 
@@ -30,6 +55,7 @@ const EXPECTED_STACK = [
   ['GET', '/api/runtime'],
   ['POST', '/api/publish'],
   ['GET', '/api/saves'],
+  ['GET', '/api/save-state'],
   ['GET', '/api/snapshot'],
   ['POST', '/api/refresh'],
   ['GET', '/api/export'],
@@ -109,5 +135,79 @@ test('every route module registers something and none registers twice', () => {
   // returned early would otherwise be invisible.
   for (const marker of ['/api/runtime', '/api/snapshot', '/api/intel', '/api/intel/history', '/api/templates/effects', '/api/v2/briefing']) {
     assert.ok(seen.has(marker), `${marker} is registered`);
+  }
+});
+
+async function startServer() {
+  return new Promise(resolve => {
+    const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
+  });
+}
+
+async function stopServer(server) {
+  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+}
+
+test('GET /api/save-state reports the newest save identity without parsing it', async () => {
+  const server = await startServer();
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+
+    const logs = [];
+    const originalLog = console.log;
+    console.log = (...args) => { logs.push(args.join(' ')); };
+    let elapsedMs = Infinity;
+    let payload;
+    let status;
+    try {
+      // Warm-up: the first request on a fresh server pays connection and JIT
+      // setup costs that have nothing to do with the route's stat-and-hash
+      // work. Measure the second request so the timing is the route's.
+      await fetch(`${base}/api/save-state`);
+      const startedAt = Date.now();
+      const response = await fetch(`${base}/api/save-state`);
+      elapsedMs = Date.now() - startedAt;
+      status = response.status;
+      payload = await response.json();
+    } finally {
+      console.log = originalLog;
+    }
+
+    assert.equal(status, 200);
+    assert.equal(payload.success, true);
+    assert.ok(/^[0-9a-f]{24}$/.test(payload.snapshotId), 'snapshotId is the 24-hex identity');
+    assert.ok(/^[0-9a-f]{64}$/.test(payload.saveHash), 'saveHash is the sha256');
+    assert.ok(payload.saveModifiedAt, 'saveModifiedAt is present');
+    assert.equal(payload.saveFilename, 'Autosave.json', 'the newest save is selected, not the older one');
+    assert.equal(payload.campaignDate, null, 'campaignDate stays null without a parse');
+
+    const body = JSON.stringify(payload);
+    assert.ok(!('fullPath' in payload), 'no fullPath key is exposed');
+    assert.ok(!body.includes(TEST_SAVE_DIR), 'the absolute save-folder path never appears in the response');
+    assert.ok(!payload.saveFilename.includes('/') && !payload.saveFilename.includes('\\'), 'saveFilename is a bare basename');
+    assert.ok(!body.includes('Older.json'), 'the older save is not the one reported');
+
+    assert.ok(elapsedMs < 20, `save-state completed in ${elapsedMs}ms, expected under 20ms`);
+    assert.ok(!logs.some(line => line.includes('[Server] Parsing save')), 'save-state must never parse the save');
+  } finally {
+    await stopServer(server);
+  }
+});
+
+test('GET /api/save-state snapshotId is byte-identical to /api/snapshot for the same save', async () => {
+  const server = await startServer();
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+
+    const saveState = await fetch(`${base}/api/save-state`).then(response => response.json());
+    const snapshot = await fetch(`${base}/api/snapshot?mode=player&observer=4712`).then(response => response.json());
+
+    assert.equal(snapshot.success, true, 'the synthetic save parses through the snapshot pipeline');
+    assert.equal(snapshot.snapshotId, saveState.snapshotId, 'snapshotId matches what the cache derives');
+    assert.equal(snapshot.saveHash, saveState.saveHash, 'saveHash matches what the cache derives');
+    assert.equal(snapshot.saveModifiedAt, saveState.saveModifiedAt, 'saveModifiedAt matches what the cache derives');
+    assert.equal(snapshot.activeSnapshot.saveFilename, saveState.saveFilename);
+  } finally {
+    await stopServer(server);
   }
 });

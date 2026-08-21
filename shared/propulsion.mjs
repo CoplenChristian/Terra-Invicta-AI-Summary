@@ -24,11 +24,13 @@
 //   all human factions  296 / 297 ships, ratio 1.000000 (the one exception is a
 //                       damaged hull whose reported acceleration corresponds to
 //                       no mass the save carries; its delta-V still matches)
-//   aliens (4717)       delta-V matches 381 / 410; acceleration frequently does
-//                       not. Alien hulls carry performance the design record
-//                       does not explain, so alien rows are reported with the
-//                       disagreement visible rather than with a modelled number
-//                       presented as fact.
+//   aliens (4717)       delta-V matches 416 / 416; COMBAT ACCELERATION does not,
+//                       on 263 of the same ships. Alien hulls carry thrust the
+//                       design record does not explain, so alien rows are
+//                       reported with the disagreement visible rather than with
+//                       a modelled number presented as fact. See
+//                       COMBAT_ACCELERATION_DISCREPANCY for what is known about
+//                       the mechanism and why no correction is applied.
 //
 // The `EVMultiplier` term is not optional and is not in the original working
 // notes. Without it the model reproduces delta-V for only the factions that
@@ -83,6 +85,78 @@ export const PROPULSION_FORMULAE = Object.freeze({
  * a real one before it is reported.
  */
 export const MODEL_AGREEMENT_TOLERANCE = 0.005;
+
+/**
+ * What a modelled figure is worth on a given row, as a machine-readable word.
+ *
+ * Tri-state for exactly the reason `compare()` is tri-state: "the save
+ * contradicts this number" and "there is nothing to check it against" are
+ * different facts, and neither may be read as "confirmed". A consumer that
+ * wants only figures the save has corroborated filters on `confirmed`; one that
+ * shows a `contradicted` figure has to opt into it and carries the reason with
+ * it.
+ */
+export const MODEL_CONFIDENCE = Object.freeze({
+  /** The save carries a figure and it matches the model within tolerance. */
+  confirmed: 'confirmed',
+  /** The save carries a figure and it does NOT match the model. */
+  contradicted: 'contradicted',
+  /** No comparison was possible. NOT a disagreement, and NOT a confirmation. */
+  unconfirmed: 'unconfirmed'
+});
+
+/**
+ * The one column the model is known to get wrong on a whole class of designs,
+ * and why nothing is done about it.
+ *
+ * Measured 2026-08-21 against the live save, all factions, omniscient
+ * (docs/model-verification-review.md, "Resolution of Claim 1"):
+ *
+ *   - Alien delta-V agrees 416 / 416 while combat acceleration disagrees on 263
+ *     of the same ships. That split localises the error to the THRUST path:
+ *     a mass error would move both columns, a thrust error moves only this one.
+ *   - 239 of the 265 total disagreements are a constant 1.35x, tight enough that
+ *     the p25 / p50 / p75 of the ratio are all 1.3500.
+ *   - Grouped by hull design template the split is perfectly clean: 21 alien
+ *     templates agree uniformly, 35 disagree uniformly, ZERO are mixed. The
+ *     factor is a per-DESIGN property, not per-ship state (fuel state and drive
+ *     were both tested and rejected: the 1.35x ships are at full tanks, and
+ *     `AlienFusionTorchx2` splits 38 / 60 at an identical `thrustCap`).
+ *
+ * No factor is applied here, for two reasons that both stand alone:
+ *
+ *   1. 153 alien ships ALREADY agree. A blanket 1.35x would trade 239 fixes for
+ *      153 new breaks.
+ *   2. The field that selects the two groups is not in the snapshot at all.
+ *      `hullName` (`AlienFrigate` appears in both), `constructionTier`,
+ *      `noseHardpoints`, `hullHardpoints`, `structuralIntegrity` and
+ *      `baseConstructionTimeDays` all overlap between them, and the alien hulls
+ *      carry `thrusterMultiplier: 1`. Naming the 35 affected templates would be
+ *      campaign-specific, which `docs/research-advisor-spec.md` section 0
+ *      forbids -- `AlienCouncilShipTemplate5xx` ids are not stable across
+ *      campaigns.
+ *
+ * So the number is reported with the contradiction attached rather than
+ * corrected by a constant nobody can derive from shipped data. Where the save
+ * reports a measured figure, that is the one to use -- and the shipped
+ * `alienBenchmark` in `shared/intel/propulsion.mjs` already reads the save's
+ * reported medians, so this gap does not reach the dashboard.
+ */
+export const COMBAT_ACCELERATION_DISCREPANCY = Object.freeze({
+  reason: 'the save\'s own combat acceleration for this design contradicts the model. This is a known '
+    + 'per-design discrepancy: it is uniform within a hull design template (21 alien templates agree '
+    + 'uniformly, 35 disagree uniformly, none are mixed) and the field that selects the affected designs '
+    + 'is not present in the snapshot, so no correction is applied. Prefer the measured figure.',
+  citation: 'docs/model-verification-review.md, "Resolution of Claim 1 -- measured 2026-08-21, against bbef9f0"',
+  correctionApplied: false,
+  correctionWithheldBecause: 'the observed discrepancy is a constant 1.35x on 239 of 265 disagreeing ships, '
+    + 'but 153 alien ships already agree without it, so applying it as a constant would trade 239 fixes for '
+    + '153 new breaks. Hardcoding the affected design templates would be campaign-specific, which '
+    + 'docs/research-advisor-spec.md section 0 forbids.',
+  affectsColumns: Object.freeze(['combatAccelerationMps2']),
+  deltaVUnaffected: 'delta-V is unaffected and agrees 416/416 on the same alien ships; the error is in the '
+    + 'thrust path only.'
+});
 
 /** Kilograms in a tonne. The save quotes ship mass in kg and propellant in t. */
 const KG_PER_TONNE = 1000;
@@ -276,6 +350,46 @@ const compare = (modelled, measured) => {
 };
 
 /**
+ * The confidence to attach to one modelled figure, read off its own comparison.
+ *
+ * `known` is the record of a discrepancy we have already characterised for this
+ * column, or null when there is none; it supplies the reason and the citation
+ * for the `contradicted` state so the caveat is not re-invented per call site.
+ *
+ * A comparison that could not be made yields `unconfirmed` and keeps its own
+ * reason. It must never collapse into `confirmed` -- an unevaluable check is not
+ * a passing one.
+ */
+const confidenceFrom = (comparison, known = null) => {
+  if (!comparison || comparison.agrees === null) {
+    return {
+      state: MODEL_CONFIDENCE.unconfirmed,
+      reason: comparison?.reason || 'no comparison against the save was possible for this column',
+      ratio: null,
+      citation: null,
+      correctionApplied: null
+    };
+  }
+  if (comparison.agrees === true) {
+    return {
+      state: MODEL_CONFIDENCE.confirmed,
+      reason: null,
+      ratio: comparison.ratio,
+      citation: null,
+      correctionApplied: null
+    };
+  }
+  return {
+    state: MODEL_CONFIDENCE.contradicted,
+    reason: known?.reason
+      || 'the save carries a figure for this column and it does not match the model within tolerance',
+    ratio: comparison.ratio,
+    citation: known?.citation ?? null,
+    correctionApplied: known ? known.correctionApplied : false
+  };
+};
+
+/**
  * Full propulsion record for one ship.
  *
  * Measured figures come straight from the save and are labelled `save`. Modelled
@@ -357,6 +471,18 @@ export function shipPropulsion({ ship, design, driveStats = {}, propellantModule
   agreement.allAgree = verdicts.length === 0 ? null : verdicts.every(Boolean);
   agreement.comparedColumns = verdicts.length;
   agreement.tolerance = MODEL_AGREEMENT_TOLERANCE;
+
+  // The confidence is derived from `agreement`, so it is attached once the
+  // comparison exists -- and it is attached to `modelled`, not left only in
+  // `agreement`, because a consumer reading `modelled.combatAccelerationMps2`
+  // on its own would otherwise have no way to tell a figure the save confirmed
+  // from one the save contradicts. See COMBAT_ACCELERATION_DISCREPANCY: on this
+  // save that is 263 of 416 alien ships, and the number is reported rather than
+  // corrected because the correcting field is not in the snapshot.
+  modelled.combatAccelerationConfidence = confidenceFrom(
+    agreement.combatAcceleration,
+    COMBAT_ACCELERATION_DISCREPANCY
+  );
 
   return {
     ...base,

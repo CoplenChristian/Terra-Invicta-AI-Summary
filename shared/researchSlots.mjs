@@ -98,6 +98,27 @@ export const SLOT_INDEX_PIN = Object.freeze({
  * no template or save field states a ProjectBonus. CategoryBonus can be
  * reconstructed from `techBonuses` on orgs, hab modules and councilor traits,
  * but that reconstruction is itself unvalidated.
+ *
+ * HOW THE EVIDENCE IS ORDERED, and why it was reordered (2026-08-21, see
+ * docs/model-verification-review.md "Claim 3"):
+ *
+ * The refusal stands, but two of the three numbers originally cited for it are
+ * CONFOUNDED and were being presented as if they were independent pins. They
+ * are now labelled, and the one measurement no confound touches -- the stable
+ * RELATIVE share between two slots -- leads instead of being demoted to a
+ * footnote:
+ *
+ *   - `whatDidReproduce` (2.26216x / 2.26214x) is a RELATIVE measure, so it
+ *     cancels any global change in research income. Stable to one part in 10^4.
+ *     This is the strongest thing in the block.
+ *   - the 1.147x / 0.993x swing is an ABSOLUTE measure (delivered / predicted)
+ *     and moves under a perfect formula if research income drifted between the
+ *     two intervals. Independent of CategoryBonus; NOT independent of drift.
+ *   - ProjectBonus = -0.209 is a CONSEQUENCE of assuming the unvalidated
+ *     reconstructed Xenology bonus of 0.20. At a true bonus of >= 0.2435 the
+ *     "penalty" contradiction disappears entirely.
+ *
+ * Both numbers are kept -- they corroborate -- but neither is a pin on its own.
  */
 export const ALLOCATION_MODEL = Object.freeze({
   source: 'Terra Invicta wiki, `Technology`, rev 2026-05-06',
@@ -114,23 +135,56 @@ export const ALLOCATION_MODEL = Object.freeze({
     method: 'predicted per-slot delivery for observer 4712 from cachedYearlyRevenue.Research with an '
       + 'unchanged pip layout of [0,0,3,3,3,0], and compared against the research actually delivered to '
       + 'each slot over two consecutive 15.5-day intervals.',
-    findings: Object.freeze([
-      'the SAME slot with the SAME pips delivered 1.147x the prediction over 12/1-12/16/2033 and 0.993x '
-        + 'over 12/16/2033-1/1/2034. A per-slot multiplier the formula treats as constant is not constant.',
-      'the two project slots delivered a fixed 1.2073 ratio to each other. With their reconstructed '
-        + 'category bonuses (Xenology 0.20, Energy 0.03) the formula can only produce that ratio with '
-        + 'ProjectBonus = -0.209 -- a project PENALTY, contradicting the term\'s own definition.',
-      'no single (base, ProjectBonus) pair fits all three pip-carrying slots at once.'
-    ]),
+    // THE LEAD SIGNAL. Stated before `findings` because it is the only
+    // measurement in this block that no confound touches.
     whatDidReproduce: 'the RELATIVE share between two slots is stable: the project slot delivered '
       + '2.26216x the tech slot in the first interval and 2.26214x in the second, one part in 10^4 apart. '
-      + 'The allocation has a stable structure; this formula is not it.',
+      + 'This is a RELATIVE measure, so it cancels any global change in research income and is the one '
+      + 'figure here that survives the income-drift confound -- which makes it the strongest evidence in '
+      + 'the block, not a footnote. A stable relative share beside an unstable absolute share is the '
+      + 'signature of a changing total income over a constant per-slot allocation ratio. The allocation '
+      + 'has a stable structure; this formula is not it.',
+    // Ordered strongest-first, and the two confounded numbers say so in their
+    // own text. This array is documentation, not the rule registry -- reordering
+    // it changes no explanation the engine emits.
+    findings: Object.freeze([
+      'UNCONFOUNDED, and the real mis-fit: no single (base, ProjectBonus) pair fits all three '
+        + 'pip-carrying slots at once, and two of the formula\'s four terms have no shipped source to '
+        + 'fall back on. This is what the refusal rests on.',
+      'CONFOUNDED by research-income drift: the SAME slot with the SAME pips delivered 1.147x the '
+        + 'prediction over 12/1-12/16/2033 and 0.993x over 12/16/2033-1/1/2034. A per-slot multiplier the '
+        + 'formula treats as constant is not constant -- BUT this is an ABSOLUTE measure '
+        + '(delivered / predicted, predicted derived from the annual research rate), so any change in the '
+        + 'observer\'s research income between the two 15.5-day intervals (a new org, trait, hab module or '
+        + 'nation stat) moves it even under a perfect formula. It is independent of CategoryBonus but NOT '
+        + 'of income drift, so it corroborates rather than pins.',
+      'CONFOUNDED by the unvalidated Xenology CategoryBonus: the two project slots delivered a fixed '
+        + '1.2073 ratio to each other. With their reconstructed category bonuses (Xenology 0.20, Energy '
+        + '0.03) the formula can only produce that ratio with ProjectBonus = -0.209 -- a project PENALTY, '
+        + 'contradicting the term\'s own definition. BUT -0.209 is a CONSEQUENCE of assuming the '
+        + 'reconstructed 0.20, not an independent refutation: for ProjectBonus = 0 to produce the same '
+        + 'ratio the Xenology bonus need only be 1.2073 x 1.03 - 1 = 0.2435, and the reconstruction is '
+        + 'itself unvalidated. If the true bonus is >= 0.2435 this contradiction collapses entirely.'
+    ]),
+    confoundedBy: Object.freeze({
+      'the 1.147x / 0.993x swing': 'research-income drift between the two 15.5-day intervals. An absolute '
+        + 'delivered/predicted ratio moves with income even when the per-slot formula is exactly right.',
+      'ProjectBonus = -0.209': 'the unvalidated reconstructed Xenology CategoryBonus of 0.20. The figure is '
+        + 'derived from that assumption; a true Xenology bonus of >= 0.2435 yields ProjectBonus >= 0 and '
+        + 'no contradiction.'
+    }),
+    bottomLine: 'the formula does not reproduce; the residual is partly income drift and partly a real '
+      + 'mis-fit, and the relative-share stability suggests the allocation has a structure this formula '
+      + 'does not capture.',
     measuredOn: 'ExitSave/Autosave/Autosave2/Autosave3, observer 4712, 2026-08-21'
   }),
   recommendationRefused: 'no reallocation is recommended. The allocation formula does not reproduce the '
-    + 'observer\'s own measured research delivery, and a reallocation computed from it would be a '
-    + 'confident number resting on an unverified model. The current layout below is measured; the '
-    + 'optimum is not offered rather than being offered wrongly.'
+    + 'observer\'s own measured research delivery: no single (base, ProjectBonus) pair fits all three '
+    + 'pip-carrying slots, and two of its four terms have no shipped source at all. A reallocation '
+    + 'computed from it would be a confident number resting on an unverified model. What IS stable is the '
+    + 'relative share between slots (see `model.reproduction.whatDidReproduce`), which cancels income '
+    + 'drift and says the allocation has a structure this formula does not capture. The current layout '
+    + 'below is measured; the optimum is not offered rather than being offered wrongly.'
 });
 
 /**

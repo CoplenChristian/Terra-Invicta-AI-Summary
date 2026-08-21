@@ -11,8 +11,13 @@ const state = {
   briefing: null,
   rawSnapshot: null,
   snapshotIdentity: null,
-  activeSector: null,
+  // True while the displayed snapshot is the newest save on disk. The save
+  // poller only offers newer saves while this holds; a historical save chosen
+  // from the picker must not be undone by it.
+  isLatestSnapshot: true,
   isLoading: false,
+  savePollInFlight: false,
+  activeSector: null,
   requestSequence: 0,
   abortController: null,
   libraryView: {
@@ -32,6 +37,40 @@ const state = {
 let factionController = null;
 let factionModalTrigger = null;
 let libraryModalTrigger = null;
+
+// Newest-save autodetection. The server fingerprints the newest save on every
+// request (saveParser.getLatestSaveFile + a size:mtimeMs:sha256 hash), so the
+// only missing piece is the browser asking again. A 5s poll is stat-and-hash
+// only (~5ms) and costs ~0.05% of a core, so a poll beats fs.watch here: no
+// dependency, no Windows write-event noise while Terra Invicta is saving.
+const SAVE_POLL_INTERVAL_MS = 5000;
+const SAVE_AUTOLOAD_STORAGE_KEY = 'ti-save-autoload';
+let savePollTimer = null;
+
+function autoloadNewSaves() {
+  try {
+    return localStorage.getItem(SAVE_AUTOLOAD_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setAutoloadNewSaves(enabled) {
+  try {
+    if (enabled) localStorage.setItem(SAVE_AUTOLOAD_STORAGE_KEY, '1');
+    else localStorage.removeItem(SAVE_AUTOLOAD_STORAGE_KEY);
+  } catch {
+    // Storage unavailable; the preference simply cannot be persisted.
+  }
+}
+
+// The same fail-closed gate the publish button uses: only the local/dev
+// Express runtime advertises the refresh capability, and the hosted worker
+// returns the same /api/runtime route with it false.
+function canAutoRefresh() {
+  return ['local', 'dev'].includes(state.runtime.environment)
+    && state.runtime.canRefresh === true;
+}
 
 function focusableModalNodes(dialog) {
   return Array.from(dialog?.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])') || [])
@@ -234,6 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
   assertViewRegistryIntegrity();
   initViewNavigation();
   initEventListeners();
+  initSaveAutodetect();
   loadRuntime().finally(loadData);
 });
 
@@ -277,6 +317,14 @@ function applyRuntimeCapabilities() {
     publishButton.disabled = !canPublish;
     publishButton.setAttribute('aria-hidden', canPublish ? 'false' : 'true');
   }
+
+  // Newest-save autodetection stays off the hosted site: without a save folder
+  // there is nothing to poll for. Keep the affordance hidden and the toggle
+  // inert there, exactly like the publish capability.
+  const newSaveBanner = document.getElementById('initNewSaveBanner');
+  if (newSaveBanner) newSaveBanner.hidden = true;
+  const autoloadToggle = document.getElementById('initNewSaveAutoload');
+  if (autoloadToggle) autoloadToggle.disabled = !canAutoRefresh();
 
   if (!supported.includes(state.mode)) {
     state.mode = state.runtime.defaultMode || supported[0] || 'player';
@@ -425,24 +473,13 @@ function initEventListeners() {
     });
   }
 
-  // Refresh button
+  // Refresh button. The newest-save affordance's Load control and the auto-load
+  // path call the SAME refreshTelemetry() below; this button is the manual
+  // entry point to it, and its error handling is the one the manual path uses.
   const refreshBtn = document.getElementById('initRefreshBtn');
   if (refreshBtn) {
-    refreshBtn.addEventListener('click', async () => {
-      refreshBtn.textContent = 'Refreshing…';
-      try {
-        const refreshResponse = await fetch(`/api/refresh?mode=${state.mode}&observer=${state.observer}`, { method: 'POST' });
-        const refreshPayload = await refreshResponse.json().catch(() => ({}));
-        if (!refreshResponse.ok || refreshPayload.success === false) {
-          throw new Error(refreshPayload.error || `Refresh failed (${refreshResponse.status})`);
-        }
-        await loadData();
-        showToast('Telemetry refreshed from the newest save.');
-      } catch (err) {
-        showToast('Refresh failed: ' + err.message);
-      } finally {
-        refreshBtn.textContent = 'Refresh save';
-      }
+    refreshBtn.addEventListener('click', () => {
+      refreshTelemetry().catch(() => {});
     });
   }
 
@@ -655,6 +692,147 @@ function initEventListeners() {
   });
 }
 
+// Newest-save autodetection ------------------------------------------------
+//
+// The one shared refresh path. The Refresh save button, the banner's Load
+// control and the auto-load path all land here; POST /api/refresh is the only
+// reload the dashboard has. `manual` (the button and the banner) toasts its
+// outcome; the auto path stays silent and retries a 503, because a save that
+// changes mid-parse is normal while Terra Invicta autosaves continuously.
+async function refreshTelemetry({ manual = true } = {}) {
+  const refreshBtn = document.getElementById('initRefreshBtn');
+  if (refreshBtn && manual) refreshBtn.textContent = 'Refreshing…';
+  try {
+    const refreshResponse = await fetch(`/api/refresh?mode=${state.mode}&observer=${state.observer}`, { method: 'POST' });
+    const refreshPayload = await refreshResponse.json().catch(() => ({}));
+    if (!refreshResponse.ok || refreshPayload.success === false) {
+      const refreshError = new Error(refreshPayload.error || `Refresh failed (${refreshResponse.status})`);
+      refreshError.status = refreshResponse.status;
+      throw refreshError;
+    }
+    await loadData();
+    if (manual) showToast('Telemetry refreshed from the newest save.');
+    return true;
+  } catch (err) {
+    if (manual) showToast('Refresh failed: ' + err.message);
+    throw err;
+  } finally {
+    if (refreshBtn && manual) refreshBtn.textContent = 'Refresh save';
+  }
+}
+
+// Auto-load with backoff. loadOrGetSnapshot throws 503 when the save changes
+// while it is being parsed -- "may still be writing it" -- and the game
+// autosaves constantly, so a poll-triggered reload will hit it. A failed
+// refresh is UNKNOWN, never an error toast; retry a few times and give up
+// quietly, leaving the banner up so the user can load manually.
+async function autoRefreshToNewestSave() {
+  const attempts = 5;
+  let delayMs = 2000;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await refreshTelemetry({ manual: false });
+      return true;
+    } catch (err) {
+      const saveStillWriting = err.status === 503 || /may still be writing/i.test(err.message || '');
+      if (!saveStillWriting || attempt === attempts) return false;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+      delayMs *= 2;
+    }
+  }
+  return false;
+}
+
+function showNewSaveBanner(saveFilename) {
+  const banner = document.getElementById('initNewSaveBanner');
+  if (!banner) return;
+  const meta = document.getElementById('initNewSaveMeta');
+  if (meta) meta.textContent = saveFilename || 'a new save';
+  banner.hidden = false;
+  banner.removeAttribute('inert');
+  banner.setAttribute('aria-hidden', 'false');
+}
+
+function hideNewSaveBanner() {
+  const banner = document.getElementById('initNewSaveBanner');
+  if (!banner) return;
+  banner.hidden = true;
+  banner.setAttribute('inert', '');
+  banner.setAttribute('aria-hidden', 'true');
+}
+
+// The route never parses, so the in-game date is only known once a reload lands
+// on the new save. When the banner is up and a load completes, say the date
+// rather than guessing it.
+function updateNewSaveBannerDate() {
+  const banner = document.getElementById('initNewSaveBanner');
+  if (!banner || banner.hidden) return;
+  const meta = document.getElementById('initNewSaveMeta');
+  const date = state.briefing?.campaignDate;
+  const fileName = state.rawSnapshot?.metadata?.fileName || state.snapshotIdentity?.saveFilename;
+  if (meta && date && fileName) {
+    meta.textContent = `${fileName} · ${formatCampaignDate(date)}`;
+  }
+}
+
+async function pollSaveState() {
+  if (!canAutoRefresh()) return;
+  if (document.visibilityState !== 'visible') return;
+  if (state.isLoading || state.savePollInFlight) return;
+  // Only while the dashboard is showing the newest save it knew about. A
+  // historical save picked from the picker must not be undone by this poller.
+  if (state.isLatestSnapshot === false) return;
+  if (!state.snapshotIdentity?.snapshotId) return;
+
+  state.savePollInFlight = true;
+  let payload;
+  try {
+    const response = await fetch('/api/save-state', { cache: 'no-store' });
+    if (!response.ok) return;
+    payload = await response.json();
+  } catch (err) {
+    // A failed poll is UNKNOWN -- not an error toast, and not "no new save".
+    // Back off and let the next interval try again.
+    console.debug('[Mission Control] Newest-save poll failed; will retry.', err);
+    return;
+  } finally {
+    state.savePollInFlight = false;
+  }
+  if (!payload?.success || !payload.snapshotId) return;
+
+  if (payload.snapshotId === state.snapshotIdentity.snapshotId) {
+    hideNewSaveBanner();
+    return;
+  }
+
+  showNewSaveBanner(payload.saveFilename);
+  if (autoloadNewSaves()) {
+    await autoRefreshToNewestSave();
+  }
+}
+
+function initSaveAutodetect() {
+  const autoloadToggle = document.getElementById('initNewSaveAutoload');
+  if (autoloadToggle) {
+    autoloadToggle.checked = autoloadNewSaves();
+    autoloadToggle.addEventListener('change', () => {
+      setAutoloadNewSaves(autoloadToggle.checked);
+    });
+  }
+
+  document.getElementById('initNewSaveLoadBtn')?.addEventListener('click', () => {
+    refreshTelemetry().catch(() => {});
+  });
+
+  if (savePollTimer) return;
+  savePollTimer = setInterval(pollSaveState, SAVE_POLL_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    // Catch up immediately when the tab comes back instead of waiting for the
+    // next interval: 720 background polls during an hour of play are pointless.
+    if (document.visibilityState === 'visible') pollSaveState();
+  });
+}
+
 async function loadData() {
   state.isLoading = true;
   const requestId = ++state.requestSequence;
@@ -675,7 +853,9 @@ async function loadData() {
     state.briefing = json.briefing;
     state.rawSnapshot = json.data;
     state.snapshotIdentity = consistency.identity;
+    state.isLatestSnapshot = json.isLatestSnapshot !== false;
     document.getElementById('initTelemetryBanner')?.remove();
+    updateNewSaveBannerDate();
 
     populateObserverSelect(state.rawSnapshot.factions || []);
     renderDashboard();
