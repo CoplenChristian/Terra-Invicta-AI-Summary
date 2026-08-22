@@ -108,9 +108,12 @@ function register(app) {
       );
       const body = requestValidation.parseBodyQuery(req.query.body);
       const theater = requestValidation.parseBodyQuery(req.query.theater ?? req.query.body);
+      // The bounds and the wording both come from the shared table, so the
+      // hosted worker cannot accept a limit this route rejects or vice versa.
       const limit = requestValidation.parseBoundedIntegerQuery(
         req.query.limit ?? (requestValidation.usesQuantityAsLimit(req.params.resource) ? req.query.quantity : undefined),
-        'mining prospects limit'
+        requestValidation.limitLabelFor(req.params.resource),
+        requestValidation.limitBoundsFor(req.params.resource)
       );
       const destination = req.query.destination ? String(req.query.destination).trim() : null;
       // `military-value` narrows to one unlock family or weapon class. An

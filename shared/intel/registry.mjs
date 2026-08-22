@@ -71,6 +71,7 @@ import { miningAnalysisResource, miningProspectsResource } from './mining.mjs';
 import { miningExpansionResource } from './miningExpansion.mjs';
 import { alienThreatResource } from './alienThreat.mjs';
 import { propulsionResource } from './propulsion.mjs';
+import { driveExplorerResource } from './driveExplorer.mjs';
 import { militaryValueResource } from './militaryValue.mjs';
 import { economicValueResource } from './economicValue.mjs';
 import { researchRankingResource } from './researchRanking.mjs';
@@ -348,6 +349,18 @@ const INTEL_ENDPOINTS = Object.freeze([
     example: `${OMNISCIENT}&limit=8`,
     project: (snapshot, { observerId, mode, designId, limit }) =>
       propulsionResource(snapshot, { observerId, mode, designId, limit })
+  },
+  {
+    key: 'driveExplorer',
+    example: `${OMNISCIENT}&sort=delta-v&status=fittable&limit=25`,
+    // Detail-aware for the same reason `military-value` is: the full listing is
+    // one row per drive in the whole 541-entry catalogue, and a discovery
+    // client cannot choose what to fetch if the big payload is the default.
+    // `design` selects the hull, `status` narrows to one availability bucket or
+    // state, `family` to one drive classification, and `sort` reorders.
+    detail: true,
+    project: (snapshot, { observerId, mode, designId, limit, sort, status, family, detail }) =>
+      driveExplorerResource(snapshot, { observerId, mode, designId, limit, sort, status, family, detail })
   },
   {
     key: 'militaryValue',

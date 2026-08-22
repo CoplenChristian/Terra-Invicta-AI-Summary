@@ -77,6 +77,7 @@
         <button class="init-btn init-nav-btn init-btn-cyan" type="button" data-view="command" aria-pressed="true">COMMAND</button>
         <button class="init-btn init-nav-btn" type="button" data-view="expansion" aria-pressed="false">EXPANSION</button>
         <button class="init-btn init-nav-btn" type="button" data-view="fleet" aria-pressed="false">FLEET</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="drives" aria-pressed="false">DRIVES</button>
         <button class="init-btn init-nav-btn" type="button" data-view="threat" aria-pressed="false">THREAT</button>
         <button class="init-btn init-nav-btn" type="button" data-view="records" aria-pressed="false">RECORDS</button>
       </nav>
@@ -393,7 +394,16 @@
       </div>
     </section>
 
-    <!-- View 4: THREAT -->
+    <!-- View 4: DRIVES -->
+    <section class="init-view" id="view-drives" hidden inert aria-hidden="true" aria-label="Drives view">
+      <div class="init-view__grid">
+        <div class="init-view__span">
+          <div id="driveExplorer"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 5: THREAT -->
     <section class="init-view" id="view-threat" hidden inert aria-hidden="true" aria-label="Threat view">
       <div class="init-view__grid">
         <div class="tech-card tech-card--quiet init-view__span">
@@ -533,6 +543,7 @@
   <script src="/v2/js/components/strategic-commentary.js"></script>
   <script src="/v2/js/components/research-advisor.js"></script>
   <script src="/v2/js/components/fleet-procurement.js"></script>
+  <script src="/v2/js/components/drive-explorer.js"></script>
   <script src="/v2/js/mission-control.js"></script>
 </body>
 </html>

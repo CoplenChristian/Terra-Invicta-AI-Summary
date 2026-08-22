@@ -10,7 +10,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**167 modules.**
+**170 modules.**
 
 ## `public/`
 
@@ -23,6 +23,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/council-orders.js` | BS | Browser (ESM) | 349 | renders the at-a-glance answer to "what should each councilor do | — | — |
 | `public/v2/js/components/detail-panel.js` | BS | Browser (ESM) | 150 | the shared detail surface for clickable Mission Control modules. | — | — |
 | `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 637 | renders the Directive Engine v2 Cycle Plan. | — | — |
+| `public/v2/js/components/drive-explorer.js` | BS | Browser (ESM) | 617 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
 | `public/v2/js/components/executive-boards.js` | BS | Browser (ESM) | 416 | renders the executive boards — faction power, resources, and the | — | — |
 | `public/v2/js/components/faction-intel.js` | BS | Browser (ESM) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
 | `public/v2/js/components/fleet-procurement.js` | BS | Browser (ESM) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
@@ -32,7 +33,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/research-advisor.js` | BS | Browser (ESM) | 972 | phase 4 of the research advisor, on screen. | — | — |
 | `public/v2/js/components/strategic-commentary.js` | BS | Browser (ESM) | 126 | renders the non-LLM four-layer Strategic Commentary Engine output. | — | — |
 | `public/v2/js/components/world-map.js` | BS | Browser (ESM) | 493 | renders the interactive world/space theater map surface. | — | — |
-| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 1894 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 1933 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (ESM) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
@@ -51,11 +52,12 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/publish/supabaseWriter.js` | C | Node (CommonJS) | 342 | publish stage 4 — every network write the publish makes, ordered to | `MAX_COMPACT_HISTORY_BYTES, MAX_UPSERT_BATCH_BYTES, MAX_UPSERT_BATCH_ROWS, batchSnapshotRows, buildCampaignPayload, commitCampaignPointer, createServiceClient, readExistingCampaign, shouldAdvancePointer, sleep, storeStrategicHistoryAndPrune, upsertSnapshotRows, …(+1)` | — |
 | `scripts/publish/techGraph.js` | C | Node (CommonJS) | 102 | publish stage 3a — apply the shared/inline/omitted tech-tree mode | `applyTechTreeMode, buildSharedTechGraph, splitTechTree, techGraphFingerprint` | `tests/techGraph.test.js` |
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 258 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
+| `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 240 | browser verification that the Drive Explorer renders the measured | — | — |
 | `scripts/verify_research_actionability.js` | C | Node (CommonJS) | 196 | browser verification of research-advisor actionability against a | — | — |
 | `scripts/verify_research_tab_layout.js` | C | Node (CommonJS) | 243 | browser verification of the Research Advisor layout and legibility | — | — |
 | `scripts/verify_research_vs_procurement.js` | C | Node (CommonJS) | 384 | browser verification of separating procurement from research and of | — | — |
 | `scripts/verify_supabase_rls.js` | C | Node (CommonJS) | 196 | verify Supabase RLS policies and hosted endpoints behave as | `main` | — |
-| `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 285 | browser verification of the v2 navigation acceptance checks against a | — | — |
+| `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 314 | browser verification of the v2 navigation acceptance checks against a | — | — |
 
 ## `server/`
 
@@ -112,7 +114,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/exportGenerator.js` | C | Node (CommonJS) | 31 | CommonJS adapter exposing the shared markdown export renderers to the server. | — | — |
 | `server/http/publishControl.js` | C | Node (CommonJS) | 151 | the local-only, service-role-backed publish route and its | `handlePublish, isPublishAuthorized, publishToken, register` | — |
 | `server/http/requestContext.js` | C | Node (CommonJS) | 90 | request->(mode, observer, save, risk floor) and snapshot->identity | `assertObserver, requestContext, responseIdentity` | — |
-| `server/http/routes/intel.js` | C | Node (CommonJS) | 194 | the focused-projection route surface — one discovery directory page | `register` | — |
+| `server/http/routes/intel.js` | C | Node (CommonJS) | 197 | the focused-projection route surface — one discovery directory page | `register` | — |
 | `server/http/routes/runtime.js` | C | Node (CommonJS) | 86 | routes that describe the local install — /api/runtime, /api/publish, | `register` | — |
 | `server/http/routes/snapshot.js` | C | Node (CommonJS) | 175 | routes returning the whole filtered snapshot or a rendering of it, | `register, registerReadOnlyExports` | — |
 | `server/http/routes/strategicHistory.js` | C | Node (CommonJS) | 137 | the Supabase-backed strategic-history routes — compact snapshot | `register, strategicHistory` | — |
@@ -123,7 +125,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/intelResources.js` | **B** C | Node (CommonJS) | 116 | CommonJS barrel exposing the shared intel projections to the local Express server. | `DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, SUPPORTED_RESOURCES, buildResource, isDetailLevel, measureIntelEndpointSizes, parseDetailLevel` | `tests/intelResources.test.js` |
 | `server/miningExpansion.js` | **B** C | Node (CommonJS) | 83 | CommonJS adapter exposing the shared mining-expansion projection to | `MINE_LIMIT_GRANTS, MISSION_TECH_NAMES, THEATER_ACCESSIBILITY, buildMiningCapacity, buildMiningExpansion, buildResourceRunways, compareMiningCandidates, evaluateUtility, getDestinationTechForBody, resolveBodyDestinationTech, scoreSiteCandidate` | `tests/miningExpansion.test.js` |
 | `server/opportunityScorer.js` | C | Node (CommonJS) | 192 | score nations as takeover opportunities for the observer faction. | — | — |
-| `server/requestValidation.js` | **B** C | Node (CommonJS) | 115 | CommonJS barrel over shared/requestValidation.mjs, adding only the | `BODY_FILTER_MESSAGE, HISTORY_LIMIT_BOUNDS, HISTORY_LIMIT_DEFAULT, HOSTED_MODES, LOCAL_MODES, MINING_LIMIT_BOUNDS, MINING_LIMIT_RESOURCES, RequestValidationError, assertKnownObserver, exceedsBodyFilterLimits, hasControlCharacters, isBoundedInteger, …(+8)` | `tests/requestValidation.test.js` |
+| `server/requestValidation.js` | **B** C | Node (CommonJS) | 119 | CommonJS barrel over shared/requestValidation.mjs, adding only the | `BODY_FILTER_MESSAGE, CATALOGUE_LIMIT_BOUNDS, CATALOGUE_LIMIT_RESOURCES, HISTORY_LIMIT_BOUNDS, HISTORY_LIMIT_DEFAULT, HOSTED_MODES, LOCAL_MODES, MINING_LIMIT_BOUNDS, MINING_LIMIT_RESOURCES, RequestValidationError, assertKnownObserver, exceedsBodyFilterLimits, …(+12)` | `tests/requestValidation.test.js` |
 | `server/saveComparison.js` | C | Node (CommonJS) | 97 | choose which earlier save the "since last save" comparison should use. | `DEFAULT_MAX_PROBE, selectComparisonSave` | `tests/saveComparison.test.js` |
 | `server/saveParser.js` | C | Node (CommonJS) | 149 | locate, decompress and parse a Terra Invicta save file into raw game state. | — | — |
 | `server/snapshot/councilors.js` | C | Node (CommonJS) | 170 | the councilor roster reducer, including the org join and the | `buildCouncilors` | — |
@@ -160,6 +162,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `shared/intel/common.mjs` | E | Node + Cloudflare worker (ESM) | 203 | the primitives every intel projection shares — the mining resource | `COMBAT_POWER_SOURCE, MINING_RESOURCES, bodyMatches, combatPowerTotal, destinationMatches, factionMatches, findAlienFaction, normalizeBody, normalizeCostObject, rateMultiplier, siteMonthlyOutput, zeroedBySaveKey` | — |
 | `shared/intel/construction.mjs` | E | Node + Cloudflare worker (ESM) | 132 | shipyards, their queues, and the consolidated build board that | `constructionResource, shipyardResourceRow, shipyardStationResourceRow` | — |
 | `shared/intel/delta.mjs` | E | Node + Cloudflare worker (ESM) | 100 | three-state turn-to-turn comparison between two snapshots, where a | `deltaResource` | — |
+| `shared/intel/driveExplorer.mjs` | E | Node + Cloudflare worker (ESM) | 923 | /api/intel/drive-explorer — every drive in the catalogue rated | `DEFAULT_DRIVE_SORT, DRIVE_AVAILABILITY, DRIVE_SORTS, MEASUREMENT_BASIS, driveExplorerResource` | `tests/driveExplorer.test.js` |
 | `shared/intel/economicValue.mjs` | E | Node + Cloudflare worker (ESM) | 603 | /api/intel/economic-value — phase 3 of the research advisor, pricing | `CONTEXT_KINDS, MINED_RESOURCES, UNPRICED_CONTEXT_GROUPS, economicValueResource` | `tests/economicValue.test.js` |
 | `shared/intel/factions.mjs` | E | Node + Cloudflare worker (ESM) | 179 | the political/strategic half of the intel surface — factions, | `councilorResourceRow, factionResourceRow, nationResourceRow, researchResourceRows, summaryResource` | — |
 | `shared/intel/fleets.mjs` | E | Node + Cloudflare worker (ESM) | 347 | fleets, the ships inside them, inbound arrivals, and the orbital | `FLEET_SUMMARY_OMITTED_FIELDS, SHIP_SUMMARY_OMITTED_FIELDS, arrivalResourceRow, fleetResourceRow, fleetSummaryProjection, fleetSummaryRow, friendlyStrengthAtDestination, shipResourceRow, shipResourceRows, shipSummaryProjection, transferResourceRow, transfersResource` | — |
@@ -172,16 +175,16 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `shared/intel/production.mjs` | E | Node + Cloudflare worker (ESM) | 284 | ship designs and the procurement plan derived from them, refusing to | `productionPlanResource, shipDesignsResource` | — |
 | `shared/intel/propulsion.mjs` | E | Node + Cloudflare worker (ESM) | 462 | /api/intel/propulsion — phase 1 of the research advisor, pairing the | `propulsionResource` | — |
 | `shared/intel/refitAdvisor.mjs` | E | Node + Cloudflare worker (ESM) | 38 | intel resource projection for the refit-advisor endpoint. | `refitAdvisorResource` | `tests/refitAdvisor.test.js` |
-| `shared/intel/registry.mjs` | E | Node + Cloudflare worker (ESM) | 583 | the ONE endpoint table from which route, discovery index, example | `DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, SUPPORTED_RESOURCES, buildResourceProjection, isDetailLevel, measureIntelEndpointSizes, parseDetailLevel` | — |
+| `shared/intel/registry.mjs` | E | Node + Cloudflare worker (ESM) | 596 | the ONE endpoint table from which route, discovery index, example | `DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, SUPPORTED_RESOURCES, buildResourceProjection, isDetailLevel, measureIntelEndpointSizes, parseDetailLevel` | — |
 | `shared/intel/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 1238 | the /api/intel/research-ranking projection composing the phase-4 | `dedupeByGateProject, researchRankingResource` | `tests/researchRanking.test.js` |
 | `shared/intel/theaters.mjs` | E | Node + Cloudflare worker (ESM) | 196 | body-by-body posture — the twelve-body theater board and the | `bodyStatusResource, theatersResource` | — |
 | `shared/intelResources.mjs` | **B** E | Node + Cloudflare worker (ESM) | 153 | public entry point for the intel projections — a barrel re-exporting | `COMBAT_POWER_SOURCE, DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, EXPANSION_MINE_LIMIT_GRANTS, EXPANSION_MISSION_TECH_NAMES, EXPANSION_THEATER_ACCESSIBILITY, FLEET_SUMMARY_OMITTED_FIELDS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, MINING_RESOURCES, MINING_SCARCITY_WEIGHTS, …(+59)` | `tests/intelResources.test.js` |
-| `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 1691 | shared markdown export renderers for the model-facing .md endpoints | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, normalizeBody, …(+6)` | `tests/markdownExports.test.js` |
+| `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 1819 | shared markdown export renderers for the model-facing .md endpoints | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, normalizeBody, …(+6)` | `tests/markdownExports.test.js` |
 | `shared/militaryValue.mjs` | E | Node + Cloudflare worker (ESM) | 1227 | military valuation of the unlock families phase 1 did not cover — | `AXIS_SETS, CLASS_KINDS, COMPONENT_CLASS_SPECS, MAGAZINE_BASIS_CODES, MILITARY_CLASS_SPECS, MILITARY_FORMULAE, MOUNT_HARDPOINTS, RATIO_UNAVAILABLE_CODES, WEAPON_CLASS_SPECS, WEAPON_ROLES, armorMetrics, batteryMetrics, …(+15)` | `tests/militaryValue.test.js` |
 | `shared/munitionDelivery.mjs` | E | Node + Cloudflare worker (ESM) | 649 | research advisor phase 5 — whether a munition round actually | `DELIVERY_BASIS_CODES, DELIVERY_FORMULAE, MUNITION_DELIVERY_AXES, buildPointDefenseProfile, munitionDelivery` | `tests/munitionDelivery.test.js` |
 | `shared/propulsion.mjs` | E | Node + Cloudflare worker (ESM) | 758 | the propulsion model — delta-V and acceleration per ship/design, | `COMBAT_ACCELERATION_DISCREPANCY, DESIGN_ROLES, MODEL_AGREEMENT_TOLERANCE, MODEL_CONFIDENCE, PROPULSION_FORMULAE, RANKING_BY_ROLE, accelerationMps2, deltaVKps, effectiveExhaustVelocity, inferDesignRole, rankRefits, refitOntoDrive, …(+2)` | — |
 | `shared/refitAdvisor.mjs` | E | Node + Cloudflare worker (ESM) | 640 | evaluates validated refit recommendations (drive, weapons, armour) for observer-flown ship designs. | `buildRefitAdvisor, evaluateArmorRecommendation, evaluatePowerBudget, evaluateReactorClass, evaluateWeaponUpgrades, isCompletedOrUngated` | `tests/refitAdvisor.test.js` |
-| `shared/requestValidation.mjs` | E | Node + Cloudflare worker (ESM) | 274 | the accept/reject request-validation rules shared by the local | `BODY_FILTER_MAX_LENGTH, BODY_FILTER_MESSAGE, HISTORY_LIMIT_BOUNDS, HISTORY_LIMIT_DEFAULT, MINING_LIMIT_BOUNDS, MINING_LIMIT_RESOURCES, RequestValidationError, assertKnownObserver, exceedsBodyFilterLimits, hasControlCharacters, isAbsent, isBoundedInteger, …(+9)` | `tests/requestValidation.test.js` |
+| `shared/requestValidation.mjs` | E | Node + Cloudflare worker (ESM) | 309 | the accept/reject request-validation rules shared by the local | `BODY_FILTER_MAX_LENGTH, BODY_FILTER_MESSAGE, CATALOGUE_LIMIT_BOUNDS, CATALOGUE_LIMIT_RESOURCES, HISTORY_LIMIT_BOUNDS, HISTORY_LIMIT_DEFAULT, MINING_LIMIT_BOUNDS, MINING_LIMIT_RESOURCES, RequestValidationError, assertKnownObserver, exceedsBodyFilterLimits, hasControlCharacters, …(+13)` | `tests/requestValidation.test.js` |
 | `shared/researchAvailability.mjs` | E | Node + Cloudflare worker (ESM) | 344 | which projects a faction can actually research, in the three states | `AVAILABILITY_STATES, buildAvailabilityResolver, getPrerequisiteBranches, monthsAtIncome, tallyAvailabilityStates` | — |
 | `shared/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 777 | the research-advisor phase-4 ranking rules that order candidates by | `ACTIONABLE_GROUPS, ASPIRATIONAL_GROUPS, AVAILABILITY_GROUP_LABELS, AVAILABILITY_GROUP_ORDER, AXIS_KINDS, AXIS_KIND_ORDER, DEFICIT_RESEARCH_REMEDIES, DELIVERY_FLOOR_ORDER, FIRST_IN_CLASS_LABEL, RANKING_FORMULAE, RANKING_METHOD, RANK_STATES, …(+13)` | `tests/researchRanking.test.js` |
 | `shared/researchReachability.mjs` | E | Node + Cloudflare worker (ESM) | 201 | the planning horizon a multi-step research chain has to fit inside | `PLANNING_HORIZON_BASIS, REACHABILITY_STATES, buildPlanningHorizon, chainReachability` | `tests/researchReachability.test.js` |
@@ -200,7 +203,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `site/worker/envelopes.js` | E | Cloudflare worker only (ESM) | 111 | the response envelopes wrapped around a Supabase result, including | `difficultyFields, resourceEnvelope, resultIdentity, snapshotEnvelope` | — |
 | `site/worker/http.js` | E | Cloudflare worker only (ESM) | 73 | the hosted runtime's response shapes — CORS policy, no-store rule, | `corsHeaders, htmlResponse, jsonResponse, markdownSnapshotResponse` | — |
 | `site/worker/index.js` | E | Cloudflare worker only (ESM) | 609 | the hosted worker's dispatcher — the order routes are tried in and | — | — |
-| `site/worker/projections.js` | E | Cloudflare worker only (ESM) | 209 | the hosted adapter over the shared projection registries — what this | `TECH_RESOURCES, buildIntelResource, buildTechIntelResource, intelResource, productionPlanPaths, techIntelResource, validateResourceQuery` | — |
+| `site/worker/projections.js` | E | Cloudflare worker only (ESM) | 214 | the hosted adapter over the shared projection registries — what this | `TECH_RESOURCES, buildIntelResource, buildTechIntelResource, intelResource, productionPlanPaths, techIntelResource, validateResourceQuery` | — |
 | `site/worker/runtimeDefaults.js` | E | Cloudflare worker only (ESM) | 69 | what this deployment believes its defaults are, and how a malformed | `HOSTED_MODES, positiveIntegerOr, readRuntimeDefaults` | — |
 | `site/worker/supabaseReader.js` | E | Cloudflare worker only (ESM) | 249 | every Supabase read the hosted runtime makes, plus the consistency | `boundedHistoryLimit, consistencyError, isSupabaseReady, sameTimestamp, strategicHistoryMeta, supabaseReadKey, timestampMs` | — |
 

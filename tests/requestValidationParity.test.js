@@ -163,6 +163,41 @@ test('both runtimes accept and reject the same mining limits', async () => {
   }
 });
 
+test('both runtimes take the same catalogue-limit decision, and it is wider only for drive-explorer', async () => {
+  const { validateResourceQuery } = await loadWorkerProjections();
+  // The exact resource list is pinned so a second endpoint cannot quietly
+  // inherit a 1,000-row ceiling.
+  assert.deepEqual([...shared.CATALOGUE_LIMIT_RESOURCES].sort(), ['drive-explorer']);
+  assert.deepEqual(shared.limitBoundsFor('drive-explorer'), shared.CATALOGUE_LIMIT_BOUNDS);
+  assert.deepEqual(shared.limitBoundsFor('mining-prospects'), shared.MINING_LIMIT_BOUNDS);
+  assert.deepEqual(shared.limitBoundsFor('nations'), shared.MINING_LIMIT_BOUNDS);
+
+  const cases = ['1', '100', '101', '541', '1000', '1001', '0', 'abc', ''];
+  for (const resource of ['drive-explorer', 'mining-prospects', 'nations']) {
+    for (const value of cases) {
+      let serverRejected = false;
+      try {
+        serverValidation.parseBoundedIntegerQuery(
+          value === '' ? undefined : value,
+          serverValidation.limitLabelFor(resource),
+          serverValidation.limitBoundsFor(resource)
+        );
+      } catch {
+        serverRejected = true;
+      }
+      const url = resourceUrl(`?limit=${encodeURIComponent(value)}`, `/api/intel/${resource}`);
+      const workerRejected = validateResourceQuery(url) !== null;
+      assert.equal(serverRejected, workerRejected,
+        `limit='${value}' on ${resource} decided differently by the two runtimes`);
+    }
+  }
+
+  // Non-vacuous: 541 is accepted for the drive catalogue and rejected everywhere
+  // else, so the widened ceiling is genuinely scoped rather than global.
+  assert.equal(validateResourceQuery(resourceUrl('?limit=541', '/api/intel/drive-explorer')), null);
+  assert.notEqual(validateResourceQuery(resourceUrl('?limit=541', '/api/intel/mining-prospects')), null);
+});
+
 test('the digits-and-bounds rule and the safe-integer rule agree for every bounds pair in use', () => {
   // The hosted worker used to check digits plus bounds; the local server also
   // checked Number.isSafeInteger. Unifying on the stricter rule is only safe
@@ -172,7 +207,11 @@ test('the digits-and-bounds rule and the safe-integer rule agree for every bound
   const inputs = ['0', '1', '25', '100', '101', '', 'abc', '-1', '1e3', '0000000000000000000005', '99999999999999999999',
     String(Number.MAX_SAFE_INTEGER), String(Number.MAX_SAFE_INTEGER + 2)];
 
-  for (const bounds of [shared.MINING_LIMIT_BOUNDS, shared.HISTORY_LIMIT_BOUNDS]) {
+  // CATALOGUE_LIMIT_BOUNDS joined on 2026-08-21 for /api/intel/drive-explorer,
+  // whose 541-row catalogue cannot be answered inside a 100-row ceiling. The
+  // equivalence has to hold for it too, and [1, 1000] is a wider window than
+  // the pairs above -- which is exactly why it is asserted rather than assumed.
+  for (const bounds of [shared.MINING_LIMIT_BOUNDS, shared.HISTORY_LIMIT_BOUNDS, shared.CATALOGUE_LIMIT_BOUNDS]) {
     for (const raw of inputs) {
       assert.equal(
         shared.isBoundedInteger(raw, bounds),

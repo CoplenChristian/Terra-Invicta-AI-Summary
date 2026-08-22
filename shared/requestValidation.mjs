@@ -96,6 +96,41 @@ export const BODY_FILTER_MESSAGE = 'Invalid body filter. Use a short body name s
 /** Bounds for the mining prospect/expansion result limit. */
 export const MINING_LIMIT_BOUNDS = Object.freeze({ min: 1, max: 100 });
 
+/**
+ * Bounds for endpoints where the WHOLE catalogue is the request.
+ *
+ * `drive-explorer` rates all 541 drives in the game against one design and the
+ * browser panel sorts and filters that catalogue client-side, so a 100-row
+ * ceiling would force it to either paginate -- which cannot answer "which of
+ * all 541 is best" -- or to fetch six times. The compact row shape is what
+ * makes one response affordable; this is the ceiling that lets it be asked for.
+ *
+ * The default remains small: an omitted `?limit=` still returns the endpoint's
+ * own default page, so raising the ceiling does not enlarge any existing
+ * response.
+ */
+export const CATALOGUE_LIMIT_BOUNDS = Object.freeze({ min: 1, max: 1000 });
+
+/** Resources that take CATALOGUE_LIMIT_BOUNDS instead of MINING_LIMIT_BOUNDS. */
+export const CATALOGUE_LIMIT_RESOURCES = new Set(['drive-explorer']);
+
+/**
+ * The limit bounds for one resource, so both runtimes take the same decision.
+ *
+ * The two adapters previously hardcoded `MINING_LIMIT_BOUNDS` independently.
+ * Deriving both from this function is the same discipline `usesQuantityAsLimit`
+ * exists for: a resource added to one runtime's list and not the other's
+ * validates its limit in one runtime only.
+ */
+export function limitBoundsFor(resource) {
+  return CATALOGUE_LIMIT_RESOURCES.has(resource) ? CATALOGUE_LIMIT_BOUNDS : MINING_LIMIT_BOUNDS;
+}
+
+/** The wording of the limit error for one resource, shared for the same reason. */
+export function limitLabelFor(resource) {
+  return CATALOGUE_LIMIT_RESOURCES.has(resource) ? 'drive catalogue limit' : 'mining prospects limit';
+}
+
 /** Bounds for the strategic-history page size. */
 export const HISTORY_LIMIT_BOUNDS = Object.freeze({ min: 1, max: 100 });
 
