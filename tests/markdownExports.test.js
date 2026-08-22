@@ -544,6 +544,26 @@ test('Express server serves /latest-threats.md and /latest-war-room.md on epheme
         `${mode}: score, EV and the cycle total must all be measured — got: ${primaryLine}`);
       assert.ok(!/undefined|null|NaN/.test(primaryLine),
         `${mode}: no placeholder token may reach the line — got: ${primaryLine}`);
+
+      // And the strategic commentary, for exactly the same reason: it is built
+      // by `server/commentary/` (Node CommonJS), so the shared renderer cannot
+      // compute it and this runtime has to hand it over. Dropping it from the
+      // route call would silently fall through to the renderer's "UNAVAILABLE
+      // in this runtime" line -- a regression that looks like an honest
+      // absence and that no renderer test can see.
+      const section = sectionEleven(res.body);
+      assert.ok(section.includes('## 11. Strategic Commentary'), `${mode}: section 11 must exist`);
+      assert.ok(!/Strategic commentary UNAVAILABLE in this runtime/.test(section),
+        `${mode}: the route must hand the commentary over, not leave the renderer to report it unread`);
+      assert.match(section, /\*\*Hulls needed for P\(win\) ≥ |\*\*Hull thresholds:\*\* NOT SIMULATED/,
+        `${mode}: section 11 must carry either the threshold table or the reason there is none`);
+      // The calibration warning travels with the counts on the live save too.
+      if (section.includes('Hulls needed for P(win)')) {
+        assert.match(section, /\*\*What those counts are NOT:\*\*/,
+          `${mode}: hull counts may never be published without their calibration basis`);
+        assert.match(section, /\*\*Own best combatant:\*\* .+, combat rating [\d,]+/,
+          `${mode}: the rating the counts are denominated in must be measured, not UNAVAILABLE`);
+      }
     }
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -588,18 +608,34 @@ function makeCyclePlan(overrides = {}) {
   };
 }
 
-const sectionTen = (doc) => {
-  const i = doc.indexOf('## 10.');
-  return i < 0 ? '' : doc.slice(i);
+/**
+ * One numbered section, bounded by the NEXT numbered heading.
+ *
+ * `sectionTen` used to slice to the end of the document, which was correct
+ * only while section 10 was the last section. Section 11 (strategic
+ * commentary) landed after it and carries its own "UNAVAILABLE in this
+ * runtime" line, so two section-10 assertions started reading section 11's
+ * text as section 10's -- a false failure that would just as easily have been
+ * a false PASS if the strings had matched the other way round. Bounding every
+ * extractor the same way removes the whole class.
+ */
+const sectionOf = (doc, number) => {
+  const lines = doc.split('\n');
+  const start = lines.findIndex(line => line.startsWith(`## ${number}.`));
+  if (start < 0) return '';
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    if (/^## \d+\./.test(lines[i])) { end = i; break; }
+  }
+  return lines.slice(start, end).join('\n');
 };
+const sectionTen = (doc) => sectionOf(doc, 10);
+const sectionEleven = (doc) => sectionOf(doc, 11);
 const chainBlock = (doc) => {
   const i = doc.indexOf('### Research Chain Promotion');
   return i < 0 ? '' : doc.slice(i, doc.indexOf('## 9.'));
 };
-const sectionNine = (doc) => {
-  const i = doc.indexOf('## 9.');
-  return i < 0 ? '' : doc.slice(i, doc.indexOf('## 10.'));
-};
+const sectionNine = (doc) => sectionOf(doc, 9);
 
 test('accelOr keeps three SIGNIFICANT figures, so the smallest measured acceleration is never a confident 0.000', () => {
   // The catalogue's smallest measured cruise acceleration. `toFixed(3)` prints
@@ -833,3 +869,388 @@ for (const exportMode of EXPORT_MODES) {
       'a promoted chain must name the step the player would start, not only the project it delivers');
   });
 }
+
+// ---------------------------------------------------------------------------
+// SECTION 11 -- THE STRATEGIC COMMENTARY REACHES THE AI SURFACES
+//
+// `server/commentary/` produced a four-layer assessment -- facts, beats, a
+// seeded Monte Carlo hull-threshold sweep and generated prose -- that reached
+// exactly two places: the v2 COMMAND view and /api/v2/briefing. No markdown
+// export carried a byte of it, so the entire combat-threshold model was
+// invisible to every LLM reading these files.
+//
+// Like the cycle plan it is engine output rather than snapshot data, so it
+// arrives two ways and both are pinned: `options.strategicCommentary` (what
+// the Express route passes) and `snapshot.missionControlBriefing` (what a
+// published row carries, which is how the Cloudflare Worker gets it with no
+// worker change).
+//
+// The section carries a deliberate SUBSET. What is dropped -- the PRNG-chosen
+// headline, the prose, and the five near-identical per-tier uncertainty
+// records -- is recoverable at /api/v2/briefing, which the section names. What
+// is NOT droppable is the calibration warning: hull counts without it read as
+// measurements.
+// ---------------------------------------------------------------------------
+
+/** A commentary payload shaped exactly like `generateStrategicCommentary`'s return value. */
+function makeCommentary(overrides = {}) {
+  const uncertainty = {
+    isMeasurement: false,
+    seedsSimulated: 120,
+    battleTrialsPerCount: 30,
+    maxHullsSwept: 24,
+    targetWinProbability: 0.8,
+    winnableSeeds: 120,
+    winnableRatio: 1,
+    opponentRatingCalibrated: false,
+    opponentRatingBasis: 'UNCALIBRATED ASSUMPTION. Alien ratings are scaled off the observer\'s own best hull '
+      + 'by invented constants -- x0.7 escort, x1.5 typical, x4.0 heavy.'
+  };
+  return {
+    available: true,
+    mode: 'player',
+    snapshotId: 'commentary-seed',
+    headline: 'Hold Posture: Defending holdings while closing the delta-V deficit',
+    prose: 'Long narrative restatement that this section deliberately does not carry.',
+    advice: 'Do not voluntarily initiate engagements against alien combat fleets until you have on the order '
+      + 'of 7 hulls Cimarron.',
+    beats: [{
+      id: 'capability-gap-widening',
+      name: 'Decisive Force Deficit',
+      severity: 'watch',
+      stance: 'defensive',
+      summary: 'Decisive deficit on delta-V (16.9 km/s ours vs 211 km/s alien (12.5x)).'
+    }],
+    simulation: {
+      available: true,
+      reason: null,
+      source: 'observable_fleet_telemetry',
+      ownBestHull: 'Monitor',
+      ownBestDesign: 'Cimarron',
+      ownRating: 19783,
+      tiers: [
+        {
+          id: 'typical-alien-combatant',
+          label: '1x typical alien combatant',
+          description: 'Observed mainline combat element (median armor 8.8cm)',
+          winnable: true,
+          p20: 2,
+          p80: 2,
+          bandLabel: '2 hulls',
+          simulated: true,
+          uncertainty
+        },
+        {
+          id: 'heavy-alien-capital',
+          label: '1x heavy alien capital (p90)',
+          description: 'Observed heavy capital force (p90 armor 14.0cm)',
+          winnable: true,
+          p20: 7,
+          p80: 7,
+          bandLabel: '7 hulls',
+          simulated: true,
+          uncertainty
+        }
+      ],
+      projections: {
+        hateVent: null,
+        rebuildClock: {
+          available: true,
+          targetHull: 'Monitor',
+          baseConstructionDays: 120,
+          activeShipyardQueues: 5,
+          monthlyThroughputEst: 1.25,
+          daysPerHullEst: 24,
+          simulated: true
+        }
+      }
+    },
+    ...overrides
+  };
+}
+
+for (const exportMode of EXPORT_MODES) {
+  test(`section 11 carries the hull thresholds from options.strategicCommentary (${exportMode} mode)`, () => {
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const section = sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: makeCommentary() }));
+
+    assert.ok(section.includes('## 11. Strategic Commentary'), 'section 11 must exist');
+    // The heading says MODELLED before a reader reaches a number.
+    assert.match(section, /## 11\. Strategic Commentary \(MODELLED, not measured\)/);
+    // The engine's own recommendation, not just counts. Section 10 learned this.
+    assert.match(section, /\*\*Recommended stance:\*\* Do not voluntarily initiate engagements/);
+    // The beats, with their severity, stance and stable id.
+    assert.match(section, /\*\*Narrative beats \(1 fired\):\*\*/);
+    assert.match(section, /\*\*Decisive Force Deficit\*\* \(watch, defensive, `capability-gap-widening`\)/);
+    // The rating every hull count is denominated in.
+    assert.match(section, /\*\*Own best combatant:\*\* Cimarron \(Monitor hull\), combat rating 19,783/);
+    // The thresholds themselves, with the measured input under each.
+    assert.match(section, /1x typical alien combatant: \*\*2 hulls\*\* — Observed mainline combat element/);
+    assert.match(section, /1x heavy alien capital \(p90\): \*\*7 hulls\*\* — Observed heavy capital force/);
+    assert.ok(section.includes(`/api/v2/briefing?observer=${OBSERVER_ID}&mode=${exportMode}`),
+      'section 11 must name the endpoint carrying the headline, prose and per-tier uncertainty');
+  });
+
+  test(`section 11 keeps the calibration warning attached to the counts it qualifies (${exportMode} mode)`, () => {
+    // A table of "7 hulls" figures with this sentence removed reads as
+    // measurement. It is the one part of the section that may never be
+    // separated from the numbers, which is why the block degrades whole.
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const section = sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: makeCommentary() }));
+
+    assert.match(section, /\*\*What those counts are NOT:\*\* UNCALIBRATED ASSUMPTION/);
+    assert.match(section, /and NOTHING else — not error in the opponent ratings, and not model misspecification/);
+    assert.match(section, /LINEAR in hull count, not the Lanchester square law/);
+    assert.match(section, /120 seeded runs of 30 battle trials per hull count, swept to 24 hulls/);
+    // SIMULATED is stated on the threshold line itself, not only in the heading.
+    assert.match(section, /\(SIMULATED, not measured; opponent basis: observable alien fleet telemetry\)/);
+  });
+
+  test(`section 11 falls back to the published snapshot's own briefing, which is how the hosted worker gets it (${exportMode} mode)`, () => {
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    // Exactly the shape scripts/publish/rows.js writes onto a published row:
+    // `strategicCommentary` is a SIBLING of `engineDirectives` on the briefing.
+    snapshot.missionControlBriefing = {
+      strategicCommentary: makeCommentary({
+        advice: 'Leverage banked threat headroom for essential orbital expansion.'
+      })
+    };
+    const section = sectionEleven(renderWarRoomMarkdown(snapshot));
+    assert.match(section, /\*\*Recommended stance:\*\* Leverage banked threat headroom/);
+    assert.ok(!section.includes('UNAVAILABLE in this runtime'),
+      'a published snapshot carrying a briefing must not report the commentary as unavailable');
+  });
+
+  test(`section 11 says the assessment was not read rather than printing an empty one (${exportMode} mode)`, () => {
+    const section = sectionEleven(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode)));
+    assert.match(section, /Strategic commentary UNAVAILABLE in this runtime/);
+    assert.match(section, /This is NOT a report that no beats fired and no engagement is winnable/);
+    assert.ok(section.includes('/api/v2/briefing'), 'the fallback must still name the endpoint');
+    // `asArray(undefined).length` and `Number(null) === 0` would produce all three.
+    assert.ok(!/\(0 fired\)/.test(section), 'an unread beat list must not render as zero beats');
+    assert.ok(!/none fired/.test(section), 'and must not claim the beats were evaluated');
+    assert.ok(!/combat rating 0/.test(section), 'an unread rating must not render as 0');
+  });
+
+  test(`section 11 tells an absent beat list from an empty one (${exportMode} mode)`, () => {
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const render = (beats) =>
+      sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: makeCommentary({ beats }) }));
+
+    // Evaluated, none fired: a real finding about a quiet campaign.
+    assert.match(render([]), /\*\*Narrative beats:\*\* none fired — the beats WERE evaluated/);
+    // Never evaluated: not a finding at all, and `asArray(x).length` prints
+    // both as 0.
+    assert.match(render(undefined), /\*\*Narrative beats:\*\* UNAVAILABLE/);
+    assert.match(render(undefined), /not the same as no beat firing/);
+    assert.match(render(null), /\*\*Narrative beats:\*\* UNAVAILABLE/);
+  });
+
+  test(`section 11 prints an unavailable sweep's reason instead of the table vanishing (${exportMode} mode)`, () => {
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const section = sectionEleven(renderWarRoomMarkdown(snapshot, {
+      strategicCommentary: makeCommentary({
+        simulation: {
+          available: false,
+          reason: '57 alien fleet(s) are visible but none carries a readable, positive armour median, so no '
+            + 'opponent rating could be measured.',
+          ownBestHull: 'Monitor',
+          ownBestDesign: 'Cimarron',
+          ownRating: 19783,
+          tiers: [],
+          projections: {}
+        }
+      })
+    }));
+    assert.match(section, /\*\*Hull thresholds:\*\* NOT SIMULATED — 57 alien fleet\(s\) are visible/);
+    // A reader must be able to tell "no threshold was computable" from "the
+    // thresholds did not fit the budget".
+    assert.ok(!section.includes('Hulls needed for P(win)'),
+      'no threshold table may be printed for a sweep that did not run');
+    // The measured rating survives the unavailable sweep and is still reported.
+    assert.match(section, /combat rating 19,783/);
+  });
+
+  test(`section 11 flags a band taken over only some seeds, and stays quiet when it was all of them (${exportMode} mode)`, () => {
+    // `winnableRatio` is the ONE per-tier uncertainty field that varies, and
+    // below 1 the percentile band was taken over a subset of seeds and
+    // understates its own spread. It is carried for exactly that case; at 1 it
+    // would be five identical lines of noise.
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const full = makeCommentary();
+    assert.ok(!sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: full }))
+      .includes('UNDERSTATES the spread'), 'a band over every seed carries no caveat row');
+
+    const partial = makeCommentary();
+    partial.simulation.tiers[1] = {
+      ...partial.simulation.tiers[1],
+      winnable: false,
+      uncertainty: { ...partial.simulation.tiers[1].uncertainty, winnableSeeds: 71, winnableRatio: 0.5917 }
+    };
+    const section = sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: partial }));
+    assert.match(section, /band taken over only 59% of seeds, so it UNDERSTATES the spread/);
+    // And an unreached tier is a CEILING report, not an impossibility verdict.
+    assert.match(section, /\*\*NOT REACHED at any count up to 24 hulls\*\*/);
+  });
+
+  test(`section 11 reports a sub-1 throughput as itself, never floored to one hull a month (${exportMode} mode)`, () => {
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const withClock = (rebuildClock) => {
+      const commentary = makeCommentary();
+      commentary.simulation.projections.rebuildClock = rebuildClock;
+      return sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: commentary }));
+    };
+
+    const slow = withClock({
+      available: true, targetHull: 'Monitor', baseConstructionDays: 120,
+      activeShipyardQueues: 1, monthlyThroughputEst: 0.25, daysPerHullEst: 120, simulated: true
+    });
+    assert.match(slow, /\*\*Production throughput \(SIMULATED\):\*\* 0\.25 × Monitor per month, i\.e\. one every 120 days/);
+    assert.match(slow, /UNDER ONE HULL A MONTH: this hull cannot be replaced inside a month/);
+    // The assumption the rate rests on is stated, not left implicit.
+    assert.match(slow, /ASSUMED to build in parallel — the field counts queued SHIPS, not shipyards/);
+
+    // A measured zero is a reading, and reads as a finding rather than as an absence.
+    const empty = withClock({
+      available: true, targetHull: 'Monitor', baseConstructionDays: 120,
+      activeShipyardQueues: 0, monthlyThroughputEst: 0, daysPerHullEst: null, simulated: true
+    });
+    assert.match(empty, /0 hulls\/mo — the queue was read and is EMPTY/);
+
+    // An unread queue is neither of those.
+    const unread = withClock({
+      available: false,
+      reason: 'Production throughput was not projected: no readable shipyard queue.',
+      targetHull: 'Monitor', baseConstructionDays: 120, activeShipyardQueues: null,
+      monthlyThroughputEst: null, daysPerHullEst: null, simulated: true
+    });
+    assert.match(unread, /\*\*Production throughput:\*\* UNAVAILABLE — Production throughput was not projected/);
+    assert.ok(!/0 hulls\/mo/.test(unread), 'an unread queue must not render as a measured zero rate');
+  });
+
+  test(`section 11 never reports a redacted hate value as a calm one (${exportMode} mode)`, () => {
+    // Four states used to reach every consumer as one bare `null`, and one of
+    // them is player mode's redaction of the true hate value -- under which
+    // this projection can never be produced at all.
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const withVent = (hateVent) => {
+      const commentary = makeCommentary();
+      commentary.simulation.projections.hateVent = hateVent;
+      return sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: commentary }));
+    };
+
+    assert.match(
+      withVent({
+        available: false,
+        reason: 'the true alien hate value is not in this intelligence picture, so no venting horizon can be '
+          + 'projected. In player mode it is redacted outright.',
+        currentHate: null, ventRatePerDay: null, projectedDaysLow: null, projectedDaysHigh: null,
+        bandLabel: null, simulated: true
+      }),
+      /\*\*Hate vent horizon:\*\* UNAVAILABLE — the true alien hate value is not in this intelligence picture/
+    );
+
+    // A record that is missing entirely is a fifth state and says so.
+    assert.match(withVent(null),
+      /\*\*Hate vent horizon:\*\* UNAVAILABLE — no projection record was carried\. This is not a report that hostility is stable/);
+
+    assert.match(
+      withVent({
+        available: true, currentHate: 168.4, ventRatePerDay: -0.2413,
+        projectedDaysLow: 416, projectedDaysHigh: 563, bandLabel: '416–563 campaign days', simulated: true
+      }),
+      /\*\*Hate vent horizon \(SIMULATED\):\*\* 416–563 campaign days to fall below the war threshold, from 168\.40 hate at -0\.2413 hate\/day/
+    );
+  });
+}
+
+test('section 11 is the FIRST body the budget suppresses, and its header and pointer survive', () => {
+  // Its position in `clampOrder` is a claim about priority, and a claim about
+  // priority that nothing exercises is an assumption. Section 11 is the only
+  // body in the document with no measured content of its own -- every input it
+  // reasons over is already printed as a measurement in sections 1 to 5 -- so
+  // it gives way before anything measured is touched.
+  const snapshot = makeMarkdownSnapshot('player');
+  const opts = { strategicCommentary: makeCommentary() };
+
+  const suppressedIn = (markdown) => {
+    const lines = markdown.split('\n');
+    const found = [];
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!lines[i].includes('Section body omitted to fit the size budget')) continue;
+      for (let j = i; j >= 0; j -= 1) {
+        if (lines[j].startsWith('## ')) { found.push(lines[j]); break; }
+      }
+    }
+    return found;
+  };
+
+  const full = renderWarRoomMarkdown(snapshot, opts);
+  assert.ok(full.includes('Hulls needed for P(win)'), 'the unclamped document must carry the table');
+  assert.strictEqual(suppressedIn(full).length, 0, 'nothing is clamped at the real ceiling');
+
+  // The tightest cap at which exactly ONE body gives way. If the priority
+  // claim in `clampOrder` is right, that one body is section 11.
+  const clamped = renderWarRoomMarkdown(snapshot, { ...opts, maxBytes: 6000 });
+  assert.deepStrictEqual(
+    suppressedIn(clamped).map(h => h.replace(/^## /, '').split('.')[0]),
+    ['11'],
+    'section 11 must be the ONLY body suppressed at the first cap that forces a clamp'
+  );
+  // The header survives so a reader knows the assessment exists.
+  assert.ok(clamped.includes('## 11. Strategic Commentary'), 'the header always survives clamping');
+  assert.ok(!clamped.includes('Hulls needed for P(win)'),
+    'and the counts go with the caveat rather than outliving it');
+
+  // Tighter still: sections 9 and 10 follow, and nothing MEASURED (sections 1
+  // to 6) has given way while the modelled material is still being shed.
+  const tighter = suppressedIn(renderWarRoomMarkdown(snapshot, { ...opts, maxBytes: 4500 }))
+    .map(h => h.replace(/^## /, '').split('.')[0]);
+  assert.deepStrictEqual(tighter.slice().sort(), ['10', '11', '9'],
+    'the two other endpoint-backed sections follow section 11, and nothing measured precedes them');
+});
+
+test('section 11 does not grow with the size of the save, at any fleet multiple', () => {
+  // The claim that justifies section 11 having no ladder entry: the commentary
+  // engine defines exactly five beats and exactly five opponent tiers, so
+  // unlike sections 2, 3 and 6 this block is fixed-size by construction.
+  // Measured against the WORST CASE -- every beat fired, every tier long,
+  // both projections available.
+  const worstCase = makeCommentary({
+    beats: ['forced-fleet-transition', 'recovery-window', 'hate-budget-banked',
+      'capability-gap-closing', 'capability-gap-widening'].map(id => ({
+      id,
+      name: 'Forced Fleet Transition',
+      severity: 'pivotal',
+      stance: 'transitional',
+      summary: 'Combat losses (18 hull(s)) were concentrated in Tier 2 designs while surviving forces are Tier 4.'
+    }))
+  });
+
+  const base = makeMarkdownSnapshot('player');
+  const ours = base.fleets.filter(f => Number(f.factionId) === OBSERVER_ID);
+  const theirs = base.fleets.filter(f => Number(f.factionId) !== OBSERVER_ID);
+
+  const sizes = new Set();
+  for (const multiple of [1, 5, 20]) {
+    const grown = JSON.parse(JSON.stringify(base));
+    const fleets = [];
+    for (let copy = 0; copy < multiple; copy += 1) {
+      for (const fleet of [...ours, ...theirs]) {
+        fleets.push(copy === 0 ? fleet : {
+          ...JSON.parse(JSON.stringify(fleet)),
+          ID: Number(fleet.ID) + (copy * 100000),
+          displayName: `${fleet.displayName} #${copy + 1}`
+        });
+      }
+    }
+    grown.fleets = fleets;
+    const rendered = renderWarRoomMarkdown(grown, { strategicCommentary: worstCase });
+    assert.ok(Buffer.byteLength(rendered, 'utf8') < 30720,
+      `war room at x${multiple} with a full section 11 rendered over the 30,720-byte cap`);
+    sizes.add(Buffer.byteLength(sectionEleven(rendered), 'utf8'));
+  }
+
+  assert.strictEqual(sizes.size, 1,
+    `section 11 changed size across a 20x fleet multiple (${[...sizes].join(', ')} bytes) — it is not fixed-size`);
+});

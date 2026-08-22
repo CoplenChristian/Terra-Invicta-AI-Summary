@@ -180,12 +180,23 @@ function registerReadOnlyExports(app) {
       // /api/v2/briefing: two clients may hold different risk tolerances against
       // one cached save, and resolving an absent parameter to the CONFIGURED
       // default is the briefing generator's job, never a coercion to 0.
-      const engineDirectives = briefingGenerator
-        .generateMissionControlBriefing(filtered, rawSnapshot, { riskFloorPercent })
-        ?.engineDirectives ?? null;
+      //
+      // Section 11 (strategic commentary) arrives the same way and off the same
+      // single briefing, for the same reason: `server/commentary/` is Node
+      // CommonJS and the shared renderer also runs in the Worker. It is a
+      // sibling of `engineDirectives` on the briefing rather than a child of
+      // it, so it is read from the briefing object itself.
+      const briefing = briefingGenerator
+        .generateMissionControlBriefing(filtered, rawSnapshot, { riskFloorPercent }) ?? null;
+      const engineDirectives = briefing?.engineDirectives ?? null;
       const cyclePlan = engineDirectives?.cyclePlan ?? null;
       const primary = engineDirectives?.primary ?? null;
-      const markdown = exportGenerator.generateWarRoomMarkdown(filtered, { cyclePlan, primary });
+      const strategicCommentary = briefing?.strategicCommentary ?? null;
+      const markdown = exportGenerator.generateWarRoomMarkdown(filtered, {
+        cyclePlan,
+        primary,
+        strategicCommentary
+      });
       res.type('text/markdown; charset=utf-8').set('Cache-Control', 'no-store').send(markdown);
     } catch (err) {
       res.status(err.statusCode || 500).type('text/plain').send(`Error generating war room markdown: ${err.message}`);

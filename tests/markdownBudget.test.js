@@ -434,3 +434,165 @@ test('a hostile transfer targeting an observer hab renders instead of throwing',
     'section 3 must record the targeting reason');
   assert.ok(utf8ByteLength(rendered) < WAR_ROOM_BYTE_BUDGET);
 });
+
+// ---------------------------------------------------------------------------
+// 6. THE CAP HOLDS WITH A FULL SECTION 10 **AND** A FULL SECTION 11
+//
+// Every cap assertion above renders the war room with no `options`, so neither
+// the council cycle plan nor the strategic commentary is present -- and both
+// are handed in by the serving runtime rather than computed from the snapshot.
+// The document a real reader gets from `/latest-war-room.md` is therefore
+// several kilobytes LARGER than anything tested above; section 11 alone is
+// ~4.1 KB at its worst case, against ~2.5 KB on the live save.
+//
+// This runs the same growth ladder with both sections at maximum size: all
+// five beats (the commentary engine defines exactly five), all five opponent
+// tiers (both builders return exactly five) with long labels and a partial
+// `winnableRatio` on every row, both projections available, and a cycle plan
+// whose every count is populated.
+// ---------------------------------------------------------------------------
+
+const { OPPONENT_RATING_BASIS } = require('../shared/engagementModel.mjs');
+const { BEAT_DEFINITIONS } = require('../server/commentary/beats');
+
+const MAX_UNCERTAINTY = {
+  isMeasurement: false,
+  seedsSimulated: 120,
+  battleTrialsPerCount: 30,
+  maxHullsSwept: 24,
+  targetWinProbability: 0.8,
+  winnableSeeds: 71,
+  // Below 1 on every row, which is the case that adds the extra caveat clause.
+  winnableRatio: 0.5917,
+  opponentRatingCalibrated: false,
+  // The longer of the two basis texts.
+  opponentRatingBasis: OPPONENT_RATING_BASIS.player
+};
+
+const MAX_COMMENTARY = {
+  available: true,
+  mode: 'player',
+  snapshotId: 'max-commentary',
+  headline: 'Strategic Pivot: Fleet transition forced by attrition into superior hull tiers',
+  prose: 'Deliberately not carried into the export.',
+  advice: 'Do not voluntarily initiate engagements against alien combat fleets until you have on the order of '
+    + '12-14 hulls Constitution-class Heavy Line Battleship. Maintain councilors on zero-hate Advise and Defend '
+    + 'Interests to maximize research and GDP throughput.',
+  beats: BEAT_DEFINITIONS.map(beat => ({
+    id: beat.id,
+    name: beat.name,
+    severity: beat.severity,
+    stance: beat.stance,
+    summary: 'Combat losses (18 hull(s)) were concentrated in Tier 2 designs while surviving forces are '
+      + 'Tier 4 construction, alongside hate venting.'
+  })),
+  simulation: {
+    available: true,
+    reason: null,
+    source: 'observable_fleet_telemetry',
+    ownBestHull: 'BattleshipHull',
+    ownBestDesign: 'Constitution-class Heavy Line Battleship',
+    ownRating: 198372,
+    tiers: ['median-alien-escort', 'typical-alien-combatant', 'two-typical-aliens',
+      'heavy-alien-capital', 'three-typical-aliens'].map((id, index) => ({
+      id,
+      label: '3x typical alien strike group (extended designation)',
+      description: 'Observed heavy capital force (p90 armor 148.5cm) across 161 tracked contacts',
+      winnable: index !== 4,
+      p20: 12,
+      p80: 14,
+      bandLabel: '12–14 hulls',
+      simulated: true,
+      uncertainty: MAX_UNCERTAINTY
+    })),
+    projections: {
+      hateVent: {
+        available: true,
+        currentHate: 168.4,
+        ventRatePerDay: -0.2413,
+        projectedDaysLow: 416,
+        projectedDaysHigh: 563,
+        bandLabel: '416–563 campaign days',
+        simulated: true
+      },
+      rebuildClock: {
+        available: true,
+        targetHull: 'BattleshipHull',
+        baseConstructionDays: 1240,
+        activeShipyardQueues: 1,
+        monthlyThroughputEst: 0.0242,
+        daysPerHullEst: 1240,
+        simulated: true
+      }
+    }
+  }
+};
+
+const MAX_CYCLE_PLAN = {
+  assignments: new Array(6).fill({}),
+  unassigned: [{}],
+  committed: [{}],
+  benched: new Array(8).fill({}),
+  benchedTotalCount: 427,
+  benchedOmittedCount: 419,
+  riskFloor: { percent: 90, inForce: true, configured: true },
+  riskFloorVetoed: [{}, {}],
+  riskFloorVetoedTotalCount: 22,
+  riskFloorVetoedOmittedCount: 20,
+  riskFloorUnverified: [{}],
+  riskFloorUnverifiedTotalCount: 9,
+  riskFloorUnverifiedOmittedCount: 8,
+  totalExpectedValue: 66.13
+};
+
+const HANDED_IN = {
+  cyclePlan: MAX_CYCLE_PLAN,
+  primary: {
+    title: 'Purge the Protectorate hold on ExtractiveSector in China',
+    score: 68.74825331372958,
+    assignment: { expectedValue: 45.93 }
+  },
+  strategicCommentary: MAX_COMMENTARY
+};
+
+for (const mode of MODES) {
+  test(`war room stays under the 30 KB cap with a full section 10 and section 11 at every growth level (${mode} mode)`, () => {
+    const base = snapshotFor(mode);
+    let sawUnbudgetedBreach = false;
+    const sectionElevenSizes = new Set();
+
+    for (const [friendly, hostile] of GROWTH_LEVELS) {
+      const grown = growFleets(base, friendly, hostile);
+      const rendered = renderWarRoomMarkdown(grown, HANDED_IN);
+      const size = utf8ByteLength(rendered);
+      assert.ok(
+        size < WAR_ROOM_BYTE_BUDGET,
+        `war room at friendly x${friendly} / hostile x${hostile} (${mode}) with a full section 10 and 11 `
+        + `rendered ${size} bytes, which is not under the ${WAR_ROOM_BYTE_BUDGET}-byte cap`
+      );
+
+      // Section 11 is fixed-size by construction -- five beats and five tiers,
+      // whatever the save holds -- which is why it has no ladder entry and
+      // gives way whole through `clampOrder` instead.
+      const section = sectionText(rendered, 11);
+      assert.ok(section.length > 0, 'section 11 must be present at every growth level');
+      if (!section.includes('Section body omitted')) {
+        sectionElevenSizes.add(utf8ByteLength(section));
+      }
+
+      const unbudgeted = utf8ByteLength(renderWarRoomMarkdown(grown, { ...HANDED_IN, ...NO_BUDGET }));
+      if (unbudgeted >= WAR_ROOM_BYTE_BUDGET) {
+        sawUnbudgetedBreach = true;
+        assert.ok(size < unbudgeted,
+          `budget did nothing at friendly x${friendly} / hostile x${hostile} (${mode}): `
+          + `${size} budgeted vs ${unbudgeted} unbudgeted`);
+      }
+    }
+
+    assert.ok(sawUnbudgetedBreach,
+      'no growth level breached the ceiling without the budget — the cap assertions would be vacuous');
+    assert.strictEqual(sectionElevenSizes.size, 1,
+      `section 11 changed size across the growth ladder (${[...sectionElevenSizes].join(', ')} bytes) — `
+      + 'it is supposed to be fixed-size by construction');
+  });
+}

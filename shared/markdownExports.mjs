@@ -1751,6 +1751,21 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   ));
 
   // -------------------------------------------------------------------------
+  // SECTION 11: STRATEGIC COMMENTARY -- THE ENGINE'S READ OF SECTIONS 1-5
+  //
+  // Everything above this line is measured. Everything in this section is
+  // MODELLED off it, and the heading says so before a reader reaches a number.
+  // See `strategicCommentaryLines` for what is carried, what is dropped, and
+  // why the calibration warning is the one part that never gives way while the
+  // hull counts survive.
+  // -------------------------------------------------------------------------
+  blocks.push(fixedBlock(
+    'strategic-commentary',
+    [`## 11. Strategic Commentary (MODELLED, not measured)`, ``],
+    strategicCommentaryLines(filteredSnapshot, observerId, options)
+  ));
+
+  // -------------------------------------------------------------------------
   // DEGRADATION ORDER -- deliberate, and the reason for each position.
   //
   // A war-room brief exists to answer "what can hurt me, and what do I have to
@@ -1783,10 +1798,14 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   //   14.   Incoming threats (§4)      -- cut only when nothing else remains,
   //                                       latest ETA first.
   //
-  // §1 (alien threat posture), §7 (logistics) and §10 (council cycle plan) are
-  // fixed-size by construction and never degrade through the ladder; §10 is
-  // bounded at five lines whatever the plan's size, because every list inside
-  // it is reported as a COUNT rather than reproduced.
+  // §1 (alien threat posture), §7 (logistics), §10 (council cycle plan) and §11
+  // (strategic commentary) are fixed-size by construction and never degrade
+  // through the ladder; §10 is bounded at five lines whatever the plan's size,
+  // because every list inside it is reported as a COUNT rather than reproduced,
+  // and §11 is bounded because the commentary engine defines exactly five beats
+  // and exactly five opponent tiers, so it does not grow with the save. Neither
+  // has a ladder entry: they give way whole, through `clampOrder` below, and
+  // §11 goes FIRST of everything for the reason recorded there.
   // -------------------------------------------------------------------------
   const ladder = [
     // The most speculative research material of all gives way first: a promoted
@@ -1816,7 +1835,16 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   // Last resort if even an entry-free document will not fit: suppress whole
   // section BODIES in the same priority order. Section headers always survive.
   const clampOrder = [
-    // Reference material and a what-if, so it is the first body to give way and
+    // FIRST, and deliberately so. Section 11 is the only body in the document
+    // with no measured content of its own: every input it reasons over --
+    // hate, fleets, hulls, build queues -- is already printed as a measurement
+    // in sections 1 to 5, and its own output is an uncalibrated model. It also
+    // degrades as a UNIT rather than row by row, because a table of hull counts
+    // with its calibration warning cut away would read as measurement. So the
+    // whole body goes before anything measured is touched, and the surviving
+    // header still names /api/v2/briefing.
+    'strategic-commentary',
+    // Reference material and a what-if, so it is the next body to give way and
     // the last thing anyone needs in a war-room brief cut to the bone.
     'drive-explorer',
     // A summary of a plan that lives in full at /api/v2/briefing, in the same
@@ -2220,6 +2248,247 @@ function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
   lines.push(`- Full plan, with each action's rules, odds and expected value: \`${endpoint}\``);
   lines.push(``);
   return lines;
+}
+
+/**
+ * Section 11 of the war room: the strategic commentary engine's read of the
+ * measured picture above it.
+ *
+ * WHY THIS SECTION EXISTS
+ *
+ * `server/commentary/` has produced a four-layer assessment -- facts, beats,
+ * a seeded Monte Carlo hull-threshold sweep, and generated prose -- since it
+ * shipped, and until 2026-08-22 every byte of it reached exactly two places:
+ * the COMMAND view of the v2 dashboard, and `/api/v2/briefing`. None of the
+ * three markdown exports carried any of it, so the entire combat-threshold
+ * model was invisible to every LLM reading these files -- which is the failure
+ * mode CLAUDE.md's AI-surfaces section exists to catch.
+ *
+ * WHAT IS CARRIED, WHAT IS DROPPED, AND WHY THE DROPPED PART IS RECOVERABLE
+ *
+ * The whole payload serialises to roughly 10 KB against the war room's ~7 KB
+ * of headroom, so carrying all of it is not an option and would be the wrong
+ * choice even if it were. Three things are deliberately left behind:
+ *
+ *   * `headline` -- one of three interchangeable strings picked by a seeded
+ *     PRNG from the same beat set. It carries no information the beats below
+ *     do not, and two saves with identical beats can print different
+ *     headlines, so an agent diffing them would read noise as signal.
+ *   * `prose` (~630 bytes) -- a narrative restatement of the beats, the two
+ *     named tiers and the advice, all three of which are carried here in
+ *     structured form. It re-prints the same numbers in a less parseable
+ *     register.
+ *   * the per-tier `uncertainty` records (~1.8 KB EACH, ~9 KB for five) --
+ *     identical across tiers by construction, because one sweep supplies one
+ *     `opponentRatingBasis` and the seed/trial/sweep constants are module
+ *     constants. They collapse to ONE statement below. The one field that does
+ *     vary, `winnableRatio`, is carried per row and only when it is below 1 --
+ *     which is exactly when the band understates its own spread.
+ *
+ * All three are at `/api/v2/briefing`, and the last line of the section says
+ * so by name, in the same relationship sections 9 and 10 have to the endpoints
+ * that carry them whole.
+ *
+ * WHAT IS NOT DROPPED, AT ANY BUDGET
+ *
+ * The calibration warning. Every hull count in this section is the output of
+ * an uncalibrated model -- in player mode the opponent ratings are the
+ * observer's own best hull multiplied by three invented constants -- and a
+ * table of "4-5 hulls" figures with that sentence removed would read as
+ * measurement. The section therefore degrades as a UNIT: it is a fixed block,
+ * so the ladder cannot thin it row by row, and it is FIRST in `clampOrder`, so
+ * if the budget binds this whole body is the first thing in the document to
+ * go, header and pointer surviving. Losing all of it costs a reader nothing
+ * they cannot fetch; losing the caveat while keeping the numbers would be
+ * worse than not shipping the section.
+ *
+ * It is also fixed-size by construction, which is why it needs no ladder
+ * entry: `BEAT_DEFINITIONS` holds five beats and both opponent-tier builders
+ * return exactly five tiers, so this block cannot grow with the size of the
+ * save the way sections 2, 3 and 6 do.
+ *
+ * WHERE THE COMMENTARY COMES FROM
+ *
+ * Exactly where the cycle plan comes from, and for the same reason: it is
+ * built by Node CommonJS this module may not touch, so it is handed IN.
+ * Express passes `options.strategicCommentary`; the hosted worker passes
+ * nothing and the fallback finds it on `snapshot.missionControlBriefing`,
+ * which `scripts/publish/rows.js` already writes onto every published row. A
+ * runtime with neither says the assessment was not read, rather than printing
+ * an empty beat list and a missing table as though the engine had found
+ * nothing to say.
+ */
+function strategicCommentaryLines(filteredSnapshot, observerId, options = {}) {
+  const mode = filteredSnapshot.mode || filteredSnapshot.intelMode || filteredSnapshot.visibility || 'player';
+  const endpoint = `/api/v2/briefing?observer=${observerId}&mode=${mode}`;
+  const commentary = options.strategicCommentary
+    ?? filteredSnapshot?.missionControlBriefing?.strategicCommentary
+    ?? null;
+
+  if (!commentary) {
+    return [
+      `- **Strategic commentary UNAVAILABLE in this runtime** — the assessment is produced by the `
+      + `commentary engine, not by the snapshot, so it reaches this brief only when the serving runtime `
+      + `hands it over. This is NOT a report that no beats fired and no engagement is winnable: nothing `
+      + `was read. Fetch it directly at \`${endpoint}\`.`,
+      ``
+    ];
+  }
+
+  const lines = [];
+
+  // The engine's own recommendation, named. Section 10 learned this the hard
+  // way: a section of counts renders byte-identical across a change that moves
+  // the recommendation, so the recommendation itself has to be printed.
+  const advice = typeof commentary.advice === 'string' && commentary.advice.trim() !== ''
+    ? commentary.advice.trim()
+    : 'UNAVAILABLE — this assessment carries no advice line';
+  lines.push(`- **Recommended stance:** ${advice}`);
+
+  // An ABSENT beat list is not a list of length zero. "Every beat was evaluated
+  // and none fired" is a real finding about a quiet campaign; "the beats were
+  // never evaluated" is not a finding at all, and `asArray(undefined).length`
+  // would print them the same way.
+  if (!Array.isArray(commentary.beats)) {
+    lines.push(`- **Narrative beats:** UNAVAILABLE — no beat list was carried, which is not the same as no beat firing.`);
+  } else if (commentary.beats.length === 0) {
+    lines.push(`- **Narrative beats:** none fired — the beats WERE evaluated and none of their preconditions held.`);
+  } else {
+    lines.push(`- **Narrative beats (${commentary.beats.length} fired):**`);
+    for (const beat of commentary.beats) {
+      lines.push(`  - **${beat.name || beat.id || 'UNNAMED'}** (${beat.severity || 'unknown severity'}`
+        + `${beat.stance ? `, ${beat.stance}` : ''}, \`${beat.id || 'no-id'}\`) — ${beat.summary || 'UNAVAILABLE'}`);
+    }
+  }
+
+  const sim = commentary.simulation || {};
+
+  // The rating every hull count below is denominated in. In player mode it is
+  // also the number the opponent tiers are SCALED OFF, so a reader who cannot
+  // see it cannot tell what the tiers mean.
+  const bestDesign = sim.ownBestDesign || sim.ownBestHull;
+  lines.push(`- **Own best combatant:** ${bestDesign || 'UNAVAILABLE'}`
+    + `${sim.ownBestHull && sim.ownBestDesign && sim.ownBestHull !== sim.ownBestDesign ? ` (${sim.ownBestHull} hull)` : ''}`
+    + `, combat rating ${localeOr(sim.ownRating)} — every hull count below is a count of THIS design`);
+
+  if (sim.available !== true) {
+    // A sweep that could not be run says so in its own words. Rendering the
+    // section without the table would leave a reader unable to tell "no
+    // threshold was computable" from "the thresholds did not fit the budget".
+    lines.push(`- **Hull thresholds:** NOT SIMULATED — ${sim.reason || 'no reason was carried with the unavailable sweep'}`);
+  } else {
+    const tiers = asArray(sim.tiers);
+    const basisLabel = sim.source === 'true_design_blueprints'
+      ? 'the alien designs\' own combat values'
+      : 'observable alien fleet telemetry';
+    lines.push(`- **Hulls needed for P(win) ≥ ${fixedOr(firstUncertainty(tiers)?.targetWinProbability, 2, '0.80')} `
+      + `(SIMULATED, not measured; opponent basis: ${basisLabel}):**`);
+    if (tiers.length === 0) {
+      lines.push(`  - UNAVAILABLE — the sweep reported itself available and carried no tiers.`);
+    }
+    for (const tier of tiers) {
+      // `winnable: false` is a CEILING report, not an impossibility verdict:
+      // it says no count up to the swept maximum reached the target.
+      const count = tier.winnable === true
+        ? (tier.bandLabel || 'UNAVAILABLE')
+        : `NOT REACHED at any count up to ${localeOr(tier.uncertainty?.maxHullsSwept)} hulls`;
+      const ratio = num(tier.uncertainty?.winnableRatio);
+      // Carried only when it is below 1, because that is exactly when the
+      // percentile band was taken over a subset of seeds and understates its
+      // own spread. At 1 it would be five identical lines of noise.
+      const partial = ratio !== null && ratio < 1
+        ? ` — band taken over only ${(ratio * 100).toFixed(0)}% of seeds, so it UNDERSTATES the spread`
+        : '';
+      lines.push(`  - ${tier.label || tier.id || 'unnamed tier'}: **${count}**`
+        + `${tier.description ? ` — ${tier.description}` : ''}${partial}`);
+    }
+
+    // THE ONE THING THAT NEVER GIVES WAY WHILE THE NUMBERS ABOVE SURVIVE.
+    const shared = firstUncertainty(tiers);
+    if (shared) {
+      lines.push(`- **What those counts are NOT:** ${shared.opponentRatingBasis || 'UNAVAILABLE — no rating basis was carried'}`);
+      lines.push(`  The band covers run-to-run variance of a stochastic model across `
+        + `${localeOr(shared.seedsSimulated)} seeded runs of ${localeOr(shared.battleTrialsPerCount)} battle trials `
+        + `per hull count, swept to ${localeOr(shared.maxHullsSwept)} hulls, and NOTHING else — not error in the `
+        + `opponent ratings, and not model misspecification (the exchange is LINEAR in hull count, not the `
+        + `Lanchester square law, which understates the value of numerical superiority).`);
+    } else {
+      lines.push(`- **What those counts are NOT:** UNAVAILABLE — no uncertainty record was carried with the sweep, `
+        + `so the calibration of these counts could not be stated. Treat them as unverified.`);
+    }
+  }
+
+  const projections = sim.projections || {};
+  lines.push(...hateVentLine(projections.hateVent));
+  lines.push(...rebuildClockLine(projections.rebuildClock));
+
+  lines.push(`- Headline, full prose and the per-tier uncertainty record: \`${endpoint}\``);
+  lines.push(``);
+  return lines;
+}
+
+/** The first tier carrying an uncertainty record; they are identical by construction. */
+function firstUncertainty(tiers) {
+  for (const tier of asArray(tiers)) {
+    if (tier && tier.uncertainty) return tier.uncertainty;
+  }
+  return null;
+}
+
+/**
+ * The hate-vent horizon, or the reason there is none.
+ *
+ * Four distinct states used to reach consumers as one bare `null`, and one of
+ * them is player mode's redaction of the true hate value -- under which this
+ * projection can NEVER be produced. Printing nothing there would report an
+ * unreadable input as the absence of a venting story.
+ */
+function hateVentLine(hateVent) {
+  if (!hateVent) {
+    return [`- **Hate vent horizon:** UNAVAILABLE — no projection record was carried. This is not a report that `
+      + `hostility is stable.`];
+  }
+  if (hateVent.available === true) {
+    return [`- **Hate vent horizon (SIMULATED):** ${hateVent.bandLabel || 'UNAVAILABLE'} to fall below the war `
+      + `threshold, from ${fixedOr(hateVent.currentHate, 2)} hate at ${fixedOr(hateVent.ventRatePerDay, 4)} hate/day`];
+  }
+  return [`- **Hate vent horizon:** UNAVAILABLE — ${hateVent.reason || 'no reason was carried'}`];
+}
+
+/**
+ * Production throughput, and the assumption underneath it.
+ *
+ * The rate is `30 / (baseConstructionDays / queuedShips)`, and `queuedShips` is
+ * a count of QUEUED HULLS rather than of shipyards -- section 5 above heads the
+ * same array "N ship(s) building". The division therefore assumes those hulls
+ * build in PARALLEL, and five queued at one yard would really produce a fifth
+ * of the stated rate. That assumption is not this export's to re-model, but it
+ * is this export's to state.
+ */
+function rebuildClockLine(clock) {
+  if (!clock) {
+    return [`- **Production throughput:** UNAVAILABLE — no projection record was carried. This is not a report of `
+      + `zero throughput.`];
+  }
+  if (clock.available !== true) {
+    return [`- **Production throughput:** UNAVAILABLE — ${clock.reason || 'no reason was carried'}`];
+  }
+  const rate = num(clock.monthlyThroughputEst);
+  const days = num(clock.daysPerHullEst);
+  // A measured 0 is a reading -- the queue WAS read and is empty -- and is
+  // deliberately phrased as a finding rather than as an absence.
+  if (rate === 0) {
+    return [`- **Production throughput (SIMULATED):** 0 hulls/mo — the queue was read and is EMPTY. `
+      + `${clock.targetHull || 'The target hull'} takes ${localeOr(clock.baseConstructionDays)} days to build and none is queued.`];
+  }
+  const reciprocal = days !== null ? `, i.e. one every ${localeOr(days)} days` : '';
+  const belowOne = rate !== null && rate < 1
+    ? ' — UNDER ONE HULL A MONTH: this hull cannot be replaced inside a month'
+    : '';
+  return [`- **Production throughput (SIMULATED):** ${localeOr(rate)} × ${clock.targetHull || 'UNAVAILABLE'} per `
+    + `month${reciprocal}${belowOne}. Basis: ${localeOr(clock.baseConstructionDays)}-day build, `
+    + `${localeOr(clock.activeShipyardQueues)} hull(s) queued, ASSUMED to build in parallel — the field counts `
+    + `queued SHIPS, not shipyards, so a serial yard would deliver a fraction of this.`];
 }
 
 /**
