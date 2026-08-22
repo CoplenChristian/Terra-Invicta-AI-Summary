@@ -467,6 +467,18 @@
 
         <div class="tech-card tech-card--quiet init-view__span">
           <div class="tech-card-header">
+            <div class="tech-card-title">UNLOCKED TECHNOLOGY</div>
+            <span>WHAT THIS FACTION HAS RESEARCHED</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="unlockedTech" class="unlocked-tech" aria-live="polite">
+              <p class="ut-notice">Loading the research graph…</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="tech-card tech-card--quiet init-view__span">
+          <div class="tech-card-header">
             <div class="tech-card-title">SINCE LAST SAVE</div>
             <span>MATERIAL STRATEGIC DELTA</span>
           </div>
@@ -544,6 +556,7 @@
   <script src="/v2/js/components/research-advisor.js"></script>
   <script src="/v2/js/components/fleet-procurement.js"></script>
   <script src="/v2/js/components/drive-explorer.js"></script>
+  <script src="/v2/js/components/unlocked-tech.js"></script>
   <script src="/v2/js/mission-control.js"></script>
 </body>
 </html>

@@ -275,6 +275,58 @@ test('synthetic observer-owned shipyard queues survive and render resolved desig
 });
 
 // ---------------------------------------------------------------------------
+// 7b. UNLOCKED-TECHNOLOGY CENSUS REACHES THE AI SURFACES
+// ---------------------------------------------------------------------------
+test('war room carries the unlocked-technology census and its lookup route', () => {
+  const snapshot = {
+    metadata: { gameTimeString: '2030-01-01T00:00:00Z' },
+    observerFactionId: 4712,
+    mode: 'player',
+    factions: [{
+      ID: 4712,
+      displayName: 'Initiative',
+      completedProjects: ['Project_A', 'Project_B', 'Project_C'],
+      completedProjectsCount: 3
+    }],
+    techTree: { finishedTechsNames: ['Tech_A', 'Tech_B'] }
+  };
+
+  const warRoom = renderWarRoomMarkdown(snapshot);
+
+  assert.match(warRoom, /3 faction projects completed/, 'the census must report the completed project count');
+  assert.match(warRoom, /2 global techs finished/, 'the census must report the finished tech count');
+  assert.match(
+    warRoom,
+    /\/api\/intel\/tech-search\?observer=4712/,
+    'the census must name the route an agent can search with, not just the number'
+  );
+});
+
+test('an absent unlocked-technology set says so rather than reporting zero unlocked', () => {
+  // Number(undefined) is NaN and [].length on a missing array throws, but the
+  // tempting `?? []` would render "0 faction projects completed" -- a faction
+  // that has researched nothing, which is a different and false claim.
+  const snapshot = {
+    metadata: { gameTimeString: '2030-01-01T00:00:00Z' },
+    observerFactionId: 4712,
+    mode: 'player',
+    factions: [{ ID: 4712, displayName: 'Initiative' }]
+  };
+
+  const warRoom = renderWarRoomMarkdown(snapshot);
+
+  assert.match(
+    warRoom,
+    /Unlocked-technology census unavailable in this snapshot\./,
+    'a missing census must be reported as unavailable'
+  );
+  assert.ok(
+    !/0 faction projects completed/.test(warRoom),
+    'an absent project list must never render as zero completed projects'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // 8. BYTE-IDENTICAL /latest-snapshot.md AND NON-VACUOUS PROOF
 // ---------------------------------------------------------------------------
 test('compact snapshot output is byte-identical to frozen baseline captured from a5a3d01', () => {

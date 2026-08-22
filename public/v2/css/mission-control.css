@@ -58,6 +58,33 @@
   --fs-meta: 10px;
   --fs-tag: 9px;
 
+  /* Spacing scale.
+   *
+   * Measured 2026-08-21 before this scale existed: 20 distinct `gap` values
+   * between 1px and 24px, including 7, 9, 11, 13, 15, 18 and 22 -- values that
+   * read as accidental rather than chosen, because there was nothing to choose
+   * from. The dominant values were already 2 / 4 / 6 / 8 / 10 / 12, so the scale
+   * below is the one the stylesheet was reaching for; it is named, not invented.
+   *
+   * The step is 2px through the dense range rather than the usual 4px base,
+   * because the type scale bottoms out at 9px: at this density a 4px jump is a
+   * whole line of leading, so 4/8/12 alone cannot express "tight group" versus
+   * "separated group" and the missing middles are exactly where the odd values
+   * appeared. Above 12px the steps widen to 4px, where that resolution is real.
+   *
+   * Applied to container rhythm and to new components. The dense component
+   * internals already sat on 2/4/6/8/10/12 and were left alone -- restating
+   * them as tokens would have churned the whole file to no visible end. */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-md: 8px;
+  --space-lg: 10px;
+  --space-xl: 12px;
+  --space-2xl: 16px;
+  --space-3xl: 20px;
+  --space-4xl: 24px;
+
   /* Compatibility aliases for the existing render functions and inline SVG. */
   --bg-deep: var(--canvas);
   --bg-dark: var(--surface-inset);
@@ -878,13 +905,17 @@ img.faction-logo {
   background: transparent;
 }
 
+/* The horizontal inset matches .tech-card-body so the header title and the body
+   content sit on one left edge. They were 14px and 16px, which read as a 2px
+   misalignment down the length of every panel. Verticals were 11px/9px; they are
+   now symmetric and sum to the same 20px, so no panel changes height. */
 .tech-card-header {
   display: flex;
-  min-height: 45px;
-  gap: 12px;
+  min-height: 44px;
+  gap: var(--space-xl);
   align-items: center;
   justify-content: space-between;
-  padding: 11px 14px 9px;
+  padding: var(--space-lg) var(--space-2xl);
   border-bottom: 1px solid var(--line);
 }
 
@@ -931,7 +962,14 @@ img.faction-logo {
 }
 
 .tech-card-body {
-  padding: 16px;
+  padding: var(--space-2xl);
+}
+
+/* Panels ended with dead space: the last block inside a card body kept its own
+   bottom margin on top of the body's 16px padding, so cards closed on 24-28px of
+   nothing while opening on 16px. The body padding owns the bottom edge. */
+.tech-card-body > *:last-child {
+  margin-bottom: 0;
 }
 
 .init-directives-banner {
@@ -1270,13 +1308,17 @@ img.faction-logo {
   display: none !important;
 }
 
+/* Was `gap: 22px; padding: 27px 26px 54px` -- four values, none of them equal,
+   none of them related. The gutter and the horizontal inset are now the same
+   step, so cards align with the frame instead of sitting 4px inside it, and the
+   bottom is 2x the top by intent rather than the previous 2.07x by accident. */
 .init-view__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
+  gap: var(--space-4xl);
   max-width: 1660px;
   margin: 0 auto;
-  padding: 27px 26px 54px;
+  padding: var(--space-4xl) var(--space-4xl) calc(var(--space-4xl) * 2);
   align-items: start;
 }
 
@@ -1286,13 +1328,16 @@ img.faction-logo {
   }
 }
 
+/* Shares the 24px horizontal inset with .init-view__grid so COMMAND and the
+   other views frame their content on the same edge. The 18px bottom was the odd
+   value out; the bottom is now 2x the top, matching the grid's intent. */
 .init-command-layout {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-lg);
   max-width: 1660px;
   margin: 0 auto;
-  padding: 12px 24px 18px;
+  padding: var(--space-xl) var(--space-4xl) var(--space-4xl);
 }
 
 .init-command-top {
@@ -1323,12 +1368,21 @@ img.faction-logo {
   }
 }
 
+/* Defensive, NOT the fix. A grid item's `min-width` defaults to `auto` -- "never
+   shrink below my content" -- which is the shape of the bug the max-width: 900px
+   block addresses. Above 900px it does not currently bite: measured with this
+   declaration removed, the drive table wrapper still resolved to 830/890 at
+   910px and 860/890 at 940px, because the `minmax(0, 1fr)` tracks absorb the
+   span. Kept because it is correct and free, not because it holds DRIVES
+   together -- the media block does that. */
 .init-view__span {
   grid-column: 1 / -1;
+  min-width: 0;
 }
 
 .init-view__full-card {
   grid-column: 1 / -1;
+  min-width: 0;
 }
 
 .detail-panel__actions {
@@ -3650,14 +3704,26 @@ body.intelligence-library-open {
   background: var(--surface-inset);
 }
 
+/* Shown only when its table actually overflows -- see syncScrollHints() in
+   mission-control.js. It used to be revealed by width alone, which meant that at
+   375px it read "SWIPE HORIZONTALLY TO VIEW ALL COLUMNS" above tables measuring
+   698/698 and 838/838, i.e. with nothing to swipe to, while a table that did
+   overflow at 1000px got no hint at all because the rule stopped at 900px.
+   An affordance that lies about the data surface is the same defect class as
+   rendering an unmeasured value as a confident zero. */
 .mc-board-scroll-hint {
   display: none;
-  padding: 6px 0 0;
+  padding: var(--space-sm) 0 0;
   color: var(--text-dim);
   font-family: var(--mono);
   font-size: 8px;
   letter-spacing: 0.06em;
   text-align: right;
+}
+
+.mc-board-scroll-hint.is-scrollable,
+.de-scroll-hint.is-scrollable {
+  display: block;
 }
 
 .mc-board-table {
@@ -4705,15 +4771,75 @@ body.intelligence-library-open {
     max-width: 100%;
   }
 
+  /* THE mobile overflow fix. Measured 2026-08-21 at 375x812: DRIVES put 64
+     elements past the right edge with no scrollable ancestor, worst edge 937px
+     on a 375px viewport, and `html, body { overflow-x: hidden }` above clipped
+     them -- so the content was unreachable, not merely off-screen.
+     `.de-table-wrap` reported clientWidth 890 / scrollWidth 890, i.e. its own
+     `overflow-x: auto` never engaged because nothing had constrained it.
+     The cause is one line: this block turns .init-view__grid from a grid into a
+     column flex container, and the base rule's `align-items: start` carries
+     over. On the flex cross axis that means shrink-to-fit, so .init-view__span
+     sized to the table's 937px max-content instead of the 375px container.
+     Stretching the items back constrains the chain, and the table wrapper then
+     scrolls as it was always meant to (clientWidth 313 / scrollWidth 890).
+     `min-width: 0` is belt-and-braces for the >900px grid case, where a
+     `grid-column: 1 / -1` item's default `min-width: auto` can do the same
+     thing. Verified on the live DOM by scripts/verify_mobile_overflow.js. */
+  .init-view__grid,
+  .init-grid-layout {
+    align-items: stretch;
+  }
+
+  .init-view__grid > *,
+  .init-grid-layout > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .mc-board-table-wrap,
-  .intel-library-table-wrap {
+  .intel-library-table-wrap,
+  .de-table-wrap {
     max-width: 100%;
     overscroll-behavior-x: contain;
   }
 
-  .mc-board-scroll-hint {
-    display: block;
+  /* Generalise the pattern that makes FLEET the only view measuring zero
+     overflow: `.mc-board-table--fleet` and `--ledger` both drop the 780px floor
+     for `min-width: 100%; table-layout: fixed` and let cells wrap. Applied here
+     to the base table at narrow widths only, so a phone reflows the columns
+     instead of panning them. Measured at 375px: expansion 164 -> 12 overflowing
+     elements, records 45 -> 0.
+
+     Deliberately NOT applied above 900px. Those two modifiers pair fixed layout
+     with explicit per-column widths; the base table has none, so a global switch
+     would redistribute every desktop table to equal columns -- a visible change
+     to a surface that measures clean today, which is not what this fix is for.
+     Desktop keeps `min-width: 780px` and `white-space: nowrap` exactly as before. */
+  .mc-board-table,
+  /* Same rule, restated at the specificity of the override it has to beat:
+     `.mc-watch-grid .mc-board-table` raises the floor to 600px below 1000px,
+     which is sound where that grid is one full-width column but forces RECORDS
+     to pan on a phone. Selector specificity, not source order, decides here --
+     (0,2,0) beats (0,1,0) wherever it sits in the file. */
+  .mc-watch-grid .mc-board-table {
+    min-width: 100%;
+    table-layout: fixed;
   }
+
+  /* `anywhere`, not `break-word`, and the difference was measured rather than
+     assumed. Both break a word too long for its column -- unavoidable at ~60px
+     columns, "the Protectorate" does not fit whole either way -- but `anywhere`
+     also feeds intrinsic sizing, which is what lets the cells settle inside the
+     wrapper completely. Swapping to `break-word` left residual overflow of 5
+     elements on COMMAND and 12 on EXPANSION at 375px: still reachable, since the
+     wrapper scrolls, but scrolling you do not need beats scrolling that works. */
+  .mc-board-table th,
+  .mc-board-table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
 
   .mc-space-force-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -7674,8 +7800,108 @@ button.council-orders__row:focus-visible {
 .de-table-wrap {
   overflow-x: auto;
   overflow-y: auto;
-  margin-top: 8px;
+  margin-top: var(--space-md);
   max-height: 620px;
+}
+
+/* DRIVES' own narrow-viewport pass.
+ *
+ * The catalogue is 7 columns of measurements the reader compares ACROSS rows --
+ * that is the task. Stacking each row into a card (the usual mobile table
+ * answer) would make the table fit and destroy the comparison, and hiding
+ * columns would drop measured data, so the table keeps its shape and pans.
+ * What panning costs you is knowing which drive a number belongs to, so the
+ * drive name is pinned to the left edge and the numbers move under it.
+ *
+ * The header is already `position: sticky; top: 0`; the corner cell needs both
+ * axes and a higher stacking order than either single-axis neighbour. */
+.de-table-wrap .de-th:first-child,
+.de-table-wrap .de-cell--name {
+  position: sticky;
+  left: 0;
+  /* Opaque: rows scroll underneath this cell, so a transparent background would
+     let drive names pile up on top of each other while panning. */
+  background: var(--surface);
+  z-index: 2;
+}
+
+.de-table-wrap .de-th:first-child {
+  z-index: 3;
+}
+
+.de-table-wrap .de-row:hover .de-cell--name,
+.de-table-wrap .de-row:focus-within .de-cell--name {
+  background: var(--surface-raised);
+}
+
+/* The pinned column needs an edge, otherwise the numbers slide under it with
+   nothing to say they passed behind something. */
+.de-table-wrap .de-th:first-child::after,
+.de-table-wrap .de-cell--name::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line-strong);
+}
+
+/* Class-driven like .mc-board-scroll-hint: the drive catalogue is 7 columns and
+   normally does overflow, but "normally" is not "measured". */
+.de-scroll-hint {
+  display: none;
+  padding: var(--space-sm) 0 0;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+
+/* Browser surfaces carry the design too. These wrappers only started showing a
+   horizontal scrollbar once the overflow fix let them scroll, and the default
+   one belongs to no design system on this page. */
+.de-table-wrap,
+.mc-board-table-wrap,
+.intel-library-table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) var(--surface-inset);
+}
+
+.de-table-wrap::-webkit-scrollbar,
+.mc-board-table-wrap::-webkit-scrollbar,
+.intel-library-table-wrap::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.de-table-wrap::-webkit-scrollbar-track,
+.mc-board-table-wrap::-webkit-scrollbar-track,
+.intel-library-table-wrap::-webkit-scrollbar-track {
+  background: var(--surface-inset);
+}
+
+.de-table-wrap::-webkit-scrollbar-thumb,
+.mc-board-table-wrap::-webkit-scrollbar-thumb,
+.intel-library-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 5px;
+}
+
+.de-table-wrap::-webkit-scrollbar-thumb:hover,
+.mc-board-table-wrap::-webkit-scrollbar-thumb:hover,
+.intel-library-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+/* Touch input, not screen width: a small phone and a touchscreen laptop need the
+   same target size, and neither is implied by a media width. */
+@media (pointer: coarse) {
+  .de-select,
+  .de-input {
+    min-height: 44px;
+  }
 }
 
 .de-table {
@@ -7870,5 +8096,246 @@ button.council-orders__row:focus-visible {
   font-size: var(--fs-tag);
   line-height: 1.5;
   color: var(--text-dim);
+}
+
+/* =========================================================================
+   UNLOCKED TECHNOLOGY (RECORDS)
+   =========================================================================
+   Uses the existing palette and the four-step type scale unchanged. Spacing
+   comes from the --space-* scale so the panel's rhythm is stated rather than
+   guessed at, which is what the rest of the file was missing.
+
+   The project name leads each row at --fs-row and the item list sits under it
+   at --fs-meta: the project is what the player searches for in game, the items
+   are what it yields. See docs/research-row-naming-spec.md.
+   ========================================================================= */
+
+.ut-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-lg);
+  padding-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--line);
+}
+
+.ut-search {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.ut-search__label,
+.ut-scope-btn {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+}
+
+.ut-search__label {
+  color: var(--text-dim);
+}
+
+.ut-input {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-sm) var(--space-md);
+  color: var(--text);
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+}
+
+.ut-input::placeholder {
+  color: var(--text-dim);
+}
+
+.ut-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.ut-scope {
+  display: flex;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-inset);
+}
+
+.ut-scope-btn {
+  padding: var(--space-xs) var(--space-lg);
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.ut-scope-btn:hover {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.ut-scope-btn.is-active {
+  color: var(--canvas);
+  background: var(--accent);
+  font-weight: 700;
+}
+
+.ut-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Rows separate with a rule rather than becoming cards: a card per row inside a
+   card body is the nested-container habit, and 60 of them would read as 60
+   objects rather than as one list. */
+.ut-row {
+  padding: var(--space-lg) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ut-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.ut-row__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.ut-row__project {
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: var(--fs-row);
+  font-weight: 600;
+}
+
+.ut-row--unlocked .ut-row__project {
+  color: var(--accent-strong);
+}
+
+.ut-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-lg);
+  margin-top: var(--space-xs);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text-dim);
+}
+
+.ut-id {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+.ut-meta-item {
+  white-space: nowrap;
+}
+
+.ut-unavailable {
+  color: var(--warning);
+}
+
+.ut-status {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.ut-status--completed { color: var(--success); }
+.ut-status--researching { color: var(--accent); }
+.ut-status--available { color: var(--text-soft); }
+.ut-status--locked { color: var(--text-dim); }
+
+.ut-unlocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ut-unlock {
+  padding: 1px var(--space-sm);
+  color: var(--text-muted);
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+}
+
+/* Why this row is in the results at all when the query matched none of its own
+   names. Without it, searching "Copperhead" and being shown "Hydrolox High
+   Explosive Missiles" looks like a bug rather than the feature. */
+.ut-unlock--matched {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.ut-unlock__why {
+  margin-left: var(--space-sm);
+  color: var(--accent);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+}
+
+.ut-unlock--more {
+  color: var(--text-dim);
+  background: transparent;
+  border-style: dashed;
+}
+
+.ut-notice {
+  padding: var(--space-xl) 0;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+  line-height: 1.5;
+}
+
+.ut-notice--error {
+  color: var(--warning);
+}
+
+.ut-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-xs) var(--space-lg);
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.04em;
+}
+
+@media (pointer: coarse) {
+  .ut-input,
+  .ut-scope-btn {
+    min-height: 44px;
+  }
 }
 
