@@ -26,6 +26,7 @@ const {
   buildControlPointCapReport,
   buildControlPointMaintenance,
   marginalControlPointCost,
+  nationControlPointCost,
   overCapInfluencePenalty,
   overCapMissionExposure,
   readBaseControlPointCap
@@ -531,4 +532,38 @@ test('an unpriceable nation annotates the refusal rather than a free control poi
   assert.equal(candidate.value.controlPointMaintenance.available, false);
   assert.equal(candidate.value.controlPointMaintenance.cost, null);
   assert.notEqual(candidate.value.controlPointMaintenance.cost, 0);
+});
+
+// ---------------------------------------------------------------------------
+// The cost expression itself, shared with the directive engine.
+//
+// `value/gdp-per-cp-cost` in server/engine/rules/value.js used to carry its own
+// `** 0.6 / 2` literal and charged one control point the undivided national
+// total. It now divides the nation's output by THIS function's result, so the
+// two callers cannot drift and the wiki citation has one home.
+// ---------------------------------------------------------------------------
+
+test('nationControlPointCost is the one expression both callers use', () => {
+  assert.equal(nationControlPointCost(1000), Math.pow(1000, COST_FORMULA.exponent) / COST_FORMULA.divisor);
+  const target = nation(1, 'Aland', 1000, [{ id: 'a', factionId: null }, { id: 'b', factionId: 2 }]);
+  const marginal = marginalControlPointCost(target);
+  assert.equal(marginal.nationTotalCost, Number(nationControlPointCost(1000).toFixed(3)));
+  // The marginal figure is that total divided by the nation's own count -- the
+  // division the engine rule was omitting.
+  assert.equal(marginal.cost, Number((nationControlPointCost(1000) / 2).toFixed(3)));
+});
+
+test('an unmeasured GDP prices a control point at null, never at 0', () => {
+  // `Number(null) === 0` and `Number('') === 0`, and a nation costing 0 cp
+  // reads as a free control point with an infinite value density.
+  for (const absent of [null, undefined, '', 'n/a', NaN]) {
+    assert.equal(nationControlPointCost(absent), null, `${JSON.stringify(absent)} should price as null`);
+  }
+  // Non-positive GDP is not a cheap nation either -- `0 ** 0.6` is 0, which
+  // would divide by zero downstream.
+  assert.equal(nationControlPointCost(0), null);
+  assert.equal(nationControlPointCost(-5), null);
+  // Strings that DO parse are still read, because the templates ship numerics
+  // as strings.
+  assert.equal(nationControlPointCost('1000'), nationControlPointCost(1000));
 });

@@ -465,6 +465,110 @@ test('a control point with unknown GDP gets value.gdpBn = null, not 0', () => {
   assert.strictEqual(valueRule.appliesTo(candidates[0]), false);
 });
 
+// ---------------------------------------------------------------------------
+// value/gdp-per-cp-cost: the control-point count cancels, and the scale is a
+// deliberate calibration rather than an artefact.
+//
+// The wiki (`Nations` § "Cost of Control Points", raw wikitext, read
+// 2026-08-22) divides the nation's control-point cost "evenly among all the
+// control points of the nation", the same way its output splits. The rule used
+// to divide only the output and charge one control point the WHOLE nation's
+// cost, which under-valued a nation by exactly its control-point count.
+//
+// Expected values here are re-derived from the CLOSED FORM `2 * GDP_Bn^0.4`,
+// which the implementation does not use -- it computes `GDP_Bn / (GDP_Bn^0.6 /
+// 2)`. Two different expressions that must agree, not a fixture captured from
+// the code's own output.
+// ---------------------------------------------------------------------------
+
+const gdpPerCpCostRule = RULES.find((r) => r.id === 'value/gdp-per-cp-cost');
+
+function expansionCandidate({ nationName = 'Testland', gdpBn, cpCountInNation }) {
+  return {
+    id: `control-nation:${nationName}:Legislature`,
+    family: 'expansion',
+    missionType: 'Control Nation',
+    title: `Take the Legislature control point in ${nationName}`,
+    target: { kind: 'controlPoint', nation: nationName, controlPointType: 'Legislature' },
+    hate: null,
+    cost: null,
+    value: { gdpBn, cpCountInNation, nationName },
+    score: null,
+    provenance: { source: 'test', estimateClass: 'exact' },
+    unmetPreconditions: []
+  };
+}
+
+/** The closed form the divided-both-sides ratio collapses to. */
+const closedFormDensity = (gdpBn) => 2 * Math.pow(gdpBn, 0.4);
+
+test('value/gdp-per-cp-cost is unchanged by how many control points the nation has', () => {
+  const world = buildWorld({ observerId: 4712 });
+  const one = gdpPerCpCostRule.evaluate(world, expansionCandidate({ gdpBn: 10534.64, cpCountInNation: 1 }));
+  const five = gdpPerCpCostRule.evaluate(world, expansionCandidate({ gdpBn: 10534.64, cpCountInNation: 5 }));
+  assert.strictEqual(one, five);
+  // And it is the closed form times the shipped scale, not some other number.
+  assert.ok(Math.abs(one - closedFormDensity(10534.64) * WEIGHTS.VALUE_POINTS) < 1e-9);
+});
+
+test('the larger economy outranks the smaller one even when it holds more control points', () => {
+  // Measured on ExitSave.gz: charging the undivided national cost put 921 of
+  // 11,781 nation pairs in the wrong order. This is the largest of them -- the
+  // old rule scored the United Malay Nation 16.26 against Russia's 16.76 and
+  // therefore recommended the smaller economy.
+  const world = buildWorld({ observerId: 4712 });
+  const malay = gdpPerCpCostRule.evaluate(
+    world, expansionCandidate({ nationName: 'United Malay Nation', gdpBn: 10534.64, cpCountInNation: 5 })
+  );
+  const russia = gdpPerCpCostRule.evaluate(
+    world, expansionCandidate({ nationName: 'Russia', gdpBn: 6507.063, cpCountInNation: 4 })
+  );
+  assert.ok(malay > russia, `expected the $10,534.64Bn nation to outrank the $6,507.06Bn one, got ${malay} vs ${russia}`);
+});
+
+test('an unreadable control-point count neither changes the score nor is reported as 1', () => {
+  const world = buildWorld({ observerId: 4712 });
+  const known = expansionCandidate({ gdpBn: 75.0515, cpCountInNation: 2 });
+  const unknown = expansionCandidate({ gdpBn: 75.0515, cpCountInNation: null });
+  assert.strictEqual(gdpPerCpCostRule.evaluate(world, unknown), gdpPerCpCostRule.evaluate(world, known));
+  const because = gdpPerCpCostRule.because(world, unknown);
+  assert.match(because, /no readable control-point count/);
+  assert.doesNotMatch(because, /across 1 control point/);
+  // The known case still shows the per-point figures a reader wants.
+  assert.match(gdpPerCpCostRule.because(world, known), /across 2 control point/);
+});
+
+test('the expansion scale still sits on the anchor the other families were calibrated against', () => {
+  // WEIGHTS.COUNCIL, ADVISORY, DEFENSE and INTELLIGENCE are all documented as
+  // set against "a mid-value CP grab" at 4.4-5.5. The one takeable control
+  // point on ExitSave.gz is Madagascar's Executive, $75.0515Bn across two
+  // control points. If VALUE_POINTS moves, this breaks and those four families
+  // have to be re-derived rather than silently left behind.
+  const world = buildWorld({ observerId: 4712 });
+  const score = gdpPerCpCostRule.evaluate(world, expansionCandidate({
+    nationName: 'Madagascar', gdpBn: 75.0515, cpCountInNation: 2
+  }));
+  assert.ok(score > 4.4 && score < 5.7, `expected the anchor grab to score 4.4-5.7, got ${score}`);
+  assert.ok(Math.abs(score - closedFormDensity(75.0515) * WEIGHTS.VALUE_POINTS) < 1e-9);
+});
+
+test('the engine weight and the shipped config default cannot drift apart', () => {
+  // VALUE_POINTS lives in TWO places: WEIGHTS here is the fallback, and
+  // config/defaults.json is what the server actually passes in through
+  // `world.directiveWeights`. Recalibrating one and not the other would leave
+  // the tests measuring a scale the running dashboard never uses.
+  const { resolveConfig } = require('../server/config');
+  const configured = resolveConfig({
+    configPath: require('path').join(require('os').tmpdir(), 'ti-config-does-not-exist.json'),
+    env: {}
+  }).analysis.directiveWeights;
+  assert.strictEqual(configured.valuePoints, WEIGHTS.VALUE_POINTS);
+  assert.strictEqual(configured.hatePoints, WEIGHTS.HATE_POINTS);
+  assert.strictEqual(configured.resourcePoints, WEIGHTS.RESOURCE_POINTS);
+  assert.strictEqual(configured.council.turn, WEIGHTS.COUNCIL.turn);
+  assert.strictEqual(configured.defense.gdpDensityPoints, WEIGHTS.DEFENSE.gdpDensityPoints);
+});
+
 test('cost/affordability returns unknown, not veto, when resource stock is unavailable', () => {
   const world = buildWorld({ observerId: 4712, resources: null });
   const candidate = {

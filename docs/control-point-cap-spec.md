@@ -281,7 +281,18 @@ modes: primary "Advise Government: United States of North America" at 6.99742201
 same five assignments in omniscient and three in player, totalExpectedValue 21.41 / 19.3, and
 "Take the Executive control point in Madagascar" still benched at 5.63.
 
-### A defect found and deliberately not fixed here
+### A defect found and deliberately not fixed here — since fixed, 2026-08-22
+
+**Landed in its own pass.** The arithmetic was corrected and `WEIGHTS.VALUE_POINTS`
+recalibrated 1 → 0.5 alongside it (also in `config/defaults.json`, which is what the
+running server reads). The rule now divides the nation's output by
+`nationControlPointCost()` in `shared/controlPointCap.mjs`, so the formula and its
+citation have one home instead of two. What the paragraph below did not know: the
+omission was a **shape** error, not a scale one — it put 921 of 11,781 nation pairs
+(7.8%) in the wrong order, so no choice of weight could have preserved the old ranking.
+See `docs/README.md`, Shipped.
+
+
 
 `value/gdp-per-cp-cost` in `server/engine/rules/value.js` divides a nation's output by its
 control-point count but charges one control point the **whole nation's** cost, under-valuing

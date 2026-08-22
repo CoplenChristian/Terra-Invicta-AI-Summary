@@ -691,6 +691,30 @@ export function buildControlPointCapReport(snapshot, { factionId, mode = 'player
 }
 
 /**
+ * The whole nation's control-point cost: `(GDP in billions) ^ 0.6 / 2`.
+ *
+ * Exported as its own primitive because two callers need the SAME expression
+ * and neither may re-type it: `marginalControlPointCost` below divides it by
+ * the nation's control-point count, and `value/gdp-per-cp-cost` in
+ * `server/engine/rules/value.js` divides the nation's output by it. That rule
+ * used to carry its own `** 0.6 / 2` literal and charged one control point the
+ * undivided national total -- the arithmetic omission this module's header
+ * already names as the thing that made the cost side an order of magnitude too
+ * large. One expression, one citation, one place to be wrong.
+ *
+ * Returns null -- never 0 -- when GDP is unreadable or non-positive, because a
+ * nation whose GDP was not measured is not a free nation.
+ *
+ * @param {number|string|null} gdpBillions GDP already in billions.
+ * @returns {number|null}
+ */
+export function nationControlPointCost(gdpBillions) {
+  const gdp = num(gdpBillions);
+  if (gdp === null || !(gdp > 0)) return null;
+  return Math.pow(gdp, COST_FORMULA.exponent) / COST_FORMULA.divisor;
+}
+
+/**
  * The marginal maintenance cost of taking one more control point in a nation.
  *
  * This is the one figure here that does NOT depend on the unreconciled base:
@@ -705,16 +729,16 @@ export function marginalControlPointCost(nation) {
   const controlPoints = asArray(nation?.controlPoints);
   const count = controlPoints.length > 0 ? controlPoints.length : num(nation?.cpCountInNation);
   const gdpBillions = gdp === null ? null : gdp / 1e9;
-  if (gdpBillions === null || gdpBillions <= 0 || count === null || count <= 0) {
+  const nationTotalCost = nationControlPointCost(gdpBillions);
+  if (nationTotalCost === null || count === null || count <= 0) {
     return {
       available: false,
       cost: null,
-      reason: gdpBillions === null || gdpBillions <= 0
+      reason: nationTotalCost === null
         ? 'the nation carries no readable GDP, so a control point in it cannot be priced'
         : 'the nation carries no readable control-point count, so its cost cannot be divided'
     };
   }
-  const nationTotalCost = Math.pow(gdpBillions, COST_FORMULA.exponent) / COST_FORMULA.divisor;
   return {
     available: true,
     cost: round(nationTotalCost / count, 3),
@@ -744,6 +768,7 @@ export default {
   buildControlPointCap,
   buildControlPointMaintenance,
   buildControlPointCapReport,
+  nationControlPointCost,
   marginalControlPointCost,
   overCapInfluencePenalty,
   overCapMissionExposure
