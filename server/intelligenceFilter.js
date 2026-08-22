@@ -8,6 +8,10 @@ const snapshotIdentity = require('./snapshotIdentity');
 const { resolveConfig } = require('./config');
 const { buildAlienHateEconomics } = require('./alienHateEconomics');
 const {
+  resolveCampaignElapsed,
+  resolveAlienProgressionSpeed
+} = require('../shared/campaignElapsed.mjs');
+const {
   ALIEN_FACTION_DISPLAY_NAME,
   INITIATIVE_DISPLAY_NAME,
   SERVANTS_DISPLAY_NAME
@@ -84,26 +88,26 @@ class IntelligenceFilter {
       String(rawSnapshot.metadata?.gameTimeString || '').match(/\/(\d{4})\b/)?.[1]
     );
     // Number(null) is 0 and Number('') is 0, both of which are finite, so an
-    // absent start year would otherwise pass the guard below and make the
-    // campaign look ~2000 years old. Probe for presence before coercing.
+    // absent reading would otherwise pass the guards inside the resolver and
+    // make the campaign look ~2000 years old. Presence is checked before any
+    // coercion there.
     //
-    // The save does not record a campaign start year at all, so the measured
-    // value is normally null and the snapshot offers 2022 as an explicitly
-    // labelled assumption instead. The elapsed-years figure is derived from
-    // whichever is available and `yearsElapsedSource` says which was used --
-    // an assumption stated is not the same as a default applied in silence.
-    const measuredStartYear = this.toFiniteOrNull(rawSnapshot.metadata?.campaignStartYear);
-    const assumedStartYear = this.toFiniteOrNull(rawSnapshot.metadata?.assumedCampaignStartYear);
-    const startYear = measuredStartYear ?? assumedStartYear;
-    const yearsElapsed = Number.isFinite(campaignYear) && startYear !== null
-      ? campaignYear - startYear
-      : null;
-    const yearsElapsedSource = yearsElapsed === null
-      ? 'unavailable: campaign year or start year missing'
-      : (measuredStartYear !== null
-        ? 'measured: save metadata campaignStartYear'
-        : (rawSnapshot.metadata?.campaignStartYearSource
-          || `assumed start year ${assumedStartYear}`));
+    // The resolution order, its evidence and the reason `daysInCampaign` beats
+    // subtracting years all live in shared/campaignElapsed.mjs. It is shared
+    // with shared/strategicSnapshot.mjs so the live snapshot and the published
+    // history cannot report two different campaign ages.
+    const elapsed = resolveCampaignElapsed(
+      rawSnapshot.metadata,
+      Number.isFinite(campaignYear) ? campaignYear : null
+    );
+    const yearsElapsed = elapsed.yearsElapsed;
+    const yearsElapsedSource = elapsed.sourceText;
+    // The save's own Alien Progression Speed. Until 2026-08-21 no caller passed
+    // one, so buildTotalWarState assumed 1 and published a 20-year Normal gate
+    // on a campaign whose setting is 200% -- the game's gate is 10. Absent or
+    // unreadable stays null, and buildTotalWarState then falls back to 1 and
+    // announces it through `progressionSpeedAssumed`.
+    const alienProgressionSpeed = resolveAlienProgressionSpeed(rawSnapshot.metadata);
 
     const buildHateEconomics = (visibleHateEstimate = null) => ({
       ...buildAlienHateEconomics({
@@ -111,11 +115,24 @@ class IntelligenceFilter {
         difficulty: rawSnapshot.metadata?.difficulty,
         mode,
         visibleHateEstimate,
-        yearsElapsed
+        yearsElapsed,
+        alienProgressionSpeed
       }),
       yearsElapsed,
       yearsElapsedSource,
-      campaignStartYearMeasured: measuredStartYear !== null
+      // Still the same question it has always answered: did the save itself
+      // state a campaign start year? It now finds one, because the field lives
+      // in TIGlobalResearchState and was previously only looked for on
+      // TIMetadataState. Reporting it as false would understate provenance,
+      // which is the mirror image of the defect this flag exists to prevent.
+      campaignStartYearMeasured: elapsed.campaignStartYearMeasured,
+      campaignStartYear: elapsed.campaignStartYear,
+      // Named `basis`, not `campaignAgeSource`: shared/researchReachability.mjs
+      // already emits a `campaignAgeSource` on its horizon block holding the
+      // full source SENTENCE, and two same-named fields carrying different
+      // shapes in one payload is a trap for a model reading it.
+      campaignAgeBasis: elapsed.source,
+      daysInCampaign: elapsed.daysInCampaign
     });
 
     if (mode === 'omniscient') {

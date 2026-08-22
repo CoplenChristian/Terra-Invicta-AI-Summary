@@ -1,4 +1,5 @@
-// Purpose: pure alien minimum-hate floor calculation from used Mission Control,
+// Purpose: pure alien minimum-hate floor and total-war gate calculation from
+//   used Mission Control, elapsed campaign time and alien progression speed,
 //   shared by local server, worker, exports and tests.
 //
 // Save-derived calculation for the alien minimum-hate floor created by used
@@ -17,11 +18,17 @@ export const DIFFICULTY_MULTIPLIERS = Object.freeze({
 export const ALIEN_HATE_WAR_THRESHOLD = 50;
 
 // Total war requires BOTH conditions. Verified against the wiki's Diplomacy
-// page ("Alien Total War"), last edited 2026-08-11.
+// page ("Alien Total War"), last edited 2026-08-11; re-read as raw wikitext
+// 2026-08-21 at its new home, https://wiki.hoodedhorse.com/Terra_Invicta/
+// (the fandom mirror now returns 410 Gone).
 export const ALIEN_TOTAL_WAR_HATE = 200;
 
 // Years since the campaign began before total war can be declared. Note Brutal
 // is 0: there, reaching 200 hate is sufficient on its own.
+//
+// Divided by Alien Progression Speed. Diplomacy, "Alien Total War", verbatim:
+// "These values are divided by the Alien Progression Speed." At the 200% this
+// campaign runs, Normal's 20 becomes 10.
 export const ALIEN_TOTAL_WAR_YEARS = Object.freeze({
   cinematic: 25,
   normal: 20,
@@ -30,6 +37,7 @@ export const ALIEN_TOTAL_WAR_YEARS = Object.freeze({
 });
 
 // Alien maximum hate: starting value and yearly growth by difficulty.
+// Diplomacy, "Alien Maximum Hate Amount", read 2026-08-21.
 export const ALIEN_MAX_HATE = Object.freeze({
   cinematic: { start: 70, perYear: 2 },
   normal: { start: 1000, perYear: 100 },
@@ -38,7 +46,24 @@ export const ALIEN_MAX_HATE = Object.freeze({
 });
 
 // If this many years have passed and the maximum is still below 200, it is
-// raised to 200. Campaign-duration checks are divided by progression speed.
+// raised to 200.
+//
+// TWO DIFFERENT SCALINGS, and they are not the same one written twice. Aliens,
+// "Alien Progression Rate", read as raw wikitext 2026-08-21, lists both:
+//
+//   "Increase in Alien Maximum Hate per Year is multiplied by X%."
+//   "Every \"Years Before Aliens Can Do Something\" timer has its duration
+//    divided by X%."
+//
+// So the yearly ACCRUAL is multiplied by speed while the year THRESHOLDS are
+// divided by it. Diplomacy states the second as "All Campaign Duration checks
+// are multiplied by the Alien Progression Speed ... every year that passes
+// counts as 2 years", which is the same arithmetic from the other side.
+//
+// Only the threshold half was implemented until 2026-08-21, and it was inert
+// because no caller passed a speed. Wiring the measured 200% in is what made
+// the missing accrual half observable: without it this campaign's maximum hate
+// would have been published as 1891 instead of 2782.
 const MAX_HATE_FLOOR_YEARS = 25;
 const MAX_HATE_FLOOR_VALUE = 200;
 
@@ -90,15 +115,25 @@ const formatFactor = (value) => value === null ? 'UNAVAILABLE' : Number(value).t
  * in player mode where the true hate figure is redacted. Nothing there projects
  * from a stock rate, so no multiplier belongs in it.
  *
- * THIS function is the one exception worth knowing about, and it is deliberately
- * left alone. The year gate below divides by `alienProgressionSpeed`, no caller
- * passes one, and the save's own `alienProgressionSpeed` is now baked at
- * `metadata.campaignSettings.settings.alienProgressionSpeed`. The default of 1
- * is therefore an assumption, which is exactly what `progressionSpeedAssumed`
- * already announces to every consumer -- it is not a silent wrong answer.
- * Wiring the measured value in would MOVE a published figure (Normal's 20-year
- * gate becomes 10 at 200%), so it is a separate, verifiable change and not part
- * of a presentational pass.
+ * THIS function was the one exception, and as of 2026-08-21 it no longer is.
+ * The audit left it alone because wiring the measured speed in MOVES a
+ * published figure, and said that deserved to be its own verifiable change.
+ * This is that change: `server/intelligenceFilter.js` and
+ * `shared/strategicSnapshot.mjs` now both read the save's own setting through
+ * `resolveAlienProgressionSpeed` (shared/campaignElapsed.mjs) and pass it here.
+ *
+ * On this campaign that took the Normal gate from 20 years to 10, and -- with
+ * elapsed campaign time also corrected from an assumed 13 years to a measured
+ * 8.91 -- the published verdict from "safe, 7 years remaining" to "safe, 1.09
+ * years remaining". Both halves were individually announced (`progressionSpeedAssumed`,
+ * `yearsElapsedSource`) and the composite on screen was still materially wrong,
+ * which is the point worth keeping: an announced assumption is not a harmless
+ * one when two of them compound in the same direction.
+ *
+ * `alienProgressionSpeed` still DEFAULTS to 1, because a synthetic fixture or a
+ * save parsed before the custom-difficulty block existed genuinely has no
+ * setting to read. That default remains an assumption and `progressionSpeedAssumed`
+ * still announces it; what changed is that a real save no longer reaches it.
  */
 export function buildTotalWarState({
   difficultyKey,
@@ -119,17 +154,28 @@ export function buildTotalWarState({
       hateRemaining: null,
       yearsRemaining: null,
       maximumAlienHate: null,
-      progressionSpeedAssumed: speed === 1
+      progressionSpeedAssumed: speed === 1,
+      alienProgressionSpeed: speed
     };
   }
 
   const yearsThreshold = baseYears / speed;
-  const yearsRemaining = Math.max(0, yearsThreshold - yearsElapsed);
+  // Rounded because the subtraction is done in binary floating point and
+  // `10 - 8.91` is `1.0899999999999999`. The GATE is tested against the
+  // unrounded difference below, so rounding here only affects what is
+  // published, never whether total war is judged available.
+  const yearsRemaining = Number(Math.max(0, yearsThreshold - yearsElapsed).toFixed(2));
   const yearGateOpen = yearsElapsed >= yearsThreshold;
 
   let maximumAlienHate = null;
   if (maxHateConfig) {
-    maximumAlienHate = maxHateConfig.start + maxHateConfig.perYear * yearsElapsed;
+    // The yearly increase is MULTIPLIED by progression speed while the 25-year
+    // floor check is DIVIDED by it -- see the two verbatim wiki lines above.
+    // The accrual half was missing until 2026-08-21 and only became observable
+    // once a real speed was passed in.
+    maximumAlienHate = Number(
+      (maxHateConfig.start + (maxHateConfig.perYear * speed) * yearsElapsed).toFixed(2)
+    );
     if (yearsElapsed >= MAX_HATE_FLOOR_YEARS / speed && maximumAlienHate < MAX_HATE_FLOOR_VALUE) {
       maximumAlienHate = MAX_HATE_FLOOR_VALUE;
     }
@@ -163,7 +209,10 @@ export function buildTotalWarState({
     hateRemaining,
     yearsRemaining,
     maximumAlienHate,
-    progressionSpeedAssumed: speed === 1
+    progressionSpeedAssumed: speed === 1,
+    // The multiplier actually applied, so a reader can check the arithmetic
+    // rather than only being told whether it was assumed.
+    alienProgressionSpeed: speed
   };
 }
 

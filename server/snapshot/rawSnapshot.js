@@ -38,10 +38,17 @@ const {
   buildTechBonusCatalogue
 } = require('./templates');
 
-// Terra Invicta campaigns begin in 2022. The save's TIMetadataState does not
-// record the start year (verified against the live save, 2026-08-20), so this
-// is an assumption rather than a measurement and every consumer is told so via
-// `metadata.campaignStartYearSource`.
+// The last-resort start year, used only when the save carries neither
+// `TITimeState.daysInCampaign` nor `TIGlobalResearchState.campaignStartYear`.
+//
+// It is the `ModernDayStart` scenario's start year, and it was the only value
+// available while the code looked for `campaignStartYear` on TIMetadataState,
+// which never carries it. Measured 2026-08-21 across 14 saves: the older
+// `ModernDayStart` campaigns do start in 2022, so the assumption was right for
+// them -- and wrong by four years for this campaign's `2026Start` scenario.
+// Every consumer is still told which route produced its figure via
+// `metadata.campaignStartYearSource` and the resolver in
+// shared/campaignElapsed.mjs.
 const ASSUMED_CAMPAIGN_START_YEAR = 2022;
 
 function buildRawSnapshot(saveData) {
@@ -169,16 +176,39 @@ function buildRawSnapshot(saveData) {
       difficultyIsCustom: campaignSettings.customDifficulty,
       // Verified against the live save on 2026-08-20: TIMetadataState does
       // not carry campaignStartYear at all, so the previous `|| 2022`
-      // fabricated an elapsed-campaign measurement for every save. The
-      // measured field now stays null; the 2022 series start is offered
-      // separately as an explicitly labelled assumption, following the same
-      // pattern the hate model already uses for `progressionSpeedAssumed`.
-      campaignStartYear: saveData.campaignStartYear ?? null,
-      campaignStartYearAvailable: saveData.campaignStartYear !== null && saveData.campaignStartYear !== undefined,
+      // fabricated an elapsed-campaign measurement for every save.
+      //
+      // Re-measured 2026-08-21 across 14 saves: the save DOES carry the start
+      // year, in `TIGlobalResearchState` rather than `TIMetadataState`, in 14
+      // of 14. `campaignStartYear` below therefore now resolves to a genuine
+      // measurement on every real save, and the 2022 assumption is reached only
+      // when neither state is readable. `daysInCampaign` -- the game's own
+      // campaign-duration counter, also 14 of 14 -- is preferred over both;
+      // shared/campaignElapsed.mjs owns that ordering and its reasons.
+      campaignStartYear: saveData.campaignStartYear ?? saveData.campaignStartYearFromResearchState ?? null,
+      campaignStartYearAvailable: (saveData.campaignStartYear ?? saveData.campaignStartYearFromResearchState ?? null) !== null,
+      // Which state answered, so a consumer can tell the two measurements apart
+      // rather than being handed one undifferentiated number.
+      campaignStartYearState: saveData.campaignStartYear !== null && saveData.campaignStartYear !== undefined
+        ? 'TIMetadataState'
+        : (saveData.campaignStartYearFromResearchState !== null && saveData.campaignStartYearFromResearchState !== undefined
+          ? 'TIGlobalResearchState'
+          : null),
+      daysInCampaign: saveData.daysInCampaign ?? null,
+      daysInCampaignAvailable: saveData.daysInCampaign !== null && saveData.daysInCampaign !== undefined,
       assumedCampaignStartYear: ASSUMED_CAMPAIGN_START_YEAR,
-      campaignStartYearSource: saveData.campaignStartYear !== null && saveData.campaignStartYear !== undefined
-        ? 'save metadata'
-        : `assumed ${ASSUMED_CAMPAIGN_START_YEAR} (Terra Invicta campaign start; not present in save metadata)`
+      campaignStartYearSource: (() => {
+        if (saveData.daysInCampaign !== null && saveData.daysInCampaign !== undefined) {
+          return `measured: TITimeState.daysInCampaign = ${saveData.daysInCampaign}`;
+        }
+        if (saveData.campaignStartYear !== null && saveData.campaignStartYear !== undefined) {
+          return 'measured: TIMetadataState.campaignStartYear';
+        }
+        if (saveData.campaignStartYearFromResearchState !== null && saveData.campaignStartYearFromResearchState !== undefined) {
+          return 'measured: TIGlobalResearchState.campaignStartYear';
+        }
+        return `assumed ${ASSUMED_CAMPAIGN_START_YEAR} (ModernDayStart scenario start; this save carries neither a campaign duration nor a start year)`;
+      })()
     },
     factions,
     factionRelationships,

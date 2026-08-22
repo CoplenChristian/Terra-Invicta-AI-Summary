@@ -952,7 +952,24 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
 
     // Venting and Total War
     if (economics.totalWar) {
-      alienThreatLines.push(`- **Total War Proximity:** State: ${economics.totalWar.state?.toUpperCase() || 'SAFE'} | Hate Distance: ${fixedOr(economics.totalWar.hateRemaining, 1)} | Year Distance: ${fixedOr(economics.totalWar.yearsRemaining, 1)} yrs`);
+      const tw = economics.totalWar;
+      alienThreatLines.push(`- **Total War Proximity:** State: ${tw.state?.toUpperCase() || 'SAFE'} | Hate Distance: ${fixedOr(tw.hateRemaining, 1)} | Year Distance: ${fixedOr(tw.yearsRemaining, 1)} yrs`);
+      // Both halves of the gate, with their provenance. Until 2026-08-21 the
+      // year distance above was the whole story on this surface and it was
+      // wrong by six years: the gate was published at the unscaled 20 and the
+      // campaign age at an assumed 13. Each input now says where it came from,
+      // because "7 years" and "1.1 years" look equally confident on their own.
+      alienThreatLines.push(
+        `- **Total War Year Gate:** ${fixedOr(tw.yearsThreshold, 1)} yrs required | `
+        + `${fixedOr(tw.yearsElapsed, 2)} elapsed | Alien Progression Speed `
+        + `${fixedOr(tw.alienProgressionSpeed, 2)}× (${tw.progressionSpeedAssumed ? 'ASSUMED — not read from this save' : 'measured from save'})`
+      );
+      alienThreatLines.push(
+        `- **Campaign Age Source:** ${economics.yearsElapsedSource || 'UNAVAILABLE'}`
+      );
+      alienThreatLines.push(
+        `- **Maximum Alien Hate:** ${fixedOr(tw.maximumAlienHate, 0)} (ceiling; the yearly increase is multiplied by Alien Progression Speed)`
+      );
     }
     if (economics.venting) {
       alienThreatLines.push(`- **Hate Venting Eligibility:** ${economics.venting.status?.toUpperCase() || 'UNAVAILABLE'} (Guaranteed: ${economics.venting.guaranteed ? 'YES' : 'NO'})`);
