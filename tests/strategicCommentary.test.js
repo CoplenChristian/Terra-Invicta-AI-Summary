@@ -548,16 +548,38 @@ const {
   buildOmniscientOpponentTiers
 } = require('../server/commentary/simulation');
 
+/**
+ * Queue rows shaped the way `buildShipyardQueues` actually shapes them.
+ *
+ * `constructionStatus` is REQUIRED for the concurrency to be readable at all --
+ * a row without one makes the number building unknown rather than smaller --
+ * and each build sits at its own `shipyardId`, which is the measured rule: one
+ * hull per yard at a time.
+ */
+const buildingRows = (count, { firstDays = null } = {}) => new Array(count).fill(null).map((_unused, index) => ({
+  factionId: 4712,
+  shipyardId: 1000 + index,
+  design: 'playerShipTemplate1',
+  constructionStatus: 'building',
+  daysToCompletion: firstDays === null ? null : firstDays + index
+}));
+
+const waitingRows = (count, { design = 'playerShipTemplate1', days = 60, shipyardId = 1000, isRefit = false } = {}) =>
+  new Array(count).fill(null).map(() => ({
+    factionId: 4712, shipyardId, design, isRefit, constructionStatus: 'queued', daysToCompletion: days
+  }));
+
 const ratedFacts = (overrides = {}) => ({
   mode: 'player',
   snapshotId: 'default-audit-seed',
   observerId: 4712,
   shipDesigns: [
-    { factionId: 4712, hullName: 'Monitor', displayName: 'Sentinel', _unnormalizedCombatValue: 12000 }
+    { factionId: 4712, hullName: 'Monitor', displayName: 'Sentinel', dataName: 'playerShipTemplate1', _unnormalizedCombatValue: 12000 }
   ],
   shipHullStats: { Monitor: { baseConstructionTimeDays: 120 } },
   alienFleets: [{ shipsCount: 4, armorMedian: 14 }, { shipsCount: 9, armorMedian: 26 }],
-  ownQueuedShips: [{ factionId: 4712 }, { factionId: 4712 }],
+  ownQueuedShips: buildingRows(2),
+  ownShipyards: new Array(6).fill({ isShipyard: true, factionId: 4712, constructionStatus: 'operational', templateName: 'Shipyard' }),
   actualAlienHate: null,
   hateVentRatePerDay: null,
   ...overrides
@@ -654,18 +676,30 @@ test('the rebuild clock refuses rather than reporting a 60-day hull or two inven
   // An unreadable build time became a specific 60 days and an EMPTY queue became
   // two active yards, both under `available: true`, and both went straight into
   // the dashboard's "~N hulls/mo".
+  //
+  // The build-time refusal moved INSIDE the record on 2026-08-22 rather than
+  // taking the whole projection down with it: the measured pipeline (how many
+  // hulls are building, at how many yards, arriving when) comes from the save's
+  // own countdowns and stands whether or not a build time is readable. What
+  // must never happen is a RATE derived from a default, and that is what this
+  // pins.
   const noBuildTime = runMonteCarloSimulation(ratedFacts({ shipHullStats: { Monitor: {} } }))
     .projections.rebuildClock;
-  assert.strictEqual(noBuildTime.available, false);
   assert.strictEqual(noBuildTime.monthlyThroughputEst, null, 'never a rate derived from a 60-day default');
+  assert.strictEqual(noBuildTime.daysPerHullEst, null);
   assert.strictEqual(noBuildTime.baseConstructionDays, null, 'and the unreadable input stays null');
-  assert.match(noBuildTime.reason, /no readable base construction time for Monitor/);
-  assert.match(noBuildTime.reason, /not a report of zero throughput/);
+  assert.strictEqual(noBuildTime.buildDays, null);
+  assert.strictEqual(noBuildTime.buildTimeBasis, null, 'no basis, because no build time was resolved');
+  assert.match(noBuildTime.throughputUnavailableReason, /no readable base construction time for Monitor/);
+  // The measured half survives the unreadable dividend, and says what it read.
+  assert.strictEqual(noBuildTime.concurrentBuilds, 2);
+  assert.doesNotMatch(JSON.stringify(noBuildTime), /\b60\b/, 'the invented 60-day hull must appear nowhere');
 
   const noQueue = runMonteCarloSimulation(ratedFacts({ ownQueuedShips: undefined }))
     .projections.rebuildClock;
   assert.strictEqual(noQueue.available, false);
-  assert.strictEqual(noQueue.activeShipyardQueues, null, 'an unread queue is not a queue of zero');
+  assert.strictEqual(noQueue.queuedHullCount, null, 'an unread queue is not a queue of zero');
+  assert.strictEqual(noQueue.concurrentBuilds, null, 'and nothing is inferred to be building');
   assert.strictEqual(noQueue.daysPerHullEst, null, 'and no per-hull time is derived from it either');
   assert.match(noQueue.reason, /no readable shipyard queue/);
 
@@ -673,11 +707,189 @@ test('the rebuild clock refuses rather than reporting a 60-day hull or two inven
   const emptyQueue = runMonteCarloSimulation(ratedFacts({ ownQueuedShips: [] }))
     .projections.rebuildClock;
   assert.strictEqual(emptyQueue.available, true, 'reading an empty queue is a successful reading');
-  assert.strictEqual(emptyQueue.activeShipyardQueues, 0);
+  assert.strictEqual(emptyQueue.queuedHullCount, 0);
+  assert.strictEqual(emptyQueue.concurrentBuilds, 0);
   assert.strictEqual(emptyQueue.monthlyThroughputEst, 0,
     'nothing queued produces nothing, which is not the same as two yards producing one hull a month');
   assert.strictEqual(emptyQueue.daysPerHullEst, null,
     'nothing is being built, so there is no per-hull time — and 0 days would read as instant delivery');
+});
+
+// ---------------------------------------------------------------------------
+// SERIAL WITHIN A YARD, PARALLEL ACROSS YARDS -- MEASURED, NOT ASSUMED
+//
+// `rebuildClock` divided the build time by `ownQueuedShips.length`, a count of
+// QUEUED HULLS, which assumes every queued hull builds simultaneously. Settled
+// on 2026-08-22 against four MD5-verified frozen saves (Autosave3 12/1/2034
+// d3225, Autosave2 12/16/2034 d3241, Autosave and ExitSave 1/1/2035 d3256) and
+// all eight factions:
+//
+//   * `nShipyardQueues` is a map keyed by SHIPYARD MODULE, one entry array per
+//     yard. Across 129 yard-queues carrying work, ZERO had more than one entry
+//     with `costPaid`, and every paid entry sat at index 0.
+//   * Only that entry advances. All 15 unpaid entries held `daysToCompletion`
+//     EXACTLY frozen over both intervals -- Humanity First's yard 17063 sat at
+//     60 / 60 behind a head running 111.80 -> 95.80 -> 80.80 -- while paid
+//     entries counted down by exactly the elapsed campaign days.
+//
+// The observer's own queue happened to be one hull at each of five yards, so
+// the published rate did not move; other factions on the same save were
+// overstated by up to 3.00x (the Servants, 15 queued against 5 building).
+//
+// EXPECTED VALUES FROM THE ARITHMETIC, not from the new output: five hulls at
+// ONE yard is one build at a time, so 30 / 120 = 0.25/mo, where the old model
+// printed 30 / (120 / 5) = 1.25.
+// ---------------------------------------------------------------------------
+test('five hulls stacked at one shipyard deliver at one yard\'s rate, not five', () => {
+  // The four behind it are a DIFFERENT design, so the dividend stays the
+  // template's 120 days and this test isolates the divisor. The interaction --
+  // a queued hull of the target type stating its own duration -- is pinned
+  // separately below.
+  const stacked = runMonteCarloSimulation(ratedFacts({
+    ownQueuedShips: [
+      { factionId: 4712, shipyardId: 900, design: 'playerShipTemplate1', constructionStatus: 'building', daysToCompletion: 40 },
+      ...waitingRows(4, { shipyardId: 900, design: 'playerShipTemplate999', days: 96 })
+    ]
+  })).projections.rebuildClock;
+
+  assert.strictEqual(stacked.queuedHullCount, 5, 'five hulls are in the queue');
+  assert.strictEqual(stacked.concurrentBuilds, 1, 'but only one of them is building');
+  assert.strictEqual(stacked.waitingBehindCount, 4);
+  assert.strictEqual(stacked.shipyardsBuilding, 1, 'all five sit at the same yard');
+  assert.strictEqual(stacked.monthlyThroughputEst, 0.25,
+    'one build at a time is 30 / 120 = 0.25/mo, not the 1.25 the old queue-length divisor printed');
+  assert.strictEqual(stacked.daysPerHullEst, 120);
+
+  // Spread the same five hulls across five yards and they ARE concurrent.
+  const spread = runMonteCarloSimulation(ratedFacts({ ownQueuedShips: buildingRows(5) }))
+    .projections.rebuildClock;
+  assert.strictEqual(spread.concurrentBuilds, 5);
+  assert.strictEqual(spread.shipyardsBuilding, 5);
+  assert.strictEqual(spread.waitingBehindCount, 0);
+  assert.strictEqual(spread.monthlyThroughputEst, 1.25, 'five yards really do deliver five times as fast');
+
+  // The Academy's live state on Autosave3: hulls queued, none started. The old
+  // model published two hulls' worth of parallel throughput from a faction
+  // delivering nothing at all.
+  const stalled = runMonteCarloSimulation(ratedFacts({ ownQueuedShips: waitingRows(2) }))
+    .projections.rebuildClock;
+  assert.strictEqual(stalled.available, true, 'the queue WAS read');
+  assert.strictEqual(stalled.queuedHullCount, 2);
+  assert.strictEqual(stalled.concurrentBuilds, 0);
+  assert.strictEqual(stalled.monthlyThroughputEst, 0,
+    'a queue where nothing has started delivers nothing, and that is a measurement');
+  assert.strictEqual(stalled.daysPerHullEst, null);
+});
+
+test('a queue row with no readable construction status makes the concurrency UNKNOWN, not smaller', () => {
+  // `rows.filter(r => r.constructionStatus === 'building').length` counts an
+  // unreadable row as "not building" and hands back a confident smaller number
+  // -- the `Number(null) === 0` failure wearing a filter.
+  const partial = runMonteCarloSimulation(ratedFacts({
+    ownQueuedShips: [...buildingRows(3), { factionId: 4712, shipyardId: 77, design: 'playerShipTemplate1' }]
+  })).projections.rebuildClock;
+
+  assert.strictEqual(partial.available, false);
+  assert.strictEqual(partial.concurrentBuilds, null, 'three-of-four readable is not a concurrency of three');
+  assert.strictEqual(partial.monthlyThroughputEst, null);
+  assert.strictEqual(partial.queuedHullCount, 4, 'the queue LENGTH was still readable, and is reported');
+  assert.match(partial.reason, /construction status could not be read/);
+  assert.match(partial.reason, /UNKNOWN rather than smaller/);
+});
+
+// ---------------------------------------------------------------------------
+// THE DIVIDEND IS A CEILING, SO THE RATE IS A FLOOR
+//
+// `baseConstructionTimeDays` is not the build time. Ship construction is scaled
+// by the yard's tier (TIHabModuleTemplate.json `constructionTimeModifier`:
+// SpaceDock 1.0, Shipyard 0.8, Spaceworks 0.6), by other station modules
+// (ConstructionModule 0.9, Nanofactory 0.75, NanofacturingComplex 0.6) and by
+// faction tech (`Effect_ShipConstructionTimeReduction` x0.8 and three weaker
+// variants). Measured on ExitSave.gz 2026-08-22: the observer HOLDS
+// `Effect_ShipConstructionTimeReduction` and runs 11 Shipyard modules beside 3
+// Space Docks, and across five factions the ratio of a queued hull's own stated
+// duration to its hull template's base runs 0.30 to 0.86.
+//
+// Every one of those modifiers only SHORTENS the build, so a rate derived from
+// the template base can only be too low. It is published as a floor, and a
+// duration stated by the observer's own queue is used in preference.
+// ---------------------------------------------------------------------------
+test('the throughput derived from a hull template base is labelled a floor, and a stated duration wins', () => {
+  const fromTemplate = runMonteCarloSimulation(ratedFacts()).projections.rebuildClock;
+  assert.strictEqual(fromTemplate.buildDays, 120);
+  assert.strictEqual(fromTemplate.buildTimeBasis, 'hull-template-base');
+  assert.strictEqual(fromTemplate.throughputBound, 'lower',
+    'the template base overstates time, so the rate it yields understates throughput');
+
+  // A NON-REFIT hull of the target type waiting in the observer's own queue
+  // states its full duration, with yard tier and tech already in it.
+  const fromQueue = runMonteCarloSimulation(ratedFacts({
+    ownQueuedShips: [...buildingRows(2), ...waitingRows(1, { days: 76.8, shipyardId: 900 })]
+  })).projections.rebuildClock;
+  assert.strictEqual(fromQueue.buildDays, 76.8, 'the save\'s own figure, not the 120-day template base');
+  assert.strictEqual(fromQueue.buildTimeBasis, 'measured-queue-entry');
+  assert.strictEqual(fromQueue.throughputBound, 'measured');
+  assert.strictEqual(fromQueue.monthlyThroughputEst, 0.781, '30 / (76.8 / 2), to three significant figures');
+
+  // A REFIT is not a build and must not be read as one: refits are far shorter,
+  // so treating one as a build time would overstate throughput badly. On
+  // ExitSave.gz all five of the observer's entries are Battlecruiser refits at
+  // 21.2 days against a 180-day hull base.
+  const refitOnly = runMonteCarloSimulation(ratedFacts({
+    ownQueuedShips: [...buildingRows(2), ...waitingRows(1, { days: 21.2, isRefit: true })]
+  })).projections.rebuildClock;
+  assert.strictEqual(refitOnly.buildTimeBasis, 'hull-template-base',
+    'a queued refit does not state a build time for the hull');
+  assert.strictEqual(refitOnly.buildDays, 120);
+
+  // And a queued hull of a DIFFERENT class states nothing about this one.
+  const otherHull = runMonteCarloSimulation(ratedFacts({
+    ownQueuedShips: [...buildingRows(2), ...waitingRows(1, { design: 'playerShipTemplate999', days: 30 })]
+  })).projections.rebuildClock;
+  assert.strictEqual(otherHull.buildTimeBasis, 'hull-template-base');
+  assert.strictEqual(otherHull.buildDays, 120);
+});
+
+// ---------------------------------------------------------------------------
+// A STATION IS NOT A SHIPYARD, AND THE SAVE STATES THE DELIVERY HORIZONS
+//
+// One station holds several yard modules: measured on ExitSave.gz the
+// observer's 14 shipyard modules sit across only 6 habs, five of them on
+// Nearchus Station alone. And `daysToCompletion` on a building hull decrements
+// by exactly the elapsed campaign days, so it already contains every modifier
+// the template base misses -- it is reported as read, never reconstructed.
+// ---------------------------------------------------------------------------
+test('the shipyard count is of MODULES, and the delivery horizons come from the save', () => {
+  const clock = runMonteCarloSimulation(ratedFacts({
+    ownQueuedShips: buildingRows(3, { firstDays: 21.2 }),
+    ownShipyards: new Array(14).fill({ isShipyard: true, factionId: 4712, constructionStatus: 'operational' })
+  })).projections.rebuildClock;
+
+  assert.strictEqual(clock.shipyardCount, 14, 'modules, not the 6 habs they sit on');
+  assert.strictEqual(clock.shipyardsBuilding, 3);
+  assert.strictEqual(clock.idleShipyardCount, 11, 'the idle capacity is the actionable half');
+  assert.strictEqual(clock.nextCompletionDays, 21.2, 'straight from the save, not reconstructed');
+  assert.strictEqual(clock.lastCommittedCompletionDays, 23.2);
+  assert.strictEqual(clock.deliveriesWithin30Days, 3);
+  assert.strictEqual(clock.completionHorizonsUnreadableCount, 0);
+
+  // An unread module manifest is not a faction with no shipyards.
+  const noYards = runMonteCarloSimulation(ratedFacts({ ownShipyards: undefined })).projections.rebuildClock;
+  assert.strictEqual(noYards.shipyardCount, null, 'absent stays null: not zero yards');
+  assert.strictEqual(noYards.idleShipyardCount, null, 'and no idle count is derived from a null total');
+  assert.strictEqual(noYards.concurrentBuilds, 2, 'while the queue reading is unaffected');
+
+  // AN UNREADABLE COUNTDOWN MUST NOT SHRINK THE DELIVERY COUNT.
+  const partialHorizons = runMonteCarloSimulation(ratedFacts({
+    ownQueuedShips: [
+      { factionId: 4712, shipyardId: 1, design: 'playerShipTemplate1', constructionStatus: 'building', daysToCompletion: 10 },
+      { factionId: 4712, shipyardId: 2, design: 'playerShipTemplate1', constructionStatus: 'building', daysToCompletion: null }
+    ]
+  })).projections.rebuildClock;
+  assert.strictEqual(partialHorizons.completionHorizonsUnreadableCount, 1);
+  assert.strictEqual(partialHorizons.deliveriesWithin30Days, null,
+    'one readable hull inside 30 days is not a measurement that ONE hull arrives');
+  assert.strictEqual(partialHorizons.nextCompletionDays, 10, 'the horizon that WAS read is still reported');
 });
 
 // ---------------------------------------------------------------------------
@@ -699,8 +911,9 @@ test('the rebuild clock refuses rather than reporting a 60-day hull or two inven
 // the old code printed 1 for both.
 // ---------------------------------------------------------------------------
 test('the rebuild clock reports the rate it computed, with no floor and no rounding to whole hulls', () => {
+  // Each hull at its OWN yard, which is what makes them concurrent.
   const clockFor = (queued, hullDays = 120) => runMonteCarloSimulation(ratedFacts({
-    ownQueuedShips: new Array(queued).fill({ factionId: 4712 }),
+    ownQueuedShips: buildingRows(queued),
     shipHullStats: { Monitor: { baseConstructionTimeDays: hullDays } }
   })).projections.rebuildClock;
 
@@ -708,7 +921,7 @@ test('the rebuild clock reports the rate it computed, with no floor and no round
   const two = clockFor(2);
   assert.strictEqual(two.available, true);
   assert.strictEqual(two.baseConstructionDays, 120);
-  assert.strictEqual(two.activeShipyardQueues, 2);
+  assert.strictEqual(two.concurrentBuilds, 2);
   assert.strictEqual(two.monthlyThroughputEst, 0.5, '30 / (120 / 2) is 0.5, and 0.5 is the answer');
   assert.strictEqual(two.daysPerHullEst, 60, 'the same measurement read the way a sub-1 rate is usable');
 
@@ -789,7 +1002,8 @@ test('an absent shipyard queue reaches the simulation as null, and an empty one 
   const unread = generateStrategicCommentary({ snapshot: baseSnapshot, snapshotId: 'absent-queue-seed' })
     .simulation.projections.rebuildClock;
   assert.strictEqual(unread.available, false, 'a queue nobody read is not a queue of zero ships');
-  assert.strictEqual(unread.activeShipyardQueues, null);
+  assert.strictEqual(unread.queuedHullCount, null);
+  assert.strictEqual(unread.concurrentBuilds, null);
   assert.strictEqual(unread.monthlyThroughputEst, null);
   assert.match(unread.reason, /no readable shipyard queue/);
   assert.match(unread.reason, /not a report of zero throughput/);

@@ -130,24 +130,42 @@
       //
       // The "~" is dropped once the rate is stated exactly. A measured 0 (a
       // queue that was read and is empty) is a reading and prints as 0.
+      // THE PARALLELISM IS NOW MEASURED, NOT ASSUMED.
+      //
+      // This card read "(N ship(s) queued, assumed parallel)". Measured
+      // 2026-08-22 across four frozen saves and all eight factions: a shipyard
+      // builds ONE hull at a time and yards run concurrently, so the divisor is
+      // the number of hulls IN PROGRESS. The card now states the rule and the
+      // yards behind it, and the rate it prints is a FLOOR whenever the build
+      // time came from the hull template rather than from the save.
       const clock = proj.rebuildClock;
       const rate = Number(clock.monthlyThroughputEst);
       const days = Number(clock.daysPerHullEst);
+      const next = Number(clock.nextCompletionDays);
+      const building = Number(clock.concurrentBuilds);
+      const yards = Number(clock.shipyardCount);
+      const waiting = Number(clock.waitingBehindCount);
       const subMonthly = Number.isFinite(rate) && rate > 0 && rate < 1 && Number.isFinite(days);
-      const headline = subMonthly
-        ? `1 per ${days} days`
-        : `${Number.isFinite(rate) ? rate : 'UNAVAILABLE'} hulls/mo`;
-      const detail = subMonthly
-        ? `${rate} hulls/mo — under one a month`
-        : (Number.isFinite(days) ? `1 per ${days} days` : 'nothing queued');
-      // "active yards" was wrong: `shipyardQueues` entries are per-SHIP, so
-      // this is the number of hulls in the build queue, and the rate above
-      // assumes they build in parallel.
+      const floor = clock.throughputBound === 'lower' ? '≥ ' : '';
+      const headline = !Number.isFinite(rate)
+        ? 'UNAVAILABLE'
+        : (subMonthly ? `1 per ${days} days` : `${floor}${rate} hulls/mo`);
+      const rateDetail = !Number.isFinite(rate)
+        ? (clock.throughputUnavailableReason || 'no build time was readable')
+        : (subMonthly
+          ? `${floor}${rate} hulls/mo — under one a month`
+          : (Number.isFinite(days) ? `1 per ${days} days` : 'nothing is building'));
+      // The measured half: yards working and the next delivery, straight from
+      // the save's own countdowns.
+      const yardDetail = Number.isFinite(yards)
+        ? `${building} of ${yards} yard(s) building, ${waiting} waiting`
+        : `${building} building, ${waiting} waiting — yard count unread`;
+      const nextDetail = Number.isFinite(next) ? `next in ${next}d` : 'no horizon read';
       projCards.push(`
         <div class="commentary-proj-card">
           <div class="commentary-proj-label">PRODUCTION THROUGHPUT</div>
           <div class="commentary-proj-val">${escapeHtml(headline)}</div>
-          <small style="color: var(--text-dim); font-size: 9px;">${escapeHtml(clock.targetHull)} — ${escapeHtml(detail)} (${escapeHtml(String(clock.activeShipyardQueues))} ship(s) queued, assumed parallel)</small>
+          <small style="color: var(--text-dim); font-size: 9px;">${escapeHtml(clock.targetHull)} — ${escapeHtml(rateDetail)} (${escapeHtml(yardDetail)}; ${escapeHtml(nextDetail)}; one hull per yard, measured)</small>
         </div>
       `);
     } else if (proj.rebuildClock && proj.rebuildClock.reason) {

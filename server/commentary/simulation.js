@@ -1,7 +1,8 @@
 /**
  * server/commentary/simulation.js
- * Purpose: Layer 3 of the strategic commentary — the opponent-tier builders and
- *   projection simulator over the shared Monte Carlo engagement sweep.
+ * Purpose: Layer 3 of the strategic commentary — the opponent-tier builders, the
+ *   measured shipyard-throughput model, and the projection simulator over the
+ *   shared Monte Carlo engagement sweep.
  *
  * Layer 3 — opponent tiers and projections.
  *
@@ -222,6 +223,217 @@ function buildOmniscientOpponentTiers(alienDesigns) {
 }
 
 /**
+ * Production throughput, measured rather than assumed.
+ *
+ * WHAT THE OLD MODEL ASSUMED, AND WHAT THE SAVE ACTUALLY SAYS.
+ *
+ * This was `30 / (baseConstructionTimeDays / ownQueuedShips.length)`, and both
+ * halves of that division were wrong. Settled by measurement on 2026-08-22
+ * against four MD5-verified frozen saves spanning three campaign moments
+ * (Autosave3 12/1/2034 d3225, Autosave2 12/16/2034 d3241, Autosave and
+ * ExitSave 1/1/2035 d3256) and all eight factions.
+ *
+ * THE DIVISOR. `shipyardQueues` rows are per-SHIP, but the save's own
+ * `nShipyardQueues` is a map keyed by SHIPYARD MODULE with an array of entries
+ * per yard. Across 129 yard-queues carrying work, exactly ZERO had more than
+ * one entry with `costPaid` set, and every paid entry sat at index 0. Over the
+ * two intervals, all 15 unpaid entries held their `daysToCompletion` EXACTLY
+ * frozen (Humanity First's yard 17063 sat at 60 / 60 behind a head that ran
+ * 111.80 -> 95.80 -> 80.80), while paid entries counted down by the elapsed
+ * campaign days. So: SERIAL WITHIN A YARD, PARALLEL ACROSS YARDS. The divisor
+ * is the number of hulls actually in progress -- at most one per yard -- and
+ * never the queue length.
+ *
+ * That mattered on live data even though it did not move the observer's own
+ * number: on Autosave3 the Servants had 15 queued against 5 building (a 3.00x
+ * overstatement), the Protectorate 5 against 3, and the Academy 2 queued with
+ * NOTHING building, which the old model published as two hulls' worth of
+ * parallel throughput from a faction delivering nothing at all.
+ *
+ * THE DIVIDEND. `baseConstructionTimeDays` is not the build time. Ship
+ * construction time is scaled by the yard's tier (`constructionTimeModifier` in
+ * TIHabModuleTemplate.json: SpaceDock 1.0, Shipyard 0.8, Spaceworks 0.6), by
+ * other modules on the station (ConstructionModule 0.9, Nanofactory 0.75,
+ * NanofacturingComplex 0.6) and by faction tech (`Effect_ShipConstructionTime
+ * Reduction` x0.8, `...Reduction10` x0.9, `...Reduction5` x0.95, `...Minor`
+ * x0.9875). The observer HOLDS `Effect_ShipConstructionTimeReduction` --
+ * measured in `TIEffectsState.factionEffectsNames` on ExitSave.gz -- and runs
+ * 11 Shipyard modules beside 3 Space Docks. Against the waiting entries that
+ * state their own full duration, the ratio to the template base runs 0.30 to
+ * 0.86 across five factions on that one save.
+ *
+ * So the template base OVERSTATES time and therefore UNDERSTATES the rate.
+ * It is not substituted for silently: the record says `buildTimeBasis:
+ * 'hull-template-base'` and `throughputBound: 'lower'`, and the rate is
+ * published as a FLOOR. A stated duration from the observer's own queue is
+ * used in preference wherever one exists, and then the bound is 'measured'.
+ *
+ * THE MEASURED PIPELINE. The save states `daysToCompletion` per queued hull and
+ * it decrements by exactly the elapsed campaign days, so it already contains
+ * every modifier above. Those horizons are reported as-is -- next completion,
+ * last committed completion, deliveries inside 30 days -- and they are the one
+ * part of this record that rests on no assumption whatsoever.
+ *
+ * @param {string|null} ownBestHullName the hull the rate is quoted for
+ * @param {Object} shipHullStats template hull statistics
+ * @param {Array|null} ownQueuedShips the observer's queue rows, null if unread
+ * @param {Array|null} ownShipyards the observer's operational yard modules
+ * @param {Array} shipDesigns designs, needed because a queue row's `hull` field
+ *   is a MISNOMER: `buildShipyardQueues` sets both `design` and `hull` to the
+ *   ship DESIGN template name (`playerShipTemplate475`), never to a hull class.
+ *   Comparing that field against a hull name matches nothing, silently.
+ */
+function buildRebuildProjection({ ownBestHullName, shipHullStats, ownQueuedShips, ownShipyards, shipDesigns }) {
+  const hullByDesignName = new Map();
+  for (const design of (Array.isArray(shipDesigns) ? shipDesigns : [])) {
+    for (const key of [design?.dataName, design?.templateName, design?.displayName, design?._displayName]) {
+      if (typeof key === 'string' && key && design?.hullName) hullByDesignName.set(key, design.hullName);
+    }
+  }
+  const baseHullStat = shipHullStats?.[ownBestHullName] || {};
+  const baseBuildDays = toFiniteNumber(baseHullStat.baseConstructionTimeDays);
+  const queuedCount = Array.isArray(ownQueuedShips) ? ownQueuedShips.length : null;
+
+  // A ROW WITHOUT A READABLE STATUS MAKES THE CONCURRENCY UNKNOWN, NOT SMALLER.
+  //
+  // `rows.filter(r => r.constructionStatus === 'building').length` would count
+  // a row whose status could not be read as "not building" and hand back a
+  // confident smaller number -- the `Number(null) === 0` failure wearing a
+  // filter. One unreadable status makes the whole count unknown.
+  let concurrentBuilds = null;
+  let buildingRows = [];
+  if (queuedCount !== null) {
+    const unreadable = ownQueuedShips.filter(row => typeof row?.constructionStatus !== 'string');
+    if (unreadable.length === 0) {
+      buildingRows = ownQueuedShips.filter(row => row.constructionStatus === 'building');
+      concurrentBuilds = buildingRows.length;
+    }
+  }
+
+  const shipyardCount = Array.isArray(ownShipyards) ? ownShipyards.length : null;
+  // Distinct yards with a hull in progress. Measured at most one build per
+  // yard, so this should equal `concurrentBuilds` -- it is computed separately
+  // rather than assumed so a save that broke the rule would show the gap.
+  const yardsBuilding = concurrentBuilds === null
+    ? null
+    : new Set(buildingRows.map(row => row.shipyardId).filter(id => id !== null && id !== undefined)).size;
+  const idleShipyardCount = (shipyardCount === null || yardsBuilding === null)
+    ? null
+    : Math.max(0, shipyardCount - yardsBuilding);
+
+  if (queuedCount === null || concurrentBuilds === null) {
+    const missing = queuedCount === null
+      ? 'no readable shipyard queue'
+      : 'a queued hull whose construction status could not be read, which makes the number building UNKNOWN rather than smaller';
+    return {
+      available: false,
+      reason: `Production throughput was not projected: ${missing}. `
+        + 'No default build time or queue count is substituted, so this is not a report of zero throughput.',
+      targetHull: ownBestHullName,
+      baseConstructionDays: baseBuildDays,
+      queuedHullCount: queuedCount,
+      concurrentBuilds: null,
+      waitingBehindCount: null,
+      shipyardCount,
+      shipyardsBuilding: null,
+      idleShipyardCount: null,
+      nextCompletionDays: null,
+      lastCommittedCompletionDays: null,
+      deliveriesWithin30Days: null,
+      completionHorizonsUnreadableCount: null,
+      buildDays: null,
+      buildTimeBasis: null,
+      throughputBound: null,
+      throughputUnavailableReason: null,
+      monthlyThroughputEst: null,
+      daysPerHullEst: null,
+      simulated: true
+    };
+  }
+
+  // THE MEASURED HALF. Straight from the save's own countdowns, which already
+  // contain yard tier, station modules and faction tech.
+  const horizons = buildingRows
+    .map(row => toFiniteNumber(row.daysToCompletion))
+    .filter(value => value !== null)
+    .sort((a, b) => a - b);
+  const completionHorizonsUnreadableCount = buildingRows.length - horizons.length;
+  const nextCompletionDays = horizons.length > 0 ? toSignificant(horizons[0]) : null;
+  const lastCommittedCompletionDays = horizons.length > 0 ? toSignificant(horizons[horizons.length - 1]) : null;
+  // Only counted when every horizon was readable: an unread countdown would
+  // silently shrink this into a confident smaller delivery count.
+  const deliveriesWithin30Days = completionHorizonsUnreadableCount === 0
+    ? horizons.filter(value => value <= 30).length
+    : null;
+
+  // A DURATION STATED BY THE SAVE BEATS A TEMPLATE CONSTANT.
+  //
+  // A queued-but-not-yet-started entry carries the FULL nominal duration of
+  // that build (measured: frozen across every interval), at that yard, with
+  // every modifier already applied. Where one exists for the hull the rate is
+  // quoted for, it is used and the bound is exact. Entries already building
+  // carry only the REMAINING time, so they cannot supply a full duration and
+  // are deliberately not read for one.
+  const waitingRows = ownQueuedShips.filter(row => row.constructionStatus !== 'building');
+  const statedForTargetHull = ownBestHullName === null ? [] : waitingRows
+    .filter(row => row.isRefit !== true && hullByDesignName.get(row.design) === ownBestHullName)
+    .map(row => toFiniteNumber(row.daysToCompletion))
+    .filter(value => value !== null && value > 0);
+
+  let buildDays = null;
+  let buildTimeBasis = null;
+  let throughputBound = null;
+  if (statedForTargetHull.length > 0) {
+    buildDays = Math.min(...statedForTargetHull);
+    buildTimeBasis = 'measured-queue-entry';
+    throughputBound = 'measured';
+  } else if (baseBuildDays !== null && baseBuildDays > 0) {
+    buildDays = baseBuildDays;
+    buildTimeBasis = 'hull-template-base';
+    // The template base ignores yard tier, station modules and faction tech,
+    // every one of which only SHORTENS the build. So the rate derived from it
+    // can only be too low, and it is published as a floor rather than as an
+    // estimate.
+    throughputBound = 'lower';
+  }
+
+  // An unreadable build time kills the RATE, not the record: the measured
+  // pipeline above stands on its own and still reaches the consumer.
+  const throughputUnavailableReason = buildDays !== null
+    ? null
+    : (baseBuildDays === null
+      ? `no readable base construction time for ${ownBestHullName || 'the target hull'}, and no queued hull of that type states one`
+      : `a base construction time of ${baseBuildDays} days, which cannot be divided into a rate`);
+
+  // An empty queue -- or a queue where nothing has started -- is a MEASURED
+  // zero rate. It is the one zero here that is a reading, and it is why the
+  // old `Math.max(1, ...)` floor had to go rather than be lowered.
+  const daysPerHull = (buildDays === null || concurrentBuilds === 0) ? null : buildDays / concurrentBuilds;
+  return {
+    available: true,
+    targetHull: ownBestHullName,
+    baseConstructionDays: baseBuildDays,
+    queuedHullCount: queuedCount,
+    concurrentBuilds,
+    waitingBehindCount: queuedCount - concurrentBuilds,
+    shipyardCount,
+    shipyardsBuilding: yardsBuilding,
+    idleShipyardCount,
+    nextCompletionDays,
+    lastCommittedCompletionDays,
+    deliveriesWithin30Days,
+    completionHorizonsUnreadableCount,
+    buildDays: toSignificant(buildDays),
+    buildTimeBasis,
+    throughputBound,
+    throughputUnavailableReason,
+    monthlyThroughputEst: buildDays === null ? null : (concurrentBuilds === 0 ? 0 : toSignificant(30 / daysPerHull)),
+    daysPerHullEst: toSignificant(daysPerHull),
+    simulated: true
+  };
+}
+
+/**
  * Runs Monte Carlo combat threshold and strategic projections simulation.
  */
 function runMonteCarloSimulation(facts) {
@@ -234,6 +446,7 @@ function runMonteCarloSimulation(facts) {
     actualAlienHate,
     hateVentRatePerDay,
     ownQueuedShips,
+    ownShipyards,
     observerId
   } = facts;
 
@@ -455,69 +668,13 @@ function runMonteCarloSimulation(facts) {
   // `queuedCount` of 0 is a MEASUREMENT and stays one: nothing queued means no
   // throughput, which is a real and useful answer, and it is why the `|| 2` had
   // to go rather than being replaced by a different floor.
-  const baseHullStat = shipHullStats?.[ownBestHullName] || {};
-  const baseBuildDays = toFiniteNumber(baseHullStat.baseConstructionTimeDays);
-  const queuedCount = Array.isArray(ownQueuedShips) ? ownQueuedShips.length : null;
-
-  let rebuildProjection;
-  if (baseBuildDays === null || baseBuildDays <= 0 || queuedCount === null) {
-    const missing = [];
-    if (baseBuildDays === null) missing.push(`no readable base construction time for ${ownBestHullName || 'the target hull'}`);
-    else if (baseBuildDays <= 0) missing.push(`a base construction time of ${baseBuildDays} days, which cannot be divided into a rate`);
-    if (queuedCount === null) missing.push('no readable shipyard queue');
-    rebuildProjection = {
-      available: false,
-      reason: `Production throughput was not projected: ${missing.join(' and ')}. `
-        + 'No default build time or queue count is substituted, so this is not a report of zero throughput.',
-      targetHull: ownBestHullName,
-      baseConstructionDays: baseBuildDays,
-      activeShipyardQueues: queuedCount,
-      monthlyThroughputEst: null,
-      daysPerHullEst: null,
-      simulated: true
-    };
-  } else {
-    // NO THROUGHPUT FLOOR, since 2026-08-22.
-    //
-    // This read `Math.max(1, Math.round(30 / (baseBuildDays / queuedCount)))`,
-    // and both operations destroyed the answer at the low end. `Math.round`
-    // takes every rate under 0.5 to 0, and `Math.max(1, ...)` then replaces
-    // that 0 with a 1 -- so a hull the observer can build once every four
-    // months was published as "~1 hulls/mo", a number the model never
-    // produced, presented with no mark saying it was a floor.
-    //
-    // The sub-1 answer is the IMPORTANT one, not an edge case to be smoothed
-    // away: "you cannot replace this hull inside a month" and "you replace one
-    // a month" lead to opposite decisions about whether to accept an
-    // engagement. On the live save (ExitSave.gz, 1/1/2035) the true rate is
-    // 1.25 hulls/mo in both modes and the old code printed 1; at the far more
-    // common single-queued-hull state the true rate is 0.25 and the old code
-    // printed the same 1.
-    //
-    // `daysPerHullEst` is the same measurement read the way a sub-1 rate is
-    // actually usable -- 0.25 hulls/mo is one Monitor every 120 days.
-    //
-    // WHAT THE FIGURE ASSUMES, AND WHY THE EXPORT SAYS SO. `queuedCount` is a
-    // count of QUEUED SHIPS, not of shipyards (`shipyardQueues` entries are
-    // per-ship; war-room section 5 heads the same array "N ship(s) building").
-    // Dividing the build time by it therefore assumes those hulls build in
-    // PARALLEL. Five ships queued at one yard build serially and the true rate
-    // would be 0.25, not 1.25. That assumption predates this change and is left
-    // in place rather than silently re-modelled, but it is no longer unstated:
-    // section 11 of /latest-war-room.md prints it beside the rate.
-    const daysPerHull = queuedCount === 0 ? null : baseBuildDays / queuedCount;
-    rebuildProjection = {
-      available: true,
-      targetHull: ownBestHullName,
-      baseConstructionDays: baseBuildDays,
-      activeShipyardQueues: queuedCount,
-      // An empty queue is a MEASURED zero rate. It is the one zero here that is
-      // a reading, and it is why the floor had to go rather than be lowered.
-      monthlyThroughputEst: queuedCount === 0 ? 0 : toSignificant(30 / daysPerHull),
-      daysPerHullEst: toSignificant(daysPerHull),
-      simulated: true
-    };
-  }
+  const rebuildProjection = buildRebuildProjection({
+    ownBestHullName,
+    shipHullStats,
+    ownQueuedShips,
+    ownShipyards,
+    shipDesigns
+  });
 
   return {
     available: true,
@@ -535,6 +692,7 @@ function runMonteCarloSimulation(facts) {
 
 module.exports = {
   runMonteCarloSimulation,
+  buildRebuildProjection,
   buildPlayerOpponentTiers,
   buildOmniscientOpponentTiers,
   // Re-exported, not re-implemented: these are the SAME function objects
