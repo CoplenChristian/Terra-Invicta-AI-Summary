@@ -8,7 +8,7 @@ hand-maintained parallel lists in `shared/intel/registry.mjs` that disagreed unt
 three were derived from one table — the same failure applies to progress tracking. Update
 this table in the same commit as the work.
 
-Last updated 2026-08-21.
+Last updated 2026-08-21 (tracker refreshed after 1b1b7ec).
 
 ---
 
@@ -32,18 +32,18 @@ Last updated 2026-08-21.
   with a dot — an agent worktree in `.claude/worktrees/`, for instance. The API routes and
   `express.static` are unaffected, so it presents as a blank dashboard rather than an
   error. `tests/cssComputedStyle.test.js` fails there for the same reason.
-- **A fresh checkout fails two byte-comparison tests.** `core.autocrlf=true` with no
-  `.gitattributes` gives a new clone or worktree CRLF copies of `docs/code-index.md` and
-  `tests/fixtures/frozen-snapshot-*.md`, while the generators emit LF. The checked-in
-  index test and the frozen-snapshot test both compare bytes and both fail until the files
-  are normalised by hand. A `.gitattributes` pinning those paths to LF would close it.
+- **A worktree has no `config.json`.** It is gitignored, so every save-backed test errors in
+  a fresh agent worktree until it is copied across from the main checkout. Harmless once
+  known, but it presents as a wall of failures unrelated to the change under test.
 
 ## Shipped
 
 | doc | commit | note |
 | :-- | :-- | :-- |
-| `drive-explorer-spec.md` | uncommitted | DRIVES view + `/api/intel/drive-explorer` + war-room §9. All 541 drives against one design, none hidden: 37 fittable / 486 researchable / 18 never / 0 unresolved on the live save, and 306 of 541 marked reactor-incompatible with the class they would need. The measured half (ΔV, acceleration) and the estimated half (destination reach) render in two different registers, asserted by computed style in `scripts/verify_drive_explorer.js`. `?limit=` needed a scoped 1,000-row ceiling — `CATALOGUE_LIMIT_BOUNDS`, shared so both runtimes decide alike |
-| `mobile-and-tech-search-spec.md` | uncommitted | **Part A's premise was wrong and the measurement says so.** `mc-board-table` was never broken: its wrapper measured `canScroll=true, maxScrollLeft=467, fullyRevealed=true`, so expansion's 164 / threat's 147 / records' 45 were reachable by scrolling, not clipped. The only genuinely unreachable content was DRIVES — 64 elements with no scrollable ancestor, worst edge 937px in a 375px viewport. One line caused it: the `max-width: 900px` block turns `.init-view__grid` into a column flex container and the base rule's `align-items: start` carried over, so `.init-view__span` shrink-wrapped to the table's 937px max-content and `.de-table-wrap` measured `clientWidth 890 / scrollWidth 890` — its `overflow-x: auto` had nothing to scroll. Stretching the items fixed it (`313/890`). Generalising FLEET's `min-width: 100%; table-layout: fixed` to narrow widths then took command/expansion/threat to **zero** overflow rather than merely scrollable. Now 0 unreachable at 375/414/768 in both modes; COMMAND 2.74 / 2.80 screens at 1920. Part B is a RECORDS panel over the existing `tech-search` + `tech-tree` rows: 165 unlocked of 750, `Copperhead` → *Hydrolox High Explosive Missiles*. `scripts/verify_mobile_overflow.js` measures it off a live DOM |
+| `drive-explorer-spec.md` | `5f4cd64` | DRIVES view + `/api/intel/drive-explorer` + war-room §9. All 541 drives against one design, none hidden: 37 fittable / 486 researchable / 18 never / 0 unresolved on the live save, and 306 of 541 marked reactor-incompatible with the class they would need. The measured half (ΔV, acceleration) and the estimated half (destination reach) render in two different registers, asserted by computed style in `scripts/verify_drive_explorer.js`. `?limit=` needed a scoped 1,000-row ceiling — `CATALOGUE_LIMIT_BOUNDS`, shared so both runtimes decide alike |
+| `mobile-and-tech-search-spec.md` | `dda9b25` | **Part A's premise was wrong and the measurement says so.** `mc-board-table` was never broken: its wrapper measured `canScroll=true, maxScrollLeft=467, fullyRevealed=true`, so expansion's 164 / threat's 147 / records' 45 were reachable by scrolling, not clipped. The only genuinely unreachable content was DRIVES — 64 elements with no scrollable ancestor, worst edge 937px in a 375px viewport. One line caused it: the `max-width: 900px` block turns `.init-view__grid` into a column flex container and the base rule's `align-items: start` carried over, so `.init-view__span` shrink-wrapped to the table's 937px max-content and `.de-table-wrap` measured `clientWidth 890 / scrollWidth 890` — its `overflow-x: auto` had nothing to scroll. Stretching the items fixed it (`313/890`). Generalising FLEET's `min-width: 100%; table-layout: fixed` to narrow widths then took command/expansion/threat to **zero** overflow rather than merely scrollable. Now 0 unreachable at 375/414/768 in both modes; COMMAND 2.74 / 2.80 screens at 1920. Part B is a RECORDS panel over the existing `tech-search` + `tech-tree` rows: 165 unlocked of 750, `Copperhead` → *Hydrolox High Explosive Missiles*. `scripts/verify_mobile_overflow.js` measures it off a live DOM |
+| three review findings on `dda9b25` | `1b1b7ec` | An independent review flagged the third scroll hint as revealed by width alone. **The measurement inverted the finding**: below 900px those tables genuinely overflow (`min-width: 840px` vs a 632px wrapper), so the un-gated reveal was accidentally truthful — true by construction, false the moment either number moves. The real defect was above the breakpoint, hint hidden while the table still overflowed (905px: 637 vs 840; 1040px: 772 vs 840). A guard now derives the styled-hint set from the stylesheet and fails on any unregistered one; there is no fourth today. Also `unlocked-tech` printing "0 unlocked of 0 projects" when the graph is unreadable — the body carried the same false claim independently of the footer, so both are gated on the census |
+| `.gitattributes` for generated files | `795c5fe` | `docs/code-index.md` and `tests/fixtures/frozen-snapshot-*.md` pinned to LF, so a fresh clone or agent worktree no longer fails two byte-comparison tests for an environment reason |
 | `code-index-spec.md` | `bbef9f0` | generated index, required agent reading |
 | `research-vs-procurement-spec.md` | `baaa38a` | also repaired the self-referential `--text-dim` token that silently broke 164 rules |
 | `save-autodetect-spec.md` | `b0ec6dc` | `/api/save-state`, 5 s visibility-gated poller, opt-in auto-load, 503 retry |
