@@ -23,6 +23,10 @@ const {
   miningTechBonusCaveat
 } = require('../../shared/miningTechBonus.mjs');
 const {
+  applySpaceMiningBonus,
+  spaceMiningBonusCaveat
+} = require('../../shared/spaceMiningBonus.mjs');
+const {
   applyMineModuleMultiplier,
   mineModuleDataAvailable,
   resolveMineModuleMultiplier,
@@ -155,7 +159,7 @@ function getFleetCombatPower(observer, ownFleets) {
  * multiplier cannot be resolved the trailing clause SAYS so and the figure is
  * flagged as raw, rather than the reader assuming it is finished.
  */
-function getMiningRateSummary(habSites, ownHabs, observerId, miningTechBonus = null) {
+function getMiningRateSummary(habSites, ownHabs, observerId, miningTechBonus = null, spaceMiningBonus = null) {
   const ownHabIds = new Set(asArray(ownHabs).map(hab => String(hab.ID ?? hab.id)));
   const visibleSites = asArray(habSites).filter(site =>
     sameId(site.factionId, observerId) || (site.habId !== null && site.habId !== undefined && ownHabIds.has(String(site.habId)))
@@ -186,7 +190,13 @@ function getMiningRateSummary(habSites, ownHabs, observerId, miningTechBonus = n
     if (values.length === 0) return null;
     const moduleAdjusted = values.reduce((sum, value) => sum + value, 0);
     const adjusted = applyMiningTechBonus(moduleAdjusted, miningTechBonus, key);
-    return `${label} ${adjusted.value.toFixed(1)}/day`;
+    // The faction-wide additive bonus multiplies the product of the
+    // per-resource x1.15 grants, once, after them -- the order measured in
+    // `shared/spaceMiningBonus.mjs`. Chained, not folded in, so each term keeps
+    // its own `applied` flag and an unresolved one leaves the figure unchanged
+    // and labelled rather than silently scaled by 1.
+    const withOperations = applySpaceMiningBonus(adjusted.value, spaceMiningBonus);
+    return `${label} ${withOperations.value.toFixed(1)}/day`;
   }).filter(Boolean);
   if (rates.length === 0) return null;
   // Only said when there is something to say: a fully measured, fully
@@ -194,6 +204,8 @@ function getMiningRateSummary(habSites, ownHabs, observerId, miningTechBonus = n
   const clauses = [];
   const caveat = miningTechBonus === null ? null : miningTechBonusCaveat(miningTechBonus);
   if (caveat) clauses.push(caveat);
+  const operationsCaveat = spaceMiningBonus === null ? null : spaceMiningBonusCaveat(spaceMiningBonus);
+  if (operationsCaveat) clauses.push(operationsCaveat);
   if (!moduleDataAvailable) {
     clauses.push('this snapshot carries no mine-module data, so the module\'s own 1.0-4.0 output multiplier '
       + 'is UNAVAILABLE and these are RAW deposit rates — a lower bound, not a measured output');
@@ -234,7 +246,7 @@ function getMiningRateSummary(habSites, ownHabs, observerId, miningTechBonus = n
  * `resourceOutputBonus` and `mineModules` on each hab say what was applied and
  * name the source, so an adjusted output is never mistaken for a raw one.
  */
-function buildAdvisableHabs(habs, habSites, observerId, miningTechBonus = null) {
+function buildAdvisableHabs(habs, habSites, observerId, miningTechBonus = null, spaceMiningBonus = null) {
   const sitesByHab = new Map();
   for (const site of asArray(habSites)) {
     const habId = site?.habId;
@@ -282,13 +294,22 @@ function buildAdvisableHabs(habs, habSites, observerId, miningTechBonus = null) 
           total = (total ?? 0) + rate * 30;
         }
         const adjusted = applyMiningTechBonus(total, miningTechBonus, key, { places: 2 });
-        monthly[key] = adjusted.value;
+        // Then the faction-wide additive bonus, once, over the top -- the order
+        // `shared/spaceMiningBonus.mjs` measured. It is the same factor on all
+        // five resources, so it is reported once on the hab rather than five
+        // times, but the per-resource block still carries its own applied flag
+        // so a reader can tell an adjusted figure from an unadjusted one.
+        const withOperations = applySpaceMiningBonus(adjusted.value, spaceMiningBonus, { places: 2 });
+        monthly[key] = withOperations.value;
         bonusByResource[key] = {
           applied: adjusted.applied,
           multiplier: adjusted.multiplier,
           state: adjusted.state,
           source: adjusted.source,
-          raw: adjusted.raw
+          raw: adjusted.raw,
+          spaceMiningBonusApplied: withOperations.applied,
+          spaceMiningBonusMultiplier: withOperations.multiplier,
+          spaceMiningBonusState: withOperations.state
         };
       }
       return {
@@ -300,6 +321,19 @@ function buildAdvisableHabs(habs, habSites, observerId, miningTechBonus = null) 
         // "no bonus".
         resourceOutputBonus: bonusByResource,
         resourceOutputBonusApplied: miningTechBonus?.available === true,
+        // The faction-wide additive space-mining bonus, once, with the orgs and
+        // effects that make it up named. `available: false` means the five
+        // monthly figures above OMIT it and are a lower bound -- never that the
+        // observer holds none.
+        spaceMiningBonus: spaceMiningBonus === null ? null : {
+          available: spaceMiningBonus.available === true,
+          state: spaceMiningBonus.state,
+          multiplier: spaceMiningBonus.multiplier,
+          additiveTotal: spaceMiningBonus.additiveTotal,
+          sources: spaceMiningBonus.sources,
+          inactiveSources: spaceMiningBonus.inactiveSources,
+          unknownReason: spaceMiningBonus.unknownReason
+        },
         // The mine module behind each joined site's figures, and its measured
         // multiplier. `multiplier: null` with state `not-built` means the site
         // has no mine and contributed nothing -- it is NOT a x1.0.
@@ -321,6 +355,13 @@ function buildAdvisableHabs(habs, habSites, observerId, miningTechBonus = null) 
                 ? `, ${miningTechBonusCaveat(miningTechBonus)}`
                 : ', no completed project raises mine output')
               : ', mining tech bonuses UNRESOLVED (raw deposit rates, a lower bound)')
+            + (spaceMiningBonus === null
+              ? ''
+              : (spaceMiningBonus.available === true
+                ? (spaceMiningBonusCaveat(spaceMiningBonus) !== null
+                  ? `, ${spaceMiningBonusCaveat(spaceMiningBonus)}`
+                  : ', no org or effect raises mine output faction-wide')
+                : `, ${spaceMiningBonusCaveat(spaceMiningBonus)}`))
           : 'no hab site joins to this hab',
         // Explicitly absent rather than absent by omission.
         research: toFiniteNumber(hab.research),

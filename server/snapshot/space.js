@@ -493,6 +493,16 @@ function buildHabSites(rawHabSites, {
       mineModuleName: module?.displayName || null,
       mineTier: moduleTemplate?.tier || module?.tier || null,
       constructionStatus,
+      // The game's own power flag for the mine module. A COMPLETED but
+      // unpowered mine produces nothing, and `constructionStatus` above cannot
+      // see that -- it is derived from `constructionCompleted` alone. Measured
+      // 2026-08-22: two of the Servants' completed Settlement complexes read
+      // `powered: false` on `ExitSave.gz`, and counting them breaks their
+      // reconciliation against the game's own revenue by 4-5%.
+      //
+      // Carried as a strict boolean or null so `resolveMineModuleMultiplier`
+      // can tell "powered, checked" from "power state not carried".
+      mineModulePowered: typeof module?.powered === 'boolean' ? module.powered : null,
       constructionCompleted: module?.constructionCompleted ?? null,
       completionDate,
       startBuildDate: module?.startBuildDate || null,

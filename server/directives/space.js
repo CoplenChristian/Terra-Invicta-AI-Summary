@@ -15,7 +15,7 @@ const directiveAdvisor = require('../directiveAdvisor');
 const { asArray, sameId, formatPower } = require('../briefing/format');
 const { getFleetCombatPower, getMiningRateSummary } = require('../briefing/readers');
 
-function buildSpaceDirectives(habs, fleets, habSites, observer, observerName = null, campaignPosture = {}, miningTechBonus = null) {
+function buildSpaceDirectives(habs, fleets, habSites, observer, observerName = null, campaignPosture = {}, miningTechBonus = null, spaceMiningBonus = null) {
   const directives = [];
   const visibleHabs = asArray(habs);
   const visibleFleets = asArray(fleets);
@@ -24,7 +24,7 @@ function buildSpaceDirectives(habs, fleets, habSites, observer, observerName = n
   const ownFleets = visibleFleets.filter(f => sameId(f.factionId, observer?.ID));
   const observerLabel = observerName || observer?.displayName || 'the selected faction';
   const fleetPower = getFleetCombatPower(observer || {}, ownFleets);
-  const miningRates = getMiningRateSummary(visibleHabSites, ownHabs, observer?.ID, miningTechBonus);
+  const miningRates = getMiningRateSummary(visibleHabSites, ownHabs, observer?.ID, miningTechBonus, spaceMiningBonus);
 
   // Directive 1: Mining Infrastructure
   directives.push({

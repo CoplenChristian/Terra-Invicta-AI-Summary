@@ -64,7 +64,11 @@ function buildExecutiveSitrep(ctx = {}) {
     // The observer's per-resource mine-output multipliers. Null means the
     // caller did not supply them, and the mining line then prints raw deposit
     // rates unchanged -- the pre-existing behaviour, not a claim of no bonus.
-    miningTechBonus = null
+    miningTechBonus = null,
+    // The observer's faction-wide additive space-mining bonus. Same convention:
+    // null means the caller did not supply it and the mining line omits the
+    // term, which is not a claim that the observer holds none.
+    spaceMiningBonus = null
   } = ctx;
 
   const visibleCouncilors = asArray(councilors);
@@ -182,7 +186,7 @@ function buildExecutiveSitrep(ctx = {}) {
   const p3 = `${p3Prefix}: ${alienCouncilorText}; ${xenoformingText}; ${facilityText}. Direct alien-councilor detection: ${directDetectionText}.`;
 
   // Paragraph 4: Space Logistics & Asset Posture
-  const miningRates = getMiningRateSummary(habSites, ownHabs, observerId, miningTechBonus);
+  const miningRates = getMiningRateSummary(habSites, ownHabs, observerId, miningTechBonus, spaceMiningBonus);
   const spaceResources = miningRates || 'visible mining-rate data is unavailable';
   const p4 = `SPACE POSTURE: ${observerLabel} has ${formatCount(ownHabCount)} visible orbital installation${ownHabCount === 1 ? '' : 's'} and ${formatCount(ownFleetCount)} visible fleet group${ownFleetCount === 1 ? '' : 's'}. Fleet combat power is ${formatPower(fleetCombatPower)}; ${spaceResources}.`;
 

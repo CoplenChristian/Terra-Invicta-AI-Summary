@@ -12,6 +12,7 @@
 
 const { buildCouncilorAttributes } = require('../../shared/councilorAttributes.mjs');
 const { ALIEN_FACTION_DISPLAY_NAME } = require('../../shared/constants.mjs');
+const { strictFiniteNumber } = require('../../shared/util.mjs');
 const { resolveFactionName } = require('./lookups');
 
 function buildCouncilors(rawCouncilors, {
@@ -86,6 +87,23 @@ function buildCouncilors(rawCouncilors, {
             stars: orgObj.tier || 1,
             tier: orgObj.tier || 1,
             bonusesText: bonuses.join(', '),
+            // The org's ROLLED space-mining output bonus, and the game's own
+            // flag for whether it is currently applying its bonuses at all.
+            //
+            // Read from `TIOrgState`, never from `TIOrgTemplate`: five of the
+            // seven templates carrying `miningBonus` are `randomized: true`, so
+            // the template value is a mean and the instance value is what the
+            // game uses -- `RandomSpaceMining12` instances read 0.04, 0.05 and
+            // 0.06 against a template 0.04 on `ExitSave.gz` (2026-08-22).
+            //
+            // `applyingBonuses` is false for a newly bought org before the next
+            // mission phase and for every org on a Detained councilor (wiki
+            // `Orgs`, raw wikitext, 2026-08-22). It is carried as a BOOLEAN so
+            // `shared/spaceMiningBonus.mjs` can tell "suspended" from "flag not
+            // present" -- absent makes the whole bonus unknown rather than
+            // silently counting a suspended org.
+            miningBonus: strictFiniteNumber(orgObj.miningBonus),
+            applyingBonuses: typeof orgObj.applyingBonuses === 'boolean' ? orgObj.applyingBonuses : null,
             statBonuses: {
               adm: orgObj.administration || 0,
               per: orgObj.persuasion || 0,

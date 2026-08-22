@@ -26,6 +26,11 @@ import {
   buildMineUpgradeOpportunities,
   MINE_MODULE_STATES
 } from '../mineModuleOutput.mjs';
+import {
+  applySpaceMiningBonus,
+  buildSpaceMiningBonus,
+  SPACE_MINING_BONUS_STATES
+} from '../spaceMiningBonus.mjs';
 import { MINING_RESOURCES } from './common.mjs';
 
 /**
@@ -285,6 +290,7 @@ export const scoreMiningSiteCandidate = (site, runways, capacity, config = {}) =
   const siteDensity = measuredDensity ?? 1.0;
 
   const miningTechBonus = config.miningTechBonus || null;
+  const spaceMiningBonus = config.spaceMiningBonus || null;
 
   let totalUtilityGain = 0;
   const resourceGains = {};
@@ -310,10 +316,17 @@ export const scoreMiningSiteCandidate = (site, runways, capacity, config = {}) =
     }
     const rawMonthlyYield = dailyRate * 30;
     const adjusted = applyMiningTechBonus(rawMonthlyYield, miningTechBonus, key, { places: 1 });
+    // Then the faction-wide additive bonus, once, over the top. It is MEASURED,
+    // not projected -- the observer's own active orgs and its own effect list --
+    // so unlike the mine-module multiplier it belongs in the score rather than
+    // beside it. `MINE_MODULE_PROJECTION_POLICY` refuses the module term because
+    // an unowned site has no module to read; this term does not depend on the
+    // site at all.
+    const withOperations = applySpaceMiningBonus(adjusted.value, spaceMiningBonus, { places: 1 });
     // The utility model must see the SAME figure the board reports, or the
     // ranking and the printed yield disagree. When the multiplier is unknown
     // `adjusted.value` is the raw figure, flagged, not a silent 1.0.
-    const monthlyYield = adjusted.value;
+    const monthlyYield = withOperations.value;
     if (adjusted.state === MINING_BONUS_STATES.unknown) bonusUnresolvedResources.push(key);
     yields[key] = {
       daily: Number(dailyRate.toFixed(3)),
@@ -323,7 +336,12 @@ export const scoreMiningSiteCandidate = (site, runways, capacity, config = {}) =
       bonusApplied: adjusted.applied,
       bonusMultiplier: adjusted.multiplier,
       bonusState: adjusted.state,
-      bonusSource: adjusted.source
+      bonusSource: adjusted.source,
+      // The faction-wide term, kept separate from the per-resource one so a
+      // reader can see which of the two moved the figure.
+      spaceMiningBonusApplied: withOperations.applied,
+      spaceMiningBonusMultiplier: withOperations.multiplier,
+      spaceMiningBonusState: withOperations.state
     };
 
     const r = runways?.[key];
@@ -519,6 +537,18 @@ export const miningExpansionResource = (snapshot, {
   const mineModuleCapability = buildMineModuleCapability(observer, {
     projectListComplete: isRequestedObserver
   });
+  // The faction-wide additive term: the observer's councillors' ACTIVE org
+  // `miningBonus` plus its own `SpaceMiningBonus` effects. This one is a sum
+  // over a ROSTER, so an incomplete roster gives a wrong answer rather than a
+  // partial one -- player mode publishes only part of a rival's councillors and
+  // strips `orgs` from the ones it does publish. Only the observer's own
+  // councillors are read, and only when the payload was filtered for it.
+  const spaceMiningBonus = buildSpaceMiningBonus(observer, {
+    councilors: isRequestedObserver
+      ? asArray(snapshot?.councilors).filter(c => sameId(c.factionId, observer.ID))
+      : null,
+    councilorListComplete: isRequestedObserver
+  });
   const completedTechs = asArray(snapshot?.techTree?.finishedTechsNames || snapshot?.globalResearch?.finishedTechNames);
   const completedTechSet = new Set(completedTechs);
   const completedProjectSet = new Set(completedProjects);
@@ -606,6 +636,7 @@ export const miningExpansionResource = (snapshot, {
       targetRunwayMonths,
       surplusDiscount,
       miningTechBonus,
+      spaceMiningBonus,
       mineModuleCapability
     });
     const candidate = {
@@ -661,8 +692,10 @@ export const miningExpansionResource = (snapshot, {
     observerId: observer.ID ?? observerId,
     capability: mineModuleCapability,
     miningTechBonus,
+    spaceMiningBonus,
     resources: MINING_RESOURCES,
     applyTechBonus: applyMiningTechBonus,
+    applySpaceBonus: applySpaceMiningBonus,
     sameId
   });
 
@@ -673,6 +706,12 @@ export const miningExpansionResource = (snapshot, {
     // applied to. `available: false` means the projected yields below are RAW
     // deposit rates and are a lower bound, not that the observer holds nothing.
     miningTechBonus,
+    // The faction-wide additive term, once, with the orgs and effects that make
+    // it up named. `available: false` means the projected yields above OMIT it
+    // and are a lower bound, not that the observer holds none. This is the term
+    // that used to show up as an unexplained per-faction scalar in the
+    // reconciliation against the game's own revenue.
+    spaceMiningBonus,
     bonusUnresolvedSiteCount,
     // The mine complexes the observer can build, and the band they imply for a
     // site that does not have one yet. This is the ONLY projection on this
@@ -720,6 +759,19 @@ export const miningExpansionResource = (snapshot, {
             + 'deposit rates; they also exclude the mine module\'s own miningModifier (1.0-4.0).')
         : `Mining tech bonuses are UNRESOLVED (${miningTechBonus.unavailableReason}). Projected yields are `
           + 'RAW deposit rates and are a lower bound, NOT a measured "no bonus".',
+      // The faction-wide additive term. It IS in the score, unlike the module
+      // multiplier, because it is measured off the observer's own roster and
+      // effect list rather than decided for a site that has no module.
+      spaceMiningBonus.available
+        ? (spaceMiningBonus.state === SPACE_MINING_BONUS_STATES.measured
+          ? `Projected yields also apply the observer's faction-wide space-mining bonus of `
+            + `+${Math.round(spaceMiningBonus.additiveTotal * 100)}% (${spaceMiningBonus.sources
+              .map(source => `${source.name} +${Math.round(source.value * 100)}%`).join(', ')}). It is MEASURED, `
+            + 'not projected, so unlike the module multiplier it is in siteValue.'
+          : 'The observer holds no active org or effect that raises mine output faction-wide, so no such '
+            + 'bonus is applied — measured, not assumed.')
+        : `The faction-wide space-mining bonus is UNRESOLVED (${spaceMiningBonus.unknownReason}). Projected `
+          + 'yields OMIT it and are a lower bound, NOT a measured "no bonus".',
       // The refusal, stated where a reader of the ranking will see it. Without
       // this line the ordering reads as though the module multiplier had been
       // accounted for and found not to matter.

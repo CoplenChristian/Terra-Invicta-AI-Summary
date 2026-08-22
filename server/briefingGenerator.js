@@ -52,6 +52,7 @@ const directiveEngine = require('./directiveEngine');
 const { resolveConfig } = require('./config');
 const { resolveObserverFaction, sameId: sameIdentity } = require('../shared/util.mjs');
 const { buildMiningTechBonuses } = require('../shared/miningTechBonus.mjs');
+const { buildSpaceMiningBonus } = require('../shared/spaceMiningBonus.mjs');
 const format = require('./briefing/format');
 const roster = require('./briefing/roster');
 const readers = require('./briefing/readers');
@@ -129,6 +130,18 @@ class BriefingGenerator {
     const miningTechBonus = buildMiningTechBonuses(observer, {
       projectListComplete: observerListIsComplete
     });
+    // The faction-wide additive term: the observer's councillors' active org
+    // `miningBonus` plus its `SpaceMiningBonus` effects. Same completeness gate
+    // and for a sharper reason -- this one is a sum over a ROSTER, and player
+    // mode publishes only part of a rival's and strips the org list from what
+    // it does publish, so a partial sum would understate rather than refuse.
+    // Only the observer's own councillors are read.
+    const spaceMiningBonus = buildSpaceMiningBonus(observer, {
+      councilors: observerListIsComplete
+        ? councilors.filter(c => sameIdentity(c.factionId, observer.ID))
+        : null,
+      councilorListComplete: observerListIsComplete
+    });
     const identity = snapshotIdentity.readSnapshotIdentity(rawSnapshot || snapshot);
     const strategic = strategicIntelligence.build(snapshot, observerId);
     const campaignPosture = directiveAdvisor.assessCampaignPosture({
@@ -155,7 +168,7 @@ class BriefingGenerator {
       // real monthly outputs to scale. Without this the engine could never
       // generate an `advise-hab:*` candidate on a live save, and a councilor
       // already advising a hab could not have their commitment priced.
-      habs: this.buildAdvisableHabs(habs, habSites, observerId, miningTechBonus),
+      habs: this.buildAdvisableHabs(habs, habSites, observerId, miningTechBonus, spaceMiningBonus),
       capabilities,
       alienIntelligenceStage: snapshot.alienIntelligenceStage || null,
       directiveWeights: this.config.analysis?.directiveWeights || null,
@@ -260,7 +273,8 @@ class BriefingGenerator {
       fleets,
       habSites,
       campaignPosture,
-      miningTechBonus
+      miningTechBonus,
+      spaceMiningBonus
     });
 
     // 2. Department Directives (Actionable Statements)
@@ -275,7 +289,7 @@ class BriefingGenerator {
       { campaignPosture, factions, targetFaction, holdGround }
     );
     const councilDirectives = this.buildCouncilDirectives(councilors, observerId, campaignPosture);
-    const spaceDirectives = this.buildSpaceDirectives(habs, fleets, habSites, observer, observerName, campaignPosture, miningTechBonus);
+    const spaceDirectives = this.buildSpaceDirectives(habs, fleets, habSites, observer, observerName, campaignPosture, miningTechBonus, spaceMiningBonus);
     const researchDirectives = this.buildResearchDirectives(globalResearch, observer, activeAlienStages, {
       mode,
       capabilities

@@ -259,7 +259,22 @@ export const resolveMineModuleMultiplier = (site) => {
   const status = site && typeof site === 'object' && typeof site.constructionStatus === 'string'
     ? site.constructionStatus
     : null;
-  const operational = status === MINE_OPERATIONAL_STATUS;
+  // A COMPLETED mine that is UNPOWERED produces nothing, and
+  // `constructionStatus` cannot see that: it is derived from
+  // `constructionCompleted` alone. Measured 2026-08-22 -- the Servants run two
+  // completed-but-unpowered Settlement complexes on `ExitSave.gz`, and counting
+  // them puts their five-resource reconciliation against the game's own revenue
+  // out by 4-5% while every other faction closes at 0.002%.
+  //
+  // `mineModulePowered` absent (a snapshot older than the field, or a
+  // hand-built one) is NOT read as unpowered -- that would zero a producing
+  // mine. It is reported as `poweredRead: false` so a consumer can tell
+  // "powered, checked" from "power state not carried".
+  const powered = site && typeof site === 'object' && typeof site.mineModulePowered === 'boolean'
+    ? site.mineModulePowered
+    : null;
+  const unpowered = powered === false;
+  const operational = status === MINE_OPERATIONAL_STATUS && !unpowered;
 
   if (template === null) {
     return Object.freeze({
@@ -270,6 +285,8 @@ export const resolveMineModuleMultiplier = (site) => {
       tier: null,
       constructionStatus: status,
       operational: false,
+      powered,
+      poweredRead: powered !== null,
       reason: 'this site carries no mine module, so there is no mine and no module multiplier. It is a '
         + 'deposit rate, not an output — a x1.0 here would claim an Outpost complex that does not exist'
     });
@@ -285,6 +302,8 @@ export const resolveMineModuleMultiplier = (site) => {
       tier: toFinite(site?.mineTier),
       constructionStatus: status,
       operational,
+      powered,
+      poweredRead: powered !== null,
       reason: `'${template}' is not one of the seven mine modules in TIHabModuleTemplate.json `
         + `(read ${MINE_MODULE_MEASURED_ON}), so its output multiplier is UNKNOWN. Assuming 1.0 would `
         + 'understate a x4.0 module by 75%'
@@ -299,7 +318,12 @@ export const resolveMineModuleMultiplier = (site) => {
     tier: entry.tier,
     constructionStatus: status,
     operational,
-    reason: null
+    powered,
+    poweredRead: powered !== null,
+    reason: unpowered
+      ? 'this mine is built but UNPOWERED, so it is producing nothing. The game reports its power state '
+        + 'directly; construction status alone cannot see this'
+      : null
   });
 };
 
@@ -528,14 +552,21 @@ export const buildMineModuleCapability = (faction, { projectListComplete = null 
  *   resources, supplied by the caller so this module does not re-declare them.
  * @param {Function} [options.applyTechBonus] - `applyMiningTechBonus`, injected
  *   so this module keeps no dependency on the tech-bonus module's internals.
+ * @param {Object|null} [options.spaceMiningBonus] - the observer's faction-wide
+ *   additive space-mining bonus (`shared/spaceMiningBonus.mjs`). Absent leaves
+ *   the gain without that term, which is a lower bound, not a measured 1.0.
+ * @param {Function} [options.applySpaceBonus] - `applySpaceMiningBonus`,
+ *   injected for the same reason as `applyTechBonus`.
  */
 export const buildMineUpgradeOpportunities = ({
   habSites = [],
   observerId = null,
   capability = null,
   miningTechBonus = null,
+  spaceMiningBonus = null,
   resources = [],
   applyTechBonus = null,
+  applySpaceBonus = null,
   sameId = (a, b) => String(a) === String(b)
 } = {}) => {
   const resourceKeys = asArray(resources).map(entry => entry?.key).filter(key => typeof key === 'string');
@@ -648,9 +679,16 @@ export const buildMineUpgradeOpportunities = ({
       const adjusted = typeof applyTechBonus === 'function'
         ? applyTechBonus(rawGain, miningTechBonus, key, { places: 1 })
         : { value: Number(rawGain.toFixed(1)) };
-      monthlyGain[key] = adjusted.value;
-      if (adjusted.value === null) totalGainUnreadable[key] = true;
-      else totalGain[key] += adjusted.value;
+      // Then the faction-wide additive term, once, over the top, in the same
+      // order the income model measured. Injected the same way and for the same
+      // reason as the tech bonus: this module keeps no dependency on either
+      // bonus module's internals.
+      const withOperations = typeof applySpaceBonus === 'function'
+        ? applySpaceBonus(adjusted.value, spaceMiningBonus, { places: 1 })
+        : { value: adjusted.value };
+      monthlyGain[key] = withOperations.value;
+      if (withOperations.value === null) totalGainUnreadable[key] = true;
+      else totalGain[key] += withOperations.value;
     }
 
     counts.available++;
