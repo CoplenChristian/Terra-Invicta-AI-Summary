@@ -27,14 +27,14 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/executive-boards.js` | BS | Browser (ESM) | 416 | renders the executive boards — faction power, resources, and the | — | — |
 | `public/v2/js/components/faction-intel.js` | BS | Browser (ESM) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
 | `public/v2/js/components/fleet-procurement.js` | BS | Browser (ESM) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
-| `public/v2/js/components/intelligence-library.js` | BS | Browser (ESM) | 576 | renders the intelligence library — the drillable intelligence | — | — |
+| `public/v2/js/components/intelligence-library.js` | BS | Browser (ESM) | 583 | renders the intelligence library — the drillable intelligence | — | — |
 | `public/v2/js/components/mc-budget.js` | BS | Browser (ESM) | 188 | the Mission Control budget planner — MC is the sole input to the | — | — |
 | `public/v2/js/components/mining-expansion.js` | BS | Browser (ESM) | 383 | the mining expansion board — capacity, runways, and need-weighted | — | — |
 | `public/v2/js/components/research-advisor.js` | BS | Browser (ESM) | 1042 | phase 4 of the research advisor, on screen. | — | — |
 | `public/v2/js/components/strategic-commentary.js` | BS | Browser (ESM) | 126 | renders the non-LLM four-layer Strategic Commentary Engine output. | — | — |
-| `public/v2/js/components/unlocked-tech.js` | BS | Browser (ESM) | 357 | renders the searchable list of the observer faction's unlocked | — | — |
+| `public/v2/js/components/unlocked-tech.js` | BS | Browser (ESM) | 372 | renders the searchable list of the observer faction's unlocked | — | — |
 | `public/v2/js/components/world-map.js` | BS | Browser (ESM) | 493 | renders the interactive world/space theater map surface. | — | — |
-| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 1985 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 2003 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (ESM) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`

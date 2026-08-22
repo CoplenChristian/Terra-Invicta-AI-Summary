@@ -72,9 +72,16 @@
    * "separated group" and the missing middles are exactly where the odd values
    * appeared. Above 12px the steps widen to 4px, where that resolution is real.
    *
-   * Applied to container rhythm and to new components. The dense component
-   * internals already sat on 2/4/6/8/10/12 and were left alone -- restating
-   * them as tokens would have churned the whole file to no visible end. */
+   * Applied to container rhythm and to new components. It is NOT a description
+   * of the file as it stands, and reading it as one would mislead: re-measured
+   * 2026-08-21 across every literal px value in gap/padding/margin, 384 land on
+   * the scale and 203 do not, spread over 22 distinct off-scale values (1, 3, 5,
+   * 7, 9, 11, 13, 14, 15, 18, 22 and up). `padding: 7px 10px`, `padding: 8px
+   * 9px`, `gap: 18px`, `padding: 14px 16px` and `gap: 7px 13px` are live
+   * examples. Those older ad-hoc values were left alone deliberately: replacing
+   * them moves pixels, which is a visual change rather than a rename, and is a
+   * separate piece of work. Read this block as the vocabulary to reach for from
+   * here, not as a claim about what already survives beside it. */
   --space-2xs: 2px;
   --space-xs: 4px;
   --space-sm: 6px;
@@ -3230,6 +3237,12 @@ body.intelligence-library-open {
   min-width: 0;
 }
 
+/* Hidden until measured -- see syncScrollHints() in mission-control.js. The
+   reveal used to sit in the max-width: 900px block, which is a proxy for
+   overflow rather than a reading of it: measured 2026-08-21, a library table
+   running 840px inside a 637-772px wrapper at 905-1040px got no hint at all,
+   and the reveal below 900px was true only because the min-width below happens
+   to exceed every wrapper at those widths. scrollWidth is the fact. */
 .intel-library-table-scroll-hint {
   display: none;
   padding: 7px 10px;
@@ -3240,6 +3253,10 @@ body.intelligence-library-open {
   font-size: 8px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+}
+
+.intel-library-table-scroll-hint.is-scrollable {
+  display: block;
 }
 
 .intel-library-table {
@@ -4843,10 +4860,6 @@ body.intelligence-library-open {
 
   .mc-space-force-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .intel-library-table-scroll-hint {
-    display: block;
   }
 
   .init-grid-layout > .init-col--command {

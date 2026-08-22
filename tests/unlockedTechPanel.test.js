@@ -153,6 +153,113 @@ test('syncScrollHints toggles on scrollWidth vs clientWidth, not on window size'
   assert.ok(!orphan.classList.has('is-scrollable'), 'a hint with no wrapper must not claim scrollability');
 });
 
+/**
+ * The intelligence library's hint is the third one on the page and was left on
+ * the width-only rule when the other two were converted. Measured 2026-08-21
+ * against the live save: at 905-1040px the library table ran 840px inside a
+ * 637-772px wrapper and the hint was suppressed, so real scrollable content was
+ * unannounced; below 900px the reveal was unconditional and true only because
+ * `.intel-library-table` sets `min-width: 840px`, i.e. by construction rather
+ * than by measurement.
+ *
+ * Measured on a live DOM rather than read out of the stylesheet: this file's
+ * other CSS assertions are text matches, and a text match cannot see a rule that
+ * loses the cascade or a custom property that resolves to nothing. `--text-muted`
+ * was once defined self-referentially and 164 rules silently fell back to
+ * `inherit` with the source text still reading correctly.
+ */
+test('the intelligence-library scroll hint is revealed by measurement, not by viewport width', async () => {
+  const { chromium } = require('playwright');
+
+  // The wrappers are pinned to a fixed width so "overflows" and "fits" are
+  // properties of the fixture rather than of the viewport under test.
+  const fixture = `
+    <div id="narrow" style="width: 340px">
+      <div class="intel-library-table-wrap">
+        <div class="intel-library-table-scroll-hint" id="hintOverflow" role="note">Swipe horizontally to inspect all columns</div>
+        <table class="intel-library-table"><tbody><tr><td>wide</td></tr></tbody></table>
+      </div>
+    </div>
+    <div id="fits" style="width: 340px">
+      <div class="intel-library-table-wrap">
+        <div class="intel-library-table-scroll-hint" id="hintFits" role="note">Swipe horizontally to inspect all columns</div>
+        <table class="intel-library-table" style="min-width: 0; width: 100%"><tbody><tr><td>x</td></tr></tbody></table>
+      </div>
+    </div>`;
+
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    const page = await context.newPage();
+    await page.setContent(fixture, { waitUntil: 'domcontentloaded' });
+    await page.addStyleTag({ path: cssPath });
+    await page.addScriptTag({ path: missionControlJsPath });
+
+    const displayOf = id => page.evaluate(
+      elementId => getComputedStyle(document.getElementById(elementId)).display,
+      id
+    );
+    const measure = () => page.evaluate(() => {
+      if (!window.MissionControlViews || typeof window.MissionControlViews.syncScrollHints !== 'function') {
+        throw new Error('syncScrollHints must be exported for the library hint to be measurable');
+      }
+      window.MissionControlViews.syncScrollHints(document);
+      const wrap = document.querySelector('#narrow .intel-library-table-wrap');
+      return {
+        overflowClassed: document.getElementById('hintOverflow').classList.contains('is-scrollable'),
+        fitsClassed: document.getElementById('hintFits').classList.contains('is-scrollable'),
+        overflowScrollWidth: wrap.scrollWidth,
+        overflowClientWidth: wrap.clientWidth
+      };
+    });
+
+    // Unmeasured is hidden. The width-only rule made this `block` at 375px for
+    // both wrappers, which is the affordance lying about the data surface.
+    assert.strictEqual(await displayOf('hintFits'), 'none', 'an unmeasured library hint must be hidden at 375px');
+    assert.strictEqual(await displayOf('hintOverflow'), 'none', 'a library hint must not appear before anything measures it');
+
+    const narrow = await measure();
+    assert.ok(
+      narrow.overflowScrollWidth > narrow.overflowClientWidth + 1,
+      `the wide fixture must actually overflow (${narrow.overflowScrollWidth}/${narrow.overflowClientWidth})`
+    );
+    assert.ok(narrow.overflowClassed, 'syncScrollHints must register the library hint and mark the overflowing one');
+    assert.ok(!narrow.fitsClassed, 'a library table that fits must not be marked scrollable');
+
+    assert.strictEqual(await displayOf('hintOverflow'), 'block', 'the measured overflowing hint must render');
+    assert.strictEqual(await displayOf('hintFits'), 'none', 'a library table that fits must not claim it can be swiped');
+
+    // The other half of the same defect: the width-only rule stopped at 900px,
+    // so a library table that overflowed on a desktop got no hint at all.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const wide = await measure();
+    assert.ok(wide.overflowClassed, 'an overflowing library table must be announced above 900px too');
+    assert.strictEqual(await displayOf('hintOverflow'), 'block', 'the hint must render above 900px when the table overflows');
+    assert.strictEqual(await displayOf('hintFits'), 'none', 'a fitting library table stays silent at any width');
+  } finally {
+    await browser.close();
+  }
+});
+
+test('every scroll hint the page renders is registered for measurement', () => {
+  const js = fs.readFileSync(missionControlJsPath, 'utf8');
+  const cssClasses = new Set(
+    (readCss().match(/\.[a-z0-9-]*scroll-hint(?![a-z0-9-])/g) || []).map(match => match.slice(1))
+  );
+  assert.ok(cssClasses.size >= 3, 'the stylesheet must still carry the known hint classes');
+
+  const registered = new Set(
+    (js.match(/'\.([a-z0-9-]*scroll-hint)'/g) || []).map(match => match.slice(2, -1))
+  );
+
+  for (const hintClass of cssClasses) {
+    assert.ok(
+      registered.has(hintClass),
+      `.${hintClass} is styled but never registered in syncScrollHints, so it is revealed by something other than measurement`
+    );
+  }
+});
+
 test('the unlocked technology panel is registered in RECORDS and mounted inside that section', () => {
   const js = fs.readFileSync(missionControlJsPath, 'utf8');
   const html = fs.readFileSync(htmlPath, 'utf8');
@@ -219,4 +326,118 @@ test('the panel searches server-side and never reimplements matching', () => {
   const js = fs.readFileSync(panelJsPath, 'utf8');
   assert.match(js, /\/api\/intel\/tech-search\?observer=/, 'typed queries must go to the tech-search endpoint');
   assert.match(js, /\/api\/intel\/tech-tree\?observer=/, 'the default list must come from the tech-tree endpoint');
+});
+
+/**
+ * Run the real panel against stubbed endpoints.
+ *
+ * `routes` maps a URL fragment to the payload that endpoint should answer with.
+ * Returns the panel API plus a live view of what it painted.
+ */
+function mountUnlockedTechPanel(routes) {
+  const js = fs.readFileSync(panelJsPath, 'utf8');
+  const handlers = {};
+  const input = {
+    id: 'unlockedTechQuery',
+    value: '',
+    selectionStart: 0,
+    addEventListener: (type, fn) => { handlers[type] = fn; },
+    focus: () => {},
+    setSelectionRange: () => {}
+  };
+  const container = {
+    innerHTML: '',
+    querySelector: sel => (sel === '#unlockedTechQuery' ? input : null),
+    querySelectorAll: () => []
+  };
+
+  // The debounce is collapsed rather than waited on, and the promise `refresh`
+  // returns is captured so the assertions run against a finished paint.
+  let pending = null;
+  const sandbox = {
+    window: {},
+    document: { activeElement: null },
+    console,
+    setTimeout: fn => { pending = fn(); return 1; },
+    clearTimeout: () => {},
+    fetch: url => {
+      const route = Object.keys(routes).find(fragment => String(url).includes(fragment));
+      if (!route) return Promise.reject(new Error(`no stub for ${url}`));
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(routes[route]) });
+    }
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(js, sandbox, { filename: panelJsPath });
+
+  return {
+    panel: sandbox.window.MissionControlUnlockedTech,
+    container,
+    type: async (value) => {
+      input.value = value;
+      handlers.input();
+      await pending;
+    }
+  };
+}
+
+test('an unreadable project census says so, and never prints a confident 0 of 0', async () => {
+  // The graph is a static parse of the game templates, so no faction_project
+  // nodes is the census failing to arrive, not a faction with no research.
+  // `nodes` missing entirely and `nodes` arriving empty are the same state.
+  for (const [label, treePayload] of [['missing', {}], ['empty', { nodes: [] }]]) {
+    const searchHit = {
+      items: [{ id: 'Project_Laser', displayName: 'Basic Lasers', status: 'completed', researchCost: 100, unlocks: [] }]
+    };
+    const mounted = mountUnlockedTechPanel({
+      '/api/intel/tech-tree': treePayload,
+      '/api/intel/tech-search': searchHit
+    });
+
+    await mounted.panel.load(4712, 'player', mounted.container);
+
+    // No query: the panel must not report the faction has completed nothing on
+    // the strength of a graph it could not read.
+    assert.ok(
+      !/has not completed any research projects/.test(mounted.container.innerHTML),
+      `nodes ${label}: an unread graph must not be reported as a faction with no research`
+    );
+    assert.match(
+      mounted.container.innerHTML,
+      /census is unavailable/,
+      `nodes ${label}: the empty state must say the census could not be read`
+    );
+
+    // With rows on screen from the separate search endpoint, the footer census
+    // is what lied: "0 unlocked of 0 projects" beneath a list of real projects.
+    await mounted.type('laser');
+    assert.match(mounted.container.innerHTML, /Basic Lasers/, `nodes ${label}: the search results must still render`);
+    assert.ok(
+      !/0 unlocked of 0 projects/.test(mounted.container.innerHTML),
+      `nodes ${label}: an absent census must not be coerced to zero`
+    );
+    assert.match(
+      mounted.container.innerHTML,
+      /Project census unavailable\./,
+      `nodes ${label}: the footer must declare the census unavailable`
+    );
+  }
+});
+
+test('a readable census is still reported as measured', async () => {
+  const nodes = [
+    { id: 'Project_A', type: 'faction_project', displayName: 'Alpha', status: 'completed', researchCost: 10, unlocks: [] },
+    { id: 'Project_B', type: 'faction_project', displayName: 'Bravo', status: 'available', researchCost: 20, unlocks: [] },
+    { id: 'Project_C', type: 'faction_project', displayName: 'Charlie', status: 'available', researchCost: 30, unlocks: [] },
+    { id: 'tech_root', type: 'tech', displayName: 'Not a project', status: 'completed' }
+  ];
+  const mounted = mountUnlockedTechPanel({ '/api/intel/tech-tree': { nodes } });
+
+  await mounted.panel.load(4712, 'omniscient', mounted.container);
+
+  assert.match(mounted.container.innerHTML, /1 unlocked of 3 projects\./, 'a measured census must be reported as measured');
+  assert.ok(
+    !/census is unavailable|census unavailable/.test(mounted.container.innerHTML),
+    'a readable census must not be reported as unavailable'
+  );
 });
