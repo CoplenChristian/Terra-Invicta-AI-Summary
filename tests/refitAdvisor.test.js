@@ -1000,9 +1000,12 @@ test('research advisor: openSlotDetails displays un-confounded REALLOCATION reas
   const reallocFact = factsFromIntel.find(f => f.label === 'REALLOCATION');
   assert.ok(reallocFact, 'REALLOCATION fact must be present');
   assert.match(reallocFact.value, /no reallocation is recommended/i);
-  assert.match(reallocFact.value, /no single \(base, ProjectBonus\) pair fits all three/);
-  assert.match(reallocFact.value, /relative share between slots/);
-  assert.match(reallocFact.value, /cancels income drift/);
+  // Corrected 2026-08-22 (tracker 3b): the formula now reproduces, so the panel
+  // must not tell the reader it does not.
+  assert.doesNotMatch(reallocFact.value, /does not reproduce/);
+  assert.match(reallocFact.value, /reproduces every measured slot/);
+  assert.match(reallocFact.value, /0\.9\^\(n-1\)/);
+  assert.match(reallocFact.value, /not a value model/);
 
   // Also test openFullRanking integrates slotFacts
   context.window.MissionControlResearchAdvisor.openFullRanking(intel);
@@ -1020,9 +1023,13 @@ test('research advisor: openSlotDetails displays un-confounded REALLOCATION reas
   });
   const fallbackRealloc = fallbackFacts.find(f => f.label === 'REALLOCATION');
   assert.ok(fallbackRealloc, 'Fallback REALLOCATION fact must be present');
-  assert.match(fallbackRealloc.value, /2\.26216× \/ 2\.26214×/);
-  assert.match(fallbackRealloc.value, /confounded by research-income drift/);
-  assert.match(fallbackRealloc.value, /confounded by the unvalidated Xenology CategoryBonus/);
+  // The fallback fires only when the payload carries no model at all, so it
+  // must not contradict the model it stands in for.
+  assert.doesNotMatch(fallbackRealloc.value, /does not reproduce measured delivery/);
+  assert.match(fallbackRealloc.value, /DOES now reproduce measured delivery/);
+  assert.match(fallbackRealloc.value, /0\.15%/);
+  assert.match(fallbackRealloc.value, /cachedYearlyRevenue\.Projects/);
+  assert.match(fallbackRealloc.value, /not a value model/);
 });
 
 

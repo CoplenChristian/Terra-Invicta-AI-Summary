@@ -261,19 +261,62 @@ test('the slot count and the tech-slot count come from the data, never from a co
 test('no reallocation is recommended, and the payload carries why', () => {
   for (const result of [live(), buildResearchSlotAllocation(snapshotWith({ weights: null }), { observerId: OBSERVER })]) {
     assert.equal(result.recommendation.offered, false);
-    assert.match(result.recommendation.reason, /does not reproduce/);
+    // The refusal STANDS but its reason changed on 2026-08-22: the formula now
+    // reproduces, so "it does not reproduce" would be a false refusal reason,
+    // which is worse than no reason at all.
+    assert.doesNotMatch(result.recommendation.reason, /does not reproduce/,
+      'the formula reproduces; refusing on that ground would be a false statement in the payload');
+    assert.match(result.recommendation.reason, /no reallocation is recommended/);
+    assert.match(result.recommendation.reason, /0\.9\^\(n-1\)/,
+      'the decay term never engaged, and that is now the first stated reason');
+    assert.match(result.recommendation.reason, /not a value model/,
+      'a forward delivery model is not a value model, and the refusal must say so');
   }
 });
 
-test('the allocation model is marked unvalidated and names what it could not reproduce', () => {
-  assert.equal(ALLOCATION_MODEL.validatedAgainstGameOutput, false);
-  assert.equal(ALLOCATION_MODEL.reproducesObservedDelivery, false);
-  assert.equal(ALLOCATION_MODEL.termsWithNoShippedSource.length, 3);
-  assert.match(ALLOCATION_MODEL.reproduction.findings.join(' '), /1\.147x .*0\.993x/);
-  assert.match(ALLOCATION_MODEL.reproduction.findings.join(' '), /-0\.209/);
-  // The half that DID reproduce is recorded beside the half that did not, so
-  // the refusal is a measurement and not a shrug.
-  assert.match(ALLOCATION_MODEL.reproduction.whatDidReproduce, /2\.26216/);
+test('the allocation model is marked validated, and the first pass is kept marked superseded', () => {
+  assert.equal(ALLOCATION_MODEL.validatedAgainstGameOutput, true);
+  assert.equal(ALLOCATION_MODEL.reproducesObservedDelivery, true);
+  // ProjectBonus left the unsourced list: it is read from
+  // `cachedYearlyRevenue.Projects`. The two wiki constants stay.
+  assert.equal(ALLOCATION_MODEL.termsWithNoShippedSource.length, 2);
+  assert.doesNotMatch(ALLOCATION_MODEL.termsWithNoShippedSource.join(' '), /no template or save field states it/,
+    'ProjectBonus IS stated by the save and must not still be listed as unsourced');
+
+  // The lead evidence is the one ratio that contains no Xenology and no total
+  // income, so it fixes ProjectBonus on its own.
+  assert.match(ALLOCATION_MODEL.reproduction.whatDidReproduce, /1\.885714/);
+  assert.equal(ALLOCATION_MODEL.reproduction.perSlotShares.length, 4);
+
+  // SUPERSEDED, NOT DELETED. The first pass's reasoning is the instructive part.
+  const superseded = ALLOCATION_MODEL.reproduction.supersededFirstPass;
+  assert.ok(superseded, 'the first pass must be kept, marked, not deleted');
+  assert.match(superseded.status, /SUPERSEDED/);
+  assert.match(superseded.findings.join(' '), /1\.147x .*0\.993x/,
+    'the withdrawn absolute swing must still be readable');
+  assert.match(superseded.findings.join(' '), /-0\.209/);
+  assert.match(superseded.recordKeepingDefect, /\[0,0,3,1,3,1\]/,
+    'the pip layout the saves actually carry must be stated against the one the record claimed');
+});
+
+test('the model refuses the scalar duration correction, with the arithmetic that refutes it', () => {
+  const record = ALLOCATION_MODEL.reproduction.notADurationCorrection;
+  assert.match(record, /2\.1115/, 'the whole-faction figure is real and must be named');
+  assert.match(record, /WHOLE FACTION/, 'and must be labelled as a whole-faction sum, not a per-slot rate');
+  // The four per-slot factors are what a duration needs, and three are BELOW 1.
+  for (const factor of ['0.4658', '0.2928', '1.0602']) {
+    assert.match(record, new RegExp(factor.replace('.', '\\.')), `per-slot factor ${factor} must be stated`);
+  }
+  assert.match(record, /too SHORT|3\.42x/,
+    'the direction matters: the flat figure is optimistic on the low-pip slots, not conservative');
+});
+
+test('the 200% question is answered by absolute gain, not by a ratio against a fitted model', () => {
+  const record = ALLOCATION_MODEL.reproduction.whyTheAbsoluteSwingCannotAnswerThe200Percent;
+  assert.match(record, /4\.2840x/, 'what a pre-200% income would have had to deliver');
+  assert.match(record, /2\.1115x/, 'what it actually delivered');
+  assert.match(record, /post-`?researchSpeedMultiplier`?/,
+    'the conclusion must be stated, not left to be inferred');
 });
 
 test('the slot index mapping is the pinned claim, and it is marked as pinned', () => {

@@ -536,8 +536,91 @@ test('the rate model records a pin with zero free parameters, and says what it d
   assert.ok(CATEGORY_RATE_MODEL.untested.length >= 2,
     'the decay term and the diminishing-returns curve were both inert in this data');
   assert.equal(CATEGORY_RATE_MODEL.durationsStillFlat, true);
-  assert.match(CATEGORY_RATE_MODEL.durationsStillFlatReason, /2\.11/,
-    'the reason durations stay flat is the size of the allocation multiplier, and it must be stated');
+  assert.match(CATEGORY_RATE_MODEL.durationsStillFlatReason, /2\.1115/,
+    'the whole-faction allocation gain is real and must still be stated');
+  // Corrected 2026-08-22 (tracker 3b). The reason must NOT be that the flat
+  // duration is wrong by the whole allocation multiplier -- that conflated a
+  // sum over four slots with the rate one slot receives.
+  assert.match(CATEGORY_RATE_MODEL.durationsStillFlatReason, /WHOLE FACTION/,
+    'the 2.1115x must be labelled a whole-faction sum, not a per-slot rate');
+  assert.doesNotMatch(CATEGORY_RATE_MODEL.durationsStillFlatReason, /upper bound/,
+    'the flat figure is not an upper bound; it measured 3.42x optimistic on a 1-pip slot');
+});
+
+// ---------------------------------------------------------------------------
+// 5a. THE RECONCILIATION (tracker 3b, measured 2026-08-22)
+//
+// Two documents disagreed: a 2.11x duration correction against "research needs
+// no adjustment". Both measurements were real; the INFERENCE from the first was
+// a units error. The identity below is what settles it, so it is pinned here
+// rather than left in prose.
+// ---------------------------------------------------------------------------
+
+test('the whole-faction 2.11x is exactly the SUM of the per-slot factors a duration needs', () => {
+  const evidence = CATEGORY_RATE_MODEL.durationsStillFlatEvidence;
+  assert.ok(evidence, 'the arithmetic behind the refusal must be carried, not just asserted');
+
+  const factors = evidence.perSlotDeliveryFactor;
+  assert.equal(factors.length, 4, 'all four of the observer\'s pip-carrying slots');
+
+  const sum = factors.reduce((total, row) => total + row.factorOfNominalIncome, 0);
+  assert.ok(Math.abs(sum - evidence.wholeFactionFactor) < 0.001,
+    `the per-slot factors must sum to the whole-faction factor: ${sum} vs ${evidence.wholeFactionFactor}`);
+
+  // THE POINT: three of the four are BELOW 1, so the flat duration is
+  // OPTIMISTIC there. A 2.11x shortening would make them worse, not better.
+  const belowOne = factors.filter(row => row.factorOfNominalIncome < 1);
+  assert.equal(belowOne.length, 3,
+    'three slots receive less than the nominal income, so the flat figure is too short for them');
+  const worst = Math.min(...factors.map(row => row.factorOfNominalIncome));
+  assert.ok(1 / worst > 3, `the worst slot is ${(1 / worst).toFixed(2)}x optimistic already`);
+
+  // Absent stays null: a measured factor is a number or it is not there.
+  for (const row of factors) {
+    assert.equal(typeof row.factorOfNominalIncome, 'number');
+    assert.ok(Number.isFinite(row.factorOfNominalIncome));
+    assert.ok(row.deliveredOverInterval > 0, 'each factor must carry the delivery it came from');
+  }
+});
+
+test('no allocation factor reaches the arithmetic: the duration is still exactly cost / income', () => {
+  // tracker 3b's proposed correction was to divide every duration by ~2.11.
+  // It was refused, so the arithmetic must be untouched -- and a duration that
+  // silently gained ANY allocation factor would show up right here.
+  assert.equal(monthsAtIncome(10000, 1000), 10, 'exactly cost / income, unscaled');
+  assert.equal(monthsAtIncome(2110, 1000), 2.1);
+  assert.notEqual(monthsAtIncome(10000, 1000), 10 / CATEGORY_RATE_MODEL.durationsStillFlatEvidence.wholeFactionFactor);
+
+  // And the same figure survives the category-aware path, which is the one that
+  // would have carried a correction if one had been applied.
+  const boosted = monthsAtIncomeForCategory(10000, 1000, {
+    state: CATEGORY_BONUS_STATES.boosted,
+    effectiveBonus: 0.44,
+    summedBonus: 0.44,
+    sourceCount: 2,
+    bySourceType: [{ sourceType: 'org' }]
+  });
+  assert.equal(boosted.months, 10, 'a +44% category still reports the flat 10 months');
+  assert.equal(boosted.flatRateMonths, 10);
+  assert.match(boosted.basis, /^flat rate/, 'and the basis must say so in its first words');
+});
+
+test('the evidence names the one bound the model DOES yield, and refuses the campaign multiplier', () => {
+  const evidence = CATEGORY_RATE_MODEL.durationsStillFlatEvidence;
+  // Not a negative result only: full concentration is a real lower bound on
+  // months, and it is category-dependent rather than scalar.
+  assert.match(evidence.fastestAchievable, /1\.1025x/, 'a global tech gains barely 10%');
+  assert.match(evidence.fastestAchievable, /2\.5095x/, 'a Xenology project gains 2.5x');
+  assert.match(evidence.fastestAchievable, /never on the duration at/,
+    'it must say what the flat figure is NOT a bound on');
+
+  // The trap the tracker warned about: a ~2.08x project factor on this campaign
+  // sits within 4% of its own 200% research rate.
+  assert.match(evidence.doesNotReapplyTheCampaignMultiplier, /coincidence/);
+  assert.match(evidence.doesNotReapplyTheCampaignMultiplier, /0\.80/,
+    'the cross-faction contrast is what shows ProjectBonus is not a disguised global multiplier');
+  assert.match(evidence.nominalMonthlyIncomeSource, /monthsAtIncome/,
+    'the divisor must be identified as the one the duration actually uses');
 });
 
 test('the measurement is recorded in the spec, with its numbers', () => {
@@ -553,6 +636,32 @@ test('the measurement is recorded in the spec, with its numbers', () => {
   assert.match(spec, /alienInvestigations/, 'the source the template sweep could not see');
   assert.match(spec, /2026-05-06/, 'the Technology page revision date');
   assert.match(spec, /2026-04-05/, 'the Aliens page revision date');
+});
+
+test('both specs carry the tracker-3b reconciliation, with the superseded reasoning kept', () => {
+  const rateSpec = fs.readFileSync(
+    path.join(__dirname, '..', 'docs', 'research-category-rate-spec.md'), 'utf8'
+  );
+  // The corrected conclusion, and the four per-slot factors that force it.
+  for (const figure of ['0.4658', '0.2928', '1.0602', '2.1115']) {
+    assert.match(rateSpec, new RegExp(figure.replace('.', '\\.')), `per-slot arithmetic: ${figure}`);
+  }
+  // The HEADING, not a passing mention of it: the superseded inference must be
+  // kept as a section a reader lands on, not merely referred to.
+  assert.match(rateSpec, /^#+ What the 2\.11× conclusion got wrong\s*$/m,
+    'the superseded inference must be kept and marked as its own section, not deleted');
+  assert.match(rateSpec, /> Over interval 1 the observer's slots received \*\*2\.1113×\*\*/,
+    'and the withdrawn wording itself must be quoted, not just described');
+  assert.match(rateSpec, /4\.2840/, 'what a pre-200% income would have had to deliver');
+
+  const settingsSpec = fs.readFileSync(
+    path.join(__dirname, '..', 'docs', 'campaign-settings-spec.md'), 'utf8'
+  );
+  assert.match(settingsSpec, /1\.147/, 'the withdrawn ratio must still be readable');
+  assert.match(settingsSpec, /Superseded, kept/,
+    'campaign-settings-spec.md reached the right verdict by invalid reasoning, and must say so');
+  assert.match(settingsSpec, /\[0,0,3,1,3,1\]/,
+    'the pip layout the saves actually carry, against the one the old record claimed');
 });
 
 test('a boosted category KEEPS its flat duration and names the bonus it does not apply', () => {

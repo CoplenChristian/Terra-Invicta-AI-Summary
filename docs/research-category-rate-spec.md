@@ -5,6 +5,12 @@ were found and the delivery mechanism pinned. The superseded conclusion is kept 
 bottom under "What the first pass got wrong", because the way it went wrong is the useful
 part.
 
+**Revised again 2026-08-22 against `431be86`** (tracker 3b). The bonus model and the
+allocation pin are unchanged and re-measured identical. What changed is the **conclusion
+drawn from the 2.11× figure**: it is a whole-faction sum, not a per-slot duration correction,
+and the superseded wording is kept under "What the 2.11× conclusion got wrong". No duration
+moved; `monthsAtIncome` is byte-for-byte the same function it was.
+
 Every duration the research advisor prints comes from one flat monthly rate. Orgs, hab
 modules, councilor traits, alien-activity investigations and one ship module all grant
 **per-category** research bonuses, so the rate a project is actually researched at varies
@@ -221,31 +227,128 @@ one in which two pipped slots share a category.
 
 # The consequence, and why durations are still flat
 
-The pin says something the first pass could not see: **the category term is the small part
-of the flat rate's error.**
+**Corrected 2026-08-22 (tracker 3b).** This section previously concluded that every stated
+duration was "an upper bound by roughly 2.11×". The measurement behind that number is right;
+the inference drawn from it was a **units error**, and the superseded wording is kept below
+under "What the 2.11× conclusion got wrong".
 
-Over interval 1 the observer's slots received **2.1113×** the nominal research income the
-flat rate divides by, because `cachedYearlyRevenue.Research` is the **pre-multiplier base**
-and the `(1 + 5% per pipped slot)`, pip-share and `(1 + Category + Project)` terms all sit
-on top of it.
+The pin says something the first pass could not see: **the category term is the small part of
+the flat rate's error.** But it is not the whole allocation multiplier that replaces it.
 
-So:
+## What 2.11× is, and what a duration needs
 
-- correcting only the category term moves a MilitaryScience duration by ~3%, and leaves a
-  2.11× error untouched while looking like a fix;
-- withdrawing the duration to `unknown` — what the first pass did — removes a usable figure
-  to avoid a 3% error and still leaves the reader with nothing.
+Over interval 1 the observer's **four slots together** received **2.1115×** the nominal
+research income the flat rate divides by, because `cachedYearlyRevenue.Research` is the
+**pre-allocation base** and the `(1 + 5% per pipped slot)`, pip-share and
+`(1 + Category + Project)` terms all sit on top of it. That part stands, re-measured
+2026-08-22 against the same MD5-verified saves.
+
+A duration is not about four slots. It is about **one**. Per slot, against the same nominal
+income of `37,735.23 / 12 = 3,144.60`/month:
+
+| slot | kind | category | pips | delivered / 15.5 d | per month | ÷ nominal income | the flat figure is |
+| ---: | :--- | :--- | ---: | ---: | ---: | ---: | :--- |
+| 2 | global tech | LifeScience | 3 | 745.85 | 1,464.6 | **0.4658** | 2.15× too **short** |
+| 3 | project | MilitaryScience | 1 | 468.82 | 920.6 | **0.2928** | 3.42× too **short** |
+| 4 | project | Xenology | 3 | 1,697.71 | 3,333.8 | **1.0602** | 1.06× too long |
+| 5 | project | Energy | 1 | 468.82 | 920.6 | **0.2928** | 3.42× too **short** |
+| | | | | **3,381.21** | **6,639.7** | **2.1115** | ← the whole-faction figure |
+
+`0.4658 + 0.2928 + 1.0602 + 0.2928 = 2.1116`. **The whole-faction 2.11× is the sum of exactly
+the quantity a duration needs, over the four slots that share it.** Using the sum in place of
+one term is the error.
+
+Three consequences:
+
+- **The flat figure is not an upper bound.** On three of the four occupied slots it is
+  already **optimistic**, by 2.15× to 3.42×. Dividing every duration by 2.11 would take the
+  1-pip slots from 3.4× optimistic to **7.2×**.
+- **No single scalar corrects it.** The per-slot factor depends on a pip share a candidate
+  project does not have until it is given one, and it spans 0.29× to 1.06× — a factor of 3.6
+  — on one faction in one interval.
+- **The category term is still the small part.** ~3% against a 3.6× spread.
+
+## The one bound the model does yield
+
+Put **every** pip on one slot and it has `pipShare = 1` with one pipped slot, so it receives
+`1.05 × (1 + CategoryBonus + ProjectBonus)` × the nominal income. That is the **fastest
+achievable** rate, so `flat months ÷ that multiplier` is a genuine **lower bound on months**:
+
+| category | kind | multiplier | flat months ÷ |
+| :--- | :--- | ---: | ---: |
+| LifeScience | global tech | 1.1025 | 1.103 |
+| MilitaryScience | project | 2.0790 | 2.079 |
+| Energy | project | 2.0790 | 2.079 |
+| Xenology | project | 2.5095 | 2.510 |
+
+Since `1.05 × (1 + Cat + Proj) ≥ 1.05 > 1` always, the flat figure **is** an upper bound on
+the *best case* — and never on the duration at the current allocation. The spread is 2.28×
+across four categories on one save, so this is not a scalar either.
+
+**Not implemented, deliberately.** Publishing it means choosing a counterfactual allocation
+for every ranked candidate, and `buildResearchSlotAllocation` already refuses to recommend a
+reallocation for the adjacent reason. Recorded here so the next reader has the arithmetic.
+
+## Is 2.079× a disguised 200%?
+
+It is worth asking, because this campaign runs `researchSpeedMultiplier` at 200% and a
+typical project's full-concentration multiplier lands within 4% of 2.0. It is a coincidence
+of this campaign carrying a 95% `ProjectBonus`, and the contrast says so:
+
+- `ProjectBonus` is read per faction from `cachedYearlyRevenue.Projects`. Measured on the
+  same interval: **0.80** for Project Exodus (18 Projects), **0.95** for the observer (21),
+  **1.00** capped for the Resistance (34), Humanity First (37), the Academy (31), the
+  Servants (49) and the Protectorate (56). A global multiplier would be identical for all.
+- It applies to **project** slots only. Measured per-pip, a project slot delivers
+  `(1 + Cat + Proj) / (1 + Cat)` times a global-tech slot — 1.885714 observed against
+  1.885714 predicted for the observer. A campaign multiplier applies to both alike.
+- And the campaign's own 200% is **already inside** `cachedYearlyRevenue.Research` — see the
+  section below.
+
+## `cachedYearlyRevenue.Research` is already post-`researchSpeedMultiplier`
+
+Measured directly rather than inferred, 2026-08-22:
+
+```
+measured whole-faction gain over nominal income          2.1115
+predicted from the allocation terms alone, all read      2.1420   (1.20 x 1.78475)
+predicted if the income ALSO still needed the 200%       4.2840
+```
+
+The measurement sits on the first, 1.4% below it — a uniform residual with **no spare factor
+of 2 anywhere in it**. Nor can the 200% be hiding in the allocation structure: a project pip
+delivers 1.889× a global-tech pip, and a global multiplier cannot produce a ratio between two
+slot kinds.
+
+This replaces the argument in `campaign-settings-spec.md`, which reached the same conclusion
+by invalid reasoning. See that document's own correction note.
 
 **Durations therefore stay flat, and the measured category bonus is named beside them.** The
 label states what is *not* applied; it deliberately does not claim a direction or size for
-the true figure, because the dominant error runs the other way.
+the true figure, because the per-slot spread runs both ways.
 
-`8.0 mo (flat; +3.0% category)` — not "so the true figure is slightly shorter", which the
-measurement contradicts.
+`8.0 mo (flat; +3.0% category)` — not "so the true figure is slightly shorter", and no longer
+"treat it as an upper bound" either.
 
-**The next scoped change** is to price a duration through the pinned allocation model rather
-than `cost / income`, which is a change to every duration in three endpoints and needs its
-own before/after capture. It is out of scope here.
+### What the 2.11× conclusion got wrong
+
+Kept because the failure mode is instructive. The superseded text read:
+
+> Over interval 1 the observer's slots received **2.1113×** the nominal research income the
+> flat rate divides by … correcting only the category term … leaves a 2.11× error untouched
+> while looking like a fix.
+>
+> **The next scoped change** is to price a duration through the pinned allocation model rather
+> than `cost / income`.
+
+Every number in it is right. What was wrong was reading a **whole-faction sum** as a
+**per-slot rate**, and then reading "the flat figure is 2.11× off" as "the flat figure is
+2.11× too *long*". Both halves fail on the same table above: the sum is not a term of itself,
+and three of the four terms are below 1.
+
+The tell was available at the time: the same document's own interval-1 table shows slot 3
+receiving 469 points where an even share of the 2.11× would be 845. A figure that is 2.11×
+the *total* while one slot gets 0.29× of it cannot also be a per-slot correction.
 
 ## Duration states
 

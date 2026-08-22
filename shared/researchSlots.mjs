@@ -18,13 +18,20 @@
  *                x pips_X / total pips
  *                x (100% + CategoryBonus x 0.9^(same-category slots with pips - 1) + ProjectBonus)
  *
- * That formula is the ONE input to this feature that is not pinned to shipped
- * data, and it was tested before anything was built on it. It does not
- * reproduce -- see `ALLOCATION_MODEL.reproduction` for the measurement. A
- * confident reallocation recommendation computed from a formula that cannot
- * reproduce the observer's own research delivery is exactly the claim this
- * repo's standards forbid, so the recommendation is refused and the refusal
- * carries its reason and its numbers.
+ * That formula was the ONE input to this feature not pinned to shipped data,
+ * and it was tested before anything was built on it. The FIRST pass could not
+ * make it reproduce; the SECOND pass (2026-08-21, `docs/research-category-rate-
+ * spec.md`) did, to within 0.15% on all four pip-carrying slots with ZERO free
+ * parameters, once `ProjectBonus` was READ from `cachedYearlyRevenue.Projects`
+ * and the 24 alien-activity investigations were folded into the Xenology bonus.
+ * See `ALLOCATION_MODEL.reproduction`; the first pass's reasoning is kept
+ * beside it under `supersededFirstPass`.
+ *
+ * The recommendation is STILL refused, but no longer for that reason. The
+ * forward model reproduces; what is missing is the two terms this campaign's
+ * data cannot exercise (the 0.9^(n-1) same-category decay and the diminishing-
+ * returns curve) and a value model over what each slot is researching. See
+ * `ALLOCATION_MODEL.recommendationRefused`.
  *
  * WHAT IS PINNED, and it is the useful half:
  *
@@ -54,14 +61,28 @@
  *     completed it long before 44,780, so effective cost equals template cost
  *     and every remaining-cost figure the advisor prints is already right.
  *   - Income is already post-multiplier. `monthsAtCurrentIncome` derives from
- *     `cachedYearlyRevenue.Research`, and the reproduction recorded in
- *     ALLOCATION_MODEL below compared predicted against observed delivery at
- *     1.147x and 0.993x over two intervals. Pre-multiplier revenue against real
- *     200% delivery would have shown ~2.0.
+ *     `cachedYearlyRevenue.Research`. RE-ESTABLISHED 2026-08-22 on a better
+ *     measurement than the 1.147x/0.993x pair originally cited, which came from
+ *     the first pass's own non-reproducing model and could not answer this (see
+ *     `ALLOCATION_MODEL.reproduction.whyTheAbsoluteSwingCannotAnswerThe200Percent`).
+ *     The observer's slots delivered 2.1115x `cachedYearlyRevenue.Research`
+ *     over interval 1, and 2.1420x is exactly what the allocation terms predict
+ *     from values all read out of the save -- (1 + 5% x 4 pipped slots) x the
+ *     pip-weighted (1 + CategoryBonus + ProjectBonus). A `cachedYearlyRevenue`
+ *     that still needed the 200% applied would have delivered 4.2840x. There is
+ *     no spare factor of 2 anywhere in the residual, which is a uniform 1.4%.
  *
  * The player's report that techs finish twice as fast is accurate and comes
  * from doubled output, which the save's own revenue figure already carries.
  * Multiplying here would introduce a 2x error into a correct figure.
+ *
+ * NOR IS THE ALLOCATION MULTIPLIER A DURATION CORRECTION. The 2.1115x above is
+ * the WHOLE FACTION's throughput summed over four slots. One project sits in
+ * ONE slot and receives only its own share: measured 0.4658x, 0.2928x, 1.0602x
+ * and 0.2928x of the nominal income (they sum to the 2.1115x). Dividing a
+ * duration by 2.11 would therefore make three of those four MORE wrong, not
+ * less -- the 1-pip slots are already 3.42x optimistic at the flat rate. See
+ * `CATEGORY_RATE_MODEL.durationsStillFlatEvidence` in shared/researchCategoryBonus.mjs.
  */
 
 import { asArray, round, sameId, toFiniteNumber } from './util.mjs';
@@ -110,101 +131,134 @@ export const SLOT_INDEX_PIN = Object.freeze({
 });
 
 /**
- * The wiki allocation formula, and the measurement that says not to build on it.
+ * The wiki allocation formula, and the measurement that now pins it.
  *
- * Two of its four terms have no source in the shipped data at all: the
- * +5%-per-active-slot and 0.9^(n-1) constants are absent from
- * `TIGlobalConfig.json` (which carries only `globalResearchMultiplier: 1`), and
- * no template or save field states a ProjectBonus. CategoryBonus can be
- * reconstructed from `techBonuses` on orgs, hab modules and councilor traits,
- * but that reconstruction is itself unvalidated.
+ * REVISED 2026-08-22 (tracker 3b). The first pass concluded this formula did
+ * not reproduce and the block below said so. The SECOND pass reproduced it to
+ * within 0.15% on all four of the observer's pip-carrying slots with ZERO free
+ * parameters. Two terms the first pass could not source turned out to be
+ * readable after all:
  *
- * HOW THE EVIDENCE IS ORDERED, and why it was reordered (2026-08-21, see
- * docs/model-verification-review.md "Claim 3"):
+ *   ProjectBonus  = min(100%, (`cachedYearlyRevenue.Projects` - the points spent
+ *                   on `orgProjectSlotUnlocked` and `habProjectSlotUnlocked`)
+ *                   x 5%). On the measured save: min(100%, (21 - 2) x 5%) = 95%.
+ *   CategoryBonus = the `techBonuses` sweep PLUS `alienInvestigations` x 1% for
+ *                   Xenology, which no template carries. 0.20 + 0.24 = 0.44.
  *
- * The refusal stands, but two of the three numbers originally cited for it are
- * CONFOUNDED and were being presented as if they were independent pins. They
- * are now labelled, and the one measurement no confound touches -- the stable
- * RELATIVE share between two slots -- leads instead of being demoted to a
- * footnote:
+ * The first pass's reasoning is kept under `reproduction.supersededFirstPass`
+ * rather than deleted, because the way it went wrong is the instructive part --
+ * it searched for a one-parameter CATEGORY model to explain a residual that
+ * lived in a missing PROJECT term, and its own notes recorded the number that
+ * would have led it there.
  *
- *   - `whatDidReproduce` (2.26216x / 2.26214x) is a RELATIVE measure, so it
- *     cancels any global change in research income. Stable to one part in 10^4.
- *     This is the strongest thing in the block.
- *   - the 1.147x / 0.993x swing is an ABSOLUTE measure (delivered / predicted)
- *     and moves under a perfect formula if research income drifted between the
- *     two intervals. Independent of CategoryBonus; NOT independent of drift.
- *   - ProjectBonus = -0.209 is a CONSEQUENCE of assuming the unvalidated
- *     reconstructed Xenology bonus of 0.20. At a true bonus of >= 0.2435 the
- *     "penalty" contradiction disappears entirely.
- *
- * Both numbers are kept -- they corroborate -- but neither is a pin on its own.
+ * TWO CONSTANTS STILL HAVE NO SHIPPED SOURCE (the +5%-per-pipped-slot and the
+ * 0.9^(n-1) same-category decay are absent from `TIGlobalConfig.json`, which
+ * carries only `globalResearchMultiplier: 1`), so the formula remains a wiki
+ * claim CORROBORATED by measurement, not a reading of the game's own data. The
+ * +5% constant is now strongly corroborated -- it is the only free scale left
+ * and it lands 1.4% high; the 0.9 decay never engaged and is not.
  */
 export const ALLOCATION_MODEL = Object.freeze({
   source: 'Terra Invicta wiki, `Technology`, rev 2026-05-06',
   formula: 'per slot X: base x (100% + 5% per slot with pips) x pips_X / total pips '
     + 'x (100% + CategoryBonus x 0.9^(same-category slots with pips - 1) + ProjectBonus)',
-  validatedAgainstGameOutput: false,
-  reproducesObservedDelivery: false,
+  validatedAgainstGameOutput: true,
+  reproducesObservedDelivery: true,
   termsWithNoShippedSource: Object.freeze([
-    'the +5%-per-active-slot constant (absent from TIGlobalConfig.json)',
-    'the 0.9^(n-1) same-category decay constant (absent from TIGlobalConfig.json)',
-    'ProjectBonus (no template or save field states it)'
+    'the +5%-per-active-slot constant (absent from TIGlobalConfig.json; corroborated to 1.4% as the only '
+      + 'free scale left once every other term is read from the save)',
+    'the 0.9^(n-1) same-category decay constant (absent from TIGlobalConfig.json, and it never engaged in '
+      + 'the measured interval because every category held exactly one pipped slot)'
   ]),
   reproduction: Object.freeze({
-    method: 'predicted per-slot delivery for observer 4712 from cachedYearlyRevenue.Research with an '
-      + 'unchanged pip layout of [0,0,3,3,3,0], and compared against the research actually delivered to '
-      + 'each slot over two consecutive 15.5-day intervals.',
-    // THE LEAD SIGNAL. Stated before `findings` because it is the only
-    // measurement in this block that no confound touches.
-    whatDidReproduce: 'the RELATIVE share between two slots is stable: the project slot delivered '
-      + '2.26216x the tech slot in the first interval and 2.26214x in the second, one part in 10^4 apart. '
-      + 'This is a RELATIVE measure, so it cancels any global change in research income and is the one '
-      + 'figure here that survives the income-drift confound -- which makes it the strongest evidence in '
-      + 'the block, not a footnote. A stable relative share beside an unstable absolute share is the '
-      + 'signature of a changing total income over a constant per-slot allocation ratio. The allocation '
-      + 'has a stable structure; this formula is not it.',
-    // Ordered strongest-first, and the two confounded numbers say so in their
-    // own text. This array is documentation, not the rule registry -- reordering
-    // it changes no explanation the engine emits.
-    findings: Object.freeze([
-      'UNCONFOUNDED, and the real mis-fit: no single (base, ProjectBonus) pair fits all three '
-        + 'pip-carrying slots at once, and two of the formula\'s four terms have no shipped source to '
-        + 'fall back on. This is what the refusal rests on.',
-      'CONFOUNDED by research-income drift: the SAME slot with the SAME pips delivered 1.147x the '
-        + 'prediction over 12/1-12/16/2033 and 0.993x over 12/16/2033-1/1/2034. A per-slot multiplier the '
-        + 'formula treats as constant is not constant -- BUT this is an ABSOLUTE measure '
-        + '(delivered / predicted, predicted derived from the annual research rate), so any change in the '
-        + 'observer\'s research income between the two 15.5-day intervals (a new org, trait, hab module or '
-        + 'nation stat) moves it even under a perfect formula. It is independent of CategoryBonus but NOT '
-        + 'of income drift, so it corroborates rather than pins.',
-      'CONFOUNDED by the unvalidated Xenology CategoryBonus: the two project slots delivered a fixed '
-        + '1.2073 ratio to each other. With their reconstructed category bonuses (Xenology 0.20, Energy '
-        + '0.03) the formula can only produce that ratio with ProjectBonus = -0.209 -- a project PENALTY, '
-        + 'contradicting the term\'s own definition. BUT -0.209 is a CONSEQUENCE of assuming the '
-        + 'reconstructed 0.20, not an independent refutation: for ProjectBonus = 0 to produce the same '
-        + 'ratio the Xenology bonus need only be 1.2073 x 1.03 - 1 = 0.2435, and the reconstruction is '
-        + 'itself unvalidated. If the true bonus is >= 0.2435 this contradiction collapses entirely.'
+    method: 'per-slot delivered research for observer 4712 differenced across two consecutive 15.5-day '
+      + 'intervals with the pip layout [0,0,3,1,3,1] unchanged throughout, against a prediction whose '
+      + 'every term is read from the save (base `cachedYearlyRevenue.Research` 37,735.23/yr, ProjectBonus '
+      + 'from `cachedYearlyRevenue.Projects`, CategoryBonus from templates plus `alienInvestigations`).',
+    // THE LEAD SIGNAL: a ratio that contains no Xenology and no total income,
+    // so it fixes ProjectBonus on its own and cannot be a fit.
+    whatDidReproduce: 'the per-pip ratio of a MilitaryScience PROJECT slot to a LifeScience GLOBAL TECH '
+      + 'slot is 468.82 / 248.6167 = 1.885714 observed against (1 + 0.03 + 0.95) / (1 + 0.05) = 1.885714 '
+      + 'predicted -- agreement to six significant figures, 0.000% error. It contains no Xenology term '
+      + 'and cancels total income entirely, so it fixes ProjectBonus alone, and it agrees with the 0.95 '
+      + 'read straight out of `cachedYearlyRevenue.Projects`. That is what makes this a test and not a fit.',
+    perSlotShares: Object.freeze([
+      'slot 2 global tech LifeScience 3 pips: predicted share 0.220588, observed 0.220349, +0.109%',
+      'slot 3 project MilitaryScience 1 pip: predicted share 0.138655, observed 0.138716, -0.044%',
+      'slot 4 project Xenology 3 pips: predicted share 0.502101, observed 0.502218, -0.023%',
+      'slot 5 project Energy 1 pip: predicted share 0.138655, observed 0.138716, -0.044%'
     ]),
-    confoundedBy: Object.freeze({
-      'the 1.147x / 0.993x swing': 'research-income drift between the two 15.5-day intervals. An absolute '
-        + 'delivered/predicted ratio moves with income even when the per-slot formula is exactly right.',
-      'ProjectBonus = -0.209': 'the unvalidated reconstructed Xenology CategoryBonus of 0.20. The figure is '
-        + 'derived from that assumption; a true Xenology bonus of >= 0.2435 yields ProjectBonus >= 0 and '
-        + 'no contradiction.'
-    }),
-    bottomLine: 'the formula does not reproduce; the residual is partly income drift and partly a real '
-      + 'mis-fit, and the relative-share stability suggests the allocation has a structure this formula '
-      + 'does not capture.',
-    measuredOn: 'ExitSave/Autosave/Autosave2/Autosave3, observer 4712, 2026-08-21'
+    absoluteScale: 'observed / predicted is 0.98461, 0.98612, 0.98591, 0.98612 -- ONE common factor 1.4% '
+      + 'low, not a structural mis-fit. Consistent with income drift inside the interval or a slightly '
+      + 'different elapsed-day convention. It is uniform, so it cancels out of every ratio above.',
+    // Answers, and closes, the question campaign-settings-spec.md used the
+    // first pass's absolute swing to answer.
+    whyTheAbsoluteSwingCannotAnswerThe200Percent: 'a delivered/predicted ratio near 1.0 says only that '
+      + 'the model\'s multipliers explain the delivery. It cannot tell you WHICH multiplier a given '
+      + 'constant factor lives in unless every multiplier in the model is independently known -- and the '
+      + 'first pass\'s prediction carried a FITTED ProjectBonus of -0.209, so a compensating factor of ~2 '
+      + 'was free to hide inside it. The question is answered instead by the ABSOLUTE gain over the '
+      + 'nominal income with every term read rather than fitted: the observer\'s slots delivered 2.1115x '
+      + '`cachedYearlyRevenue.Research` against 2.1420x predicted from the allocation terms alone. A '
+      + 'pre-200% income would have required 4.2840x. `cachedYearlyRevenue.Research` is already '
+      + 'post-`researchSpeedMultiplier`.',
+    bottomLine: 'the formula reproduces every measured slot with no fitted parameter. What it does NOT '
+      + 'license is a duration correction: see `notADurationCorrection`.',
+    // The thing tracker 3b was opened to do, and the reason it must not be done.
+    notADurationCorrection: 'the 2.1115x gain is the WHOLE FACTION\'s throughput summed over four slots. '
+      + 'A duration is about ONE slot, which receives only pipShare x (1 + 5% per pipped slot) x '
+      + '(1 + CategoryBonus + ProjectBonus) -- measured at 0.4658x, 0.2928x, 1.0602x and 0.2928x of the '
+      + 'nominal income, and those four are what sum to 2.1115x. Three of the four are BELOW 1, so the '
+      + 'flat duration is too SHORT for them, not too long; dividing every duration by 2.11 would make '
+      + 'the 1-pip slots 7.2x optimistic instead of 3.4x.',
+    untested: Object.freeze([
+      'the 0.9^(n-1) same-category decay: every category held exactly one pipped slot in interval 1, so '
+        + 'the exponent was 0 everywhere and the term never engaged. Interval 2 corroborates it weakly.',
+      'the 100% ProjectBonus cap: the observer sits at 95%, below it.'
+    ]),
+    measuredOn: 'Autosave3.gz 61cc7c1103742fe47d2984d384a3147a (12/1/2034), Autosave2.gz '
+      + '5294cddfb5906d27bfd59bce9f29ccda (12/16/2034 12:00), Autosave.gz '
+      + '2ef9643051e675026850b23b380f93f3 and ExitSave.gz 5c0d9ef98213c91d8187ae11bf885d57 (1/1/2035); '
+      + 'observer 4712; frozen to disk and MD5-verified before use, 2026-08-21 and re-verified 2026-08-22',
+    // ---- KEPT, NOT DELETED. The first pass's reasoning, marked superseded.
+    supersededFirstPass: Object.freeze({
+      status: 'SUPERSEDED 2026-08-22. Kept because the failure mode is the instructive part. Every '
+        + 'delivered figure it measured reproduces to the integer; only its MODEL was wrong.',
+      claimedMethod: 'predicted per-slot delivery from cachedYearlyRevenue.Research with a pip layout '
+        + 'recorded as [0,0,3,3,3,0] over 12/1-12/16/2033 and 12/16/2033-1/1/2034.',
+      recordKeepingDefect: 'that record does not match the saves it names. All four frozen saves carry '
+        + '`researchWeights` [0,0,3,1,3,1], not [0,0,3,3,3,0], and are dated 12/1/2034 to 1/1/2035, not '
+        + '2033. The 1.147x / 0.993x pair is therefore not reproducible as stated, which is the second '
+        + 'reason it cannot carry the weight campaign-settings-spec.md put on it.',
+      findings: Object.freeze([
+        'claimed UNCONFOUNDED: no single (base, ProjectBonus) pair fits all three pip-carrying slots. '
+          + 'WRONG -- (base = cachedYearlyRevenue.Research, ProjectBonus = 0.95) fits all four to 0.15%. '
+          + 'The pair could not be found because the Xenology CategoryBonus was 0.20 instead of 0.44.',
+        'claimed CONFOUNDED by income drift: the same slot delivered 1.147x the prediction over one '
+          + 'interval and 0.993x over the next. The observer\'s `cachedYearlyRevenue.Research` is '
+          + 'IDENTICAL (37,735.23) at both ends of both intervals, so income drift is not evidenced; the '
+          + 'swing came from the prediction, not the income.',
+        'claimed CONFOUNDED by the reconstructed Xenology bonus: ProjectBonus solved to -0.209, a project '
+          + 'PENALTY. Correct as arithmetic and correctly flagged as suspicious. At the true Xenology '
+          + '0.44 it solves to +0.95, which is exactly what the save states.'
+      ]),
+      whatItAlmostSaw: 'it recorded that "for ProjectBonus = 0 to produce the same ratio the Xenology '
+        + 'bonus need only be 0.2435" and that its reconstruction was unvalidated. That note was pointing '
+        + 'straight at the 24 alien-activity investigations it had not counted.',
+      lesson: '`grep techBonuses` finds every bonus source that is data-driven IN THAT SHAPE, not every '
+        + 'bonus source. Two of five were neither.'
+    })
   }),
-  recommendationRefused: 'no reallocation is recommended. The allocation formula does not reproduce the '
-    + 'observer\'s own measured research delivery: no single (base, ProjectBonus) pair fits all three '
-    + 'pip-carrying slots, and two of its four terms have no shipped source at all. A reallocation '
-    + 'computed from it would be a confident number resting on an unverified model. What IS stable is the '
-    + 'relative share between slots (see `model.reproduction.whatDidReproduce`), which cancels income '
-    + 'drift and says the allocation has a structure this formula does not capture. The current layout '
-    + 'below is measured; the optimum is not offered rather than being offered wrongly.'
+  recommendationRefused: 'no reallocation is recommended, and the reason CHANGED on 2026-08-22. It is no '
+    + 'longer that the formula fails to reproduce -- it reproduces every measured slot to within 0.15% '
+    + 'with zero fitted parameters (see `model.reproduction`). What is missing is different and still '
+    + 'disqualifying: (1) the 0.9^(n-1) same-category decay never engaged in the measured data, so a '
+    + 'recommendation that moves two pips into one category would be extrapolating past the evidence; '
+    + '(2) the +5%-per-pipped-slot constant has no shipped source and is the only free scale left, so a '
+    + 'recommendation that CHANGES the number of pipped slots leans on the one term still unsourced; and '
+    + '(3) a forward delivery model is not a value model -- knowing a slot would receive 12% more says '
+    + 'nothing about whether what it is researching is worth more. The current layout below is measured; '
+    + 'the optimum is not offered rather than being offered wrongly.'
 });
 
 /**

@@ -16,8 +16,7 @@ Last updated 2026-08-22.
 
 | # | doc | state |
 | :-- | :-- | :-- |
-| 3 | `research-category-rate-spec.md` | **bonuses shipped; the duration correction is now the open half.** All five wiki-named bonus sources are baked (`shared/researchCategoryBonus.mjs`), including the two no `techBonuses` sweep can see: alien-activity investigations (a plain `alienInvestigations` integer, +1% Xenology each, which took the observer from a reported +20% to a measured **+44%**) and the ship Mobile Space Science Lab, which is *declared unhandled* because the snapshot carries no per-ship utility-module names. The diminishing-returns curve is implemented per source type above 50%, investigations exempt. **The delivery mechanism now pins**: with `ProjectBonus` read from `cachedYearlyRevenue.Projects` (21 → +95%) the wiki allocation formula reproduces all four measured slots to within 0.15% with zero free parameters. Durations are deliberately still flat and labelled, because the pin shows the flat rate's dominant error is the whole allocation multiplier (**2.11×**), not the category term |
-| 3b | **price durations through the pinned allocation model** | **not started, and it moves every duration in three endpoints.** `monthsAtIncome` is `cost / monthlyIncome`, but `cachedYearlyRevenue.Research` is the *pre-multiplier* base: over the measured interval the observer's slots received 2.11× it. Every stated duration is therefore an upper bound by roughly that factor. **This contradicts the "research needs no adjustment" verdict in `campaign-settings-spec.md`, which rested on delivered/predicted ratios of 1.147× / 0.993×; the two measurements must be reconciled before either is acted on.** Needs a before/after capture across both modes, since it changes every figure the advisor prints |
+| 3 | `research-category-rate-spec.md` | **bonuses shipped; the duration correction is now the open half.** All five wiki-named bonus sources are baked (`shared/researchCategoryBonus.mjs`), including the two no `techBonuses` sweep can see: alien-activity investigations (a plain `alienInvestigations` integer, +1% Xenology each, which took the observer from a reported +20% to a measured **+44%**) and the ship Mobile Space Science Lab, which is *declared unhandled* because the snapshot carries no per-ship utility-module names. The diminishing-returns curve is implemented per source type above 50%, investigations exempt. **The delivery mechanism now pins**: with `ProjectBonus` read from `cachedYearlyRevenue.Projects` (21 → +95%) the wiki allocation formula reproduces all four measured slots to within 0.15% with zero free parameters. Durations are deliberately still flat and labelled — see §3b, which settled *why*: the per-slot allocation factor measured 0.29×–1.06× of the nominal income, a 3.6× spread no category-term correction touches and no single scalar closes |
 | 3d | `mining-tech-bonus-spec.md` | **not started, and it is gated on one measurement.** Thirteen projects raise mine output (`Effect_MiningWaterBonus` and four siblings at **×1.15**, `Effect_SpaceMiningBonus5/10` at an additive 0.05/0.1 — two shapes that must not be conflated). The observer holds exactly one, `Project_ThermalMiningTechniques`, water ×1.15. **Nothing in the dashboard applies any of them**: `scoreMiningSiteCandidate`, `getMiningRateSummary` and the owned-hab output feeding directive Advise economics all use raw `site[key] × 30`. Whether that is wrong turns on whether the save's per-site rates are pre- or post-bonus, which **is not yet known** — two measurement attempts failed and are recorded in the spec so they are not repeated. Water is the only bonused resource and has nearly the lowest income ratio (1.033) against unbonused metals (1.094) and fissiles (1.219), which points to post-bonus but does not prove it. If post-bonus, applying ×1.15 would **overstate water by 15%** across three surfaces. `monthlyIncome` is a measured 30-day ledger and must not be touched either way |
 | 4 | `fleet-engagement-spec.md` | **not started.** Per-fleet hull-count estimates in THREAT, reachability-gated. Note the existing tiers top out at three ships while 26 of 57 fleets are larger and 3 exceed the whole 24-hull sweep |
 | 5 | `repo-structure-spec.md` | **not started.** Separate the 2025 report tool from the dashboard. Approved, never assigned |
@@ -34,6 +33,12 @@ Last updated 2026-08-22.
 - **A worktree has no `config.json`.** It is gitignored, so every save-backed test errors in
   a fresh agent worktree until it is copied across from the main checkout. Harmless once
   known, but it presents as a wall of failures unrelated to the change under test.
+- **`shared/markdownExports.mjs:1485` still tells every agent to "treat every stated duration
+  as an upper bound".** The one surviving instance of the claim §3b withdrew — the war room's
+  research-category-bonuses footnote. It was left alone because another agent held the file;
+  it needs the same correction the other six sites got, and the replacement wording is in
+  `CATEGORY_RATE_MODEL.durationsStillFlatReason`. This is the AI-facing surface, so it is the
+  one that matters most.
 
 ## Shipped
 
@@ -76,6 +81,25 @@ would have introduced errors.
   figures. Evidence in `campaign-settings-spec.md`.
 - **Engineers (+95%).** Already inside measured research income. Applying separately would
   double-count.
+- **Pricing durations through the allocation model** (was open item 3b, closed 2026-08-22
+  in `a3f0e21`). The contradiction between `research-category-rate-spec.md` and
+  `campaign-settings-spec.md` is settled, and **no duration moved**. Both measurements were
+  real; the *inference* from one was a units error. The 2.11× is the observer's four slots
+  delivering `cachedYearlyRevenue.Research` **summed**, while a duration concerns one slot —
+  and the four slots measured 0.4658×, 0.2928×, 1.0602× and 0.2928×, which sum to that
+  2.11×. Three are **below 1**, so the flat figure is already 2.15×–3.42× *optimistic*
+  there rather than conservative; dividing by 2.11 would have taken the 1-pip slots to 7.2×
+  optimistic, in the wrong direction. `campaign-settings-spec.md` reached the right verdict
+  by invalid reasoning — a delivered/predicted ratio near 1.0 cannot detect a missing ×2
+  when the prediction carries a fitted `ProjectBonus` of −0.209 — and its recorded pip
+  layout did not match the saves it named. Replacement evidence: measured gain **2.1115×**
+  against **2.1420×** predicted from terms all read from the save, where a pre-200% income
+  would have needed 4.2840×. A project pip delivers **1.885714×** a global-tech pip against
+  `1.98 / 1.05 = 1.885714` predicted, to six figures — a campaign-wide multiplier cannot
+  produce a ratio *between slot kinds*, which is what makes this decisive.
+  **Recorded, not built:** the fastest-achievable duration (all pips on one slot) is a real
+  lower bound at `1.05 × (1 + Category + Project)`, but it is category-dependent (1.1025×
+  to 2.5095×) and needs a counterfactual allocation per candidate.
 
 ## Archive
 
