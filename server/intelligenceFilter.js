@@ -337,7 +337,25 @@ class IntelligenceFilter {
         // Obsolete markers are the observer's own internal decisions, not enemy intel.
         // Redacted to null (never []) for enemy factions in player mode.
         obsoleteShipDesigns: isEnhanced || isObserver ? f.obsoleteShipDesigns : null,
-        obsoletedShipParts: isEnhanced || isObserver ? f.obsoletedShipParts : null
+        obsoletedShipParts: isEnhanced || isObserver ? f.obsoletedShipParts : null,
+        // Which cap-raising projects a RIVAL has completed. `completedProjects`
+        // above is already truncated to five for a rival, so publishing the
+        // full ControlPointMaintenance list would leak past that truncation --
+        // and it is the project half of their control-point cap, which is the
+        // whole quantity player mode is supposed to withhold.
+        //
+        // Null, never []. An empty list reads as "this rival has completed no
+        // cap projects", which is a confident claim from no evidence and would
+        // make their cap look smaller than it is.
+        controlPointMaintenanceEffects: isEnhanced || isObserver ? f.controlPointMaintenanceEffects : null,
+        // A rival's own recorded cap overage states their cap position directly,
+        // which is exactly what the masked councilor attributes exist to keep
+        // out of player mode. Null, never 0 -- a rival reported at 0 overage
+        // reads as comfortably within a cap nobody measured.
+        recordedControlPointCapOverage: isEnhanced || isObserver ? f.recordedControlPointCapOverage : null,
+        recordedControlPointCapOverageSamples: isEnhanced || isObserver
+          ? f.recordedControlPointCapOverageSamples
+          : null
       };
     });
 
@@ -734,6 +752,21 @@ class IntelligenceFilter {
       }
       if (Array.isArray(faction.obsoletedShipParts)) {
         factionLeaks.push(`${faction.ID}:obsoletedShipParts[${faction.obsoletedShipParts.length}]`);
+      }
+      // The two halves of a rival's control-point cap position. The effect list
+      // is their completed cap projects (past the five-project truncation that
+      // `completedProjects` already applies), and the recorded overage states
+      // their cap position outright.
+      if (Array.isArray(faction.controlPointMaintenanceEffects)) {
+        factionLeaks.push(
+          `${faction.ID}:controlPointMaintenanceEffects[${faction.controlPointMaintenanceEffects.length}]`
+        );
+      }
+      if (this.toFiniteOrNull(faction.recordedControlPointCapOverage) !== null) {
+        factionLeaks.push(`${faction.ID}:recordedControlPointCapOverage`);
+      }
+      if (this.toFiniteOrNull(faction.recordedControlPointCapOverageSamples) !== null) {
+        factionLeaks.push(`${faction.ID}:recordedControlPointCapOverageSamples`);
       }
     }
     if (factionLeaks.length) {

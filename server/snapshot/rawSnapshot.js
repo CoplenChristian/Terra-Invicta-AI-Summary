@@ -21,6 +21,7 @@ const {
 } = require('../../shared/campaignSettings.mjs');
 const lookups = require('./lookups');
 const space = require('./space');
+const { firstNumericOrNull } = require('./numbers');
 const { buildNations } = require('./nations');
 const { buildCouncilors } = require('./councilors');
 const { buildGlobalResearchSlots, buildTechTree } = require('./research');
@@ -55,8 +56,10 @@ function buildRawSnapshot(saveData) {
   const gamestates = saveData.gamestates || {};
   const raw = lookups.readRawCollections(gamestates);
   const {
+    meta,
     rawFactions, rawNations, rawControlPoints, rawCouncilors, rawHabs, rawHabModules,
-    rawHabSites, rawFleets, rawAlienFacilities, rawXenoforming, rawGlobalResearch
+    rawHabSites, rawFleets, rawAlienFacilities, rawXenoforming, rawGlobalResearch,
+    rawGlobalValues, rawEffects
   } = raw;
 
   const factionIntelligence = factionsModule.buildFactionIntelligence(rawFactions);
@@ -124,9 +127,16 @@ function buildRawSnapshot(saveData) {
 
   const factionRelationships = factionsModule.buildFactionRelationships(rawFactions);
 
+  // The game's own per-faction `ControlPointMaintenance` effect lists, indexed
+  // by faction id. Authoritative for the cap contribution of completed work --
+  // see the note in lookups.readRawCollections.
+  const controlPointMaintenanceEffectsByFaction =
+    factionsModule.buildControlPointMaintenanceEffects(rawEffects);
+
   const factions = factionsModule.buildFactions(rawFactions, {
     councilors, habs, fleets, nations, controlPointsById, shipyardCountByFaction,
     shipyardQueues, habResearchByFaction, scoreWeights, scoreNormalizers,
+    controlPointMaintenanceEffectsByFaction,
     gameTimeString: saveData.gameTimeString
   });
 
@@ -145,6 +155,19 @@ function buildRawSnapshot(saveData) {
   // saveParser bakes this; a hand-built saveData that predates the field falls
   // back to the explicit unavailable block rather than to an invented default.
   const campaignSettings = saveData.campaignSettings || CAMPAIGN_SETTINGS_UNAVAILABLE;
+
+  // `TIGlobalValuesState.controlPointMaintenanceFreebies` -- half of the base
+  // control-point cap, and the only place the game stores it. The other half is
+  // `campaignSettings.controlPointMaintenanceFreebieBonus`, already parsed.
+  //
+  // Absent stays null. A base cap read as 0 would render every faction as
+  // hundreds of control points over their cap; read as "no limit" it would
+  // render the constraint away entirely. Both are worse than unknown, so
+  // shared/controlPointCap.mjs refuses to compose a cap without it.
+  const rawGlobalValuesRow = rawGlobalValues[0] || {};
+  const controlPointMaintenanceFreebies = firstNumericOrNull(
+    rawGlobalValuesRow.controlPointMaintenanceFreebies
+  );
 
   return {
     miningScarcityWeights: analysisConfig.miningScarcityWeights,
@@ -169,6 +192,21 @@ function buildRawSnapshot(saveData) {
       // consumer falls back to the bare label, so behaviour with the settings
       // absent is unchanged.
       campaignSettings,
+      // `TIMetadataState.playerFactionName` -- which faction the human is
+      // playing. Load-bearing for the control-point cap, because the campaign
+      // options set a control-point capacity bonus for every faction AND a
+      // separate one that only AI factions receive. Without knowing which
+      // faction is the human's, the AI-only term cannot be applied to the right
+      // factions, so shared/controlPointCap.mjs leaves it out and says so
+      // rather than applying it to everyone or to no one.
+      //
+      // Absent stays null; an empty string is not a faction name.
+      playerFactionName: typeof meta?.playerFactionName === 'string' && meta.playerFactionName.trim() !== ''
+        ? meta.playerFactionName.trim()
+        : null,
+      // See the note where this is read: half of the base control-point cap,
+      // and null when the save does not carry it.
+      controlPointMaintenanceFreebies,
       // The label every surface renders. It is the bare difficulty for a stock
       // campaign and names the customisation for a custom one, so no reader
       // sees "Normal" on a campaign running four rates at 200%.

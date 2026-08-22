@@ -144,6 +144,16 @@ function readRawCollections(gamestates) {
     rawAlienFacilities: getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIRegionAlienFacilityState'),
     rawXenoforming: getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIRegionXenoformingState'),
     rawGlobalResearch: getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIGlobalResearchState'),
+    // The campaign-start globals. Read for `controlPointMaintenanceFreebies`,
+    // which is half the base control-point cap and exists nowhere else -- no
+    // template carries a base cap at all (checked across all 60 template files
+    // 2026-08-22; TIGlobalConfig.json is a 4.7 KB UI-canvas list).
+    rawGlobalValues: getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIGlobalValuesState'),
+    // The game's own per-faction active-effect lists, keyed by effect context.
+    // Authoritative for `ControlPointMaintenance` in a way a completed-project
+    // sweep is not: the Aliens hold four such effects from none of the 32
+    // projects that grant them (measured 2026-08-22).
+    rawEffects: getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIEffectsState'),
     rawMissions: getCollection(gamestates, 'PavonisInteractive.TerraInvicta.TIMissionState')
   };
 }
@@ -321,6 +331,14 @@ function buildControlPoints(rawControlPoints, factionsById) {
         // nation's output but the owning faction stops receiving it, so the
         // resource split has to know the difference.
         benefitsDisabled: typeof cp.benefitsDisabled === 'boolean' ? cp.benefitsDisabled : null,
+        // A crackdown'd control point also costs its owner NO control-point
+        // maintenance (wiki Nations, "Cost of Control Points", raw wikitext read
+        // 2026-08-22), so shared/controlPointCap.mjs needs to tell it apart from
+        // a merely benefits-disabled one. The save stores an expiry date rather
+        // than a flag; an ABSENT expiry is "not under crackdown", which is a
+        // measurement, so this stays a boolean rather than a nullable one.
+        crackdown: cp.crackdownExpiration !== null && cp.crackdownExpiration !== undefined,
+        crackdownExpiration: cp.crackdownExpiration || null,
         // Defend Interests is stateful: keep the save's ward and expiry
         // so the directive engine can distinguish an actionable gap from a
         // holding that is already protected. The filter decides who may
