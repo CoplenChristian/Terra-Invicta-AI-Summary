@@ -2,7 +2,33 @@
 
 Separate the original report-generation tool from the dashboard it grew into.
 
-Written 2026-08-21 against `6551da0`.
+Written 2026-08-21 against `6551da0`. **Shipped 2026-08-22; archived.**
+
+> **Three measurements below were wrong and are kept as written.** Re-checked
+> against the tree at `960207f` before implementing:
+>
+> 1. **`screenshots/` is not the 2025 tool's output.** `git log --diff-filter=A`
+>    dates it **2026-08-19**, and it holds dashboard QA captures
+>    (`qa-mission-control-map.png`, `v2-review/01-player-desktop.png`) cited by
+>    `archive/opencode-feedback-8-18-2026.md`. It stayed at the root; only
+>    `Ship_Info/`, `csv/` and `Again_Save/` (all 2025-11-22) moved.
+> 2. **"Nothing current references the original tool" measured only inbound
+>    references.** Outbound, 7 of the 12 scripts `Import-Module`
+>    **`TerraInvicta.Common.psm1`** — created **2026-08-20**, shared with the five
+>    root `parse_*.ps1` parsers and covered by `tests/powershell_common.test.js` —
+>    and every one of them calls `Get-TIConfig -BasePath`, which resolves
+>    `config/defaults.json`, `config/config.schema.json` and the ignored root
+>    `config.json`. The acceptance criterion "nothing inside references the
+>    dashboard" is therefore **not achievable** and was not met: the scripts now
+>    anchor the module and the config on their parent directory instead.
+> 3. **Two constraints were already satisfied.** `backups/`, `logs/`, `Again` and
+>    `*.gz` were already in `.gitignore`, and `CLAUDE.md` cites no path that moved.
+>    What `.gitignore` did need was its *anchored* generated-output patterns
+>    re-pointed at `md-generation-reports/`.
+>
+> Also deliberately not done: the four root `test_browser*.js` scripts and the five
+> `paths.*SubDir` config keys. Both are recorded under "Small follow-ups" in
+> `docs/README.md` rather than folded into a structural move.
 
 ---
 

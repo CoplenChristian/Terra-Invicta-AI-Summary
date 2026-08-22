@@ -162,10 +162,10 @@ class TemplateLoader {
     return null;
   }
 
-  // A directory that merely exists is not a usable templates directory. The
-  // repo's Ship_Info/raw_json, for example, has no tech/project/effect
-  // templates -- selecting it produced a present-but-empty tech tree, so tech
-  // endpoints returned empty results instead of the documented unavailable
+  // A directory that merely exists is not a usable templates directory.
+  // md-generation-reports/Ship_Info/raw_json, for example, has no tech/project/
+  // effect templates -- selecting it produced a present-but-empty tech tree, so
+  // tech endpoints returned empty results instead of the documented unavailable
   // response, and template-backed tests failed on a clean checkout.
   isUsableTemplatesDir(dir) {
     if (!fs.existsSync(dir)) return false;

@@ -5,8 +5,12 @@ param(
 )
 
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-Import-Module (Join-Path $scriptPath 'TerraInvicta.Common.psm1') -Force
-$config = Get-TIConfig -BasePath $scriptPath
+# See ti_data_tools.ps1: the shared module and config/ stayed at the repository
+# root when this tool moved into md-generation-reports/, so they anchor on
+# $repoRoot. $workDir (the tool's own output root) follows the scripts.
+$repoRoot = Split-Path -Parent $scriptPath
+Import-Module (Join-Path $repoRoot 'TerraInvicta.Common.psm1') -Force
+$config = Get-TIConfig -BasePath $repoRoot
 $workDir = if ([IO.Path]::IsPathRooted($config.paths.workDir)) {
     $config.paths.workDir
 } else {

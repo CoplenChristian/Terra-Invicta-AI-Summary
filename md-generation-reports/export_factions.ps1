@@ -7,9 +7,13 @@ param(
 
 # Load configuration
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$commonModulePath = Join-Path $scriptPath "TerraInvicta.Common.psm1"
+# See ti_data_tools.ps1: the shared module and config/ stayed at the repository
+# root when this tool moved into md-generation-reports/, so they anchor on
+# $repoRoot. $WorkDir (the tool's own output root) follows the scripts.
+$repoRoot = Split-Path -Parent $scriptPath
+$commonModulePath = Join-Path $repoRoot "TerraInvicta.Common.psm1"
 Import-Module -Name $commonModulePath -Force
-$config = Get-TIConfig -BasePath $scriptPath
+$config = Get-TIConfig -BasePath $repoRoot
 
 if ([string]::IsNullOrEmpty($WorkDir)) { $WorkDir = $config.WorkDir }
 if (-not [IO.Path]::IsPathRooted($WorkDir)) { $WorkDir = Join-Path $scriptPath $WorkDir }
@@ -27,12 +31,12 @@ if ($Latest -and $SaveNumber -gt 0) {
 # default and allow -SaveNumber for a deliberate historical lookup.
 $requestedSave = $SavePath
 $lookupSave = if ($requestedSave -and -not [IO.Path]::IsPathRooted($requestedSave)) {
-    Join-Path $scriptPath $requestedSave
+    Join-Path $repoRoot $requestedSave
 } else { $requestedSave }
 if ($lookupSave -and (Test-Path -LiteralPath $lookupSave -PathType Leaf)) {
     $selectedSave = Get-Item -LiteralPath $lookupSave
 } else {
-    $saveFolder = Resolve-TISaveFolder -ConfiguredSavePath $config.paths.savePath -RequestedSaveFolder $requestedSave -BasePath $scriptPath
+    $saveFolder = Resolve-TISaveFolder -ConfiguredSavePath $config.paths.savePath -RequestedSaveFolder $requestedSave -BasePath $repoRoot
     $saveFiles = Get-TISaveFiles -Folder $saveFolder
     $selectedSave = if ($SaveNumber -gt 0) {
         Select-TISaveFile -Files $saveFiles -RequestedNumber $SaveNumber

@@ -19,11 +19,11 @@ If this conversation context is gone, this file plus `TI_DATA_TOOLS.md` and `ti_
 
 ### Main entry points
 
-- `Terra-Invicta-AI-Summary/ti_data_tools.ps1` — toolbox functions.
-- `Terra-Invicta-AI-Summary/TI_DATA_TOOLS.md` — user‑facing usage guide.
-- `Terra-Invicta-AI-Summary/TI_DATA_DEV.md` — this file (developer internals).
-- `Terra-Invicta-AI-Summary/summarize_boost_income.ps1` — standalone Boost income helper.
-- `Terra-Invicta-AI-Summary/Again_Save/summary.md` — template summary pointing at the toolbox and docs.
+- `Terra-Invicta-AI-Summary/md-generation-reports/ti_data_tools.ps1` — toolbox functions.
+- `Terra-Invicta-AI-Summary/md-generation-reports/TI_DATA_TOOLS.md` — user‑facing usage guide.
+- `Terra-Invicta-AI-Summary/md-generation-reports/TI_DATA_DEV.md` — this file (developer internals).
+- `Terra-Invicta-AI-Summary/md-generation-reports/summarize_boost_income.ps1` — standalone Boost income helper.
+- `Terra-Invicta-AI-Summary/md-generation-reports/Again_Save/summary.md` — template summary pointing at the toolbox and docs.
 
 ---
 
@@ -783,7 +783,7 @@ HabSiteCount, WaterPerDay, VolatilesPerDay, MetalsPerDay, NoblesPerDay, Fissiles
 
 ## 6. Boost Helper Script (`summarize_boost_income.ps1`)
 
-**Location:** `Terra-Invicta-AI-Summary/summarize_boost_income.ps1`
+**Location:** `Terra-Invicta-AI-Summary/md-generation-reports/summarize_boost_income.ps1`
 
 **Purpose:**
 
@@ -805,7 +805,7 @@ When modifying or extending `ti_data_tools.ps1`:
 1. **Refresh exports**  
 
    ```powershell
-   Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
+   Set-Location F:\Windsurf\Terra-Invicta-AI-Summary\md-generation-reports
    .\export_factions.ps1
    ```
 
