@@ -24,6 +24,7 @@ const path = require('path');
 const saveParser = require('../server/saveParser');
 const {
   resolveCampaignElapsed,
+  resolveCampaignYear,
   resolveAlienProgressionSpeed,
   CAMPAIGN_AGE_SOURCES,
   DAYS_PER_CAMPAIGN_YEAR
@@ -141,6 +142,37 @@ test('DAYS_PER_CAMPAIGN_YEAR is the Julian year the conversion actually uses', (
     resolveCampaignElapsed({ daysInCampaign: 365.25 }, 2035).yearsElapsed,
     1
   );
+});
+
+// ---------------------------------------------------------------------------
+// Campaign year.
+//
+// The parse `resolveCampaignElapsed`'s two start-year fallbacks depend on. It
+// was hand-copied in server/intelligenceFilter.js and shared/strategicSnapshot
+// .mjs, and shared/intel/alienThreat.mjs would have been the third copy.
+// ---------------------------------------------------------------------------
+
+test('the campaign year is parsed from the save\'s own date string', () => {
+  // The live save's format, verbatim.
+  assert.strictEqual(resolveCampaignYear({ gameTimeString: '1/1/2035 12:00:00 AM' }), 2035);
+  assert.strictEqual(resolveCampaignYear({ gameTimeString: '12/16/2034 12:00:00 PM' }), 2034);
+});
+
+test('an unparseable date is null, never a year of 0', () => {
+  // `Number(undefined)` is NaN and `Number('')` is 0. A year of 0 subtracted
+  // from a start year of 2026 reports a campaign that has run for MINUS 2026
+  // years; the two callers that used to parse this by hand each carried their
+  // own finite-guard for exactly that.
+  for (const bad of [undefined, null, '', '   ', 'not a date', '2035-01-01T00:00:00Z', {}, []]) {
+    assert.strictEqual(
+      resolveCampaignYear({ gameTimeString: bad }),
+      null,
+      `gameTimeString ${JSON.stringify(bad)} must not resolve to a year`
+    );
+  }
+  assert.strictEqual(resolveCampaignYear({}), null);
+  assert.strictEqual(resolveCampaignYear(null), null);
+  assert.strictEqual(resolveCampaignYear(), null);
 });
 
 // ---------------------------------------------------------------------------

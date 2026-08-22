@@ -1,7 +1,7 @@
 // shared/intel/alienThreat.mjs
 //
-// Purpose: the alien-threat projection — hate math, floor and retaliation —
-//   with its own deliberate mode re-check.
+// Purpose: the alien-threat projection — hate math, floor, total-war gate and
+//   retaliation — with its own deliberate mode re-check.
 //
 // The hate math endpoint. Kept in its own module because its mode re-check is
 // a deliberate second line of defence over `server/intelligenceFilter.js` --
@@ -11,6 +11,11 @@
 import { DEFAULT_OBSERVER_FACTION_ID } from '../constants.mjs';
 import { toFiniteNumber as toFinite, resolveObserverFaction } from '../util.mjs';
 import { buildAlienHateEconomics, ALIEN_HATE_WAR_THRESHOLD } from '../alienHateEconomics.mjs';
+import {
+  resolveCampaignElapsed,
+  resolveCampaignYear,
+  resolveAlienProgressionSpeed
+} from '../campaignElapsed.mjs';
 
 /**
  * 7. Alien Threat: Precise hate math, minimum-hate floor, and retaliation mechanics.
@@ -81,6 +86,26 @@ export const alienThreatResource = (snapshot, observerId = DEFAULT_OBSERVER_FACT
       : 'measured: raw save assessedAlienHateOfMe (unfiltered snapshot)';
   }
 
+  // ---------------------------------------------------------------------
+  // Total war needs elapsed campaign time, and this endpoint used not to
+  // supply it.
+  //
+  // `buildTotalWarState` reports 'unavailable' rather than a false 'safe' when
+  // elapsed years are missing, so the omission never published a WRONG verdict
+  // -- it published no verdict at all, on the one endpoint whose entire job is
+  // the alien threat. The snapshot, the briefing and /latest-war-room.md all
+  // carried the gate; /api/intel/alien-threat carried the hate figures the
+  // gate is ultimately FOR and stopped there.
+  //
+  // Resolved through shared/campaignElapsed.mjs, not re-derived here: that
+  // module exists so the live snapshot, the published history and this
+  // endpoint cannot report three different campaign ages. The verdict itself
+  // is still computed exactly once, by buildTotalWarState, from inputs this
+  // function only forwards.
+  // ---------------------------------------------------------------------
+  const elapsed = resolveCampaignElapsed(snapshot.metadata, resolveCampaignYear(snapshot.metadata));
+  const alienProgressionSpeed = resolveAlienProgressionSpeed(snapshot.metadata);
+
   // Do NOT reimplement the hate floor here. buildAlienHateEconomics is the
   // single source of truth and is what the dashboard card renders: difficulty
   // multipliers are 0.05/0.30/0.60/1.00, and each completed concealment
@@ -90,7 +115,9 @@ export const alienThreatResource = (snapshot, observerId = DEFAULT_OBSERVER_FACT
   const economics = buildAlienHateEconomics({
     observer: { ...observer, assessedAlienHateOfMe: resolvedHate },
     difficulty,
-    mode: 'omniscient'
+    mode: 'omniscient',
+    yearsElapsed: elapsed.yearsElapsed,
+    alienProgressionSpeed
   });
 
   const round1 = (value) => (value === null ? null : Number(Number(value).toFixed(1)));
@@ -119,6 +146,27 @@ export const alienThreatResource = (snapshot, observerId = DEFAULT_OBSERVER_FACT
   const alienInvestigationCount = Array.isArray(investigations)
     ? investigations.length
     : Number.isFinite(Number(investigations)) ? Number(investigations) : null;
+
+  // The gate, verbatim from buildTotalWarState. Deliberately NOT rounded and
+  // NOT reshaped: this object has to be the one /api/snapshot,
+  // /api/v2/briefing and /latest-war-room.md already publish for the same save
+  // and mode, and re-rounding `hateRemaining` here would make it merely
+  // similar. Redaction is already handled upstream -- `resolvedHate` is what
+  // fed the economics -- so player mode arrives here as 'safe_hate_unknown'
+  // with a null `hateRemaining`, never as a confident 'safe'.
+  const totalWar = economics.totalWar;
+  const totalWarAvailable = totalWar.state !== 'unavailable';
+  // Which input is missing, read off the state object rather than guessed at:
+  // buildTotalWarState nulls `yearsThreshold` when it cannot key the
+  // difficulty, and `yearsElapsed` when the save carries no campaign age.
+  const gateGaps = [];
+  if (totalWar.yearsElapsed === null) gateGaps.push('elapsed campaign time');
+  if (totalWar.yearsThreshold === null) gateGaps.push('a difficulty to key the year gate against');
+  const totalWarSource = totalWarAvailable
+    ? elapsed.sourceText
+    : `unavailable: the total-war gate cannot be evaluated without ${
+      gateGaps.length ? gateGaps.join(' and ') : 'its inputs'
+    }`;
 
   // What the player legitimately knows about alien hate is the in-game 5-pip
   // estimate meter, which the intelligence filter already builds on
@@ -152,6 +200,23 @@ export const alienThreatResource = (snapshot, observerId = DEFAULT_OBSERVER_FACT
     warThreshold: ALIEN_HATE_WAR_THRESHOLD,
     minimumHateMCThreshold: economics.mcWarFloor === null ? null : Math.floor(economics.mcWarFloor),
     calculation: economics.formula.text,
+    // The 200-hate / N-year total-war gate. Both halves, plus the ceiling hate
+    // grows towards. Byte-identical to `alienHateEconomics.totalWar` on
+    // /api/snapshot for the same save and mode -- one verdict, one computation,
+    // several surfaces.
+    totalWar,
+    // 'available' | 'unavailable'. A gate that cannot be evaluated says so;
+    // it never degrades into 'safe', which is the reassuring direction to be
+    // wrong in on a threat endpoint.
+    totalWarStatus: totalWarAvailable ? 'available' : 'unavailable',
+    // Where the elapsed campaign time came from, or which input is missing.
+    // Same sentence `alienHateEconomics.yearsElapsedSource` carries.
+    totalWarSource,
+    // Provenance for the campaign age, under the names the snapshot's own
+    // economics block uses so the two surfaces read alike:
+    // 'days-in-campaign' | 'start-year' | 'assumed' | 'unavailable'.
+    campaignAgeBasis: elapsed.source,
+    daysInCampaign: elapsed.daysInCampaign,
     // Hate above the floor is not automatically recoverable. The aliens only
     // vent hate when they destroy an asset AND all of the following hold.
     venting: {

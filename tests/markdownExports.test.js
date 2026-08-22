@@ -197,6 +197,131 @@ test('threats report distinguishes unobserved space from absence of threats', ()
 });
 
 // ---------------------------------------------------------------------------
+// 4b. THE ALIEN TOTAL WAR GATE ON THE TACTICAL DOCUMENT
+//
+// /latest-threats.md reports contacts inbound within 365 days. On the live
+// save the total-war YEAR gate is 1.09 years -- roughly 398 days -- away, so a
+// reader planning that window is planning inside the window the gate opens in,
+// and the document said nothing about it. /latest-war-room.md §1 keeps the
+// derivation; this is one line.
+// ---------------------------------------------------------------------------
+const gateSnapshot = (totalWar, extra = {}) => ({
+  metadata: { gameTimeString: '1/1/2035 12:00:00 AM', difficulty: 'Normal' },
+  observerFactionId: OBSERVER_ID,
+  mode: 'player',
+  factions: [{ ID: OBSERVER_ID, displayName: 'the Initiative', resources: {}, monthlyNet: {} }],
+  habs: [],
+  fleets: [],
+  shipDesigns: [],
+  habModules: [],
+  shipyardStations: [],
+  shipyardQueues: [],
+  capabilities: { deepSkywatch: true, skywatch: true },
+  alienIntelligenceStage: { operations: { active: true, status: 'ACTIVE' } },
+  alienHateEconomics: { applicable: true, totalWar, ...extra }
+});
+
+test('the tactical threats document carries the alien total-war gate', () => {
+  // Live-save figures, read off the snapshot's own block: 10-year gate at 200%
+  // Alien Progression Speed, 8.91 years elapsed, 1.09 remaining.
+  const md = renderThreatsMarkdown(gateSnapshot({
+    state: 'safe',
+    hateThreshold: 200,
+    yearsThreshold: 10,
+    yearsElapsed: 8.91,
+    hateRemaining: 157.13747,
+    yearsRemaining: 1.09,
+    maximumAlienHate: 2782,
+    progressionSpeedAssumed: false,
+    alienProgressionSpeed: 2
+  }));
+
+  assert.match(md, /\*\*Alien Total War Gate:\*\* SAFE — 1\.09 yrs to the year gate/);
+  assert.match(md, /10\.0 yr gate, 2\.00× progression/);
+  assert.match(md, /hate distance 157\.1/);
+  assert.match(md, /derivation in \/latest-war-room\.md §1/);
+});
+
+test('a redacted hate half leaves the year gate readable and never fabricates a distance', () => {
+  const md = renderThreatsMarkdown(gateSnapshot({
+    state: 'safe_hate_unknown',
+    hateThreshold: 200,
+    yearsThreshold: 10,
+    yearsElapsed: 8.91,
+    hateRemaining: null,
+    yearsRemaining: 1.09,
+    maximumAlienHate: 2782,
+    progressionSpeedAssumed: false,
+    alienProgressionSpeed: 2
+  }));
+
+  assert.match(md, /SAFE_HATE_UNKNOWN — 1\.09 yrs to the year gate/);
+  // Number(null) is 0, so the failure mode to pin is "hate distance 0.0" --
+  // which reads as total war being one point of hate away.
+  assert.match(md, /hate distance UNAVAILABLE/);
+  assert.ok(!/hate distance 0/.test(md), 'a redacted hate distance must not render as 0');
+});
+
+test('a snapshot with no gate says UNAVAILABLE, never safe', () => {
+  // The committed fixtures were derived before the gate was computed, which is
+  // exactly the shape of a snapshot published by an older publisher.
+  for (const fixturePath of [PLAYER_FIXTURE_PATH, OMNI_FIXTURE_PATH]) {
+    const snap = loadFixture(fixturePath);
+    assert.strictEqual(
+      snap.alienHateEconomics?.totalWar,
+      undefined,
+      'fixture precondition: this snapshot predates the total-war gate'
+    );
+    const md = renderThreatsMarkdown(snap);
+    assert.match(md, /\*\*Alien Total War Gate:\*\* UNAVAILABLE — this snapshot carries no total-war gate/);
+    assert.ok(!/Alien Total War Gate:\*\* SAFE/.test(md), 'an absent gate must not read as safe');
+  }
+});
+
+test('the gate is reported NOT APPLICABLE for an exempt faction', () => {
+  // Servants and Protectorate are exempt from the alien hate model entirely;
+  // showing them a year countdown would be an invented threat.
+  const snap = gateSnapshot(null);
+  snap.alienHateEconomics = { applicable: false, totalWar: null };
+  assert.match(renderThreatsMarkdown(snap), /\*\*Alien Total War Gate:\*\* NOT APPLICABLE to /);
+});
+
+test('the threats and war-room documents report one gate, not two', () => {
+  // Both renderers read `alienHateEconomics.totalWar`, so they cannot disagree
+  // on a value -- this pins that they are in fact both reading it, and that
+  // the tactical line agrees with the strategic block on the same snapshot.
+  const totalWar = {
+    state: 'safe_hate_unknown',
+    hateThreshold: 200,
+    yearsThreshold: 10,
+    yearsElapsed: 8.91,
+    hateRemaining: null,
+    yearsRemaining: 1.09,
+    maximumAlienHate: 2782,
+    progressionSpeedAssumed: false,
+    alienProgressionSpeed: 2
+  };
+  const playerSnap = makeMarkdownSnapshot('player');
+  playerSnap.alienHateEconomics = {
+    ...playerSnap.alienHateEconomics,
+    totalWar,
+    yearsElapsedSource: 'measured: save TITimeState.daysInCampaign = 3256 (365.25 days/year)'
+  };
+
+  const threats = renderThreatsMarkdown(playerSnap);
+  const warRoom = renderWarRoomMarkdown(playerSnap);
+
+  assert.ok(threats.includes('**Alien Total War Gate:** SAFE_HATE_UNKNOWN'), 'threats state');
+  assert.ok(warRoom.includes('State: SAFE_HATE_UNKNOWN'), 'war-room state');
+  // The year distance, rendered on both surfaces from the same field.
+  assert.ok(threats.includes('1.09 yrs to the year gate'), 'threats year distance');
+  assert.ok(warRoom.includes('Year Distance: 1.1 yrs'), 'war-room year distance');
+  // Neither document may turn the redacted hate half into a number.
+  assert.ok(threats.includes('hate distance UNAVAILABLE'), 'threats hate distance');
+  assert.ok(warRoom.includes('Hate Distance: UNAVAILABLE'), 'war-room hate distance');
+});
+
+// ---------------------------------------------------------------------------
 // 5. HUMAN-READABLE DESIGN ROLLUPS
 // ---------------------------------------------------------------------------
 test('friendly fleet manifests resolve design IDs to human-readable names', () => {

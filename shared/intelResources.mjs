@@ -32,7 +32,7 @@
 //   intel/miningExpansion.mjs capacity, runways, need-weighted site scoring
 //   intel/theaters.mjs        per-body posture and the single-body briefing
 //   intel/mobility.mjs        fleet transfer feasibility
-//   intel/alienThreat.mjs     hate math, floor, retaliation
+//   intel/alienThreat.mjs     hate math, floor, total-war gate, retaliation
 //   intel/delta.mjs           turn-to-turn comparison
 //   intel/propulsion.mjs      research advisor phase 1: delta-V, thrust, refits
 //   intel/militaryValue.mjs   research advisor phase 2: what a gate lets you build
