@@ -2,7 +2,8 @@
  * Drive Explorer Panel
  * --------------------
  * Purpose: renders the DRIVES view — every drive in the catalogue rated against
- * one of the observer's designs, from /api/intel/drive-explorer.
+ * one of the observer's designs, from /api/intel/drive-explorer, and opens the
+ * research path behind a clicked drive from /api/intel/tech-path.
  *
  * THE ONE RULE THIS PANEL EXISTS TO ENFORCE
  * -----------------------------------------
@@ -373,10 +374,18 @@
       ? `<span class="de-caveat de-caveat--fitted" title="The drive currently fitted to this design. Every multiple in this table is measured against it.">FITTED</span>`
       : '';
 
+    // The name is a real <button>, not a tabindex on the <tr>: the row keeps its
+    // row semantics for assistive technology while the control that opens the
+    // path modal is a control. Mouse users get the whole row (see bindControls);
+    // keyboard users get this, in the tab order, with an accessible name.
     return `
-      <tr class="de-row${row.isFittedDrive ? ' de-row--fitted' : ''}${uncomputable ? ' de-row--uncomputable' : ''}">
+      <tr class="de-row${row.isFittedDrive ? ' de-row--fitted' : ''}${uncomputable ? ' de-row--uncomputable' : ''}" data-de-drive="${attr(row.driveId)}">
         <td class="de-cell de-cell--name">
-          <div class="de-name">${escapeHtml(row.displayName || row.driveId)}</div>
+          <button type="button" class="de-name-btn" data-de-path="${attr(row.driveId)}"
+            aria-label="${attr(`${row.displayName || row.driveId}: show the research path that unlocks this drive`)}"
+            title="Show the global techs and faction projects that unlock this drive, and which of them are already done.">
+            <span class="de-name">${escapeHtml(row.displayName || row.driveId)}</span>
+          </button>
           <div class="de-cell__sub">${words(row.classification)} · ${words(row.propellant)} ${fittedMark}${disabledMark}${caveatMark}</div>
         </td>
         <td class="de-cell de-measured de-cell--number"${uncomputable ? ` title="${attr(measured.reason || 'not computable against this design')}"` : ''}>
@@ -465,6 +474,263 @@
       </div>`;
   }
 
+  // ------------------------------------------------------------------------
+  // The path modal: click a drive, see what unlocks it.
+  //
+  // Everything below reads /api/intel/tech-path for the drive's GATE PROJECT.
+  // The endpoint already makes the split this modal is about -- `type` is
+  // `faction_project` or `global_tech` -- and already picks the cheapest
+  // satisfying route through the alternate prerequisites, reporting the road not
+  // taken. Nothing here re-derives any of that.
+  //
+  // Two things it must never do:
+  //   * present a `researchCost: -1` sentinel as a cost. It marks a project that
+  //     is never researched, so a path containing one has NO honest total.
+  //   * imply that a cleared path is a startable one. Availability is rolled
+  //     monthly, not derived (docs/research-advisor-spec.md 3b), and the caveat
+  //     travels on the payload so this panel cannot forget to say so.
+  // ------------------------------------------------------------------------
+
+  const pathCache = new Map();
+
+  const STATUS_LABEL = Object.freeze({
+    completed: 'DONE',
+    researching: 'RESEARCHING',
+    available: 'AVAILABLE',
+    locked: 'LOCKED',
+    unknown: 'UNKNOWN'
+  });
+
+  const STATUS_TONE = Object.freeze({
+    completed: 'ok',
+    researching: 'warn',
+    available: 'ok',
+    locked: 'block',
+    unknown: 'unknown'
+  });
+
+  /** Research points, or an honest UNKNOWN. -1 is a sentinel, never a number. */
+  function rp(value) {
+    const parsed = num(value);
+    if (parsed === null) return UNAVAILABLE;
+    if (parsed < 0) return 'NEVER RESEARCHED';
+    return `${Math.round(parsed).toLocaleString('en-US')} RP`;
+  }
+
+  function statusText(node) {
+    const label = STATUS_LABEL[node.status] || 'UNKNOWN';
+    const pct = num(node.progressPercent);
+    if (node.status === 'researching' && pct !== null) return `${label} ${pct.toFixed(1)}%`;
+    return label;
+  }
+
+  function pathRow(node) {
+    return {
+      label: node.displayName || node.id,
+      sublabel: node.category ? String(node.category).replace(/([a-z])([A-Z])/g, '$1 $2') : null,
+      status: statusText(node),
+      statusTone: STATUS_TONE[node.status] || 'unknown',
+      meta: rp(node.cost)
+    };
+  }
+
+  // A node before the nodes that depend on it -- a path, not a set.
+  //
+  // `remainingPath` is a PRE-order walk, so reversing it is NOT a dependency
+  // order: on the live save `Exotic Hybrid Systems` and `Exotics` are siblings
+  // under one parent while the first also needs the second, and the reversed
+  // pre-order lists the dependent first. The endpoint carries the real
+  // topological order as `remainingPathDependencyOrder` (ids), so this sorts by
+  // position in it. A node the order does not mention keeps its emitted
+  // position at the end rather than being dropped.
+  function inDependencyOrder(nodes, order) {
+    const index = new Map((Array.isArray(order) ? order : []).map((id, position) => [id, position]));
+    return nodes
+      .map((node, position) => ({ node, position }))
+      .sort((a, b) => {
+        const rankA = index.has(a.node.id) ? index.get(a.node.id) : Number.POSITIVE_INFINITY;
+        const rankB = index.has(b.node.id) ? index.get(b.node.id) : Number.POSITIVE_INFINITY;
+        if (rankA !== rankB) return rankA - rankB;
+        return a.position - b.position;
+      })
+      .map(entry => entry.node);
+  }
+
+  function routeSection(routes) {
+    const list = Array.isArray(routes) ? routes : [];
+    if (list.length === 0) return null;
+    return {
+      title: 'ROUTE CHOSEN',
+      caption: `${list.length} node(s) on this path had an alternate prerequisite`,
+      rows: list.map(route => ({
+        label: route.nodeDisplayName || route.nodeId,
+        sublabel: `via ${route.chosenRoute?.displayName || route.chosenRoute?.id || 'an unnamed prerequisite'}`
+          + ` rather than ${route.alternativeRoute?.displayName || route.alternativeRoute?.id || 'an unnamed alternative'}`,
+        status: num(route.savings) === null ? 'SAVINGS UNKNOWN' : `SAVES ${rp(route.savings)}`,
+        statusTone: num(route.savings) === null ? 'unknown' : 'ok',
+        meta: `${rp(route.chosenRoute?.cost)} vs ${rp(route.alternativeRoute?.cost)}`
+      })),
+      empty: 'No node on this path had an alternate prerequisite.'
+    };
+  }
+
+  async function fetchTechPath(target) {
+    const key = `${state.observer}|${state.mode}|${target}`;
+    if (pathCache.has(key)) return pathCache.get(key);
+    const params = new URLSearchParams({
+      observer: String(state.observer),
+      mode: String(state.mode),
+      target: String(target)
+    });
+    try {
+      const response = await fetch(`/api/intel/tech-path?${params.toString()}`);
+      if (!response.ok) {
+        // Unavailable is not empty. The reason travels so the modal can say it.
+        const failed = { unavailable: true, reason: `The tech-path endpoint returned HTTP ${response.status}.` };
+        pathCache.set(key, failed);
+        return failed;
+      }
+      const payload = await response.json();
+      pathCache.set(key, payload);
+      return payload;
+    } catch (err) {
+      console.warn('[DriveExplorer] Failed to fetch tech path:', err);
+      return { unavailable: true, reason: 'The tech-path endpoint could not be reached from this browser.' };
+    }
+  }
+
+  /** Facts and sections for a drive whose gate is resolved and whose path loaded. */
+  function pathPanelOptions(row, payload) {
+    const drive = row.displayName || row.driveId;
+    const gateId = row.availability.gateProjectId;
+    const gateName = row.availability.gateProjectName || payload?.target?.displayName || gateId;
+
+    const facts = [
+      { label: 'DRIVE', value: drive },
+      { label: 'GATE PROJECT', value: gateName ? `${gateName} (${gateId})` : 'none — this drive names no gating project' },
+      { label: 'AVAILABILITY', value: BUCKET_LABEL[row.availability.bucket] || 'UNKNOWN' }
+    ];
+
+    if (payload?.unavailable) {
+      return {
+        eyebrow: 'RESEARCH PATH',
+        title: drive,
+        summary: 'The research path behind this drive could not be read from this snapshot.',
+        facts,
+        notes: [payload.reason || 'No reason was reported.']
+      };
+    }
+
+    const remaining = Array.isArray(payload.remainingPath) ? payload.remainingPath : [];
+    const satisfied = Array.isArray(payload.satisfiedPrerequisites) ? payload.satisfiedPrerequisites : [];
+    const order = payload.remainingPathDependencyOrder;
+    const factionNodes = inDependencyOrder(remaining.filter(n => n.type === 'faction_project'), order);
+    const globalNodes = inDependencyOrder(remaining.filter(n => n.type === 'global_tech'), order);
+    const otherNodes = inDependencyOrder(
+      remaining.filter(n => n.type !== 'faction_project' && n.type !== 'global_tech'), order);
+    const satisfiedFaction = satisfied.filter(n => n.type === 'faction_project').length;
+    const satisfiedGlobal = satisfied.filter(n => n.type === 'global_tech').length;
+
+    const totalCost = payload.researchCostComplete === true
+      ? rp(payload.totalRemainingResearchCost)
+      : 'UNKNOWN — a step on this path is never researched';
+
+    facts.push(
+      { label: 'REMAINING', value: `${remaining.length} step(s)` },
+      { label: 'FACTION RESEARCH', value: payload.remainingFactionResearchCost === null ? 'UNKNOWN' : rp(payload.remainingFactionResearchCost) },
+      { label: 'GLOBAL RESEARCH', value: payload.remainingGlobalResearchCost === null ? 'UNKNOWN' : rp(payload.remainingGlobalResearchCost) },
+      { label: 'TOTAL REMAINING', value: totalCost },
+      { label: 'ALREADY SATISFIED', value: `${payload.satisfiedPrerequisiteTotalCount ?? satisfied.length} prerequisite(s)` }
+    );
+
+    const sections = [
+      {
+        title: 'FACTION PROJECTS',
+        caption: `${factionNodes.length} remaining · ${payload.remainingFactionResearchCost === null ? 'cost unknown' : rp(payload.remainingFactionResearchCost)}`,
+        rows: factionNodes.map(pathRow),
+        empty: 'No faction project remains on this path.'
+      },
+      {
+        title: 'GLOBAL TECHS',
+        caption: `${globalNodes.length} remaining · ${payload.remainingGlobalResearchCost === null ? 'cost unknown' : rp(payload.remainingGlobalResearchCost)}`,
+        rows: globalNodes.map(pathRow),
+        empty: 'No global tech remains on this path.'
+      }
+    ];
+
+    // Neither of the two types the endpoint reports. Shown rather than dropped:
+    // a node silently absent from both sections would make the counts lie.
+    if (otherNodes.length > 0) {
+      sections.push({
+        title: 'OTHER NODES',
+        caption: `${otherNodes.length} node(s) the endpoint classified as neither a faction project nor a global tech`,
+        rows: otherNodes.map(pathRow),
+        empty: 'None.'
+      });
+    }
+
+    sections.push({
+      title: 'ALREADY SATISFIED',
+      caption: `${satisfied.length} shown · ${satisfiedFaction} faction, ${satisfiedGlobal} global · already researched, nothing further to pay`,
+      rows: satisfied.map(pathRow),
+      empty: 'No prerequisite on this path is satisfied yet.'
+    });
+
+    const routes = routeSection(payload.routesEvaluated);
+    if (routes) sections.push(routes);
+
+    const notes = [payload.availabilityCaveat].filter(Boolean);
+    const omitted = num(payload.satisfiedPrerequisiteOmittedCount);
+    if (omitted !== null && omitted > 0) {
+      notes.push(`${omitted} further satisfied prerequisite(s) are not listed here: the endpoint caps the list at ${satisfied.length}. The full set is on /api/intel/tech-path?target=${gateId}.`);
+    }
+    if (Array.isArray(payload.uncostedNodes) && payload.uncostedNodes.length > 0) {
+      notes.push(`${payload.uncostedNodes.length} node(s) on this path carry no readable cost, so no total for it is honest: ${payload.uncostedNodes.join(', ')}.`);
+    }
+
+    return {
+      eyebrow: 'RESEARCH PATH',
+      title: drive,
+      summary: `${remaining.length} step(s) remain to unlock ${gateName || 'this drive'}, and ${payload.satisfiedPrerequisiteTotalCount ?? satisfied.length} prerequisite(s) on the route are already done. The route is the cheapest satisfying one, from the same walk /api/intel/tech-path performs.`,
+      facts,
+      sections,
+      notes
+    };
+  }
+
+  /** Opens the modal for one drive row. Every branch opens SOMETHING. */
+  async function openDrivePath(driveId, trigger) {
+    const panel = global.MissionControlDetailPanel;
+    if (!panel || typeof panel.open !== 'function') return;
+    const payloadRows = (state.payload && state.payload.items) || [];
+    const row = payloadRows.find(entry => entry.driveId === driveId);
+    if (!row) return;
+
+    const gateId = row.availability.gateProjectId;
+    const drive = row.displayName || row.driveId;
+
+    if (!gateId) {
+      // Ungated is a fact about the drive, not a missing value.
+      panel.open({
+        eyebrow: 'RESEARCH PATH',
+        title: drive,
+        facts: [
+          { label: 'DRIVE', value: drive },
+          { label: 'GATE PROJECT', value: 'none — this drive names no gating project' },
+          { label: 'AVAILABILITY', value: BUCKET_LABEL[row.availability.bucket] || 'UNKNOWN' }
+        ],
+        summary: 'This drive is not gated by any project, so there is no research path to it. What makes it usable is whatever mounts it.',
+        notes: ['Nothing unlocks this drive because nothing needs to. 33 of the 125 laser templates and a handful of hulls, armours, reactors and radiators are the same.']
+      });
+      return;
+    }
+
+    if (trigger) trigger.setAttribute('aria-busy', 'true');
+    const payload = await fetchTechPath(gateId);
+    if (trigger) trigger.removeAttribute('aria-busy');
+    panel.open(pathPanelOptions(row, payload));
+  }
+
   function renderUnavailable(container, message) {
     container.innerHTML = `
       <div class="tech-card init-view__span">
@@ -548,6 +814,22 @@
         if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
       });
     }
+
+    // One delegated listener on the table body, so a re-paint (every sort,
+    // filter and search keystroke rebuilds it) cannot leave rows inert.
+    const table = container.querySelector('.de-table tbody');
+    if (table) {
+      table.addEventListener('click', (event) => {
+        // The name button is the accessible control; the rest of the row is a
+        // mouse convenience on top of it. Either way the same handler runs.
+        const button = event.target.closest('[data-de-path]');
+        const tableRow = event.target.closest('[data-de-drive]');
+        const driveId = button?.getAttribute('data-de-path') || tableRow?.getAttribute('data-de-drive');
+        if (!driveId) return;
+        event.preventDefault();
+        openDrivePath(driveId, button || tableRow.querySelector('[data-de-path]'));
+      });
+    }
   }
 
   async function fetchDriveExplorer(observerId, mode, designId) {
@@ -610,8 +892,10 @@
     load,
     render,
     fetchDriveExplorer,
+    openDrivePath,
     // Exposed so the layout verifier and the unit tests exercise the same
-    // filtering and sorting the panel does, rather than a copy of it.
-    _internals: { state, visibleRows, sortRows, BUCKETS, ESTIMATE_CAPTION }
+    // filtering, sorting and path-modal shaping the panel does, rather than a
+    // copy of it.
+    _internals: { state, visibleRows, sortRows, pathPanelOptions, inDependencyOrder, rp, BUCKETS, ESTIMATE_CAPTION }
   };
 })(window);
