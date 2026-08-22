@@ -5,13 +5,34 @@ were found and the delivery mechanism pinned. The superseded conclusion is kept 
 bottom under "What the first pass got wrong", because the way it went wrong is the useful
 part.
 
-**Revised again 2026-08-22 against `431be86`** (tracker 3b). The bonus model and the
-allocation pin are unchanged and re-measured identical. What changed is the **conclusion
-drawn from the 2.11× figure**: it is a whole-faction sum, not a per-slot duration correction,
-and the superseded wording is kept under "What the 2.11× conclusion got wrong". No duration
-moved; `monthsAtIncome` is byte-for-byte the same function it was.
+**Revised 2026-08-22 against `431be86`** (tracker 3b). The bonus model and the allocation pin
+are unchanged and re-measured identical. What changed is the **conclusion drawn from the
+2.11× figure**: it is a whole-faction sum, not a per-slot duration correction, and the
+superseded wording is kept under "What the 2.11× conclusion got wrong".
 
-Every duration the research advisor prints comes from one flat monthly rate. Orgs, hab
+**Revised again 2026-08-22 against `866b8a8`, and this time every duration MOVED.** Two
+independent corrections landed together:
+
+1. **The rate.** A duration is now priced through the allocation the item's slot actually
+   receives, not against the whole faction's income. The measured per-slot factors of
+   0.4658×, 0.2928×, 1.0602× and 0.2928× are applied per slot instead of being recorded as a
+   reason to leave the figure flat. `shared/researchAllocationPricing.mjs`.
+2. **The cost.** The campaign's `researchSpeedMultiplier` acts on the effective research
+   **cost**, measured — so on this 200% campaign every remaining cost was 2× what the game
+   charges. `shared/researchCostScaling.mjs`. That overturns
+   `docs/campaign-settings-spec.md`'s "acts on output, not cost" verdict.
+
+The section headed "The consequence, and why durations are still flat" is kept, marked, and
+its conclusion is withdrawn — see "Why durations did NOT stay flat" beneath it.
+
+**What the 2.11× measurement can and cannot answer.** It stands, re-reproduced identically a
+third time. But both sides of it are research POINTS and cost never enters, so it
+**cannot discriminate** between "income already doubled, cost unscaled" and "income never
+doubled, cost halved" — they predict the identical 2.11×. The 4.2840× alternative it ruled
+out was a hypothesis nobody held. It is a correct measurement of the income path and silent
+about the cost path, which is where the multiplier turned out to live.
+
+~~Every duration the research advisor prints comes from one flat monthly rate.~~ Orgs, hab
 modules, councilor traits, alien-activity investigations and one ship module all grant
 **per-category** research bonuses, so the rate a project is actually researched at varies
 by category.
@@ -285,9 +306,26 @@ Since `1.05 × (1 + Cat + Proj) ≥ 1.05 > 1` always, the flat figure **is** an 
 the *best case* — and never on the duration at the current allocation. The spread is 2.28×
 across four categories on one save, so this is not a scalar either.
 
-**Not implemented, deliberately.** Publishing it means choosing a counterfactual allocation
+~~**Not implemented, deliberately.** Publishing it means choosing a counterfactual allocation
 for every ranked candidate, and `buildResearchSlotAllocation` already refuses to recommend a
-reallocation for the adjacent reason. Recorded here so the next reader has the arithmetic.
+reallocation for the adjacent reason. Recorded here so the next reader has the arithmetic.~~
+
+**IMPLEMENTED 2026-08-22.** The objection was sound and the answer to it was not "leave the
+figure wrong" but "name the assumption". A duration is now priced through
+`shared/researchAllocationPricing.mjs` in one of four labelled states:
+
+| state | months | basis |
+| :-- | :-- | :-- |
+| `allocation-measured` | exact | the item is in a slot; its pip weight is read from the save |
+| `allocation-assumed` | `one-pip`, with `all-pips` beside it | it is not in a slot, so a pip allocation is ASSUMED |
+| `slot-receives-nothing` | **null** | it holds zero pips, so it receives nothing and has no time to complete |
+| `flat-rate-unpriced` | flat | no slot layout could be read; the pre-existing figure, labelled |
+
+The `one-pip` scenario is the conservative end and it is anchored to an observation rather
+than to a guess: on this save it is exactly the rate slots 3 and 5 are **measured** to
+deliver. The `all-pips` scenario is the lower bound above. A single confident number would
+hide a spread of 7.01× between them (932.53 against 6,537.62 points/month for a project on
+this save), which is why both are published and the state says which the headline took.
 
 ## Is 2.079× a disguised 200%?
 
@@ -323,12 +361,39 @@ slot kinds.
 This replaces the argument in `campaign-settings-spec.md`, which reached the same conclusion
 by invalid reasoning. See that document's own correction note.
 
-**Durations therefore stay flat, and the measured category bonus is named beside them.** The
-label states what is *not* applied; it deliberately does not claim a direction or size for
-the true figure, because the per-slot spread runs both ways.
+> ~~**Durations therefore stay flat, and the measured category bonus is named beside them.**
+> The label states what is *not* applied; it deliberately does not claim a direction or size
+> for the true figure, because the per-slot spread runs both ways.~~
+>
+> ~~`8.0 mo (flat; +3.0% category)` — not "so the true figure is slightly shorter", and no
+> longer "treat it as an upper bound" either.~~
 
-`8.0 mo (flat; +3.0% category)` — not "so the true figure is slightly shorter", and no longer
-"treat it as an upper bound" either.
+### Why durations did NOT stay flat
+
+**Withdrawn 2026-08-22.** The reasoning above is right about everything except what to do
+next. It establishes that the per-slot spread is 3.6× and that no single scalar closes it,
+and then concludes: keep printing a number that is 2.15×–3.42× wrong on three of the four
+occupied slots, and name a 3% category bonus beside it.
+
+That is the wrong trade in both directions. The per-slot factor is not a *scalar* but it is
+perfectly *computable* — every term of it is read from the save when the item is in a slot.
+And for an item that is not in a slot, the honest answer is not the flat figure (which
+describes no allocation anyone would run) but a **labelled scenario with the other end beside
+it**. Refusing to publish a counterfactual is right; publishing a wrong number instead of one
+is not the only alternative.
+
+What a row prints now:
+
+```
+2.3 mo (its slot)              measured: the item is in a 1-pip slot, every term read
+8.1 mo (1 pip) · 1.2 mo all-in assumed: both ends given, the state says which is the headline
+no pips                        it holds zero pips, so it receives nothing at all
+```
+
+Checked against the save that produced it: `Project_240cmGreenArcLaserCannon` in slot 3, 2,119
+effective points remaining, priced at **2.3 months**. Its slot's own measured delivery over
+the previous interval was 460.09 points per 15.5 days = 902.8/month, which is **2.35 months**.
+The flat figure for the same row was 0.7 months.
 
 ### What the 2.11× conclusion got wrong
 
@@ -352,16 +417,37 @@ the *total* while one slot gets 0.29× of it cannot also be a per-slot correctio
 
 ## Duration states
 
+**Replaced 2026-08-22.** The five states below now name the ALLOCATION basis, because that
+is the axis a reader has to know about: the same category priced against a 3-pip slot rather
+than a 1-pip slot moves by 3.6×, against the 3% a category term is worth.
+
 | state | months | meaning |
 | :--- | :--- | :--- |
-| `flat-rate` | flat | the category carries no bonus for the observer; the flat rate is right for the category term |
-| `flat-rate-boosted` | flat | the category carries a measured bonus, stated on the row, **not** applied |
-| `unresolved-category` | flat | the project's category could not be resolved, so whether a bonus applies is undecidable |
-| `category-unchecked` | flat | the snapshot predates the catalogue; nothing was measured either way |
-| `unmeasured-income` | **null** | no measured research income — the only state without a number |
+| `allocation-measured` | exact | the item is in a slot; its pip weight is read from the save, so every term is measured |
+| `allocation-assumed` | `one-pip`, `all-pips` beside it | not in a slot, so a pip allocation is ASSUMED and the row says which |
+| `slot-receives-nothing` | **null** | it holds zero pips: it receives nothing and has no time to complete |
+| `flat-rate-unpriced` | flat | no slot layout could be read; the pre-existing flat figure, labelled as unpriced |
+| `unmeasured-income` | **null** | no measured research income at all |
 
-`unknown` is gone. Thirteen ranked rows carried it, none of them Xenology: MilitaryScience
-(7), Energy (2), Materials (2), SpaceScience (2), at roughly 3–5% each.
+The category dimension has not been dropped — it moved onto explicit fields.
+`categoryResearchBonus` carries the effective bonus (now applied, inside the multiplier), and
+`monthsAreUpperBound` is true when a term had to be priced at its floor: an unresolved
+category, a category whose sum is a declared lower bound (SpaceScience, because of the Mobile
+Space Science Lab no snapshot field can count), or an unresolved slot kind. That is strictly
+more information than the four superseded state codes carried.
+
+### The four superseded states, kept
+
+| state | what it meant | why it is gone |
+| :--- | :--- | :--- |
+| `flat-rate` | the category carried no bonus, so the flat rate was right for the CATEGORY term | it was still the whole faction's income rather than the slot's share, so it was wrong for the ALLOCATION term — by 2.15× to 3.42× on three of the observer's four slots |
+| `flat-rate-boosted` | the category carried a measured bonus, named beside the figure and not applied | now applied, inside the allocation multiplier |
+| `unresolved-category` | the category could not be resolved, so whether a bonus applied was undecidable | now priced with the bonus at its floor of zero, which makes the months an explicit UPPER bound rather than an unlabelled point estimate |
+| `category-unchecked` | the bonus catalogue was absent from the snapshot | same treatment |
+
+`unknown` was removed on 2026-08-21. Thirteen ranked rows had carried it, none of them
+Xenology: MilitaryScience (7), Energy (2), Materials (2), SpaceScience (2), at roughly 3–5%
+each.
 
 ---
 

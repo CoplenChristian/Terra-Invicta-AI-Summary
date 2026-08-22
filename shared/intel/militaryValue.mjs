@@ -66,12 +66,13 @@ import {
   tallyAvailabilityStates
 } from '../researchAvailability.mjs';
 import {
-  CATEGORY_DURATION_STATES,
   MEASURED_INCOME_BASIS,
   buildResearchCategoryBonuses,
   categoryBonusSummary,
-  monthsAtIncomeForCategory
+  priceResearchDuration,
+  researchDurationFields
 } from '../researchCategoryBonus.mjs';
+import { allocationPricingSummary, buildResearchAllocationPricing } from '../researchAllocationPricing.mjs';
 import { buildItemGateMap, unlockIndexCensus, unlocksForGate } from '../unlockIndex.mjs';
 import { findAlienFaction } from './common.mjs';
 
@@ -514,7 +515,7 @@ function emitProfile(profile, paths) {
  * the two would mis-describe the gate, and only the project kind can be
  * resolved through `availableProjectNames`.
  */
-function researchFor(snapshot, itemGateMap, resolver, family, id, monthlyResearch, categoryBonuses) {
+function researchFor(snapshot, itemGateMap, resolver, family, id, monthlyResearch, categoryBonuses, allocationPricing) {
   const gate = itemGateMap.get(`${family}:${id}`) || null;
   if (!gate) {
     return {
@@ -529,14 +530,11 @@ function researchFor(snapshot, itemGateMap, resolver, family, id, monthlyResearc
       reason: 'this item names no research gate in the templates, so no project unlocks it and none needs to be researched. What makes it usable is whatever mounts it, not a project of its own.',
       researchCost: null,
       remainingResearchCost: null,
-      monthsAtCurrentIncome: null,
-      // No research at all, so no duration and no category to price one
-      // against. `reason` above already says so in this row's own terms.
-      // No duration was attempted, so there is no duration STATE either. A
-      // category code here would describe a figure this row does not have.
-      monthsAtCurrentIncomeState: null,
-      categoryResearchBonus: null,
-      flatRateMonths: null,
+      // No research at all, so no duration and nothing to price one against.
+      // `reason` above already says so in this row's own terms. Every duration
+      // field is present and null rather than absent, so a consumer reading the
+      // shape does not have to distinguish "missing key" from "no answer".
+      ...researchDurationFields(null),
       missingPrerequisites: [],
       unlockChance: null,
       alsoUnlocks: null
@@ -552,14 +550,11 @@ function researchFor(snapshot, itemGateMap, resolver, family, id, monthlyResearc
       reason: `this item is gated by a global tech (${gate.gateId}), not a faction project, so \`availableProjectNames\` cannot resolve its state`,
       researchCost: null,
       remainingResearchCost: null,
-      monthsAtCurrentIncome: null,
       // Gated by a global tech whose remaining cost this endpoint cannot
-      // resolve, so there is no duration to price against a category.
-      // No duration was attempted, so there is no duration STATE either. A
-      // category code here would describe a figure this row does not have.
-      monthsAtCurrentIncomeState: null,
-      categoryResearchBonus: null,
-      flatRateMonths: null,
+      // resolve, so there is no duration to price at all. No duration was
+      // attempted, so there is no duration STATE either -- a state code here
+      // would describe a figure this row does not have.
+      ...researchDurationFields(null),
       missingPrerequisites: null,
       unlockChance: null,
       alsoUnlocks: null
@@ -567,14 +562,19 @@ function researchFor(snapshot, itemGateMap, resolver, family, id, monthlyResearc
   }
 
   const availability = resolver.resolve(gate.gateId);
-  // Priced against the gate project's OWN research category, which the resolver
-  // carries from the graph node. The duration stays FLAT for a boosted category
-  // and reports the measured bonus beside itself.
-  const duration = monthsAtIncomeForCategory(
-    availability.remainingResearchCost,
-    monthlyResearch,
-    categoryBonuses.bonusFor(availability.category ?? null)
-  );
+  // Priced through the allocation the gate project's own slot receives -- or,
+  // when it is not in a slot, through a LABELLED assumed one with the fastest
+  // case beside it. Its research category and node type both come from the
+  // resolver, which reads them off the graph node, so neither is guessed here.
+  const duration = priceResearchDuration({
+    remainingCost: availability.remainingResearchCost,
+    monthlyIncome: monthlyResearch,
+    categoryBonuses,
+    allocationPricing,
+    itemId: gate.gateId,
+    category: availability.category ?? null,
+    type: availability.type ?? null
+  });
   const unlocks = unlocksForGate(snapshot, gate.gateId);
   const families = {};
   let totalItems = 0;
@@ -591,18 +591,12 @@ function researchFor(snapshot, itemGateMap, resolver, family, id, monthlyResearc
     reason: availability.reason,
     researchCost: availability.researchCost,
     remainingResearchCost: availability.remainingResearchCost,
-    // Absent stays null: with no measured research income there is no honest
-    // number of months, and "0 months" would read as "immediate". That is now
-    // the ONLY reason this is null -- a boosted category keeps its flat figure
-    // and names its bonus on `categoryResearchBonus`.
-    monthsAtCurrentIncome: duration.months,
-    // A state CODE. `research.categoryBonuses.durationStates` spells each one
-    // out once per response rather than repeating it on every row.
-    monthsAtCurrentIncomeState: duration.state,
-    // The EFFECTIVE bonus after the wiki diminishing-returns rule, not the raw
-    // sum. Equal to the sum below the 50%-per-source-type threshold.
-    categoryResearchBonus: duration.categoryBonus,
-    flatRateMonths: duration.flatRateMonths,
+    // Absent stays null, and there are now exactly two reasons for it: no
+    // measured research income, or a slot carrying no pips at all -- which
+    // receives nothing and therefore has no time to complete. "0 months" would
+    // read as immediate and a large number would read as slow progress; both
+    // are false of a slot receiving nothing.
+    ...researchDurationFields(duration),
     missingPrerequisites: availability.missingPrerequisites,
     unlockChance: availability.unlockChance,
     // One project unlocks up to seven mount variants of the same weapon, so
@@ -673,6 +667,7 @@ function buildFieldedArmament(fieldedWeaponRows) {
 /** Builds one comparison class end to end. */
 function buildClass({
   entry, componentStats, itemGateMap, resolver, snapshot, fielded, monthlyResearch, categoryBonuses,
+  allocationPricing,
   armament, armorRanking, candidateLimit, bestFieldedHull, detail, pointDefenseProfile
 }) {
   const { classKey, family, role, spec } = entry;
@@ -689,7 +684,7 @@ function buildClass({
       ...metrics,
       fieldedCount: fieldedCounts.get(id) ?? 0,
       isFielded: fieldedCounts.has(id),
-      research: researchFor(snapshot, itemGateMap, resolver, family, id, monthlyResearch, categoryBonuses)
+      research: researchFor(snapshot, itemGateMap, resolver, family, id, monthlyResearch, categoryBonuses, allocationPricing)
     });
   }
 
@@ -828,9 +823,13 @@ function buildClass({
           gateProjectName: best.research.gateProjectName,
           remainingResearchCost: best.research.remainingResearchCost,
           monthsAtCurrentIncome: best.research.monthsAtCurrentIncome,
-          // Why that duration is what it is. A null on a boosted category is a
-          // withdrawn estimate, not a missing measurement.
+          // Why that duration is what it is, and the second end of the range
+          // when the allocation had to be assumed. Both travel because this is
+          // the row research-ranking reads; dropping them here would print a
+          // headline one-pip figure with no all-in beside it.
           monthsAtCurrentIncomeState: best.research.monthsAtCurrentIncomeState,
+          monthsFastestAllocation: best.research.monthsFastestAllocation,
+          monthsAreUpperBound: best.research.monthsAreUpperBound,
           categoryResearchBonus: best.research.categoryResearchBonus,
           flatRateMonths: best.research.flatRateMonths,
           unlockChance: best.research.unlockChance,
@@ -939,6 +938,8 @@ function buildClass({
           remainingResearchCost: row.research.remainingResearchCost,
           monthsAtCurrentIncome: row.research.monthsAtCurrentIncome,
           monthsAtCurrentIncomeState: row.research.monthsAtCurrentIncomeState,
+          monthsFastestAllocation: row.research.monthsFastestAllocation,
+          monthsAreUpperBound: row.research.monthsAreUpperBound,
           categoryResearchBonus: row.research.categoryResearchBonus,
           flatRateMonths: row.research.flatRateMonths
         }))
@@ -1046,6 +1047,8 @@ function buildClass({
             remainingResearchCost: row.research.remainingResearchCost,
             monthsAtCurrentIncome: row.research.monthsAtCurrentIncome,
             monthsAtCurrentIncomeState: row.research.monthsAtCurrentIncomeState,
+            monthsFastestAllocation: row.research.monthsFastestAllocation,
+            monthsAreUpperBound: row.research.monthsAreUpperBound,
             categoryResearchBonus: row.research.categoryResearchBonus,
             flatRateMonths: row.research.flatRateMonths
           };
@@ -1278,6 +1281,9 @@ export const militaryValueResource = (snapshot, {
   // Built once for the whole catalogue sweep: it walks every hab module and
   // councilor the observer holds, and hundreds of rows read from it.
   const categoryBonuses = buildResearchCategoryBonuses(snapshot, { observerId });
+  // Built once for the same reason: it reads the observer's slot layout and
+  // Projects figures, neither of which varies by row.
+  const allocationPricing = buildResearchAllocationPricing(snapshot, { observerId });
 
   if (!catalogueAvailable) {
     return {
@@ -1299,6 +1305,7 @@ export const militaryValueResource = (snapshot, {
         monthlyResearchIncome: monthlyResearch,
         monthlyResearchIncomeBasis: MEASURED_INCOME_BASIS,
         categoryBonuses: categoryBonusSummary(categoryBonuses),
+        allocationPricing: allocationPricingSummary(allocationPricing, snapshot?.metadata?.researchCostScaling ?? null),
         states: Object.values(AVAILABILITY_STATES)
       },
       fielded: null,
@@ -1357,6 +1364,7 @@ export const militaryValueResource = (snapshot, {
       fielded,
       monthlyResearch,
       categoryBonuses,
+      allocationPricing,
       armament,
       armorRanking,
       candidateLimit,
@@ -1445,6 +1453,9 @@ export const militaryValueResource = (snapshot, {
       // The observer's per-category research bonuses, with their sources, and
       // the model that says why no duration is divided by them.
       categoryBonuses: categoryBonusSummary(categoryBonuses),
+      // The slot allocation every duration on this response is priced through,
+      // plus the campaign research-cost basis its remaining costs are on.
+      allocationPricing: allocationPricingSummary(allocationPricing, snapshot?.metadata?.researchCostScaling ?? null),
       states: Object.values(AVAILABILITY_STATES)
     },
     fielded: {

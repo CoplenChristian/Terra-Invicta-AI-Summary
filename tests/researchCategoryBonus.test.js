@@ -44,11 +44,25 @@ const {
   buildResearchCategoryBonuses,
   categoryBonusCaveat,
   categoryBonusSummary,
-  monthsAtIncomeForCategory
+  monthsAtIncomeForCategory,
+  priceResearchDuration,
+  researchDurationFields
 } = require('../shared/researchCategoryBonus.mjs');
+const {
+  buildResearchAllocationPricing,
+  computeProjectBonus
+} = require('../shared/researchAllocationPricing.mjs');
 
 const OBSERVER = 4712;
 const MODES = ['omniscient', 'player'];
+
+// The synthetic allocation the pricing tests run against: three global-tech
+// slots and three project slots, with pips on slots 2, 3 and 4. Written out
+// rather than reused from the campaign save so the arithmetic below is derived
+// from these two constants and cannot silently follow a live save that moved.
+const PIP_WEIGHTS = [0, 0, 3, 1, 3, 0];
+const PIP_TOTAL = PIP_WEIGHTS.reduce((sum, pips) => sum + pips, 0);
+const PIPPED_SLOTS = PIP_WEIGHTS.filter(pips => pips > 0).length;
 
 // A module template that grants a bonus, chosen from the installed templates at
 // run time rather than named here, so this file does not hardcode a campaign's
@@ -83,6 +97,41 @@ function snapshotWith({
     factions: [observer],
     habModules,
     councilors: [{ ID: 100, displayName: 'Ada Lovelace', factionId: OBSERVER, orgs, traits }]
+  };
+}
+
+/**
+ * `snapshotWith` plus everything the ALLOCATION pricing needs: a pip layout,
+ * the three Projects fields, the global tech slots and one project parked in a
+ * three-pip slot and one in a zero-pip backlog slot.
+ *
+ * Two occupants matter for the tests: `Project_InTheThreePipSlot` exercises the
+ * measured path, and `Project_Backlogged` exercises the slot that receives
+ * nothing. Anything else is unstarted and takes the assumed path.
+ */
+function pricedSnapshot(options = {}) {
+  const base = snapshotWith(options);
+  const observer = {
+    ...base.factions[0],
+    researchWeights: PIP_WEIGHTS,
+    projectPoints: 21,
+    orgProjectSlotUnlocked: true,
+    habProjectSlotUnlocked: true,
+    currentProjects: [
+      { projectId: 'Project_InTheThreePipSlot', slot: 4, category: null, accumulatedResearch: 0, totalCost: 1000 },
+      { projectId: 'Project_Backlogged', slot: 5, category: null, accumulatedResearch: 0, totalCost: 1000 }
+    ]
+  };
+  return {
+    ...base,
+    factions: [observer],
+    globalResearch: {
+      activeSlots: [
+        { techId: 'Tech0', displayName: 'Tech 0', category: null },
+        { techId: 'Tech1', displayName: 'Tech 1', category: null },
+        { techId: 'Tech2', displayName: 'Tech 2', category: null }
+      ]
+    }
   };
 }
 
@@ -583,26 +632,30 @@ test('the whole-faction 2.11x is exactly the SUM of the per-slot factors a durat
   }
 });
 
-test('no allocation factor reaches the arithmetic: the duration is still exactly cost / income', () => {
-  // tracker 3b's proposed correction was to divide every duration by ~2.11.
-  // It was refused, so the arithmetic must be untouched -- and a duration that
-  // silently gained ANY allocation factor would show up right here.
+test('the FLAT helper stays exactly cost / income, and the whole-faction factor never reaches it', () => {
+  // `monthsAtIncome` is the budget figure and must stay unscaled: it is what
+  // the allocation-priced duration is compared AGAINST, so a factor leaking
+  // into it would hide the very error the comparison exists to show. tracker
+  // 3b's rejected correction was to divide every duration by ~2.11; a duration
+  // that silently gained ANY whole-faction factor shows up right here.
   assert.equal(monthsAtIncome(10000, 1000), 10, 'exactly cost / income, unscaled');
   assert.equal(monthsAtIncome(2110, 1000), 2.1);
   assert.notEqual(monthsAtIncome(10000, 1000), 10 / CATEGORY_RATE_MODEL.durationsStillFlatEvidence.wholeFactionFactor);
 
-  // And the same figure survives the category-aware path, which is the one that
-  // would have carried a correction if one had been applied.
-  const boosted = monthsAtIncomeForCategory(10000, 1000, {
+  // With NO allocation model supplied the category path falls back to that same
+  // flat figure -- and says so, rather than presenting it as priced.
+  const unpriced = monthsAtIncomeForCategory(10000, 1000, {
     state: CATEGORY_BONUS_STATES.boosted,
     effectiveBonus: 0.44,
     summedBonus: 0.44,
     sourceCount: 2,
     bySourceType: [{ sourceType: 'org' }]
   });
-  assert.equal(boosted.months, 10, 'a +44% category still reports the flat 10 months');
-  assert.equal(boosted.flatRateMonths, 10);
-  assert.match(boosted.basis, /^flat rate/, 'and the basis must say so in its first words');
+  assert.equal(unpriced.months, 10, 'the fallback is the flat figure, unchanged');
+  assert.equal(unpriced.flatRateMonths, 10);
+  assert.equal(unpriced.state, CATEGORY_DURATION_STATES.flatRateUnpriced);
+  assert.match(unpriced.basis, /^this is the UNPRICED flat figure/,
+    'and the basis must say so in its first words, never look like a priced one');
 });
 
 test('the evidence names the one bound the model DOES yield, and refuses the campaign multiplier', () => {
@@ -664,96 +717,171 @@ test('both specs carry the tracker-3b reconciliation, with the superseded reason
     'the pip layout the saves actually carry, against the one the old record claimed');
 });
 
-test('a boosted category KEEPS its flat duration and names the bonus it does not apply', () => {
+test('a boosted category is APPLIED inside the allocation multiplier, not named beside a flat figure', () => {
   const [templateName, entry] = GRANTING_MODULE;
   const category = entry.bonuses[0].category;
-  const model = buildResearchCategoryBonuses(snapshotWith({
-    habModules: [poweredModule(templateName)]
-  }), { observerId: OBSERVER });
-
-  const duration = monthsAtIncomeForCategory(10000, 1000, model.bonusFor(category));
-  // The decision that changed: withdrawing thirteen usable durations to correct
-  // three to five per cent was the wrong trade.
-  assert.equal(duration.months, 10, 'the flat figure stands');
-  assert.equal(duration.state, CATEGORY_DURATION_STATES.flatRateBoosted);
-  assert.equal(duration.flatRateMonths, 10);
-  // The EFFECTIVE bonus, which is what a reader should act on.
-  assert.equal(duration.categoryBonus, model.categories[category].effectiveBonus);
-  assert.equal(duration.categoryBonusSummed, model.categories[category].summedBonus);
-  assert.equal(duration.categoryRateModel, CATEGORY_RATE_MODEL);
-
-  // And the label a consumer prints says the bonus is NOT applied, without
-  // claiming a direction or size for the true figure -- the pinned model says
-  // the dominant error is elsewhere.
-  const caveat = categoryBonusCaveat(duration.categoryBonus === null
-    ? { state: duration.state }
-    : { state: duration.state, categoryResearchBonus: duration.categoryBonus });
-  assert.match(caveat, /flat rate/);
-  assert.match(caveat, /not applied/);
-  assert.doesNotMatch(caveat, /shorter|faster|sooner/i,
-    'claiming the true figure is "slightly shorter" would be a claim the measurement contradicts');
-});
-
-test('no duration is ever the flat figure divided by (1 + bonus)', () => {
-  // The specific wrong answer this model still refuses. The flat figure stands
-  // UNADJUSTED; a naive correction would land within rounding of `naive`.
-  const [templateName, entry] = GRANTING_MODULE;
-  const category = entry.bonuses[0].category;
-  const model = buildResearchCategoryBonuses(snapshotWith({
-    habModules: [poweredModule(templateName)]
-  }), { observerId: OBSERVER });
+  const snapshot = pricedSnapshot({ habModules: [poweredModule(templateName)] });
+  const model = buildResearchCategoryBonuses(snapshot, { observerId: OBSERVER });
+  const pricing = buildResearchAllocationPricing(snapshot, { observerId: OBSERVER });
   const bonus = model.categories[category].effectiveBonus;
   assert.ok(bonus > 0, 'the test needs a real bonus, or it passes vacuously');
+
+  const duration = priceResearchDuration({
+    remainingCost: 10000, monthlyIncome: 1000, categoryBonuses: model, allocationPricing: pricing,
+    itemId: 'Project_NotInASlot', category, type: 'faction_project'
+  });
+
+  // The decision that changed on 2026-08-22: the bonus is inside the rate now.
+  // A duration equal to the flat figure would mean the multiplier never ran.
+  assert.equal(duration.state, CATEGORY_DURATION_STATES.allocationAssumed);
+  assert.notEqual(duration.months, 10, 'the flat figure must NOT survive as the answer');
+  assert.equal(duration.flatRateMonths, 10, 'but it is kept beside it, so the move is visible');
+  assert.equal(duration.categoryBonus, bonus, 'the EFFECTIVE bonus is what a reader acts on');
+  assert.equal(duration.categoryBonusSummed, model.categories[category].summedBonus);
+
+  // The arithmetic, derived rather than pinned: one pip of PIP_TOTAL, with
+  // PIPPED_SLOTS pipped slots, times (1 + category + project).
+  const expectedRate = 1000 * (1 + 0.05 * PIPPED_SLOTS) * (1 / PIP_TOTAL)
+    * (1 + bonus + pricing.projectBonus.bonus);
+  assert.equal(duration.months, Math.round((10000 / expectedRate) * 10) / 10,
+    'the headline months are cost over the one-pip allocation rate, to the digit');
+
+  // Moving the same project into a 3-pip slot must move the answer, or the
+  // allocation term is not reaching the arithmetic.
+  const inSlot = priceResearchDuration({
+    remainingCost: 10000, monthlyIncome: 1000, categoryBonuses: model, allocationPricing: pricing,
+    itemId: 'Project_InTheThreePipSlot', category, type: 'faction_project'
+  });
+  assert.equal(inSlot.state, CATEGORY_DURATION_STATES.allocationMeasured);
+  assert.ok(inSlot.months < duration.months,
+    'three pips must finish sooner than one, or pip share is not in the model');
+});
+
+test('no duration is ever the flat figure divided by (1 + bonus), nor the flat figure itself', () => {
+  // Two specific wrong answers. The naive category-only correction was refused
+  // in 2026-08-21 and is still refused; the flat figure was the answer until
+  // 2026-08-22 and no longer is.
+  const [templateName, entry] = GRANTING_MODULE;
+  const category = entry.bonuses[0].category;
+  const snapshot = pricedSnapshot({ habModules: [poweredModule(templateName)] });
+  const model = buildResearchCategoryBonuses(snapshot, { observerId: OBSERVER });
+  const pricing = buildResearchAllocationPricing(snapshot, { observerId: OBSERVER });
+  const bonus = model.categories[category].effectiveBonus;
+  assert.ok(bonus > 0, 'the test needs a real bonus, or it passes vacuously');
+
   const naive = Math.round((10000 / 1000) / (1 + bonus) * 10) / 10;
-  const duration = monthsAtIncomeForCategory(10000, 1000, model.bonusFor(category));
-  assert.notEqual(duration.months, naive);
-  assert.equal(duration.months, monthsAtIncome(10000, 1000),
-    'the boosted duration must be exactly the flat one, digit for digit');
+  const duration = priceResearchDuration({
+    remainingCost: 10000, monthlyIncome: 1000, categoryBonuses: model, allocationPricing: pricing,
+    itemId: 'Project_NotInASlot', category, type: 'faction_project'
+  });
+  assert.notEqual(duration.months, naive, 'not the category-only correction');
+  assert.notEqual(duration.months, monthsAtIncome(10000, 1000), 'and not the flat figure either');
 });
 
-test('an unboosted category keeps its flat duration, because the flat rate is right there', () => {
-  const model = buildResearchCategoryBonuses(snapshotWith({}), { observerId: OBSERVER });
-  const duration = monthsAtIncomeForCategory(7500, 1000, model.bonusFor(CATALOGUE.categories[0]));
-  assert.equal(duration.months, 7.5);
-  assert.equal(duration.state, CATEGORY_DURATION_STATES.flatRate);
-  assert.equal(duration.categoryBonus, 0);
+test('a global tech does NOT take the project bonus, and an unresolved slot kind is an upper bound', () => {
+  // The ProjectBonus applies to PROJECT slots only. Applying it to a global
+  // tech would nearly halve its stated duration -- the observer runs 95%.
+  const snapshot = pricedSnapshot({});
+  const model = buildResearchCategoryBonuses(snapshot, { observerId: OBSERVER });
+  const pricing = buildResearchAllocationPricing(snapshot, { observerId: OBSERVER });
+  const common = {
+    remainingCost: 10000, monthlyIncome: 1000, categoryBonuses: model, allocationPricing: pricing,
+    itemId: 'SomeUnstartedThing', category: CATALOGUE.categories[0]
+  };
+
+  const asProject = priceResearchDuration({ ...common, type: 'faction_project' });
+  const asTech = priceResearchDuration({ ...common, type: 'global_tech' });
+  const unknownKind = priceResearchDuration({ ...common, type: null });
+
+  assert.ok(asTech.months > asProject.months,
+    'a global tech is slower than a project of the same cost, because it takes no project bonus');
+  assert.equal(unknownKind.months, asTech.months,
+    'an unresolved slot kind is priced WITHOUT the project bonus -- the slowest it can be');
+  assert.equal(unknownKind.monthsAreUpperBound, true,
+    'and it is flagged as an upper bound rather than presented as a point estimate');
+  assert.equal(asProject.monthsAreUpperBound, false);
+  assert.equal(asTech.monthsAreUpperBound, false);
 });
 
-test('an unresolvable category and an UNCHECKED one both keep the flat duration, labelled', () => {
-  const model = buildResearchCategoryBonuses(snapshotWith({}), { observerId: OBSERVER });
+test('an unresolvable category is priced at the bonus FLOOR and flagged as an upper bound', () => {
+  const snapshot = pricedSnapshot({});
+  const model = buildResearchCategoryBonuses(snapshot, { observerId: OBSERVER });
+  const pricing = buildResearchAllocationPricing(snapshot, { observerId: OBSERVER });
 
-  // The model IS available and cannot place this category. What is unknown is
-  // whether a bonus applies -- not the arithmetic underneath, which is the same
-  // cost over the same income.
   for (const category of [null, '', 'NotARealResearchCategory']) {
-    const duration = monthsAtIncomeForCategory(7500, 1000, model.bonusFor(category));
-    assert.equal(duration.months, 7.5, `${JSON.stringify(category)}: the flat figure is still the flat figure`);
-    assert.equal(duration.state, CATEGORY_DURATION_STATES.unresolvedCategory);
-    assert.equal(duration.categoryBonus, null, 'and no bonus may be invented for it');
+    const duration = priceResearchDuration({
+      remainingCost: 7500, monthlyIncome: 1000, categoryBonuses: model, allocationPricing: pricing,
+      itemId: 'Project_NotInASlot', category, type: 'faction_project'
+    });
+    assert.equal(duration.categoryBonus, null,
+      `${JSON.stringify(category)}: no bonus may be invented for it`);
+    assert.equal(duration.monthsAreUpperBound, true,
+      `${JSON.stringify(category)}: priced at the floor, so the months are at most this`);
+    assert.ok(duration.months > 0, 'and a usable figure is still produced, not withdrawn');
   }
 
-  // The model is NOT available (a snapshot published before the catalogue
-  // existed). Nothing was measured either way, so the pre-existing flat figure
-  // is passed through unchanged and LABELLED. This state was a good call and
-  // must survive.
-  const unread = buildResearchCategoryBonuses({ factions: [{ ID: OBSERVER }] }, { observerId: OBSERVER });
-  const legacy = monthsAtIncomeForCategory(7500, 1000, unread.bonusFor('Xenology'));
-  assert.equal(legacy.months, 7.5);
-  assert.equal(legacy.state, CATEGORY_DURATION_STATES.unchecked);
-  assert.match(legacy.basis, /could not be resolved|has not been checked/);
+  // A snapshot with no allocation model at all -- published before this
+  // existed -- passes the pre-existing flat figure through UNCHANGED and
+  // labels it. Withdrawing it would degrade every older snapshot on no
+  // evidence; calling it priced would be a lie.
+  const unpriced = buildResearchAllocationPricing({ factions: [{ ID: OBSERVER }] }, { observerId: OBSERVER });
+  assert.equal(unpriced.available, false);
+  const legacy = priceResearchDuration({
+    remainingCost: 7500, monthlyIncome: 1000, categoryBonuses: model, allocationPricing: unpriced,
+    itemId: 'Project_Anything', category: 'Xenology', type: 'faction_project'
+  });
+  assert.equal(legacy.months, 7.5, 'exactly the flat figure it always was');
+  assert.equal(legacy.state, CATEGORY_DURATION_STATES.flatRateUnpriced);
+  assert.match(legacy.basis, /UNPRICED flat figure/);
 
-  // The three labelled states must be distinguishable to a consumer, or the
-  // label is decoration.
+  // The labelled states must be distinguishable to a consumer, or the label is
+  // decoration.
   const caveats = new Set([
-    CATEGORY_DURATION_STATES.flatRateBoosted,
-    CATEGORY_DURATION_STATES.unresolvedCategory,
-    CATEGORY_DURATION_STATES.unchecked
+    CATEGORY_DURATION_STATES.allocationAssumed,
+    CATEGORY_DURATION_STATES.receivesNothing,
+    CATEGORY_DURATION_STATES.flatRateUnpriced
   ].map(state => categoryBonusCaveat({ state, categoryResearchBonus: 0.03 })));
   assert.equal(caveats.size, 3, 'each labelled state must read differently');
-  // An unlabelled state adds nothing, so a caller can concatenate blindly.
-  assert.equal(categoryBonusCaveat({ state: CATEGORY_DURATION_STATES.flatRate }), '');
+  // A measured allocation with every term resolved needs no caveat, so a caller
+  // can concatenate blindly.
+  assert.equal(categoryBonusCaveat({ state: CATEGORY_DURATION_STATES.allocationMeasured }), '');
   assert.equal(categoryBonusCaveat({}), '');
   assert.equal(categoryBonusCaveat(), '');
+});
+
+test('a slot carrying no pips receives nothing: null months, never zero and never a big number', () => {
+  const snapshot = pricedSnapshot({});
+  const model = buildResearchCategoryBonuses(snapshot, { observerId: OBSERVER });
+  const pricing = buildResearchAllocationPricing(snapshot, { observerId: OBSERVER });
+
+  const duration = priceResearchDuration({
+    remainingCost: 10000, monthlyIncome: 1000, categoryBonuses: model, allocationPricing: pricing,
+    itemId: 'Project_Backlogged', category: CATALOGUE.categories[0], type: 'faction_project'
+  });
+  assert.equal(duration.state, CATEGORY_DURATION_STATES.receivesNothing);
+  assert.equal(duration.months, null, '"0 months" would read as immediate');
+  assert.notEqual(duration.months, 0);
+  assert.match(duration.basis, /no pips|zero of the observer/);
+});
+
+test('the two allocation scenarios bracket the answer, and the headline says which it took', () => {
+  const snapshot = pricedSnapshot({});
+  const model = buildResearchCategoryBonuses(snapshot, { observerId: OBSERVER });
+  const pricing = buildResearchAllocationPricing(snapshot, { observerId: OBSERVER });
+  const duration = priceResearchDuration({
+    remainingCost: 10000, monthlyIncome: 1000, categoryBonuses: model, allocationPricing: pricing,
+    itemId: 'Project_NotInASlot', category: CATALOGUE.categories[0], type: 'faction_project'
+  });
+
+  assert.equal(duration.allocationScenario, 'one-pip',
+    'the headline takes the CONSERVATIVE end, because the flat figure was already 3.42x optimistic');
+  assert.ok(duration.monthsFastest > 0, 'and the fastest achievable travels beside it');
+  assert.ok(duration.monthsFastest < duration.months,
+    'every pip on one slot must beat one pip of many, or the scenarios are not distinct');
+
+  // The ratio is the whole point: a single confident number would hide it.
+  const spread = duration.months / duration.monthsFastest;
+  assert.ok(spread > 2, `the two scenarios must differ enough to matter (measured ${spread.toFixed(2)}x)`);
 });
 
 test('an unmeasured income is its own state, and never zero months', () => {
@@ -774,29 +902,39 @@ test('a duration computed from measured income is unchanged by the engineer tota
   // research income, so nothing here may multiply by it again. The proof is
   // that the flat path is exactly cost / income and moves only when income
   // moves -- not when an engineer figure appears beside it.
-  const model = buildResearchCategoryBonuses(snapshotWith({}), { observerId: OBSERVER });
-  const unboosted = model.bonusFor(CATALOGUE.categories[0]);
   const income = 2937;
-  const baseline = monthsAtIncomeForCategory(10000, income, unboosted);
+  const snapshot = pricedSnapshot({});
+  snapshot.factions[0].totalResearch = income;
+  const model = buildResearchCategoryBonuses(snapshot, { observerId: OBSERVER });
+  const pricing = buildResearchAllocationPricing(snapshot, { observerId: OBSERVER });
+  const priced = (bonuses, allocation) => priceResearchDuration({
+    remainingCost: 10000, monthlyIncome: income, categoryBonuses: bonuses, allocationPricing: allocation,
+    itemId: 'Project_NotInASlot', category: CATALOGUE.categories[0], type: 'faction_project'
+  });
+  const baseline = priced(model, pricing);
+  assert.equal(baseline.state, CATEGORY_DURATION_STATES.allocationAssumed,
+    'this must run through the PRICED path, or it tests the fallback and proves nothing');
 
   for (const engineerTotal of [0, 0.95, 1.95, 19]) {
     // The engineer figure exists in the world; the duration must not see it.
-    const withEngineers = buildResearchCategoryBonuses({
-      ...snapshotWith({}),
-      factions: [{
-        ID: OBSERVER, displayName: 'the Initiative', totalResearch: income,
-        engineerResearchMultiplier: engineerTotal, researchBreakdown: { engineers: engineerTotal }
-      }]
-    }, { observerId: OBSERVER });
-    const duration = monthsAtIncomeForCategory(10000, income, withEngineers.bonusFor(CATALOGUE.categories[0]));
+    const withEngineers = { ...snapshot };
+    withEngineers.factions = [{
+      ...snapshot.factions[0],
+      engineerResearchMultiplier: engineerTotal,
+      researchBreakdown: { engineers: engineerTotal }
+    }];
+    const duration = priced(
+      buildResearchCategoryBonuses(withEngineers, { observerId: OBSERVER }),
+      buildResearchAllocationPricing(withEngineers, { observerId: OBSERVER })
+    );
     assert.equal(duration.months, baseline.months,
       `engineer total ${engineerTotal} must not move a duration priced from measured income`);
   }
 
-  // And the flat path agrees to the digit with the un-category-aware function
-  // it replaced, so no multiplier crept in on the way.
-  assert.equal(baseline.months, monthsAtIncome(10000, income));
-  assert.equal(baseline.months, Math.round((10000 / income) * 10) / 10);
+  // And the FLAT figure it carries beside itself agrees to the digit with the
+  // un-category-aware function, so no multiplier crept into the comparison.
+  assert.equal(baseline.flatRateMonths, monthsAtIncome(10000, income));
+  assert.equal(baseline.flatRateMonths, Math.round((10000 / income) * 10) / 10);
 });
 
 test('wherever the measured income is reported, it says what is already inside it', () => {

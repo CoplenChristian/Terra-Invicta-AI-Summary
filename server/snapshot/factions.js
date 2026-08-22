@@ -26,6 +26,11 @@ const {
   summarizeRecentTransactions
 } = require('./numbers');
 const { getFactionColor } = require('./lookups');
+const {
+  RESEARCH_COST_SCALING_UNKNOWN,
+  effectiveResearchCost,
+  researchCostBasis
+} = require('../../shared/researchCostScaling.mjs');
 
 function normalizeFactionIntelligence(faction) {
   const normalizeEntries = (entries) => (Array.isArray(entries) ? entries : [])
@@ -139,7 +144,12 @@ function buildFactions(rawFactions, {
   scoreWeights,
   scoreNormalizers,
   controlPointMaintenanceEffectsByFaction = null,
-  gameTimeString
+  gameTimeString,
+  // The campaign research-cost scaler from `shared/researchCostScaling.mjs`.
+  // Absent (an older caller, a hand-built test snapshot) degrades to the
+  // unknown block, which returns template costs UNCHANGED and labels them --
+  // never a silent divide-by-one presented as a checked figure.
+  researchCostScaling = RESEARCH_COST_SCALING_UNKNOWN
 }) {
   const factions = [];
   for (const f of rawFactions) {
@@ -251,7 +261,16 @@ function buildFactions(rawFactions, {
       // Same rule as the global tech slots above: an unresolved project
       // template has an unknown cost, not a default one, and an unknown
       // cost cannot produce a completion percentage.
-      const cost = firstNumericOrNull(projT?.researchCost);
+      //
+      // EFFECTIVE, not template. Measured 2026-08-22: the campaign's
+      // `researchSpeedMultiplier` acts on the research COST, not on the
+      // income -- the observer's own 10,000-point Gas Core Fission Reactor VI
+      // completed from 4,708.568 accumulated inside 15.5 days at a measured
+      // 30.2467 points/day, which reaches 5,000 and cannot reach 10,000. The
+      // template figure made every completion percentage on this campaign
+      // read half what the game shows. See shared/researchCostScaling.mjs.
+      const templateCost = firstNumericOrNull(projT?.researchCost);
+      const cost = effectiveResearchCost(templateCost, researchCostScaling);
       const acc = firstNumericOrNull(p.accumulatedResearch) ?? 0;
       return {
         projectId: p.projectTemplateName,
@@ -266,8 +285,13 @@ function buildFactions(rawFactions, {
         totalCost: cost,
         totalCostAvailable: cost !== null,
         totalCostSource: cost !== null
-          ? 'game template researchCost'
+          ? `game template researchCost, ${researchCostBasis(researchCostScaling)}`
           : 'unavailable: project template not resolved',
+        // The unscaled template figure, kept beside the effective one so a
+        // reader can see what was divided and by what rather than having to
+        // trust that something was.
+        templateResearchCost: templateCost,
+        researchCostScalingState: researchCostScaling?.state ?? null,
         percent: completionPercent(acc, cost)
       };
     });
@@ -353,6 +377,27 @@ function buildFactions(rawFactions, {
       researchWeights: Array.isArray(f.researchWeights)
         ? f.researchWeights.map(weight => firstNumericOrNull(weight))
         : null,
+      // ---- the three inputs to the project-slot research bonus -------------
+      //
+      // `ProjectBonus = min(100%, max(0, Projects - orgSlotSpent - habSlotSpent)
+      // x 5%)` is what makes a project slot deliver 1.885714x a global-tech pip
+      // on this observer, and it is the term that turns the allocation model
+      // from a fit into a test. The RULE lives in
+      // shared/researchAllocationPricing.mjs so both runtimes apply the same
+      // one; only its inputs are published here.
+      //
+      // Absent stays null, and the two flags stay BOOLEAN rather than being
+      // coerced: an unread flag means the number of points already spent on
+      // slot unlocks is unknown, which makes the remaining count unknown --
+      // not equal to the total. `computeProjectBonus` refuses on either.
+      //
+      // `cachedYearlyRevenue.Projects` is a stock of Projects points despite
+      // sitting in a "yearly revenue" map (the observer reads 21 while
+      // `financials.projectedMonthlyIncome.Projects` reads 1.75, which is that
+      // same 21 divided by twelve and is NOT a monthly flow of anything).
+      projectPoints: firstNumericOrNull(f.cachedYearlyRevenue?.Projects),
+      orgProjectSlotUnlocked: typeof f.orgProjectSlotUnlocked === 'boolean' ? f.orgProjectSlotUnlocked : null,
+      habProjectSlotUnlocked: typeof f.habProjectSlotUnlocked === 'boolean' ? f.habProjectSlotUnlocked : null,
       availableProjectsCount: availableProjects.length,
       availableProjectNames: availableProjects,
       // How many alien-activity investigations this faction has completed. A

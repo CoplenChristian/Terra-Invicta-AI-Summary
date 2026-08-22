@@ -36,7 +36,7 @@
 import { DEFAULT_OBSERVER_FACTION_ID } from '../constants.mjs';
 import { asArray, round, sameId, toFiniteNumber } from '../util.mjs';
 import { summarizeFleetCapability } from '../fleetCapability.mjs';
-import { AVAILABILITY_STATES, buildAvailabilityResolver, monthsAtIncome } from '../researchAvailability.mjs';
+import { AVAILABILITY_STATES, buildAvailabilityResolver } from '../researchAvailability.mjs';
 import {
   ACTIONABLE_GROUPS,
   ASPIRATIONAL_GROUPS,
@@ -66,7 +66,8 @@ import {
   buildPlanningHorizon,
   chainReachability
 } from '../researchReachability.mjs';
-import { categoryBonusCaveat } from '../researchCategoryBonus.mjs';
+import { buildResearchCategoryBonuses, categoryBonusCaveat } from '../researchCategoryBonus.mjs';
+import { allocationPricingSummary, buildResearchAllocationPricing } from '../researchAllocationPricing.mjs';
 import { buildResearchSlotAllocation } from '../researchSlots.mjs';
 import { buildTechPath, observerGraph } from '../techGraph.mjs';
 import { propulsionResource } from './propulsion.mjs';
@@ -75,6 +76,26 @@ import { economicValueResource } from './economicValue.mjs';
 
 const DEFAULT_GROUP_LIMIT = 5;
 const MAX_GROUP_LIMIT = 50;
+
+/**
+ * What a chain's months mean, stated once and carried on every chain rather
+ * than inferred from a field name.
+ *
+ * `monthsAtCurrentIncome` was the old name and it is gone deliberately: the
+ * figure it carried was remaining cost over the WHOLE faction's income, which
+ * describes no allocation anyone would run. It omitted the +5%-per-pipped-slot
+ * term and the category and project bonuses, so for a project chain worked at
+ * full effort it overstated the time by roughly 2x, while for a chain worked at
+ * one pip beside the current layout it understated it by roughly 3x. A rename
+ * rather than a value change would have left the same wrong number under a
+ * better label.
+ */
+export const CHAIN_MONTHS_BASIS = 'every remaining step priced at FULL CONCENTRATION -- every pip on the '
+  + 'step being worked, one step at a time, at its own category and slot-kind multiplier -- then summed. '
+  + 'It is therefore a genuine LOWER bound on the chain\'s time to complete, which is the only honest '
+  + 'basis for a planning-horizon gate: a chain that does not fit even at full concentration certainly '
+  + 'does not fit. A chain worked at less than full effort takes longer, by up to the ratio between the '
+  + 'two scenarios on `research.allocationPricing`.';
 
 // Phase 3 defaults to 25 candidates; the ranking needs the whole set before it
 // can say which 5 lead, so it asks for the module's own maximum rather than
@@ -97,7 +118,8 @@ const nameOr = (value, fallback) => {
  */
 const categoryCaveat = (row) => categoryBonusCaveat({
   state: row?.monthsAtCurrentIncomeState,
-  categoryResearchBonus: row?.categoryResearchBonus
+  categoryResearchBonus: row?.categoryResearchBonus,
+  monthsAreUpperBound: row?.monthsAreUpperBound
 });
 
 // ---------------------------------------------------------------------------
@@ -115,6 +137,7 @@ function militaryRow({
   id, source, classKey, ruleKey, itemId, displayName, axisLabel, axisKind, axisBasis,
   multiple, availabilityState, gateProjectId, gateProjectName, remainingResearchCost,
   monthsAtCurrentIncome, monthsAtCurrentIncomeState, categoryResearchBonus, flatRateMonths,
+  monthsFastestAllocation, monthsAreUpperBound,
   unlockChance, clearsFloor, floorReason, alsoUnlocks, context,
   ruleGroupSize, clearsDeliveryFloor, deliveryFloorReason
 }) {
@@ -160,11 +183,14 @@ function militaryRow({
     gateProjectName: gateProjectName ?? null,
     remainingResearchCost: isZeroCost ? 0 : toFinite(remainingResearchCost),
     monthsAtCurrentIncome: isZeroCost ? 0 : toFinite(monthsAtCurrentIncome),
-    // Why that duration is what it is. The number is the FLAT rate even when
-    // the category is boosted, so the state and the bonus travel with it --
-    // without them a reader cannot tell a duration that already accounts for
-    // its category from one that does not. See shared/researchCategoryBonus.mjs.
+    // Why that duration is what it is. The number is priced through the slot
+    // allocation the item would receive, and when that allocation had to be
+    // ASSUMED the scenario travels with it -- without which a reader cannot
+    // tell a measured duration from a counterfactual one. See
+    // shared/researchAllocationPricing.mjs.
     monthsAtCurrentIncomeState: isZeroCost ? null : (monthsAtCurrentIncomeState ?? null),
+    monthsFastestAllocation: isZeroCost ? null : toFinite(monthsFastestAllocation),
+    monthsAreUpperBound: isZeroCost ? null : (monthsAreUpperBound ?? null),
     categoryResearchBonus: isZeroCost ? null : toFinite(categoryResearchBonus),
     flatRateMonths: isZeroCost ? null : toFinite(flatRateMonths),
     unlockChance: isZeroCost ? null : (unlockChance ?? null),
@@ -243,6 +269,8 @@ function propulsionRows(propulsion) {
         remainingResearchCost: best.remainingResearchCost,
         monthsAtCurrentIncome: best.monthsAtCurrentIncome,
         monthsAtCurrentIncomeState: best.monthsAtCurrentIncomeState,
+        monthsFastestAllocation: best.monthsFastestAllocation,
+        monthsAreUpperBound: best.monthsAreUpperBound,
         categoryResearchBonus: best.categoryResearchBonus,
         flatRateMonths: best.flatRateMonths,
         unlockChance: best.unlockChance,
@@ -313,6 +341,8 @@ function militaryValueRows(military) {
           remainingResearchCost: best.remainingResearchCost,
           monthsAtCurrentIncome: best.monthsAtCurrentIncome,
           monthsAtCurrentIncomeState: best.monthsAtCurrentIncomeState,
+          monthsFastestAllocation: best.monthsFastestAllocation,
+          monthsAreUpperBound: best.monthsAreUpperBound,
           categoryResearchBonus: best.categoryResearchBonus,
           flatRateMonths: best.flatRateMonths,
           unlockChance: best.unlockChance,
@@ -391,6 +421,8 @@ function militaryValueRows(military) {
         remainingResearchCost: best.remainingResearchCost,
         monthsAtCurrentIncome: best.monthsAtCurrentIncome,
         monthsAtCurrentIncomeState: best.monthsAtCurrentIncomeState,
+        monthsFastestAllocation: best.monthsFastestAllocation,
+        monthsAreUpperBound: best.monthsAreUpperBound,
         categoryResearchBonus: best.categoryResearchBonus,
         flatRateMonths: best.flatRateMonths,
         unlockChance: null,
@@ -557,7 +589,11 @@ function chainPromotionSummary(row) {
     destinationDisplayName: chain.destinationDisplayName ?? null,
     stepsCount: toFinite(chain.stepsCount),
     totalRemainingCost: toFinite(chain.totalRemainingCost),
-    monthsAtCurrentIncome: toFinite(chain.monthsAtCurrentIncome),
+    // Renamed from `monthsAtCurrentIncome` on 2026-08-22 together with the
+    // value it carries, so no consumer can read the new number under the old
+    // meaning. See CHAIN_MONTHS_BASIS.
+    monthsAtFullConcentration: toFinite(chain.monthsAtFullConcentration),
+    monthsBasis: CHAIN_MONTHS_BASIS,
     improvementMultiple: toFinite(row.improvementMultiple),
     axisLabel: row.axisLabel ?? null,
     chainValuePerResearchPoint: chainAwareValuePerResearchPoint(row),
@@ -657,9 +693,11 @@ function economicRows(economic, directions) {
       valuationState: item.valuationState,
       remainingResearchCost: toFinite(item.availability?.remainingResearchCost),
       monthsAtCurrentIncome: toFinite(item.availability?.monthsAtCurrentIncome),
-      // Why that duration is what it is: the flat rate, and whether a category
-      // bonus applies to it that the number does not include.
+      // Why that duration is what it is: which slot allocation priced it, and
+      // whether that allocation was read from the save or assumed.
       monthsAtCurrentIncomeState: item.availability?.monthsAtCurrentIncomeState ?? null,
+      monthsFastestAllocation: toFinite(item.availability?.monthsFastestAllocation),
+      monthsAreUpperBound: item.availability?.monthsAreUpperBound ?? null,
       categoryResearchBonus: toFinite(item.availability?.categoryResearchBonus),
       flatRateMonths: toFinite(item.availability?.flatRateMonths),
       unlockChance: item.availability?.unlockChance ?? null,
@@ -773,20 +811,20 @@ export const researchRankingResource = (snapshot, {
       // time. Saying "start now" of a candidate two projects away is the exact
       // misreading promotion has to avoid.
       const next = row.chainPromoted === true ? (row.chain?.immediateNextStep || null) : null;
-      const nextMonths = next && next.monthsAtCurrentIncome !== null && next.monthsAtCurrentIncome !== undefined
-        ? `${next.monthsAtCurrentIncome} mo`
+      const nextMonths = next && next.monthsAtFullConcentration !== null && next.monthsAtFullConcentration !== undefined
+        ? `${next.monthsAtFullConcentration} mo`
         : '—';
       if (free !== null && free > 0) {
         row.slotAction = 'free-slot';
         row.freeProjectSlots = free;
-        // The duration is the flat one, and the category bonus is named beside
-        // it rather than replacing it: withdrawing a usable figure to correct a
-        // few per cent costs the reader more than the error does.
+        // The duration is priced through the allocation this row would receive.
+        // Its own caveat names the assumption when one had to be made, so a
+        // reader cannot mistake an assumed pip allocation for a measured one.
         const timing = row.monthsAtCurrentIncome !== null
-          ? `${row.monthsAtCurrentIncome} mo at current research income${categoryCaveat(row)}`
+          ? `${row.monthsAtCurrentIncome} mo${categoryCaveat(row)}`
           : 'duration unavailable';
         row.slotNote = next
-          ? `${free} of ${cap} project slots free — start ${next.displayName}, the first of ${row.chain.stepsCount} steps (${nextMonths} at current research income).`
+          ? `${free} of ${cap} project slots free — start ${next.displayName}, the first of ${row.chain.stepsCount} steps (${nextMonths} at full concentration).`
           : `${free} of ${cap} project slots free — start now with nothing lost (${timing}).`;
       } else if (free !== null && free === 0 && cap > 0) {
         row.slotAction = 'occupied-slot';
@@ -813,6 +851,43 @@ export const researchRankingResource = (snapshot, {
 
   const graph = observerGraph(snapshot, mode, observerId);
   const byId = graph.byId;
+
+  // --- how a multi-step chain is priced -----------------------------------
+  // A chain is a PLAN, not a slot occupant, so 'how long does it take' has no
+  // answer until you say at what effort. It is priced here at FULL
+  // CONCENTRATION -- every pip on the step being worked, one step at a time --
+  // which is the one end of the range the model can state without inventing
+  // anything, and which makes the figure a genuine LOWER bound. That is the
+  // only honest thing to gate a planning horizon on: a chain that cannot fit
+  // even at full concentration certainly cannot fit.
+  //
+  // It replaces cost / whole-faction income, which was neither bound -- it
+  // omitted the +5%-per-pipped-slot term and the category and project bonuses
+  // entirely, so it OVERSTATED a concentrated chain by about 2x for a project.
+  const categoryBonuses = buildResearchCategoryBonuses(snapshot, { observerId });
+  const allocationPricing = buildResearchAllocationPricing(snapshot, { observerId });
+  const chainMonths = (path) => {
+    if (!path || path.researchCostComplete === false) return null;
+    let total = 0;
+    for (const step of asArray(path.remainingPath)) {
+      const cost = toFinite(step?.cost);
+      if (cost === null || cost < 0) return null;
+      const node = byId.get(step?.id) || null;
+      const bonus = categoryBonuses.bonusFor(node?.category ?? null);
+      const rate = allocationPricing.concentratedMonthlyRate({
+        category: node?.category ?? null,
+        isProject: node?.type === 'faction_project' ? true : (node?.type === 'global_tech' ? false : null),
+        categoryBonus: bonus?.effectiveBonus ?? null,
+        categoryBonusIsLowerBound: bonus?.isLowerBound ?? null
+      });
+      // A step whose rate cannot be formed makes the whole chain unmeasurable.
+      // A partial sum presented as a total is the same defect as a fabricated
+      // one, and this repo already carries that lesson on researchCost: -1.
+      if (!(rate?.monthlyRate > 0)) return null;
+      total += cost / rate.monthlyRate;
+    }
+    return round(total, 1);
+  };
 
   // --- military track ------------------------------------------------------
   // Deficit relevance is stamped BEFORE the dedupe, not after: the dedupe keeps
@@ -849,20 +924,20 @@ export const researchRankingResource = (snapshot, {
           destinationDisplayName: targetNode?.displayName || row.gateProjectName || row.gateProjectId,
           stepsCount: path.remainingPath.length,
           totalRemainingCost: path.totalRemainingResearchCost,
-          // The WHOLE chain's time to complete. The row's own
-          // `monthsAtCurrentIncome` is the destination project alone, which on a
-          // twelve-step chain is the last step with eleven left out -- printing
-          // that beside the chain total would put two numbers on screen that do
-          // not describe the same thing.
-          monthsAtCurrentIncome: path.researchCostComplete === false
-            ? null
-            : monthsAtIncome(path.totalRemainingResearchCost, monthlyResearch),
+          // The WHOLE chain's time to complete, AT FULL CONCENTRATION. The
+          // row's own `monthsAtCurrentIncome` is the destination project alone,
+          // which on a twelve-step chain is the last step with eleven left out
+          // -- printing that beside the chain total would put two numbers on
+          // screen that do not describe the same thing.
+          monthsAtFullConcentration: chainMonths(path),
+          monthsBasis: CHAIN_MONTHS_BASIS,
           researchCostComplete: path.researchCostComplete,
           uncostedNodes: path.uncostedNodes,
           routesEvaluated: path.routesEvaluated,
           reachability: chainReachability({
             totalRemainingCost: path.totalRemainingResearchCost,
             researchCostComplete: path.researchCostComplete,
+            months: chainMonths(path),
             horizon: planningHorizon
           }),
           immediateNextStep: {
@@ -875,7 +950,12 @@ export const researchRankingResource = (snapshot, {
             // from, so the two cannot disagree.
             availabilityState: nextState,
             availabilityLabel: AVAILABILITY_GROUP_LABELS[nextState] || nextState,
-            monthsAtCurrentIncome: monthsAtIncome(immediateNextNode.cost, monthlyResearch)
+            // Priced on the same basis as the chain it belongs to. Mixing a
+            // concentrated chain total with a flat next-step figure would put
+            // two incompatible numbers side by side.
+            monthsAtFullConcentration: chainMonths({
+              researchCostComplete: true, remainingPath: [immediateNextNode]
+            })
           },
           steps: path.remainingPath.map(p => ({
             id: p.id,
@@ -963,12 +1043,12 @@ export const researchRankingResource = (snapshot, {
             // them refuses the identical chain for being unreachable. Two
             // accountings of one fact that disagree is the drift this repo has
             // already been bitten by.
-            monthsAtCurrentIncome: path.researchCostComplete === false
-              ? null
-              : monthsAtIncome(path.totalRemainingResearchCost, monthlyResearch),
+            monthsAtFullConcentration: chainMonths(path),
+            monthsBasis: CHAIN_MONTHS_BASIS,
             reachability: chainReachability({
               totalRemainingCost: path.totalRemainingResearchCost,
               researchCostComplete: path.researchCostComplete,
+              months: chainMonths(path),
               horizon: planningHorizon
             }),
             researchCostComplete: path.researchCostComplete,

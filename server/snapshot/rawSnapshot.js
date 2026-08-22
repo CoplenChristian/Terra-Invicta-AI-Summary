@@ -19,6 +19,7 @@ const {
   CAMPAIGN_SETTINGS_UNAVAILABLE,
   describeCampaignDifficulty
 } = require('../../shared/campaignSettings.mjs');
+const { buildResearchCostScaling } = require('../../shared/researchCostScaling.mjs');
 const lookups = require('./lookups');
 const space = require('./space');
 const { firstNumericOrNull } = require('./numbers');
@@ -114,11 +115,23 @@ function buildRawSnapshot(saveData) {
   const resourceTransfers = space.buildResourceTransfers(rawFactions, { factionsById });
   const shipyardStations = space.buildShipyardStations(habModules, shipyardQueues);
 
+  // The campaign settings, read BEFORE research because the research-cost
+  // scaler derives from them and every research cost on this snapshot is on
+  // the effective basis it decides. saveParser bakes the block; a hand-built
+  // saveData that predates the field falls back to the explicit unavailable
+  // block rather than to an invented default.
+  const campaignSettings = saveData.campaignSettings || CAMPAIGN_SETTINGS_UNAVAILABLE;
+  // `researchSpeedMultiplier` acts on the effective research COST, measured
+  // 2026-08-22 -- see shared/researchCostScaling.mjs for the three independent
+  // lines of evidence and for what it overturns in docs/campaign-settings-spec.md.
+  // It is NOT applied to the research income anywhere.
+  const researchCostScaling = buildResearchCostScaling(campaignSettings);
+
   // Process Global Research
   const globalResearchObj = rawGlobalResearch[0] || {};
   const finishedTechsNames = Array.isArray(globalResearchObj.finishedTechsNames) ? globalResearchObj.finishedTechsNames : [];
   const techProgress = Array.isArray(globalResearchObj.techProgress) ? globalResearchObj.techProgress : [];
-  const activeGlobalSlots = buildGlobalResearchSlots(techProgress, { factionsById });
+  const activeGlobalSlots = buildGlobalResearchSlots(techProgress, { factionsById, researchCostScaling });
 
   // Process Factions Summary & Power Scores
   const analysisConfig = templateLoader.config.analysis || {};
@@ -137,7 +150,7 @@ function buildRawSnapshot(saveData) {
     councilors, habs, fleets, nations, controlPointsById, shipyardCountByFaction,
     shipyardQueues, habResearchByFaction, scoreWeights, scoreNormalizers,
     controlPointMaintenanceEffectsByFaction,
-    gameTimeString: saveData.gameTimeString
+    gameTimeString: saveData.gameTimeString, researchCostScaling
   });
 
   const allShipDesigns = factionsModule.collectShipDesigns(rawFactions);
@@ -152,9 +165,6 @@ function buildRawSnapshot(saveData) {
   const keyProjects = (analysisConfig.strategicProjects || []).map(project => project.id);
   const techMatrix = factionsModule.buildTechMatrix(keyProjects, { factions, rawFactions });
 
-  // saveParser bakes this; a hand-built saveData that predates the field falls
-  // back to the explicit unavailable block rather than to an invented default.
-  const campaignSettings = saveData.campaignSettings || CAMPAIGN_SETTINGS_UNAVAILABLE;
 
   // `TIGlobalValuesState.controlPointMaintenanceFreebies` -- half of the base
   // control-point cap, and the only place the game stores it. The other half is
@@ -207,6 +217,12 @@ function buildRawSnapshot(saveData) {
       // See the note where this is read: half of the base control-point cap,
       // and null when the save does not carry it.
       controlPointMaintenanceFreebies,
+      // Where the campaign's research speed setting actually acts: on the
+      // effective research COST. Every `researchCost`, `totalCost` and
+      // remaining-cost figure on this snapshot is already on this basis, and
+      // this block says which basis that is. Measured 2026-08-22; it overturns
+      // the "acts on output, not cost" verdict recorded on 2026-08-21.
+      researchCostScaling,
       // The label every surface renders. It is the bare difficulty for a stock
       // campaign and names the customisation for a custom one, so no reader
       // sees "Normal" on a campaign running four rates at 200%.
@@ -297,7 +313,7 @@ function buildRawSnapshot(saveData) {
     // plus the `resourcesGranted` / `orgGranted` rows, which are project fields
     // the tech tree does not carry at all.
     effectIndex: buildEffectIndex(),
-    techTree: buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions)
+    techTree: buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions, researchCostScaling)
   };
 }
 

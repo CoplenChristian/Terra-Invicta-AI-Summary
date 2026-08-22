@@ -333,7 +333,11 @@ test('every multiplier the save carries has a recorded verdict', () => {
   for (const key of ['researchSpeedMultiplier', 'miningProductivityMultiplier', 'nationalIPMultiplier', 'alienProgressionSpeed', 'controlPointMaintenanceFreebieBonus', 'averageMonthlyEvents']) {
     const verdict = CAMPAIGN_SETTING_VERDICTS[key];
     assert.ok(verdict, `no recorded verdict for ${key}`);
-    assert.match(verdict.verdict, /checked -- unaffected|not applicable/);
+    // `WRONG, corrected` is a legitimate verdict and the third one this table
+    // can hold. It was added on 2026-08-22 when the research verdict was
+    // overturned; a table that could only say "checked" or "not applicable"
+    // would have had to either lie or drop the entry.
+    assert.match(verdict.verdict, /checked -- unaffected|not applicable|WRONG, corrected/);
     assert.ok(verdict.evidence && verdict.evidence.length > 40, `${key} verdict carries no evidence`);
     // The original measurement date must stay readable. A verdict whose
     // EVIDENCE was later replaced says so after it, rather than losing the date
@@ -342,16 +346,36 @@ test('every multiplier the save carries has a recorded verdict', () => {
   }
 });
 
-test('a verdict whose evidence was withdrawn keeps the withdrawn reasoning, marked', () => {
-  // tracker 3b: the research verdict is right, but the 1.147x / 0.993x argument
-  // for it was not. Replacing evidence silently would leave a future reader
-  // unable to see that the old argument had been examined and rejected.
+test('the OVERTURNED research verdict keeps the wrong reasoning, marked, and names why it was wrong', () => {
+  // Two rounds of correction are recorded on this one entry and both must stay
+  // legible. 2026-08-21 cleared it; 2026-08-22 (tracker 3b) replaced the
+  // EVIDENCE while keeping the verdict; 2026-08-22 (this change) overturned the
+  // VERDICT. A reader who finds only the current text cannot tell that the old
+  // argument was examined -- and the way it went wrong is the reusable part.
   const research = CAMPAIGN_SETTING_VERDICTS.researchSpeedMultiplier;
-  assert.strictEqual(research.verdict, 'checked -- unaffected', 'the verdict itself did NOT change');
-  assert.match(research.evidence, /2\.1115x/, 'the replacement evidence is the measured absolute gain');
-  assert.match(research.evidence, /4\.2840x/, 'against what a pre-200% income would have delivered');
-  assert.doesNotMatch(research.evidence, /1\.147x/, 'the withdrawn ratio must not still stand as evidence');
-  assert.ok(research.evidenceSuperseded, 'the withdrawn argument must be kept and marked');
+  assert.match(research.verdict, /^WRONG, corrected 2026-08-22/, 'the verdict itself was overturned');
+  assert.match(research.appliesTo, /cost/, 'and it acts on cost, not on output');
+  assert.ok(research.correctedBy, 'with a pointer to where the correction lives');
+
+  // The evidence now covers BOTH sides, because the income half still stands
+  // and a reader who drops it applies the multiplier twice.
+  assert.match(research.evidence, /4,708\.568/, 'the tracked completion on the cost side');
+  assert.match(research.evidence, /0\.49716/, 'the ceiling across 278 rows');
+  assert.match(research.evidence, /2\.1115x/, 'and the income measurement, which still stands');
+
+  // The wrong evidence, kept and explained.
+  assert.ok(research.evidenceThatWasWrong, 'the overturned argument must be kept and marked');
+  assert.match(research.evidenceThatWasWrong, /Fleet Logistics/);
+  assert.match(research.evidenceThatWasWrong, /First\.gz/,
+    'and must name the save it came from, which carries no multiplier at all');
+
+  // Why the income measurement could not have caught it. Without this a future
+  // reader repeats the same non-discriminating test and concludes the same way.
+  assert.ok(research.whyTheIncomeMeasurementCouldNotCatchIt);
+  assert.match(research.whyTheIncomeMeasurementCouldNotCatchIt, /identical 2\.1115x/);
+
+  // The tracker-3b round is still recorded too.
+  assert.ok(research.evidenceSuperseded, 'the earlier withdrawn argument must survive as well');
   assert.match(research.evidenceSuperseded, /1\.147x/);
   assert.match(research.evidenceSuperseded, /WITHDRAWN/);
   assert.match(research.evidenceSuperseded, /-0\.209/, 'and must name the fitted parameter that made it circular');

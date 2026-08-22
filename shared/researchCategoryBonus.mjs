@@ -82,6 +82,10 @@
 // Plain ESM, no Node built-ins, no imports outside `shared/`.
 
 import { asArray, round, sameId, toFiniteNumber as toFinite } from './util.mjs';
+// One-way: the allocation pricing knows nothing about category bonuses, and
+// takes an already-resolved bonus number as an argument. Keeping the direction
+// one-way is what stops the two models growing a circular dependency.
+import { ALLOCATION_SCENARIOS } from './researchAllocationPricing.mjs';
 
 /** How a category's bonus resolved. `measured-zero` is a real, different state from `unresolved`. */
 export const CATEGORY_BONUS_STATES = Object.freeze({
@@ -764,18 +768,21 @@ export function buildResearchCategoryBonuses(snapshot, { observerId } = {}) {
  * against, so a flat duration can be too short or too long depending on the pip
  * share -- see `CATEGORY_RATE_MODEL.durationsStillFlatEvidence`.
  */
-export function categoryBonusCaveat({ state, categoryResearchBonus } = {}) {
-  if (state === CATEGORY_DURATION_STATES.flatRateBoosted) {
+export function categoryBonusCaveat({ state, categoryResearchBonus, monthsAreUpperBound } = {}) {
+  if (state === CATEGORY_DURATION_STATES.allocationAssumed) {
+    return ' — assumes one pip; faster with more';
+  }
+  if (state === CATEGORY_DURATION_STATES.receivesNothing) {
+    return ' — this slot carries no pips, so it receives nothing';
+  }
+  if (state === CATEGORY_DURATION_STATES.flatRateUnpriced) {
+    return ' — flat rate; the observer\'s slot allocation could not be read, so this is not priced';
+  }
+  if (state === CATEGORY_DURATION_STATES.allocationMeasured && monthsAreUpperBound === true) {
     const bonus = toFinite(categoryResearchBonus);
     return bonus === null
-      ? ' — flat rate; this category carries a research bonus that is not applied here'
-      : ` — flat rate; this category carries +${round(bonus * 100, 1)}% research, not applied here`;
-  }
-  if (state === CATEGORY_DURATION_STATES.unresolvedCategory) {
-    return ' — flat rate; this project\'s research category could not be resolved';
-  }
-  if (state === CATEGORY_DURATION_STATES.unchecked) {
-    return ' — flat rate, unchecked against any category bonus';
+      ? ' — at most; this category\'s research bonus could not be resolved'
+      : ` — at most; this category's measured +${round(bonus * 100, 1)}% research is a lower bound`;
   }
   return '';
 }
@@ -859,25 +866,53 @@ export function categoryBonusSummary(model) {
  * is NAMED beside the number instead, and the number stays labelled flat.
  */
 export const CATEGORY_DURATION_STATES = Object.freeze({
-  // The category carries no bonus for this observer, so the flat rate is the
-  // right rate for the category term and the duration stands unlabelled.
-  flatRate: 'flat-rate',
-  // The category carries a measured bonus. The flat duration STANDS and the
-  // bonus is stated beside it. Replaces the former `unknown`, which withdrew
-  // the figure.
-  flatRateBoosted: 'flat-rate-boosted',
-  // No measured research income, so no duration at any rate. The only state
-  // whose months are null.
-  unmeasuredIncome: 'unmeasured-income',
-  // The bonus model IS available and says this category cannot be resolved --
-  // either the project carries none, or it names one no template knows. The
-  // flat figure still stands; what is unknown is whether a bonus applies to it.
-  unresolvedCategory: 'unresolved-category',
-  // The bonus model could not be built at all (a snapshot published before the
-  // techBonuses catalogue existed). The flat duration is passed through
-  // UNCHANGED, exactly as it read before this model existed, and labelled --
-  // nothing about it was measured either way.
-  unchecked: 'category-unchecked'
+  // ---- the allocation-priced states, 2026-08-22 -------------------------
+  // The item occupies a research slot whose pip weight is read from the save,
+  // so every term of the rate is measured. This is the only state that is a
+  // measurement rather than a scenario.
+  allocationMeasured: 'allocation-measured',
+  // The item is not in a slot, so a pip allocation had to be ASSUMED. `months`
+  // is the `one-pip` scenario and `monthsFastest` is the `all-pips` one; the
+  // row names which it assumed. Never present this as a measurement.
+  allocationAssumed: 'allocation-assumed',
+  // The item sits in a slot carrying no pips. It receives NOTHING, so it has no
+  // time to complete: `months` is null with a reason, never a large number and
+  // never zero.
+  receivesNothing: 'slot-receives-nothing',
+  // The allocation model could not be built -- no `researchWeights`, no
+  // Projects figure, or no measured income for the observer. The FLAT figure is
+  // passed through exactly as it read before this model existed and labelled as
+  // unpriced. It is NOT an upper bound: at one pip of eight the flat figure
+  // measured 3.42x optimistic.
+  flatRateUnpriced: 'flat-rate-unpriced',
+  // No measured research income at all, so no duration at any rate.
+  unmeasuredIncome: 'unmeasured-income'
+});
+
+/**
+ * The four states this enum carried until 2026-08-22, kept rather than deleted
+ * because a reader who finds one in an older published snapshot needs to know
+ * what it meant and why it is gone.
+ *
+ * All four described the CATEGORY dimension of a duration that was, in every
+ * case, the flat whole-faction figure. That dimension has not been dropped --
+ * it moved onto explicit fields (`categoryResearchBonus`, and
+ * `monthsAreUpperBound` when the bonus is unresolved or a declared lower
+ * bound), which is strictly more information than a state code could carry.
+ * What changed is that the STATE now names the allocation basis, because that
+ * is the axis a reader has to know about: the same category, priced against a
+ * 3-pip slot rather than a 1-pip slot, moves by 3.6x.
+ */
+export const SUPERSEDED_DURATION_STATES = Object.freeze({
+  'flat-rate': 'the category carried no bonus, so the flat rate was right for the CATEGORY term. It was '
+    + 'still the whole faction\'s income rather than the slot\'s share, so it was wrong for the '
+    + 'ALLOCATION term -- by 2.15x to 3.42x on the observer\'s three 1-and-3-pip slots.',
+  'flat-rate-boosted': 'the category carried a measured bonus which was named beside the figure and not '
+    + 'applied. Now applied, inside the allocation multiplier.',
+  'unresolved-category': 'the category could not be resolved, so whether a bonus applied was undecidable. '
+    + 'Now priced with the bonus at its floor of zero, which makes the months an explicit UPPER bound '
+    + '(`monthsAreUpperBound: true`) rather than an unlabelled point estimate.',
+  'category-unchecked': 'the bonus catalogue was absent from the snapshot. Same treatment as above.'
 });
 
 /**
@@ -891,138 +926,245 @@ export const CATEGORY_DURATION_STATES = Object.freeze({
  * descriptors already follow.
  */
 export const CATEGORY_DURATION_BASES = Object.freeze({
-  [CATEGORY_DURATION_STATES.flatRate]: 'this project\'s research category carries no bonus for the '
-    + 'observer, so the flat monthly rate is the correct rate for the category term. The measured income '
-    + 'already includes every flat, non-category bonus.',
-  [CATEGORY_DURATION_STATES.flatRateBoosted]: 'this project\'s research category carries a measured '
-    + 'research bonus (the row\'s own `categoryResearchBonus`), and this duration does NOT apply it. It '
-    + 'is the flat basis throughout: remaining cost divided by the faction\'s measured monthly research '
-    + 'income. The flat figure is kept because the rate model puts the per-slot allocation factor at '
-    + '0.29x to 1.06x of that income depending on pip share -- so the flat figure runs both short and '
-    + 'long and no single correction closes it -- while the category term moves a number only a few per '
-    + 'cent. Do NOT read this as an upper bound on the actual completion time; at one pip of eight it '
-    + 'measured 3.4x optimistic. See `categoryBonuses.model.durationsStillFlatEvidence`.',
+  [CATEGORY_DURATION_STATES.allocationMeasured]: 'priced through the allocation this item\'s own research '
+    + 'slot receives, with the pip weight read from the save: remaining cost divided by '
+    + '`income x (1 + 5% per pipped slot) x pipShare x (1 + CategoryBonus + ProjectBonus)`. Every term is '
+    + 'measured. The model reproduces the observer\'s four measured slot deliveries to a single common '
+    + 'scale factor of 0.9858, so treat the figure as good to about 1.5%, not to the digit.',
+  [CATEGORY_DURATION_STATES.allocationAssumed]: 'this item is not in a research slot, so its pip '
+    + 'allocation is ASSUMED and the assumption drives the answer. `months` takes the `one-pip` scenario '
+    + '(one of the observer\'s current pips, layout otherwise unchanged -- which is the rate a 1-pip slot '
+    + 'is MEASURED to deliver on this save); `monthsFastest` takes `all-pips` (every pip on this item), '
+    + 'which is the fastest the game can deliver it and therefore a real lower bound. Do not read either '
+    + 'as a measurement.',
+  [CATEGORY_DURATION_STATES.receivesNothing]: 'this item sits in a research slot carrying no pips, so it '
+    + 'receives no research at all and has no time to complete. `months` is null: a large number would '
+    + 'imply slow progress and zero would imply immediate, and neither is true of a slot receiving '
+    + 'nothing.',
+  [CATEGORY_DURATION_STATES.flatRateUnpriced]: 'the observer\'s slot allocation could not be read from '
+    + 'this snapshot, so this is the UNPRICED flat figure: remaining cost divided by the whole faction\'s '
+    + 'monthly research income. It is not an upper bound -- a project runs in one slot and receives only '
+    + 'that slot\'s share, measured at 0.29x to 1.06x of this income, so at one pip of eight this figure '
+    + 'was 3.42x optimistic. The row\'s own reason says which term was missing.',
   [CATEGORY_DURATION_STATES.unmeasuredIncome]: 'no measured research income, so there is no honest '
-    + 'number of months at any rate. "0 months" would read as immediate.',
-  [CATEGORY_DURATION_STATES.unresolvedCategory]: 'this project\'s research category could not be '
-    + 'resolved -- it carries none, or it names one no installed template knows -- so whether a category '
-    + 'bonus applies to this flat figure is undecidable.',
-  [CATEGORY_DURATION_STATES.unchecked]: 'the observer\'s per-category research bonuses could not be '
-    + 'resolved from this snapshot, so this duration is the unadjusted flat-rate figure and has NOT been '
-    + 'checked against a category bonus. It reads exactly as it did before the category model existed.'
+    + 'number of months at any rate. "0 months" would read as immediate.'
 });
 
 /**
- * Months of research for a project in a given category, at a measured income.
+ * Months of research for one item, priced through the allocation it would
+ * actually receive.
  *
- * The engineer multiplier is NOT applied here and must not be: `monthlyIncome`
- * is a measured figure read from the save, so the flat +5%-per-engineer bonus
- * is already inside it. Only the per-CATEGORY variation is missing from a
- * single total, and that is what this function reasons about.
+ * REWRITTEN 2026-08-22. It used to return the FLAT figure -- remaining cost
+ * divided by the whole faction's monthly research income -- in every state, and
+ * name the category bonus beside it without applying it. Both halves of that
+ * were wrong, in opposite directions and by very different amounts:
  *
- * THE FLAT FIGURE IS NOT WITHDRAWN FOR A BOOSTED CATEGORY. `CATEGORY_RATE_MODEL`
- * is now pinned, and what it pins is that the category term is the SMALL part
- * of the flat rate's error: the per-slot allocation factor measured 0.29x to
- * 1.06x of the nominal income the flat rate divides by, depending on the pip
- * share. Withdrawing thirteen usable durations to correct three to five per
- * cent, while leaving a 3.6x per-slot spread that no scalar closes, is a worse
- * answer than printing the flat figure with its category bonus named beside it.
+ *   THE ALLOCATION TERM, which was missing entirely. A project runs in ONE
+ *   slot and receives only that slot's share. Measured on the observer, the
+ *   per-slot factor ran 0.4658x, 0.2928x, 1.0602x and 0.2928x of the flat
+ *   income, so the flat figure was 2.15x to 3.42x too SHORT on three slots and
+ *   1.06x too long on the fourth. That is now priced by
+ *   `shared/researchAllocationPricing.mjs`, and the category bonus is inside
+ *   its multiplier rather than named beside an unadjusted number.
  *
- * `months` is therefore null only when the income itself is unmeasured.
+ *   THE COST, which was the template figure. The campaign's
+ *   `researchSpeedMultiplier` acts on cost, so on a 200% campaign every
+ *   remaining cost handed to this function was twice what the game charges.
+ *   That is fixed upstream, in the snapshot -- see
+ *   `shared/researchCostScaling.mjs` -- so `remainingCost` arrives effective.
  *
- * @param {number|null} remainingCost
- * @param {number|null} monthlyIncome measured research income; engineers included
- * @param {Object|null} categoryRate a row from `buildResearchCategoryBonuses().bonusFor(category)`
+ * The engineer multiplier is still NOT applied and must not be: `monthlyIncome`
+ * is measured from the save and already includes every flat bonus.
+ *
+ * `months` is null in exactly two cases, and they are different facts: the
+ * income is unmeasured, or the item sits in a slot receiving no pips at all.
+ *
+ * @param {number|null} remainingCost   EFFECTIVE remaining cost, not template
+ * @param {number|null} monthlyIncome   measured research income; engineers included
+ * @param {Object|null} categoryRate    a row from `buildResearchCategoryBonuses().bonusFor(category)`
+ * @param {Object|null} allocationRate  a row from
+ *   `buildResearchAllocationPricing().rateFor(...)`. Absent falls back to the
+ *   flat figure, LABELLED `flat-rate-unpriced` -- never silently.
  */
-export function monthsAtIncomeForCategory(remainingCost, monthlyIncome, categoryRate) {
+/**
+ * The standard duration fields every row carries, so the four intel modules
+ * emit one shape rather than four that drift.
+ *
+ * Deliberately flat and short: the SENTENCES explaining each state are stated
+ * once per response in `research.categoryBonuses.durationStates`, never per
+ * row. Repeating them per row measured +41 KB on the military-value fixture.
+ *
+ * @param {Object} duration from `priceResearchDuration`
+ */
+export function researchDurationFields(duration) {
+  return {
+    monthsAtCurrentIncome: duration?.months ?? null,
+    // A state CODE. `research.categoryBonuses.durationStates` spells each one
+    // out once per response.
+    //
+    // The scenario a headline figure assumed is NOT a separate field: the state
+    // carries it. `allocation-assumed` always takes the `one-pip` scenario, and
+    // `research.allocationPricing.scenarios` names both ends once per response.
+    // A per-row copy of a constant is what the payload ceiling exists to catch.
+    // Nor is the slot's own monthly rate a field: it is exactly
+    // `remainingResearchCost / monthsAtCurrentIncome`, and the multiplier terms
+    // are stated once on `research.allocationPricing`.
+    monthsAtCurrentIncomeState: duration?.state ?? null,
+    // The second end of the range, and NOT derivable from anything else on the
+    // row: the fastest the game can deliver it, every pip on one slot. Null on
+    // a measured slot, where there is one rate and no scenario.
+    monthsFastestAllocation: duration?.monthsFastest ?? null,
+    // True when a term had to be priced at its floor (an unresolved category
+    // bonus, a category whose sum is a declared lower bound, or an unresolved
+    // slot kind), so the months are at most this and possibly fewer. A
+    // correctness flag, not decoration: without it an upper bound and a point
+    // estimate render identically.
+    monthsAreUpperBound: duration?.monthsAreUpperBound ?? null,
+    // The EFFECTIVE category bonus after the wiki diminishing-returns rule, now
+    // INSIDE the rate rather than named beside an unadjusted figure.
+    categoryResearchBonus: duration?.categoryBonus ?? null,
+    // The superseded whole-faction figure, kept so a reader can see what moved.
+    // It is a budget number, not a completion time -- see `monthsAtIncome`.
+    flatRateMonths: duration?.flatRateMonths ?? null
+  };
+}
+
+/**
+ * The one call every duration-printing surface makes.
+ *
+ * It exists so the four intel modules cannot drift: joining a category bonus to
+ * an allocation rate is four lines that must be identical everywhere, and the
+ * `isProject` decision in particular is the kind of thing one copy would get
+ * subtly wrong. A tech-tree node's `type` decides it, and an UNRESOLVED type
+ * stays `null` rather than defaulting to "project" -- defaulting would apply a
+ * +95% bonus to a global tech and halve its stated duration.
+ *
+ * @param {Object} args
+ * @param {number|null} args.remainingCost  EFFECTIVE remaining cost
+ * @param {number|null} args.monthlyIncome
+ * @param {Object|null} args.categoryBonuses    from `buildResearchCategoryBonuses`
+ * @param {Object|null} args.allocationPricing  from `buildResearchAllocationPricing`
+ * @param {string|null} args.itemId  the project or global-tech id, to find its slot
+ * @param {string|null} args.category
+ * @param {string|null} args.type    'faction_project' | 'global_tech' | null
+ */
+export function priceResearchDuration({
+  remainingCost = null, monthlyIncome = null, categoryBonuses = null,
+  allocationPricing = null, itemId = null, category = null, type = null
+} = {}) {
+  const bonus = typeof categoryBonuses?.bonusFor === 'function'
+    ? categoryBonuses.bonusFor(category ?? null)
+    : null;
+  const isProject = type === 'faction_project' ? true : (type === 'global_tech' ? false : null);
+  const rate = typeof allocationPricing?.rateFor === 'function'
+    ? allocationPricing.rateFor({
+      itemId,
+      category: category ?? null,
+      isProject,
+      categoryBonus: bonus?.effectiveBonus ?? null,
+      categoryBonusIsLowerBound: bonus?.isLowerBound ?? null
+    })
+    : null;
+  return monthsAtIncomeForCategory(remainingCost, monthlyIncome, bonus, rate);
+}
+
+export function monthsAtIncomeForCategory(remainingCost, monthlyIncome, categoryRate, allocationRate = null) {
   const flat = flatMonths(remainingCost, monthlyIncome);
   const category = categoryRate?.category ?? null;
+  const bonusState = categoryRate?.state ?? CATEGORY_BONUS_STATES.unresolved;
+  // The EFFECTIVE bonus after the wiki diminishing-returns rule, not the raw
+  // sum. A category measured at zero is a real measurement of zero; every other
+  // unresolved state is null, and null is NOT zero.
+  const effectiveBonus = bonusState === CATEGORY_BONUS_STATES.measuredZero
+    ? 0
+    : (bonusState === CATEGORY_BONUS_STATES.boosted ? (categoryRate.effectiveBonus ?? null) : null);
+
+  const shared = {
+    category,
+    categoryBonus: effectiveBonus,
+    categoryBonusSummed: categoryRate?.summedBonus ?? null,
+    categoryBonusState: bonusState,
+    // The old whole-faction figure, kept so a reader can see what moved and by
+    // how much rather than having to trust that something did.
+    flatRateMonths: flat,
+    categoryRateModel: CATEGORY_RATE_MODEL
+  };
 
   if (flat === null) {
     return {
+      ...shared,
       months: null,
+      monthsFastest: null,
+      monthsAreUpperBound: null,
+      allocationState: allocationRate?.state ?? null,
+      allocationScenario: null,
+      monthlyRate: null,
       state: CATEGORY_DURATION_STATES.unmeasuredIncome,
-      category,
-      categoryBonus: null,
       flatRateMonths: null,
-      basis: 'no measured research income, so there is no honest number of months at any rate',
-      categoryRateModel: null
+      basis: 'no measured research income, so there is no honest number of months at any rate'
     };
   }
 
-  const state = categoryRate?.state ?? CATEGORY_BONUS_STATES.unresolved;
+  const cost = toFinite(remainingCost);
+  const rate = toFinite(allocationRate?.monthlyRate);
+  const allocationState = allocationRate?.state ?? null;
 
-  if (state === CATEGORY_BONUS_STATES.measuredZero) {
+  // The allocation could not be formed. Return the flat figure UNCHANGED and
+  // say so -- withdrawing it would blank every snapshot published before the
+  // pricing existed, and calling it priced would be a lie.
+  if (allocationState === null || allocationState === 'allocation-unavailable' || rate === null) {
     return {
+      ...shared,
       months: flat,
-      state: CATEGORY_DURATION_STATES.flatRate,
-      category,
-      categoryBonus: 0,
-      flatRateMonths: flat,
-      basis: 'this category carries no research bonus for the observer, so the flat monthly rate is the '
-        + 'correct rate for it. The measured income already includes every flat, non-category bonus.',
-      categoryRateModel: null
+      monthsFastest: null,
+      monthsAreUpperBound: null,
+      allocationState,
+      allocationScenario: null,
+      monthlyRate: null,
+      state: CATEGORY_DURATION_STATES.flatRateUnpriced,
+      basis: 'this is the UNPRICED flat figure -- remaining cost divided by the whole faction\'s monthly '
+        + 'research income -- because the observer\'s slot allocation could not be read: '
+        + (allocationRate?.reason || 'no allocation model was supplied for this row')
+        + '. It is not an upper bound: a project receives only its own slot\'s share, measured at 0.29x '
+        + 'to 1.06x of this income.'
     };
   }
 
-  if (state === CATEGORY_BONUS_STATES.boosted) {
-    // The EFFECTIVE bonus, not the raw sum: the diminishing-returns rule is
-    // quantified now, so there is a right number to report and the sum is only
-    // an input to it. They are equal below the 50% threshold.
-    const effective = categoryRate.effectiveBonus ?? null;
+  // A slot carrying no pips receives nothing. Neither a large number nor zero
+  // is true of it, so there is no number.
+  if (allocationState === 'slot-receives-nothing') {
     return {
-      // The flat figure STANDS. See the block comment above.
-      months: flat,
-      state: CATEGORY_DURATION_STATES.flatRateBoosted,
-      category,
-      categoryBonus: effective,
-      categoryBonusSummed: categoryRate.summedBonus ?? null,
-      flatRateMonths: flat,
-      basis: `flat rate: remaining cost / measured monthly research income. This category carries a `
-        + `measured research bonus (effective ${effective}, from ${categoryRate.sourceCount} source(s) `
-        + `across ${(categoryRate.bySourceType || []).length} source type(s)) and this duration does NOT `
-        + 'apply it. The rate model is pinned and puts the per-slot allocation factor at 0.29x to 1.06x '
-        + 'of that income depending on pip share, which no category-term correction touches, so the flat '
-        + 'figure is kept and the bonus is stated beside it.',
-      categoryRateModel: CATEGORY_RATE_MODEL
+      ...shared,
+      months: null,
+      monthsFastest: null,
+      monthsAreUpperBound: false,
+      allocationState,
+      allocationScenario: null,
+      monthlyRate: 0,
+      state: CATEGORY_DURATION_STATES.receivesNothing,
+      basis: allocationRate.reason || 'this item sits in a research slot carrying no pips, so it receives '
+        + 'no research at all and has no time to complete'
     };
   }
 
-  if (state === CATEGORY_BONUS_STATES.unknownCategory
-    || state === CATEGORY_BONUS_STATES.absentCategory) {
-    return {
-      // Still the flat figure: what is unresolved is whether a bonus applies to
-      // it, and that question does not make the arithmetic below it wrong.
-      months: flat,
-      state: CATEGORY_DURATION_STATES.unresolvedCategory,
-      category,
-      categoryBonus: null,
-      flatRateMonths: flat,
-      basis: 'this is the flat-rate figure. '
-        + (categoryRate?.effectiveBonusUnavailableReason
-          || 'this project\'s research category could not be resolved, so whether a category bonus '
-            + 'applies to it is undecidable'),
-      categoryRateModel: CATEGORY_RATE_MODEL
-    };
-  }
+  const months = (cost === null || !(rate > 0)) ? null : round(cost / rate, 1);
+  const fastestRate = toFinite(allocationRate?.scenarios?.[ALLOCATION_SCENARIOS.allPips]?.monthlyRate);
+  const monthsFastest = (cost === null || fastestRate === null || !(fastestRate > 0))
+    ? null
+    : round(cost / fastestRate, 1);
 
-  // The model itself is unavailable, so nothing about this category was
-  // measured -- not that it is unboosted, and not that it is boosted. The flat
-  // duration is returned exactly as it read before this model existed, with the
-  // reason it could not be checked. Withdrawing it here would degrade every
-  // snapshot published before the catalogue was baked, on no evidence.
   return {
-    months: flat,
-    state: CATEGORY_DURATION_STATES.unchecked,
-    category,
-    categoryBonus: null,
-    flatRateMonths: flat,
-    // Always says what the number IS -- the unadjusted flat-rate figure -- and
-    // then why it has not been checked. The reason alone would leave a reader
-    // to guess whether the months beside it had been adjusted.
-    basis: 'this is the unadjusted flat-rate figure and it has not been checked against a category bonus: '
-      + (categoryRate?.effectiveBonusUnavailableReason
-        || 'the observer\'s per-category research bonuses could not be resolved from this snapshot'),
-    categoryRateModel: CATEGORY_RATE_MODEL
+    ...shared,
+    months,
+    // Only an assumed allocation has a second end; a measured slot has one rate.
+    monthsFastest: allocationState === 'assumed-allocation' ? monthsFastest : null,
+    monthsAreUpperBound: allocationRate.monthsAreUpperBound ?? null,
+    allocationState,
+    allocationScenario: allocationRate.scenario ?? null,
+    monthlyRate: allocationRate.monthlyRate,
+    state: allocationState === 'measured-slot-allocation'
+      ? CATEGORY_DURATION_STATES.allocationMeasured
+      : CATEGORY_DURATION_STATES.allocationAssumed,
+    basis: allocationRate.basis
   };
 }

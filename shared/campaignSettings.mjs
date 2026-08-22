@@ -249,24 +249,51 @@ export function describeCampaignDifficulty(difficulty, campaignSettings) {
  * correct. Each model also carries the same verdict as a comment at its own
  * site; this is the index of them.
  *
- * Every entry was established by measurement on 2026-08-21 against the campaign
- * saves, not by reading the code. The reason they all clear is structural: the
- * dashboard READS measured values out of the save almost everywhere rather than
- * computing them from base rates, so the multipliers are already inside what it
- * reads. Applying one anywhere would introduce a 2x error.
+ * FOUR OF THE FIVE CLEAR. The reason they clear is structural: the dashboard
+ * READS measured values out of the save almost everywhere rather than computing
+ * them from base rates, so those multipliers are already inside what it reads.
+ * Applying one to a read value would introduce a 2x error.
+ *
+ * THE FIFTH DID NOT, and its entry says so. `researchSpeedMultiplier` was
+ * cleared on 2026-08-21 and the clearance was WRONG: research cost is the one
+ * figure on the dashboard that came from a game TEMPLATE rather than from the
+ * save, and a template cannot carry a campaign setting. That is exactly where
+ * the multiplier had somewhere to hide, and the structural argument above --
+ * "the multipliers are already inside what it reads" -- is precisely why the
+ * template path was the one to check hardest and the one that was checked with
+ * a save from a different campaign.
+ *
+ * The lesson generalises: a structural argument tells you where to LOOK, and
+ * cannot substitute for looking. Any future figure computed from a template
+ * rather than read from the save needs its own measurement.
  */
 export const CAMPAIGN_SETTING_VERDICTS = Object.freeze({
   researchSpeedMultiplier: Object.freeze({
-    verdict: 'checked -- unaffected',
-    appliesTo: 'output, not cost',
-    site: 'shared/researchSlots.mjs, shared/intel/research*.mjs',
-    evidence: 'Fleet Logistics sat at accumulatedResearch 44,780 against a template researchCost of '
-      + '45,000 and was still in progress, so effective cost equals template cost. Income is already '
-      + 'post-multiplier: over 12/1/2034 -> 12/16/2034 12:00 the observer\'s slots delivered 2.1115x '
-      + 'cachedYearlyRevenue.Research, and 2.1420x is what the allocation terms predict with every term '
-      + 'READ from the save -- (1 + 5% x 4 pipped slots) x the pip-weighted (1 + CategoryBonus + '
-      + 'ProjectBonus). An income still needing the 200% would have delivered 4.2840x. The residual is a '
-      + 'uniform 1.4%, with no spare factor of 2 anywhere in it.',
+    verdict: 'WRONG, corrected 2026-08-22 -- it acts on COST',
+    appliesTo: 'the effective research cost: template cost / (multiplier / 100)',
+    correctedBy: 'shared/researchCostScaling.mjs, which carries the three independent lines of evidence',
+    site: 'shared/researchCostScaling.mjs (applied), server/snapshot/research.js and '
+      + 'server/snapshot/factions.js (applied at snapshot build), shared/researchAllocationPricing.mjs '
+      + '(consumes the effective cost)',
+    evidence: 'THE COST SIDE, measured 2026-08-22: the observer\'s Project_GasCoreFissionReactorVI '
+      + '(template researchCost 10,000) stood at 4,708.568 accumulated on 12/16/2034 12:00 and was '
+      + 'complete by 1/1/2035, with its slot delivering a measured 30.2467 points/day -- which reaches '
+      + '5,000 in 9.64 days and cannot reach 10,000 in under 175. 278 in-progress project rows across '
+      + 'the five saves carrying 200% never exceed 50% of template cost (maximum 0.49716), while saves '
+      + 'carrying no readable multiplier do routinely (First.gz 13 of 49, maximum 0.9756). '
+      + 'THE INCOME SIDE is unaffected and must NOT be multiplied: over 12/1/2034 -> 12/16/2034 12:00 '
+      + 'the observer\'s slots delivered 2.1115x cachedYearlyRevenue.Research against 2.1420x predicted '
+      + 'from the allocation terms alone, a uniform 1.4% residual.',
+    evidenceThatWasWrong: 'the 2026-08-21 verdict read "acts on OUTPUT, not on cost", on the strength '
+      + 'of Fleet Logistics sitting at accumulatedResearch 44,780 against a template researchCost of '
+      + '45,000 and still being in progress. That observation is real and reproduces -- on First.gz, '
+      + 'which carries NO TIMetadataState custom-difficulty block and therefore no '
+      + 'researchSpeedMultiplier. It established that a campaign WITHOUT a multiplier charges template '
+      + 'cost, which is true and silent about a campaign that has one.',
+    whyTheIncomeMeasurementCouldNotCatchIt: 'delivered research over cachedYearlyRevenue.Research has '
+      + 'research POINTS on both sides; cost never enters. "Income already doubled, cost unscaled" and '
+      + '"income never doubled, cost halved" predict the identical 2.1115x. The 4.2840x alternative it '
+      + 'ruled out -- income doubled AND everything else unchanged -- was a hypothesis nobody held.',
     evidenceSuperseded: 'the original wording cited ALLOCATION_MODEL reproducing delivery at 1.147x and '
       + '0.993x, "where a missing 200% would have read ~2.0". WITHDRAWN 2026-08-22 (tracker 3b) as '
       + 'invalid reasoning, though the conclusion it reached was right. A delivered/predicted ratio near '
@@ -275,7 +302,7 @@ export const CAMPAIGN_SETTING_VERDICTS = Object.freeze({
       + '~2 to hide. The figures were also not reproducible as recorded: they name a pip layout of '
       + '[0,0,3,3,3,0] and dates in 2033, while all four MD5-verified saves carry [0,0,3,1,3,1] and run '
       + '12/1/2034 to 1/1/2035. Kept, marked, and replaced by the measurement above.',
-    measuredOn: '2026-08-21; evidence replaced 2026-08-22'
+    measuredOn: '2026-08-21; income evidence replaced 2026-08-22; VERDICT OVERTURNED 2026-08-22'
   }),
   miningProductivityMultiplier: Object.freeze({
     verdict: 'checked -- unaffected',

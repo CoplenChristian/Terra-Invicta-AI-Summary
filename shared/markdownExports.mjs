@@ -356,6 +356,40 @@ export function evaluateHostileRelevance(fleet, ourHabIds, ourOrbits, gameDate) 
 // "nothing to report", which is the same failure class as fabricating data.
 // ---------------------------------------------------------------------------
 
+/**
+ * The one line that tells an agent what basis every RP figure in a research
+ * section is on.
+ *
+ * It exists because the figures MOVED on 2026-08-22 and nothing else in these
+ * documents would say so. This campaign's `researchSpeedMultiplier` acts on the
+ * effective research COST -- measured; see `shared/researchCostScaling.mjs` --
+ * so "43 / 50 RP" is what the game charges while the wiki and the shipped
+ * templates both state 100 for the same project. An agent comparing the two
+ * without this line would conclude the export was wrong.
+ *
+ * Returns '' when there is nothing to say, so a caller can push it blindly:
+ * a stock campaign needs no note, and a snapshot published before the scaling
+ * existed says its multiplier is unknown rather than claiming a basis.
+ *
+ * @param {Object|null} filteredSnapshot
+ * @returns {string}
+ */
+export function researchCostBasisLine(filteredSnapshot) {
+  const scaling = filteredSnapshot?.metadata?.researchCostScaling || null;
+  if (!scaling) return '';
+  if (scaling.state === 'campaign-scaled') {
+    const percent = scaling.multiplierPercent;
+    return `*Every RP figure below is the EFFECTIVE cost: template cost ÷ this campaign's `
+      + `${percent}% research speed setting. The shipped templates state ${scaling.costDivisor}× these `
+      + `numbers; the game charges these.*`;
+  }
+  if (scaling.state === 'campaign-multiplier-unknown') {
+    return `*RP figures below are raw template costs. This snapshot carries no readable campaign research `
+      + `speed multiplier, so whether the game charges these has NOT been checked.*`;
+  }
+  return '';
+}
+
 /** Hard ceiling for /latest-war-room.md. Output is guaranteed strictly below. */
 export const WAR_ROOM_BYTE_BUDGET = 30720; // 30 KB
 /** Hard ceiling for /latest-threats.md. Output is guaranteed strictly below. */
@@ -1575,8 +1609,14 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
 
   blocks.push(fixedBlock('unlocked-technology-census', censusLines));
 
+  // The cost basis goes in the HEADING, not in a trailing line: a budget pass
+  // that empties this block still renders its heading, and a reader who sees
+  // the RP figures must always see what basis they are on.
+  const costBasis = researchCostBasisLine(filteredSnapshot);
   const slotBlock = listBlock('research-slots', {
-    headingLines: [`### Global Research Slots`],
+    headingLines: costBasis
+      ? [`### Global Research Slots`, ``, costBasis]
+      : [`### Global Research Slots`],
     emptyLines: [`*No global research slots tracked.*`],
     budgetEmptyLines: budgetEmptyNote('global research slots', '/api/intel/research', false),
     budgetNote: budgetOmissionNote('global research slots', '/api/intel/research'),
@@ -1963,12 +2003,20 @@ function researchChainPromotionBlocks(filteredSnapshot, observerId, observerName
   const promoted = asArray(promotion.promoted);
   const declined = asArray(promotion.declined);
 
+  // `mo@full` rather than a bare `mo`, because the figure changed meaning on
+  // 2026-08-22: it is now the chain priced at FULL CONCENTRATION -- every pip
+  // on the step being worked -- which is a lower bound, where the old number
+  // was cost over the whole faction's income and was neither bound. Four
+  // characters is cheap insurance against an agent carrying the old reading
+  // forward; the byte budget is 30 KB and this block is a handful of rows.
   const chainFacts = (row) => {
     const steps = num(row.stepsCount);
     const parts = [
       steps === null ? 'UNKNOWN steps' : `${steps} step(s)`,
       `${localeOr(row.totalRemainingCost)} RP`,
-      isMeasured(row.monthsAtCurrentIncome) ? `${fixedOr(row.monthsAtCurrentIncome, 1)} mo` : 'UNKNOWN months'
+      isMeasured(row.monthsAtFullConcentration)
+        ? `${fixedOr(row.monthsAtFullConcentration, 1)} mo@full`
+        : 'UNKNOWN months'
     ];
     return parts.join(', ');
   };
@@ -2386,6 +2434,13 @@ export function renderCompactSnapshotMarkdown(filteredData) {
   lines.push(`## Technology`);
   lines.push(``);
   lines.push(`### Global Research Slots:`);
+  // What basis every RP figure in this section is on. See researchCostBasisLine.
+  const technologyCostBasis = researchCostBasisLine(filteredData);
+  if (technologyCostBasis) {
+    lines.push(``);
+    lines.push(technologyCostBasis);
+    lines.push(``);
+  }
   for (const slot of filteredData.globalResearch.activeSlots) {
     // An unresolved tech template leaves totalCost -- and therefore percent
     // -- genuinely unknown. Say so instead of printing "null%" or throwing

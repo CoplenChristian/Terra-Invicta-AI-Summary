@@ -47,8 +47,10 @@ import {
   MEASURED_INCOME_BASIS,
   buildResearchCategoryBonuses,
   categoryBonusSummary,
-  monthsAtIncomeForCategory
+  priceResearchDuration,
+  researchDurationFields
 } from '../researchCategoryBonus.mjs';
+import { allocationPricingSummary, buildResearchAllocationPricing } from '../researchAllocationPricing.mjs';
 import {
   CONTEXT_KINDS,
   CONTEXT_QUANTITY_MAP,
@@ -124,7 +126,7 @@ const unpricedContextGroup = (context) => {
  */
 function priceNode({
   node, effectIndex, baseline, quantities, availability, monthlyResearch, monthlyIncome,
-  categoryBonuses, detail
+  categoryBonuses, allocationPricing, detail
 }) {
   const rows = [];
   const contextsSeen = new Set();
@@ -257,14 +259,21 @@ function priceNode({
     : (grant?.org ? 'org-only' : (unlockRows > 0 ? 'unlocks-only' : 'none'));
 
   const remaining = availability?.remainingResearchCost ?? null;
-  // The duration is the flat figure, labelled with the observer's measured
-  // bonus for THIS project's category rather than adjusted by it -- see
-  // `researchCategoryBonus.mjs` for why the flat figure is kept.
-  const duration = monthsAtIncomeForCategory(
-    remaining,
-    monthlyResearch,
-    categoryBonuses.bonusFor(node.category ?? null)
-  );
+  // Priced through the allocation this node's own slot receives -- or, when it
+  // is not in a slot, through a LABELLED assumed one with the fastest case
+  // beside it. The category bonus is inside that multiplier now rather than
+  // named beside an unadjusted flat figure. The node's `type` decides whether
+  // the project bonus applies; economic nodes are a mix of global techs and
+  // faction projects, so it genuinely varies here.
+  const duration = priceResearchDuration({
+    remainingCost: remaining,
+    monthlyIncome: monthlyResearch,
+    categoryBonuses,
+    allocationPricing,
+    itemId: node.id,
+    category: node.category ?? null,
+    type: node.type ?? null
+  });
 
   return {
     id: node.id,
@@ -278,16 +287,7 @@ function priceNode({
       researchCost: availability?.researchCost ?? null,
       researchProgress: availability?.researchProgress ?? null,
       remainingResearchCost: remaining,
-      monthsAtCurrentIncome: duration.months,
-      // Why that number is what it is: whether the flat rate is the right rate
-      // for this category, or the right rate with an unapplied bonus beside it.
-      // The state is a CODE; `research.categoryBonuses.durationStates` spells
-      // each one out once.
-      monthsAtCurrentIncomeState: duration.state,
-      // The EFFECTIVE bonus after the wiki diminishing-returns rule, not the
-      // raw sum. Equal to the sum below the 50%-per-source-type threshold.
-      categoryResearchBonus: duration.categoryBonus,
-      flatRateMonths: duration.flatRateMonths,
+      ...researchDurationFields(duration),
       unlockChance: availability?.unlockChance ?? null,
       missingPrerequisites: detail === 'full' ? (availability?.missingPrerequisites ?? null) : null
     },
@@ -376,6 +376,9 @@ export const economicValueResource = (snapshot, {
   // Built once for the whole candidate sweep rather than per node: it walks
   // every hab module and councilor the observer holds.
   const categoryBonuses = buildResearchCategoryBonuses(snapshot, { observerId });
+  // Built once for the whole sweep, like the bonuses above: it reads the
+  // observer's slot layout and Projects figures, neither of which vary by node.
+  const allocationPricing = buildResearchAllocationPricing(snapshot, { observerId });
   const baseline = buildEffectBaseline(snapshot, observerId);
 
   const head = {
@@ -419,6 +422,9 @@ export const economicValueResource = (snapshot, {
         monthlyResearchIncome: monthlyResearch,
         monthlyResearchIncomeBasis: MEASURED_INCOME_BASIS,
         categoryBonuses: categoryBonusSummary(categoryBonuses),
+        allocationPricing: allocationPricingSummary(
+          allocationPricing, snapshot?.metadata?.researchCostScaling ?? null
+        ),
         states: Object.values(AVAILABILITY_STATES)
       },
       filter: { context: null, state: null, candidateLimit, detail: wantsFull ? 'full' : 'summary' },
@@ -452,6 +458,7 @@ export const economicValueResource = (snapshot, {
       monthlyResearch,
       monthlyIncome,
       categoryBonuses,
+      allocationPricing,
       detail: wantsFull ? 'full' : 'summary'
     });
     if (wantedContext && !row.contexts.includes(wantedContext)) continue;
@@ -602,9 +609,15 @@ export const economicValueResource = (snapshot, {
         : resolver.reason,
       monthlyResearchIncome: monthlyResearch,
       monthlyResearchIncomeBasis: MEASURED_INCOME_BASIS,
-      // The observer's per-category research bonuses, with their sources, and
-      // the model that says why no duration is divided by them.
+      // The observer's per-category research bonuses, with their sources. They
+      // are now applied, inside the allocation multiplier below.
       categoryBonuses: categoryBonusSummary(categoryBonuses),
+      // The slot allocation every duration on this response is priced through,
+      // plus the campaign research-cost basis the remaining costs are on. A
+      // duration is a cost over a rate; both halves are attributed here.
+      allocationPricing: allocationPricingSummary(
+        allocationPricing, snapshot?.metadata?.researchCostScaling ?? null
+      ),
       states: Object.values(AVAILABILITY_STATES),
       availabilityStates: tallyAvailabilityStates(candidates),
       completedAndExcluded: completedSkipped

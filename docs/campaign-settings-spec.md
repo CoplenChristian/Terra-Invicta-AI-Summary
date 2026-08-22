@@ -1,22 +1,25 @@
-# Campaign settings — measured, and the numbers are already right
+# Campaign settings — four of five verdicts hold, and the research one was WRONG
 
-Written 2026-08-21 against `2b6e3d5`. **Conclusion reached by measurement, 2026-08-21:
-no rate model needs changing.** What remains is a display and transparency fix.
+Written 2026-08-21 against `2b6e3d5`. **Revised 2026-08-22 against `431be86`** (tracker 3b),
+which replaced the research evidence but kept its conclusion.
 
-**Revised 2026-08-22 against `431be86`** (tracker 3b). The verdict table is unchanged and
-every entry still holds. What changed is the **evidence** under "Research — acts on output,
-not on cost": the delivered/predicted pair of 1.147× / 0.993× could not carry the weight put
-on it, and has been replaced by a direct measurement. The superseded reasoning is kept in
-place, marked, in that section.
+**Revised again 2026-08-22 against `866b8a8`, and this revision OVERTURNS a verdict.**
+`researchSpeedMultiplier` does **not** act on output. It acts on the effective research
+**cost**, and on this 200% campaign the game charges exactly **half** the template figure.
+Every research cost, completion percentage and duration the dashboard printed was therefore
+2× too high from 2026-08-21 until the correction. The user reported that campaign settings
+were not reflected in the durations, and the user was right.
 
-This campaign runs custom difficulty with four rates at 200%. The premise of this spec was
-that the dashboard, which bakes only the difficulty *label*, must therefore be projecting
-durations and rates from stock numbers. **That premise is wrong**, and implementing the
-"fix" would have introduced 2× errors into figures that are currently correct.
+The measurement, the three independent lines behind it, and why the earlier proof could not
+see it are in `shared/researchCostScaling.mjs` and in the corrected section below. The
+superseded reasoning is kept in place, marked.
 
-The reason is structural: the dashboard **reads measured values from the save** almost
-everywhere rather than computing from base rates, so the multipliers are already baked into
-what it reads.
+**The other four verdicts stand and were not re-opened.** Mining, national IP, alien
+progression and control points are unaffected for the reason the original spec gave: the
+dashboard reads measured values from the save almost everywhere rather than computing from
+base rates, so those multipliers are already inside what it reads. Research was the one
+place where a figure came from a **template** rather than from the save, and that is exactly
+where the multiplier had somewhere to hide.
 
 ---
 
@@ -42,29 +45,94 @@ averageMonthlyEvents                   "5"
 
 | multiplier | verdict |
 | :-- | :-- |
-| `researchSpeedMultiplier` | **checked — unaffected.** Acts on output, not cost |
+| `researchSpeedMultiplier` | **WRONG, corrected 2026-08-22. Acts on COST.** Effective cost = template ÷ (multiplier/100). Applied in `shared/researchCostScaling.mjs` |
 | `miningProductivityMultiplier` | **checked — unaffected.** Site rates are realised extraction |
 | `nationalIPMultiplier` | **checked — unaffected.** `computeBaseIP` reproduces the save's own figure |
 | `alienProgressionSpeed` | **checked — unaffected.** Hate is `save-derived`; venting rate is measured or refused |
 | `controlPointMaintenanceFreebieBonus` | **not applicable.** No model computes control-point upkeep |
 | `averageMonthlyEvents` | **not applicable.** Nothing consumes an event rate |
 
-### Research — acts on output, not on cost
+### Research — acts on COST, and the 2026-08-21 verdict was wrong
 
-Scanning all 14 saves for the highest accumulated-versus-template-cost ratio on an item
-still in progress:
+> **OVERTURNED 2026-08-22.** This section's heading used to read "acts on output, not on
+> cost", and the whole dashboard priced research against the raw template cost on the
+> strength of it. The evidence below is real and reproduces; it is about a **different
+> campaign**. The superseded text is kept in full, marked, because how it went wrong is the
+> useful part.
+
+**Superseded, kept — the 2026-08-21 cost argument:**
+
+> Scanning all 14 saves for the highest accumulated-versus-template-cost ratio on an item
+> still in progress:
+>
+> ```
+> Fleet Logistics   accumulatedResearch 44,780 / template researchCost 45,000 = 99.5%
+>                   still in progress (First.gz)
+> ```
+>
+> A halved effective cost of 22,500 would have completed that project long before it reached
+> 44,780. **Effective cost equals template cost**, so every remaining-cost figure the advisor
+> prints is right.
+
+**`First.gz` carries no `TIMetadataState` custom-difficulty block at all.** Its
+`campaignSettings.available` is `false` and it has no `researchSpeedMultiplier`. The
+observation is therefore evidence that a campaign *with no multiplier* charges template
+cost — which is true, and silent about a campaign that has one. The sweep was described as
+covering "all 14 saves" but reported only its maximum, and the maximum came from the one
+family of saves that could not answer the question.
+
+#### What the corrected measurement shows
+
+Three independent lines, 2026-08-22, on the same four MD5-verified frozen saves plus three
+further campaign saves and four controls:
+
+**1. Tracked to completion, on the observer's own project.**
+`Project_GasCoreFissionReactorVI` carries a template `researchCost` of 10,000. At
+12/16/2034 12:00 it stood at **4,708.568** accumulated. It was **complete** by 1/1/2035,
+15.5 days later, and its slot's delivery rate over the preceding interval was measured — not
+modelled — at **30.2467 points/day**.
 
 ```
-Fleet Logistics   accumulatedResearch 44,780 / template researchCost 45,000 = 99.5%
-                  still in progress (First.gz)
+days from 4,708.568 to the TEMPLATE cost of 10,000    174.94     impossible
+days from 4,708.568 to template/2 = 5,000               9.64     fits
+interval available                                     15.50
 ```
 
-A halved effective cost of 22,500 would have completed that project long before it reached
-44,780. **Effective cost equals template cost**, so every remaining-cost figure the advisor
-prints is right.
+The successor project's own accrual in the tail of the same interval (`Project_ColonyCore`,
+155.5453 points) places the handover at ~10.4 days, putting the effective cost at **~5,022** —
+template/2 to within 0.44%, inside the allocation model's own 1.4% band.
 
-Income is already post-multiplier too. `monthsAtCurrentIncome` derives from
-`cachedYearlyRevenue.Research`.
+**2. A hard ceiling at exactly 50%.** Across the five saves carrying
+`researchSpeedMultiplier: 200%` — the four frozen ones plus `initiative.gz`, `Again.gz`,
+`Quicksave.gz` — **278 in-progress project rows** with any accumulated research:
+
+```
+[0.0,0.1) 83   [0.1,0.2) 33   [0.2,0.3) 36   [0.3,0.4) 15   [0.4,0.5) 12
+[0.5,0.6)  0   [0.6,0.7)  0   [0.7,0.8)  0   [0.8,0.9)  0   [0.9,1.0)  0
+```
+
+Maximum 0.49716. A quantity caught mid-flight at random does not stop dead at one half.
+
+**3. A two-sided control.** The corpus is not incapable of showing rows past 50%. Saves with
+no readable multiplier do it routinely: `First.gz` 13 of 49 rows above 0.5 with a maximum of
+0.9756, `servant.gz` 1 of 37. CLAUDE.md's warning about one-sided pins is answered — illegal
+states are observed to be reachable elsewhere and unreachable here.
+
+`TIGlobalResearchState.useHarshTree` is `false` in all eight saves examined, so it is not the
+confound.
+
+#### The income half stands, for a better reason than was given
+
+`cachedYearlyRevenue.Research` is the game's own realised annualised rate, and the observer's
+measured per-slot delivery matches it times the allocation terms to a uniform 1.4%. It must
+**not** be multiplied again. Applying the campaign multiplier to both cost and income would
+produce the 4× error the original verdict was guarding against.
+
+But note what the 2.1115× measurement below can and cannot do. **Both sides of it are
+research POINTS; cost never enters.** "Income already doubled, cost unscaled" and "income
+never doubled, cost halved" predict the identical 2.11×. The 4.2840× alternative it ruled out
+— income doubled *and* everything else unchanged — was the one hypothesis nobody held. It is
+a correct measurement of the income path and it **cannot discriminate** on the cost path.
 
 > **The argument for that was replaced on 2026-08-22 (tracker 3b). The conclusion stands;
 > the reasoning that reached it did not.** The superseded wording is kept immediately below.
@@ -120,11 +188,20 @@ A campaign-wide research multiplier cannot produce a ratio *between two slot kin
 **And the same measurement does not license the opposite error.** The 2.1115× gain is a
 whole-faction sum over four slots; a duration is about one slot, whose measured factors are
 0.4658×, 0.2928×, 1.0602× and 0.2928× of the nominal income. `docs/research-category-rate-spec.md`
-carries the arithmetic. No duration moves.
+carries the arithmetic.
+
+> **"No duration moves" — WITHDRAWN 2026-08-22.** That sentence ended this section until the
+> cost side was measured, and it was wrong twice over. Every duration moved, for two
+> independent reasons: the remaining cost halved (this section), and the rate a project
+> actually receives is its slot's share rather than the whole faction's income
+> (`shared/researchAllocationPricing.mjs`). On the observer's 1-pip project slot the two
+> corrections push the same way and the stated duration went from 0.7 months to 2.3 — against
+> 2.35 measured from the slot's own accumulated deltas.
 
 The player's report that "techs are half what they normally are" describes the experience
-accurately — research completes twice as fast — but that comes from doubled output, and the
-dashboard already reflects it.
+accurately — and the mechanism is now measured rather than assumed. It is **not** doubled
+output: it is halved cost. The distinction was invisible from the income side, which is why
+it took a cost-side measurement to find.
 
 ### Mining — site rates are realised extraction
 
@@ -230,8 +307,12 @@ the `%`, parse, and treat unparseable as **`null` — never `0`, never a silent 
 
 - All ten settings baked and parsed; `"200%"` → a number, never `0`.
 - A `customDifficulty: true` campaign never renders as plain "Normal".
-- **Every existing figure is unchanged.** Research costs, `monthsAtCurrentIncome`, mining
-  tonnes/month and advise IP must produce byte-identical output before and after. This is
-  the most important criterion: the measurements above say they are already correct, and a
-  regression here would be a 2× error introduced by the change.
+- ~~**Every existing figure is unchanged.** Research costs, `monthsAtCurrentIncome`, mining
+  tonnes/month and advise IP must produce byte-identical output before and after.~~
+  **AMENDED 2026-08-22.** Mining tonnes/month and advise IP are unchanged and must stay so.
+  Research costs and durations are **not**: they were wrong, and the correction moves them
+  (see the overturned verdict above). What survives is the reason the criterion existed —
+  that a 2× error must not be *introduced* — and it now cuts the other way: applying the
+  multiplier to the research **income** as well as to the cost would be the 4× version of
+  the same mistake. `shared/researchCostScaling.mjs` refuses it explicitly.
 - Both modes; full suite green with exact pass/fail/skip counts.

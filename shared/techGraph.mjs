@@ -13,6 +13,7 @@
 //   progress state on top of it.
 
 import { asArray, toFiniteNumber, sameId } from './util.mjs';
+import { RESEARCH_COST_SCALING_UNKNOWN, effectiveResearchCost } from './researchCostScaling.mjs';
 
 export const UNLOCK_CLASSES = [
   'ship_hull', 'weapon', 'missile', 'point_defense', 'drive', 'reactor',
@@ -198,6 +199,12 @@ export function buildTechGraph(templates, saveState = {}) {
   const projects = asArray(saveState.projects || (templates && templates.allProjects ? templates.allProjects() : []));
   const effects = saveState.effects || {};
   const componentByEffect = saveState.componentByEffect || {};
+  // The campaign's research-cost scaler. Absent (a test harness, a caller
+  // written before it existed) degrades to the unknown block, which returns
+  // template costs UNCHANGED -- so every existing caller is byte-identical and
+  // nothing silently claims to have been checked.
+  const costScaling = saveState.researchCostScaling || RESEARCH_COST_SCALING_UNKNOWN;
+  const scaledCost = (template) => effectiveResearchCost(numOrNull(template?.researchCost), costScaling);
 
   const byId = new Map();
   const nodeList = [];
@@ -235,10 +242,14 @@ export function buildTechGraph(templates, saveState = {}) {
       // `|| 0` turned an unresolved cost into a zero cost, and a zero cost
       // makes progress/cost either Infinity or NaN downstream. Absent stays
       // null; researchPercent then reports null rather than NaN.
-      researchCost: numOrNull(template.researchCost),
+      //
+      // EFFECTIVE cost: the campaign's `researchSpeedMultiplier` acts on cost,
+      // measured 2026-08-22. Unscaled with no readable multiplier.
+      researchCost: scaledCost(template),
+      templateResearchCost: numOrNull(template.researchCost),
       researchProgress: 0,
       // 0% only means something against a known cost.
-      researchPercent: percentOrNull(0, template.researchCost),
+      researchPercent: percentOrNull(0, scaledCost(template)),
       contributors: [],
       prerequisites: prereqRefs,
       effects: asArray(template.effects).map(eid => effectRecord(eid, effects[eid], componentByEffect)),
@@ -296,10 +307,12 @@ export function buildTechGraph(templates, saveState = {}) {
       type: 'faction_project',
       category,
       subcategory: template.AI_projectRole || template.AI_techRole || null,
-      // See techNode above: an unresolved cost is unknown, not zero.
-      researchCost: numOrNull(template.researchCost),
+      // See techNode above: an unresolved cost is unknown, not zero, and the
+      // published figure is the EFFECTIVE cost on this campaign.
+      researchCost: scaledCost(template),
+      templateResearchCost: numOrNull(template.researchCost),
       researchProgress: 0,
-      researchPercent: percentOrNull(0, template.researchCost),
+      researchPercent: percentOrNull(0, scaledCost(template)),
       repeatable: !!template.repeatable,
       oneTimeGlobally: !!template.oneTimeGlobally,
       // Availability is a monthly RNG gate, not a queue position. A project

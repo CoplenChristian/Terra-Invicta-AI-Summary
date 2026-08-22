@@ -329,6 +329,18 @@ class IntelligenceFilter {
         // have never investigated anything, from no evidence. The observer's
         // own count is legitimately known and survives.
         alienInvestigations: isEnhanced || isObserver ? f.alienInvestigations : null,
+        // The three inputs to a faction's project-slot research bonus. Same
+        // class as `researchWeights` and for the same reason: how many Projects
+        // points a rival holds and which slot unlocks it has bought is their
+        // internal economy, and the three together give their project research
+        // rate directly. Null rather than 0 or false -- a rival reported at 0
+        // Projects with both unlocks false reads as a faction that has never
+        // developed its research at all, which is a confident claim from no
+        // evidence. `computeProjectBonus` refuses on any of the three being
+        // absent, so a redacted rival reports "unavailable", never a number.
+        projectPoints: isEnhanced || isObserver ? f.projectPoints : null,
+        orgProjectSlotUnlocked: isEnhanced || isObserver ? f.orgProjectSlotUnlocked : null,
+        habProjectSlotUnlocked: isEnhanced || isObserver ? f.habProjectSlotUnlocked : null,
         // Same class again: the top-level `shipDesigns` array is filtered to
         // the observer's own designs below, but each faction object carried an
         // unfiltered inline copy -- 425 enemy hull/weapon/armor loadouts
@@ -745,6 +757,19 @@ class IntelligenceFilter {
       }
       if (this.toFiniteOrNull(snapshot?.factionIntelligence?.[faction.ID]?.alienInvestigations) !== null) {
         factionLeaks.push(`${faction.ID}:factionIntelligence.alienInvestigations`);
+      }
+      // The project-bonus inputs, checked on the RAW fields rather than on
+      // anything derived from them. Four of this repo's player-mode leaks
+      // shared exactly the shape of a nulled derived field beside a surviving
+      // raw one, so each of the three is asserted here individually.
+      if (this.toFiniteOrNull(faction.projectPoints) !== null) {
+        factionLeaks.push(`${faction.ID}:projectPoints`);
+      }
+      if (typeof faction.orgProjectSlotUnlocked === 'boolean') {
+        factionLeaks.push(`${faction.ID}:orgProjectSlotUnlocked`);
+      }
+      if (typeof faction.habProjectSlotUnlocked === 'boolean') {
+        factionLeaks.push(`${faction.ID}:habProjectSlotUnlocked`);
       }
       if (this.toFiniteOrNull(faction.researchBreakdown?.habModules) !== null) {
         factionLeaks.push(`${faction.ID}:researchBreakdown.habModules`);

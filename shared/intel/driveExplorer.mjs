@@ -104,9 +104,14 @@ import {
 } from '../propulsion.mjs';
 import {
   AVAILABILITY_STATES,
-  buildAvailabilityResolver,
-  monthsAtIncome
+  buildAvailabilityResolver
 } from '../researchAvailability.mjs';
+import {
+  buildResearchCategoryBonuses,
+  priceResearchDuration,
+  researchDurationFields
+} from '../researchCategoryBonus.mjs';
+import { allocationPricingSummary, buildResearchAllocationPricing } from '../researchAllocationPricing.mjs';
 import { evaluatePowerBudget, evaluateReactorClass } from '../refitAdvisor.mjs';
 import { buildTechPath, observerGraph } from '../techGraph.mjs';
 import { mobilityResource } from './mobility.mjs';
@@ -759,6 +764,14 @@ export const driveExplorerResource = (snapshot, {
   const destinationModel = buildDestinationModel(snapshot, selected, observerId);
   const observerFaction = asArray(snapshot.factions).find(faction => sameId(faction?.ID, observerId)) || null;
   const monthlyResearch = toFinite(observerFaction?.totalResearch);
+  // Durations here used to be the FLAT whole-faction figure via `monthsAtIncome`
+  // while the three sibling endpoints priced theirs against the gate project's
+  // category. Two accountings of one fact that disagree is the drift this repo
+  // has already been bitten by, so this endpoint now goes through the same
+  // allocation pricing as the others. Both models are built once for the whole
+  // 541-drive sweep.
+  const categoryBonuses = buildResearchCategoryBonuses(snapshot, { observerId });
+  const allocationPricing = buildResearchAllocationPricing(snapshot, { observerId });
   const propellantModules = snapshot.propellantModules || {};
 
   // The fitted drive's own refit row is the comparison baseline, computed
@@ -910,7 +923,15 @@ export const driveExplorerResource = (snapshot, {
         gateProjectId: availability.projectId ?? gateId ?? null,
         gateProjectName: availability.displayName ?? null,
         remainingResearchCost: availability.remainingResearchCost,
-        monthsAtCurrentIncome: monthsAtIncome(availability.remainingResearchCost, monthlyResearch),
+        ...researchDurationFields(priceResearchDuration({
+          remainingCost: availability.remainingResearchCost,
+          monthlyIncome: monthlyResearch,
+          categoryBonuses,
+          allocationPricing,
+          itemId: availability.projectId ?? gateId ?? null,
+          category: availability.category ?? null,
+          type: availability.type ?? null
+        })),
         missingPrerequisiteCount: availability.missingPrerequisites === null ? null : missing.length,
         // The chain SHAPE in the compact row; the whole record under detail=full.
         chainSteps: chain ? chain.steps : null,
@@ -1047,7 +1068,12 @@ export const driveExplorerResource = (snapshot, {
         : resolver.reason,
       chainCostsAvailable: chains.available,
       chainCostsReason: chains.reason,
-      monthlyResearchIncome: monthlyResearch
+      monthlyResearchIncome: monthlyResearch,
+      // The slot allocation every duration on this response is priced through,
+      // plus the campaign research-cost basis its remaining costs are on.
+      allocationPricing: allocationPricingSummary(
+        allocationPricing, snapshot?.metadata?.researchCostScaling ?? null
+      )
     },
     filters: {
       status: requestedStatus,

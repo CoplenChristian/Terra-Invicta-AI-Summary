@@ -95,39 +95,42 @@
   }
 
   /**
-   * A duration, with the category bonus it does NOT apply named beside it.
+   * A duration, priced through the allocation the item would actually receive,
+   * with the assumption named when one had to be made.
    *
-   * The number is always the flat one. Withdrawing thirteen usable durations to
-   * correct three to five per cent was the wrong trade, and the rate model
-   * measured the flat rate's dominant error to be the whole allocation
-   * multiplier rather than the category term -- so correcting only the category
-   * part would move the figure slightly and look like a fix. The bonus is
-   * stated so a reader can see the estimate is conservative and by roughly what.
+   * REWRITTEN 2026-08-22. The figure used to be the flat one -- remaining cost
+   * over the WHOLE faction's research income -- with the category bonus named
+   * beside it and not applied. That was wrong twice: the item receives only its
+   * own slot's share (measured at 0.29x to 1.06x of that income, so the flat
+   * figure ran 2.15x to 3.42x SHORT on three of the observer's four slots), and
+   * the remaining cost was the template figure on a campaign whose research
+   * speed setting halves it.
    *
-   * The caveat is deliberately silent about direction and size: it says what is
-   * unapplied, not what the true figure is.
-   *
-   * A row from a snapshot published before the category model existed carries
-   * no state, and renders exactly as it always did.
+   * A number that had to assume a pip allocation SAYS SO. Presenting an assumed
+   * allocation as a measured one is the error this label exists to prevent.
    */
   function researchDuration(row) {
     if (!row) return UNAVAILABLE;
+    const state = row.monthsAtCurrentIncomeState || null;
+    if (state === 'slot-receives-nothing') return 'no pips';
     const value = months(row.monthsAtCurrentIncome);
     if (value === UNAVAILABLE) return value;
-    const state = row.monthsAtCurrentIncomeState || null;
-    if (state === 'flat-rate-boosted') {
-      const bonus = num(row.categoryResearchBonus);
-      return bonus === null ? `${value} (flat rate)` : `${value} (flat; +${(bonus * 100).toFixed(1)}% category)`;
+    const atMost = row.monthsAreUpperBound === true ? '≤' : '';
+    if (state === 'allocation-assumed') {
+      const fastest = months(row.monthsFastestAllocation);
+      return fastest === UNAVAILABLE || fastest === value
+        ? `${atMost}${value} (1 pip)`
+        : `${atMost}${value} (1 pip) · ${fastest} all-in`;
     }
-    if (state === 'unresolved-category') return `${value} (flat; category unresolved)`;
-    if (state === 'category-unchecked') return `${value} (flat, unchecked)`;
-    return value;
+    if (state === 'allocation-measured') return `${atMost}${value} (its slot)`;
+    if (state === 'flat-rate-unpriced') return `${value} (flat, unpriced)`;
+    return `${atMost}${value}`;
   }
 
   /**
    * The tooltip that explains a labelled research duration.
    *
-   * Built from the row's state code and its own bonus rather than read from a
+   * Built from the row's state code and its own numbers rather than read from a
    * per-row sentence: repeating the sentence on every row cost 41 KB on the
    * military-value payload, which is the duplication its size ceiling exists
    * to catch.
@@ -135,28 +138,36 @@
   function researchDurationTitle(row) {
     if (!row) return '';
     const state = row.monthsAtCurrentIncomeState || null;
-    if (state === 'flat-rate-boosted') {
-      const bonus = num(row.categoryResearchBonus);
-      return 'This project sits in a research category the observer has boosted'
-        + (bonus === null ? '' : ` by +${(bonus * 100).toFixed(1)}%`)
-        + ', and this figure does NOT apply that bonus. It is the flat rate: remaining cost divided by '
-        + 'the faction\'s measured monthly research income. The allocation model measured on this '
-        + 'campaign puts a single slot\'s share at 0.29x to 1.06x that income depending on its pips, so '
-        + 'the flat figure runs both short and long and no single correction closes it — the category '
-        + 'term is worth only a few per cent of that spread. It is NOT an upper bound: at one pip of '
-        + 'eight it measured 3.4x optimistic.';
+    const bound = row.monthsAreUpperBound === true
+      ? ' A term of the rate could not be resolved and was priced at its floor, so this is an UPPER bound '
+        + '— the real figure is this or fewer months.'
+      : '';
+    if (state === 'allocation-assumed') {
+      return 'This item is not in a research slot, so its pip allocation had to be ASSUMED. The headline '
+        + 'figure gives it ONE of the observer\'s current pips with the rest of the layout unchanged — '
+        + 'which is the rate a 1-pip slot is measured to deliver on this save. The second figure gives it '
+        + 'every pip, which is the fastest the game can deliver it and a real lower bound on months. '
+        + 'Neither is a measurement of what will happen; they bracket it.' + bound;
     }
-    if (state === 'unresolved-category') {
-      return 'The flat-rate figure. This project\'s research category could not be resolved, so whether '
-        + 'the observer has boosted it is undecidable.';
+    if (state === 'allocation-measured') {
+      return 'Priced through the allocation this item\'s own research slot receives, with the pip weight '
+        + 'read from the save: remaining cost divided by income × (1 + 5% per pipped slot) × pip share × '
+        + '(1 + category bonus + project bonus). Every term is measured. The model reproduces the '
+        + 'observer\'s four measured slot deliveries to a single common factor of 0.9858, so treat it as '
+        + 'good to about 1.5%, not to the digit.' + bound;
     }
-    if (state === 'category-unchecked') {
-      return 'The unadjusted flat-rate figure. This snapshot carries no per-category research bonus '
-        + 'data, so it has not been checked against a category bonus.';
+    if (state === 'slot-receives-nothing') {
+      return 'This item sits in a research slot carrying no pips. It receives no research at all, so it '
+        + 'has no time to complete until pips are assigned to it — not a long time, no time.';
     }
-    if (state === 'flat-rate') {
-      return 'This project\'s research category carries no bonus for the observer, so the flat monthly '
-        + 'rate is the right rate for the category term.';
+    if (state === 'flat-rate-unpriced') {
+      return 'The UNPRICED flat figure: remaining cost divided by the whole faction\'s monthly research '
+        + 'income, because the observer\'s slot allocation could not be read from this snapshot. It is '
+        + 'not an upper bound — an item receives only its own slot\'s share, measured at 0.29x to 1.06x '
+        + 'of this income, so at one pip of eight this figure was 3.42x optimistic.';
+    }
+    if (state === 'unmeasured-income') {
+      return 'No measured research income, so there is no honest number of months at any rate.';
     }
     return '';
   }
@@ -257,7 +268,8 @@
   // glance from a row that is startable as it stands, so it is not decoration.
   const CHAIN_TITLE = 'This is a chain, not a single project. The name on the left is the step you can '
     + 'start; the arrow points at what the chain ends in. The points and the months are for the WHOLE '
-    + 'remaining chain at your measured research income, not for the first step alone.';
+    + 'remaining chain, not for the first step alone — and the months are at FULL CONCENTRATION, every '
+    + 'pip on the step being worked, which is the fastest it can go and therefore a lower bound.';
   const NEW_CAPABILITY_TITLE = 'A capability you field nothing comparable to, so no improvement multiple '
     + 'exists to form. That is not a failed measurement — there is genuinely no baseline — and inventing '
     + 'a ratio against a zero would be fabrication.';
@@ -365,7 +377,7 @@
 
     if (isChainRow(row)) {
       const chainTitle = `Prerequisite chain: ${int(row.chain.stepsCount)} steps, ${int(row.chain.totalRemainingCost)} pts total`
-        + ` (${months(row.chain.monthsAtCurrentIncome)} at current research income)`
+        + ` (${months(row.chain.monthsAtFullConcentration)} at full concentration)`
         + (row.chain.immediateNextStep ? ` (Immediate next: ${row.chain.immediateNextStep.displayName} — ${int(row.chain.immediateNextStep.cost)} pts)` : '')
         + ` ${CHAIN_TITLE}`;
       notes.push(`<span class="ra-tag ra-tag--chain" title="${attr(chainTitle)}">${int(row.chain.stepsCount)} steps</span>`);
@@ -385,7 +397,7 @@
     // destination's own bonus does not describe the number shown.
     const chainMeta = isChainRow(row);
     const meta = chainMeta
-      ? [`${int(row.chain.totalRemainingCost)} pts`, months(row.chain.monthsAtCurrentIncome)]
+      ? [`${int(row.chain.totalRemainingCost)} pts`, months(row.chain.monthsAtFullConcentration)]
       : [`${int(row.remainingResearchCost)} pts`, researchDuration(row)];
     const roll = rollNote(row.unlockChance, row.availabilityState);
     if (roll) meta.push(roll);
@@ -761,7 +773,7 @@
           label: `MILITARY RESEARCH · ${group.label} · ${rowLabel}`,
           value: `${row.isFirstInClass ? 'First of kind' : `${mult(row.improvementMultiple)} ${row.axisLabel || 'unnamed axis'}`} · `
             + (chainDrill
-              ? `${int(row.chain.totalRemainingCost)} pts · ${months(row.chain.monthsAtCurrentIncome)} (whole chain)`
+              ? `${int(row.chain.totalRemainingCost)} pts · ${months(row.chain.monthsAtFullConcentration)} (whole chain)`
               : `${int(row.remainingResearchCost)} pts · ${researchDuration(row)}`)
             + (chainDrill ? ` · ${int(row.chain.stepsCount)} steps` : '')
             + (row.chainPromoted === true && row.destinationAvailabilityLabel
@@ -787,7 +799,7 @@
         label: `CAPABILITY · New · ${cap.displayName || cap.id}`,
         value: `First capability of its kind — no baseline to compare against · `
           + (capChain
-            ? `${int(cap.chain.totalRemainingCost)} pts · ${months(cap.chain.monthsAtCurrentIncome)} (whole chain)`
+            ? `${int(cap.chain.totalRemainingCost)} pts · ${months(cap.chain.monthsAtFullConcentration)} (whole chain)`
             : `${int(cap.remainingResearchCost)} pts · ${researchDuration(cap)}`)
           + chainInfo
       });
@@ -815,7 +827,7 @@
           label: `CHAIN REACH · not promoted · ${refused.displayName || refused.id}`,
           value: `${mult(refused.improvementMultiple)} ${refused.axisLabel || 'unnamed axis'} · `
             + `${int(refused.stepsCount)} steps · ${int(refused.totalRemainingCost)} pts · `
-            + `${months(refused.monthsAtCurrentIncome)} at current income — beyond the horizon, so it is not `
+            + `${months(refused.monthsAtFullConcentration)} at full concentration — beyond the horizon, so it is not `
             + 'offered as advice however well it scores per point.'
         });
       }
@@ -834,10 +846,10 @@
       // chain the ranking refused as unreachable must not read here as advice.
       const reach = (chain.chain && chain.chain.reachability) || null;
       const reachNote = reach && reach.state === BEYOND_HORIZON
-        ? ` · ${months(reach.months)} at current income — beyond the ${months(reach.horizonMonths)} planning horizon, so it is not promoted into the ranking`
+        ? ` · ${months(reach.months)} at full concentration — beyond the ${months(reach.horizonMonths)} planning horizon, so it is not promoted into the ranking`
         : (reach && reach.state === REACH_UNKNOWN
           ? ' · time to complete could not be measured for this chain'
-          : (reach ? ` · ${months(reach.months)} at current income` : ''));
+          : (reach ? ` · ${months(reach.months)} at full concentration` : ''));
       facts.push({
         label: `DRIVE CHAIN · ${chain.displayName} on ${chain.referenceDesign}`,
         value: `${mult(chain.rankMetricMultiple)} ${chain.axisLabel} · `

@@ -50,16 +50,22 @@
  * of each slot comes from the data, and a turn-1 observer with no pips assigned
  * anywhere reports exactly that rather than an empty section.
  *
- * DO NOT APPLY `researchSpeedMultiplier` HERE OR TO ANY RESEARCH COST. Checked
- * by measurement on 2026-08-21 (docs/campaign-settings-spec.md; indexed in
- * shared/campaignSettings.mjs as CAMPAIGN_SETTING_VERDICTS), on a campaign
- * running research at 200%. Two independent findings:
+ * DO NOT APPLY `researchSpeedMultiplier` TO THE RESEARCH INCOME. It IS applied
+ * to the research COST, once, in `shared/researchCostScaling.mjs` at snapshot
+ * build time -- so every cost this module sees has already been through it and
+ * must not be scaled again. Applying it to income as well would be a 4x error.
  *
- *   - It acts on OUTPUT, not on cost. Fleet Logistics sat at
- *     accumulatedResearch 44,780 against a template researchCost of 45,000 and
- *     was STILL IN PROGRESS. A halved effective cost of 22,500 would have
- *     completed it long before 44,780, so effective cost equals template cost
- *     and every remaining-cost figure the advisor prints is already right.
+ * THE 2026-08-21 VERDICT BELOW WAS HALF WRONG AND IS CORRECTED HERE.
+ *
+ *   - "It acts on OUTPUT, not on cost" is WRONG, overturned by measurement on
+ *     2026-08-22. It acts on COST: the observer's own 10,000-point Gas Core
+ *     Fission Reactor VI completed from 4,708.568 accumulated inside 15.5 days
+ *     at a measured 30.2467 points/day, which reaches 5,000 and cannot reach
+ *     10,000; 278 in-progress rows across five 200% saves never exceed 50% of
+ *     template cost while saves with no multiplier reach 97.6%. The evidence
+ *     it was based on (Fleet Logistics at 44,780/45,000, still in progress)
+ *     came from First.gz, which carries no custom-difficulty block at all --
+ *     it showed that a campaign WITHOUT a multiplier charges template cost.
  *   - Income is already post-multiplier. `monthsAtCurrentIncome` derives from
  *     `cachedYearlyRevenue.Research`. RE-ESTABLISHED 2026-08-22 on a better
  *     measurement than the 1.147x/0.993x pair originally cited, which came from
@@ -76,13 +82,20 @@
  * from doubled output, which the save's own revenue figure already carries.
  * Multiplying here would introduce a 2x error into a correct figure.
  *
- * NOR IS THE ALLOCATION MULTIPLIER A DURATION CORRECTION. The 2.1115x above is
- * the WHOLE FACTION's throughput summed over four slots. One project sits in
- * ONE slot and receives only its own share: measured 0.4658x, 0.2928x, 1.0602x
- * and 0.2928x of the nominal income (they sum to the 2.1115x). Dividing a
- * duration by 2.11 would therefore make three of those four MORE wrong, not
- * less -- the 1-pip slots are already 3.42x optimistic at the flat rate. See
- * `CATEGORY_RATE_MODEL.durationsStillFlatEvidence` in shared/researchCategoryBonus.mjs.
+ * THE WHOLE-FACTION 2.1115x IS STILL NOT A DURATION CORRECTION, and that has
+ * not changed. It is the whole faction's throughput summed over four slots; one
+ * project sits in ONE slot and receives only its own share -- measured 0.4658x,
+ * 0.2928x, 1.0602x and 0.2928x of the nominal income, which sum to it.
+ * Dividing a duration by 2.11 would make three of those four MORE wrong.
+ *
+ * What DID change on 2026-08-22 is that the per-slot factor is now COMPUTED and
+ * applied, in `shared/researchAllocationPricing.mjs`. It is not a scalar, but
+ * every term of it is read from the save when the item is in a slot; when it is
+ * not, two labelled scenarios are published instead of one confident number.
+ * The layout below is still measured and this module still recommends no
+ * reallocation -- see `ALLOCATION_MODEL.recommendationRefused`, whose three
+ * reasons are unaffected: pricing a duration at a STATED allocation is not the
+ * same act as recommending a different one.
  */
 
 import { asArray, round, sameId, toFiniteNumber } from './util.mjs';
