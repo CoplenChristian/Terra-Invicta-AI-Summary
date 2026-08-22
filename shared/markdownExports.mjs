@@ -1511,7 +1511,7 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
       investigations === null
         ? `*Alien-activity investigations: UNAVAILABLE — the Xenology figure omits them rather than counting them as zero.*`
         : `*Includes ${investigations} alien-activity investigation(s) at +1% Xenology each (wiki, Aliens rev 2026-04-05), exempt from diminishing returns.*`,
-      `*Durations elsewhere in this brief are FLAT-RATE and do NOT apply these bonuses. The allocation model measured on this campaign puts the flat rate's dominant error at the per-slot allocation multiplier (2.11x), not the category term — treat every stated duration as an upper bound.*`,
+      `*Durations elsewhere in this brief are FLAT-RATE and do NOT apply these bonuses. The flat rate divides by the whole faction's nominal research income, but a project runs in ONE slot, and on this campaign the four slots measured 0.4658x, 0.2928x, 1.0602x and 0.2928x of that income — they sum to 2.11x, which is a faction-wide throughput and NOT a per-duration correction. A stated duration is therefore too SHORT wherever a slot draws under its even share (three of the four here, by 2.15x to 3.42x) and too long only where it draws over. Treat one as an order-of-magnitude figure, not as a bound in either direction.*`,
       ``
     ];
   }

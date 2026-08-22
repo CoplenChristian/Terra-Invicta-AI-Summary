@@ -82,7 +82,7 @@ would have introduced errors.
 - **Engineers (+95%).** Already inside measured research income. Applying separately would
   double-count.
 - **Pricing durations through the allocation model** (was open item 3b, closed 2026-08-22
-  in `a3f0e21`). The contradiction between `research-category-rate-spec.md` and
+  in `d3ce7e4`). The contradiction between `research-category-rate-spec.md` and
   `campaign-settings-spec.md` is settled, and **no duration moved**. Both measurements were
   real; the *inference* from one was a units error. The 2.11× is the observer's four slots
   delivering `cachedYearlyRevenue.Research` **summed**, while a duration concerns one slot —
