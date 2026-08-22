@@ -7,10 +7,25 @@
  *
  * THE ONE RULE THIS PANEL EXISTS TO ENFORCE
  * -----------------------------------------
- * Delta-V and combat acceleration are MEASURED: the propulsion model held
- * against this hull's own measured dry mass and tank capacity. Destination
- * reachability is an ESTIMATE from a fixed heuristic table, and only nine
- * destinations are modelled.
+ * Delta-V, combat acceleration and cruise acceleration are MEASURED: the
+ * propulsion model held against this hull's own measured dry mass and tank
+ * capacity. Destination reachability is an ESTIMATE from a fixed heuristic
+ * table, and only nine destinations are modelled.
+ *
+ * CRUISE IS NOT A NEAR-SUBSTITUTE FOR COMBAT
+ * ------------------------------------------
+ * `combat / cruise` is exactly each drive's own `thrustCap`, which runs 1 to 160
+ * across the catalogue. Only 72 of 541 drives have the two equal (measured
+ * 2026-08-22 on the live save), so for the other 469 the combat figure overstates
+ * sustained transit acceleration -- by 60x on VASIMR x1, which reads 0.01010778
+ * combat against 0.00016846 cruise. Both columns are therefore on screen; the
+ * panel offered a CRUISE ACCEL sort with no cruise column for a while, which
+ * reordered the table by an invisible key.
+ *
+ * The magnitudes span five orders, so the two acceleration columns are rendered
+ * to SIGNIFICANT FIGURES rather than to a fixed number of decimals. `toFixed(3)`
+ * printed the smallest drives as `0.000`, which reads as a measured zero and is
+ * the defect class the rest of this panel exists to avoid.
  *
  * They are therefore rendered in two different registers and never in one:
  *
@@ -81,6 +96,34 @@
 
   const ESTIMATE_CAPTION = 'ESTIMATE — heuristic, not a measurement';
 
+  /**
+   * The minimum-threshold controls, mirroring `DRIVE_THRESHOLD_FILTERS` in
+   * shared/requestValidation.mjs.
+   *
+   * `measure` is the field on `row.measured` each one tests, so the predicate
+   * below and the endpoint's are reading the same number by the same name. The
+   * unit is on the control's own label AND in its placeholder: "> 10" is
+   * ambiguous between km/s and m/s², which is the same defect as the missing
+   * column this table just gained.
+   */
+  const THRESHOLDS = Object.freeze([
+    { key: 'minDeltaV', measure: 'deltaVKps', label: 'MIN ΔV (km/s)', unit: 'km/s', placeholder: 'e.g. 10 km/s' },
+    {
+      key: 'minCombatAcceleration',
+      measure: 'combatAccelerationMps2',
+      label: 'MIN COMBAT ACCEL (m/s²)',
+      unit: 'm/s²',
+      placeholder: 'e.g. 20 m/s²'
+    },
+    {
+      key: 'minCruiseAcceleration',
+      measure: 'cruiseAccelerationMps2',
+      label: 'MIN CRUISE ACCEL (m/s²)',
+      unit: 'm/s²',
+      placeholder: 'e.g. 0.5 m/s²'
+    }
+  ]);
+
   // Panel-local view state. Sorting and filtering happen here because the whole
   // catalogue is already in hand; only a design change costs a fetch.
   const state = {
@@ -90,6 +133,9 @@
     bucket: 'all',
     reactor: 'all',
     search: '',
+    // Raw, as typed. Parsed by `parseThreshold` on every paint so a half-typed
+    // value is a rejected one and never a coerced one.
+    thresholds: { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '' },
     limit: 120,
     container: null,
     observer: null,
@@ -122,6 +168,28 @@
     return `${parsed.toFixed(2)}×`;
   }
 
+  /**
+   * An acceleration, to three significant figures.
+   *
+   * Measured cruise acceleration on the live catalogue runs from 0.00016846 to
+   * 20.59560406 -- five orders of magnitude. `toFixed(3)` renders the bottom of
+   * that range as `0.000`, which a reader cannot tell from a measured zero, so
+   * this keeps three significant figures instead of three decimal places.
+   *
+   * A measured 0 stays `0`: it is a real measurement, and it is NOT what an
+   * absent value renders as. Absent is the em dash, as everywhere else here.
+   */
+  function accel(value) {
+    const parsed = num(value);
+    if (parsed === null) return UNAVAILABLE;
+    if (parsed === 0) return '0';
+    const abs = Math.abs(parsed);
+    if (abs >= 1000) return Math.round(parsed).toLocaleString('en-US');
+    // `Number(...)` drops the trailing zeros `toPrecision` pads with, so 20.6
+    // does not read as 20.600 beside 0.000168.
+    return String(Number(parsed.toPrecision(3)));
+  }
+
   /** A magnitude that spans nine orders on this data set. */
   function power(value) {
     const parsed = num(value);
@@ -149,20 +217,119 @@
 
   // ------------------------------------------------------------------------
   // Filtering and sorting, over the catalogue already fetched.
+  //
+  // WHY THE NUMERIC FILTER RUNS HERE AS WELL AS ON THE ENDPOINT
+  // ----------------------------------------------------------
+  // `/api/intel/drive-explorer` honours `minDeltaV`, `minCombatAcceleration` and
+  // `minCruiseAcceleration` -- that is not optional, because a filter that exists
+  // only in the browser is invisible to every agent reading the endpoint, and
+  // being agent-readable is half the point of this project.
+  //
+  // The panel nevertheless applies the SAME rules client-side rather than
+  // re-fetching, because it already holds all 541 rows and already sorts and
+  // filters them here: a fetch per keystroke would re-transfer the whole
+  // catalogue to answer a question the page can already answer. That buys
+  // responsiveness at the cost of a second implementation of the rule, so
+  // tests/driveExplorer.test.js runs both against the live save over a matrix of
+  // thresholds and fails if the two sets or the two counts ever differ.
+  //
+  // ABSENT STAYS NULL, and it is the whole risk here. `Number(null) === 0`, so a
+  // null measurement tested against `>= 10` becomes `0 >= 10` and the row is
+  // dropped as though it had been measured and found wanting. The three outcomes
+  // below are the same three-valued logic the endpoint uses.
   // ------------------------------------------------------------------------
 
+  const OUTCOME = Object.freeze({ pass: 'pass', below: 'below', untestable: 'untestable' });
+
+  /**
+   * Parses one typed threshold. Mirrors `parseMinimumThreshold`.
+   *
+   * Absent -> no filter. Malformed or negative -> no filter AND a rejection the
+   * reader is shown, never a coercion: `Number('abc')` is NaN and `Number('')`
+   * is 0, and either would silently answer a different question.
+   */
+  function parseThreshold(raw) {
+    if (raw === null || raw === undefined) return { applied: null, rejected: null };
+    const text = String(raw).trim();
+    if (text === '') return { applied: null, rejected: null };
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(text)) return { applied: null, rejected: text };
+    const parsed = Number(text);
+    if (!Number.isFinite(parsed)) return { applied: null, rejected: text };
+    return { applied: parsed, rejected: null };
+  }
+
+  /** Every typed threshold, parsed. `active` is what actually filters. */
+  function activeThresholds() {
+    const applied = {};
+    const active = [];
+    const rejected = [];
+    THRESHOLDS.forEach(entry => {
+      const result = parseThreshold(state.thresholds[entry.key]);
+      applied[entry.key] = result.applied;
+      if (result.applied !== null) active.push(entry);
+      if (result.rejected !== null) rejected.push({ ...entry, value: result.rejected });
+    });
+    return { applied, active, rejected };
+  }
+
+  /**
+   * One row against the active minimums.
+   *
+   * A definite failure on any TESTABLE minimum is a failure whatever else is
+   * unmeasured -- the AND is then definitely false. Only when every testable
+   * minimum passes and something is missing is the answer unknown, and an
+   * unknown row is excluded and counted apart from the genuine failures.
+   */
+  function thresholdOutcome(row, active) {
+    let unmeasured = 0;
+    for (const entry of active) {
+      const value = num(row.measured ? row.measured[entry.measure] : null);
+      if (value === null) unmeasured += 1;
+      else if (value < entry.applied) return OUTCOME.below;
+    }
+    return unmeasured > 0 ? OUTCOME.untestable : OUTCOME.pass;
+  }
+
+  /**
+   * The rows to show, plus WHY the rest are not shown.
+   *
+   * Returns the matched rows and the two exclusion counts separately, because
+   * "408 filtered out" cannot be read: a drive that failed the minimum and a
+   * drive nobody could measure are different facts and the reader needs both.
+   */
   function visibleRows(items) {
     const term = state.search.trim().toLowerCase();
-    return items.filter(row => {
-      if (state.bucket !== 'all' && row.availability.bucket !== state.bucket) return false;
-      if (state.reactor === 'compatible' && row.reactor.compatible !== true) return false;
-      if (state.reactor === 'incompatible' && row.reactor.compatible !== false) return false;
+    const request = activeThresholds();
+    const active = request.active.map(entry => ({
+      ...entry,
+      applied: request.applied[entry.key]
+    }));
+
+    const matched = [];
+    const untestable = [];
+    let belowThresholdCount = 0;
+
+    for (const row of items) {
+      if (state.bucket !== 'all' && row.availability.bucket !== state.bucket) continue;
+      if (state.reactor === 'compatible' && row.reactor.compatible !== true) continue;
+      if (state.reactor === 'incompatible' && row.reactor.compatible !== false) continue;
       if (term) {
         const haystack = `${row.displayName || ''} ${row.driveId || ''} ${row.classification || ''} ${row.propellant || ''}`.toLowerCase();
-        if (!haystack.includes(term)) return false;
+        if (!haystack.includes(term)) continue;
       }
-      return true;
-    });
+      const outcome = thresholdOutcome(row, active);
+      if (outcome === OUTCOME.pass) matched.push(row);
+      else if (outcome === OUTCOME.untestable) untestable.push(row);
+      else belowThresholdCount += 1;
+    }
+
+    return {
+      rows: matched,
+      belowThresholdCount,
+      untestableCount: untestable.length,
+      untestableDrives: untestable,
+      thresholds: request
+    };
   }
 
   function sortRows(rows) {
@@ -245,7 +412,12 @@
           </div>
           <div class="de-summary__cell de-measured">
             <div class="de-summary__label">FITTED COMBAT ACCEL <span class="de-tag de-tag--measured">MEASURED</span></div>
-            <div class="de-summary__value de-measured__value">${dec(fitted.combatAccelerationMps2, 3)}<span class="de-unit"> m/s²</span></div>
+            <div class="de-summary__value de-measured__value">${accel(fitted.combatAccelerationMps2)}<span class="de-unit"> m/s²</span></div>
+          </div>
+          <div class="de-summary__cell de-measured">
+            <div class="de-summary__label">FITTED CRUISE ACCEL <span class="de-tag de-tag--measured">MEASURED</span></div>
+            <div class="de-summary__value de-measured__value">${accel(fitted.cruiseAccelerationMps2)}<span class="de-unit"> m/s²</span></div>
+            <div class="de-summary__sub">the baseline every × fitted in the CRUISE ACCEL column is measured against</div>
           </div>
         </div>
         ${notMeasured ? `<div class="de-notice de-notice--warn" title="${attr(design.baselineUnmeasuredReason)}">
@@ -276,7 +448,8 @@
       </div>`;
   }
 
-  function renderControls(payload, shownCount, matchedCount) {
+  function renderControls(payload, shownCount, outcome) {
+    const matchedCount = outcome.rows.length;
     const census = payload.availabilityCensus || {};
     const reactorCensus = payload.reactorCompatibilityCensus || {};
     const bucketOptions = [
@@ -297,12 +470,32 @@
     const sortOptions = SORTS.map(entry =>
       `<option value="${attr(entry.key)}"${state.sort === entry.key ? ' selected' : ''}>${escapeHtml(entry.label)}</option>`).join('');
 
+    // The unit is on the label AND in the placeholder. A bare "> 10" does not
+    // say km/s from m/s², and the reader has no way to find out from the box.
+    //
+    // `type="text"` with `inputmode="decimal"`, deliberately, NOT `type="number"`.
+    // A number input returns `''` from `.value` for anything it considers
+    // invalid, so typing a leading `-` or a half-finished `1e` silently wipes the
+    // field -- and it makes the rejection branch below unreachable in a browser
+    // while it stays reachable through the endpoint. Same keypad on mobile, and
+    // an honest "that is not a number" instead of a value that vanishes.
+    const thresholdControls = THRESHOLDS.map(entry => `
+        <label class="de-control de-control--threshold">
+          <span class="de-control__label">${escapeHtml(entry.label)}</span>
+          <input class="de-input de-input--number" type="text" inputmode="decimal"
+            data-de-threshold="${attr(entry.key)}" value="${attr(state.thresholds[entry.key])}"
+            placeholder="${attr(entry.placeholder)}"
+            aria-label="${attr(`Minimum ${entry.measure === 'deltaVKps' ? 'delta-V' : entry.label.toLowerCase()}, in ${entry.unit}`)}"
+            title="${attr(`Shows only drives measuring at least this much, in ${entry.unit}. A drive with no measured value for it is excluded and counted separately — it could not be tested, which is not the same as failing.`)}">
+        </label>`).join('');
+
     return `
       <div class="de-controls">
         <label class="de-control">
           <span class="de-control__label">SORT BY</span>
           <select class="de-select" data-de-sort>${sortOptions}</select>
         </label>
+        ${thresholdControls}
         <label class="de-control">
           <span class="de-control__label">AVAILABILITY</span>
           <select class="de-select" data-de-bucket>${bucketOptions}</select>
@@ -324,7 +517,45 @@
           <span class="de-control__label">SHOWING</span>
           <span class="de-count" data-de-count>${int(shownCount)} of ${int(matchedCount)} matched · ${int(payload.driveCatalogue.total)} in catalogue</span>
         </div>
-      </div>`;
+      </div>
+      ${renderThresholdNotice(outcome)}`;
+  }
+
+  /**
+   * What the minimums did, on screen rather than only in the payload.
+   *
+   * Two things must be visible and are separate facts: a rejected minimum did
+   * NOT filter (so the list is wider than the reader typed), and an untestable
+   * drive was excluded without having failed (so the list is narrower than the
+   * matches alone explain, for a reason that is not a verdict on the drive).
+   */
+  function renderThresholdNotice(outcome) {
+    const rejected = outcome.thresholds.rejected;
+    const active = outcome.thresholds.active;
+    const blocks = [];
+
+    if (rejected.length > 0) {
+      blocks.push(`<div class="de-notice de-notice--warn">
+        ${escapeHtml(rejected.map(entry => `${entry.label} = "${entry.value}"`).join('; '))}
+        — not a non-negative number, so ${rejected.length === 1 ? 'it was' : 'they were'} IGNORED rather than
+        treated as zero. Nothing was filtered on ${rejected.length === 1 ? 'it' : 'them'}.
+      </div>`);
+    }
+
+    if (active.length > 0) {
+      const summary = active.map(entry =>
+        `${entry.label.replace(/^MIN /, '')} ≥ ${escapeHtml(String(outcome.thresholds.applied[entry.key]))}`).join(' AND ');
+      blocks.push(`<div class="de-notice de-notice--filters">
+        MINIMUMS ACTIVE: ${summary}. ${int(outcome.rows.length)} drive(s) meet them;
+        ${int(outcome.belowThresholdCount)} were measured and fall short.
+        ${outcome.untestableCount > 0
+    ? `${int(outcome.untestableCount)} could NOT be tested — they have no measured value for a filtered column,
+           so they are excluded and counted here rather than counted as failures.`
+    : 'Every drive in scope had a measured value for every filtered column, so none was excluded as untestable.'}
+      </div>`);
+    }
+
+    return blocks.join('');
   }
 
   function renderReactorCell(row, payload) {
@@ -364,6 +595,17 @@
     const uncomputable = measured.computable !== true;
     const opened = Array.isArray(estimate.opensUp) ? estimate.opensUp : [];
 
+    // Cruise is checked on its own value, not on the row's `computable` flag: a
+    // row can be computable overall and still carry a null cruise acceleration
+    // (shared/propulsion.mjs and shared/intel/driveExplorer.mjs both set it to
+    // null on their own paths), and that cell must read as unavailable rather
+    // than borrowing the row's verdict.
+    const cruiseUnavailable = num(measured.cruiseAccelerationMps2) === null;
+    const cruiseTitle = cruiseUnavailable
+      ? ` title="${attr(measured.reason
+        || 'this drive has no measured cruise acceleration against this design — unavailable, which is not the same as zero')}"`
+      : '';
+
     const caveatMark = measured.dryMassCaveat
       ? `<span class="de-caveat" title="${attr(measured.dryMassCaveat)}">MASS CAVEAT</span>`
       : '';
@@ -388,13 +630,19 @@
           </button>
           <div class="de-cell__sub">${words(row.classification)} · ${words(row.propellant)} ${fittedMark}${disabledMark}${caveatMark}</div>
         </td>
-        <td class="de-cell de-measured de-cell--number"${uncomputable ? ` title="${attr(measured.reason || 'not computable against this design')}"` : ''}>
+        <td class="de-cell de-measured de-cell--number de-cell--dv"${uncomputable ? ` title="${attr(measured.reason || 'not computable against this design')}"` : ''}>
           <div class="de-measured__value">${dec(measured.deltaVKps, 2)}</div>
           <div class="de-cell__sub">${uncomputable ? 'UNAVAILABLE' : `${mult(measured.deltaVMultipleVsFitted)} fitted`}</div>
         </td>
         <td class="de-cell de-measured de-cell--number"${uncomputable ? ` title="${attr(measured.reason || 'not computable against this design')}"` : ''}>
-          <div class="de-measured__value">${dec(measured.combatAccelerationMps2, 3)}</div>
+          <div class="de-measured__value">${accel(measured.combatAccelerationMps2)}</div>
           <div class="de-cell__sub">${uncomputable ? 'UNAVAILABLE' : `${mult(measured.combatAccelerationMultipleVsFitted)} fitted`}</div>
+        </td>
+        <td class="de-cell de-measured de-cell--number"${cruiseTitle}>
+          <div class="de-measured__value">${accel(measured.cruiseAccelerationMps2)}</div>
+          <div class="de-cell__sub">${cruiseUnavailable
+    ? 'UNAVAILABLE'
+    : `${mult(measured.cruiseAccelerationMultipleVsFitted)} fitted`}</div>
         </td>
         ${renderReactorCell(row, payload)}
         <td class="de-cell de-cell--number de-cell--power" title="Power draw is information, never a veto: the game scales thrust by min(1, plant output / required draw) rather than refusing an underpowered design. The acceleration figures in this table do not have that scaling applied.">
@@ -411,9 +659,12 @@
       </tr>`;
   }
 
-  function renderTable(payload, rows) {
+  function renderTable(payload, rows, outcome) {
     if (rows.length === 0) {
-      return `<div class="de-notice">No drive matches the current filters. ${escapeHtml(String(payload.driveCatalogue.rated))} drives are rated in this catalogue; widen the filters to see them.</div>`;
+      const untestable = outcome && outcome.untestableCount > 0
+        ? ` ${escapeHtml(String(outcome.untestableCount))} drive(s) could not be tested against the active minimums — they carry no measured value for a filtered column, so they are excluded rather than failed.`
+        : '';
+      return `<div class="de-notice">No drive matches the current filters. ${escapeHtml(String(payload.driveCatalogue.rated))} drives are rated in this catalogue; widen the filters to see them.${untestable}</div>`;
     }
     return `
       <div class="de-table-wrap">
@@ -422,7 +673,8 @@
             <tr>
               <th class="de-th">DRIVE</th>
               <th class="de-th de-th--measured">ΔV km/s<span class="de-th__caption">MEASURED</span></th>
-              <th class="de-th de-th--measured">COMBAT ACCEL m/s²<span class="de-th__caption">MEASURED</span></th>
+              <th class="de-th de-th--measured" title="Peak acceleration in combat: thrust at the drive's own thrustCap multiplier. It is NOT the acceleration a transfer burn sustains — see CRUISE ACCEL.">COMBAT ACCEL m/s²<span class="de-th__caption">MEASURED</span></th>
+              <th class="de-th de-th--measured" title="Sustained acceleration outside combat: thrust at 1x, which is what a transfer burn actually gets. Combat divided by cruise is exactly this drive's thrustCap, and only 72 of 541 drives have the two equal.">CRUISE ACCEL m/s²<span class="de-th__caption">MEASURED</span></th>
               <th class="de-th">REACTOR</th>
               <th class="de-th">POWER DRAW</th>
               <th class="de-th">AVAILABILITY</th>
@@ -435,7 +687,8 @@
       <div class="de-scroll-hint">SWIPE HORIZONTALLY — DRIVE NAME STAYS PINNED</div>`;
   }
 
-  function renderFooter(payload, shownCount, matchedCount) {
+  function renderFooter(payload, shownCount, outcome) {
+    const matchedCount = outcome.rows.length;
     const unresolved = Array.isArray(payload.unresolvedDrives) ? payload.unresolvedDrives : [];
     // A cap announces itself, and it announces the control that lifts it.
     const omitted = Math.max(0, matchedCount - shownCount);
@@ -470,6 +723,10 @@
       <div class="de-reconcile">
         ${int(payload.driveCatalogue.total)} drives in the catalogue = ${int(payload.driveCatalogue.rated)} rated + ${int(payload.unresolvedCount)} unresolved.
         ${int(matchedCount)} match the current filters, ${int(shownCount)} shown${omitted > 0 ? `, ${int(omitted)} omitted by the ${int(state.limit)}-row display cap — raise it with ROWS SHOWN` : ''}.
+        ${outcome.thresholds.active.length > 0
+    ? `Of the rest, ${int(outcome.belowThresholdCount)} were measured and fell below an active minimum and
+       ${int(outcome.untestableCount)} could not be tested at all — an untestable drive is excluded, never counted as a failure.`
+    : ''}
         ${int(payload.driveCatalogue.disabledInTemplates)} of them are disabled in the shipped templates and cannot be built.
       </div>`;
   }
@@ -759,8 +1016,8 @@
       return;
     }
 
-    const matched = visibleRows(payload.items || []);
-    const sorted = sortRows(matched);
+    const outcome = visibleRows(payload.items || []);
+    const sorted = sortRows(outcome.rows);
     const capped = sorted.slice(0, state.limit);
     // The fitted drive survives the display cap whenever the current filters
     // still admit it: every multiple in the table is measured against that row,
@@ -778,9 +1035,9 @@
           <div class="de-picker">${renderDesignPicker(payload)}</div>
           ${renderDesignSummary(payload)}
           ${renderLegend(payload)}
-          ${renderControls(payload, shown.length, matched.length)}
-          ${renderTable(payload, shown)}
-          ${renderFooter(payload, shown.length, matched.length)}
+          ${renderControls(payload, shown.length, outcome)}
+          ${renderTable(payload, shown, outcome)}
+          ${renderFooter(payload, shown.length, outcome)}
         </div>
       </div>`;
 
@@ -812,6 +1069,22 @@
         paint();
         const next = state.container.querySelector('[data-de-search]');
         if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
+      });
+    }
+
+    // The whole catalogue is already in hand, so a minimum filters without a
+    // fetch. Focus is restored after the repaint the same way SEARCH does it --
+    // a repaint that drops the caret makes a numeric field untypeable.
+    const thresholdInputs = container.querySelectorAll('[data-de-threshold]');
+    if (thresholdInputs && thresholdInputs.forEach) {
+      thresholdInputs.forEach(input => {
+        input.addEventListener('input', () => {
+          const key = input.getAttribute('data-de-threshold');
+          state.thresholds[key] = input.value;
+          paint();
+          const next = state.container.querySelector(`[data-de-threshold="${key}"]`);
+          if (next) next.focus();
+        });
       });
     }
 
@@ -896,6 +1169,18 @@
     // Exposed so the layout verifier and the unit tests exercise the same
     // filtering, sorting and path-modal shaping the panel does, rather than a
     // copy of it.
-    _internals: { state, visibleRows, sortRows, pathPanelOptions, inDependencyOrder, rp, BUCKETS, ESTIMATE_CAPTION }
+    _internals: {
+      state,
+      visibleRows,
+      sortRows,
+      pathPanelOptions,
+      inDependencyOrder,
+      rp,
+      accel,
+      parseThreshold,
+      BUCKETS,
+      THRESHOLDS,
+      ESTIMATE_CAPTION
+    }
   };
 })(window);

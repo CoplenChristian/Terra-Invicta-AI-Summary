@@ -125,6 +125,14 @@ function register(app) {
       const quantity = parseInt(req.query.quantity, 10) || 1;
       const status = req.query.status ? String(req.query.status).trim() : null;
       const sort = req.query.sort ? String(req.query.sort).trim() : null;
+      // Handed through RAW. The shared parser inside the projection decides what
+      // a valid minimum is and echoes any rejection, so this route and the hosted
+      // worker cannot answer `?minDeltaV=abc` differently. It is deliberately not
+      // a 400: an unusable minimum is reported the same way an unrecognised
+      // `?sort=` is, as an echoed rejection beside the answer.
+      const thresholds = Object.fromEntries(
+        requestValidation.DRIVE_THRESHOLD_PARAMETERS.map(parameter => [parameter, req.query[parameter] ?? null])
+      );
       // A malformed `?detail=` is a 400, never a silent fall-through to the
       // default -- the same rule the limit and body filters already follow.
       // Quietly answering a smaller question than the caller asked is exactly
@@ -153,6 +161,7 @@ function register(app) {
         quantity,
         status,
         sort,
+        thresholds,
         detail,
         previousSnapshot: previousFiltered,
         mode,

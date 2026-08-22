@@ -1,7 +1,8 @@
 /**
  * Shared request-validation rules for both runtimes.
  * Purpose: the accept/reject request-validation rules shared by the local
- *   Express server and the hosted Cloudflare worker.
+ *   Express server, the hosted Cloudflare worker and the shared projections
+ *   that parse their own filter values.
  *
  * The 2026-08-20 review (section D) named this as the reason the local Express
  * server and the hosted Cloudflare worker duplicate validation:
@@ -129,6 +130,111 @@ export function limitBoundsFor(resource) {
 /** The wording of the limit error for one resource, shared for the same reason. */
 export function limitLabelFor(resource) {
   return CATALOGUE_LIMIT_RESOURCES.has(resource) ? 'drive catalogue limit' : 'mining prospects limit';
+}
+
+// ---------------------------------------------------------------------------
+// Minimum-threshold filters on measured columns.
+//
+// Shared for exactly the reason `CATALOGUE_LIMIT_BOUNDS` is: the local Express
+// route, the hosted worker and the browser panel must all decide the SAME thing
+// about `?minDeltaV=10`, and three hand-written copies of "what counts as a
+// number" is the shape that drifts silently.
+//
+// THE UNIT IS PART OF THE PARAMETER, not decoration. `> 10` is ambiguous
+// between km/s and m/s2, so each parameter names the measured field it tests and
+// the unit that field is in, and both travel on the response.
+// ---------------------------------------------------------------------------
+
+/**
+ * The `/api/intel/drive-explorer` minimum filters: parameter -> the measured
+ * field it tests and the unit that field carries.
+ *
+ * Minimums only, and deliberately so: a maximum has no use on this view, and two
+ * bounds per field would be six inputs on a column-tight table. If a maximum is
+ * ever wanted it is an additive follow-up, not a reshape of this table.
+ */
+export const DRIVE_THRESHOLD_FILTERS = Object.freeze({
+  minDeltaV: Object.freeze({
+    measure: 'deltaVKps',
+    unit: 'km/s',
+    label: 'minimum delta-V'
+  }),
+  minCombatAcceleration: Object.freeze({
+    measure: 'combatAccelerationMps2',
+    unit: 'm/s2',
+    label: 'minimum combat acceleration'
+  }),
+  minCruiseAcceleration: Object.freeze({
+    measure: 'cruiseAccelerationMps2',
+    unit: 'm/s2',
+    label: 'minimum cruise acceleration'
+  })
+});
+
+/** The parameter names, in the order they are documented and rendered. */
+export const DRIVE_THRESHOLD_PARAMETERS = Object.freeze(Object.keys(DRIVE_THRESHOLD_FILTERS));
+
+/**
+ * A non-negative decimal, optionally in exponent form.
+ *
+ * The exponent form is not decoration either: measured cruise acceleration on
+ * the live catalogue spans 0.00016846 to 20.59560406, so `1e-4` is a threshold a
+ * reader genuinely wants to be able to type. A leading `-` is absent from the
+ * pattern on purpose -- that is what rejects a negative minimum, which is
+ * meaningless here, rather than silently clamping it to zero.
+ */
+const NON_NEGATIVE_DECIMAL = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+/** The wording every runtime echoes for a rejected threshold. */
+export const THRESHOLD_REJECTION_REASON =
+  'not a non-negative number; a minimum must be a value like 10, 0.5 or 1e-4, and it was ignored rather than coerced';
+
+/**
+ * Parses one minimum threshold.
+ *
+ * Absent -> no filter. Present-but-malformed -> NO filter and a `rejected` echo,
+ * never a coercion: `Number('abc')` is `NaN` and `Number('')` is `0`, and both
+ * would quietly answer a different question than the caller asked. The caller
+ * echoes the rejection rather than 400-ing, the same way an unrecognised `?sort=`
+ * is echoed as `sorts.rejected`.
+ *
+ * @returns {{ applied: number|null, rejected: string|null, reason: string|null }}
+ */
+export function parseMinimumThreshold(value) {
+  if (isAbsent(value)) return { applied: null, rejected: null, reason: null };
+  const raw = String(value).trim();
+  if (raw === '') return { applied: null, rejected: null, reason: null };
+  if (!NON_NEGATIVE_DECIMAL.test(raw)) {
+    return { applied: null, rejected: raw, reason: THRESHOLD_REJECTION_REASON };
+  }
+  const parsed = Number(raw);
+  // `1e400` is all-legal syntax and parses to Infinity. A threshold nothing can
+  // clear is not a threshold; it is an unusable input, so it is rejected too.
+  if (!Number.isFinite(parsed)) {
+    return { applied: null, rejected: raw, reason: THRESHOLD_REJECTION_REASON };
+  }
+  return { applied: parsed, rejected: null, reason: null };
+}
+
+/**
+ * Parses every drive-explorer threshold from an already-extracted bag of raw
+ * query values, so the two runtimes differ only in how they read a query string.
+ *
+ * @returns {{ applied: Object, active: string[], rejected: Array<{parameter: string, value: string, reason: string}> }}
+ */
+export function parseDriveThresholds(raw = {}) {
+  const applied = {};
+  const active = [];
+  const rejected = [];
+  for (const parameter of DRIVE_THRESHOLD_PARAMETERS) {
+    const result = parseMinimumThreshold(raw?.[parameter]);
+    applied[parameter] = result.applied;
+    if (result.applied !== null) active.push(parameter);
+    if (result.rejected !== null) {
+      rejected.push({ parameter, value: result.rejected, reason: result.reason });
+    }
+  }
+  return { applied, active, rejected };
 }
 
 /** Bounds for the strategic-history page size. */

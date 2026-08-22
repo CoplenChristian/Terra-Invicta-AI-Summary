@@ -278,6 +278,7 @@ parameters.
 /api/intel/delta?observer=4712&mode=omniscient
 /api/intel/mobility?observer=4712&fleet=<fleetId>
 /api/intel/drive-explorer?observer=4712&mode=omniscient&design=<designId>&sort=delta-v&status=fittable&limit=25
+/api/intel/drive-explorer?observer=4712&minDeltaV=10&minCombatAcceleration=20&minCruiseAcceleration=0.5
 /api/intel/production-plan?observer=4712&mode=omniscient&design=playerShipTemplate584&quantity=4 (or POST)
 /api/intel/body-status?body=Mars&observer=4712&mode=omniscient
 ```
@@ -316,6 +317,33 @@ modelled — an absent body is not an unreachable one. It is the one endpoint wh
 `?limit=` may exceed 100 (`CATALOGUE_LIMIT_BOUNDS`, up to 1,000), because the
 whole catalogue is the request; `?sort=`, `?status=` and `?family=` narrow it and
 `detail=full` adds the reasons, prerequisites and research chains.
+
+Its **minimum-threshold filters** are `minDeltaV` (km/s), `minCombatAcceleration`
+(m/s²) and `minCruiseAcceleration` (m/s²) — inclusive minimums over the `measured`
+block, combined with AND, parsed by `parseDriveThresholds` in
+`shared/requestValidation.mjs` so both runtimes decide alike (the same discipline
+`CATALOGUE_LIMIT_BOUNDS` exists for). Three things about them are contract:
+
+- **A row with no measured value for a filtered field is UNTESTABLE, not failed.**
+  It is excluded and counted under `filters.thresholdExclusions.untestableCount`,
+  named in `untestableDrives` with the measurement that was missing, and never
+  folded into `belowThresholdCount`. `Number(null) === 0` would report it as a
+  measured failure instead. A row that definitely fails any *testable* minimum is
+  a failure whatever else is unmeasured.
+- **A malformed or negative minimum is rejected and echoed, never coerced.**
+  `minDeltaV=abc` answers 200 with `thresholds.rejected` naming it and no filter
+  applied, the same treatment an unrecognised `?sort=` gets. Exponent form
+  (`1e-4`) is accepted; measured cruise acceleration spans five orders.
+- **`filters.matched + excludedByStatusOrFamilyCount + belowThresholdCount +
+  untestableCount == driveCatalogue.rated`**, and `filters.reconciles` reports it.
+
+`combat = cruise × thrustCap` exactly, and `thrustCap` runs 1 to 160 across the
+catalogue: only **72 of 541** drives have the two equal (measured 2026-08-22), so
+the combat figure overstates sustained transit acceleration on the other 469 —
+VASIMR x1 reads 0.01010778 combat against 0.00016846 cruise. Both are columns on
+the DRIVES view for that reason, and both render to three significant figures
+rather than three decimal places, because `toFixed(3)` prints the bottom of that
+range as a confident-looking `0.000`.
 
 Each resource response includes save metadata, `intelMode`, `visibility`, a
 `count`, and a focused `items` array (or focused top-level summary fields).

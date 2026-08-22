@@ -7815,6 +7815,13 @@ button.council-orders__row:focus-visible {
   align-items: flex-end;
 }
 
+/* Capped so the unit-bearing label wraps inside the control rather than setting
+   the control's width from its own max-content. Without this "MIN COMBAT ACCEL
+   (m/s2)" would make a 108px input sit in a 190px column. */
+.de-control--threshold {
+  max-width: 160px;
+}
+
 .de-control__label {
   font-family: var(--mono);
   font-size: var(--fs-tag);
@@ -7832,6 +7839,15 @@ button.council-orders__row:focus-visible {
   border-radius: 2px;
   padding: 3px 6px;
   min-width: 150px;
+}
+
+/* A threshold is a short number, not a search term. Narrower so three of them
+   plus the five existing controls still wrap into rows rather than one per row
+   at 375px -- and narrower is all that changes: the type scale is untouched,
+   because its steps are 1px apart and were only just repaired. */
+.de-input--number {
+  min-width: 108px;
+  max-width: 160px;
 }
 
 .de-select:focus-visible,
@@ -8299,6 +8315,14 @@ button.council-orders__row:focus-visible {
 .de-notice--warn {
   border-color: var(--warning);
   color: var(--warning);
+}
+
+/* The active-minimums summary. Accented rather than warning-coloured: an active
+   filter is a state the reader chose, not a problem. It still has to be visible,
+   because it is the reason the list is shorter than the catalogue. */
+.de-notice--filters {
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .de-unresolved {

@@ -13,6 +13,7 @@ const {
   DETAIL_LEVELS,
   DEFAULT_DETAIL_LEVEL,
   DETAIL_AWARE_RESOURCES,
+  THRESHOLD_AWARE_RESOURCES,
   isDetailLevel,
   parseDetailLevel,
   measureIntelEndpointSizes,
@@ -34,14 +35,17 @@ function buildResource(snapshot, resource, options = {}) {
     quantity = 1,
     status = null,
     sort = null,
+    thresholds = null,
     previousSnapshot = null,
     mode = 'player',
     isLatestSnapshot = true,
     detail = DEFAULT_DETAIL_LEVEL
   } = options;
   const identity = snapshotIdentity.readSnapshotIdentity(snapshot);
-  // `detail` is echoed only for the resources that honour it, so the echo never
-  // implies a parameter did something it did not.
+  // `detail` and the minimum thresholds are echoed only for the resources that
+  // honour them, so the echo never implies a parameter did something it did not.
+  // The thresholds echo here is the RAW request; what the projection made of it,
+  // including any rejection, is on the projection's own `thresholds` block.
   const query = {
     faction: factionId,
     body,
@@ -54,7 +58,8 @@ function buildResource(snapshot, resource, options = {}) {
     quantity,
     status,
     sort,
-    ...(DETAIL_AWARE_RESOURCES.has(resource) ? { detail } : {})
+    ...(DETAIL_AWARE_RESOURCES.has(resource) ? { detail } : {}),
+    ...(THRESHOLD_AWARE_RESOURCES.has(resource) ? { ...(thresholds || {}) } : {})
   };
   const projection = buildResourceProjection(snapshot, resource, {
     factionId,
@@ -68,6 +73,7 @@ function buildResource(snapshot, resource, options = {}) {
     quantity,
     status,
     sort,
+    thresholds,
     previousSnapshot,
     mode,
     detail,
@@ -108,6 +114,7 @@ module.exports = {
   DETAIL_LEVELS,
   DEFAULT_DETAIL_LEVEL,
   DETAIL_AWARE_RESOURCES,
+  THRESHOLD_AWARE_RESOURCES,
   isDetailLevel,
   parseDetailLevel,
   measureIntelEndpointSizes,

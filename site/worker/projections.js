@@ -21,6 +21,7 @@ import {
   SUPPORTED_RESOURCES,
   DETAIL_LEVELS,
   DETAIL_AWARE_RESOURCES,
+  THRESHOLD_AWARE_RESOURCES,
   parseDetailLevel,
   buildResourceProjection
 } from '../shared/intelResources.mjs';
@@ -36,6 +37,7 @@ import {
 } from '../shared/techGraph.mjs';
 import {
   BODY_FILTER_MESSAGE,
+  DRIVE_THRESHOLD_PARAMETERS,
   exceedsBodyFilterLimits,
   isBoundedInteger,
   limitBoundsFor,
@@ -123,6 +125,13 @@ export const buildIntelResource = (result, resource, url) => {
   const quantity = parseInt(url.searchParams.get('quantity'), 10) || 1;
   const status = url.searchParams.get('status');
   const sort = url.searchParams.get('sort');
+  // Read RAW and handed straight to the shared projection, which owns the
+  // parsing. That is what makes this runtime's answer to `?minDeltaV=10` the
+  // same as the local server's -- the same discipline `limitBoundsFor` exists
+  // for, applied to a filter rather than a bound.
+  const thresholds = Object.fromEntries(
+    DRIVE_THRESHOLD_PARAMETERS.map(parameter => [parameter, url.searchParams.get(parameter)])
+  );
   // `validateResourceQuery` has already rejected a malformed value, so this
   // cannot silently fall back to the default for a caller who asked for `full`.
   const detail = parseDetailLevel(url.searchParams.get('detail'));
@@ -138,7 +147,8 @@ export const buildIntelResource = (result, resource, url) => {
     quantity,
     status: status || null,
     sort: sort || null,
-    ...(DETAIL_AWARE_RESOURCES.has(resource) ? { detail } : {})
+    ...(DETAIL_AWARE_RESOURCES.has(resource) ? { detail } : {}),
+    ...(THRESHOLD_AWARE_RESOURCES.has(resource) ? { ...thresholds } : {})
   };
   const projection = buildResourceProjection(snapshot, resource, {
     factionId,
@@ -152,6 +162,7 @@ export const buildIntelResource = (result, resource, url) => {
     quantity,
     status,
     sort,
+    thresholds,
     detail,
     mode: result.mode || result.row?.visibility || 'player'
   });
