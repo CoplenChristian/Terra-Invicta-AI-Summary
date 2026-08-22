@@ -41,14 +41,24 @@ function makeFaction(id, displayName, options = {}) {
       // Per-slot research pip weights. Omitted unless a test asks for them, so
       // the default fixture exercises the "this snapshot carries no weights"
       // path that a save published before phase 5 will take.
-      ...(options.researchWeights ? { researchWeights: options.researchWeights } : {})
+      ...(options.researchWeights ? { researchWeights: options.researchWeights } : {}),
+      // Alien-activity investigations, the Xenology bonus source no template
+      // carries. Omitted unless asked for, so the default fixture exercises the
+      // "absent" path -- which must stay null and never become a measured 0.
+      // `!== undefined` rather than a truthiness check, because 0 is a real and
+      // meaningful value here.
+      ...(options.alienInvestigations !== undefined
+        ? { alienInvestigations: options.alienInvestigations }
+        : {})
     }
   };
 }
 
 // A hab module as the save stores it: the sector owns the module list, and the
 // module carries its own construction state.
-function makeHabModule(id, templateName, { constructionCompleted = true, destroyed = false, decommissioning = false } = {}) {
+function makeHabModule(id, templateName, {
+  constructionCompleted = true, destroyed = false, decommissioning = false, powered = true
+} = {}) {
   return {
     Value: {
       ID: ref(id),
@@ -57,7 +67,10 @@ function makeHabModule(id, templateName, { constructionCompleted = true, destroy
       constructionCompleted,
       destroyed,
       decommissioning,
-      powered: true,
+      // Configurable because an UNPOWERED lab must contribute no research
+      // category bonus, and a fixture that could only build powered modules
+      // could not test that. Defaults to powered, so no existing caller moves.
+      powered,
       archived: false,
       buildCost: {}
     }
@@ -236,7 +249,12 @@ function makeSaveData({
         }
       ],
       'PavonisInteractive.TerraInvicta.TIHabModuleState': habModules.map(
-        m => makeHabModule(m.id, m.templateName, { constructionCompleted: m.constructionCompleted !== false })
+        m => makeHabModule(m.id, m.templateName, {
+          constructionCompleted: m.constructionCompleted !== false,
+          destroyed: m.destroyed === true,
+          decommissioning: m.decommissioning === true,
+          powered: m.powered !== false
+        })
       ),
       'PavonisInteractive.TerraInvicta.TIHabSiteState': [
         {

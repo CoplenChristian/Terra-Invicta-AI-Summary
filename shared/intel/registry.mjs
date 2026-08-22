@@ -75,6 +75,7 @@ import { driveExplorerResource } from './driveExplorer.mjs';
 import { militaryValueResource } from './militaryValue.mjs';
 import { economicValueResource } from './economicValue.mjs';
 import { researchRankingResource } from './researchRanking.mjs';
+import { buildResearchCategoryBonuses, categoryBonusSummary } from '../researchCategoryBonus.mjs';
 import { deltaResource } from './delta.mjs';
 import { mobilityResource } from './mobility.mjs';
 import { bodyStatusResource, theatersResource } from './theaters.mjs';
@@ -182,9 +183,22 @@ const INTEL_ENDPOINTS = Object.freeze([
   {
     key: 'research',
     example: OMNISCIENT,
-    project: (snapshot) => {
+    project: (snapshot, { observerId }) => {
       const research = researchResourceRows(snapshot);
-      return { count: research.rows.length, items: research.rows, finishedGlobalProjects: research.finishedGlobalProjects };
+      return {
+        count: research.rows.length,
+        items: research.rows,
+        finishedGlobalProjects: research.finishedGlobalProjects,
+        // The observer's per-category research bonuses, with every contributing
+        // source named. This is the natural home for them: an agent asking
+        // "what is the observer researching and how fast" gets both from one
+        // call, and the largest single contributor -- alien-activity
+        // investigations -- is in no template, so it cannot be reconstructed
+        // from anything else on this surface.
+        categoryBonuses: categoryBonusSummary(
+          buildResearchCategoryBonuses(snapshot, { observerId })
+        )
+      };
     }
   },
   {

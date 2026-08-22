@@ -1,118 +1,310 @@
-# Research duration ignores per-category bonuses
+# Research duration and per-category research bonuses
 
-Written 2026-08-21 against `b3b77f6`.
+Written 2026-08-21 against `b3b77f6`. **Revised 2026-08-21** after two missed bonus sources
+were found and the delivery mechanism pinned. The superseded conclusion is kept at the
+bottom under "What the first pass got wrong", because the way it went wrong is the useful
+part.
 
-Every duration the research advisor prints comes from one flat monthly rate. Orgs and hab
-modules grant **per-category** research bonuses, so a project in a boosted category
-finishes sooner than stated and one in an unboosted category does not.
+Every duration the research advisor prints comes from one flat monthly rate. Orgs, hab
+modules, councilor traits, alien-activity investigations and one ship module all grant
+**per-category** research bonuses, so the rate a project is actually researched at varies
+by category.
 
 ---
 
-## Measured
+## The five sources, and which of them a template sweep finds
 
-`monthsAtIncome(remainingCost, monthlyIncome)` (`shared/researchAvailability.mjs:338`) is:
+The official wiki (`Technology`, revision **2026-05-06**, read as raw wikitext 2026-08-21)
+names five sources of a Research Category Bonus:
 
-```js
-return round(cost / income, 1);
+| source | in a template? | handled |
+| :--- | :--- | :--- |
+| councilor traits | `techBonuses` on `TITraitTemplate.json` | yes |
+| equipped orgs | `techBonuses` on `TIOrgTemplate.json` | yes |
+| hab modules | `techBonuses` on `TIHabModuleTemplate.json` | yes |
+| ships with a Mobile Space Science Lab (SpaceScience only) | `TIUtilityModuleTemplate.json`, but as `specialModuleRules: ["GenerateSpaceScienceBonus"]` / `specialModuleValue: 0.05` — **not** `techBonuses` | **no**, declared |
+| alien activity investigations (Xenology only) | **no template at all** | yes |
+
+`grep -l techBonuses` over the installed templates returns exactly three files, which is
+why the first pass swept exactly three families and stopped.
+
+### Alien-activity investigations are not in any template
+
+`InvestigateAlienActivity` in `TIMissionTemplate.json` resolves to:
+
+```json
+"targetEffects": [{ "$type": "TIMissionEffect_InvestigateAlienActivity" }]
 ```
 
-One rate, no category term. It is called from exactly three places — `economicValue.mjs:265`,
-`militaryValue.mjs:568`, `propulsion.mjs:282` — each passing a single `monthlyResearch`.
+A code-side effect class with no data-driven bonus. `TIGlobalConfig.json` carries no
+investigation constant either — a grep for `investig` returns nothing, and the only
+research key in the whole file is `globalResearchMultiplier: 1`.
 
-**Category bonuses are real and in the templates, and none of them is baked:**
+The count itself **is** in the save, as a plain integer `alienInvestigations` on
+`TIFactionState`. The rate is a **wiki claim**:
+
+> Terra Invicta wiki, `Aliens`, revision **2026-04-05**, read as raw wikitext 2026-08-21:
+> xenology, no condition, **+1% per Alien Activity Investigation**.
+
+On the measured saves the observer had **24**, so its true Xenology bonus was
+`0.20 (two Xenology Labs) + 0.24 = 0.44`, not the 0.20 the template sweep found. Nothing
+is hardcoded: the count is read per save and multiplied by the stated rate.
+
+### The ship module is declared unhandled, not omitted
+
+The snapshot's fielded ships (`fleets[].ships[]`) carry a weapon loadout but not their
+utility-module template names, so how many Mobile Space Science Labs the observer flies
+cannot be read. `UNHANDLED_SOURCE_TYPES` names it, and every category it touches
+(`SpaceScience`) reports `isLowerBound: true` with the reason. A floor presented as a total
+is the same defect as a fabricated figure.
+
+## Diminishing returns, quantified
+
+Every one of the 41 bonus-granting hab module templates carries the special rule
+`TechBonusDiminishingReturns`, and **no shipped template or config states its constant**.
+The first pass concluded from this that `effectiveBonus` had to stay `null`. The wiki
+states the rule (`Technology`, rev **2026-05-06**):
+
+> Except for alien activity investigations, each source will have diminishing returns
+> applied to it separately when its base bonus exceeds 50%. Specifically, if the base bonus
+> is more than 50%, then the actual bonus is set to
+> `50% + 50% × (Base Bonus − 50%) / (Base Bonus + 150%)`.
+>
+> The Research Category Bonus is then simply the sum of these actual bonuses from each
+> source type.
+
+Three things follow, and the third is a judgement rather than a reading:
+
+1. The threshold is **strict** — at exactly 50% the curve is the identity.
+2. **Alien-activity investigations are exempt** and stack linearly with no cap.
+3. "Each source ... separately", then "the sum ... from each source **type**", is read here
+   as **per source type**: all orgs together, all hab modules together. On this campaign no
+   source type reaches 50%, so the per-source and per-type readings are indistinguishable
+   in the data and this choice is recorded as a judgement, not a measurement.
+
+**Both constants are wiki claims, not measurements**, and `CATEGORY_BONUS_RULES.claimStatus`
+says so in the payload. They are corroborated only indirectly, by the pin below.
+
+---
+
+# The measurement, 2026-08-21 (second pass)
+
+## Method
+
+The same four saves as the first pass, re-copied and **re-verified byte-for-byte** against
+the source before use because the game had been running:
 
 ```
-TIOrgTemplate         114 of 381 orgs carry techBonuses
-                      e.g. U.N. Office for Outer Space Affairs
-                           [{ category: "SpaceScience", bonus: 0.05 }]
-TIHabModuleTemplate   e.g. EnergyLab
-                           [{ category: "Energy", bonus: 0.025 }]
-                           incomeResearch_month: 5
+Autosave3.gz   61cc7c1103742fe47d2984d384a3147a   12/1/2034
+Autosave2.gz   5294cddfb5906d27bfd59bce9f29ccda   12/16/2034 12:00
+Autosave.gz    2ef9643051e675026850b23b380f93f3   1/1/2035
+ExitSave.gz    5c0d9ef98213c91d8187ae11bf885d57   1/1/2035
 ```
 
-`grep techBonuses` across `shared/` and `server/` returns **nothing** outside a comment.
+All four MD5s match the first pass exactly, so this is a genuine re-measurement of the same
+data rather than a new campaign state. `alienInvestigations` was **24 in all four**, so it
+does not drift inside either interval and cannot confound a relative comparison.
 
-**Observer's current exposure**, from powered completed hab modules only:
+Per-slot `accumulatedResearch` was differenced across two consecutive 15.5-day intervals
+with the pip layout `[0,0,3,1,3,1]` unchanged throughout. The first pass's delivered
+figures reproduce to the integer.
+
+## Interval 1 — 12/1/2034 → 12/16/2034 12:00
+
+| slot | kind | pips | category | delivered | per pip |
+| ---: | :--- | ---: | :--- | ---: | ---: |
+| 2 | global tech | 3 | LifeScience | 745 | 248.33 |
+| 3 | project | 1 | MilitaryScience | 469 | 469 |
+| 4 | project | 3 | Xenology | 1698 | 566 |
+| 5 | project | 1 | Energy | 469 | 469 |
+
+Every category holds exactly one pipped slot, so the `0.9^(n−1)` same-category decay is
+`0.9^0 = 1` everywhere and the term never engages.
+
+## The model, with every term read rather than fitted
+
+The wiki allocation formula (`Technology`, rev 2026-05-06):
 
 ```
-Xenology   +20.0%   a project there finishes in x0.833 of the stated estimate
+delivered to slot X = base
+                    × (100% + 5% per research slot with pips)
+                    × pips_X / total pips
+                    × (100% + CategoryBonus_X × 0.9^(same-category pipped slots − 1)
+                             + ProjectBonus if X is a project)
 ```
 
-That figure matches the **0.20 Xenology** reconstructed independently in
-`ALLOCATION_MODEL.reproduction` (`shared/researchSlots.mjs`), which also recorded Energy
-0.03 and MilitaryScience 0.03 — those come from orgs and councilor traits, which this hab
-module sweep does not capture. So the true spread is wider than the one category above.
+The first pass could not fit it because two terms were wrong, and neither was the category
+term it was searching in:
 
-A 20% bonus means the advisor states 12 months where the answer is 10.
+**`ProjectBonus` is readable from the save.** The wiki says the first Projects point from an
+org unlocks the second project slot, the first from a hab module unlocks the third, and each
+remaining one adds 5% up to a 100% cap. The save carries all three:
 
-## Engineers are already handled — do not double-apply
+```
+cachedYearlyRevenue.Projects = 21
+orgProjectSlotUnlocked       = true
+habProjectSlotUnlocked       = true
+-> ProjectBonus = min(100%, (21 − 2) × 5%) = 95%
+```
 
-The player also runs a flat **+95% from engineers** (each grants 5%), which applies to all
-research rather than a category. That is already present: `monthlyIncome.Research` is a
-**measured** figure read from the save, so it necessarily includes engineers, and the
-research-multiplier measurement in `docs/campaign-settings-spec.md` confirmed measured
-income reproduces observed delivery at 1.147× / 0.993×.
+**`CategoryBonus` for Xenology is 0.44, not 0.20** — the 24 investigations.
 
-**Applying an engineer term on top would double-count it.** Only the *category* variation
-is missing, because a single total cannot encode per-category rates.
+## What reproduced — zero free parameters
 
-## Measure the mechanism before applying a correction
+Predicted share of delivered research against observed share, all four slots at once:
 
-**Do not simply divide duration by `(1 + categoryBonus)`.** The exact mechanism is not
-settled, and this repo has a recorded finding that says so: `ALLOCATION_MODEL` reports the
-published allocation formula — which includes a CategoryBonus term — **does not reproduce**
-measured delivery, and that no single `(base, ProjectBonus)` pair fits all three
-pip-carrying slots.
+| slot | category | multiplier | predicted share | observed share | error |
+| ---: | :--- | ---: | ---: | ---: | ---: |
+| 2 | LifeScience (global tech) | 1.0500 | 0.220588 | 0.220349 | +0.109% |
+| 3 | MilitaryScience (project) | 1.9800 | 0.138655 | 0.138716 | −0.044% |
+| 4 | Xenology (project) | 2.3900 | 0.502101 | 0.502218 | −0.023% |
+| 5 | Energy (project) | 1.9800 | 0.138655 | 0.138716 | −0.044% |
 
-What *is* recorded as stable is the **relative share between slots**, at 2.26216× / 2.26214×
-across two intervals, one part in 10⁴.
+Against a per-slot integer-rounding noise floor of 0.059% to 0.213%. Every residual is
+inside noise.
 
-So the honest sequence is the one that settled the campaign multipliers:
+The four independent per-pip ratios, which cancel total income entirely:
 
-1. **Measure delivery into a boosted-category slot against an unboosted one** across two
-   consecutive saves, using a relative comparison so global income drift cancels.
-   `ALLOCATION_MODEL.reproduction` documents the technique and its confounds.
-2. Only then apply a correction, and state the measured basis next to it.
-3. If the mechanism cannot be pinned, report the category-adjusted duration as **unknown**
-   rather than printing a flat number that is known to be wrong for boosted categories.
+```
+Xenology / MilitaryScience              observed 1.206823   predicted 1.207071   +0.021%
+Energy / MilitaryScience                observed 1.000000   predicted 1.000000    0.000%
+MilitaryScience project / global tech   observed 1.888591   predicted 1.885714   −0.152%
+Xenology project / global tech          observed 2.279195   predicted 2.276190   −0.132%
+```
 
-An unadjusted flat duration is wrong by a measured 17% on Xenology today. A confidently
-wrong *adjusted* duration would be worse.
+The third row is the load-bearing one. It contains no Xenology at all, so it fixes
+`ProjectBonus` independently — and it agrees with the 0.95 read straight out of
+`cachedYearlyRevenue.Projects` to 0.15%. That is what makes this a test rather than a fit.
 
-## What to build
+**Equal bonus, equal delivery, across different source types.** Slots 3 and 5 carry the same
+0.03 from *different* source types — MilitaryScience from an org (0.01) plus the `Veteran`
+trait (0.02), Energy from two orgs (0.01 + 0.02). Both delivered exactly **469**. That is
+what licenses summing across source types.
 
-1. **Bake per-category research bonuses** for the observer: orgs, hab modules and
-   councilor traits, summed by category, with the contributing sources listed so the figure
-   is checkable. Powered and completed modules only — an unpowered lab contributes nothing.
-2. **Give `monthsAtIncome` a category**, once the mechanism is measured. All three callers
-   know the project's `category` already; the tech tree node carries it.
-3. **Show the category rate next to any duration it changed**, so a reader can tell a
-   boosted estimate from a flat one.
-4. **Say when a duration is flat-rate** because the project's category carries no bonus, or
-   because the bonus could not be resolved.
+**The absolute scale is one common factor.** Observed / predicted is 0.98461, 0.98612,
+0.98591, 0.98612 — uniformly ~1.4% low, not a structural mis-fit. Consistent with income
+drift inside the interval or a slightly different elapsed-day convention.
 
-## Constraints
+## Interval 2 — 12/16/2034 12:00 → 1/1/2035
 
-- **Absent stays null.** A missing bonus is `null`, not `0` and not `1`. An unresolvable
-  category makes the duration `unknown`, never silently flat.
+Slots 2 and 5 changed occupant, so only slots 3 and 4 are differenceable.
+
+```
+Xenology / MilitaryScience per-pip   observed  1.208696
+  predicted, no same-category decay            1.207071   −0.134%
+  predicted, 0.9 decay on MilitaryScience      1.208902   +0.017%
+```
+
+Slot 2 became a *MilitaryScience* global tech partway through this interval, which would
+engage the `0.9^(n−1)` decay for part of it. Both readings sit inside noise, so the decay
+term is **corroborated, not pinned**.
+
+## What is pinned, and what is not
+
+**Pinned.** The allocation formula, with `CategoryBonus` including investigations and
+`ProjectBonus` read from `cachedYearlyRevenue.Projects`, reproduces four measured slot
+deliveries to within 0.15% with no fitted parameter.
+
+**Not pinned, and the record says so:**
+
+- the `0.9^(n−1)` same-category decay — every category held exactly one pipped slot in
+  interval 1, so the exponent was 0 and the term never engaged;
+- the diminishing-returns curve — no source type on this campaign reaches 50%, so the curve
+  is the identity throughout and applying it changes nothing here. It is exercised only
+  against a synthetic 60% source in `tests/researchCategoryBonus.test.js`;
+- the 100% `ProjectBonus` cap — the observer sits at 95%, below it.
+
+**What would test the rest:** a save in which one source type's subtotal exceeds 50%, and
+one in which two pipped slots share a category.
+
+---
+
+# The consequence, and why durations are still flat
+
+The pin says something the first pass could not see: **the category term is the small part
+of the flat rate's error.**
+
+Over interval 1 the observer's slots received **2.1113×** the nominal research income the
+flat rate divides by, because `cachedYearlyRevenue.Research` is the **pre-multiplier base**
+and the `(1 + 5% per pipped slot)`, pip-share and `(1 + Category + Project)` terms all sit
+on top of it.
+
+So:
+
+- correcting only the category term moves a MilitaryScience duration by ~3%, and leaves a
+  2.11× error untouched while looking like a fix;
+- withdrawing the duration to `unknown` — what the first pass did — removes a usable figure
+  to avoid a 3% error and still leaves the reader with nothing.
+
+**Durations therefore stay flat, and the measured category bonus is named beside them.** The
+label states what is *not* applied; it deliberately does not claim a direction or size for
+the true figure, because the dominant error runs the other way.
+
+`8.0 mo (flat; +3.0% category)` — not "so the true figure is slightly shorter", which the
+measurement contradicts.
+
+**The next scoped change** is to price a duration through the pinned allocation model rather
+than `cost / income`, which is a change to every duration in three endpoints and needs its
+own before/after capture. It is out of scope here.
+
+## Duration states
+
+| state | months | meaning |
+| :--- | :--- | :--- |
+| `flat-rate` | flat | the category carries no bonus for the observer; the flat rate is right for the category term |
+| `flat-rate-boosted` | flat | the category carries a measured bonus, stated on the row, **not** applied |
+| `unresolved-category` | flat | the project's category could not be resolved, so whether a bonus applies is undecidable |
+| `category-unchecked` | flat | the snapshot predates the catalogue; nothing was measured either way |
+| `unmeasured-income` | **null** | no measured research income — the only state without a number |
+
+`unknown` is gone. Thirteen ranked rows carried it, none of them Xenology: MilitaryScience
+(7), Energy (2), Materials (2), SpaceScience (2), at roughly 3–5% each.
+
+---
+
+# What the first pass got wrong
+
+Kept because the failure mode is instructive, not because the conclusion stands.
+
+It measured correctly. Every delivered figure it recorded reproduces to the integer. It then
+searched for a **one-parameter category model** to explain a residual that was not in the
+category term at all, and correctly refused to guess when nothing fitted.
+
+Its three candidate fits, and what each was actually seeing:
+
+| candidate | fitted | what it really was |
+| :--- | :--- | :--- |
+| `1 + b + P` | `P = −0.208` / `−0.215` | the right *shape*. `P` came out negative only because `b` was 0.20 instead of 0.44. At the true `b`, `P` solves to +0.95 — the value the save states. |
+| `1 + k·b` | `k = 1.263` / `1.275` | an artefact of the same missing 0.24 |
+| under-reconstructed `b` | `b = 0.243` / `0.245` | **the closest to right.** It was rejected because `TechBonusDiminishingReturns` can only push a bonus *below* its sum, so a `b` above 0.20 looked impossible. The rule is real; it just does not apply below 50%, and investigations are exempt from it anyway. |
+
+`ALLOCATION_MODEL.reproduction` had already recorded that "for ProjectBonus = 0 to produce
+the same ratio the Xenology bonus need only be 0.2435" and that the reconstruction was
+unvalidated. That note was pointing straight at the missing source.
+
+Two lessons worth keeping:
+
+- **`grep techBonuses` is not "find every bonus source".** It is "find every bonus source
+  *that is data-driven in that shape*". Two of five sources were neither.
+- **A one-parameter fit to one ratio is not a test — but neither is refusing to look for a
+  second ratio.** The project-vs-global-tech comparison was available in the same interval
+  and contains no Xenology; it fixes `ProjectBonus` on its own. The first pass excluded
+  global-tech slots as "a separate mechanism" on the strength of a ratio it could not
+  explain (745 against 1698), and that exclusion removed the one comparison that would have
+  broken the collinearity it then reported as the blocker.
+
+---
+
+# Constraints (unchanged)
+
+- **Absent stays null.** A missing bonus is `null`, not `0` and not `1`. An unreadable
+  `alienInvestigations` is `null` — `Number(null) === 0`, and zero investigations is a real
+  and different fact.
 - **Do not double-apply engineers.** They are already in the measured income.
-- Nothing campaign-specific: read `techBonuses` from templates, never hardcode Xenology or
-  a 0.20.
+- Nothing campaign-specific: read `techBonuses` from templates and `alienInvestigations`
+  from the save. Never hardcode Xenology, 0.20, 0.44 or 24.
 - `shared/**` runs in both runtimes.
-- Both modes — player mode redacts enemy state but the observer's own orgs and habs are
-  visible; verify.
+- Both modes. The observer's own investigation count is legitimately known and survives
+  player mode; a **rival's** is redacted to `null` alongside `currentProjects` and
+  `availableProjectNames`, because it converts directly into their Xenology research rate.
 - Read `docs/code-index.md`; update `Purpose:` lines and run `npm run index` last.
-
-## Acceptance
-
-- Per-category bonuses are baked with their contributing sources. On the live save Xenology
-  resolves to **+20.0%** from two powered hab modules — assert the value is derived, not
-  that it equals 0.20, since the campaign moves.
-- An unpowered or incomplete module contributes nothing. Assert with a synthetic module.
-- **The mechanism is measured and the evidence recorded in this spec** before any duration
-  changes. State delivery into a boosted slot against an unboosted one.
-- No duration changes until that measurement exists; until then boosted-category durations
-  report `unknown` rather than a known-wrong flat number.
-- Engineers are not applied a second time — assert that a duration computed from measured
-  income is unchanged by the engineer total.
-- Both modes; full suite green with exact pass/fail/skip counts.

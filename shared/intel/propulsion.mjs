@@ -30,9 +30,14 @@ import {
 import {
   AVAILABILITY_STATES,
   buildAvailabilityResolver,
-  monthsAtIncome,
   tallyAvailabilityStates
 } from '../researchAvailability.mjs';
+import {
+  MEASURED_INCOME_BASIS,
+  buildResearchCategoryBonuses,
+  categoryBonusSummary,
+  monthsAtIncomeForCategory
+} from '../researchCategoryBonus.mjs';
 import { gatesForFamily, unlockIndexCensus } from '../unlockIndex.mjs';
 import { findAlienFaction } from './common.mjs';
 
@@ -249,6 +254,9 @@ export const propulsionResource = (snapshot, {
 
   const observerFaction = asArray(snapshot.factions).find(faction => sameId(faction?.ID, observerId)) || null;
   const monthlyResearch = toFinite(observerFaction?.totalResearch);
+  // Built once for the whole design sweep: it walks every hab module and
+  // councilor the observer holds, and every refit row reads from it.
+  const categoryBonuses = buildResearchCategoryBonuses(snapshot, { observerId });
 
   const candidates = driveStatsAvailable ? buildCandidateDrives(snapshot, resolver) : [];
 
@@ -267,6 +275,14 @@ export const propulsionResource = (snapshot, {
           propellantModules: snapshot.propellantModules || {}
         });
         const remaining = candidate.availability.remainingResearchCost;
+        // Priced against the gate project's OWN research category. The flat
+        // figure stands for a boosted category and carries the measured bonus
+        // beside it rather than being adjusted by it.
+        const duration = monthsAtIncomeForCategory(
+          remaining,
+          monthlyResearch,
+          categoryBonuses.bonusFor(candidate.availability.category ?? null)
+        );
         return {
           ...refit,
           isFittedDrive: candidate.driveId === design.drive?.id,
@@ -279,7 +295,14 @@ export const propulsionResource = (snapshot, {
             remainingResearchCost: remaining,
             // Absent stays null: without a measured research income there is no
             // honest number of months, and "0 months" would read as "immediate".
-            monthsAtCurrentIncome: monthsAtIncome(remaining, monthlyResearch),
+            // That is now the only reason this is null.
+            monthsAtCurrentIncome: duration.months,
+            // A state CODE. `research.categoryBonuses.durationStates` spells
+            // each one out once per response, not on every row.
+            monthsAtCurrentIncomeState: duration.state,
+            // The EFFECTIVE bonus after the wiki diminishing-returns rule.
+            categoryResearchBonus: duration.categoryBonus,
+            flatRateMonths: duration.flatRateMonths,
             missingPrerequisites: candidate.availability.missingPrerequisites,
             unlockChance: candidate.availability.unlockChance
           }
@@ -351,6 +374,12 @@ export const propulsionResource = (snapshot, {
             gateProjectId: best.research.gateProjectId,
             remainingResearchCost: best.research.remainingResearchCost,
             monthsAtCurrentIncome: best.research.monthsAtCurrentIncome,
+            // Why that duration is what it is. A null on a boosted category is
+            // a withdrawn estimate, not a missing measurement, and the two are
+            // indistinguishable without this.
+            monthsAtCurrentIncomeState: best.research.monthsAtCurrentIncomeState,
+            categoryResearchBonus: best.research.categoryResearchBonus,
+            flatRateMonths: best.research.flatRateMonths,
             unlockChance: best.research.unlockChance
           }
           // Explicit null with the state's own name attached, so "none in this
@@ -431,6 +460,10 @@ export const propulsionResource = (snapshot, {
         ? (resolver.availabilityKnown ? null : 'the observer\'s available-project list is absent in this mode')
         : resolver.reason,
       monthlyResearchIncome: monthlyResearch,
+      monthlyResearchIncomeBasis: MEASURED_INCOME_BASIS,
+      // The observer's per-category research bonuses, with their sources, and
+      // the model that says why no duration is divided by them.
+      categoryBonuses: categoryBonusSummary(categoryBonuses),
       states: Object.values(AVAILABILITY_STATES)
     },
     driveCatalogue: {

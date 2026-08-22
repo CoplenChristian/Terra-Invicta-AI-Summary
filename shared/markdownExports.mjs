@@ -41,6 +41,7 @@ import {
   HAB_CONSTRUCTION_MODULES
 } from './strategicSnapshot.mjs';
 import { DRIVE_AVAILABILITY, driveExplorerResource } from './intel/driveExplorer.mjs';
+import { buildResearchCategoryBonuses } from './researchCategoryBonus.mjs';
 
 // Absence-preserving formatting helpers
 export const isMeasured = (value) =>
@@ -1389,6 +1390,53 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     });
   }
 
+  // Per-category research bonuses. An agent reading this file otherwise has no
+  // way to know a Xenology project runs at +44% while a Materials one runs at
+  // +2%, and the largest single contributor -- alien-activity investigations --
+  // is in no template at all, so it cannot be reconstructed downstream either.
+  const bonusModel = buildResearchCategoryBonuses(filteredSnapshot, { observerId: observer?.ID });
+  const bonusBlock = listBlock('research-category-bonuses', {
+    headingLines: [`### Research Category Bonuses (${observerName})`],
+    emptyLines: [bonusModel.available === true
+      ? `*No research category carries a bonus for this observer.*`
+      : `*Per-category research bonuses unavailable: ${bonusModel.reason}*`],
+    budgetEmptyLines: budgetEmptyNote('research category bonuses', '/api/intel/research-ranking', false),
+    budgetNote: budgetOmissionNote('research category bonuses', '/api/intel/research-ranking'),
+    trailingLines: [``]
+  });
+  blocks.push(bonusBlock);
+
+  if (bonusModel.available === true) {
+    for (const category of asArray(bonusModel.boostedCategories)) {
+      const row = bonusModel.categories[category];
+      if (!row) continue;
+      const pctOf = (value) => (isMeasured(value) ? `${(Number(value) * 100).toFixed(1)}%` : 'UNKNOWN');
+      // The per-type split, so a reader can see which source carries the
+      // figure and whether the diminishing-returns curve bit.
+      const split = asArray(row.bySourceType)
+        .map(group => `${group.sourceType} ${pctOf(group.effectiveBonus)}`
+          + (group.diminished ? ` (diminished from ${pctOf(group.summedBonus)})` : ''))
+        .join(', ');
+      addEntry(bonusBlock, {
+        rank: [-(num(row.effectiveBonus) ?? 0), String(category)],
+        variants: [[
+          `- **${category}**: +${pctOf(row.effectiveBonus)} effective`
+            + (split ? ` — ${split}` : '')
+            + (row.isLowerBound === true ? ' — LOWER BOUND, a named source could not be read' : '')
+        ]]
+      });
+    }
+    // Stated once, not per row: what the figures do and do not do.
+    const investigations = num(bonusModel.alienInvestigations);
+    bonusBlock.trailingLines = [
+      investigations === null
+        ? `*Alien-activity investigations: UNAVAILABLE — the Xenology figure omits them rather than counting them as zero.*`
+        : `*Includes ${investigations} alien-activity investigation(s) at +1% Xenology each (wiki, Aliens rev 2026-04-05), exempt from diminishing returns.*`,
+      `*Durations elsewhere in this brief are FLAT-RATE and do NOT apply these bonuses. The allocation model measured on this campaign puts the flat rate's dominant error at the per-slot allocation multiplier (2.11x), not the category term — treat every stated duration as an upper bound.*`,
+      ``
+    ];
+  }
+
   // -------------------------------------------------------------------------
   // SECTION 9: DRIVE EXPLORER
   //
@@ -1438,6 +1486,9 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   // construction and never degrade.
   // -------------------------------------------------------------------------
   const ladder = [
+    // Background before the active picture: what a bonus is worth matters less
+    // this turn than what is being researched with it.
+    { block: 'research-category-bonuses', action: 'drop' },
     { block: 'research-projects', action: 'drop' },
     { block: 'research-slots', action: 'drop' },
     { block: 'friendly-fleets', action: 'reduce', toLevel: 1 },
@@ -1459,6 +1510,9 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     // Reference material and a what-if, so it is the first body to give way and
     // the last thing anyone needs in a war-room brief cut to the bone.
     'drive-explorer',
+    // Next to go: the category bonuses explain why a duration is labelled, but the
+    // duration itself survives without them.
+    'research-category-bonuses',
     'research-projects', 'research-slots', 'research-heading',
     'habs',
     'construction-modules', 'construction-stations', 'construction-queues', 'construction-heading',

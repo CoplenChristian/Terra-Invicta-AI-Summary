@@ -66,6 +66,7 @@ import {
   buildPlanningHorizon,
   chainReachability
 } from '../researchReachability.mjs';
+import { categoryBonusCaveat } from '../researchCategoryBonus.mjs';
 import { buildResearchSlotAllocation } from '../researchSlots.mjs';
 import { buildTechPath, observerGraph } from '../techGraph.mjs';
 import { propulsionResource } from './propulsion.mjs';
@@ -88,6 +89,17 @@ const nameOr = (value, fallback) => {
   return text === '' ? (fallback ?? null) : text;
 };
 
+/**
+ * The clause that names a row's unapplied category bonus beside its duration.
+ *
+ * Reads the row's own state and bonus; returns `''` when there is nothing to
+ * say, so callers concatenate it unconditionally.
+ */
+const categoryCaveat = (row) => categoryBonusCaveat({
+  state: row?.monthsAtCurrentIncomeState,
+  categoryResearchBonus: row?.categoryResearchBonus
+});
+
 // ---------------------------------------------------------------------------
 // MILITARY CANDIDATE ROWS
 // ---------------------------------------------------------------------------
@@ -102,7 +114,8 @@ const nameOr = (value, fallback) => {
 function militaryRow({
   id, source, classKey, ruleKey, itemId, displayName, axisLabel, axisKind, axisBasis,
   multiple, availabilityState, gateProjectId, gateProjectName, remainingResearchCost,
-  monthsAtCurrentIncome, unlockChance, clearsFloor, floorReason, alsoUnlocks, context,
+  monthsAtCurrentIncome, monthsAtCurrentIncomeState, categoryResearchBonus, flatRateMonths,
+  unlockChance, clearsFloor, floorReason, alsoUnlocks, context,
   ruleGroupSize, clearsDeliveryFloor, deliveryFloorReason
 }) {
   const scored = militaryValuePerResearchPoint(multiple, remainingResearchCost, availabilityState, context);
@@ -147,6 +160,13 @@ function militaryRow({
     gateProjectName: gateProjectName ?? null,
     remainingResearchCost: isZeroCost ? 0 : toFinite(remainingResearchCost),
     monthsAtCurrentIncome: isZeroCost ? 0 : toFinite(monthsAtCurrentIncome),
+    // Why that duration is what it is. The number is the FLAT rate even when
+    // the category is boosted, so the state and the bonus travel with it --
+    // without them a reader cannot tell a duration that already accounts for
+    // its category from one that does not. See shared/researchCategoryBonus.mjs.
+    monthsAtCurrentIncomeState: isZeroCost ? null : (monthsAtCurrentIncomeState ?? null),
+    categoryResearchBonus: isZeroCost ? null : toFinite(categoryResearchBonus),
+    flatRateMonths: isZeroCost ? null : toFinite(flatRateMonths),
     unlockChance: isZeroCost ? null : (unlockChance ?? null),
     // Phase 1 and phase 2 both rank on one axis with a stated floor on the axis
     // it trades against. A candidate that wins its axis by failing the floor is
@@ -222,6 +242,9 @@ function propulsionRows(propulsion) {
         gateProjectName: null,
         remainingResearchCost: best.remainingResearchCost,
         monthsAtCurrentIncome: best.monthsAtCurrentIncome,
+        monthsAtCurrentIncomeState: best.monthsAtCurrentIncomeState,
+        categoryResearchBonus: best.categoryResearchBonus,
+        flatRateMonths: best.flatRateMonths,
         unlockChance: best.unlockChance,
         clearsFloor: best.clearsFloor,
         floorReason: best.floorReason,
@@ -289,6 +312,9 @@ function militaryValueRows(military) {
           gateProjectName: best.gateProjectName,
           remainingResearchCost: best.remainingResearchCost,
           monthsAtCurrentIncome: best.monthsAtCurrentIncome,
+          monthsAtCurrentIncomeState: best.monthsAtCurrentIncomeState,
+          categoryResearchBonus: best.categoryResearchBonus,
+          flatRateMonths: best.flatRateMonths,
           unlockChance: best.unlockChance,
           clearsFloor: best.clearsFloor,
           floorReason: best.floorReason,
@@ -364,6 +390,9 @@ function militaryValueRows(military) {
         gateProjectName: null,
         remainingResearchCost: best.remainingResearchCost,
         monthsAtCurrentIncome: best.monthsAtCurrentIncome,
+        monthsAtCurrentIncomeState: best.monthsAtCurrentIncomeState,
+        categoryResearchBonus: best.categoryResearchBonus,
+        flatRateMonths: best.flatRateMonths,
         unlockChance: null,
         clearsFloor: null,
         floorReason: null,
@@ -628,6 +657,11 @@ function economicRows(economic, directions) {
       valuationState: item.valuationState,
       remainingResearchCost: toFinite(item.availability?.remainingResearchCost),
       monthsAtCurrentIncome: toFinite(item.availability?.monthsAtCurrentIncome),
+      // Why that duration is what it is: the flat rate, and whether a category
+      // bonus applies to it that the number does not include.
+      monthsAtCurrentIncomeState: item.availability?.monthsAtCurrentIncomeState ?? null,
+      categoryResearchBonus: toFinite(item.availability?.categoryResearchBonus),
+      flatRateMonths: toFinite(item.availability?.flatRateMonths),
       unlockChance: item.availability?.unlockChance ?? null,
       contexts: asArray(item.contexts),
       // The specific effect driving the number, which section 8 requires beside
@@ -745,9 +779,15 @@ export const researchRankingResource = (snapshot, {
       if (free !== null && free > 0) {
         row.slotAction = 'free-slot';
         row.freeProjectSlots = free;
+        // The duration is the flat one, and the category bonus is named beside
+        // it rather than replacing it: withdrawing a usable figure to correct a
+        // few per cent costs the reader more than the error does.
+        const timing = row.monthsAtCurrentIncome !== null
+          ? `${row.monthsAtCurrentIncome} mo at current research income${categoryCaveat(row)}`
+          : 'duration unavailable';
         row.slotNote = next
           ? `${free} of ${cap} project slots free — start ${next.displayName}, the first of ${row.chain.stepsCount} steps (${nextMonths} at current research income).`
-          : `${free} of ${cap} project slots free — start now with nothing lost (${row.monthsAtCurrentIncome !== null ? `${row.monthsAtCurrentIncome} mo` : '—'} at current research income).`;
+          : `${free} of ${cap} project slots free — start now with nothing lost (${timing}).`;
       } else if (free !== null && free === 0 && cap > 0) {
         row.slotAction = 'occupied-slot';
         row.activeOccupants = asArray(slots.activeProjects).map(p => ({

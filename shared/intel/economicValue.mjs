@@ -41,9 +41,14 @@ import { asArray, round, sameId, toFiniteNumber as toFinite } from '../util.mjs'
 import {
   AVAILABILITY_STATES,
   buildAvailabilityResolver,
-  monthsAtIncome,
   tallyAvailabilityStates
 } from '../researchAvailability.mjs';
+import {
+  MEASURED_INCOME_BASIS,
+  buildResearchCategoryBonuses,
+  categoryBonusSummary,
+  monthsAtIncomeForCategory
+} from '../researchCategoryBonus.mjs';
 import {
   CONTEXT_KINDS,
   CONTEXT_QUANTITY_MAP,
@@ -117,7 +122,10 @@ const unpricedContextGroup = (context) => {
  * `valuationState: 'unpriceable'` and the reasons attached -- because the whole
  * point of this endpoint is that such a node stays visible.
  */
-function priceNode({ node, effectIndex, baseline, quantities, availability, monthlyResearch, monthlyIncome, detail }) {
+function priceNode({
+  node, effectIndex, baseline, quantities, availability, monthlyResearch, monthlyIncome,
+  categoryBonuses, detail
+}) {
   const rows = [];
   const contextsSeen = new Set();
 
@@ -249,6 +257,14 @@ function priceNode({ node, effectIndex, baseline, quantities, availability, mont
     : (grant?.org ? 'org-only' : (unlockRows > 0 ? 'unlocks-only' : 'none'));
 
   const remaining = availability?.remainingResearchCost ?? null;
+  // The duration is the flat figure, labelled with the observer's measured
+  // bonus for THIS project's category rather than adjusted by it -- see
+  // `researchCategoryBonus.mjs` for why the flat figure is kept.
+  const duration = monthsAtIncomeForCategory(
+    remaining,
+    monthlyResearch,
+    categoryBonuses.bonusFor(node.category ?? null)
+  );
 
   return {
     id: node.id,
@@ -262,7 +278,16 @@ function priceNode({ node, effectIndex, baseline, quantities, availability, mont
       researchCost: availability?.researchCost ?? null,
       researchProgress: availability?.researchProgress ?? null,
       remainingResearchCost: remaining,
-      monthsAtCurrentIncome: monthsAtIncome(remaining, monthlyResearch),
+      monthsAtCurrentIncome: duration.months,
+      // Why that number is what it is: whether the flat rate is the right rate
+      // for this category, or the right rate with an unapplied bonus beside it.
+      // The state is a CODE; `research.categoryBonuses.durationStates` spells
+      // each one out once.
+      monthsAtCurrentIncomeState: duration.state,
+      // The EFFECTIVE bonus after the wiki diminishing-returns rule, not the
+      // raw sum. Equal to the sum below the 50%-per-source-type threshold.
+      categoryResearchBonus: duration.categoryBonus,
+      flatRateMonths: duration.flatRateMonths,
       unlockChance: availability?.unlockChance ?? null,
       missingPrerequisites: detail === 'full' ? (availability?.missingPrerequisites ?? null) : null
     },
@@ -348,6 +373,9 @@ export const economicValueResource = (snapshot, {
 
   const quantities = buildLiveQuantities(snapshot, observerId);
   const resolver = buildAvailabilityResolver(snapshot, mode, observerId);
+  // Built once for the whole candidate sweep rather than per node: it walks
+  // every hab module and councilor the observer holds.
+  const categoryBonuses = buildResearchCategoryBonuses(snapshot, { observerId });
   const baseline = buildEffectBaseline(snapshot, observerId);
 
   const head = {
@@ -389,6 +417,8 @@ export const economicValueResource = (snapshot, {
         availableProjectCount: resolver.availableProjectCount,
         reason: resolver.available ? null : resolver.reason,
         monthlyResearchIncome: monthlyResearch,
+        monthlyResearchIncomeBasis: MEASURED_INCOME_BASIS,
+        categoryBonuses: categoryBonusSummary(categoryBonuses),
         states: Object.values(AVAILABILITY_STATES)
       },
       filter: { context: null, state: null, candidateLimit, detail: wantsFull ? 'full' : 'summary' },
@@ -421,6 +451,7 @@ export const economicValueResource = (snapshot, {
       availability,
       monthlyResearch,
       monthlyIncome,
+      categoryBonuses,
       detail: wantsFull ? 'full' : 'summary'
     });
     if (wantedContext && !row.contexts.includes(wantedContext)) continue;
@@ -570,6 +601,10 @@ export const economicValueResource = (snapshot, {
         ? (resolver.availabilityKnown ? null : 'the observer\'s available-project list is absent in this mode')
         : resolver.reason,
       monthlyResearchIncome: monthlyResearch,
+      monthlyResearchIncomeBasis: MEASURED_INCOME_BASIS,
+      // The observer's per-category research bonuses, with their sources, and
+      // the model that says why no duration is divided by them.
+      categoryBonuses: categoryBonusSummary(categoryBonuses),
       states: Object.values(AVAILABILITY_STATES),
       availabilityStates: tallyAvailabilityStates(candidates),
       completedAndExcluded: completedSkipped

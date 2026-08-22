@@ -34,7 +34,8 @@ const {
   buildPropellantModules,
   buildProjectGating,
   buildComponentStats,
-  buildEffectIndex
+  buildEffectIndex,
+  buildTechBonusCatalogue
 } = require('./templates');
 
 // Terra Invicta campaigns begin in 2022. The save's TIMetadataState does not
@@ -215,6 +216,10 @@ function buildRawSnapshot(saveData) {
     driveStats: buildDriveStats(),
     propellantModules: buildPropellantModules(),
     projectGating: buildProjectGating(),
+    // Which org, hab module and councilor trait grants which per-category
+    // research bonus. The save carries no computed category multiplier of its
+    // own, so this catalogue is the only route to the observer's exposure.
+    techBonusCatalogue: buildTechBonusCatalogue(),
     // The fourteen non-drive unlock families, keyed by the same family names
     // the unlock index uses so a gate resolves without a second lookup table.
     componentStats: buildComponentStats(),

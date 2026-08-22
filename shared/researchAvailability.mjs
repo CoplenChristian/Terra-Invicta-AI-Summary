@@ -132,6 +132,10 @@ export function buildAvailabilityResolver(snapshot, mode, observerId) {
       resolve: (projectId) => ({
         projectId,
         displayName: projectId,
+        // The project's research category, carried so a caller can price the
+        // duration against the observer's per-category bonus without a second
+        // graph lookup. Absent here because there is no graph to read it from.
+        category: null,
         state: AVAILABILITY_STATES.unknown,
         reason: 'no tech tree on this snapshot',
         researchCost: null,
@@ -199,6 +203,7 @@ export function buildAvailabilityResolver(snapshot, mode, observerId) {
     const node = byId.get(projectId);
     if (!node) {
       return {
+        category: null,
         state: AVAILABILITY_STATES.unknown,
         reason: `project '${projectId}' is not in this snapshot's tech tree`,
         researchCost: null,
@@ -231,6 +236,10 @@ export function buildAvailabilityResolver(snapshot, mode, observerId) {
     const common = {
       projectId,
       displayName: node.displayName || projectId,
+      // The project's research category, from the graph node's own
+      // `techCategory`. Carried so a caller can price the duration against the
+      // observer's per-category research bonus without a second graph lookup.
+      category: node.category ?? null,
       researchCost,
       researchProgress,
       remainingResearchCost: remaining,
@@ -334,7 +343,28 @@ export function tallyAvailabilityStates(rows) {
   return counts;
 }
 
-/** Months of research at a measured income, or null when income is unmeasured. */
+/**
+ * Months of research at a measured income, or null when income is unmeasured.
+ *
+ * ONE FLAT RATE, WITH NO CATEGORY TERM, and that is deliberate here. The rate
+ * a project is actually researched at varies by CATEGORY -- orgs, hab modules,
+ * councilor traits and alien-activity investigations all grant per-category
+ * bonuses -- so this figure is only the right answer for a category the
+ * observer has not boosted.
+ *
+ * Callers that know the project's category must go through
+ * `monthsAtIncomeForCategory` in `shared/researchCategoryBonus.mjs`, which
+ * keeps this flat figure and states the bonus it does not apply beside it.
+ * This function stays flat and unaware so that the one place the category
+ * question is answered is the one place it can be reviewed.
+ *
+ * It is also an UPPER BOUND for a second, larger reason the rate model pins:
+ * `monthlyIncome` is the pre-allocation base, and the observer's slots received
+ * 2.11x it over the measured interval. See `CATEGORY_RATE_MODEL`.
+ *
+ * The engineer multiplier is NOT applied and must not be: `monthlyIncome` is a
+ * measured figure read from the save and already includes it.
+ */
 export function monthsAtIncome(remainingCost, monthlyIncome) {
   const cost = toFinite(remainingCost);
   const income = toFinite(monthlyIncome);
