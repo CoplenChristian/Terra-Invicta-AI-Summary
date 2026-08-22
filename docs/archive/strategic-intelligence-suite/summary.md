@@ -120,7 +120,13 @@ Located at [`http://localhost:3000/v2`](http://localhost:3000/v2) and built with
 
 ## 4. Verification & Testing
 
-1. **Automated Endpoint Test Suite ([`test_new_intel_endpoints.js`](file:///F:/Windsurf/Terra-Invicta-AI-Summary/test_new_intel_endpoints.js))**
+> **2026-08-22.** The two test scripts named in this section — `test_new_intel_endpoints.js`
+> and `test_browser_v2.js`, along with `test_browser.js` and `test_browser_councilors.js` —
+> were deleted. Nothing ran them, they wrote output into one agent session's artifact
+> directory, and `scripts/verify_*.js` superseded them. The results below stand as recorded
+> on 2026-08-19; the file links no longer resolve.
+
+1. **Automated Endpoint Test Suite (`test_new_intel_endpoints.js`, deleted 2026-08-22)**
    - **Result:** `12 PASSED, 0 FAILED`
    - Verified HTTP 200 responses, data integrity, calculation correctness, and shared contract envelope compliance for all 12 endpoints.
 
@@ -130,5 +136,5 @@ Located at [`http://localhost:3000/v2`](http://localhost:3000/v2) and built with
 3. **Static Build (`npm run build:site`)**
    - **Result:** Bundled `dist/` directory with static assets and worker scripts successfully.
 
-4. **Browser & UI Test ([`test_browser_v2.js`](file:///F:/Windsurf/Terra-Invicta-AI-Summary/test_browser_v2.js))**
+4. **Browser & UI Test (`test_browser_v2.js`, deleted 2026-08-22)**
    - **Result:** Verified full rendering of Command Center v2 with 0 DOM/script errors.

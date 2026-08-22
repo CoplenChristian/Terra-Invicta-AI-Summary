@@ -11,13 +11,68 @@ ROOT = Path(__file__).resolve().parent
 # parent. WORK_DIR below still defaults to this tool's own directory.
 REPO_ROOT = ROOT.parent
 CONFIG_PATH = REPO_ROOT / "config.json"
+DEFAULTS_PATH = REPO_ROOT / "config" / "defaults.json"
 
-with CONFIG_PATH.open("r", encoding="utf-8") as f:
-    _cfg = json.load(f)
 
-WORK_DIR = Path(_cfg.get("WorkDir", str(ROOT))).resolve()
-SAVE_PATH = _cfg.get("SavePath")
-OUTPUT_DIR = WORK_DIR / _cfg.get("AgainSaveSubDir", "Again_Save")
+def _read_json(path):
+    """Parsed JSON, or None when the file is simply not there."""
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except FileNotFoundError:
+        return None
+
+
+def _setting(cfg, nested_key, legacy_key):
+    """
+    One path setting, nested spelling first, then the legacy flat one.
+
+    Two defects this closes, both of which the PowerShell siblings never had
+    because Get-TIConfig does this for them:
+
+      1. config.json is GITIGNORED. Opening it unconditionally raised
+         FileNotFoundError on any checkout that had not been configured, while
+         every other script in this directory falls back to
+         config/defaults.json.
+      2. It read ONLY the flat legacy keys (WorkDir / SavePath /
+         AgainSaveSubDir). A purely nested config.json -- the documented,
+         non-deprecated shape -- left every one of them unset, so the exporter
+         silently wrote to the WRONG directory instead of failing. Silent wrong
+         output is worse than a crash.
+
+    Absence stays absence: an unset key returns None rather than a coerced
+    empty string, so the caller decides what a missing value means.
+    """
+    paths = cfg.get("paths")
+    if not isinstance(paths, dict):
+        paths = {}
+    for candidate in (paths.get(nested_key), cfg.get(legacy_key)):
+        if candidate is not None and candidate != "":
+            return candidate
+    return None
+
+
+def _resolve(nested_key, legacy_key):
+    """The user's config wins; config/defaults.json is the fallback."""
+    return _setting(_cfg, nested_key, legacy_key) or _setting(_defaults, nested_key, legacy_key)
+
+
+_defaults = _read_json(DEFAULTS_PATH) or {}
+_cfg = _read_json(CONFIG_PATH)
+if _cfg is None:
+    print(f"[export_factions] no {CONFIG_PATH}; falling back to {DEFAULTS_PATH}")
+    _cfg = {}
+
+# A RELATIVE workDir belongs to this tool, not to whatever directory the script
+# happened to be launched from. The PowerShell siblings resolve it against their
+# own folder (see Get-UnlockedShipComponents.ps1) and this has to agree with
+# them, or the two halves of the tool write to different trees.
+_work_dir = _resolve("workDir", "WorkDir") or "."
+_work_path = Path(_work_dir)
+WORK_DIR = (_work_path if _work_path.is_absolute() else ROOT / _work_path).resolve()
+
+SAVE_PATH = _resolve("savePath", "SavePath")
+OUTPUT_DIR = WORK_DIR / (_resolve("againSaveSubDir", "AgainSaveSubDir") or "Again_Save")
 
 FACTIONS = [
     ("ResistCouncil", "Resistance"),
@@ -144,6 +199,15 @@ def export_councilors_per_faction(json_path: Path) -> None:
 
 
 if __name__ == "__main__":
+    if not SAVE_PATH:
+        # Without this the save path interpolates into the PowerShell command as
+        # the literal string 'None' and the failure surfaces as an unreadable
+        # IO error several layers down.
+        raise SystemExit(
+            "No save file is configured. Set paths.savePath in "
+            f"{CONFIG_PATH} (or the legacy SavePath key); neither it nor "
+            f"{DEFAULTS_PATH} supplies one."
+        )
     temp_json = decompress_to_temp_json()
     try:
         export_faction_core(temp_json)

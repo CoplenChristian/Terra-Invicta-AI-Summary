@@ -30,6 +30,13 @@ Written 2026-08-21 against `6551da0`. **Shipped 2026-08-22; archived.**
 > `paths.*SubDir` config keys. Both are recorded under "Small follow-ups" in
 > `docs/README.md` rather than folded into a structural move.
 
+**Both were resolved on 2026-08-22.** The four scripts were deleted (see the note further
+down). The five `paths.*SubDir` keys were **kept**, and the follow-up's premise turned out
+to be wrong: the schema validates the config *after* `config/defaults.json` is merged in, so
+those `required` entries cannot reject any user config, and the keys are read — by seven
+PowerShell scripts and the Python exporter in `md-generation-reports/`, through the same
+`config/config.schema.json`.
+
 ---
 
 ## What is actually in the root
@@ -106,6 +113,8 @@ None is in version control, so none is a *repository* problem — but `backups/`
 Five PowerShell parsers created 2026-08-19 — `parse_alien_hate.ps1`, `parse_faction_councilors.ps1`, `parse_faction_nations.ps1`, `parse_faction_space_assets.ps1`, `parse_alien_councilor_locations.ps1`. `CLAUDE.md` documents these as **retained for backward compatibility**, superseded by `scripts/parse_save.js`. They are not part of the 2025 tool. Either leave them or give them their own directory — but do not fold them into `md-generation-reports/`, which would misdate them.
 
 Four ad-hoc browser scripts also sit at root — `test_browser.js`, `test_browser_councilors.js`, `test_browser_v2.js`, `test_new_intel_endpoints.js` (2026-08-19). These predate `scripts/verify_v2_navigation.js` and are probably dead; check before moving or removing.
+
+> **Resolved 2026-08-22: deleted.** They were checked, and dead was the right reading — nothing in `package.json`, `tests/`, `scripts/` or any module referenced them; three of the four wrote their screenshots into a single 2026-08-19 agent session's artifact directory; and `test_browser.js` asserted on v1 `.card` markup at the site root. The two archive documents that cite them by root path (`strategic-intelligence-suite/code-review.md`, `summary.md`) carry a dated note saying so.
 
 Three feedback documents — `AGY_SUPABASE_BACKEND_PROMPT.md`, `antigravity-feedback-8-18-2026.md`, `opencode-feedback-8-18-2026.md` — belong in `docs/archive/`.
 

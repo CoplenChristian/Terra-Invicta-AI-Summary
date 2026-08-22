@@ -86,11 +86,17 @@ Confirmed that all 6 migrations are applied and in sync:
 
 | Component | Test Executed | Command | Result |
 |---|---|---|---|
-| **API Endpoints (12/12)** | Automated contract & schema test | `node test_new_intel_endpoints.js` | **12 PASSED, 0 FAILED** |
+| **API Endpoints (12/12)** | Automated contract & schema test | `node test_new_intel_endpoints.js` [^dead-scripts] | **12 PASSED, 0 FAILED** |
 | **Supabase Publisher** | Save parsing & payload generation | `npm run push:dry-run` | **24 snapshots validated** |
 | **Static Worker Bundle** | Build verification & tree shaking | `npm run build:site` | **0 build errors** |
-| **Browser Command Center** | Headless UI & canvas verification | `node test_browser_v2.js` | **0 rendering errors** |
+| **Browser Command Center** | Headless UI & canvas verification | `node test_browser_v2.js` [^dead-scripts] | **0 rendering errors** |
 | **Supabase Security** | Security & performance advisory linting | `get_advisors (MCP)` | **0 security lints** |
+
+[^dead-scripts]: `test_new_intel_endpoints.js`, `test_browser.js`, `test_browser_councilors.js`
+and `test_browser_v2.js` were deleted on 2026-08-22. The results above stand as recorded on
+2026-08-19; the scripts themselves were one-off root files that nothing ran, wrote their
+screenshots into a single agent session's artifact directory, and were superseded by
+`scripts/verify_*.js`. Re-running these exact commands is no longer possible.
 
 ---
 

@@ -9,11 +9,12 @@
     "schemaVersion": { "const": 1 },
     "paths": {
       "type": "object",
+      "description": "Shared by BOTH runtimes. The dashboard reads savePath and templatesPath; workDir and the five *SubDir keys are the md-generation-reports/ tool's, read through Get-TIConfig in TerraInvicta.Common.psm1 (which validates against this same file) and by export_factions.py. They are `required` and that costs nothing: server/config.js and Get-TIConfig both validate the config AFTER merging config/defaults.json under it, so a user config that omits every one of them still resolves -- measured 2026-08-22 across an absent config.json, an empty object, a nested config with no `paths`, a nested config with `paths` but no sub-directories, and a legacy flat config. Making them optional would therefore reject nothing it rejects today, and would let a defaults.json that dropped one pass silently.",
       "additionalProperties": false,
       "required": ["savePath", "workDir", "templatesPath", "csvSubDir", "shipInfoSubDir", "againSaveSubDir", "summarySubDir", "snippetPackSubDir"],
       "properties": {
         "savePath": { "type": ["string", "null"] },
-        "workDir": { "type": "string", "minLength": 1 },
+        "workDir": { "type": "string", "minLength": 1, "description": "The md-generation-reports/ tool's output root. No Node consumer reads it; server/config.js only migrates the legacy WorkDir spelling onto it and maps TI_WORK_DIR. A relative value is resolved against the tool's own directory by every script that reads it." },
         "templatesPath": { "type": ["string", "null"] },
         "csvSubDir": { "type": "string" },
         "shipInfoSubDir": { "type": "string" },

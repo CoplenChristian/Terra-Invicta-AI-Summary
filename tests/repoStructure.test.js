@@ -195,6 +195,40 @@ test('the Python exporter reads config.json from the repository root', () => {
   assert.match(src, /CONFIG_PATH\s*=\s*REPO_ROOT\s*\/\s*"config\.json"/);
 });
 
+test('the Python exporter tolerates a missing config.json and reads nested keys', () => {
+  // THIS IS A SOURCE SCAN, DELIBERATELY, and it is worth saying why rather than
+  // leaving a reader to assume it is laziness. Executing the script needs a
+  // Python interpreter, which this repo's toolchain does not require and which
+  // is not present on the machine this runs on -- so an executing test would be
+  // permanently skipped here and could never be verified by mutation. The
+  // scan pins the three properties the fix is about and each one was confirmed
+  // red by restoring the old spelling.
+  const src = fs.readFileSync(path.join(ROOT, TOOL_DIR, 'export_factions.py'), 'utf8');
+
+  // 1. config.json is gitignored, so its absence is an ordinary state. The
+  //    unguarded `with CONFIG_PATH.open("r")` raised FileNotFoundError where
+  //    every PowerShell sibling falls back to config/defaults.json.
+  assert.match(src, /except\s+FileNotFoundError/,
+    'a missing config.json must fall back, not raise');
+  assert.match(src, /DEFAULTS_PATH\s*=\s*REPO_ROOT\s*\/\s*"config"\s*\/\s*"defaults\.json"/,
+    'the fallback must be config/defaults.json, the same file Get-TIConfig uses');
+  assert.doesNotMatch(src, /with\s+CONFIG_PATH\.open\(/,
+    'CONFIG_PATH must not be opened unguarded');
+
+  // 2. Reading only the flat legacy keys made a nested config silently produce
+  //    the WRONG output directory instead of an error.
+  for (const key of ['workDir', 'savePath', 'againSaveSubDir']) {
+    assert.ok(src.includes(`"${key}"`), `the nested paths.${key} spelling must be read`);
+  }
+  assert.match(src, /cfg\.get\("paths"\)/,
+    'the nested paths object must be consulted');
+
+  // 3. An unresolved save path used to interpolate into the PowerShell command
+  //    as the literal string 'None'.
+  assert.match(src, /if\s+not\s+SAVE_PATH:[\s\S]{0,400}?raise\s+SystemExit/,
+    'an unconfigured save path must be refused with a named error');
+});
+
 test('no 2025 tool file is tracked at the repository root', () => {
   const stragglers = TOOL_FILES.filter(name => trackedUnder(name).length > 0);
   assert.deepEqual(stragglers, [], `these belong in ${TOOL_DIR}/`);
