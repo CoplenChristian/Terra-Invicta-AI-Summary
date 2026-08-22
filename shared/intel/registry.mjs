@@ -81,6 +81,7 @@ import { deltaResource } from './delta.mjs';
 import { mobilityResource } from './mobility.mjs';
 import { bodyStatusResource, theatersResource } from './theaters.mjs';
 import { refitAdvisorResource } from './refitAdvisor.mjs';
+import { controlPointCapResource } from './controlPointCap.mjs';
 
 const kebab = (key) => key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 
@@ -440,6 +441,15 @@ const INTEL_ENDPOINTS = Object.freeze([
     example: OMNISCIENT_OWN,
     project: (snapshot, { observerId, mode, designId, limit }) =>
       refitAdvisorResource(snapshot, { observerId, mode, designId, limit })
+  },
+  {
+    // Appended, not slotted beside the other faction-scoped rows: this list is
+    // the order the discovery index renders in, and inserting a row in the
+    // middle silently renumbers every example a reader has already seen.
+    key: 'controlPointCap',
+    example: `${OMNISCIENT_OWN}`,
+    project: (snapshot, { observerId, mode, factionId }) =>
+      controlPointCapResource(snapshot, { observerId, mode, factionId })
   },
   // Served by the adapters themselves, not by buildResourceProjection: history
   // and strategic-delta need snapshot storage, and the tech-graph family needs

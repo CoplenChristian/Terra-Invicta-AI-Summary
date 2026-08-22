@@ -93,6 +93,40 @@ function buildFactionRelationships(rawFactions) {
   return factionRelationships;
 }
 
+/**
+ * The game's own per-faction `ControlPointMaintenance` effect lists.
+ *
+ * `TIEffectsState.factionEffectsNames` is a list of `{ Key: factionId, Value:
+ * { <context>: [effectName, ...] } }`. This is the authoritative source for
+ * which cap-raising effects a faction actually holds, and it is NOT the same as
+ * sweeping `finishedProjectNames` against the project templates: the Aliens
+ * hold four `ControlPointMaintenance` effects granted by none of the 32
+ * projects that grant them (measured 2026-08-22 on `ExitSave.gz`), because two
+ * of the five effects list `initialFactionsStr: ["AlienCouncil", ...]` and are
+ * handed out at campaign start.
+ *
+ * A faction with no row gets no entry, so a consumer can tell "this faction
+ * holds no such effect" (empty array) apart from "this snapshot does not carry
+ * the effect state" (absent) -- the second must not read as zero cap.
+ */
+function buildControlPointMaintenanceEffects(rawEffects) {
+  const byFaction = new Map();
+  const rows = Array.isArray(rawEffects) && rawEffects.length > 0
+    ? rawEffects[0]?.factionEffectsNames
+    : null;
+  if (!Array.isArray(rows)) return byFaction;
+
+  for (const row of rows) {
+    const factionId = row?.Key?.value ?? row?.Key ?? null;
+    if (factionId === null || factionId === undefined) continue;
+    const contexts = row?.Value;
+    if (!contexts || typeof contexts !== 'object') continue;
+    const list = contexts.ControlPointMaintenance;
+    byFaction.set(factionId, Array.isArray(list) ? list.slice() : []);
+  }
+  return byFaction;
+}
+
 function buildFactions(rawFactions, {
   councilors,
   habs,
@@ -104,6 +138,7 @@ function buildFactions(rawFactions, {
   habResearchByFaction,
   scoreWeights,
   scoreNormalizers,
+  controlPointMaintenanceEffectsByFaction = null,
   gameTimeString
 }) {
   const factions = [];
@@ -331,6 +366,30 @@ function buildFactions(rawFactions, {
       // real, different fact from an unreadable count, so the guard is on
       // presence rather than on truthiness.
       alienInvestigations: firstNumericOrNull(f.alienInvestigations),
+      // The cap-raising effects this faction actually holds, from the game's
+      // own effect state rather than derived from completed projects. Absent
+      // (rather than empty) when this snapshot carries no effect state at all,
+      // so shared/controlPointCap.mjs can report the project term as UNKNOWN
+      // instead of composing a cap that silently omits it.
+      controlPointMaintenanceEffects: controlPointMaintenanceEffectsByFaction
+        && controlPointMaintenanceEffectsByFaction.has(factionId)
+        ? controlPointMaintenanceEffectsByFaction.get(factionId)
+        : null,
+      // `TIFactionState.history_CPCapOverageByDay`, most recent slot: the game's
+      // OWN record of how far over its control-point cap this faction is.
+      //
+      // Carried verbatim because it is the only figure the game states, and it
+      // is what shows that the derived cap does not yet reconcile. Its exact
+      // semantics are NOT verified -- its Mission Control sibling does not equal
+      // (usage - capacity) on the same save -- so a 0 here is not evidence a
+      // faction is within cap. Absent stays null.
+      recordedControlPointCapOverage: Array.isArray(f.history_CPCapOverageByDay)
+        && f.history_CPCapOverageByDay.length > 0
+        ? firstNumericOrNull(f.history_CPCapOverageByDay[f.history_CPCapOverageByDay.length - 1])
+        : null,
+      recordedControlPointCapOverageSamples: Array.isArray(f.history_CPCapOverageByDay)
+        ? f.history_CPCapOverageByDay.length
+        : null,
       missionControlUsage: Number.isFinite(Number(f.missionControlUsage)) ? Number(f.missionControlUsage) : null,
       // Mission Control capacity is useful context, but it is deliberately
       // kept separate from missionControlUsage because only used MC affects
@@ -468,6 +527,7 @@ module.exports = {
   normalizeFactionIntelligence,
   buildFactionIntelligence,
   buildFactionRelationships,
+  buildControlPointMaintenanceEffects,
   buildFactions,
   collectShipDesigns,
   buildActiveXenoforming,

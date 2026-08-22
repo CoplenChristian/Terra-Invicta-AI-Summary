@@ -25,6 +25,7 @@
 //     4 actually takeable  (Malawi, Honduras, Madagascar, Namibia)
 
 const { toFiniteNumber, sameId } = require('../../../shared/util.mjs');
+const { marginalControlPointCost } = require('../../../shared/controlPointCap.mjs');
 
 function buildControlNationCandidate(nation, cp, allCpsInNation, world) {
   const regionsCount = toFiniteNumber(nation.regionsCount);
@@ -80,7 +81,27 @@ function buildControlNationCandidate(nation, cp, allCpsInNation, world) {
       regionsCount,
       population,
       territoryClass,
-      allOtherCpsOwnedByObserver
+      allOtherCpsOwnedByObserver,
+      // What this control point would add to the observer's control-point
+      // maintenance: the nation's total cost divided by the nation's own
+      // control-point count (wiki Nations, "Cost of Control Points", raw
+      // wikitext read 2026-08-22). Madagascar's Executive costs ~3 cp;
+      // one of the USA's six costs ~39.
+      //
+      // AN ANNOTATION, NOT A RULE, DELIBERATELY. No rule reads it and no score
+      // moves because of it. The cap it would have to be checked against does
+      // not reconcile against the save's own recorded overage
+      // (shared/controlPointCap.mjs), so there is no honest threshold to veto
+      // or price against -- and a veto built on a fabricated ceiling would
+      // reject real recommendations. What IS sound is the relative figure: a
+      // reader can compare two candidate control points without any claim about
+      // affordability, because the per-control-point cost does not depend on
+      // the unresolved base cap.
+      //
+      // Null-safe by construction: an unpriceable nation yields
+      // `{ available: false, cost: null, reason }` rather than a zero that
+      // would read as a free control point.
+      controlPointMaintenance: marginalControlPointCost(nation)
     },
     score: null,
     provenance: {
