@@ -6727,6 +6727,21 @@ button.council-orders__row:focus-visible {
   letter-spacing: 0.04em;
 }
 
+/* What basis the projected yields are on: raw deposit rate, tech-adjusted, or
+   unresolved. Deliberately quiet rather than a warning banner -- in the normal
+   case it is provenance, not an alert -- but always present, because a reader
+   must be able to tell an adjusted figure from a raw one. */
+.mining-yield-basis {
+  margin: 6px 0 2px;
+  padding: 4px 6px;
+  border-left: 2px solid var(--line);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+}
+
 .mining-section-title {
   display: flex;
   justify-content: space-between;

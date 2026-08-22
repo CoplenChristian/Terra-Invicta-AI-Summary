@@ -18,6 +18,10 @@ const {
   toFiniteNumber,
   firstAvailableNumber
 } = require('./format');
+const {
+  applyMiningTechBonus,
+  miningTechBonusCaveat
+} = require('../../shared/miningTechBonus.mjs');
 
 function isFilteredDataAvailable(snapshot, fieldName, capabilityName, mode) {
   if (!Object.prototype.hasOwnProperty.call(snapshot, fieldName)) return false;
@@ -75,7 +79,17 @@ function getFleetCombatPower(observer, ownFleets) {
   return firstAvailableNumber(observer?.combatPower, observer?.fleetCombatPower);
 }
 
-function getMiningRateSummary(habSites, ownHabs, observerId) {
+/**
+ * The observer's per-day mined rates, as one sentence fragment.
+ *
+ * The save's `habSites[].<resource>` is the DEPOSIT rate and carries no
+ * faction's tech bonus (measured 2026-08-22, see shared/miningTechBonus.mjs),
+ * so a resource the observer holds a completed mine project for reads 1.15x per
+ * grant short here. `miningTechBonus` is that multiplier; when it is absent or
+ * unresolved the raw rates are printed and the trailing clause SAYS they are
+ * raw, rather than the reader assuming the figure is finished.
+ */
+function getMiningRateSummary(habSites, ownHabs, observerId, miningTechBonus = null) {
   const ownHabIds = new Set(asArray(ownHabs).map(hab => String(hab.ID ?? hab.id)));
   const visibleSites = asArray(habSites).filter(site =>
     sameId(site.factionId, observerId) || (site.habId !== null && site.habId !== undefined && ownHabIds.has(String(site.habId)))
@@ -88,9 +102,16 @@ function getMiningRateSummary(habSites, ownHabs, observerId) {
     ['Fissiles', 'fissiles']
   ].map(([label, key]) => {
     const values = visibleSites.map(site => toFiniteNumber(site[key])).filter(value => value !== null);
-    return values.length > 0 ? `${label} ${values.reduce((sum, value) => sum + value, 0).toFixed(1)}/day` : null;
+    if (values.length === 0) return null;
+    const raw = values.reduce((sum, value) => sum + value, 0);
+    const adjusted = applyMiningTechBonus(raw, miningTechBonus, key);
+    return `${label} ${adjusted.value.toFixed(1)}/day`;
   }).filter(Boolean);
-  return rates.length > 0 ? rates.join(', ') : null;
+  if (rates.length === 0) return null;
+  // Only said when there is something to say: a fully measured, fully
+  // unbonused observer gets no trailing clause at all.
+  const caveat = miningTechBonus === null ? null : miningTechBonusCaveat(miningTechBonus);
+  return caveat ? `${rates.join(', ')} (${caveat})` : rates.join(', ');
 }
 
 /**
@@ -107,8 +128,16 @@ function getMiningRateSummary(habSites, ownHabs, observerId) {
  * null rather than being filled with a plausible-looking number, and a hab
  * left with nothing measurable is dropped by the candidate generator with a
  * recorded reason.
+ *
+ * THESE FIGURES REACH COUNCILOR RECOMMENDATIONS, not just a display: the
+ * directive engine's Advise economics scales them by Administration to price
+ * `advise-hab:*`. The save's site rate is the DEPOSIT rate and carries no tech
+ * bonus (measured 2026-08-22, shared/miningTechBonus.mjs), so a bonused
+ * resource was being priced 1.15x per grant short. `miningTechBonus` corrects
+ * it; `resourceOutputBonus` on each hab says whether the correction was applied
+ * and names its source, so an adjusted output is never mistaken for a raw one.
  */
-function buildAdvisableHabs(habs, habSites, observerId) {
+function buildAdvisableHabs(habs, habSites, observerId, miningTechBonus = null) {
   const sitesByHab = new Map();
   for (const site of asArray(habSites)) {
     const habId = site?.habId;
@@ -125,6 +154,7 @@ function buildAdvisableHabs(habs, habSites, observerId) {
     .map(hab => {
       const sites = sitesByHab.get(String(hab.ID)) || [];
       const monthly = {};
+      const bonusByResource = {};
       for (const key of RESOURCE_KEYS) {
         let total = null;
         for (const site of sites) {
@@ -132,13 +162,32 @@ function buildAdvisableHabs(habs, habSites, observerId) {
           if (rate === null) continue;
           total = (total ?? 0) + rate * 30;
         }
-        monthly[key] = total === null ? null : Number(total.toFixed(2));
+        const adjusted = applyMiningTechBonus(total, miningTechBonus, key, { places: 2 });
+        monthly[key] = adjusted.value;
+        bonusByResource[key] = {
+          applied: adjusted.applied,
+          multiplier: adjusted.multiplier,
+          state: adjusted.state,
+          source: adjusted.source,
+          raw: adjusted.raw
+        };
       }
       return {
         ...hab,
         ...monthly,
+        // Which of the five monthly figures above are bonus-adjusted, by how
+        // much, and from what. An unresolved multiplier leaves the RAW figure
+        // in place with `applied: false` -- it is never reported as a measured
+        // "no bonus".
+        resourceOutputBonus: bonusByResource,
+        resourceOutputBonusApplied: miningTechBonus?.available === true,
         resourceOutputSource: sites.length > 0
           ? `${sites.length} joined hab site(s), daily rate x30`
+            + (miningTechBonus?.available === true
+              ? (miningTechBonus.boostedResources.length > 0
+                ? `, ${miningTechBonusCaveat(miningTechBonus)}`
+                : ', no completed project raises mine output')
+              : ', mining tech bonuses UNRESOLVED (raw deposit rates, a lower bound)')
           : 'no hab site joins to this hab',
         // Explicitly absent rather than absent by omission.
         research: toFiniteNumber(hab.research),

@@ -50,7 +50,8 @@ const strategicIntelligence = require('./strategicIntelligence');
 const directiveAdvisor = require('./directiveAdvisor');
 const directiveEngine = require('./directiveEngine');
 const { resolveConfig } = require('./config');
-const { resolveObserverFaction } = require('../shared/util.mjs');
+const { resolveObserverFaction, sameId: sameIdentity } = require('../shared/util.mjs');
+const { buildMiningTechBonuses } = require('../shared/miningTechBonus.mjs');
 const format = require('./briefing/format');
 const roster = require('./briefing/roster');
 const readers = require('./briefing/readers');
@@ -114,6 +115,20 @@ class BriefingGenerator {
     const mode = snapshot.mode || (snapshot.isOmniscient ? 'omniscient' : 'player');
     const visibility = snapshot.visibility || `${mode} filtered intelligence`;
     const capabilities = snapshot.capabilities || {};
+    // The observer's per-resource mine-output multipliers, built ONCE and
+    // threaded to every surface that turns a site rate into an output figure.
+    //
+    // Only the OBSERVER's own completed-project list is complete --
+    // `server/intelligenceFilter.js` truncates every rival's to five entries in
+    // player mode -- so the list is declared complete only when the faction we
+    // resolved really is the faction this snapshot was filtered for. A
+    // fallback-resolved faction yields an UNKNOWN multiplier, not a 1.0, and no
+    // rival's bonuses are read here at all.
+    const observerListIsComplete = observer.ID !== undefined && observer.ID !== null
+      && (sameIdentity(observer.ID, requestedObserverId) || sameIdentity(observer.ID, snapshot.observerFactionId));
+    const miningTechBonus = buildMiningTechBonuses(observer, {
+      projectListComplete: observerListIsComplete
+    });
     const identity = snapshotIdentity.readSnapshotIdentity(rawSnapshot || snapshot);
     const strategic = strategicIntelligence.build(snapshot, observerId);
     const campaignPosture = directiveAdvisor.assessCampaignPosture({
@@ -140,7 +155,7 @@ class BriefingGenerator {
       // real monthly outputs to scale. Without this the engine could never
       // generate an `advise-hab:*` candidate on a live save, and a councilor
       // already advising a hab could not have their commitment priced.
-      habs: this.buildAdvisableHabs(habs, habSites, observerId),
+      habs: this.buildAdvisableHabs(habs, habSites, observerId, miningTechBonus),
       capabilities,
       alienIntelligenceStage: snapshot.alienIntelligenceStage || null,
       directiveWeights: this.config.analysis?.directiveWeights || null,
@@ -244,7 +259,8 @@ class BriefingGenerator {
       habs,
       fleets,
       habSites,
-      campaignPosture
+      campaignPosture,
+      miningTechBonus
     });
 
     // 2. Department Directives (Actionable Statements)
@@ -259,7 +275,7 @@ class BriefingGenerator {
       { campaignPosture, factions, targetFaction, holdGround }
     );
     const councilDirectives = this.buildCouncilDirectives(councilors, observerId, campaignPosture);
-    const spaceDirectives = this.buildSpaceDirectives(habs, fleets, habSites, observer, observerName, campaignPosture);
+    const spaceDirectives = this.buildSpaceDirectives(habs, fleets, habSites, observer, observerName, campaignPosture, miningTechBonus);
     const researchDirectives = this.buildResearchDirectives(globalResearch, observer, activeAlienStages, {
       mode,
       capabilities

@@ -122,21 +122,30 @@ export const normalizeCostObject = (cost) => {
 //
 // DO NOT APPLY `miningProductivityMultiplier` HERE. Checked by measurement on
 // 2026-08-21 (docs/campaign-settings-spec.md; indexed in
-// shared/campaignSettings.mjs as CAMPAIGN_SETTING_VERDICTS): the site rates
-// this reads are REALISED extraction, so the multiplier is already inside
-// them. On a campaign running mining at 200%, the observer's 17 completed
-// mines gave rate x30 against the faction's own monthlyIncome as water 1.033,
-// volatiles 0.939, metals 1.094, nobleMetals 1.088, fissiles 1.219 -- five
-// independent resources near 1.0, where an omitted 200% would read ~2.0.
+// shared/campaignSettings.mjs as CAMPAIGN_SETTING_VERDICTS) and CONFIRMED by a
+// much sharper measurement on 2026-08-22 (shared/miningTechBonus.mjs): each
+// faction's own `cachedYearlyRevenue` reconciles with the stored site rates and
+// NO factor of two anywhere, so the 200% is already inside the stored rate.
 // Multiplying here would introduce a 2x error into a correct figure.
 //
 // `rateMultiplier` below is a daily->monthly unit conversion (x30), not a
 // difficulty term, and that is why it is the only factor applied.
 //
-// Also recorded so it is not "rediscovered": an unmined site still reports
-// rates. Those are the PROJECTED yield -- exactly what a prospecting board
-// should show -- not evidence that the field means richness rather than
-// extraction. The same field on a built mine carries the realised rate.
+// WHAT THE STORED RATE IS, CORRECTED 2026-08-22. It is the DEPOSIT's rate, on a
+// built mine exactly as on an unmined site -- NOT realised extraction. 405 of
+// 409 sites are byte-identical between two saves 5.3 in-game years apart, across
+// 90 ownership changes, 102 mine-tier changes and fourteen newly completed
+// mining-bonus projects. So two things are missing from `total` below and are
+// deliberately NOT applied here:
+//   * the mine module's `miningModifier` (1.0-4.0). Applying it needs a decision
+//     about an unowned site with no module, so it is named as unhandled in
+//     `UNMODELLED_FACTORS` rather than guessed.
+//   * the owning faction's `Effect_Mining<Resource>Bonus` multipliers. Those ARE
+//     applied, by the caller, via `applyMiningTechBonus` -- this primitive has
+//     no faction to attribute them to, and silently assuming the observer's
+//     would be wrong for every other faction's row.
+// `siteMonthlyOutput` is therefore a raw deposit figure and a LOWER BOUND on
+// what a built mine delivers.
 export const siteMonthlyOutput = (site) => {
   const measured = MINING_RESOURCES
     .map(({ key }) => toFinite(site?.[key]))
