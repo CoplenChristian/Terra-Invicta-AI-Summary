@@ -22,6 +22,17 @@ Last updated 2026-08-22.
 
 ### Small follow-ups, unassigned
 
+- **`tests/powershell_common.test.js` reports six green passes without running
+  anything.** All six spawn `pwsh` and `return` early on `probe.error?.code ===
+  'ENOENT'`, so on a machine with no PowerShell 7 they pass in ~2.5 ms each having
+  executed no PowerShell at all — the suite cannot tell "the module is correct"
+  from "the module was never loaded". Measured 2026-08-22: `pwsh` is **not on this
+  machine's PATH**; Windows PowerShell 5.1 is (`C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe`),
+  and the test never tries it. This matters more since the repo-structure move,
+  because `TerraInvicta.Common.psm1` is now the one dependency crossing the
+  tool/dashboard boundary. A skip would at least be honest; falling back to
+  `powershell.exe` would be better. `tests/repoStructure.test.js` guards the
+  module's *path* textually, which is unaffected, but nothing executes its code.
 - **Five config keys the dashboard validates and never reads.** `paths.csvSubDir`,
   `shipInfoSubDir`, `againSaveSubDir`, `summarySubDir` and `snippetPackSubDir` are
   **`required`** in `config/config.schema.json` and defaulted in `config/defaults.json`,
