@@ -1,7 +1,8 @@
 // shared/campaignElapsed.mjs
 //
-// Purpose: resolve elapsed campaign time and alien progression speed from one
-//   place, so the total-war gate and the research horizon cannot drift apart.
+// Purpose: resolve elapsed campaign time, campaign year and alien progression
+//   speed from one place, so the total-war gate and the research horizon
+//   cannot drift apart.
 //
 // WHY THIS MODULE EXISTS
 //
@@ -151,6 +152,29 @@ export function resolveCampaignElapsed(metadata = null, campaignYear = null) {
     campaignStartYearMeasured: measuredStartYear !== null,
     daysInCampaign: null
   };
+}
+
+/**
+ * The four-digit campaign year, parsed from `metadata.gameTimeString`.
+ *
+ * `resolveCampaignElapsed` needs this for its two start-year fallbacks, so
+ * every caller of that function needs it too -- and each one was writing the
+ * same `/\/(\d{4})\b/` out by hand: `server/intelligenceFilter.js` for the live
+ * snapshot, `shared/strategicSnapshot.mjs` for the published history, and (as
+ * of 2026-08-22) `shared/intel/alienThreat.mjs` would have been the third.
+ * Three hand-copied regexes over one save field is the drift this module's
+ * header already argues against, so the parse lives beside the resolver it
+ * feeds.
+ *
+ * Absent stays null: `gameTimeString` may be missing or in a format this
+ * pattern does not match, and `Number(undefined)` is NaN rather than a year.
+ *
+ * @param {Object|null} metadata `rawSnapshot.metadata`
+ * @returns {number|null} e.g. 2035 for "1/1/2035 12:00:00 AM"
+ */
+export function resolveCampaignYear(metadata = null) {
+  const raw = metadata && typeof metadata === 'object' ? metadata.gameTimeString : null;
+  return strictFiniteNumber(String(raw ?? '').match(/\/(\d{4})\b/)?.[1] ?? null);
 }
 
 /**

@@ -9,6 +9,7 @@ const { resolveConfig } = require('./config');
 const { buildAlienHateEconomics } = require('./alienHateEconomics');
 const {
   resolveCampaignElapsed,
+  resolveCampaignYear,
   resolveAlienProgressionSpeed
 } = require('../shared/campaignElapsed.mjs');
 const {
@@ -84,21 +85,22 @@ class IntelligenceFilter {
     );
     // Elapsed campaign years gate the alien total-war declaration, so the
     // hate model needs them to report anything but 'unavailable'.
-    const campaignYear = Number(
-      String(rawSnapshot.metadata?.gameTimeString || '').match(/\/(\d{4})\b/)?.[1]
-    );
+    //
     // Number(null) is 0 and Number('') is 0, both of which are finite, so an
     // absent reading would otherwise pass the guards inside the resolver and
     // make the campaign look ~2000 years old. Presence is checked before any
-    // coercion there.
+    // coercion there, and the year parse -- previously written out here by
+    // hand, and again in shared/strategicSnapshot.mjs -- now lives beside the
+    // resolver it feeds as `resolveCampaignYear`.
     //
     // The resolution order, its evidence and the reason `daysInCampaign` beats
     // subtracting years all live in shared/campaignElapsed.mjs. It is shared
-    // with shared/strategicSnapshot.mjs so the live snapshot and the published
-    // history cannot report two different campaign ages.
+    // with shared/strategicSnapshot.mjs and shared/intel/alienThreat.mjs so the
+    // live snapshot, the published history and the alien-threat endpoint cannot
+    // report three different campaign ages.
     const elapsed = resolveCampaignElapsed(
       rawSnapshot.metadata,
-      Number.isFinite(campaignYear) ? campaignYear : null
+      resolveCampaignYear(rawSnapshot.metadata)
     );
     const yearsElapsed = elapsed.yearsElapsed;
     const yearsElapsedSource = elapsed.sourceText;

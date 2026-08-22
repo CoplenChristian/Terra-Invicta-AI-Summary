@@ -20,6 +20,7 @@
 import { buildAlienHateEconomics } from './alienHateEconomics.mjs';
 import {
   resolveCampaignElapsed,
+  resolveCampaignYear,
   resolveAlienProgressionSpeed,
   CAMPAIGN_AGE_SOURCES
 } from './campaignElapsed.mjs';
@@ -565,7 +566,10 @@ export function buildStrategicSnapshot(raw, {
   const observer = resolveObserverFaction(factions, observerFactionId) || {};
 
   const campaignDate = raw.metadata?.gameTimeString || null;
-  const campaignYear = campaignDate ? num(String(campaignDate).match(/\/(\d{4})\b/)?.[1]) : null;
+  // Parsed by the module that consumes it, not here: the same regex used to be
+  // written out in server/intelligenceFilter.js as well, and a third copy was
+  // about to appear in shared/intel/alienThreat.mjs.
+  const campaignYear = resolveCampaignYear(raw.metadata);
 
   const completed = new Set([
     ...asArray(raw.globalResearch?.finishedTechsNames),

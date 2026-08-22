@@ -739,6 +739,36 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
     detectionLabel = hostiles[0].visibility || 'Active Deep System Skywatch';
   }
 
+  // The alien total-war gate, as one header line.
+  //
+  // It is a STRATEGIC clock, and /latest-war-room.md §1 already carries the
+  // full derivation, so the case for repeating it in a TACTICAL document is
+  // not automatic. What settles it is the horizon: this document reports
+  // inbound contacts within 365 days, and on the live save the year gate is
+  // 1.09 years -- about 398 days -- away. A reader planning the next year of
+  // contacts is planning inside the window in which the gate opens, and the
+  // document said nothing about it. One line, no derivation.
+  //
+  // Read off `alienHateEconomics.totalWar`, the same object the war room and
+  // /api/intel/alien-threat publish, so the three cannot disagree on a value.
+  // A gate that could not be evaluated renders UNAVAILABLE; it never degrades
+  // into "safe", and no missing figure becomes a confident 0.
+  const hateEconomics = filteredSnapshot.alienHateEconomics || null;
+  const totalWar = hateEconomics && hateEconomics.totalWar ? hateEconomics.totalWar : null;
+  let totalWarLine;
+  if (hateEconomics && hateEconomics.applicable === false) {
+    totalWarLine = `**Alien Total War Gate:** NOT APPLICABLE to ${observerName}`;
+  } else if (totalWar) {
+    totalWarLine = `**Alien Total War Gate:** ${String(totalWar.state || 'unavailable').toUpperCase()}`
+      + ` — ${fixedOr(totalWar.yearsRemaining, 2)} yrs to the year gate`
+      + ` (${fixedOr(totalWar.yearsThreshold, 1)} yr gate, ${fixedOr(totalWar.alienProgressionSpeed, 2)}× progression),`
+      + ` hate distance ${fixedOr(totalWar.hateRemaining, 1)} — derivation in /latest-war-room.md §1`;
+  } else {
+    // A snapshot published before the gate was computed genuinely has no
+    // verdict to show. It says so; it does not borrow "safe" from the absence.
+    totalWarLine = `**Alien Total War Gate:** UNAVAILABLE — this snapshot carries no total-war gate`;
+  }
+
   const blocks = [];
 
   blocks.push(fixedBlock('title', [
@@ -748,6 +778,7 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
     `**Observer Faction:** ${observerName}`,
     `**Intelligence Mode:** ${mode}`,
     `**Detection Status:** ${detectionLabel}`,
+    totalWarLine,
     ``
   ]));
 
