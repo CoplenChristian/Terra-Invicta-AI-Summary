@@ -34,6 +34,8 @@ const {
 } = require('../shared/miningTechBonus.mjs');
 const readers = require('../server/briefing/readers');
 const { scoreMiningSiteCandidate } = require('../shared/intelResources.mjs');
+const { renderWarRoomMarkdown, WAR_ROOM_BYTE_BUDGET } = require('../shared/markdownExports.mjs');
+const { makeMarkdownSnapshot } = require('./fixtures/syntheticMarkdownSnapshot');
 const { loadFilteredSnapshot, queryIntel } = require('../server/snapshotLoader');
 
 const OBSERVER = 4712;
@@ -365,4 +367,178 @@ test('the observer\'s own income reconciles at exactly 1.15^n, which is what pro
   // reconciliation above proves nothing about the bonus at all.
   assert.ok(bonuses.boostedResources.length > 0,
     'the observer holds at least one mine-output project, so 1.15 is actually exercised');
+});
+
+// ---------------------------------------------------------------------------
+// THE AI MARKDOWN EXPORTS
+//
+// `a615018` applied the multipliers to three derived surfaces and reached none
+// of the .md exports, so every agent-facing consumer saw an adjusted figure it
+// could not distinguish from a raw one and could not tell which project earned
+// it. Per CLAUDE.md that is half this project's readership.
+//
+// The VALUE assertions below run against the synthetic markdown snapshot, whose
+// faction list this file controls outright, so they pin exact strings without
+// pinning this campaign's save. The live save is used only for the property
+// that both modes agree -- the observer's own completed-project list is the one
+// list player mode does not truncate, and that is worth checking rather than
+// assuming.
+// ---------------------------------------------------------------------------
+
+const WATER_GRANT = WATER_RULE.projects[1];
+const NOBLES_GRANTS = NOBLES_RULE.projects;
+
+/** The synthetic war room, with the observer's project list set explicitly. */
+function warRoomWith(completedProjects, { mode = 'player', rivalProjects = null } = {}) {
+  const snapshot = makeMarkdownSnapshot(mode);
+  for (const faction of snapshot.factions) {
+    if (Number(faction.ID) === OBSERVER) {
+      if (completedProjects !== undefined) faction.completedProjects = completedProjects;
+    } else if (rivalProjects !== null) {
+      faction.completedProjects = rivalProjects.slice();
+    }
+  }
+  return renderWarRoomMarkdown(snapshot);
+}
+
+test('the war room names each multiplier in force AND the project that grants it', () => {
+  const markdown = warRoomWith([WATER_GRANT]);
+
+  assert.match(markdown, /\*\*Mine output multipliers:\*\*/,
+    'the war room carries a mine-output multiplier line at all');
+  assert.ok(markdown.includes(`Water ×1.15 from ${WATER_GRANT}`),
+    `the grant is NAMED, not reduced to a bare number: expected "Water ×1.15 from ${WATER_GRANT}"`);
+  // A bare multiplier with no project beside it is the failure this pins.
+  const bonusLine = markdown.split('\n').find(line => line.includes('Mine output multipliers'));
+  assert.ok(/×1\.15 from Project_/.test(bonusLine),
+    'every stated multiplier must be attributed to a project');
+});
+
+test('the war room states the mine-module multiplier is still excluded, so the figures are a lower bound', () => {
+  const markdown = warRoomWith([WATER_GRANT]);
+  const moduleFactor = UNMODELLED_FACTORS.find(f => f.factor === 'mine-module miningModifier');
+
+  assert.match(markdown, /LOWER BOUND/, 'an adjusted figure has to be labelled a lower bound');
+  assert.match(markdown, /miningModifier/, 'the excluded factor is named');
+  assert.ok(markdown.includes(moduleFactor.range),
+    'the 1.0-4.0 range is read from UNMODELLED_FACTORS rather than retyped, so the two cannot disagree');
+});
+
+test('the war room does not invite the reader to re-apply the bonus to the measured ledger', () => {
+  // `monthlyNet` is `summarizeRecentTransactions(...).net` -- the save's own
+  // 30-day transaction ledger, which is realised income with every bonus
+  // already inside it. Multiplying it again would be the 1.15x error in the
+  // opposite direction from the one this change fixed.
+  const markdown = warRoomWith([WATER_GRANT]);
+  assert.match(markdown, /must NOT be adjusted again/);
+  assert.match(markdown, /30-day transaction ledger/);
+});
+
+test('a faction whose project list cannot be read is UNKNOWN in the war room, never "no bonus"', () => {
+  // The synthetic factions carry no `completedProjects` at all.
+  const markdown = warRoomWith(undefined);
+
+  assert.match(markdown, /\*\*Mine output multipliers:\*\* UNKNOWN/,
+    'an unreadable list is unknown, not measured');
+  assert.match(markdown, /RAW deposit rates/);
+  assert.match(markdown, /NOT a measured "no bonus"/);
+  assert.doesNotMatch(markdown, /×1 \(list read/,
+    'an unread list must not render as a measured absence of bonuses');
+  assert.doesNotMatch(markdown, /Mine output multipliers:\*\* none in force/);
+});
+
+test('a read list holding no granting project is a measured x1, distinct from unknown', () => {
+  const markdown = warRoomWith([]);
+
+  assert.match(markdown, /\*\*Mine output multipliers:\*\* none in force/);
+  assert.match(markdown, /×1 \(list read, no completed grant\)/);
+  assert.doesNotMatch(markdown, /Mine output multipliers:\*\* UNKNOWN/,
+    'a list that WAS read and grants nothing is a different fact from one that could not be read');
+});
+
+test('multiplicative stacking reaches the war room as 1.15^2, not 1.30 and not a cap', () => {
+  const markdown = warRoomWith(NOBLES_GRANTS.slice());
+  const expected = Number(Math.pow(MINING_BONUS_STACKING.perGrant, 2).toFixed(6));
+
+  assert.strictEqual(expected, 1.3225);
+  assert.ok(markdown.includes(`Noble metals ×${expected} from ${NOBLES_GRANTS[0]} + ${NOBLES_GRANTS[1]}`),
+    'both granting projects are named beside the stacked multiplier');
+  assert.match(markdown, /Stacking is multiplicative at ×1\.15 per grant/);
+});
+
+test('no rival faction\'s mine bonus reaches a player-mode war room', () => {
+  // Every granting project in the table, held by every faction EXCEPT the
+  // observer, whose own list is empty. Player mode truncates a rival's list to
+  // five entries, so a multiplier read from one would be wrong rather than
+  // absent -- and nothing here may read one at all.
+  const everyGrant = MINING_BONUS_RULES.flatMap(rule => rule.projects.slice());
+  const markdown = warRoomWith([], { mode: 'player', rivalProjects: everyGrant });
+
+  assert.match(markdown, /\*\*Mine output multipliers:\*\* none in force/,
+    'the observer holds nothing, so nothing is in force');
+  for (const project of everyGrant) {
+    assert.ok(!markdown.includes(project),
+      `${project} is a rival's completed research and must not appear in a player-mode export`);
+  }
+});
+
+test('the observer-fallback faction is UNKNOWN, not a rival\'s truncated five entries', () => {
+  // `renderWarRoomMarkdown` resolves the observer with `fallbackToFirst: true`,
+  // so a payload that does not carry the requested observer answers with
+  // whatever faction happens to be first. That faction's completed-project list
+  // is NOT the observer's, and in player mode it is truncated to five entries,
+  // so a multiplier read from it would be WRONG rather than merely absent.
+  const snapshot = makeMarkdownSnapshot('player');
+  snapshot.factions = snapshot.factions.filter(f => Number(f.ID) !== OBSERVER);
+  // The fallback faction holds a granting project, truncated exactly as
+  // server/intelligenceFilter.js truncates a rival's list.
+  snapshot.factions[0].completedProjects = [WATER_GRANT, 'Project_A', 'Project_B', 'Project_C', 'Project_D'];
+
+  const markdown = renderWarRoomMarkdown(snapshot);
+  assert.match(markdown, /\*\*Mine output multipliers:\*\* UNKNOWN/,
+    'a faction that is not the requested observer resolves to unknown');
+  assert.ok(!markdown.includes(WATER_GRANT),
+    'the fallback faction\'s completed research must not be published as the observer\'s bonus');
+  assert.doesNotMatch(markdown, /Water ×1\.15/,
+    'no multiplier may be claimed from a list that is not known to be complete');
+});
+
+test('the war-room mine-output block is identical in both modes on the live save', () => {
+  // `server/intelligenceFilter.js` keeps `isObserver ? f.completedProjects :
+  // f.completedProjects.slice(0, 5)`, so the observer's own list survives
+  // player mode intact and this block must not degrade there. A feature
+  // verified only in omniscient mode is not verified.
+  const blockOf = (mode) => {
+    const snapshot = loadFilteredSnapshot({ mode, observer: OBSERVER });
+    const lines = renderWarRoomMarkdown(snapshot).split('\n');
+    const start = lines.findIndex(line => line.includes('Mine output multipliers'));
+    assert.ok(start >= 0, `${mode}: the war room carries the mine-output block`);
+    return lines.slice(start, start + 4).join('\n');
+  };
+
+  const player = blockOf('player');
+  const omniscient = blockOf('omniscient');
+  assert.strictEqual(player, omniscient,
+    'the observer\'s own project list is not redacted, so the block must read the same in both modes');
+  assert.doesNotMatch(player, /UNKNOWN/,
+    'the observer\'s own list IS readable in player mode, so this must not fall through to unknown');
+
+  // And whatever multiplier is in force is attributed, on the live save too.
+  const observer = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER })
+    .factions.find(f => Number(f.ID) === OBSERVER);
+  const bonuses = buildMiningTechBonuses(observer, { projectListComplete: true });
+  for (const key of bonuses.boostedResources) {
+    const entry = bonuses.byResource[key];
+    assert.ok(player.includes(`${entry.label} ×${entry.multiplier} from ${entry.grants.join(' + ')}`),
+      `${key}: the live multiplier and its grant are both named`);
+  }
+});
+
+test('the mine-output block leaves the war room inside its byte budget in both modes', () => {
+  for (const mode of ['player', 'omniscient']) {
+    const markdown = renderWarRoomMarkdown(loadFilteredSnapshot({ mode, observer: OBSERVER }));
+    const bytes = Buffer.byteLength(markdown, 'utf8');
+    assert.ok(bytes < WAR_ROOM_BYTE_BUDGET,
+      `${mode}: ${bytes} bytes against the ${WAR_ROOM_BYTE_BUDGET} ceiling`);
+  }
 });

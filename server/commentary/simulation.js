@@ -180,18 +180,53 @@ function runMonteCarloSimulation(facts) {
     d => sameId(d.factionId, observerId)
   );
 
-  let ownRating = 5000; // default baseline
-  let ownBestHullName = 'Combat Hull';
-  let ownBestDesignName = 'Standard Combatant';
+  // NO DEFAULT RATING, AND NO DEFAULT NAMES.
+  //
+  // This block used to open at `ownRating = 5000 // default baseline`, with
+  // `'Combat Hull'` and `'Standard Combatant'` beside it. All three fired when
+  // the observer had no design carrying a combat value, so a strength that
+  // could not be MEASURED was simulated as a specific number and every
+  // downstream verdict inherited it as though it were real. In omniscient mode
+  // the opponent tiers are absolute design CVs, so the invented 5000 decided
+  // every threshold outright; in player mode it also seeded the opponent
+  // ratings themselves, since those are scaled off it.
+  //
+  // `shared/fleetEngagement.mjs` already models the correct behaviour for the
+  // same quantity -- `available: false`, and it says no default was substituted
+  // -- and this now follows it rather than inventing a third answer.
+  let ownRating = null;
+  let ownBestHullName = null;
+  let ownBestDesignName = null;
 
   if (ownDesigns.length > 0) {
-    const withCv = ownDesigns.filter(d => toFiniteNumber(d._unnormalizedCombatValue) !== null);
+    const withCv = ownDesigns
+      .map(d => ({ design: d, cv: toFiniteNumber(d._unnormalizedCombatValue) }))
+      .filter(entry => entry.cv !== null)
+      .sort((a, b) => b.cv - a.cv);
     if (withCv.length > 0) {
-      withCv.sort((a, b) => b._unnormalizedCombatValue - a._unnormalizedCombatValue);
-      ownRating = withCv[0]._unnormalizedCombatValue;
-      ownBestHullName = withCv[0].hullName || 'Battlecruiser';
-      ownBestDesignName = withCv[0].displayName || withCv[0]._displayName || ownBestHullName;
+      ownRating = withCv[0].cv;
+      ownBestHullName = withCv[0].design.hullName || null;
+      ownBestDesignName = withCv[0].design.displayName
+        || withCv[0].design._displayName
+        || ownBestHullName;
     }
+  }
+
+  // Checked BEFORE the opponent tiers because player mode builds them by
+  // scaling `ownRating`; a null there would silently produce opponent ratings
+  // of 0 and a sweep over meaningless numbers.
+  if (ownRating === null) {
+    return {
+      available: false,
+      reason: 'the observer has no ship design carrying a combat value in this snapshot, so there is no '
+        + 'own-side rating to sweep any engagement against. No default rating is substituted, and no '
+        + 'hull threshold is reported.',
+      ownBestHull: null,
+      ownBestDesign: null,
+      ownRating: null,
+      tiers: [],
+      projections: {}
+    };
   }
 
   // 2. Build Opponent Tiers (Player vs Omniscient)
@@ -219,6 +254,10 @@ function runMonteCarloSimulation(facts) {
       reason: 'No alien forces visible in this intelligence picture; simulation unavailable.',
       ownBestHull: ownBestHullName,
       ownBestDesign: ownBestDesignName,
+      // Measured, and reported even though the sweep did not run. It was
+      // previously left undefined here, which JSON drops -- indistinguishable
+      // downstream from a rating that could not be read.
+      ownRating: Math.round(ownRating),
       tiers: [],
       projections: {}
     };

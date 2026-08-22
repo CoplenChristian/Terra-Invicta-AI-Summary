@@ -61,10 +61,15 @@ function generateStrategicCommentary({
     beats,
     simulation: {
       available: simulation.available,
-      source: simulation.source,
-      ownBestHull: simulation.ownBestHull,
-      ownBestDesign: simulation.ownBestDesign,
-      ownRating: simulation.ownRating,
+      // A simulation that could not be run has to SAY it could not be run.
+      // `reason` was built by both unavailable branches and then dropped here,
+      // so a consumer saw `available: false` with nothing to render and the
+      // combat-threshold panel simply vanished with no explanation.
+      reason: simulation.reason ?? null,
+      source: simulation.source ?? null,
+      ownBestHull: simulation.ownBestHull ?? null,
+      ownBestDesign: simulation.ownBestDesign ?? null,
+      ownRating: simulation.ownRating ?? null,
       tiers: simulation.tiers || [],
       projections: simulation.projections || {}
     }
