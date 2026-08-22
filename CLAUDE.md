@@ -96,6 +96,13 @@ shipped:
 `reachability` and `benchedOmittedCount` did not. The work was correct, tested and
 browser-verified, and still invisible to every agent reading the exports.
 
+All four reached the exports on 2026-08-22 (war-room §8 chain-promotion block and the new
+§10 council cycle plan). The lesson stands, and it acquired a corollary: two of the four
+were **engine** output, not snapshot data, so the shared renderer — which also runs in the
+Cloudflare Worker — could not compute them. Anything in that class has to be handed in by
+the serving runtime, and the runtime that cannot supply it must say the value was not read
+rather than rendering a zero.
+
 ## Order and completeness are load-bearing
 
 The rule registry is **not** grouped by family — `readiness/unmet-preconditions` sits between two `value/` rules, and `cost/affordability` is a veto after every score. `applyRules` and `scoreCandidates` emit in registry order, so "tidying" it silently reshuffles every explanation the user reads.

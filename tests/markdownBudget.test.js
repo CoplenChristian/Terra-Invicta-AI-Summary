@@ -283,7 +283,11 @@ for (const mode of MODES) {
     for (const { snapshot, options, label } of cases) {
       const rendered = renderWarRoomMarkdown(snapshot, options);
 
-      for (let n = 1; n <= 8; n += 1) {
+      // Sections 9 (drive explorer) and 10 (council cycle plan) are fixed
+      // blocks that the last-resort clamp suppresses the BODIES of. The header
+      // still has to survive, for the same reason every other one does, and
+      // this loop stopped at 8 because it predates both sections.
+      for (let n = 1; n <= 10; n += 1) {
         assert.match(
           rendered,
           new RegExp(`^## ${n}\\. `, 'm'),
