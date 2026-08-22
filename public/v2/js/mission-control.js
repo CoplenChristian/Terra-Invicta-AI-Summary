@@ -223,7 +223,11 @@ const VIEWS = [
     panels: [
       'dualAssetRings',
       'alienHateEconomics',
-      'powerTrajectoryChart'
+      'powerTrajectoryChart',
+      // "How much force does THIS fleet cost, and can I even get there" is
+      // squarely "what is coming", so it lives here rather than in FLEET, which
+      // answers "what do I build".
+      'fleetEngagement'
     ]
   },
   {
@@ -268,6 +272,7 @@ function syncScrollHints(root = document) {
   const pairs = [
     ['.mc-board-scroll-hint', '.mc-board-table-wrap', 'after'],
     ['.de-scroll-hint', '.de-table-wrap', 'after'],
+    ['.fe-scroll-hint', '.fe-table-wrap', 'after'],
     ['.intel-library-table-scroll-hint', '.intel-library-table-wrap', 'inside']
   ];
   for (const [hintSelector, wrapSelector, placement] of pairs) {
@@ -376,6 +381,24 @@ function loadLazyViewPanels(viewId) {
     if (lazyViewLoadKeys.get('drives') === key) return;
     lazyViewLoadKeys.set('drives', key);
     window.MissionControlDriveExplorer.load(state.observer, state.mode, container)
+      .finally?.(() => syncScrollHints());
+    return;
+  }
+
+  // The engagement estimates run a seeded Monte Carlo sweep per alien fleet on
+  // the server -- 57 fleets on the live save -- so the work is charged to
+  // visitors who open THREAT rather than to everyone on load. Its table is
+  // measured for overflow after it lands, because a table rendered while its
+  // view was hidden measures 0 and would leave a real overflow unannounced.
+  if (viewId === 'threat') {
+    const container = document.getElementById('fleetEngagement');
+    if (!container || !window.MissionControlFleetEngagement?.fetchFleetEngagement) return;
+    if (lazyViewLoadKeys.get('threat') === key) return;
+    lazyViewLoadKeys.set('threat', key);
+    window.MissionControlFleetEngagement.fetchFleetEngagement(state.observer, state.mode)
+      .then(data => {
+        window.MissionControlFleetEngagement.render(container, data);
+      })
       .finally?.(() => syncScrollHints());
     return;
   }

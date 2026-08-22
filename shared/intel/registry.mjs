@@ -70,6 +70,7 @@ import { logisticsResource } from './logistics.mjs';
 import { miningAnalysisResource, miningProspectsResource } from './mining.mjs';
 import { miningExpansionResource } from './miningExpansion.mjs';
 import { alienThreatResource } from './alienThreat.mjs';
+import { fleetEngagementResource } from './fleetEngagement.mjs';
 import { propulsionResource } from './propulsion.mjs';
 import { driveExplorerResource } from './driveExplorer.mjs';
 import { militaryValueResource } from './militaryValue.mjs';
@@ -312,6 +313,15 @@ const INTEL_ENDPOINTS = Object.freeze([
     // the redaction rule instead of trusting that the snapshot was scrubbed.
     project: (snapshot, { observerId, mode }) =>
       ({ count: null, items: [], ...alienThreatResource(snapshot, observerId, { mode }) })
+  },
+  {
+    key: 'fleetEngagement',
+    example: `${OMNISCIENT}&limit=12`,
+    // Per-fleet, reachability-gated hull requirements. Ranked and truncated
+    // because 57 rows is not advice; `fleetsTotalCount` / `fleetsOmittedCount`
+    // reconcile the cap, and every row is an ESTIMATE, never a measurement.
+    project: (snapshot, { observerId, mode, limit }) =>
+      fleetEngagementResource(snapshot, { observerId, mode, limit })
   },
   {
     key: 'delta',
