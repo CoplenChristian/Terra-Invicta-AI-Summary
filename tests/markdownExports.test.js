@@ -405,3 +405,217 @@ test('Express server serves /latest-threats.md and /latest-war-room.md on epheme
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+// ---------------------------------------------------------------------------
+// 10. WAR-ROOM SECTIONS 8 (CHAIN PROMOTION), 9 (CRUISE) AND 10 (CYCLE PLAN)
+//
+// Tracker items 1b and 3e. Four figures existed only in the browser and on the
+// JSON endpoints -- `riskFloor`, the chain promotion, its reachability gate and
+// `benchedOmittedCount` -- and section 9 quoted combat acceleration alone, which
+// is the burst figure and overstates transit acceleration on most drives.
+//
+// The cycle plan is engine output, not snapshot data, so it reaches this file
+// two ways and both are pinned below: `options.cyclePlan` (what the Express
+// route passes) and `snapshot.missionControlBriefing` (what a published row
+// carries, which is how the Cloudflare Worker gets it with no worker change).
+// ---------------------------------------------------------------------------
+
+const { accelOr } = require('../shared/markdownExports.mjs');
+
+const EXPORT_MODES = ['player', 'omniscient'];
+
+/** A cycle plan shaped exactly like `allocateCyclePlan`'s return value. */
+function makeCyclePlan(overrides = {}) {
+  return {
+    assignments: [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
+    unassigned: [],
+    committed: [{ id: 'x' }],
+    benched: new Array(8).fill(null).map((_, i) => ({ id: `bench-${i}` })),
+    benchedTotalCount: 46,
+    benchedOmittedCount: 38,
+    riskFloor: { percent: 0, inForce: false, configured: true },
+    riskFloorVetoed: [],
+    riskFloorVetoedTotalCount: 0,
+    riskFloorVetoedOmittedCount: 0,
+    riskFloorUnverified: [],
+    riskFloorUnverifiedTotalCount: 0,
+    riskFloorUnverifiedOmittedCount: 0,
+    ...overrides
+  };
+}
+
+const sectionTen = (doc) => {
+  const i = doc.indexOf('## 10.');
+  return i < 0 ? '' : doc.slice(i);
+};
+const chainBlock = (doc) => {
+  const i = doc.indexOf('### Research Chain Promotion');
+  return i < 0 ? '' : doc.slice(i, doc.indexOf('## 9.'));
+};
+const sectionNine = (doc) => {
+  const i = doc.indexOf('## 9.');
+  return i < 0 ? '' : doc.slice(i, doc.indexOf('## 10.'));
+};
+
+test('accelOr keeps three SIGNIFICANT figures, so the smallest measured acceleration is never a confident 0.000', () => {
+  // The catalogue's smallest measured cruise acceleration. `toFixed(3)` prints
+  // this as "0.000", which a reader cannot tell from a measured zero -- the
+  // defect fixed on the DRIVES panel in 7352a44 and inherited by this export.
+  assert.strictEqual(accelOr(0.00016846), '0.000168');
+  assert.strictEqual(accelOr(0.01010778), '0.0101');
+  assert.strictEqual(accelOr(20.59560406), '20.6');
+  assert.strictEqual(accelOr(606.46655067), '606');
+  // A measured zero is a reading and stays a reading.
+  assert.strictEqual(accelOr(0), '0');
+  // Absence is not zero, in any of its shapes.
+  assert.strictEqual(accelOr(null), 'UNAVAILABLE');
+  assert.strictEqual(accelOr(undefined), 'UNAVAILABLE');
+  assert.strictEqual(accelOr(''), 'UNAVAILABLE');
+  assert.strictEqual(accelOr(Number.NaN), 'UNAVAILABLE');
+});
+
+for (const exportMode of EXPORT_MODES) {
+  test(`section 10 reports the risk floor and the bench truncation from options.cyclePlan (${exportMode} mode)`, () => {
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const rendered = renderWarRoomMarkdown(snapshot, { cyclePlan: makeCyclePlan() });
+    const section = sectionTen(rendered);
+
+    assert.ok(section.includes('## 10. Council Cycle Plan'), 'section 10 must exist');
+    // A floor of 0 that WAS configured is the player choosing no floor. It is
+    // not an unset floor and it is not a floor that rejects everything.
+    assert.match(section, /\*\*Risk floor:\*\* 0% — CONFIGURED but NOT IN FORCE/);
+    // Truncation announces itself: carried, total and omitted all present.
+    assert.match(section, /\*\*Bench:\*\* 8 of 46 candidate action\(s\) carried, 38 omitted/);
+    // And it says WHICH eight, because the slice is generation order.
+    assert.match(section, /NOT the highest-value few/);
+    assert.match(section, /\*\*Assigned this cycle:\*\* 3 councilor\(s\); 0 unassigned, 1 already committed/);
+    assert.ok(section.includes(`/api/v2/briefing?observer=4712&mode=${exportMode}`),
+      'section 10 must name the endpoint carrying the full plan');
+  });
+
+  test(`section 10 falls back to the published snapshot's own briefing, which is how the hosted worker gets it (${exportMode} mode)`, () => {
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    // Exactly the shape scripts/publish/rows.js writes onto a published row.
+    snapshot.missionControlBriefing = {
+      engineDirectives: { cyclePlan: makeCyclePlan({ benchedTotalCount: 427, benchedOmittedCount: 419 }) }
+    };
+    const section = sectionTen(renderWarRoomMarkdown(snapshot));
+    assert.match(section, /\*\*Bench:\*\* 8 of 427 candidate action\(s\) carried, 419 omitted/);
+    assert.ok(!section.includes('UNAVAILABLE in this runtime'),
+      'a published snapshot carrying a briefing must not report the plan as unavailable');
+  });
+
+  test(`section 10 says the plan was not read rather than printing a floor of zero and an empty bench (${exportMode} mode)`, () => {
+    const section = sectionTen(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode)));
+    assert.match(section, /Cycle plan UNAVAILABLE in this runtime/);
+    assert.match(section, /This is NOT a plan with no risk floor and an empty bench/);
+    // `Number(null) === 0` would have produced all three of these.
+    assert.ok(!/\*\*Risk floor:\*\* 0%/.test(section), 'an unread floor must not render as 0%');
+    assert.ok(!/\*\*Bench:\*\* 0 of 0/.test(section), 'an unread bench must not render as 0 of 0');
+    assert.ok(!/0 councilor\(s\)/.test(section), 'an unread assignment list must not render as 0 councilors');
+  });
+
+  test(`section 10 tells an unset risk floor apart from a floor set to zero, and from one in force (${exportMode} mode)`, () => {
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const render = (riskFloor) =>
+      sectionTen(renderWarRoomMarkdown(snapshot, { cyclePlan: makeCyclePlan({ riskFloor }) }));
+
+    assert.match(render({ percent: null, inForce: false, configured: false }),
+      /\*\*Risk floor:\*\* NOT CONFIGURED/);
+    assert.match(render({ percent: 0, inForce: false, configured: true }),
+      /\*\*Risk floor:\*\* 0% — CONFIGURED but NOT IN FORCE/);
+    assert.match(render({ percent: 90, inForce: true, configured: true }),
+      /\*\*Risk floor:\*\* 90% — IN FORCE; an action is vetoed when the LOW end of its odds band is below it/);
+    // No floor record at all is a fourth, distinct state.
+    assert.match(render(null), /\*\*Risk floor:\*\* UNAVAILABLE — this plan carries no risk-floor record/);
+  });
+
+  test(`an absent bench list renders UNAVAILABLE rather than a count of zero (${exportMode} mode)`, () => {
+    const section = sectionTen(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode), {
+      cyclePlan: makeCyclePlan({
+        benched: undefined,
+        benchedTotalCount: undefined,
+        benchedOmittedCount: undefined,
+        assignments: undefined
+      })
+    }));
+    assert.match(section, /\*\*Bench:\*\* UNAVAILABLE of UNAVAILABLE candidate action\(s\) carried, UNAVAILABLE omitted/);
+    assert.match(section, /\*\*Assigned this cycle:\*\* UNAVAILABLE councilor\(s\)/);
+  });
+
+  test(`the chain-promotion block keeps its horizon and its counts even with no chains to list (${exportMode} mode)`, () => {
+    const block = chainBlock(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode)));
+    assert.ok(block.length > 0, 'the chain-promotion block must render even when empty');
+    // The horizon and the refusal counts live in the trailing note precisely so
+    // that a budget pass which empties the list still leaves them.
+    assert.match(block, /Planning horizon/);
+    assert.match(block, /chain\(s\) promoted/);
+    assert.match(block, /omitted by the endpoint's group limit/);
+    assert.match(block, /ordered under the step you would START/);
+    assert.ok(block.includes('/api/intel/research-ranking?observer=4712&detail=full'),
+      'the block must name the endpoint carrying the full set');
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Live-save property assertions. No drive, project or chain name is asserted --
+// docs/research-advisor-spec.md section 0 forbids campaign-specific tests -- and
+// each skips cleanly rather than failing on live-save state.
+// ---------------------------------------------------------------------------
+for (const exportMode of EXPORT_MODES) {
+  test(`section 9 quotes cruise acceleration beside combat on every measured line (${exportMode} mode, live save)`, (t) => {
+    if (!hasLiveSave()) {
+      t.skip('Skipping: no live save available');
+      return;
+    }
+    const snapshot = loadFilteredSnapshot({ mode: exportMode, observer: OBSERVER_ID });
+    const section = sectionNine(renderWarRoomMarkdown(snapshot));
+    if (section.includes('Drive Explorer unavailable')) {
+      t.skip('Skipping: this save carries no drive catalogue');
+      return;
+    }
+
+    assert.match(section, /\*\*Fitted drive \(MEASURED\):\*\*.*m\/s² combat accel, .*m\/s² cruise accel/,
+      'the fitted-drive line must carry both accelerations, not the burst figure alone');
+    assert.match(section, /\*\*Best fittable today by ΔV \(MEASURED\):\*\*.*m\/s² cruise accel/,
+      'the best-by-delta-V line must carry cruise acceleration');
+    assert.match(section, /\*\*Best fittable today by cruise acceleration \(MEASURED\):\*\*/,
+      'cruise acceleration must be its own ranking, not only a column on the combat one');
+    assert.match(section, /combat \/ cruise is that drive's own thrust cap/,
+      'the section must say what the two figures are and which overstates transit');
+    assert.ok(section.includes('&sort=cruise-acceleration'),
+      'the endpoint line must name the sort key that ranks the whole catalogue by cruise');
+  });
+
+  test(`section 8 carries the chain promotion, its reachability gate and its omitted count (${exportMode} mode, live save)`, (t) => {
+    if (!hasLiveSave()) {
+      t.skip('Skipping: no live save available');
+      return;
+    }
+    const snapshot = loadFilteredSnapshot({ mode: exportMode, observer: OBSERVER_ID });
+    const block = chainBlock(renderWarRoomMarkdown(snapshot));
+    const counts = block.match(/\*([\d,]+) chain\(s\) promoted \((\d+) carried here, ([\d,]+) omitted/);
+    assert.ok(counts, 'the block must state promoted, carried and omitted counts');
+    const promoted = Number(counts[1].replace(/,/g, ''));
+    if (promoted === 0) {
+      t.skip('Skipping: this save promoted no chain, so there is no row to inspect');
+      return;
+    }
+    // Truncation reconciles: carried + omitted == the true total.
+    assert.strictEqual(
+      Number(counts[2]) + Number(counts[3].replace(/,/g, '')),
+      promoted,
+      'carried + omitted must equal the promoted total'
+    );
+    // Every listed chain names the reachability state it was gated on, and at
+    // least one names the step the player would actually start.
+    const rows = block.split('\n').filter(l => l.startsWith('- '));
+    assert.ok(rows.length > 0, 'at least one chain row must be listed');
+    for (const row of rows) {
+      assert.match(row, /WITHIN-HORIZON|BEYOND-HORIZON|UNKNOWN/,
+        `every chain row must name its reachability state: ${row}`);
+    }
+    assert.ok(rows.some(r => /start \*\*/.test(r)),
+      'a promoted chain must name the step the player would start, not only the project it delivers');
+  });
+}

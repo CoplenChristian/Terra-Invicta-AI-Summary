@@ -159,11 +159,25 @@ function registerReadOnlyExports(app) {
 
   app.get('/latest-war-room.md', (req, res) => {
     try {
-      const { mode, observerId, targetPath } = requestContext(req);
+      const { mode, observerId, targetPath, riskFloorPercent } = requestContext(req);
       const rawSnapshot = snapshotCache.loadOrGetSnapshot(targetPath);
       assertObserver(rawSnapshot, observerId);
       const filtered = snapshotCache.buildFilteredSnapshot(rawSnapshot, mode, observerId);
-      const markdown = exportGenerator.generateWarRoomMarkdown(filtered);
+      // Section 10 reports the risk floor and the bench truncation, and both are
+      // engine output rather than snapshot data. The shared renderer cannot
+      // build them -- it also runs in the Cloudflare Worker, which has neither
+      // Node CommonJS nor config -- so this runtime hands the plan over. The
+      // hosted worker needs no equivalent: its published rows already carry
+      // `snapshot.missionControlBriefing`, which the renderer falls back to.
+      //
+      // The floor is a request parameter here for the same reason it is on
+      // /api/v2/briefing: two clients may hold different risk tolerances against
+      // one cached save, and resolving an absent parameter to the CONFIGURED
+      // default is the briefing generator's job, never a coercion to 0.
+      const cyclePlan = briefingGenerator
+        .generateMissionControlBriefing(filtered, rawSnapshot, { riskFloorPercent })
+        ?.engineDirectives?.cyclePlan ?? null;
+      const markdown = exportGenerator.generateWarRoomMarkdown(filtered, { cyclePlan });
       res.type('text/markdown; charset=utf-8').set('Cache-Control', 'no-store').send(markdown);
     } catch (err) {
       res.status(err.statusCode || 500).type('text/plain').send(`Error generating war room markdown: ${err.message}`);

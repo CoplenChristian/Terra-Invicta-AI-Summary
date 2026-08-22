@@ -41,6 +41,7 @@ import {
   HAB_CONSTRUCTION_MODULES
 } from './strategicSnapshot.mjs';
 import { DRIVE_AVAILABILITY, driveExplorerResource } from './intel/driveExplorer.mjs';
+import { researchRankingResource } from './intel/researchRanking.mjs';
 import { buildResearchCategoryBonuses } from './researchCategoryBonus.mjs';
 
 // Absence-preserving formatting helpers
@@ -52,6 +53,34 @@ export const fixedOr = (value, decimals, fallback = 'UNAVAILABLE') =>
 
 export const localeOr = (value, fallback = 'UNAVAILABLE') =>
   (isMeasured(value) ? Number(value).toLocaleString() : fallback);
+
+/**
+ * An acceleration, to three SIGNIFICANT figures rather than three decimals.
+ *
+ * Measured acceleration across the drive catalogue spans five orders of
+ * magnitude -- 0.00016846 to 20.59560406 m/s2 on the live save (2026-08-22) --
+ * so `toFixed(3)` renders the bottom of the range as `0.000`, which a reader
+ * cannot tell from a measured zero. That was fixed on the DRIVES panel in
+ * `7352a44` (`accel()` in public/v2/js/components/drive-explorer.js) and the
+ * same rule now applies to section 9 of this export, which had inherited the
+ * `toFixed(3)` form. Section 9's own population does not reach the bottom of
+ * the range on the current save (its smallest measured cruise acceleration is
+ * 0.018194 m/s2), so this is a latent defect being closed rather than a live
+ * one -- but the population is "fittable today", and it moves every time a
+ * drive project completes.
+ *
+ * A measured 0 stays `0`: it is a reading, and it is deliberately NOT what an
+ * absent value renders as.
+ */
+export const accelOr = (value, fallback = 'UNAVAILABLE') => {
+  if (!isMeasured(value)) return fallback;
+  const parsed = Number(value);
+  if (parsed === 0) return '0';
+  if (Math.abs(parsed) >= 1000) return Math.round(parsed).toLocaleString();
+  // `Number(...)` drops the zeros `toPrecision` pads with, so 20.6 does not
+  // read as 20.600 beside 0.000168.
+  return String(Number(parsed.toPrecision(3)));
+};
 
 export const normalizeBody = (body) =>
   String(body || '').trim().replace(/\s+orbit$/i, '').toLowerCase();
@@ -1487,6 +1516,18 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     ];
   }
 
+  // Multi-step research chains, and the reachability gate they had to pass.
+  //
+  // These two facts existed only in the browser and on
+  // /api/intel/research-ranking: a chain PROMOTED into an actionable group is
+  // not filed under the project it eventually delivers -- it is filed under the
+  // step the player would start now -- and a chain REFUSED by the reachability
+  // gate has been removed from the top of a ranking it would otherwise have
+  // won. Both are the kind of reordering an agent reading this file cannot
+  // reconstruct and would otherwise never learn about, and the refusal in
+  // particular is a truncation, so it announces itself here as it does there.
+  blocks.push(...researchChainPromotionBlocks(filteredSnapshot, observerId, observerName));
+
   // -------------------------------------------------------------------------
   // SECTION 9: DRIVE EXPLORER
   //
@@ -1504,6 +1545,15 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   ));
 
   // -------------------------------------------------------------------------
+  // SECTION 10: COUNCIL CYCLE PLAN -- THE RISK FLOOR AND THE BENCH
+  // -------------------------------------------------------------------------
+  blocks.push(fixedBlock(
+    'council-cycle-plan',
+    [`## 10. Council Cycle Plan (risk floor & bench)`, ``],
+    councilCyclePlanLines(filteredSnapshot, observerId, options)
+  ));
+
+  // -------------------------------------------------------------------------
   // DEGRADATION ORDER -- deliberate, and the reason for each position.
   //
   // A war-room brief exists to answer "what can hurt me, and what do I have to
@@ -1512,30 +1562,42 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   // longest. Each step is applied only as far as the overflow requires, and
   // within a step the least relevant entries always give way first.
   //
-  //   1-2.  Research (§8) entries      -- background; nothing here changes
-  //                                       what a commander does this turn.
-  //   3.    Friendly fleets (§2) → L1  -- shed the weapon/PD line. Cheap, and
+  //   1-3.  Research (§8) entries      -- background; nothing here changes
+  //                                       what a commander does this turn. The
+  //                                       chain-promotion rows go first of all:
+  //                                       they describe plans not yet started,
+  //                                       and their horizon and refusal counts
+  //                                       survive in the block's trailing note.
+  //   4.    Friendly fleets (§2) → L1  -- shed the weapon/PD line. Cheap, and
   //                                       every fleet stays listed.
-  //   4.    Hostile fleets (§3) → L1   -- shed the second detail line, same
+  //   5.    Hostile fleets (§3) → L1   -- shed the second detail line, same
   //                                       reasoning; every contact stays named.
-  //   5-6.  Construction (§5) modules, then stations.
-  //   7.    Friendly fleets (§2) → L2  -- shed the propulsion line.
-  //   8.    Key habs (§6)              -- a static inventory the JSON
+  //   6-7.  Construction (§5) modules, then stations.
+  //   8.    Friendly fleets (§2) → L2  -- shed the propulsion line.
+  //   9.    Key habs (§6)              -- a static inventory the JSON
   //                                       endpoints carry in full.
-  //   9.    Construction (§5) queues   -- last of §5: the only part that says
+  //   10.   Construction (§5) queues   -- last of §5: the only part that says
   //                                       when reinforcements actually arrive.
-  //   10.   Friendly fleets (§2) → L3  -- shed the design rollup; header only.
-  //   11.   Hostile fleets (§3) entries -- ranked by the relevance evaluator's
+  //   11.   Friendly fleets (§2) → L3  -- shed the design rollup; header only.
+  //   12.   Hostile fleets (§3) entries -- ranked by the relevance evaluator's
   //                                       own criteria, least relevant first.
-  //   12.   Friendly fleets (§2) entries -- the observer's own picture is the
+  //   13.   Friendly fleets (§2) entries -- the observer's own picture is the
   //                                       last thing cut before threats.
-  //   13.   Incoming threats (§4)      -- cut only when nothing else remains,
+  //   14.   Incoming threats (§4)      -- cut only when nothing else remains,
   //                                       latest ETA first.
   //
-  // §1 (alien threat posture) and §7 (logistics) are fixed-size by
-  // construction and never degrade.
+  // §1 (alien threat posture), §7 (logistics) and §10 (council cycle plan) are
+  // fixed-size by construction and never degrade through the ladder; §10 is
+  // bounded at five lines whatever the plan's size, because every list inside
+  // it is reported as a COUNT rather than reproduced.
   // -------------------------------------------------------------------------
   const ladder = [
+    // The most speculative research material of all gives way first: a promoted
+    // chain is by definition something the player has NOT started, priced over
+    // steps that are months out. Its horizon and its refusal counts live in the
+    // block's trailing note, so emptying the list keeps what a reader cannot
+    // recover elsewhere and sheds only the per-chain rows.
+    { block: 'research-chain-promotion', action: 'drop' },
     // Background before the active picture: what a bonus is worth matters less
     // this turn than what is being researched with it.
     { block: 'research-category-bonuses', action: 'drop' },
@@ -1560,8 +1622,13 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     // Reference material and a what-if, so it is the first body to give way and
     // the last thing anyone needs in a war-room brief cut to the bone.
     'drive-explorer',
-    // Next to go: the category bonuses explain why a duration is labelled, but the
-    // duration itself survives without them.
+    // A summary of a plan that lives in full at /api/v2/briefing, in the same
+    // relationship to that endpoint as section 9 is to the drive explorer.
+    'council-cycle-plan',
+    // Then the research family, most speculative first: a chain nobody has
+    // started, then the bonuses that explain why a duration is labelled (the
+    // duration itself survives without them), then the live projects and slots.
+    'research-chain-promotion',
     'research-category-bonuses',
     'research-projects', 'research-slots', 'research-heading',
     'habs',
@@ -1578,12 +1645,251 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
 }
 
 /**
+ * Section 8 of the war room: which multi-step research chains were promoted
+ * into an actionable group, which the reachability gate refused, and how wide
+ * the horizon it was measured against is.
+ *
+ * WHY THIS IS IN THE EXPORT AT ALL
+ *
+ * Both halves change what the reader is looking at, and neither is derivable
+ * from the rest of this file:
+ *
+ *   * A PROMOTED chain is listed under the step the player would start now, not
+ *     under the project it eventually delivers. Without the block, an agent
+ *     reading "Exotics, researchable now" has no way to know it is there
+ *     because it is step one of a two-step chain to Exotic Heat Sinks, priced
+ *     over both steps.
+ *   * A DECLINED chain has been removed from the top of a ranking it would
+ *     otherwise have won -- on the live save the Pion Torch chain wins the
+ *     payoff ratio outright and is refused at 413.5 months against a
+ *     106.9-month horizon. That is a truncation, and truncation announces
+ *     itself.
+ *
+ * The endpoint's own group limit is carried through rather than re-capped
+ * here: `promotedOmittedCount` / `declinedOmittedCount` are the counts
+ * /api/intel/research-ranking already publishes, and inventing a second, larger
+ * cap in this file would put two different truncation rules on one figure.
+ *
+ * Returns an array so the caller can push it as one unit; there is one block.
+ */
+function researchChainPromotionBlocks(filteredSnapshot, observerId, observerName) {
+  const endpoint = `/api/intel/research-ranking?observer=${observerId}&detail=full`;
+  const block = listBlock('research-chain-promotion', {
+    headingLines: [`### Research Chain Promotion & Reachability (${observerName})`],
+    // Deliberately not "there are none": the gate may not have been evaluable
+    // at all, and the horizon note below says which of the two happened.
+    emptyLines: [`*No multi-step research chain was promoted or declined for this observer — the horizon `
+      + `note below says whether the reachability gate could be evaluated at all.*`],
+    budgetEmptyLines: budgetEmptyNote('research chains', endpoint, false),
+    budgetNote: budgetOmissionNote('research chains', endpoint),
+    trailingLines: [``]
+  });
+
+  let ranking;
+  try {
+    ranking = researchRankingResource(filteredSnapshot, {
+      observerId,
+      // `mode` is what the local filtered snapshot carries; `intelMode` /
+      // `visibility` are what the published rows label themselves with.
+      mode: filteredSnapshot.mode || filteredSnapshot.intelMode || filteredSnapshot.visibility || 'player'
+    });
+  } catch (err) {
+    block.emptyLines = [`*Research chain promotion unavailable: ${err.message}*`];
+    return [block];
+  }
+
+  const promotion = ranking?.military?.chainPromotion || null;
+  if (!promotion) {
+    block.emptyLines = [
+      `*Research chain promotion unavailable: this snapshot produced no chain-promotion census `
+      + `(${ranking?.sources?.militaryValue?.reason || 'no reason reported'}).*`
+    ];
+    return [block];
+  }
+
+  // Emission order is the endpoint's order, preserved. `rank` exists only so
+  // the byte budget cuts from the END of each list rather than reshuffling it:
+  // declined rows give way before promoted ones, because a promoted chain is
+  // something the reader can act on this cycle and a declined one is a refusal
+  // whose COUNT and reason survive in the trailing note either way.
+  const promoted = asArray(promotion.promoted);
+  const declined = asArray(promotion.declined);
+
+  const chainFacts = (row) => {
+    const steps = num(row.stepsCount);
+    const parts = [
+      steps === null ? 'UNKNOWN steps' : `${steps} step(s)`,
+      `${localeOr(row.totalRemainingCost)} RP`,
+      isMeasured(row.monthsAtCurrentIncome) ? `${fixedOr(row.monthsAtCurrentIncome, 1)} mo` : 'UNKNOWN months'
+    ];
+    return parts.join(', ');
+  };
+  const axisGain = (row) => (row.axisLabel
+    ? `${row.axisLabel} ${isMeasured(row.improvementMultiple) ? `×${fixedOr(row.improvementMultiple, 2)}` : '×UNKNOWN'}`
+    : 'axis UNAVAILABLE');
+
+  promoted.forEach((row, index) => {
+    const next = row.immediateNextStep;
+    addEntry(block, {
+      rank: [0, index],
+      variants: [[
+        `- **${row.displayName || row.id}** — ${axisGain(row)} over ${chainFacts(row)} — `
+        + `start **${next?.displayName || 'UNAVAILABLE'}**`
+        + `${next?.availabilityState ? ` (${next.availabilityState})` : ''} — `
+        + `${String(row.reachabilityState || 'reachability UNKNOWN').toUpperCase()}`
+      ]]
+    });
+  });
+
+  declined.forEach((row, index) => {
+    addEntry(block, {
+      rank: [1, index],
+      variants: [[
+        `- **DECLINED — ${row.displayName || row.id}** — ${axisGain(row)} over ${chainFacts(row)} — `
+        + `${String(row.reachabilityState || 'reachability UNKNOWN').toUpperCase()}: `
+        + `${row.reason || 'no reason reported'}`
+      ]]
+    });
+  });
+
+  // The horizon and the counts live in trailingLines, not in entries, so that a
+  // budget pass that empties the list still leaves the reader the two facts
+  // that cannot be recovered from anywhere else in this document: how wide the
+  // horizon is, and how many chains were refused by it.
+  const horizon = promotion.horizon || null;
+  const horizonLine = horizon?.available === true
+    ? `*Planning horizon: ${fixedOr(horizon.months, 1)} months / ${localeOr(horizon.points)} RP at `
+      + `${localeOr(horizon.monthlyResearchIncome)} RP/mo — campaign age `
+      + `${horizon.horizonAssumed === true ? 'ASSUMED' : 'MEASURED'}`
+      + `${horizon.campaignAgeSource ? ` (${horizon.campaignAgeSource})` : ''}. A plan longer than the `
+      + `campaign already played is past it; that is our inference, not a figure the game publishes.*`
+    : `*Planning horizon UNAVAILABLE, so no chain was promoted on reachability grounds: `
+      + `${horizon?.reason || 'no reason reported'}.*`;
+
+  // Deliberately "carried", not "shown": the byte budget may drop entries AFTER
+  // this line is composed, and the block's own budget note is what reports that.
+  // Two different counts both claiming to be "shown" would contradict each
+  // other the first time the budget bit.
+  const countLine = `*${localeOr(promotion.promotedCount)} chain(s) promoted `
+    + `(${promoted.length} carried here, ${localeOr(promotion.promotedOmittedCount)} omitted by the endpoint's group limit); `
+    + `${localeOr(promotion.declinedCount)} declined `
+    + `(${declined.length} carried, ${localeOr(promotion.declinedOmittedCount)} omitted). Full set at \`${endpoint}\`.*`;
+
+  block.trailingLines = [
+    horizonLine,
+    countLine,
+    `*A promoted chain is ordered under the step you would START, not the project it delivers, and its `
+    + `cost and duration are priced over ALL remaining steps.*`,
+    ``
+  ];
+  return [block];
+}
+
+/**
+ * Section 10 of the war room: the configured risk floor, what it held back, and
+ * how much of the candidate bench this brief is actually showing.
+ *
+ * WHERE THE PLAN COMES FROM, AND WHY IT ARRIVES TWO WAYS
+ *
+ * The cycle plan is built by `server/engine/assignment.js`, which is Node
+ * CommonJS and reads configuration -- neither of which this module may touch,
+ * because it also runs in the Cloudflare Worker. So the plan is handed IN
+ * rather than computed here, and each runtime supplies it the way it already
+ * has it:
+ *
+ *   * Express (`/latest-war-room.md`) passes `options.cyclePlan`; the route has
+ *     the raw snapshot and the briefing generator to hand.
+ *   * The hosted worker passes nothing: published rows carry
+ *     `snapshot.missionControlBriefing` (see scripts/publish/rows.js), so the
+ *     fallback below finds it with no worker change at all.
+ *
+ * A runtime that has neither says so. It does NOT print a floor of zero and an
+ * empty bench, which is what `Number(null) === 0` would produce and which reads
+ * as a measured "nothing was held back".
+ *
+ * WHAT THE BENCH COUNTS ACTUALLY MEAN
+ *
+ * `benched` is a SLICE, and it is deliberately not re-sorted: the engine emits
+ * candidates in registry order and that order is load-bearing for every
+ * explanation a reader sees, so re-ranking the slice would silently change
+ * which entries appear. The line therefore states both the counts AND the
+ * ordering rule -- a reader told "8 of 46" without it would reasonably assume
+ * the eight are the best eight.
+ */
+function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
+  const mode = filteredSnapshot.mode || filteredSnapshot.intelMode || filteredSnapshot.visibility || 'player';
+  const endpoint = `/api/v2/briefing?observer=${observerId}&mode=${mode}`;
+  const plan = options.cyclePlan
+    ?? filteredSnapshot?.missionControlBriefing?.engineDirectives?.cyclePlan
+    ?? null;
+
+  if (!plan) {
+    return [
+      `- **Cycle plan UNAVAILABLE in this runtime** — the councilor cycle plan is produced by the `
+      + `directive engine, not by the snapshot, so it reaches this brief only when the serving runtime `
+      + `hands it over. This is NOT a plan with no risk floor and an empty bench: nothing was read. `
+      + `Fetch it directly at \`${endpoint}\`.`,
+      ``
+    ];
+  }
+
+  // An ABSENT array is not an array of length zero. `asArray(undefined).length`
+  // is 0, and printing that as "0 councilors assigned" is a measurement of
+  // something nobody read -- the exact `Number(null) === 0` failure this file's
+  // fourth design principle exists to stop.
+  const countOr = (value) => (Array.isArray(value) ? String(value.length) : 'UNAVAILABLE');
+
+  const lines = [];
+  const floor = plan.riskFloor || null;
+  const floorPercent = isMeasured(floor?.percent) ? `${Number(floor.percent)}%` : 'UNAVAILABLE';
+  // Three states, never collapsed. "Configured at 0" is the player choosing no
+  // floor; "not configured" is the absence of a choice. Both hold nothing back
+  // and they are reported differently, because a floor of zero that rejected
+  // everything is the failure mode the rule was written against.
+  let floorText;
+  if (!floor) {
+    floorText = `UNAVAILABLE — this plan carries no risk-floor record`;
+  } else if (floor.configured !== true) {
+    floorText = `NOT CONFIGURED — no success-odds floor was set, so nothing was held back on odds`;
+  } else if (floor.inForce === true) {
+    floorText = `${floorPercent} — IN FORCE; an action is vetoed when the LOW end of its odds band is below it`;
+  } else {
+    floorText = `${floorPercent} — CONFIGURED but NOT IN FORCE (a floor of 0 is the player choosing no `
+      + `floor, which is not the same as no floor being configured)`;
+  }
+  lines.push(`- **Risk floor:** ${floorText}`);
+
+  lines.push(`- **Held back by the floor:** ${localeOr(plan.riskFloorVetoedTotalCount)} action(s) vetoed `
+    + `(${countOr(plan.riskFloorVetoed)} listed, ${localeOr(plan.riskFloorVetoedOmittedCount)} omitted); `
+    + `${localeOr(plan.riskFloorUnverifiedTotalCount)} could not be checked against it `
+    + `(${countOr(plan.riskFloorUnverified)} listed, ${localeOr(plan.riskFloorUnverifiedOmittedCount)} omitted) `
+    + `— odds that could not be computed are never counted as clearing the floor`);
+
+  lines.push(`- **Bench:** ${countOr(plan.benched)} of ${localeOr(plan.benchedTotalCount)} candidate `
+    + `action(s) carried, ${localeOr(plan.benchedOmittedCount)} omitted for transport. The listed entries are `
+    + `the FIRST few in candidate-generation order, NOT the highest-value few — emission order is `
+    + `load-bearing for every explanation, so the slice is deliberately not re-ranked`);
+
+  lines.push(`- **Assigned this cycle:** ${countOr(plan.assignments)} councilor(s); `
+    + `${countOr(plan.unassigned)} unassigned, ${countOr(plan.committed)} already committed`);
+
+  lines.push(`- Full plan, with each action's rules, odds and expected value: \`${endpoint}\``);
+  lines.push(``);
+  return lines;
+}
+
+/**
  * Section 9 of the war room: what every drive would do to one of our designs.
  *
  * Deliberately small -- the point of the block is that the surface EXISTS and
- * carries its two headline answers plus the honest census, not that it
+ * carries its three headline answers plus the honest census, not that it
  * reproduces 541 rows. `/api/intel/drive-explorer` carries the rest, and the
  * block names it.
+ *
+ * The three answers are three RANKINGS -- most delta-V, most burst
+ * acceleration, most sustained acceleration -- not one ranking with three
+ * columns. See the comment beside `bestCruise` for what was measured before the
+ * third was added.
  *
  * The estimate line is a separate bullet in its own words. Folding destination
  * reachability into a bullet beside a delta-V figure would present a heuristic
@@ -1595,7 +1901,14 @@ function driveExplorerLines(filteredSnapshot, observerId) {
   try {
     explorer = driveExplorerResource(filteredSnapshot, {
       observerId,
-      mode: filteredSnapshot.intelMode || filteredSnapshot.visibility || 'player',
+      // `mode` first: it is what the LOCAL filtered snapshot carries, while
+      // `intelMode` / `visibility` are what a published row labels itself with.
+      // Without it an omniscient local snapshot rated its drives as 'player'.
+      // Measured 2026-08-22: on the current save that changed nothing this
+      // block renders -- the two calls differ only in the `intelMode` label the
+      // resource echoes back, which section 9 does not print -- so this closes
+      // a latent divergence rather than a live one.
+      mode: filteredSnapshot.mode || filteredSnapshot.intelMode || filteredSnapshot.visibility || 'player',
       status: DRIVE_AVAILABILITY.fittable,
       limit: 1000
     });
@@ -1619,7 +1932,8 @@ function driveExplorerLines(filteredSnapshot, observerId) {
     + `Reactor: ${design.reactor.powerPlantClass || 'UNAVAILABLE'}`
     + `${isMeasured(design.reactor.maxOutputGW) ? ` (${fixedOr(design.reactor.maxOutputGW, 1)} GW)` : ''}`);
   lines.push(`- **Fitted drive (MEASURED):** ${design.fittedDrive.displayName || 'UNAVAILABLE'} — `
-    + `${fixedOr(fitted.deltaVKps, 2)} km/s ΔV, ${fixedOr(fitted.combatAccelerationMps2, 3)} m/s² combat accel`
+    + `${fixedOr(fitted.deltaVKps, 2)} km/s ΔV, ${accelOr(fitted.combatAccelerationMps2)} m/s² combat accel, `
+    + `${accelOr(fitted.cruiseAccelerationMps2)} m/s² cruise accel`
     + `${fitted.computable ? '' : ` (not computable: ${fitted.reason || design.baselineUnmeasuredReason || 'unmeasured'})`}`);
   lines.push(`- **Catalogue:** ${localeOr(explorer.driveCatalogue.total)} drives — `
     + `${localeOr(census[DRIVE_AVAILABILITY.fittable])} fittable today, `
@@ -1643,6 +1957,21 @@ function driveExplorerLines(filteredSnapshot, observerId) {
   }, null);
   const bestDeltaV = bestBy(row => row.measured.deltaVKps);
   const bestAccel = bestBy(row => row.measured.combatAccelerationMps2);
+  // A THIRD ranking, not a third column on the second one. `combat = cruise x
+  // thrustCap` and thrustCap runs 1 to 160, so the two orderings genuinely come
+  // apart: over the whole rated catalogue against this design they share 0 of
+  // their top 10 (best by combat: Pion Torch x6 at 606 m/s2 burst / 10.1
+  // sustained; best by cruise: Neutron Liquid Rocket x6 at 20.6 / 20.6).
+  //
+  // Measured 2026-08-22 on the live save: inside the population this section
+  // actually ranks -- fittable TODAY, reactor-compatible, computable -- the two
+  // winners are the SAME drive on all 10 of the observer's 24 designs that have
+  // any computable option, in both modes, because everything fittable today
+  // caps at thrustCap 1. The line is here anyway: a reader cannot tell "the two
+  // rankings agree" from "only one ranking was run" unless both are printed,
+  // and the agreement is itself the answer to "is my best burst drive also my
+  // best transit drive".
+  const bestCruise = bestBy(row => row.measured.cruiseAccelerationMps2);
 
   const optionLine = (label, row) => {
     if (!row) {
@@ -1651,12 +1980,26 @@ function driveExplorerLines(filteredSnapshot, observerId) {
     }
     return `- **${label} (MEASURED):** ${row.displayName} — ${fixedOr(row.measured.deltaVKps, 2)} km/s ΔV `
       + `(${fixedOr(row.measured.deltaVMultipleVsFitted, 2)}× fitted), `
-      + `${fixedOr(row.measured.combatAccelerationMps2, 3)} m/s² combat accel `
-      + `(${fixedOr(row.measured.combatAccelerationMultipleVsFitted, 2)}× fitted)`
+      + `${accelOr(row.measured.combatAccelerationMps2)} m/s² combat accel `
+      + `(${fixedOr(row.measured.combatAccelerationMultipleVsFitted, 2)}× fitted), `
+      + `${accelOr(row.measured.cruiseAccelerationMps2)} m/s² cruise accel `
+      + `(${fixedOr(row.measured.cruiseAccelerationMultipleVsFitted, 2)}× fitted)`
       + `${row.measured.dryMassCaveat ? ` — CAVEAT: ${row.measured.dryMassCaveat}` : ''}`;
   };
   lines.push(optionLine('Best fittable today by ΔV', bestDeltaV));
   lines.push(optionLine('Best fittable today by combat acceleration', bestAccel));
+  // The cruise ranking is always REPORTED; only its rendering is compacted when
+  // it lands on the drive the line above already spelled out in full. Saying
+  // "the same drive" is a statement of the ranking's result -- it is not the
+  // line being dropped, which is what would make the two rankings
+  // indistinguishable from one ranking having been run.
+  lines.push(bestCruise && bestCruise === bestAccel
+    ? `- **Best fittable today by cruise acceleration (MEASURED):** the same drive — `
+      + `${bestCruise.displayName}, in full on the line above. The burst and sustained rankings agree for `
+      + `this design's fittable set.`
+    : optionLine('Best fittable today by cruise acceleration', bestCruise));
+  lines.push(`- *Combat accel is the BURST figure; cruise accel is the sustained one. combat / cruise is `
+    + `that drive's own thrust cap, so wherever the two differ the combat figure OVERSTATES transit acceleration.*`);
 
   // The estimate, in its own register and its own words.
   //
@@ -1680,7 +2023,8 @@ function driveExplorerLines(filteredSnapshot, observerId) {
       + `${model?.reason || 'no destination table could be read for this design'}.*`);
   }
 
-  lines.push(`- Full listing (${localeOr(explorer.driveCatalogue.total)} drives, sortable and filterable): \`${endpoint}\``);
+  lines.push(`- Full listing (${localeOr(explorer.driveCatalogue.total)} drives, sortable and filterable): \`${endpoint}\` `
+    + `— add \`&sort=cruise-acceleration\` to rank the whole catalogue by sustained acceleration rather than burst`);
   lines.push(``);
   return lines;
 }
