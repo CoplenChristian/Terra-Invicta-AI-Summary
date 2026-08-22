@@ -358,12 +358,27 @@ export function tallyAvailabilityStates(rows) {
  * This function stays flat and unaware so that the one place the category
  * question is answered is the one place it can be reviewed.
  *
- * It is also an UPPER BOUND for a second, larger reason the rate model pins:
- * `monthlyIncome` is the pre-allocation base, and the observer's slots received
- * 2.11x it over the measured interval. See `CATEGORY_RATE_MODEL`.
+ * IT IS NOT AN UPPER BOUND ON COMPLETION TIME, and the comment here said it was
+ * until 2026-08-22 (tracker 3b). `monthlyIncome` IS the pre-allocation base and
+ * the observer's slots did collectively receive 2.11x it -- but that is the
+ * whole faction's throughput summed over four slots, and a project sits in one.
+ * Per slot the measured factor ran 0.4658x, 0.2928x, 1.0602x and 0.2928x of
+ * this income; three of the four are BELOW 1, so this figure was 2.15x to 3.42x
+ * OPTIMISTIC on those slots, not conservative. The four sum to the 2.11x, which
+ * is exactly the units error the old comment made.
+ *
+ * WHAT THIS FIGURE IS: remaining cost divided by the faction's whole measured
+ * monthly research income -- a budget figure, the research analogue of "months
+ * of runway at current burn". Every caller must label it as such; nothing
+ * downstream may present it as a calendar completion date. The only bound the
+ * pinned model does yield is the FASTEST achievable duration (all pips on one
+ * slot), which is category-dependent and lives in
+ * `CATEGORY_RATE_MODEL.durationsStillFlatEvidence.fastestAchievable`.
  *
  * The engineer multiplier is NOT applied and must not be: `monthlyIncome` is a
- * measured figure read from the save and already includes it.
+ * measured figure read from the save and already includes it. Nor is the
+ * campaign's `researchSpeedMultiplier` -- `cachedYearlyRevenue.Research` is
+ * already post-multiplier, re-established by measurement 2026-08-22.
  */
 export function monthsAtIncome(remainingCost, monthlyIncome) {
   const cost = toFinite(remainingCost);

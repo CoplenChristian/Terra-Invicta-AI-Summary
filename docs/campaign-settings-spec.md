@@ -3,6 +3,12 @@
 Written 2026-08-21 against `2b6e3d5`. **Conclusion reached by measurement, 2026-08-21:
 no rate model needs changing.** What remains is a display and transparency fix.
 
+**Revised 2026-08-22 against `431be86`** (tracker 3b). The verdict table is unchanged and
+every entry still holds. What changed is the **evidence** under "Research — acts on output,
+not on cost": the delivered/predicted pair of 1.147× / 0.993× could not carry the weight put
+on it, and has been replaced by a direct measurement. The superseded reasoning is kept in
+place, marked, in that section.
+
 This campaign runs custom difficulty with four rates at 200%. The premise of this spec was
 that the dashboard, which bakes only the difficulty *label*, must therefore be projecting
 durations and rates from stock numbers. **That premise is wrong**, and implementing the
@@ -58,10 +64,63 @@ A halved effective cost of 22,500 would have completed that project long before 
 prints is right.
 
 Income is already post-multiplier too. `monthsAtCurrentIncome` derives from
-`cachedYearlyRevenue.Research`, and the reproduction recorded in `ALLOCATION_MODEL`
-(`shared/researchSlots.mjs`) compared predicted against observed delivery over two
-intervals at **1.147× and 0.993×**. Pre-multiplier revenue against real 200% delivery would
-have shown ~2.0.
+`cachedYearlyRevenue.Research`.
+
+> **The argument for that was replaced on 2026-08-22 (tracker 3b). The conclusion stands;
+> the reasoning that reached it did not.** The superseded wording is kept immediately below.
+
+**Superseded, kept:**
+
+> …and the reproduction recorded in `ALLOCATION_MODEL` (`shared/researchSlots.mjs`) compared
+> predicted against observed delivery over two intervals at **1.147× and 0.993×**.
+> Pre-multiplier revenue against real 200% delivery would have shown ~2.0.
+
+Two things are wrong with it, and neither is the conclusion.
+
+1. **It is circular.** `delivered / predicted ≈ 1.0` says only that the model's multipliers
+   explain the delivery. It cannot locate a constant factor of 2 unless every multiplier in
+   the model is independently known — and that prediction carried a **fitted** `ProjectBonus`
+   of `−0.209`, which the same document called a project *penalty* and flagged as
+   contradictory. A free parameter of unknown sign and magnitude is exactly where a missing
+   ×2 hides. A model that admits it does not reproduce cannot then be used as a null.
+2. **The figures are not reproducible as recorded.** `ALLOCATION_MODEL.reproduction` states a
+   pip layout of `[0,0,3,3,3,0]` and dates of 12/1/2033 – 1/1/2034. All four MD5-verified
+   saves it names carry `researchWeights` `[0,0,3,1,3,1]` and run 12/1/2034 – 1/1/2035. No
+   faction in those saves carries `[0,0,3,3,3,0]`.
+
+**The replacement, measured 2026-08-22 on the same four frozen saves** (`Autosave3.gz`
+`61cc7c11…`, `Autosave2.gz` `5294cddf…`, `Autosave.gz` `2ef96430…`, `ExitSave.gz`
+`5c0d9ef9…`), observer 4712, 12/1/2034 → 12/16/2034 12:00, 15.5 days:
+
+```
+delivered to all four pip-carrying slots               3,381.21
+cachedYearlyRevenue.Research x 15.5 / 365.25           1,601.36
+                                          measured gain  2.1115x
+
+predicted from the allocation terms ALONE, every term read from the save:
+  (1 + 5% x 4 pipped slots)                                1.2000
+  x SUM over slots of pipShare x (1 + Category + Project)  1.78475
+                                                         = 2.1420x
+
+predicted if cachedYearlyRevenue.Research ALSO still needed the 200%
+                                                         = 4.2840x
+```
+
+The measurement sits on the first, 1.4% low, and that residual is **uniform across all four
+slots** (0.98461 / 0.98612 / 0.98591 / 0.98612) — one common scale factor with no room for a
+spare ×2. Nothing here is fitted: `ProjectBonus = min(100%, (21 − 2) × 5%) = 0.95` is read
+from `cachedYearlyRevenue.Projects`, and the Xenology `CategoryBonus` of 0.44 is two Xenology
+Labs plus 24 `alienInvestigations`.
+
+The structure rules it out a second way. A project pip delivers **1.885714×** a global-tech
+pip, against `(1 + 0.03 + 0.95) / (1 + 0.05) = 1.885714` predicted — agreement to six figures.
+A campaign-wide research multiplier cannot produce a ratio *between two slot kinds*; only a
+`ProjectBonus` can, and that one is read from the save.
+
+**And the same measurement does not license the opposite error.** The 2.1115× gain is a
+whole-faction sum over four slots; a duration is about one slot, whose measured factors are
+0.4658×, 0.2928×, 1.0602× and 0.2928× of the nominal income. `docs/research-category-rate-spec.md`
+carries the arithmetic. No duration moves.
 
 The player's report that "techs are half what they normally are" describes the experience
 accurately — research completes twice as fast — but that comes from doubled output, and the

@@ -262,9 +262,20 @@ export const CAMPAIGN_SETTING_VERDICTS = Object.freeze({
     site: 'shared/researchSlots.mjs, shared/intel/research*.mjs',
     evidence: 'Fleet Logistics sat at accumulatedResearch 44,780 against a template researchCost of '
       + '45,000 and was still in progress, so effective cost equals template cost. Income is already '
-      + 'post-multiplier: ALLOCATION_MODEL reproduced observed delivery at 1.147x and 0.993x from '
-      + 'cachedYearlyRevenue.Research, where a missing 200% would have read ~2.0.',
-    measuredOn: '2026-08-21'
+      + 'post-multiplier: over 12/1/2034 -> 12/16/2034 12:00 the observer\'s slots delivered 2.1115x '
+      + 'cachedYearlyRevenue.Research, and 2.1420x is what the allocation terms predict with every term '
+      + 'READ from the save -- (1 + 5% x 4 pipped slots) x the pip-weighted (1 + CategoryBonus + '
+      + 'ProjectBonus). An income still needing the 200% would have delivered 4.2840x. The residual is a '
+      + 'uniform 1.4%, with no spare factor of 2 anywhere in it.',
+    evidenceSuperseded: 'the original wording cited ALLOCATION_MODEL reproducing delivery at 1.147x and '
+      + '0.993x, "where a missing 200% would have read ~2.0". WITHDRAWN 2026-08-22 (tracker 3b) as '
+      + 'invalid reasoning, though the conclusion it reached was right. A delivered/predicted ratio near '
+      + '1.0 cannot detect a missing constant factor when the prediction itself carries a FITTED '
+      + 'parameter -- the first pass had fitted ProjectBonus at -0.209, leaving room for a compensating '
+      + '~2 to hide. The figures were also not reproducible as recorded: they name a pip layout of '
+      + '[0,0,3,3,3,0] and dates in 2033, while all four MD5-verified saves carry [0,0,3,1,3,1] and run '
+      + '12/1/2034 to 1/1/2035. Kept, marked, and replaced by the measurement above.',
+    measuredOn: '2026-08-21; evidence replaced 2026-08-22'
   }),
   miningProductivityMultiplier: Object.freeze({
     verdict: 'checked -- unaffected',

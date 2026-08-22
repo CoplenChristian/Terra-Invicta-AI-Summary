@@ -335,8 +335,26 @@ test('every multiplier the save carries has a recorded verdict', () => {
     assert.ok(verdict, `no recorded verdict for ${key}`);
     assert.match(verdict.verdict, /checked -- unaffected|not applicable/);
     assert.ok(verdict.evidence && verdict.evidence.length > 40, `${key} verdict carries no evidence`);
-    assert.strictEqual(verdict.measuredOn, '2026-08-21');
+    // The original measurement date must stay readable. A verdict whose
+    // EVIDENCE was later replaced says so after it, rather than losing the date
+    // it was first established on.
+    assert.match(verdict.measuredOn, /^2026-08-21(; .+)?$/, `${key} lost its measurement date`);
   }
+});
+
+test('a verdict whose evidence was withdrawn keeps the withdrawn reasoning, marked', () => {
+  // tracker 3b: the research verdict is right, but the 1.147x / 0.993x argument
+  // for it was not. Replacing evidence silently would leave a future reader
+  // unable to see that the old argument had been examined and rejected.
+  const research = CAMPAIGN_SETTING_VERDICTS.researchSpeedMultiplier;
+  assert.strictEqual(research.verdict, 'checked -- unaffected', 'the verdict itself did NOT change');
+  assert.match(research.evidence, /2\.1115x/, 'the replacement evidence is the measured absolute gain');
+  assert.match(research.evidence, /4\.2840x/, 'against what a pre-200% income would have delivered');
+  assert.doesNotMatch(research.evidence, /1\.147x/, 'the withdrawn ratio must not still stand as evidence');
+  assert.ok(research.evidenceSuperseded, 'the withdrawn argument must be kept and marked');
+  assert.match(research.evidenceSuperseded, /1\.147x/);
+  assert.match(research.evidenceSuperseded, /WITHDRAWN/);
+  assert.match(research.evidenceSuperseded, /-0\.209/, 'and must name the fitted parameter that made it circular');
 });
 
 test('the verdicts are also written beside the models they clear', () => {

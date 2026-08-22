@@ -141,9 +141,10 @@
         + (bonus === null ? '' : ` by +${(bonus * 100).toFixed(1)}%`)
         + ', and this figure does NOT apply that bonus. It is the flat rate: remaining cost divided by '
         + 'the faction\'s measured monthly research income. The allocation model measured on this '
-        + 'campaign says the flat rate\'s dominant error is the whole per-slot allocation multiplier '
-        + '(2.11x), not the category term, so the flat figure is kept rather than corrected by a few '
-        + 'per cent. Treat it as an upper bound.';
+        + 'campaign puts a single slot\'s share at 0.29x to 1.06x that income depending on its pips, so '
+        + 'the flat figure runs both short and long and no single correction closes it — the category '
+        + 'term is worth only a few per cent of that spread. It is NOT an upper bound: at one pip of '
+        + 'eight it measured 3.4x optimistic.';
     }
     if (state === 'unresolved-category') {
       return 'The flat-rate figure. This project\'s research category could not be resolved, so whether '
@@ -719,11 +720,12 @@
 
     const reallocationText = slots.recommendation?.reason
       || slots.model?.recommendationRefused
-      || ('Not offered. The published allocation formula does not reproduce measured delivery: no single '
-        + '(base, ProjectBonus) pair fits all three pip-carrying slots, and two of its four terms have no shipped '
-        + 'source. The stable relative share between slots (2.26216× / 2.26214×) leads because it cancels income '
-        + 'drift; the 1.147×/0.993× absolute swing is confounded by research-income drift, and the −0.209 project '
-        + 'bonus is confounded by the unvalidated Xenology CategoryBonus (at ≥ 0.2435 the contradiction collapses).');
+      || ('Not offered. The published allocation formula DOES now reproduce measured delivery — all four '
+        + 'pip-carrying slots to within 0.15% with zero fitted parameters, once ProjectBonus is read from '
+        + 'cachedYearlyRevenue.Projects (95%) and the 24 alien-activity investigations are folded into the Xenology '
+        + 'bonus (0.44). What is still missing is different: the 0.9^(n−1) same-category decay never engaged in the '
+        + 'measured data, the +5%-per-pipped-slot constant has no shipped source, and a forward delivery model is '
+        + 'not a value model. The current layout is measured; the optimum is not offered rather than offered wrongly.');
 
     facts.push({
       label: 'REALLOCATION',

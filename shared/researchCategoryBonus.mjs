@@ -66,12 +66,18 @@
 // observer's four pip-carrying slots to within 0.15% with ZERO free parameters.
 // The measurement is recorded below and in `docs/research-category-rate-spec.md`.
 //
-// Durations are still reported at the FLAT rate, because the correction the
-// pinned model implies is not the category term alone -- it is the whole
-// allocation multiplier, which on this save runs 2.11x. Withdrawing the flat
-// figure would remove thirteen usable durations to fix a few per cent while
-// leaving the 2.11x untouched, so the flat figure stands and the measured
-// category bonus is named beside it.
+// Durations are still reported at the FLAT rate, and the reason was CORRECTED
+// on 2026-08-22 (tracker 3b). It used to read "the whole allocation multiplier,
+// which on this save runs 2.11x" -- true as a whole-faction figure, and a units
+// error as a duration claim. 2.1115x is what the observer's FOUR slots deliver
+// SUMMED. One project sits in ONE slot and receives 0.4658x, 0.2928x, 1.0602x
+// or 0.2928x of the nominal income; those four sum to the 2.1115x. Three of
+// them are BELOW 1, so the flat figure is too SHORT there, not too long.
+//
+// No single scalar can correct that, because the per-slot factor depends on a
+// pip share the project does not have until it is given one. So the flat figure
+// stands, is labelled as flat, and the measured category bonus is named beside
+// it. See `CATEGORY_RATE_MODEL.durationsStillFlatEvidence`.
 //
 // Plain ESM, no Node built-ins, no imports outside `shared/`.
 
@@ -277,13 +283,52 @@ export const CATEGORY_RATE_MODEL = Object.freeze({
 
   // ---- what this does NOT license ---------------------------------------
   durationsStillFlat: true,
-  durationsStillFlatReason: 'the pinned model says the flat duration is wrong by the WHOLE allocation '
-    + 'multiplier, not by the category term. Over interval 1 the observer\'s slots received 2.1113x the '
-    + 'nominal research income the flat rate divides by, because `cachedYearlyRevenue.Research` is the '
-    + 'PRE-multiplier base. Correcting only the category part would move a duration by a few per cent '
-    + 'while leaving a 2.11x error in place, and would look like a fix. So durations stay flat, the '
-    + 'measured category bonus is named beside them, and the allocation correction is left as a scoped '
-    + 'change of its own.',
+  durationsStillFlatReason: 'the pinned model does NOT yield a scalar duration correction, and the '
+    + 'earlier claim that it did was a units error corrected on 2026-08-22 (tracker 3b). '
+    + '`cachedYearlyRevenue.Research` is indeed the PRE-allocation base and the observer\'s slots did '
+    + 'collectively receive 2.1115x it -- but that 2.1115x is the WHOLE FACTION\'s throughput summed over '
+    + 'four slots, and a duration is about ONE slot. Per slot the measured factor is 0.4658x, 0.2928x, '
+    + '1.0602x and 0.2928x of the nominal income (they sum to the 2.1115x), so the flat figure is too '
+    + 'SHORT on three of the four, not too long, and no single scalar corrects it. Correcting the '
+    + 'category term alone would move a duration a few per cent in a figure whose per-slot spread is '
+    + '3.6x. So durations stay flat, stay labelled flat, and the measured category bonus is named '
+    + 'beside them.',
+  // The arithmetic behind the sentence above, so the claim is checkable rather
+  // than asserted. Every figure is measured; nothing here is a projection.
+  durationsStillFlatEvidence: Object.freeze({
+    nominalMonthlyIncome: 3144.60,
+    nominalMonthlyIncomeSource: '`cachedYearlyRevenue.Research` 37,735.23 / 12 -- the exact divisor '
+      + '`monthsAtIncome` uses',
+    intervalDays: 15.5,
+    perSlotDeliveryFactor: Object.freeze([
+      Object.freeze({ slot: 2, kind: 'global-tech', category: 'LifeScience', pips: 3, deliveredOverInterval: 745.85, factorOfNominalIncome: 0.4658, flatFigureIs: 'too short by 2.15x' }),
+      Object.freeze({ slot: 3, kind: 'project', category: 'MilitaryScience', pips: 1, deliveredOverInterval: 468.82, factorOfNominalIncome: 0.2928, flatFigureIs: 'too short by 3.42x' }),
+      Object.freeze({ slot: 4, kind: 'project', category: 'Xenology', pips: 3, deliveredOverInterval: 1697.71, factorOfNominalIncome: 1.0602, flatFigureIs: 'too long by 1.06x' }),
+      Object.freeze({ slot: 5, kind: 'project', category: 'Energy', pips: 1, deliveredOverInterval: 468.82, factorOfNominalIncome: 0.2928, flatFigureIs: 'too short by 3.42x' })
+    ]),
+    wholeFactionFactor: 2.1115,
+    wholeFactionFactorIsTheSum: 'the four per-slot factors sum to it (0.4658 + 0.2928 + 1.0602 + 0.2928 '
+      + '= 2.1116, to rounding). That identity IS the error the earlier claim made: it used the sum where '
+      + 'a duration needs one term of it.',
+    // The one bound the model does yield, stated so the reader is not left with
+    // only a negative result.
+    fastestAchievable: 'putting EVERY pip on one slot gives that slot pipShare 1 and one pipped slot, so '
+      + 'it receives 1.05 x (1 + CategoryBonus + ProjectBonus) x nominal income. That is a real LOWER '
+      + 'bound on months, and it is category-dependent, not scalar: 1.1025x for a LifeScience global tech '
+      + 'against 2.5095x for a Xenology project on this save -- a spread of 2.28x. The flat figure is an '
+      + 'upper bound on THAT best case only (the multiplier is >= 1.05 always), never on the duration at '
+      + 'the current allocation.',
+    doesNotReapplyTheCampaignMultiplier: 'the 2.079x that a typical project would gain under full '
+      + 'concentration on this save lands within 4% of the campaign\'s own 200% researchSpeedMultiplier, '
+      + 'which is a coincidence of this campaign carrying a 95% ProjectBonus, and it is why no such '
+      + 'factor is applied. Structurally the two are unrelated: ProjectBonus is read per faction from '
+      + '`cachedYearlyRevenue.Projects` (measured 0.80 on one rival, 1.00 on four others) and applies to '
+      + 'project slots only, while a campaign multiplier would apply to every slot alike. '
+      + '`cachedYearlyRevenue.Research` is already post-researchSpeedMultiplier -- see '
+      + '`ALLOCATION_MODEL.reproduction.whyTheAbsoluteSwingCannotAnswerThe200Percent`.',
+    measuredOn: 'Autosave3.gz -> Autosave2.gz, observer 4712, 15.5 days, MD5-verified frozen copies, '
+      + '2026-08-22'
+  }),
   untested: Object.freeze([
     'the 0.9^(n-1) same-category decay: every category held exactly one pipped slot in interval 1, so the '
       + 'exponent was 0 everywhere and the term never engaged. Interval 2 corroborates it weakly.',
@@ -713,9 +758,11 @@ export function buildResearchCategoryBonuses(snapshot, { observerId } = {}) {
  *
  * Returns `''` for a row with nothing to say, so a caller can concatenate it
  * unconditionally. It states the bonus and that it is NOT applied; it does not
- * claim which way or by how much the true figure moves, because the pinned
- * model says the dominant error is the whole allocation multiplier rather than
- * the category term -- see `CATEGORY_RATE_MODEL.durationsStillFlatReason`.
+ * claim which way or by how much the true figure moves, and that restraint is
+ * now the MEASURED position rather than a hedge: the per-slot allocation factor
+ * runs 0.29x to 1.06x of the nominal income on the save it was measured
+ * against, so a flat duration can be too short or too long depending on the pip
+ * share -- see `CATEGORY_RATE_MODEL.durationsStillFlatEvidence`.
  */
 export function categoryBonusCaveat({ state, categoryResearchBonus } = {}) {
   if (state === CATEGORY_DURATION_STATES.flatRateBoosted) {
@@ -804,11 +851,12 @@ export function categoryBonusSummary(model) {
  * The states a category-aware duration can be in.
  *
  * EVERY state except `unmeasured-income` carries a number. The flat figure is
- * never withdrawn on account of a category bonus: the pinned rate model says
- * the flat rate's dominant error is the whole allocation multiplier (2.11x on
- * the save it was measured against), not the category term, so withdrawing a
- * duration to fix a few per cent would remove a usable figure without touching
- * the error that matters. The bonus is NAMED beside the number instead.
+ * never withdrawn on account of a category bonus: the pinned rate model puts
+ * the flat rate's per-slot error at 0.29x to 1.06x of the nominal income
+ * depending on pip share (measured), a spread of 3.6x that no category-term
+ * correction touches and no single scalar closes. Withdrawing a duration to fix
+ * a few per cent would remove a usable figure without touching that. The bonus
+ * is NAMED beside the number instead, and the number stays labelled flat.
  */
 export const CATEGORY_DURATION_STATES = Object.freeze({
   // The category carries no bonus for this observer, so the flat rate is the
@@ -847,11 +895,13 @@ export const CATEGORY_DURATION_BASES = Object.freeze({
     + 'observer, so the flat monthly rate is the correct rate for the category term. The measured income '
     + 'already includes every flat, non-category bonus.',
   [CATEGORY_DURATION_STATES.flatRateBoosted]: 'this project\'s research category carries a measured '
-    + 'research bonus (the row\'s own `categoryResearchBonus`), and this duration does NOT apply it. The '
-    + 'flat figure is kept because the rate model pins the dominant error as the whole allocation '
-    + 'multiplier -- 2.11x on the save it was measured against -- rather than the category term, so '
-    + 'correcting only the category part would move the number a few per cent and look like a fix. See '
-    + '`categoryBonuses.model`.',
+    + 'research bonus (the row\'s own `categoryResearchBonus`), and this duration does NOT apply it. It '
+    + 'is the flat basis throughout: remaining cost divided by the faction\'s measured monthly research '
+    + 'income. The flat figure is kept because the rate model puts the per-slot allocation factor at '
+    + '0.29x to 1.06x of that income depending on pip share -- so the flat figure runs both short and '
+    + 'long and no single correction closes it -- while the category term moves a number only a few per '
+    + 'cent. Do NOT read this as an upper bound on the actual completion time; at one pip of eight it '
+    + 'measured 3.4x optimistic. See `categoryBonuses.model.durationsStillFlatEvidence`.',
   [CATEGORY_DURATION_STATES.unmeasuredIncome]: 'no measured research income, so there is no honest '
     + 'number of months at any rate. "0 months" would read as immediate.',
   [CATEGORY_DURATION_STATES.unresolvedCategory]: 'this project\'s research category could not be '
@@ -872,9 +922,10 @@ export const CATEGORY_DURATION_BASES = Object.freeze({
  *
  * THE FLAT FIGURE IS NOT WITHDRAWN FOR A BOOSTED CATEGORY. `CATEGORY_RATE_MODEL`
  * is now pinned, and what it pins is that the category term is the SMALL part
- * of the flat rate's error: the observer's slots received 2.11x the nominal
- * income the flat rate divides by. Withdrawing thirteen usable durations to
- * correct three to five per cent, while leaving the 2.11x untouched, is a worse
+ * of the flat rate's error: the per-slot allocation factor measured 0.29x to
+ * 1.06x of the nominal income the flat rate divides by, depending on the pip
+ * share. Withdrawing thirteen usable durations to correct three to five per
+ * cent, while leaving a 3.6x per-slot spread that no scalar closes, is a worse
  * answer than printing the flat figure with its category bonus named beside it.
  *
  * `months` is therefore null only when the income itself is unmeasured.
@@ -927,10 +978,11 @@ export function monthsAtIncomeForCategory(remainingCost, monthlyIncome, category
       categoryBonus: effective,
       categoryBonusSummed: categoryRate.summedBonus ?? null,
       flatRateMonths: flat,
-      basis: `this category carries a measured research bonus (effective ${effective}, from `
-        + `${categoryRate.sourceCount} source(s) across ${(categoryRate.bySourceType || []).length} source `
-        + 'type(s)), and this duration does NOT apply it. The rate model is pinned and says the flat '
-        + 'rate\'s dominant error is the whole allocation multiplier, not the category term, so the flat '
+      basis: `flat rate: remaining cost / measured monthly research income. This category carries a `
+        + `measured research bonus (effective ${effective}, from ${categoryRate.sourceCount} source(s) `
+        + `across ${(categoryRate.bySourceType || []).length} source type(s)) and this duration does NOT `
+        + 'apply it. The rate model is pinned and puts the per-slot allocation factor at 0.29x to 1.06x '
+        + 'of that income depending on pip share, which no category-term correction touches, so the flat '
         + 'figure is kept and the bonus is stated beside it.',
       categoryRateModel: CATEGORY_RATE_MODEL
     };
