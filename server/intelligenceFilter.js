@@ -362,6 +362,15 @@ class IntelligenceFilter {
         // cap projects", which is a confident claim from no evidence and would
         // make their cap look smaller than it is.
         controlPointMaintenanceEffects: isEnhanced || isObserver ? f.controlPointMaintenanceEffects : null,
+        // The effect half of a RIVAL's faction-wide space-mining bonus. Two of
+        // the three projects granting `Effect_SpaceMiningBonus10` sit past the
+        // five-entry `completedProjects` truncation above, so publishing the
+        // list would leak straight through it.
+        //
+        // Null, never []. An empty list reads as "this rival holds no mining
+        // effects", which would let a consumer compose a rival bonus that is
+        // confidently 1.0 when it is simply unmeasured.
+        spaceMiningBonusEffects: isEnhanced || isObserver ? f.spaceMiningBonusEffects : null,
         // A rival's own recorded cap overage states their cap position directly,
         // which is exactly what the masked councilor attributes exist to keep
         // out of player mode. Null, never 0 -- a rival reported at 0 overage
@@ -787,6 +796,13 @@ class IntelligenceFilter {
       if (Array.isArray(faction.controlPointMaintenanceEffects)) {
         factionLeaks.push(
           `${faction.ID}:controlPointMaintenanceEffects[${faction.controlPointMaintenanceEffects.length}]`
+        );
+      }
+      // The effect half of a rival's space-mining bonus, for the same reason:
+      // it names completed work the five-project truncation withholds.
+      if (Array.isArray(faction.spaceMiningBonusEffects)) {
+        factionLeaks.push(
+          `${faction.ID}:spaceMiningBonusEffects[${faction.spaceMiningBonusEffects.length}]`
         );
       }
       if (this.toFiniteOrNull(faction.recordedControlPointCapOverage) !== null) {

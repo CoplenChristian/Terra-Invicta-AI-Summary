@@ -485,6 +485,34 @@
       bonusNote = `Yields include completed-project mine bonuses: ${named}.`;
     }
 
+    // The faction-wide ADDITIVE term, appended to the same sentence rather than
+    // given a register of its own -- it is the second half of "what is already
+    // in these yields", and a reader who sees only the x1.15 clause would think
+    // that clause was the whole adjustment. All three states are rendered: an
+    // UNRESOLVED bonus has to read as unresolved, and a measured zero has to
+    // read as measured, because they are different facts.
+    const spaceBonus = expansion?.spaceMiningBonus || null;
+    if (!spaceBonus) {
+      bonusNote += ' FACTION-WIDE SPACE-MINING BONUS NOT REPORTED by this snapshot — yields omit it.';
+    } else if (spaceBonus.available !== true) {
+      bonusNote += ' FACTION-WIDE SPACE-MINING BONUS UNRESOLVED — yields omit it and are a lower bound, '
+        + 'not a measured "no bonus".';
+    } else {
+      const total = num(spaceBonus.additiveTotal);
+      const sources = Array.isArray(spaceBonus.sources) ? spaceBonus.sources : [];
+      if (total === null) {
+        bonusNote += ' FACTION-WIDE SPACE-MINING BONUS UNREADABLE — yields omit it.';
+      } else if (total === 0) {
+        bonusNote += ' No active org or effect raises mine output faction-wide (measured, not assumed).';
+      } else {
+        const from = sources.length
+          ? sources.map((s) => `${s.name} +${Math.round(num(s.value) * 100)}%`).join(', ')
+          : 'source not named';
+        bonusNote += ` They also include the faction-wide space-mining bonus of +${Math.round(total * 100)}%`
+          + ` (${from}), which is additive and applied after the multipliers above.`;
+      }
+    }
+
     // The mine module's own multiplier, said once for the whole table rather
     // than repeated per row. It is NOT in the score and the note says so,
     // because a ranking that silently excluded it would read as one that had

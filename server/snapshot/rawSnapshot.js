@@ -146,10 +146,17 @@ function buildRawSnapshot(saveData) {
   const controlPointMaintenanceEffectsByFaction =
     factionsModule.buildControlPointMaintenanceEffects(rawEffects);
 
+  // The additive half of the faction-wide mine-output bonus, read from the same
+  // effect state. It cannot come from a completed-project sweep: no project
+  // grants `Effect_SpaceMiningBonus5`, two narrative events do.
+  const spaceMiningBonusEffectsByFaction =
+    factionsModule.buildSpaceMiningBonusEffects(rawEffects);
+
   const factions = factionsModule.buildFactions(rawFactions, {
     councilors, habs, fleets, nations, controlPointsById, shipyardCountByFaction,
     shipyardQueues, habResearchByFaction, scoreWeights, scoreNormalizers,
     controlPointMaintenanceEffectsByFaction,
+    spaceMiningBonusEffectsByFaction,
     gameTimeString: saveData.gameTimeString, researchCostScaling
   });
 

@@ -43,7 +43,41 @@ Written 2026-08-22 against `1589907`.
 > every multiplier tested — so a projection buys nothing and costs an ordering the save does
 > not support. `MINE_MODULE_PROJECTION_POLICY` records the decision and the alternatives it
 > rejected; each candidate carries the observer's buildable **band** in the estimate register
-> instead. The per-faction scalar in (b) remains the only open half.
+> instead.
+>
+> **UPDATE 2026-08-22 — the per-faction scalar is closed too, and this whole spec is now
+> answered.** It was never unexplained: it is `1 + Σ(active org miningBonus) +
+> Σ(SpaceMiningBonus effect values)`, both **additive** fractions in the same units.
+> `shared/spaceMiningBonus.mjs` is that term. With it applied, the model
+>
+> ```
+> Σ(rate × miningModifier) × 365.25/12 × 1.15^grants × (1 + Σ)
+>   + flat module income + incoming daily transfers
+> ```
+>
+> reproduces **every** faction's own `cachedYearlyRevenue / 12` at 0.9999 78–0.9999 81 on all
+> five resources — 0.0022%, every digit the save carries — and closes 38 of 40
+> faction-reconciliations across five 1.0.51 saves.
+>
+> Four things this settled that the notes above got wrong or could not see:
+>
+> 1. **The additive/multiplicative question is answered.** Project Exodus reading 1.28 rather
+>    than 1.10 was never a contradiction: it holds +0.18 of org bonus *beside*
+>    `Project_GoldRush`'s +0.1. The two additive fractions sum; the ×1.15 grants stay
+>    multiplicative and are applied first.
+> 2. **A completed but UNPOWERED mine produces nothing**, and `constructionStatus` cannot see
+>    that. Two of the Servants' Settlement complexes are exactly that, and counting them
+>    breaks their reconciliation by 4–5%.
+> 3. **The Aliens' and the Protectorate's residuals were not scalars at all** — one is the
+>    `AlienWormholeFacility`'s flat monthly income (+200 volatiles / +200 metals / +50 nobles
+>    / +10 fissiles, and **no water**, which is why their water read 1.000), the other is the
+>    Aliens' standing resource transfer to them.
+> 4. **`Effect_SpaceMiningBonus5` is granted by no project**, only by two narrative events, so
+>    the effect half must be read from `TIEffectsState.factionEffectsNames`.
+>
+> A rival's mined output is therefore **modellable in omniscient mode** and deliberately
+> **refused in player mode** — the roster is truncated and orgs are stripped, so a rival
+> resolves `unknown` rather than a confident `measured-none`.
 
 Thirteen projects raise mine output. The dashboard applies none of them to any figure it
 derives. **Whether that is a defect depends on one unsettled question, and that question

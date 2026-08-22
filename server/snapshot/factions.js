@@ -132,6 +132,40 @@ function buildControlPointMaintenanceEffects(rawEffects) {
   return byFaction;
 }
 
+/**
+ * The game's own per-faction `SpaceMiningBonus` effect lists.
+ *
+ * Same source and same shape as `buildControlPointMaintenanceEffects` above,
+ * and kept as a separate reader rather than folded into it so neither can move
+ * the other's contract. It is deliberately NOT derived from
+ * `finishedProjectNames`: **no project grants `Effect_SpaceMiningBonus5`** —
+ * the only two grants in the shipped templates are the narrative events
+ * `event_Breakthrough_Hab` and `event_ScienceTour` (`TINarrativeEventTemplate.json`,
+ * read 2026-08-22) — and the Resistance holds it on `ExitSave.gz`. A project
+ * sweep therefore scores that faction 0.05 short and its mined output 5% low.
+ *
+ * A faction with no row gets no entry, so a consumer can tell "this faction
+ * holds no such effect" (empty array) apart from "this snapshot does not carry
+ * the effect state" (absent) — the second must not read as a x1.0 bonus.
+ */
+function buildSpaceMiningBonusEffects(rawEffects) {
+  const byFaction = new Map();
+  const rows = Array.isArray(rawEffects) && rawEffects.length > 0
+    ? rawEffects[0]?.factionEffectsNames
+    : null;
+  if (!Array.isArray(rows)) return byFaction;
+
+  for (const row of rows) {
+    const factionId = row?.Key?.value ?? row?.Key ?? null;
+    if (factionId === null || factionId === undefined) continue;
+    const contexts = row?.Value;
+    if (!contexts || typeof contexts !== 'object') continue;
+    const list = contexts.SpaceMiningBonus;
+    byFaction.set(factionId, Array.isArray(list) ? list.slice() : []);
+  }
+  return byFaction;
+}
+
 function buildFactions(rawFactions, {
   councilors,
   habs,
@@ -144,6 +178,7 @@ function buildFactions(rawFactions, {
   scoreWeights,
   scoreNormalizers,
   controlPointMaintenanceEffectsByFaction = null,
+  spaceMiningBonusEffectsByFaction = null,
   gameTimeString,
   // The campaign research-cost scaler from `shared/researchCostScaling.mjs`.
   // Absent (an older caller, a hand-built test snapshot) degrades to the
@@ -420,6 +455,16 @@ function buildFactions(rawFactions, {
         && controlPointMaintenanceEffectsByFaction.has(factionId)
         ? controlPointMaintenanceEffectsByFaction.get(factionId)
         : null,
+      // The additive `SpaceMiningBonus` effects this faction holds, from the
+      // game's own effect state. Half of the faction-wide mine-output bonus
+      // modelled by `shared/spaceMiningBonus.mjs`; the other half is the
+      // `miningBonus` on its councillors' active orgs. Absent (rather than
+      // empty) when this snapshot carries no effect state, so the bonus reports
+      // UNKNOWN instead of a confident x1.0.
+      spaceMiningBonusEffects: spaceMiningBonusEffectsByFaction
+        && spaceMiningBonusEffectsByFaction.has(factionId)
+        ? spaceMiningBonusEffectsByFaction.get(factionId)
+        : null,
       // `TIFactionState.history_CPCapOverageByDay`, most recent slot: the game's
       // OWN record of how far over its control-point cap this faction is.
       //
@@ -573,6 +618,7 @@ module.exports = {
   buildFactionIntelligence,
   buildFactionRelationships,
   buildControlPointMaintenanceEffects,
+  buildSpaceMiningBonusEffects,
   buildFactions,
   collectShipDesigns,
   buildActiveXenoforming,

@@ -57,17 +57,22 @@
 // WHAT THIS MODULE DELIBERATELY DOES NOT MODEL
 // ---------------------------------------------------------------------------
 //
-// * `B(faction)` above. It is 1.000 for the observer (0.999978 measured) and
-//   for the Academy, and a clean but UNEXPLAINED scalar elsewhere -- 1.14 for
-//   Humanity First, 1.28 for Project Exodus, 1.33 for the Resistance, agreeing
-//   to six digits across all five resources. No shipped template accounts for
-//   it. It is named in `UNMODELLED_FACTORS` rather than silently folded in.
+// * `B(faction)` above. SOLVED 2026-08-22 and no longer unexplained: it is
+//   `1 + SUM(active org miningBonus) + SUM(SpaceMiningBonus effect values)`,
+//   modelled by `shared/spaceMiningBonus.mjs`. THIS module still does not apply
+//   it, because it is a faction-wide scalar rather than a per-resource
+//   multiplier, so a figure adjusted only here is short of it until the caller
+//   chains the two. Both are named in `UNMODELLED_FACTORS` with that split
+//   spelled out. With both terms in, all eight factions reconcile against their
+//   own `cachedYearlyRevenue` at 0.0022% on all five resources.
 // * `Effect_SpaceMiningBonus5` / `Effect_SpaceMiningBonus10`. These are
 //   `Additive` fractions (0.05 / 0.1), a DIFFERENT SHAPE from the x1.15
 //   multipliers, and `shared/economicValue.mjs` already records why the two
-//   must not be conflated. Project Exodus holds `Project_GoldRush`
-//   (`Effect_SpaceMiningBonus10`) and reads 1.28, not 1.10, so how the additive
-//   fraction is combined is NOT settled by this save. Declared unhandled.
+//   must not be conflated -- which is exactly why they are not handled here.
+//   They go into the additive bucket in `shared/spaceMiningBonus.mjs` instead,
+//   beside the org bonuses that share their units. Project Exodus reading 1.28
+//   rather than 1.10 was never a contradiction: it holds +0.18 of org mining
+//   bonus beside `Project_GoldRush`'s +0.1.
 // * The mine module's own `miningModifier` (1.0 / 1.25 / 1.5 / 2.0 / 4.0).
 //   THIS MODULE still does not apply it -- it has no site to read a module off
 //   -- but it is no longer missing from the dashboard. `shared/mineModuleOutput.mjs`
@@ -210,20 +215,34 @@ export const UNMODELLED_FACTORS = Object.freeze([
     source: 'TIHabModuleTemplate.json, read 2026-08-22'
   }),
   Object.freeze({
+    // NO LONGER UNMODELLED, and kept here to record what it turned out to be.
+    // The 1.28 that looked like a contradiction was two terms, not one: Project
+    // Exodus holds +0.18 of org mining bonus BESIDE the +0.1 from GoldRush, and
+    // 1 + 0.18 + 0.10 = 1.28 exactly. `shared/spaceMiningBonus.mjs` sums both
+    // additive fractions into one bucket and applies it after these x1.15
+    // multipliers. THIS module still does not apply it -- it is per-faction,
+    // not per-resource -- so a figure adjusted only here is still short of it.
     factor: 'SpaceMiningBonus additive fraction',
     range: '+0.05 / +0.1 per grant',
-    reason: 'an ADDITIVE fraction, not a multiplier, and how it combines with the x1.15 multipliers is '
-      + 'not settled by this save: Project Exodus holds Project_GoldRush (+0.1) and its unbonused '
-      + 'resources read 1.28, not 1.10.',
-    source: 'TIEffectTemplate.json / TIProjectTemplate.json, read 2026-08-22'
+    reason: 'an ADDITIVE fraction, not a multiplier, so it does not belong beside these x1.15 grants. It is '
+      + 'now MODELLED by shared/spaceMiningBonus.mjs, which sums it with the org mining bonuses that share '
+      + 'its units and applies the sum once, after the multiplicative grants. A figure adjusted only by this '
+      + 'module still omits it.',
+    source: 'TIEffectTemplate.json / TIProjectTemplate.json, read 2026-08-22; combination measured against '
+      + 'cachedYearlyRevenue on ExitSave.gz, 2026-08-22'
   }),
   Object.freeze({
-    factor: 'unexplained per-faction mining scalar',
-    range: '1.000 for the observer and the Academy; 1.14 / 1.28 / 1.33 elsewhere',
-    reason: 'agrees to six digits across all five resources within a faction, so it is a real scalar, '
-      + 'but no shipped template accounts for it. It is 1.000 for the observer, so it does not affect '
-      + 'the observer-scoped figures this module adjusts.',
-    source: 'measured against cachedYearlyRevenue on ExitSave.gz, 2026-08-22'
+    // CLOSED 2026-08-22. Left in place, restated, because the next reader of
+    // this list needs to know the scalar was explained rather than dropped.
+    factor: 'per-faction mining scalar (CLOSED — it was the space-mining bonus)',
+    range: 'was 1.000 for the observer, the Academy and the Aliens; 1.10 / 1.14 / 1.19 / 1.28 / 1.33 elsewhere',
+    reason: 'the residual was 1 + SUM(active org miningBonus) + SUM(SpaceMiningBonus effect values). With it '
+      + 'applied, the mine-output model reproduces every faction\'s own annualised revenue at 0.0022% on all '
+      + 'five resources for all eight factions. shared/spaceMiningBonus.mjs is that term; the two rivals that '
+      + 'looked exempt were simply holding no mining orgs. THIS module does not apply it — it is faction-wide, '
+      + 'not per-resource — so a figure adjusted only here is a lower bound until that module is applied too.',
+    source: 'TIOrgState.miningBonus and TIEffectsState.factionEffectsNames, measured against '
+      + 'cachedYearlyRevenue across five 1.0.51 saves, 2026-08-22'
   })
 ]);
 
