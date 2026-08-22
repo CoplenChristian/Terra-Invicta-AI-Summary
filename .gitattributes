@@ -1,0 +1,5 @@
+# Generated files are compared byte-for-byte by tests. With core.autocrlf=true and no
+# rule here, a checkout gives them CRLF while the generators emit LF, so a fresh clone or
+# an agent worktree fails those tests for an environment reason rather than a real one.
+docs/code-index.md text eol=lf
+tests/fixtures/frozen-snapshot-*.md text eol=lf
