@@ -32,6 +32,18 @@ Last updated 2026-08-22.
 - **A worktree has no `config.json`.** It is gitignored, so every save-backed test errors in
   a fresh agent worktree until it is copied across from the main checkout. Harmless once
   known, but it presents as a wall of failures unrelated to the change under test.
+- **`runMonteCarloSimulation` substitutes a confident 5000 for an unmeasured rating.**
+  `server/commentary/simulation.js:183` — `let ownRating = 5000; // default baseline` — fires
+  when the observer has no design carrying a combat value, so an unmeasurable strength is
+  silently simulated as a specific one. Found while building fleet engagement (`cea938d`),
+  which returns `available: false` and says no default was substituted; `simulation.js` was
+  left alone because that change had proven byte-identity across 100 surfaces and touching it
+  would have broken the proof. Same class as every other confident zero in this repo, just
+  with a different constant. Its `bandLabel` also renders "1 hulls".
+- **The mining bonus does not reach the markdown exports.** `a615018` applied water ×1.15 to
+  three derived surfaces but `shared/markdownExports.mjs` was held by another agent, so the
+  .md consumers see neither the multiplier nor its source. The war-room mining line should
+  name both, and should say the figures still exclude the mine module's 1.0–4.0 multiplier.
 
 ## Shipped
 
