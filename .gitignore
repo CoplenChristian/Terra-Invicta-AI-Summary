@@ -41,3 +41,7 @@ backups/
 # Without this, `git status` shows tens of thousands of untracked files and a
 # `git add -A` would sweep an entire second checkout into a commit.
 .claude/worktrees/
+
+# Claude Code personal overrides. settings.json is the shared file; .local.json is
+# per-machine by convention and here it installs auto-running edit hooks.
+.claude/settings.local.json
