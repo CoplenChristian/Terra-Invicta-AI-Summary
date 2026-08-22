@@ -10,7 +10,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**173 modules.**
+**174 modules.**
 
 ## `public/`
 
@@ -21,9 +21,9 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/js/app.js` | BS | Browser (legacy, non-module) | 1517 | the legacy v1 dashboard controller — renders the old UI and must not | — | — |
 | `public/v2/js/components/alien-hate-economics.js` | BS | Browser (ESM) | 309 | renders the save-derived Mission Control hate floor without | — | — |
 | `public/v2/js/components/council-orders.js` | BS | Browser (ESM) | 349 | renders the at-a-glance answer to "what should each councilor do | — | — |
-| `public/v2/js/components/detail-panel.js` | BS | Browser (ESM) | 150 | the shared detail surface for clickable Mission Control modules. | — | — |
+| `public/v2/js/components/detail-panel.js` | BS | Browser (ESM) | 220 | the shared detail surface for clickable Mission Control modules — | — | — |
 | `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 637 | renders the Directive Engine v2 Cycle Plan. | — | — |
-| `public/v2/js/components/drive-explorer.js` | BS | Browser (ESM) | 618 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
+| `public/v2/js/components/drive-explorer.js` | BS | Browser (ESM) | 902 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
 | `public/v2/js/components/executive-boards.js` | BS | Browser (ESM) | 416 | renders the executive boards — faction power, resources, and the | — | — |
 | `public/v2/js/components/faction-intel.js` | BS | Browser (ESM) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
 | `public/v2/js/components/fleet-procurement.js` | BS | Browser (ESM) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
@@ -54,6 +54,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/publish/techGraph.js` | C | Node (CommonJS) | 102 | publish stage 3a — apply the shared/inline/omitted tech-tree mode | `applyTechTreeMode, buildSharedTechGraph, splitTechTree, techGraphFingerprint` | `tests/techGraph.test.js` |
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 258 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
 | `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 240 | browser verification that the Drive Explorer renders the measured | — | — |
+| `scripts/verify_drive_path_modal.js` | C | Node (CommonJS) | 305 | browser verification that clicking a drive row actually opens the | — | — |
 | `scripts/verify_mobile_overflow.js` | C | Node (CommonJS) | 244 | browser verification that no view clips content off-screen on narrow | — | — |
 | `scripts/verify_research_actionability.js` | C | Node (CommonJS) | 196 | browser verification of research-advisor actionability against a | — | — |
 | `scripts/verify_research_tab_layout.js` | C | Node (CommonJS) | 243 | browser verification of the Research Advisor layout and legibility | — | — |
@@ -164,7 +165,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `shared/intel/common.mjs` | E | Node + Cloudflare worker (ESM) | 203 | the primitives every intel projection shares — the mining resource | `COMBAT_POWER_SOURCE, MINING_RESOURCES, bodyMatches, combatPowerTotal, destinationMatches, factionMatches, findAlienFaction, normalizeBody, normalizeCostObject, rateMultiplier, siteMonthlyOutput, zeroedBySaveKey` | — |
 | `shared/intel/construction.mjs` | E | Node + Cloudflare worker (ESM) | 132 | shipyards, their queues, and the consolidated build board that | `constructionResource, shipyardResourceRow, shipyardStationResourceRow` | — |
 | `shared/intel/delta.mjs` | E | Node + Cloudflare worker (ESM) | 100 | three-state turn-to-turn comparison between two snapshots, where a | `deltaResource` | — |
-| `shared/intel/driveExplorer.mjs` | E | Node + Cloudflare worker (ESM) | 923 | /api/intel/drive-explorer — every drive in the catalogue rated | `DEFAULT_DRIVE_SORT, DRIVE_AVAILABILITY, DRIVE_SORTS, MEASUREMENT_BASIS, driveExplorerResource` | `tests/driveExplorer.test.js` |
+| `shared/intel/driveExplorer.mjs` | E | Node + Cloudflare worker (ESM) | 927 | /api/intel/drive-explorer — every drive in the catalogue rated | `DEFAULT_DRIVE_SORT, DRIVE_AVAILABILITY, DRIVE_SORTS, MEASUREMENT_BASIS, driveExplorerResource` | `tests/driveExplorer.test.js` |
 | `shared/intel/economicValue.mjs` | E | Node + Cloudflare worker (ESM) | 638 | /api/intel/economic-value — phase 3 of the research advisor, pricing | `CONTEXT_KINDS, MINED_RESOURCES, UNPRICED_CONTEXT_GROUPS, economicValueResource` | `tests/economicValue.test.js` |
 | `shared/intel/factions.mjs` | E | Node + Cloudflare worker (ESM) | 179 | the political/strategic half of the intel surface — factions, | `councilorResourceRow, factionResourceRow, nationResourceRow, researchResourceRows, summaryResource` | — |
 | `shared/intel/fleets.mjs` | E | Node + Cloudflare worker (ESM) | 347 | fleets, the ships inside them, inbound arrivals, and the orbital | `FLEET_SUMMARY_OMITTED_FIELDS, SHIP_SUMMARY_OMITTED_FIELDS, arrivalResourceRow, fleetResourceRow, fleetSummaryProjection, fleetSummaryRow, friendlyStrengthAtDestination, shipResourceRow, shipResourceRows, shipSummaryProjection, transferResourceRow, transfersResource` | — |
@@ -194,7 +195,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `shared/researchSlots.mjs` | E | Node + Cloudflare worker (ESM) | 453 | research-advisor phase-5 allocation of research to slots. | `ALLOCATION_MODEL, SLOT_INDEX_PIN, SLOT_KINDS, SLOT_KIND_LABELS, buildResearchSlotAllocation` | `tests/researchSlots.test.js` |
 | `shared/strategicDelta.mjs` | E | Node + Cloudflare worker (ESM) | 418 | compute the difference between two strategic_snapshot_v1 documents | `buildStrategicDelta, deriveStructuredEvents, totalWarActive, totalWarStateOf` | `tests/strategicDelta.test.js` |
 | `shared/strategicSnapshot.mjs` | E | Node + Cloudflare worker (ESM) | 608 | reduce a full raw snapshot to a compact strategic_snapshot_v1 | `DEFAULT_HISTORY_POLICY, HAB_CONSTRUCTION_MODULES, MINE_LIMIT_GRANTS, SHIP_CONSTRUCTION_MODULES, STRATEGIC_SNAPSHOT_SCHEMA, STRATEGIC_SNAPSHOT_VERSION, buildStrategicSnapshot, deriveEvents` | `tests/strategicSnapshot.test.js` |
-| `shared/techGraph.mjs` | E | Node + Cloudflare worker (ESM) | 1048 | pure tech-tree normalisation and dependency-graph helpers shared by | `CATEGORIES, STATUSES, UNLOCK_CLASSES, applySaveState, asArray, buildProjectOpportunities, buildResearchQueue, buildResearchQueueProjection, buildTechGraph, buildTechMatrix, buildTechMatrixProjection, buildTechMilestones, …(+14)` | `tests/techGraph.test.js` |
+| `shared/techGraph.mjs` | E | Node + Cloudflare worker (ESM) | 1159 | pure tech-tree normalisation and dependency-graph helpers shared by | `CATEGORIES, ROLLED_AVAILABILITY_CAVEAT, SATISFIED_PREREQUISITE_LIMIT, STATUSES, UNLOCK_CLASSES, applySaveState, asArray, buildProjectOpportunities, buildResearchQueue, buildResearchQueueProjection, buildTechGraph, buildTechMatrix, …(+16)` | `tests/techGraph.test.js` |
 | `shared/unlockIndex.mjs` | E | Node + Cloudflare worker (ESM) | 116 | read accessors over the baked unlock index built at snapshot-build | `buildItemGateMap, gateForItem, gatesForFamily, unlockIndexCensus, unlockIndexUnavailableReason, unlocksForGate` | `tests/unlockIndex.test.js` |
 | `shared/util.mjs` | E | Node + Cloudflare worker (ESM) | 167 | the one home for the small helpers copied across the repo — asArray, | `METERS_PER_AU, MS_PER_DAY, ONE_TRILLION, asArray, resolveObserverFaction, round, sameId, strictFiniteNumber, toFiniteNumber` | — |
 

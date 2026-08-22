@@ -783,6 +783,12 @@ export const driveExplorerResource = (snapshot, {
       availability: {
         bucket,
         state: availability.state,
+        // The gate travels on the COMPACT row too, because it is the identity a
+        // reader needs to ask the follow-up question: /api/intel/tech-path takes
+        // this id, and the drive row's path modal opens on it. `null` here means
+        // the drive names no gating project, which is a fact, not an absence.
+        gateProjectId: availability.projectId ?? gateId ?? null,
+        gateProjectName: availability.displayName ?? null,
         remainingResearchCost: availability.remainingResearchCost,
         monthsAtCurrentIncome: monthsAtIncome(availability.remainingResearchCost, monthlyResearch),
         missingPrerequisiteCount: availability.missingPrerequisites === null ? null : missing.length,
@@ -793,8 +799,6 @@ export const driveExplorerResource = (snapshot, {
         ...(verbose
           ? {
             reason: availability.reason,
-            gateProjectId: availability.projectId ?? gateId,
-            gateProjectName: availability.displayName,
             researchCost: availability.researchCost,
             missingPrerequisites: availability.missingPrerequisites,
             unlockChance: availability.unlockChance,

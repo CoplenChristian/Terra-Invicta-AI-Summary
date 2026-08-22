@@ -2850,6 +2850,165 @@ img.faction-logo {
   font-size: 12px;
 }
 
+/* Grouped list sections inside the one shared modal.
+ *
+ * Built for a research path -- faction projects, global techs, what is already
+ * done -- but nothing here knows that: a section is a title, a caption and rows.
+ * Every row wraps rather than overflowing, because the dialog is 620px on
+ * desktop and calc(100vw - 18px) at 375, and a modal that pans sideways is the
+ * mobile defect this repo just spent a commit removing. */
+.detail-panel__sections {
+  margin-top: var(--space-lg);
+}
+
+.detail-panel__section + .detail-panel__section {
+  margin-top: var(--space-lg);
+}
+
+.detail-panel__section-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.detail-panel__section-title {
+  margin: 0;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.detail-panel__section-caption {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.04em;
+  /* The caption carries the counts and the cost split. It must be able to wrap
+     onto its own line rather than push the section wider than the dialog. */
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.detail-panel__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detail-panel__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-panel__row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.detail-panel__row-label {
+  color: var(--text);
+  font-size: var(--fs-row);
+  overflow-wrap: anywhere;
+}
+
+.detail-panel__row-sub {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.detail-panel__row-side {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  align-items: baseline;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.detail-panel__row-meta {
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  overflow-wrap: anywhere;
+}
+
+.detail-panel__status {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.detail-panel__status--ok {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.detail-panel__status--warn {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.detail-panel__status--block {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.detail-panel__status--unknown {
+  color: var(--text-dim);
+  border-color: var(--line-strong);
+}
+
+/* An empty section still renders and says so. A section that vanished would
+   read as "not applicable" when it means "none". */
+.detail-panel__empty {
+  padding: var(--space-sm) 0;
+  color: var(--text-dim);
+  font-size: var(--fs-metric);
+}
+
+.detail-panel__notes {
+  margin-top: var(--space-lg);
+}
+
+/* The things a figure cannot say about itself -- the rolled-availability
+   caveat, an announced truncation, an uncostable node. Warning-toned because
+   ignoring one makes the numbers above mean something they do not. */
+.detail-panel__note {
+  margin: 0 0 var(--space-sm);
+  padding-left: var(--space-sm);
+  border-left: 2px solid var(--warning);
+  color: var(--text-soft);
+  font-size: var(--fs-metric);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
 body.detail-panel-open,
 body.faction-intel-open,
 body.intelligence-library-open {
@@ -7983,6 +8142,50 @@ button.council-orders__row:focus-visible {
   font-family: var(--mono);
   font-size: var(--fs-row);
   color: var(--text);
+}
+
+/* The drive name is the control that opens the research-path modal. It has to
+   LOOK like one -- a row that responds to a click with no affordance for it is
+   the defect this replaced. The whole row is clickable for the mouse, so the
+   pointer cursor sits on the row and the underline sits on the name. */
+.de-row {
+  cursor: pointer;
+}
+
+.de-name-btn {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  /* The button inherits the name's own type; it is an affordance, not a chrome
+     button, and must not change the row's rhythm. */
+  font: inherit;
+  color: inherit;
+}
+
+.de-name-btn .de-name {
+  border-bottom: 1px dotted var(--line-strong);
+}
+
+.de-row:hover .de-name-btn .de-name,
+.de-name-btn:hover .de-name,
+.de-name-btn:focus-visible .de-name {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.de-name-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.de-name-btn[aria-busy='true'] .de-name {
+  color: var(--text-dim);
+  border-bottom-style: dashed;
 }
 
 .de-chip {

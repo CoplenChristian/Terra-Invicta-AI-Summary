@@ -503,15 +503,33 @@ function remainingCost(node) {
 /**
  * Evaluates the optimal (cheapest satisfying) prerequisite path for targetNode,
  * exploring alternative routes (altPrereq0) where they exist and reporting routes evaluated.
+ *
+ * `satisfied` is ADDITIVE and carries the other half of the path: the
+ * prerequisites already completed along the branch that was chosen. The walker
+ * skips those by design, so without it a 12-step path reports nothing about the
+ * eleven prerequisites the player has already done, and reads as a to-do list
+ * rather than a path. It follows the CHOSEN branch only -- a completed
+ * prerequisite on the route not taken is not on this path. `path`, `cost`,
+ * `costComplete` and `routesEvaluated` are untouched by it.
+ *
+ * `ordered` is the second ADDITIVE field, and it is a different order from
+ * `path` rather than a reformatting of it. `path` is a PRE-order walk -- a node,
+ * then what it needs -- so reversing it does NOT give a dependency order:
+ * measured on the live save, `Project_ExoticHybridSystems` and `Project_Exotics`
+ * are siblings under one parent while the first also depends on the second, and
+ * the reversed pre-order puts the dependent first. `ordered` is the post-order
+ * walk with first-occurrence dedupe, which IS a topological order: every node
+ * appears after every prerequisite of it that is also on the path.
  */
 export function collectOptimalRemainingPath(graph, byId, targetNode, includeSelf = true, activeStack = new Set()) {
   if (!targetNode || targetNode.status === 'completed') {
-    return { path: [], routesEvaluated: [], cost: 0, costComplete: true };
+    return { path: [], routesEvaluated: [], satisfied: [], ordered: [], cost: 0, costComplete: true };
   }
 
   if (activeStack.has(targetNode.id)) {
-    // Cycle detected, break recursion
-    return { path: [], routesEvaluated: [], cost: 0, costComplete: true };
+    // Cycle detected, break recursion. A cycle has no topological order, so
+    // `ordered` is empty here for the same reason `path` is.
+    return { path: [], routesEvaluated: [], satisfied: [], ordered: [], cost: 0, costComplete: true };
   }
 
   const newStack = new Set(activeStack);
@@ -524,15 +542,44 @@ export function collectOptimalRemainingPath(graph, byId, targetNode, includeSelf
     const branch = branches[bIndex];
     const branchPath = [];
     const branchRoutes = [];
+    const branchSatisfied = [];
+    const branchSatisfiedIds = new Set();
+    const branchOrdered = [];
+    const orderedInBranch = new Set();
     const seenInBranch = new Set();
     let branchCost = 0;
     let branchCostComplete = true;
 
     for (const prereqRef of branch) {
       const prereqNode = byId.get(prereqRef.id);
-      if (!prereqNode || prereqNode.status === 'completed') continue;
+      if (!prereqNode) continue;
+      if (prereqNode.status === 'completed') {
+        // The half the remaining-path walk drops. Recorded, never costed: a
+        // completed prerequisite contributes nothing to any remaining total.
+        if (!branchSatisfiedIds.has(prereqNode.id)) {
+          branchSatisfiedIds.add(prereqNode.id);
+          branchSatisfied.push(prereqNode);
+        }
+        continue;
+      }
 
       const subResult = collectOptimalRemainingPath(graph, byId, prereqNode, true, newStack);
+      for (const satisfiedNode of subResult.satisfied) {
+        if (!branchSatisfiedIds.has(satisfiedNode.id)) {
+          branchSatisfiedIds.add(satisfiedNode.id);
+          branchSatisfied.push(satisfiedNode);
+        }
+      }
+      // FIRST occurrence wins, which is what makes this a topological order:
+      // the first time a node is emitted post-order, everything it needs has
+      // already been emitted. A later duplicate can only be earlier than its own
+      // prerequisites, so it is dropped rather than moved.
+      for (const item of subResult.ordered) {
+        if (!orderedInBranch.has(item.id)) {
+          orderedInBranch.add(item.id);
+          branchOrdered.push(item);
+        }
+      }
       for (const item of subResult.path) {
         if (!seenInBranch.has(item.id)) {
           seenInBranch.add(item.id);
@@ -561,6 +608,8 @@ export function collectOptimalRemainingPath(graph, byId, targetNode, includeSelf
       branchRef: branch[0] || null,
       path: branchPath,
       routesEvaluated: branchRoutes,
+      satisfied: branchSatisfied,
+      ordered: branchOrdered,
       cost: branchCostComplete ? branchCost : null,
       costComplete: branchCostComplete,
       nodeCount: branchPath.length
@@ -585,6 +634,8 @@ export function collectOptimalRemainingPath(graph, byId, targetNode, includeSelf
     isAlternate: false,
     path: [],
     routesEvaluated: [],
+    satisfied: [],
+    ordered: [],
     cost: 0,
     costComplete: true
   };
@@ -638,12 +689,20 @@ export function collectOptimalRemainingPath(graph, byId, targetNode, includeSelf
     finalPath.unshift(targetNode);
   }
 
+  // Post-order: self comes LAST, after everything it depends on.
+  const finalOrdered = [...(bestBranch.ordered || [])];
+  if (includeSelf) {
+    finalOrdered.push(targetNode);
+  }
+
   const selfCost = remainingCost(targetNode);
   const totalCost = (bestBranch.costComplete && selfCost !== null) ? bestBranch.cost + selfCost : null;
 
   return {
     path: finalPath,
     routesEvaluated: finalRoutes,
+    satisfied: bestBranch.satisfied || [],
+    ordered: finalOrdered,
     cost: totalCost,
     costComplete: bestBranch.costComplete && selfCost !== null
   };
@@ -653,6 +712,19 @@ export function collectRemainingPath(graph, byId, targetNode, includeSelf = true
   const result = collectOptimalRemainingPath(graph, byId, targetNode, includeSelf);
   return result.path;
 }
+
+// A path's satisfied half is small in practice -- the deepest node in the
+// 899-node graph (Project_ProtiumConverterTorch, measured 2026-08-21) carries 20
+// -- but a cap that never announces itself is the same defect as fabricating
+// data, so the true total and the omitted count travel with the list either way.
+export const SATISFIED_PREREQUISITE_LIMIT = 60;
+
+// The one thing a "0 remaining" path cannot tell you. Availability is ROLLED
+// monthly from initialUnlockChance/deltaUnlockChance/maxUnlockChance, never
+// derived from prerequisites (docs/research-advisor-spec.md 3b, measured:
+// 104 of 274 prereq-clear projects were not actually available). Carried on the
+// payload so an agent reading /api/intel/tech-path sees it, not only the modal.
+export const ROLLED_AVAILABILITY_CAVEAT = 'Prerequisites met does not mean startable. Project availability is rolled monthly from each project\'s unlock chance, not derived from its prerequisites, so a path reading zero remaining may still not be offered this month.';
 
 export function buildTechPath(graph, byId, targets) {
   const resolved = [];
@@ -672,6 +744,18 @@ export function buildTechPath(graph, byId, targets) {
   const remainingPath = [];
   const remainingSet = new Set();
   const allRoutesEvaluated = [];
+  // The satisfied half of the path. Separate from `alreadyCompleted`, which
+  // names TARGETS that are already done; these are the PREREQUISITES already
+  // done on the way to a target that is not.
+  const satisfiedPrerequisites = [];
+  const satisfiedSet = new Set();
+  // The same nodes as `remainingPath`, by id, in an order a reader can follow:
+  // every node after every prerequisite of it that is also on the path.
+  // `remainingPath` itself is pre-order and must not be reordered -- it is
+  // consumed by the chain promotion in COMMAND and by the drive-chain rows,
+  // both of which read `remainingPath[length - 1]` as the immediate next step.
+  const dependencyOrder = [];
+  const dependencyOrderSet = new Set();
 
   for (const { node } of resolved) {
     if (!node) continue;
@@ -679,7 +763,25 @@ export function buildTechPath(graph, byId, targets) {
       alreadyCompleted.push({ id: node.id, displayName: node.displayName, type: node.type });
       continue;
     }
-    const { path, routesEvaluated } = collectOptimalRemainingPath(graph, byId, node, true);
+    const { path, routesEvaluated, satisfied, ordered } = collectOptimalRemainingPath(graph, byId, node, true);
+    for (const item of asArray(ordered)) {
+      if (dependencyOrderSet.has(item.id)) continue;
+      dependencyOrderSet.add(item.id);
+      dependencyOrder.push(item.id);
+    }
+    for (const item of asArray(satisfied)) {
+      if (satisfiedSet.has(item.id)) continue;
+      satisfiedSet.add(item.id);
+      satisfiedPrerequisites.push({
+        id: item.id,
+        displayName: item.displayName,
+        type: item.type,
+        category: item.category,
+        cost: item.researchCost,
+        status: item.status,
+        progressPercent: item.researchPercent
+      });
+    }
     for (const item of path) {
       if (remainingSet.has(item.id)) continue;
       remainingSet.add(item.id);
@@ -720,9 +822,18 @@ export function buildTechPath(graph, byId, targets) {
 
   const researchCostComplete = uncostedNodes.length === 0;
   const single = resolved.length === 1 && resolved[0].node;
+  const satisfiedShown = satisfiedPrerequisites.slice(0, SATISFIED_PREREQUISITE_LIMIT);
   const base = {
     alreadyCompleted,
     remainingPath,
+    // ADDITIVE. Nothing above or below this reads it, and no cost field counts
+    // it: a completed prerequisite has no remaining cost by definition.
+    satisfiedPrerequisites: satisfiedShown,
+    satisfiedPrerequisiteTotalCount: satisfiedPrerequisites.length,
+    satisfiedPrerequisiteOmittedCount: satisfiedPrerequisites.length - satisfiedShown.length,
+    // Ids only, so `remainingPath` stays the one place a node's fields live.
+    remainingPathDependencyOrder: dependencyOrder,
+    availabilityCaveat: ROLLED_AVAILABILITY_CAVEAT,
     remainingGlobalResearchCost: globalCostComplete ? remainingGlobalResearchCost : null,
     remainingFactionResearchCost: factionCostComplete ? remainingFactionResearchCost : null,
     totalRemainingResearchCost: researchCostComplete ? remainingGlobalResearchCost + remainingFactionResearchCost : null,
