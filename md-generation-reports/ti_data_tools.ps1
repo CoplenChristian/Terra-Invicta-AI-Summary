@@ -24,9 +24,16 @@ Set-StrictMode -Version Latest
 
 # Load configuration
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$commonModulePath = Join-Path $scriptPath "TerraInvicta.Common.psm1"
+# This tool lives in md-generation-reports/, one level below the repository
+# root. TerraInvicta.Common.psm1 and config/ stayed at the root -- the module is
+# shared with the parse_*.ps1 parsers and with tests/powershell_common.test.js,
+# and Get-TIConfig resolves config/defaults.json, config/config.schema.json and
+# config.json against -BasePath. Those therefore anchor on $repoRoot. Only the
+# tool's own output root ($WorkDir, below) follows the scripts down.
+$repoRoot = Split-Path -Parent $scriptPath
+$commonModulePath = Join-Path $repoRoot "TerraInvicta.Common.psm1"
 Import-Module -Name $commonModulePath -Force
-$config = Get-TIConfig -BasePath $scriptPath
+$config = Get-TIConfig -BasePath $repoRoot
 
 $WorkDir = $config.WorkDir
 if (-not [IO.Path]::IsPathRooted($WorkDir)) { $WorkDir = Join-Path $scriptPath $WorkDir }

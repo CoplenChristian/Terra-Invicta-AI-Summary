@@ -1,81 +1,106 @@
-# Terra Invicta AI Summary Tools
+# Terra Invicta Intel
 
-A PowerShell toolkit for analyzing *Terra Invicta* save files and generating detailed strategic summaries. This project helps track faction power, resource income, and tech progress over time.
+A strategic-intelligence dashboard for *Terra Invicta* saves, read by people **and**
+by LLM agents. It parses the newest save, reduces it to a snapshot, redacts that
+snapshot down to what a chosen observer faction is allowed to see, and serves the
+result as a browser dashboard, a focused JSON API, and a set of AI-friendly
+markdown exports.
 
-## 📋 Prerequisites
+> The 2025 PowerShell/Python report generator this repository started as now lives
+> in [`md-generation-reports/`](./md-generation-reports/README.md). It is a separate
+> tool with its own README, and nothing here depends on it.
 
-- **PowerShell 5.1** or later (PowerShell Core 7+ recommended).
-- A **Terra Invicta save file** (uncompressed `.json` or compressed `.gz`).
-- (Optional) An AI assistant (like Claude, GPT-4, or Gemini) to process the generated Markdown snippets into a narrative summary.
+## Quick start
 
-## ⚙️ Setup & Configuration
-
-1.  **Clone or Download** this repository.
-2.  **Configure Paths**:
-    - Locate `template.config` in the root directory and copy it to a new, ignored file named `config.json`.
-    - Set `paths.savePath` to your Terra Invicta save folder or a specific `.gz`/`.json` save file.
-    - Optional values such as `paths.templatesPath`, campaign defaults, scoring weights, and directive weights live in `config/defaults.json`; override only the values you need in the ignored root `config.json`.
-    - Existing flat keys (`SavePath`, `WorkDir`, and output directory keys) remain supported temporarily and emit deprecation warnings.
-
-    ```json
-    {
-      "paths": {
-        "savePath": "C:/Users/YourUser/Documents/My Games/TerraInvicta/Saves",
-        "templatesPath": "C:/Program Files (x86)/Steam/steamapps/common/Terra Invicta/TerraInvicta_Data/StreamingAssets/Templates"
-      }
-    }
-    ```
-
-## 🚀 Usage Workflow
-
-### 1. Export Data
-Run the exporter to parse your save file and generate CSVs.
-```powershell
-.\export_factions.ps1
-```
-The exporter selects the newest `.gz` or `.json` save by default and writes to
-the configured CSV folder. Use `.\export_factions.ps1 -Latest` explicitly in
-automation, or `.\export_factions.ps1 -SaveNumber 2` for a numbered historical
-lookup. This will create/update files in the `csv/` directory.
-
-The standalone parsers (`parse_*.ps1`) use the same central configuration and
-selection rules. Values that are likely to change—paths, scoring weights,
-directive weights, capability mappings, and retention—belong in the nested
-JSON config; the defaults file documents the complete shape.
-Both the Node loader and the PowerShell common module validate the resolved
-configuration against `config/config.schema.json`, so type and range errors are
-reported before analysis starts.
-
-### 2. Load the Toolbox
-Load the analysis functions into your PowerShell session.
-```powershell
-. .\ti_data_tools.ps1
+```bash
+npm install
+node server/index.js        # or .\start_dashboard.ps1
 ```
 
-### 3. Generate Snippet Pack
-Create a comprehensive Markdown report containing all key data tables (Faction Power, Tech Matrix, Space Sitrep, etc.).
-```powershell
-Get-TISnippetPackMarkdown | Set-Content -Encoding UTF8 .\Again_Save\snippet_pack\snippet_pack_YYYYMMDD.md
+Then open **`http://localhost:3000/v2/`**. `public/index.html` is the retired v1
+shell; `public/v2/index.html` is the live dashboard and the only place current
+work renders.
+
+Configuration is optional. Copy `md-generation-reports/template.config` to a root
+`config.json` (gitignored) only if you need to override a path — save folder,
+templates folder, campaign defaults. Everything else is defaulted in
+`config/defaults.json` and validated against `config/config.schema.json`.
+
+## Intelligence modes
+
+The observer faction is `4712` (the Initiative); the aliens are `4717`.
+
+| mode | what it shows |
+| :-- | :-- |
+| `player` | only what the observer legitimately knows — the default |
+| `enhanced` | player intel plus derived estimates |
+| `omniscient` | the save's true state, including real alien hate |
+
+Player mode is a genuinely different code path, not a cosmetic filter: it nulls
+the save's true alien hate and masks enemy councilor attributes. **Anything
+verified only in omniscient mode is not verified.**
+
+## The API surface
+
+`/api/intel` is the machine-readable discovery index — every focused endpoint,
+listed without filters, so an external client can find the route surface before
+adding query parameters. Every resource is one row in `shared/intel/registry.mjs`,
+from which the route table, the discovery index and dispatch are all derived.
+
+```text
+/api/snapshot?mode=omniscient&observer=4712     the whole filtered snapshot
+/api/v2/briefing?mode=player&observer=4712      the Mission Control briefing
+/api/intel/<resource>?observer=4712             37 focused projections
+/api/intel/tech-*                               the tech-tree family
+/latest-snapshot.md  /latest-war-room.md  /latest-threats.md
 ```
-*Replace `YYYYMMDD` with the in-game date.*
 
-### 4. Create Strategic Summary
-Use the generated snippet pack to populate a new summary file in `Again_Save/`.
-- Copy the structure from `Again_Save/summary.md` (the template).
-- Paste relevant sections from your snippet pack.
-- Add your own strategic analysis or use an AI to generate the narrative.
+The three `.md` endpoints are the AI-facing exports. They are byte-budgeted, and
+a figure that reaches the browser but not those files is invisible to every LLM
+consumer — which is half the point of the project.
 
-## 📂 Key Files
+## Layout
 
-- **`export_factions.ps1`**: The main script that reads the save file and exports raw data to CSV.
-- **`ti_data_tools.ps1`**: A library of helper functions for analyzing the CSV data and generating Markdown tables.
-- **`config.json`**: Configuration file for file paths (ignored by git).
-- **`TI_DATA_TOOLS.md`**: Detailed documentation for the toolbox functions.
-- **`Again_Save/summary.md`**: The master template for strategic summaries.
+```
+server/                 the local Express runtime (CommonJS)
+shared/                 pure logic shared by Node and the Cloudflare worker (ESM)
+site/worker/            the hosted Cloudflare worker
+public/v2/              the live dashboard; public/index.html is the retired v1 shell
+scripts/                the save-parser CLI, the publisher, browser verifications
+tests/                  node:test suites
+config/                 defaults.json + config.schema.json
+docs/                   specs, and docs/README.md is the single work tracker
+md-generation-reports/  the 2025 report tool, its docs and its outputs
+```
 
-## 📁 Directory Structure
+`docs/code-index.md` maps every source module to its purpose, runtime, exports
+and test file. It is generated by `npm run index` and **required reading before
+editing any code** — it marks the barrels and the do-not-edit legacy shell.
 
-- **`csv/`**: Contains all exported CSV data files.
-- **`Again_Save/`**: Stores your dated summary files (e.g., `summary_20250101.md`).
-- **`Again_Save/snippet_pack/`**: Stores the raw Markdown data dumps generated by the toolbox.
-- **`Ship_Info/`**: Contains raw JSON data for ship components (used for tech scoring).
+## Commands
+
+```bash
+npm test                            the full suite
+npm run index                       regenerate docs/code-index.md
+npm run parse -- --latest           the universal save-parser CLI
+npm run parse -- --latest --endpoint summary --format json
+npm run build:site                  build the static fallback bundle
+npm run push:dry-run                publish to Supabase without network writes
+npm run push:supabase               publish for real (local only)
+```
+
+Publishing writes Player, Enhanced and Omniscient snapshots to Supabase as
+separate rows so the hosted site can serve them. It uses the service-role key,
+which is **local only** and must never reach `public/`, `dist/`, the worker, or a
+commit. Raw save files are never uploaded.
+
+## Working on this repository
+
+`CLAUDE.md` is canonical for agents and worth reading first even if you are not
+one: it records the defect classes this codebase keeps re-learning — absent
+values coerced to a confident zero, `ID` versus `id` on save-derived objects,
+redaction that nulls the derived field and leaves the raw one, and refactors that
+pass their tests while moving a figure.
+
+`docs/README.md` is the single tracker for what is built, what is in flight and
+what is left. Update it in the same commit as the work.

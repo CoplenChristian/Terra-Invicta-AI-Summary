@@ -22,13 +22,15 @@ dist/
 Again
 Spaceships*
 
-# Generated CSVs and exports
-csv/*.csv
-!csv/README.md
-Again_Save/snippet_pack/*
-!Again_Save/snippet_pack/README.md
-Again_Save/summary/*
-!Again_Save/summary/README.md
+# Generated CSVs and exports from md-generation-reports/ (the 2025 report tool).
+# These paths are anchored, so they moved with the tool -- leaving them at the
+# root would have started tracking every generated CSV and snippet pack.
+md-generation-reports/csv/*.csv
+!md-generation-reports/csv/README.md
+md-generation-reports/Again_Save/snippet_pack/*
+!md-generation-reports/Again_Save/snippet_pack/README.md
+md-generation-reports/Again_Save/summary/*
+!md-generation-reports/Again_Save/summary/README.md
 logs/
 
 # Local Supabase snapshot exports (safety net before pruning; can be large)

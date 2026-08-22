@@ -16,7 +16,7 @@ All core paths are driven by `config.json` in the campaign root and loaded into
 
 - **Root campaign folder**  
   `TIConfig.RootPath` (from `config.WorkDir` in `config.json`).  
-  *Default in this repo:* `F:/Windsurf/Terra-Invicta-AI-Summary`.
+  *Default in this repo:* `F:/Windsurf/Terra-Invicta-AI-Summary/md-generation-reports`.
 
 - **Latest export folder (CSV outputs)**  
   `Get-TIExportPath -FileName <name>` uses `TIConfig.ExportFolder`  
@@ -48,7 +48,7 @@ All core paths are driven by `config.json` in the campaign root and loaded into
 **Always refresh exports before using the tools:**  
 
 ```powershell
-Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
+Set-Location F:\Windsurf\Terra-Invicta-AI-Summary\md-generation-reports
 .\export_factions.ps1
 ```
 
@@ -61,7 +61,7 @@ Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
 Dot‑source `ti_data_tools.ps1` once per PowerShell session so all functions are available:  
 
 ```powershell
-Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
+Set-Location F:\Windsurf\Terra-Invicta-AI-Summary\md-generation-reports
 . .\ti_data_tools.ps1
 ```
 
@@ -563,7 +563,7 @@ Get-TIFactionAlienHateTable -Format Table|Markdown|Json
 with a Markdown table of alien hate by faction each time you run:
 
 ```powershell
-Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
+Set-Location F:\Windsurf\Terra-Invicta-AI-Summary\md-generation-reports
 ./export_factions.ps1
 . ./ti_data_tools.ps1
 # 1) Read the in-game date from Again_Metadata.csv (outside this one-liner, or interactively)
@@ -842,7 +842,7 @@ Get-TISnippetPackMarkdown | Set-Clipboard
 or to write directly to a dated snippet pack file:
 
 ```powershell
-Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
+Set-Location F:\Windsurf\Terra-Invicta-AI-Summary\md-generation-reports
 ./export_factions.ps1
 . ./ti_data_tools.ps1
 # IMPORTANT (especially for AI agents):
@@ -865,14 +865,14 @@ specific date you exported, e.g. `snippet_pack_20310316.md`) when writing
 
 Separate from the toolbox, this script:
 
-- Path: `F:\Windsurf\Terra-Invicta-AI-Summary/summarize_boost_income.ps1`
+- Path: `F:\Windsurf\Terra-Invicta-AI-Summary\md-generation-reports\summarize_boost_income.ps1`
 - Reads all `Again_<Faction>_Nations.csv` files.
 - Sums `BoostPerCP` per file to estimate Boost income per faction.
 
 Run from the campaign root:
 
 ```powershell
-Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
+Set-Location F:\Windsurf\Terra-Invicta-AI-Summary\md-generation-reports
 .\summarize_boost_income.ps1
 ```
 
@@ -885,7 +885,7 @@ This is mostly redundant with `Get-TIFactionBoostAndSpaceSummary`, but can be us
 1. **Export latest data**
 
    ```powershell
-   Set-Location F:\Windsurf\Terra-Invicta-AI-Summary
+   Set-Location F:\Windsurf\Terra-Invicta-AI-Summary\md-generation-reports
    .\export_factions.ps1
    ```
 

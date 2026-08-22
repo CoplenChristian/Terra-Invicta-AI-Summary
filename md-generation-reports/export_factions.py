@@ -6,7 +6,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-CONFIG_PATH = ROOT / "config.json"
+# This tool lives in md-generation-reports/; config.json stayed at the
+# repository root, alongside config/defaults.json, so it is read from the
+# parent. WORK_DIR below still defaults to this tool's own directory.
+REPO_ROOT = ROOT.parent
+CONFIG_PATH = REPO_ROOT / "config.json"
 
 with CONFIG_PATH.open("r", encoding="utf-8") as f:
     _cfg = json.load(f)
