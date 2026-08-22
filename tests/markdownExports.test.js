@@ -955,10 +955,24 @@ function makeCommentary(overrides = {}) {
       projections: {
         hateVent: null,
         rebuildClock: {
+          // The live save's state (ExitSave.gz, 1/1/2035, both modes).
           available: true,
           targetHull: 'Monitor',
           baseConstructionDays: 120,
-          activeShipyardQueues: 5,
+          queuedHullCount: 5,
+          concurrentBuilds: 5,
+          waitingBehindCount: 0,
+          shipyardCount: 14,
+          shipyardsBuilding: 5,
+          idleShipyardCount: 9,
+          nextCompletionDays: 21.2,
+          lastCommittedCompletionDays: 25.2,
+          deliveriesWithin30Days: 5,
+          completionHorizonsUnreadableCount: 0,
+          buildDays: 120,
+          buildTimeBasis: 'hull-template-base',
+          throughputBound: 'lower',
+          throughputUnavailableReason: null,
           monthlyThroughputEst: 1.25,
           daysPerHullEst: 24,
           simulated: true
@@ -1103,29 +1117,70 @@ for (const exportMode of EXPORT_MODES) {
 
     const slow = withClock({
       available: true, targetHull: 'Monitor', baseConstructionDays: 120,
-      activeShipyardQueues: 1, monthlyThroughputEst: 0.25, daysPerHullEst: 120, simulated: true
+      queuedHullCount: 5, concurrentBuilds: 1, waitingBehindCount: 4,
+      shipyardCount: 14, shipyardsBuilding: 1, idleShipyardCount: 13,
+      nextCompletionDays: 40, lastCommittedCompletionDays: 40, deliveriesWithin30Days: 0,
+      completionHorizonsUnreadableCount: 0,
+      buildDays: 120, buildTimeBasis: 'hull-template-base', throughputBound: 'lower',
+      throughputUnavailableReason: null,
+      monthlyThroughputEst: 0.25, daysPerHullEst: 120, simulated: true
     });
-    assert.match(slow, /\*\*Production throughput \(SIMULATED\):\*\* 0\.25 × Monitor per month, i\.e\. one every 120 days/);
+    assert.match(slow, /\*\*Production throughput \(SIMULATED\):\*\* AT LEAST 0\.25 × Monitor per month, i\.e\. one every 120 days/);
     assert.match(slow, /UNDER ONE HULL A MONTH: this hull cannot be replaced inside a month/);
-    // The assumption the rate rests on is stated, not left implicit.
-    assert.match(slow, /ASSUMED to build in parallel — the field counts queued SHIPS, not shipyards/);
+    // THE PARALLELISM IS NOW A MEASURED RULE, not a stated assumption, and the
+    // export must print the rule rather than the caveat it replaced.
+    assert.match(slow, /A yard builds ONE hull at a time and yards run in PARALLEL, measured/);
+    assert.match(slow, /a hull waiting behind another does not advance at all/);
+    assert.ok(!/ASSUMED to build in parallel/.test(slow),
+      'the superseded assumption must not survive beside the measured rule');
+    // The measured pipeline, and the yard census the old line had no idea about.
+    assert.match(slow, /\*\*Production pipeline \(MEASURED from the save's own countdowns\):\*\* 1 hull\(s\) building, 4 waiting behind them — 1 of 14 shipyard\(s\) working, 13 idle/);
+    assert.match(slow, /next in 40 days, all 1 inside 40 days; 0 due inside 30 days/);
+    // And the dividend is labelled a ceiling, so the rate is labelled a floor.
+    assert.match(slow, /That base is a CEILING on time, so this rate is a FLOOR/);
 
-    // A measured zero is a reading, and reads as a finding rather than as an absence.
-    const empty = withClock({
+    // A queue that was read and has NOTHING building is a measured zero rate,
+    // and reads as a finding rather than as an absence.
+    const stalled = withClock({
       available: true, targetHull: 'Monitor', baseConstructionDays: 120,
-      activeShipyardQueues: 0, monthlyThroughputEst: 0, daysPerHullEst: null, simulated: true
+      queuedHullCount: 2, concurrentBuilds: 0, waitingBehindCount: 2,
+      shipyardCount: 7, shipyardsBuilding: 0, idleShipyardCount: 7,
+      nextCompletionDays: null, lastCommittedCompletionDays: null, deliveriesWithin30Days: 0,
+      completionHorizonsUnreadableCount: 0,
+      buildDays: 120, buildTimeBasis: 'hull-template-base', throughputBound: 'lower',
+      throughputUnavailableReason: null,
+      monthlyThroughputEst: 0, daysPerHullEst: null, simulated: true
     });
-    assert.match(empty, /0 hulls\/mo — the queue was read and is EMPTY/);
+    assert.match(stalled, /0 hulls\/mo — NOTHING IS BUILDING/);
+    assert.match(stalled, /2 hull\(s\) sit queued but unstarted/);
+    assert.match(stalled, /nothing is under construction/);
 
-    // An unread queue is neither of those.
+    // A build time nobody could read kills the RATE without taking the measured
+    // pipeline down with it.
+    const noRate = withClock({
+      available: true, targetHull: 'Monitor', baseConstructionDays: null,
+      queuedHullCount: 3, concurrentBuilds: 3, waitingBehindCount: 0,
+      shipyardCount: 14, shipyardsBuilding: 3, idleShipyardCount: 11,
+      nextCompletionDays: 12, lastCommittedCompletionDays: 30, deliveriesWithin30Days: 3,
+      completionHorizonsUnreadableCount: 0,
+      buildDays: null, buildTimeBasis: null, throughputBound: null,
+      throughputUnavailableReason: 'no readable base construction time for Monitor, and no queued hull of that type states one',
+      monthlyThroughputEst: null, daysPerHullEst: null, simulated: true
+    });
+    assert.match(noRate, /\*\*Production throughput:\*\* UNAVAILABLE — no readable base construction time for Monitor/);
+    assert.match(noRate, /3 hull\(s\) building, 0 waiting behind them/, 'the measured pipeline still reaches the reader');
+    assert.ok(!/0 hulls\/mo/.test(noRate), 'an unreadable build time must not render as a measured zero rate');
+
+    // An unread QUEUE is none of those: nothing was measured at all.
     const unread = withClock({
       available: false,
       reason: 'Production throughput was not projected: no readable shipyard queue.',
-      targetHull: 'Monitor', baseConstructionDays: 120, activeShipyardQueues: null,
+      targetHull: 'Monitor', baseConstructionDays: 120, queuedHullCount: null, concurrentBuilds: null,
       monthlyThroughputEst: null, daysPerHullEst: null, simulated: true
     });
     assert.match(unread, /\*\*Production throughput:\*\* UNAVAILABLE — Production throughput was not projected/);
     assert.ok(!/0 hulls\/mo/.test(unread), 'an unread queue must not render as a measured zero rate');
+    assert.ok(!/Production pipeline/.test(unread), 'and no pipeline was measured to report');
   });
 
   test(`section 11 never reports a redacted hate value as a calm one (${exportMode} mode)`, () => {

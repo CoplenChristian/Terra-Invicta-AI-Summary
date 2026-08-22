@@ -1,7 +1,8 @@
 /**
  * server/commentary/facts.js
  * Purpose: Layer 1 of the strategic commentary — fact extraction and
- *   null-honest metrics.
+ *   null-honest metrics, including the observer's build queue and shipyard
+ *   modules.
  *
  * Layer 1 — Fact extraction and null-honest metrics for strategic commentary.
  *
@@ -151,6 +152,32 @@ function extractFacts({
     ? null
     : shipyardQueues.filter(q => sameId(q.factionId, observerId) || sameId(q.factionID, observerId));
 
+  // THE OBSERVER'S SHIPYARD MODULES, since 2026-08-22.
+  //
+  // A STATION IS NOT A SHIPYARD. Counting habs undercounts build capacity,
+  // because one station holds several yard modules: measured on ExitSave.gz
+  // (1/1/2035) the observer's 14 shipyard modules sit across only 6 habs, five
+  // of them on Nearchus Station alone. The unit that matters is the MODULE, and
+  // `habModules[].isShipyard` is the flag the snapshot already resolves from
+  // the template's `allowsShipConstruction`.
+  //
+  // Only OPERATIONAL, undestroyed modules count: a yard still being built
+  // cannot take a hull. `templateName` is carried through untouched so a
+  // consumer can name the tier mix (`Shipyard` and `SpaceDock` here) without
+  // this layer deciding what a tier is worth.
+  //
+  // Absent stays null, and by the same argument as the queue above: an absent
+  // `habModules` is "nobody read the module manifest", not "this faction owns
+  // no shipyards". Player mode keeps the observer's own modules, so this is
+  // readable in both modes -- verified, not assumed.
+  const habModules = Array.isArray(snapshot.habModules) ? snapshot.habModules : null;
+  const ownShipyards = habModules === null
+    ? null
+    : habModules.filter(m => m.isShipyard === true
+      && sameId(m.factionId, observerId)
+      && m.constructionStatus === 'operational'
+      && m.destroyed !== true);
+
   // Hate Trend & Venting Rate
   let elapsedDays = toFiniteNumber(delta.period?.days);
   let hateVentRatePerDay = null;
@@ -184,6 +211,7 @@ function extractFacts({
     alienFleets,
     ownFleets,
     ownQueuedShips,
+    ownShipyards,
     elapsedDays,
     hateVentRatePerDay,
     shipHullStats,

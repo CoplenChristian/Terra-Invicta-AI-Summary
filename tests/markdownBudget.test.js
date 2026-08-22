@@ -516,10 +516,26 @@ const MAX_COMMENTARY = {
         simulated: true
       },
       rebuildClock: {
+        // The widest the two lines get: every count present, a long hull name,
+        // and the template-base branch, which carries the full FLOOR caveat
+        // naming the yard, module and tech modifiers.
         available: true,
         targetHull: 'BattleshipHull',
         baseConstructionDays: 1240,
-        activeShipyardQueues: 1,
+        queuedHullCount: 148,
+        concurrentBuilds: 137,
+        waitingBehindCount: 11,
+        shipyardCount: 214,
+        shipyardsBuilding: 137,
+        idleShipyardCount: 77,
+        nextCompletionDays: 1240,
+        lastCommittedCompletionDays: 4820,
+        deliveriesWithin30Days: 128,
+        completionHorizonsUnreadableCount: 0,
+        buildDays: 1240,
+        buildTimeBasis: 'hull-template-base',
+        throughputBound: 'lower',
+        throughputUnavailableReason: null,
         monthlyThroughputEst: 0.0242,
         daysPerHullEst: 1240,
         simulated: true

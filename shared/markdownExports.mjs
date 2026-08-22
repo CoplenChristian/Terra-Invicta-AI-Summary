@@ -2456,14 +2456,27 @@ function hateVentLine(hateVent) {
 }
 
 /**
- * Production throughput, and the assumption underneath it.
+ * Production throughput: what is measured, and what is a bound.
  *
- * The rate is `30 / (baseConstructionDays / queuedShips)`, and `queuedShips` is
- * a count of QUEUED HULLS rather than of shipyards -- section 5 above heads the
- * same array "N ship(s) building". The division therefore assumes those hulls
- * build in PARALLEL, and five queued at one yard would really produce a fifth
- * of the stated rate. That assumption is not this export's to re-model, but it
- * is this export's to state.
+ * The rate used to be `30 / (baseConstructionDays / queuedShips)`, with the
+ * parallelism STATED as an assumption. It is now measured, so this prints the
+ * rule instead of the caveat. Settled 2026-08-22 against four MD5-verified
+ * frozen saves and all eight factions: a shipyard builds ONE hull at a time
+ * and yards run concurrently, so the divisor is the number of hulls in
+ * progress, never the queue length.
+ *
+ * Two things print here and they are not the same kind of number.
+ *
+ * The DELIVERY horizons come from the save's own per-hull `daysToCompletion`,
+ * which decrements by exactly the elapsed campaign days and therefore already
+ * contains yard tier, station modules and faction tech. They rest on nothing.
+ *
+ * The RATE divides a build time into that concurrency. When the build time is
+ * the hull template's base it is a FLOOR and says so, because the template base
+ * ignores every modifier above and each one only shortens the build -- measured
+ * ratios of stated duration to template base run 0.30-0.86 across five factions
+ * on ExitSave.gz. When the observer's own queue states a duration for that
+ * hull, the rate is measured instead and the wording changes with it.
  */
 function rebuildClockLine(clock) {
   if (!clock) {
@@ -2473,22 +2486,64 @@ function rebuildClockLine(clock) {
   if (clock.available !== true) {
     return [`- **Production throughput:** UNAVAILABLE — ${clock.reason || 'no reason was carried'}`];
   }
+
+  const lines = [];
+  const building = num(clock.concurrentBuilds);
+  const waiting = num(clock.waitingBehindCount);
+  const yards = num(clock.shipyardCount);
+  const idle = num(clock.idleShipyardCount);
+  const next = num(clock.nextCompletionDays);
+  const last = num(clock.lastCommittedCompletionDays);
+  const within30 = num(clock.deliveriesWithin30Days);
+  const unreadableHorizons = num(clock.completionHorizonsUnreadableCount);
+
+  // MEASURED: the pipeline. A zero here is a reading -- the queue WAS read --
+  // and is phrased as a finding rather than as an absence.
+  const yardPart = yards === null
+    ? 'the shipyard module count could not be read'
+    : `${localeOr(building)} of ${localeOr(yards)} shipyard(s) working, ${localeOr(idle)} idle`;
+  const horizonPart = next === null
+    ? (building === 0 ? 'nothing is under construction' : 'no completion horizon was readable')
+    : `next in ${localeOr(next)} days, all ${localeOr(building)} inside ${localeOr(last)} days`;
+  const within30Part = within30 === null
+    ? (unreadableHorizons !== null && unreadableHorizons > 0
+      ? `; deliveries inside 30 days NOT counted — ${localeOr(unreadableHorizons)} countdown(s) unreadable`
+      : '')
+    : `; ${localeOr(within30)} due inside 30 days`;
+  lines.push(`- **Production pipeline (MEASURED from the save's own countdowns):** `
+    + `${localeOr(building)} hull(s) building, ${localeOr(waiting)} waiting behind them — ${yardPart}. `
+    + `${horizonPart}${within30Part}. A yard builds ONE hull at a time and yards run in PARALLEL, `
+    + `measured; a hull waiting behind another does not advance at all.`);
+
   const rate = num(clock.monthlyThroughputEst);
   const days = num(clock.daysPerHullEst);
-  // A measured 0 is a reading -- the queue WAS read and is empty -- and is
-  // deliberately phrased as a finding rather than as an absence.
+  if (rate === null) {
+    lines.push(`- **Production throughput:** UNAVAILABLE — `
+      + `${clock.throughputUnavailableReason || 'no build time was readable'}. No default build time is `
+      + `substituted, so this is not a report of zero throughput.`);
+    return lines;
+  }
   if (rate === 0) {
-    return [`- **Production throughput (SIMULATED):** 0 hulls/mo — the queue was read and is EMPTY. `
-      + `${clock.targetHull || 'The target hull'} takes ${localeOr(clock.baseConstructionDays)} days to build and none is queued.`];
+    lines.push(`- **Production throughput (SIMULATED):** 0 hulls/mo — NOTHING IS BUILDING. `
+      + `${localeOr(waiting)} hull(s) sit queued but unstarted, and a queued hull that has not started does not `
+      + `advance, so the delivery rate is a measured zero.`);
+    return lines;
   }
   const reciprocal = days !== null ? `, i.e. one every ${localeOr(days)} days` : '';
-  const belowOne = rate !== null && rate < 1
-    ? ' — UNDER ONE HULL A MONTH: this hull cannot be replaced inside a month'
-    : '';
-  return [`- **Production throughput (SIMULATED):** ${localeOr(rate)} × ${clock.targetHull || 'UNAVAILABLE'} per `
-    + `month${reciprocal}${belowOne}. Basis: ${localeOr(clock.baseConstructionDays)}-day build, `
-    + `${localeOr(clock.activeShipyardQueues)} hull(s) queued, ASSUMED to build in parallel — the field counts `
-    + `queued SHIPS, not shipyards, so a serial yard would deliver a fraction of this.`];
+  const belowOne = rate < 1 ? ' — UNDER ONE HULL A MONTH: this hull cannot be replaced inside a month' : '';
+  const bound = clock.throughputBound === 'lower'
+    ? `AT LEAST ${localeOr(rate)}`
+    : localeOr(rate);
+  const basis = clock.buildTimeBasis === 'measured-queue-entry'
+    ? `Basis: ${localeOr(clock.buildDays)}-day build MEASURED from this observer's own queue, `
+      + `${localeOr(building)} building concurrently.`
+    : `Basis: the hull template's ${localeOr(clock.buildDays)}-day base, ${localeOr(building)} building `
+      + `concurrently. That base is a CEILING on time, so this rate is a FLOOR: yard tier `
+      + `(Shipyard ×0.8, Spaceworks ×0.6), station modules (Nanofactory ×0.75) and faction tech `
+      + `(Effect_ShipConstructionTimeReduction ×0.8) all shorten it, and the observer holds some of them.`;
+  lines.push(`- **Production throughput (SIMULATED):** ${bound} × ${clock.targetHull || 'UNAVAILABLE'} per `
+    + `month${reciprocal}${belowOne}. ${basis}`);
+  return lines;
 }
 
 /**
