@@ -449,6 +449,58 @@ test('an absent campaign start year is labelled as an assumption, not reported a
     assert.strictEqual(snap.alienHateEconomics.campaignStartYearMeasured, false);
     assert.match(snap.alienHateEconomics.yearsElapsedSource, /assumed/,
       `${mode} must state that elapsed years rest on an assumed start year`);
+    // The assumed path must also announce that the progression speed is a
+    // default, not a reading: this fixture carries no campaign-settings block.
+    assert.strictEqual(snap.alienHateEconomics.totalWar.progressionSpeedAssumed, true);
+    assert.strictEqual(snap.alienHateEconomics.totalWar.yearsThreshold, 10,
+      'Veteran is 10 years, unscaled, when no speed can be read');
+  }
+});
+
+test('a save that DOES carry a campaign start year reports it as measured, in both modes', () => {
+  // The mirror of the test above, and the reason it matters: TIMetadataState
+  // carries no campaignStartYear on any of the 14 saves measured 2026-08-21,
+  // but TIGlobalResearchState and TITimeState both do. Looking only at the
+  // first is why every real save fell through to the 2022 assumption.
+  const save = makeSaveData();
+  save.campaignStartYear = null;
+  save.gameTimeString = '1/1/2035 12:00:00 AM';
+  // buildRawSnapshot reads the top-level `difficulty` the parser lifted, not
+  // the one inside the metadata state -- the fixture ships Veteran.
+  save.difficulty = 'Normal';
+  save.gamestates['PavonisInteractive.TerraInvicta.TIMetadataState'] = [
+    { Value: { gameTimeString: '1/1/2035 12:00:00 AM', difficulty: 'Normal', alienProgressionSpeed: '200%' } }
+  ];
+  // As the parser would have supplied them from the two states that carry them.
+  save.campaignStartYearFromResearchState = 2026;
+  save.daysInCampaign = 3256;
+  save.campaignSettings = require('../shared/campaignSettings.mjs')
+    .buildCampaignSettings({ customDifficulty: true, alienProgressionSpeed: '200%' });
+
+  const raw = snapshotBuilder.buildRawSnapshot(save);
+  assert.strictEqual(raw.metadata.campaignStartYear, 2026);
+  assert.strictEqual(raw.metadata.campaignStartYearAvailable, true);
+  assert.strictEqual(raw.metadata.campaignStartYearState, 'TIGlobalResearchState');
+  assert.strictEqual(raw.metadata.daysInCampaign, 3256);
+  // The assumption is still published beside it, unchanged -- it is the
+  // fallback, not the answer.
+  assert.strictEqual(raw.metadata.assumedCampaignStartYear, 2022);
+  assert.match(raw.metadata.campaignStartYearSource, /^measured:/);
+
+  for (const mode of ['player', 'omniscient']) {
+    const economics = filtered(save, mode).alienHateEconomics;
+    assert.strictEqual(economics.campaignStartYearMeasured, true, `${mode}`);
+    assert.strictEqual(economics.campaignStartYear, 2026, `${mode}`);
+    assert.strictEqual(economics.yearsElapsed, 8.91, `${mode}: 3256 days, not 2035 - 2022`);
+    assert.match(economics.yearsElapsedSource, /^measured:/, `${mode}`);
+    assert.doesNotMatch(economics.yearsElapsedSource, /assumed/, `${mode}`);
+    // Both halves of the gate, both now read from the save.
+    assert.strictEqual(economics.totalWar.yearsThreshold, 10,
+      `${mode}: Normal's 20-year gate halved by the save's 200% progression speed`);
+    assert.strictEqual(economics.totalWar.yearsRemaining, 1.09, `${mode}`);
+    assert.strictEqual(economics.totalWar.progressionSpeedAssumed, false, `${mode}`);
+    assert.strictEqual(economics.totalWar.alienProgressionSpeed, 2, `${mode}`);
+    assert.strictEqual(economics.totalWar.maximumAlienHate, 2782, `${mode}`);
   }
 });
 

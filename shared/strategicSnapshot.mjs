@@ -18,6 +18,11 @@
 // import it alongside the local server.
 
 import { buildAlienHateEconomics } from './alienHateEconomics.mjs';
+import {
+  resolveCampaignElapsed,
+  resolveAlienProgressionSpeed,
+  CAMPAIGN_AGE_SOURCES
+} from './campaignElapsed.mjs';
 import { deriveStructuredEvents } from './strategicDelta.mjs';
 import { DEFAULT_OBSERVER_FACTION_ID } from './constants.mjs';
 import { asArray, toFiniteNumber as num, round, sameId, resolveObserverFaction } from './util.mjs';
@@ -206,32 +211,32 @@ const buildEconomy = (observer, habSites, completed) => {
 };
 
 const buildAlienThreat = (raw, observer, campaignYear) => {
-  // TIMetadataState does not carry a campaign start year, so snapshotBuilder
-  // reports the measured field as null and offers `assumedCampaignStartYear`
-  // separately as an explicitly labelled assumption. Total war needs the
-  // elapsed-years gate, so use the assumption when there is no measurement --
-  // but carry `yearsElapsedAssumed` alongside it, so a reader can tell a
-  // measured campaign age from a presumed one rather than being handed a
-  // confident number. Without this the state would be permanently
-  // 'unavailable' and the most consequential event in a campaign would never
-  // announce itself.
-  const measuredStartYear = num(raw.metadata?.campaignStartYear);
-  const assumedStartYear = num(raw.metadata?.assumedCampaignStartYear);
-  const startYear = measuredStartYear ?? assumedStartYear;
-  const yearsElapsed = startYear !== null && campaignYear !== null
-    ? campaignYear - startYear
-    : null;
-  const yearsElapsedAssumed = yearsElapsed !== null && measuredStartYear === null;
+  // Elapsed campaign time gates total war, so it must be supplied here: without
+  // it buildTotalWarState reports 'unavailable', which is what left
+  // `alienThreat.totalWar` absent from every published snapshot and made the
+  // delta's total-war narration unreachable.
+  //
+  // This used to derive the figure itself, in parallel with
+  // server/intelligenceFilter.js, from `TIMetadataState.campaignStartYear` --
+  // a field no save carries. Both now read shared/campaignElapsed.mjs, which
+  // owns the resolution order (daysInCampaign, then the save's own
+  // campaignStartYear, then the labelled assumption) and its evidence.
+  // `yearsElapsedAssumed` keeps its exact meaning: true only when the figure
+  // rests on the assumed start year rather than on a reading from the save.
+  const elapsed = resolveCampaignElapsed(raw.metadata, campaignYear);
+  const yearsElapsed = elapsed.yearsElapsed;
+  const yearsElapsedAssumed = yearsElapsed !== null
+    && elapsed.source === CAMPAIGN_AGE_SOURCES.assumed;
 
-  // yearsElapsed must be supplied here: total war needs BOTH the campaign-year
-  // gate and 200 hate, and buildTotalWarState reports 'unavailable' without it.
-  // Omitting it is what left `alienThreat.totalWar` absent from every published
-  // snapshot, which in turn made the delta's total-war narration unreachable.
   const economics = buildAlienHateEconomics({
     observer,
     difficulty: raw.metadata?.difficulty,
     mode: 'omniscient',
-    yearsElapsed
+    yearsElapsed,
+    // The save's own Alien Progression Speed, which halves the Normal 20-year
+    // gate at 200%. Passing it is the whole point of this path agreeing with
+    // the live snapshot: the two used to publish different year gates.
+    alienProgressionSpeed: resolveAlienProgressionSpeed(raw.metadata)
   });
 
   return {

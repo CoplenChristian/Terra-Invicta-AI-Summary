@@ -8,6 +8,59 @@ const zlib = require('zlib');
 const { resolveConfig } = require('./config');
 const { buildCampaignSettings } = require('../shared/campaignSettings.mjs');
 
+/**
+ * Reads the single Value object out of a `gamestates` collection.
+ *
+ * The save stores each state class as an array of `{ Key, Value }` wrappers,
+ * but a few are written unwrapped. Both shapes appear across the 14 saves in
+ * the user's folder, so both are handled here rather than at each call site.
+ */
+function firstStateValue(gamestates, stateClassName) {
+  const rows = gamestates?.[`PavonisInteractive.TerraInvicta.${stateClassName}`];
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const first = rows[0];
+  if (!first || typeof first !== 'object') return null;
+  return (first.Value !== undefined && first.Value !== null) ? first.Value : first;
+}
+
+/**
+ * Strict numeric read. `Number(null)`, `Number('')`, `Number('   ')` and
+ * `Number([])` are ALL 0, so an absent or malformed field would otherwise
+ * become a confident zero -- a campaign that has run for no time at all, which
+ * reads as "the total-war gate is the full ten years away".
+ *
+ * Only an actual number or a non-blank numeric string counts as a reading;
+ * everything else is null. This is the same rule as `strictFiniteNumber` in
+ * shared/util.mjs, restated here because saveParser is the CommonJS boundary
+ * and reads raw, arbitrarily-shaped save fields.
+ */
+function finiteOrNull(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/**
+ * `TIGlobalResearchState.campaignStartYear` -- the save's own campaign start
+ * year. Present in 14 of 14 saves measured 2026-08-21: 2026 on this campaign's
+ * `2026Start` scenario, 2022 on the older `ModernDayStart` ones (which is why
+ * the 2022 assumption was right for those and wrong for this one).
+ */
+function readCampaignStartYear(gamestates) {
+  return finiteOrNull(firstStateValue(gamestates, 'TIGlobalResearchState')?.campaignStartYear);
+}
+
+/**
+ * `TITimeState.daysInCampaign` -- the game's own campaign-duration counter, and
+ * the most direct measurement of the quantity the total-war year gate needs.
+ */
+function readDaysInCampaign(gamestates) {
+  return finiteOrNull(firstStateValue(gamestates, 'TITimeState')?.daysInCampaign);
+}
+
 class SaveParser {
   constructor(configOrPath = null) {
     this.configPath = typeof configOrPath === 'string' ? configOrPath : null;
@@ -125,9 +178,19 @@ class SaveParser {
       campaignSettings: buildCampaignSettings(metaObj),
       // Campaign start year drives elapsed-years gating. An invented 2022
       // silently shifts every elapsed-time calculation.
+      //
+      // `TIMetadataState` does not carry it -- absent in 14 of 14 saves
+      // measured 2026-08-21 -- so this reading is null on every real save and
+      // the two below are what actually answer. It is kept because a save that
+      // did carry it should still be believed, and because the synthetic test
+      // fixtures set it here.
       campaignStartYear: Number.isFinite(Number(metaObj.campaignStartYear)) && metaObj.campaignStartYear !== null && metaObj.campaignStartYear !== ''
         ? Number(metaObj.campaignStartYear)
         : null,
+      // The two states that DO carry elapsed campaign time, in 14 of 14 saves.
+      // See shared/campaignElapsed.mjs for which is preferred and why.
+      campaignStartYearFromResearchState: readCampaignStartYear(json.gamestates),
+      daysInCampaign: readDaysInCampaign(json.gamestates),
       gamestates: json.gamestates || {}
     };
   }

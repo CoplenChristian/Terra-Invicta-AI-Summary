@@ -46,12 +46,26 @@
       note: 'Campaign duration or difficulty missing from this snapshot.' }
   };
 
-  function renderTotalWar(totalWar) {
+  // `yearsElapsedSource` sits on the economics object rather than on totalWar,
+  // so it is passed in explicitly instead of being read off the wrong object --
+  // which would silently render nothing.
+  function renderTotalWar(totalWar, yearsElapsedSource = null) {
     if (!totalWar) return '';
     const copy = TOTAL_WAR_COPY[totalWar.state] || TOTAL_WAR_COPY.unavailable;
+    // The save's Alien Progression Speed IS now read (2026-08-21), so this
+    // branch is reached on every real save and the old wording -- "the slider
+    // is not read from the save" -- became false the moment it started firing.
+    // The caveat is inverted rather than deleted: a fixture or a pre-1.0 save
+    // still has no setting to read, and that case must keep saying so.
     const speedCaveat = totalWar.progressionSpeedAssumed === false
-      ? ''
-      : '<small>Assumes default Alien Progression Speed; the slider is not read from the save.</small>';
+      ? `<small>Year gate scaled by the save's Alien Progression Speed of ${value(totalWar.alienProgressionSpeed, 2)}×.</small>`
+      : '<small>Assumes default Alien Progression Speed; this snapshot carries no campaign-settings block to read it from.</small>';
+    // Elapsed campaign time is the other input to the year gate and is just as
+    // capable of being an assumption, so it is shown beside the gate rather
+    // than left to the API. Absent stays absent: no source, no line.
+    const ageCaveat = typeof yearsElapsedSource === 'string' && yearsElapsedSource
+      ? `<small>Campaign age: ${escapeHtml(yearsElapsedSource)}.</small>`
+      : '';
 
     return `
       <div class="alien-hate-econ-section">
@@ -70,6 +84,7 @@
         </div>
         ${copy.note ? `<p class="alien-hate-econ-note">${escapeHtml(copy.note)}</p>` : ''}
         ${speedCaveat}
+        ${ageCaveat}
       </div>
     `;
   }
@@ -158,7 +173,7 @@
           </div>
         </details>
 
-        ${renderTotalWar(economics.totalWar)}
+        ${renderTotalWar(economics.totalWar, economics.yearsElapsedSource)}
 
         <div class="alien-hate-econ-section">
           <div class="alien-hate-econ-section-heading">

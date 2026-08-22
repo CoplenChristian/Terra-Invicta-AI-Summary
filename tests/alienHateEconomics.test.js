@@ -164,3 +164,100 @@ test('economics reports total war and flags venting as blocked', () => {
   assert.strictEqual(economics.ventingBlockedByTotalWar, true,
     'hateAboveFloor is not recoverable once total war is declared');
 });
+
+// --- Alien Progression Speed, wired in 2026-08-21 -----------------------------
+//
+// Re-read as RAW WIKITEXT on 2026-08-21 at the wiki's new home,
+// https://wiki.hoodedhorse.com/Terra_Invicta/ (the fandom mirror now returns
+// 410 Gone). Two DIFFERENT scalings, and conflating them is the trap:
+//
+//   Diplomacy, "Alien Total War":
+//     "These values are divided by the Alien Progression Speed."
+//   Aliens, "Alien Progression Rate" (page last edited 2026-04-05):
+//     "Increase in Alien Maximum Hate per Year is multiplied by X%."
+//     "Every 'Years Before Aliens Can Do Something' timer has its duration
+//      divided by X%."
+//
+// So year THRESHOLDS are divided by the speed and the yearly ACCRUAL is
+// multiplied by it. Only the threshold half was implemented, and it was inert
+// because no caller passed a speed -- these pin both halves now that one does.
+
+test('the maximum-hate yearly increase is multiplied by progression speed', () => {
+  // Measured before this change: the live save published 2300 here, from
+  // 1000 + 100/yr x an assumed 13 elapsed years at an assumed speed of 1.
+  const stock = buildTotalWarState({ difficultyKey: 'normal', actualAlienHate: 0, yearsElapsed: 10 });
+  assert.strictEqual(stock.maximumAlienHate, 2000, '1000 + 100/yr at 100% speed');
+
+  const accelerated = buildTotalWarState({
+    difficultyKey: 'normal', actualAlienHate: 0, yearsElapsed: 10, alienProgressionSpeed: 2
+  });
+  assert.strictEqual(accelerated.maximumAlienHate, 3000,
+    '1000 + (100 x 2)/yr at 200% speed -- the accrual scales, it is not just the thresholds');
+
+  // The live save's own figures, end to end.
+  const live = buildTotalWarState({
+    difficultyKey: 'normal', actualAlienHate: 42.86253, yearsElapsed: 8.91, alienProgressionSpeed: 2
+  });
+  assert.strictEqual(live.maximumAlienHate, 2782);
+  assert.strictEqual(live.yearsThreshold, 10);
+  assert.strictEqual(live.yearsRemaining, 1.09);
+  assert.strictEqual(live.state, 'safe');
+});
+
+test('the 25-year maximum-hate floor check is divided by progression speed', () => {
+  // Cinematic accrues 2/yr from 70, so it is still under 200 when the floor
+  // rule fires -- which is the only difficulty where the rule is observable.
+  // At 200% the accrual doubles to 4/yr AND the 25-year check halves to 12.5.
+  const justBefore = buildTotalWarState({
+    difficultyKey: 'cinematic', actualAlienHate: 0, yearsElapsed: 12, alienProgressionSpeed: 2
+  });
+  assert.strictEqual(justBefore.maximumAlienHate, 118, '70 + 4/yr x 12, floor not yet reached');
+
+  const justAfter = buildTotalWarState({
+    difficultyKey: 'cinematic', actualAlienHate: 0, yearsElapsed: 12.5, alienProgressionSpeed: 2
+  });
+  assert.strictEqual(justAfter.maximumAlienHate, 200,
+    'at 200% the 25-year floor check is reached at 12.5 elapsed years');
+});
+
+test('the applied progression speed is reported, not just whether it was assumed', () => {
+  const measured = buildTotalWarState({
+    difficultyKey: 'normal', actualAlienHate: 0, yearsElapsed: 8.91, alienProgressionSpeed: 2
+  });
+  assert.strictEqual(measured.alienProgressionSpeed, 2);
+  assert.strictEqual(measured.progressionSpeedAssumed, false);
+
+  // No speed supplied: still 1, still announced as an assumption. A fixture or
+  // a save predating the custom-difficulty block genuinely has none to read.
+  const assumed = buildTotalWarState({ difficultyKey: 'normal', actualAlienHate: 0, yearsElapsed: 8.91 });
+  assert.strictEqual(assumed.alienProgressionSpeed, 1);
+  assert.strictEqual(assumed.progressionSpeedAssumed, true);
+  assert.strictEqual(assumed.yearsThreshold, 20, 'the unscaled gate is what the assumption produces');
+
+  // An unusable speed must not annihilate the gate: 20/0 is Infinity and a
+  // negative would invert it. Both fall back to 1 and announce it.
+  for (const bad of [0, -2, null, undefined, NaN, 'fast']) {
+    const state = buildTotalWarState({
+      difficultyKey: 'normal', actualAlienHate: 0, yearsElapsed: 8.91, alienProgressionSpeed: bad
+    });
+    assert.strictEqual(state.yearsThreshold, 20, `speed ${JSON.stringify(bad)} must fall back to 1`);
+    assert.strictEqual(state.progressionSpeedAssumed, true);
+  }
+});
+
+test('published year figures carry no binary floating-point residue', () => {
+  // `10 - 8.91` is 1.0899999999999999 in binary floating point, and that string
+  // reached the briefing and the v2 board verbatim.
+  const state = buildTotalWarState({
+    difficultyKey: 'normal', actualAlienHate: 0, yearsElapsed: 8.91, alienProgressionSpeed: 2
+  });
+  assert.strictEqual(state.yearsRemaining, 1.09);
+
+  // Rounding is presentational only -- it must never move the gate itself.
+  // 9.999 elapsed against a 10-year gate is still shut, however it prints.
+  const almost = buildTotalWarState({
+    difficultyKey: 'normal', actualAlienHate: 250, yearsElapsed: 9.999, alienProgressionSpeed: 2
+  });
+  assert.strictEqual(almost.state, 'pending', 'the gate is tested unrounded');
+  assert.strictEqual(almost.yearsRemaining, 0);
+});
