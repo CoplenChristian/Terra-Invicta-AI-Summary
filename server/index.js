@@ -10,6 +10,7 @@
  *   http/snapshotCache.js    the one parsed-save cache and its reset rules
  *   http/requestContext.js   request -> (mode, observer, save); snapshot -> identity
  *   http/publishControl.js   the local-only, service-role-backed publish route
+ *   http/routes/shell.js     the v2 shell at `/` and `/v2`
  *   http/routes/runtime.js   /api/runtime, /api/publish, /api/saves
  *   http/routes/snapshot.js  whole-snapshot routes and their markdown renderings
  *   http/routes/intel.js     the focused-projection surface and its query contract
@@ -38,6 +39,7 @@ const { resolveConfig } = require('./config');
 const runtimeConfig = resolveConfig();
 const templateLoader = require('./templateLoader');
 
+const shellRoutes = require('./http/routes/shell');
 const runtimeRoutes = require('./http/routes/runtime');
 const snapshotRoutes = require('./http/routes/snapshot');
 const intelRoutes = require('./http/routes/intel');
@@ -58,10 +60,12 @@ app.use(express.json({ limit: '5mb' }));
 //
 // This is the ONE genuinely order-dependent registration in the file: moving it
 // after express.static brings the legacy v1 shell back at `/`.
-const missionControlShell = path.join(__dirname, '../public/v2/index.html');
-app.get(['/', '/v2'], (req, res) => {
-  res.sendFile(missionControlShell);
-});
+//
+// The handler itself lives in http/routes/shell.js with the rest of the route
+// modules. It moved there to get an injectable `publicDir`, which is what lets
+// a test reproduce the dot-directory 404 on any checkout rather than only on
+// one that happens to live under a dot-directory. See that file's header.
+shellRoutes.register(app);
 
 app.use(express.static(path.join(__dirname, '../public')));
 

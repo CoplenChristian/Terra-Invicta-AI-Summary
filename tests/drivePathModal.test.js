@@ -37,6 +37,7 @@ const techGraph = require('../shared/techGraph.mjs');
 const snapshotLoader = require('../server/snapshotLoader');
 const templateLoader = require('../server/templateLoader');
 const { buildResourceProjection } = require('../shared/intel/registry.mjs');
+const { MISSION_CONTROL_SHARED } = require('./fixtures/renderHarness');
 
 const OBSERVER = 4712;
 const MODES = ['player', 'omniscient'];
@@ -236,11 +237,11 @@ function loadPanelSandbox(fetchImpl) {
     path.join(__dirname, '..', 'public', 'v2', 'js', 'components', 'drive-explorer.js'), 'utf8');
   const sandbox = {
     console,
-    MissionControlShared: {
-      escapeHtml: (value) => String(value === null || value === undefined ? '' : value)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#039;')
-    },
+    // The SHIPPED bundle, not a hand-copy of its escaper. The copy that used to
+    // sit here was faithful, so nothing was wrong with it -- but it was a second
+    // thing to keep in step with `public/v2/js/shared.js`, and the harness
+    // executes that file rather than reproducing it.
+    MissionControlShared: MISSION_CONTROL_SHARED,
     fetch: fetchImpl || (() => Promise.reject(new Error('no network in this test'))),
     URLSearchParams
   };

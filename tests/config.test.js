@@ -101,6 +101,41 @@ test('strategic history retention uses one canonical value across compatibility 
   assert.equal(cliResolved.publishing.historyRetention, 14);
 });
 
+test('the required paths.*SubDir keys cannot reject a user config', () => {
+  // `docs/README.md` carried these five keys plus paths.workDir as a follow-up
+  // on the reasoning that a schema requiring a key nothing reads will reject a
+  // valid config for no reason. Measured 2026-08-22: it cannot. `validate()`
+  // runs on the config AFTER config/defaults.json is merged underneath it, and
+  // defaults supplies every one of them, so the `required` entry is unreachable
+  // as a rejection for any user config. The keys stayed; this pins the reason.
+  //
+  // It is also the guard for the property that makes that true: if defaults.json
+  // ever drops one, or the merge stops running before validation, this goes red
+  // rather than the schema quietly starting to reject people's configs.
+  const REQUIRED_SUBDIRS = [
+    'csvSubDir', 'shipInfoSubDir', 'againSaveSubDir', 'summarySubDir', 'snippetPackSubDir'
+  ];
+  const shapes = {
+    'absent config.json': null,
+    'empty object': {},
+    'nested with no paths section': { schemaVersion: 1, campaign: { key: 'initiative' } },
+    'nested paths with no sub-directories': { schemaVersion: 1, paths: { savePath: 'C:/saves' } },
+    'legacy flat with only SavePath': { SavePath: 'C:/saves' }
+  };
+  for (const [label, shape] of Object.entries(shapes)) {
+    const configPath = shape === null
+      ? path.join(os.tmpdir(), 'ti-config-absent-on-purpose.json')
+      : tempJson(shape).file;
+    const resolved = config.resolveConfig({ configPath, env: {} });
+    for (const key of REQUIRED_SUBDIRS) {
+      assert.equal(typeof resolved.paths[key], 'string',
+        `${label}: paths.${key} must be supplied by defaults, not required of the user`);
+    }
+    assert.equal(typeof resolved.paths.workDir, 'string',
+      `${label}: paths.workDir must be supplied by defaults`);
+  }
+});
+
 test('save parser reports missing configured paths instead of probing developer folders', () => {
   const parser = new SaveParser({
     schemaVersion: 1,

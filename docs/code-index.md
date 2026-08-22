@@ -10,7 +10,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**187 modules.**
+**188 modules.**
 
 ## `public/`
 
@@ -121,11 +121,12 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/http/requestContext.js` | C | Node (CommonJS) | 90 | request->(mode, observer, save, risk floor) and snapshot->identity | `assertObserver, requestContext, responseIdentity` | — |
 | `server/http/routes/intel.js` | C | Node (CommonJS) | 206 | the focused-projection route surface — one discovery directory page | `register` | — |
 | `server/http/routes/runtime.js` | C | Node (CommonJS) | 86 | routes that describe the local install — /api/runtime, /api/publish, | `register` | — |
+| `server/http/routes/shell.js` | C | Node (CommonJS) | 80 | serve the Mission Control (v2) shell at the site root and /v2, | `DEFAULT_PUBLIC_DIR, SHELL_RELATIVE_PATH, SHELL_ROUTES, register` | — |
 | `server/http/routes/snapshot.js` | C | Node (CommonJS) | 197 | routes returning the whole filtered snapshot or a rendering of it, | `register, registerReadOnlyExports` | — |
 | `server/http/routes/strategicHistory.js` | C | Node (CommonJS) | 137 | the Supabase-backed strategic-history routes — compact snapshot | `register, strategicHistory` | — |
 | `server/http/routes/tech.js` | C | Node (CommonJS) | 106 | routes answered from the game templates — the tech-tree family and | `TECH_ROUTES, register` | — |
 | `server/http/snapshotCache.js` | C | Node (CommonJS) | 151 | the local server's one parsed-save cache and its reset rules. | `buildFilteredSnapshot, getPreviousRawSnapshot, loadOrGetSnapshot, resetCache` | — |
-| `server/index.js` | **B** C | Node (CommonJS) | 98 | the local Express composition root — process error handlers, | — | — |
+| `server/index.js` | **B** C | Node (CommonJS) | 102 | the local Express composition root — process error handlers, | — | — |
 | `server/intelligenceFilter.js` | C | Node (CommonJS) | 1006 | redact and filter a raw snapshot down to what the observer is allowed to see. | — | `tests/intelligenceFilter.test.js` |
 | `server/intelResources.js` | **B** C | Node (CommonJS) | 123 | CommonJS barrel exposing the shared intel projections to the local Express server. | `DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, SUPPORTED_RESOURCES, THRESHOLD_AWARE_RESOURCES, buildResource, isDetailLevel, measureIntelEndpointSizes, parseDetailLevel` | `tests/intelResources.test.js` |
 | `server/miningExpansion.js` | **B** C | Node (CommonJS) | 83 | CommonJS adapter exposing the shared mining-expansion projection to | `MINE_LIMIT_GRANTS, MISSION_TECH_NAMES, THEATER_ACCESSIBILITY, buildMiningCapacity, buildMiningExpansion, buildResourceRunways, compareMiningCandidates, evaluateUtility, getDestinationTechForBody, resolveBodyDestinationTech, scoreSiteCandidate` | `tests/miningExpansion.test.js` |
