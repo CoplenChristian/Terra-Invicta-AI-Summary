@@ -43,6 +43,11 @@ import {
 import { DRIVE_AVAILABILITY, driveExplorerResource } from './intel/driveExplorer.mjs';
 import { researchRankingResource } from './intel/researchRanking.mjs';
 import { buildResearchCategoryBonuses } from './researchCategoryBonus.mjs';
+import {
+  ENGAGEMENT_VERDICTS,
+  FLEET_REACHABILITY_STATES,
+  buildFleetEngagement
+} from './fleetEngagement.mjs';
 
 // Absence-preserving formatting helpers
 export const isMeasured = (value) =>
@@ -891,16 +896,124 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
     });
   }
 
+  // Per-fleet engagement estimates.
+  //
+  // The one figure on this page that is NOT a reading of the save, so the
+  // heading, the preamble and every row say so. What it answers that nothing
+  // else here does: the archetype tiers in the strategic commentary top out at
+  // three ships while 26 of 57 alien fleets on the measured save are larger, so
+  // "a heavy capital costs 7 hulls" is not an answer about a 34-ship fleet.
+  const engagement = buildFleetEngagement(filteredSnapshot, {
+    observerId,
+    mode: filteredSnapshot.mode || 'player',
+    limit: 8
+  });
+
+  const engagementBlock = listBlock('engagement-estimates', {
+    headingLines: [
+      `## Per-Fleet Engagement Estimates — MODELLED, NOT MEASURED`,
+      ``,
+      ...(engagement.available
+        ? [
+          `*Each band is Monte Carlo spread of a model across seeded runs and NOTHING else — it excludes `
+          + `the error in the opponent rating, which is an assumption in ${engagement.mode.toUpperCase()} `
+          + `mode. Rating is composed over each fleet's OWN ships, never N copies of a representative one. `
+          + `Ordered by threat to observer assets; full ordering basis and all rows at `
+          + `/api/intel/fleet-engagement.*`,
+          ``,
+          `- **Own force:** ${engagement.ownForce.totalHulls ?? 'UNAVAILABLE'} hull(s) in `
+          + `${engagement.ownForce.fleetCount} fleet(s); best design `
+          + `${engagement.ownForce.bestDesignName || 'UNAVAILABLE'} rated `
+          + `${engagement.ownForce.rating === null ? 'UNAVAILABLE' : Math.round(engagement.ownForce.rating).toLocaleString()}`,
+          `- **Hostile fleets tracked:** ${engagement.fleetsTotalCount} `
+          + `(${engagement.shipsTotalCount} ships) — reachability `
+          + `${Object.entries(engagement.reachabilityTotals).map(([k, v]) => `${v} ${k}`).join(', ') || 'not evaluated'}`,
+          `- **Gate:** a fleet beyond every observer fleet's ΔV gets NO hull count. One whose reachability `
+          + `could not be evaluated still gets one, labelled unknown — withholding it would make an `
+          + `unevaluated threat read as no threat.`,
+          ``
+        ]
+        : [
+          `*No engagement estimate: ${engagement.reason}*`,
+          ``
+        ])
+    ],
+    emptyLines: [],
+    budgetEmptyLines: budgetEmptyNote('engagement estimates', '/api/intel/fleet-engagement'),
+    budgetNote: budgetOmissionNote('engagement estimates', '/api/intel/fleet-engagement'),
+    detailNote: (levelCounts, kept) => [
+      `*Composition and reachability detail suppressed to fit the size budget for `
+      + `${levelCounts[0]} of ${kept} listed estimates; see /api/intel/fleet-engagement.*`,
+      ``
+    ]
+  });
+  blocks.push(engagementBlock);
+
+  for (const row of asArray(engagement.items)) {
+    const composed = row.composition.ratedShips + row.composition.unratedShips;
+    const requirementText = row.requirement.bandLabel !== null
+      ? `${row.requirement.bandLabel} — MODELLED, composed over ${row.composition.ratedShips} of `
+        + `${composed} ship(s)`
+      : `NONE — ${row.requirement.verdict.toUpperCase()}: ${row.requirement.reason}`;
+    const fieldableText = row.fieldable.verdict === 'unknown'
+      ? `UNKNOWN — ${row.fieldable.reason}`
+      : `${row.fieldable.verdict.toUpperCase()} — ${row.fieldable.hullsAtEngagementPoint} reachable hull(s) `
+        + `vs ${row.fieldable.hullsNeeded} needed`;
+
+    const headerLine = `### ${row.fleetName} — ${row.shipsCount ?? 'unknown'} ships`
+      + `${row.distinctHullTypes ? ` / ${row.distinctHullTypes} hull types` : ''}`;
+    const forceLine = `- **At:** ${row.orbitBody || 'unknown'}`
+      + `${row.destination ? ` → ${row.destination}${row.daysToArrival === null ? '' : ` in ${row.daysToArrival}d` }` : ' (stationary)'}`
+      + ` · ${row.dominantWeaponType || 'weapon mix unknown'}`;
+    const reachLine = `- **Reach:** ${row.reachability.state.toUpperCase()}`
+      + ` (${row.reachability.isEstimate ? 'estimate' : 'measured'})`
+      + `${row.engagementPoint.body ? ` at ${row.engagementPoint.body}` : ''}`
+      + `${row.reachability.reason ? ` — ${row.reachability.reason}` : ''}`;
+    const needLine = `- **Hulls needed:** ${requirementText}`;
+    const fieldLine = `- **Observer can field:** ${fieldableText}`;
+
+    const full = [headerLine, forceLine, reachLine, needLine, fieldLine, ``];
+
+    addEntry(engagementBlock, {
+      // Same order the resource ranks in, re-expressed as a tuple: engageable
+      // first, asset-threatening next, then urgency inside that group and mass
+      // outside it. `buildFleetEngagement` already sorted; this keeps the
+      // budget pass shedding from the least relevant end.
+      rank: [
+        row.reachability.state === FLEET_REACHABILITY_STATES.beyondDeltaV ? 1 : 0,
+        row.threatensObserverAsset ? 0 : 1,
+        row.threatensObserverAsset ? (row.daysToArrival ?? Number.MAX_SAFE_INTEGER) : -(row.shipsCount ?? 0),
+        row.threatensObserverAsset ? -(row.shipsCount ?? 0) : (row.daysToArrival ?? Number.MAX_SAFE_INTEGER),
+        String(row.fleetId ?? '')
+      ],
+      variants: [full, [headerLine, reachLine, needLine, ``]]
+    });
+  }
+
+  if (engagement.available && engagement.fleetsOmittedCount > 0) {
+    engagementBlock.trailingLines = [
+      `*${engagement.items.length} of ${engagement.fleetsTotalCount} hostile fleets shown; `
+      + `${engagement.fleetsOmittedCount} omitted by the ranking, not by the budget. `
+      + `Full set at /api/intel/fleet-engagement.*`,
+      ``
+    ];
+  }
+
   // Degradation order for /latest-threats.md. The inbound-contact list IS the
   // document -- the theater roll-up is supporting context, so it gives way
-  // first, and detail is shed before whole entries are cut.
+  // first, and detail is shed before whole entries are cut. The engagement
+  // estimates are the newest section and the only modelled one, so they shed
+  // detail before either measured section does and are dropped before the
+  // measured contact list.
   const ladder = [
+    { block: 'engagement-estimates', action: 'reduce', toLevel: 1 },
     { block: 'risk-theaters', action: 'reduce', toLevel: 1 },
     { block: 'inbound-threats', action: 'reduce', toLevel: 1 },
+    { block: 'engagement-estimates', action: 'drop' },
     { block: 'risk-theaters', action: 'drop' },
     { block: 'inbound-threats', action: 'drop' }
   ];
-  const clampOrder = ['risk-theaters', 'inbound-threats'];
+  const clampOrder = ['engagement-estimates', 'risk-theaters', 'inbound-threats'];
   const maxBytes = isMeasured(options.maxBytes) ? Number(options.maxBytes) : THREATS_BYTE_BUDGET;
 
   return renderWithByteBudget(blocks, ladder, clampOrder, maxBytes);
