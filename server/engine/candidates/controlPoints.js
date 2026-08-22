@@ -88,15 +88,17 @@ function buildControlNationCandidate(nation, cp, allCpsInNation, world) {
       // wikitext read 2026-08-22). Madagascar's Executive costs ~3 cp;
       // one of the USA's six costs ~39.
       //
-      // AN ANNOTATION, NOT A RULE, DELIBERATELY. No rule reads it and no score
-      // moves because of it. The cap it would have to be checked against does
-      // not reconcile against the save's own recorded overage
-      // (shared/controlPointCap.mjs), so there is no honest threshold to veto
-      // or price against -- and a veto built on a fabricated ceiling would
-      // reject real recommendations. What IS sound is the relative figure: a
-      // reader can compare two candidate control points without any claim about
-      // affordability, because the per-control-point cost does not depend on
-      // the unresolved base cap.
+      // AN ANNOTATION, NOT A RULE, DELIBERATELY -- and it stays one even now
+      // that the cap DOES reconcile (shared/controlPointCap.mjs, 2026-08-22).
+      // The reason changed: it is no longer that no threshold exists, it is
+      // that on the measured save the threshold is not close. The observer's
+      // composed headroom is roughly 230 control-point points against a
+      // marginal cost of ~3 for Madagascar's Executive and ~39 for one of the
+      // USA's six, so a cost rule would move no ranking and a veto would fire
+      // on nothing. Adding either would put a rule in the registry that does
+      // nothing but could silently start vetoing on a future save nobody
+      // re-measured. The figure is published; the verdict lives on
+      // /api/intel/control-point-cap where its accuracy travels with it.
       //
       // Null-safe by construction: an unpriceable nation yields
       // `{ available: false, cost: null, reason }` rather than a zero that

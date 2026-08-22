@@ -1,18 +1,23 @@
 // shared/intel/controlPointCap.mjs
 //
-// Purpose: /api/intel/control-point-cap — the composed control-point cap and
-//   maintenance cost per faction, with the reconciliation failure stated.
+// Purpose: /api/intel/control-point-cap — the control-point cap, maintenance
+//   cost and headroom per faction, with the accuracy of each verdict stated.
 //
-// This endpoint reports a MODEL, not a measurement, and says so on every row.
-// The composition is cited term by term in shared/controlPointCap.mjs; the
-// absolute cap it produces disagrees with the only figure the game records, so
-// `headroom.available` is false everywhere and `verdict` is 'unresolved'.
+// The composition follows the game's own methods, cited term by term in
+// shared/controlPointCap.mjs, and it now reconciles against the game's own
+// daily record to within about one point in eight hundred. So this endpoint
+// answers rather than refuses — but each row says WHICH of two bases its
+// headroom came from, because they are not equally strong:
 //
-// Nothing here may be read as "there is room for another control point". It
-// exists so a reader can see WHICH councilor and WHICH project their cap is
-// made of -- a councilor dying changes it -- and what one more control point in
-// a given nation would cost, which is the one figure that does not depend on
-// the unreconciled base.
+//   * `recorded` — the save records a positive penalty, so the faction is over
+//     cap by exactly three times it. Exact, and no composed cap is involved.
+//   * `composed`  — every cap term and the whole cost were measured. The
+//     composed cap was measured running ~1 point high on the one faction the
+//     record pins, and `accuracy` carries that.
+//
+// A row still refuses when a term is unreadable, and refuses LOUDLY when the
+// composition contradicts the record (a negative composed headroom while the
+// game records zero cannot both be true).
 //
 // `?faction=` narrows to one faction. Without it every faction in the payload
 // is reported, which in player mode means the observer's own row composes and
@@ -24,7 +29,8 @@ import { DEFAULT_OBSERVER_FACTION_ID } from '../constants.mjs';
 import {
   CONTROL_POINT_CAP_MEASURED_ON,
   CONTROL_POINT_CAP_SOURCES,
-  BASE_CAP_UNRESOLVED,
+  CONTROL_POINT_CAP_ACCURACY,
+  CONTROL_POINT_OVERAGE_PENALTY_MULTIPLIER,
   COST_FORMULA,
   buildControlPointCapReport
 } from '../controlPointCap.mjs';
@@ -53,6 +59,15 @@ export function controlPointCapResource(snapshot, options = {}) {
   const items = selected.map((f) => buildControlPointCapReport(snapshot, { factionId: f?.ID, mode }));
   const composed = items.filter((item) => item.capacity.capAvailable);
   const refused = items.filter((item) => !item.capacity.capAvailable);
+  const answered = items.filter((item) => item.headroom.available);
+  const overCap = items.filter((item) => item.headroom.overCap === true);
+  const observerRow = items.find((item) => sameId(item.factionId, observerId)) || null;
+  // Narrowing with `?faction=` to somebody other than the observer used to
+  // headline `unknown` beside a row that plainly said `over-cap`, because the
+  // headline only ever spoke for the observer. It now speaks for whichever
+  // faction the request is actually about, and NAMES which one -- a verdict
+  // whose subject is ambiguous is worse than no verdict.
+  const verdictRow = observerRow || (items.length === 1 ? items[0] : null);
 
   return {
     count: items.length,
@@ -60,24 +75,44 @@ export function controlPointCapResource(snapshot, options = {}) {
     intelMode: mode,
     // The headline a consumer should read FIRST. Every other number on this
     // endpoint is downstream of it.
-    verdict: 'unresolved',
-    verdictReason: 'the composed cap does not reconcile against the save\'s own recorded overage, so no faction\'s '
-      + 'headroom is emitted and nothing here may gate a decision about taking another control point',
-    reconciliationEvidence: Object.freeze({
-      measuredOn: CONTROL_POINT_CAP_MEASURED_ON,
-      note: 'On ExitSave.gz (1/1/2035) the Protectorate models a cap of 992 against a maintenance cost of 872.47, '
-        + 'i.e. no overage, while the save records an overage of 10.02. On CombatAutosave.gz (7/15/2034) the same '
-        + 'faction records 5.16. Between the two saves the modelled cap moves by 2 and the cap implied by the '
-        + 'recordings moves by 14.09, and no cost exponent reconciles both (solving the pair gives p = 0.5041 with '
-        + 'a base cap of -88).'
+    verdict: verdictRow ? verdictRow.verdict : 'unknown',
+    verdictReason: verdictRow
+      ? verdictRow.verdictReason
+      : 'this payload carries several factions and none of them is the observer, so no single headline verdict '
+        + 'applies; read the per-faction rows',
+    verdictFactionId: verdictRow ? verdictRow.factionId : null,
+    verdictFactionName: verdictRow ? verdictRow.factionName : null,
+    // The observer's own position, lifted out so a consumer does not have to
+    // find its row. Null rather than 0 when it cannot be established, and null
+    // rather than someone else's number when the observer is not in the payload.
+    observerHeadroom: observerRow ? observerRow.headroom.value : null,
+    observerHeadroomBasis: observerRow ? observerRow.headroom.basis : null,
+    recordingSemantics: Object.freeze({
+      field: 'TIFactionState.history_CPCapOverageByDay',
+      windowDays: 32,
+      ordering: 'newest first -- slot 0 is today, slot 31 is 31 days ago, one slot per in-game day',
+      storedQuantity: 'max(0, maintenance cost - cap) x the overage multiplier, i.e. the MISSION-DEFENCE PENALTY',
+      overageMultiplier: CONTROL_POINT_OVERAGE_PENALTY_MULTIPLIER,
+      overageFromStored: 'overage = stored slot / 0.3333333432674408',
+      appliedModifier: 'the mean of the whole window, not slot 0',
+      source: CONTROL_POINT_CAP_SOURCES.recording,
+      measuredOn: CONTROL_POINT_CAP_MEASURED_ON
     }),
-    baseCapAmbiguity: BASE_CAP_UNRESOLVED,
+    accuracy: CONTROL_POINT_CAP_ACCURACY,
     costFormula: COST_FORMULA,
     sources: CONTROL_POINT_CAP_SOURCES,
     // Composed vs refused, so a consumer can see at a glance that player mode
     // answers for the observer and declines for every rival, rather than
     // finding a page of nulls and guessing why.
     composedCount: composed.length,
+    answeredCount: answered.length,
+    overCapCount: overCap.length,
+    overCapFactions: Object.freeze(overCap.map((item) => Object.freeze({
+      factionId: item.factionId,
+      factionName: item.factionName,
+      overage: item.recorded.overage,
+      influencePerYear: item.penalties.influencePerYearFromRecorded
+    }))),
     refusedCount: refused.length,
     refusedFactions: Object.freeze(refused.map((item) => Object.freeze({
       factionId: item.factionId,

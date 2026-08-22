@@ -31,6 +31,40 @@ const {
   effectiveResearchCost,
   researchCostBasis
 } = require('../../shared/researchCostScaling.mjs');
+const {
+  CONTROL_POINT_OVERAGE_PENALTY_MULTIPLIER
+} = require('../../shared/controlPointCap.mjs');
+
+/**
+ * One slot of `history_*CapOverageByDay`, by age in days.
+ *
+ * Slot 0 is today. Absent, short, or non-numeric stays null -- a slot that was
+ * never written is not a measured zero, and `Number(null) === 0` would report
+ * an unrecorded faction as comfortably within its cap.
+ */
+function readControlPointCapPenalty(history, ageInDays) {
+  if (!Array.isArray(history) || history.length <= ageInDays) return null;
+  return firstNumericOrNull(history[ageInDays]);
+}
+
+/**
+ * The mean of the whole penalty window -- what the game actually applies to
+ * missions defending this faction's control points.
+ *
+ * Refuses on any unreadable slot rather than averaging the readable ones: a
+ * mean over a short window is a different (and smaller) number than a mean over
+ * the full one, and nothing downstream could tell them apart.
+ */
+function averageOrNull(history) {
+  if (!Array.isArray(history) || history.length === 0) return null;
+  let total = 0;
+  for (const slot of history) {
+    const value = firstNumericOrNull(slot);
+    if (value === null) return null;
+    total += value;
+  }
+  return total / history.length;
+}
 
 function normalizeFactionIntelligence(faction) {
   const normalizeEntries = (entries) => (Array.isArray(entries) ? entries : [])
@@ -465,18 +499,50 @@ function buildFactions(rawFactions, {
         && spaceMiningBonusEffectsByFaction.has(factionId)
         ? spaceMiningBonusEffectsByFaction.get(factionId)
         : null,
-      // `TIFactionState.history_CPCapOverageByDay`, most recent slot: the game's
-      // OWN record of how far over its control-point cap this faction is.
+      // `TIFactionState.history_CPCapOverageByDay` -- the game's OWN record of
+      // this faction's control-point cap position.
       //
-      // Carried verbatim because it is the only figure the game states, and it
-      // is what shows that the derived cap does not yet reconcile. Its exact
-      // semantics are NOT verified -- its Mission Control sibling does not equal
-      // (usage - capacity) on the same save -- so a 0 here is not evidence a
-      // faction is within cap. Absent stays null.
-      recordedControlPointCapOverage: Array.isArray(f.history_CPCapOverageByDay)
-        && f.history_CPCapOverageByDay.length > 0
-        ? firstNumericOrNull(f.history_CPCapOverageByDay[f.history_CPCapOverageByDay.length - 1])
-        : null,
+      // THE SEMANTICS ARE NOW MEASURED, AND THEY ARE NOT WHAT THIS FILE USED TO
+      // ASSUME. Two corrections, both from the shipped assembly (IL read
+      // 2026-08-22, Assembly-CSharp.dll 1.0.51) and both confirmed against the
+      // save data:
+      //
+      //   1. THE ARRAY IS NEWEST-FIRST. Slot 0 is today; slot 31 is 31 days
+      //      ago, one slot per in-game day. This file read
+      //      `[length - 1]` and called it "the most recent slot", which is the
+      //      OLDEST sample -- a month stale. Proven by value alignment across
+      //      four saves of one campaign: the arrays for 12/1/2034, 12/16/2034
+      //      and 1/1/2035 are the same series shifted by exactly 16, 15 and 31
+      //      slots for gaps of 15.5, 15.5 and 31 days, in BOTH this array and
+      //      its Mission Control sibling.
+      //
+      //   2. THE STORED NUMBER IS NOT THE OVERAGE. It is
+      //      `GetOneDayControlPointCapMissionPenalty()`, which is
+      //      `max(0, cost - cap) * TIMissionModifier_ControlPointOverage_Multiplier`
+      //      and that multiplier is 0.3333333432674408f (TIGlobalConfig ctor).
+      //      The stored value is the MISSION-DEFENCE PENALTY, i.e. the overage
+      //      divided by three. Reading it as the overage understates the real
+      //      position by 3x.
+      //
+      // `GetAveragedControlPointCapPenaltyToMissions()` is `Average()` over the
+      // whole array, which is why the game's own tooltip says the penalty "is
+      // averaged from how much we have been over the cap during the last month"
+      // (UIGeneralControls.en, `CPCapOverageCurrent`). Today's sample and the
+      // month mean are therefore DIFFERENT quantities and both are published.
+      //
+      // A recorded 0 is a measurement -- the penalty is floored at zero, so it
+      // means "at or under cap" -- but only for a human faction. The alien
+      // faction's cap is a hard-coded 20000, so its 0 is an exemption, not a
+      // position. Absent stays null throughout.
+      controlPointCapPenaltyToday: readControlPointCapPenalty(f.history_CPCapOverageByDay, 0),
+      controlPointCapPenaltyAveraged: averageOrNull(f.history_CPCapOverageByDay),
+      // The overage itself: today's penalty times three. Named as before
+      // because consumers read it, but it is now the real excess rather than a
+      // month-stale third of it.
+      recordedControlPointCapOverage: (() => {
+        const penalty = readControlPointCapPenalty(f.history_CPCapOverageByDay, 0);
+        return penalty === null ? null : penalty / CONTROL_POINT_OVERAGE_PENALTY_MULTIPLIER;
+      })(),
       recordedControlPointCapOverageSamples: Array.isArray(f.history_CPCapOverageByDay)
         ? f.history_CPCapOverageByDay.length
         : null,

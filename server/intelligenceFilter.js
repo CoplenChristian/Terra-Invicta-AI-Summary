@@ -375,7 +375,14 @@ class IntelligenceFilter {
         // which is exactly what the masked councilor attributes exist to keep
         // out of player mode. Null, never 0 -- a rival reported at 0 overage
         // reads as comfortably within a cap nobody measured.
+        //
+        // ALL FOUR, not just the derived one. The overage is today's stored
+        // penalty times three, so publishing the penalty and withholding the
+        // overage would leak the same number under a different name -- the
+        // exact defect shape the redaction notes in CLAUDE.md record.
         recordedControlPointCapOverage: isEnhanced || isObserver ? f.recordedControlPointCapOverage : null,
+        controlPointCapPenaltyToday: isEnhanced || isObserver ? f.controlPointCapPenaltyToday : null,
+        controlPointCapPenaltyAveraged: isEnhanced || isObserver ? f.controlPointCapPenaltyAveraged : null,
         recordedControlPointCapOverageSamples: isEnhanced || isObserver
           ? f.recordedControlPointCapOverageSamples
           : null
@@ -807,6 +814,16 @@ class IntelligenceFilter {
       }
       if (this.toFiniteOrNull(faction.recordedControlPointCapOverage) !== null) {
         factionLeaks.push(`${faction.ID}:recordedControlPointCapOverage`);
+      }
+      // The raw fields the overage is derived FROM, not only the derived one.
+      // `recordedControlPointCapOverage` is `controlPointCapPenaltyToday * 3`,
+      // so nulling the derived field alone would have left the same fact on the
+      // payload under two other names.
+      if (this.toFiniteOrNull(faction.controlPointCapPenaltyToday) !== null) {
+        factionLeaks.push(`${faction.ID}:controlPointCapPenaltyToday`);
+      }
+      if (this.toFiniteOrNull(faction.controlPointCapPenaltyAveraged) !== null) {
+        factionLeaks.push(`${faction.ID}:controlPointCapPenaltyAveraged`);
       }
       if (this.toFiniteOrNull(faction.recordedControlPointCapOverageSamples) !== null) {
         factionLeaks.push(`${faction.ID}:recordedControlPointCapOverageSamples`);

@@ -1,334 +1,331 @@
-# Control point cap — the constraint the engine ignores
+# Control point cap — what the game records, and the cap that follows from it
 
-Written 2026-08-22 against `866b8a8`. **Revised 2026-08-22 after implementation against `f451945`;
-the revision corrects three claims in the original and records the outcome.**
-
-The dashboard tracks how many control points the observer holds. It has **no concept of a
-cap**, and the directive engine actively recommends taking more — "Take the Executive
-control point in Madagascar" sits in the live cycle plan. Exceeding the cap is not a soft
-penalty.
+Written 2026-08-22 against `866b8a8`. **Revised 2026-08-22 after implementation against `f451945`.
+Revised again 2026-08-22 against `43f170f`, and this revision overturns the previous one's
+central conclusion: the cap does reconcile, and the headroom verdict is no longer refused.**
 
 ---
 
 ## Outcome, in one paragraph
 
-Every contribution to the cap is now located, cited and attributed, and the maintenance cost
-formula is cited too. The **absolute cap is still not established**: the composed figure
-disagrees with the only figure the game itself records, and the disagreement grows over time.
-`shared/controlPointCap.mjs` therefore reports the composition, reports the recording,
-reports the residual, and **refuses the headroom verdict**. No rule was added to the
-directive registry and no recommendation changed. See "What did not reconcile" below.
+The previous revision could not reconcile the composed cap against the game's own record and
+refused the headroom verdict — correctly, given what it knew. It knew the wrong thing about the
+record. `history_CPCapOverageByDay` is **not** the overage and its last slot is **not** the most
+recent sample: it is a 32-day window, newest first, of the **mission-defence penalty**, which is
+the overage divided by three. Read correctly, and with three consequent corrections to the model,
+the composition now reproduces the game's own figure to within **about one point in eight
+hundred**, and the residual does not grow. `shared/controlPointCap.mjs` emits `headroom.available:
+true` from one of two named bases, with the measured residual travelling beside it.
 
 ---
 
-## The mechanic
+## What `history_CPCapOverageByDay` actually records
 
-From the wiki (`Aliens`, raw wikitext, read 2026-08-22 at `wiki.hoodedhorse.com`, the
-publisher's official wiki; the fandom mirror is 410):
+This is the question the previous two attempts assumed the answer to. It was measured on
+2026-08-22 by reading the shipped assembly directly —
+`TerraInvicta_Data/Managed/Assembly-CSharp.dll`, campaign version 1.0.51 — with a minimal
+PE/CLI metadata reader, and then corroborated three independent ways.
 
-> "Human Factions suffer increased vulnerability to Crackdown and Purge missions from
-> exceeding their cp, as well as incur an annual influence upkeep equal to the excess
-> amount squared."
+```csharp
+TIFactionState::GetOneDayControlPointCapMissionPenalty()
+    float over = GetBaselineControlPointMaintenanceCost(false)
+               - GetControlPointMaintenanceFreebieCap();
+    return over > 0f ? over * global.TIMissionModifier_ControlPointOverage_Multiplier : 0f;
 
-Confirmed and made precise by `Nations`, section "Cost of Control Points" (raw wikitext,
-read 2026-08-22), which states both penalties in the game's own terms:
-
-- annual Influence income decreases by `overcap ^ 2`
-- **Crackdown, Purge, Enthrall Elites and Dominate Nation** against the faction gain a
-  bonus attack modifier of `overcap / 3`
-
-The second is carried in the templates as
-`TIMissionModifier_InsufficientCPMaintenance_Defender`, present on four missions in
-`TIMissionTemplate.json`. The first is **quadratic**: three over cap costs 9 Influence/year,
-ten over costs 100. A linear model of this is not an approximation, it is a different
-mechanic.
-
-## Councilor contribution — **three attributes, not one**
-
-> **CORRECTION.** The original spec named only Persuasion. It is three.
-
-From `Control Point Capacity` (raw wikitext, read 2026-08-22):
-
-> "Every point of {{TV|administration}}, {{TV|persuasion}}, or {{TV|command}} on a
-> [[Councilors|Councilor]] that is not {{MissionIcon|Detain}}[[Detain|Detained]] adds 1
-> point of {{TV|cp}}."
-
-The same page settles two things the original spec left open:
-
-- **Orgs add no cp directly.** "They only help by improving Councilor attributes." So the
-  right reading is the *resolved* attribute (base + org + trait, clamped 0–25), not the base
-  one, and there is no separate org term.
-- **Traits add no cp directly** either, for the same reason.
-- **Events add none. Techs add none.**
-
-Detention matters: a detained councilor contributes nothing while held.
-
-## Hab modules — **a source the original spec missed entirely**
-
-`TIHabModuleTemplate.json` carries `controlPointCapacity` on exactly three of its 156
-modules:
-
-```
-AdministrationNode      controlPointCapacity  4
-AdministrationTower     controlPointCapacity 12
-AdministrationComplex   controlPointCapacity 30
+TIFactionState::GetAveragedControlPointCapPenaltyToMissions()
+    return history_CPCapOverageByDay.Average();
 ```
 
-All three also carry a `LEOControlPointCapacity` special rule, whose effect is **not
-modelled** — no source read so far states what it does. Zero Administration modules exist
-anywhere on the measured save, so this term is a measured zero for every faction today and
-an untested code path.
+`TIGlobalConfig::.ctor` initialises `TIMissionModifier_ControlPointOverage_Multiplier` to
+`0.3333333432674408f`. So, answering the questions the brief posed one at a time:
 
-## What the templates carry
+| question | answer |
+| :-- | :-- |
+| instantaneous, mean, accumulator or decayed? | **Instantaneous daily sample.** One slot written per in-game day; no smoothing inside a slot. |
+| is it per-day, and what does the length say? | **Per day, 32 slots, newest first.** Slot 0 is today, slot 31 is 31 days ago. |
+| capped or floored? | **Floored at 0, never capped.** `over > 0 ? … : 0f`. The Servants' "7 while hundreds over" was a 31-day-stale slot, not a clamp. |
+| does it reset? | No reset found; it shifts one slot a day. |
+| the aliens' 0 — exempt, or unmaintained? | **Exempt.** `GetControlPointMaintenanceFreebieCap()` returns a hard-coded `20000f` for the alien faction, and `GetAnnualControlPointMaintenanceCost()` returns 0. |
+| what is stored? | **`max(0, cost − cap) × 0.3333…` — the mission-defence penalty, not the overage.** |
+| what does the game *apply*? | **The mean of the whole 32-day window**, not slot 0. |
 
-`ControlPointMaintenance` is the effect context, and `TIEffectTemplate EN` shows the game
-displays it as **"Control Point Cap"** — so maintenance and cap are the same quantity under
-two names. Five effects modify it:
+### The three corroborations, none of which needs the assembly
 
-```
-Effect_ControlPointMaintenanceBonus160   value -120
-Effect_ControlPointMaintenanceBonus40    value  -40
-Effect_ControlPointMaintenanceBonus20    value  -20
-Effect_ControlPointMaintenanceBonus10    value  -10
-Effect_ControlPointMaintenanceBonus3     value   -5
-```
+**1. Slot ordering, from save-to-save alignment.** Four saves of one campaign, MD5-verified frozen
+copies. Each array is the same series shifted by exactly the number of days between the saves:
 
-**The suffix does not match the value.** `Bonus160` is −120 and `Bonus3` is −5. Do not
-derive a magnitude from a template's name; read `value`.
-
-### Sign convention — **pinned, twice, by the shipped data**
-
-A negative `ControlPointMaintenance` value **raises** the cap by its magnitude. Two
-independent facts in the templates say so:
-
-1. All five effects carry `"showTotal": "Invert"` — the data instructing the UI to negate
-   the total before displaying it. A stored −120 displays as +120.
-2. `AI_projectRole: "ControlPointCap"` is shared by twelve projects. Nine grant these
-   **negative** effects. The other three — `Project_AdministrationNode` / `Tower` /
-   `Complex` — grant no effect at all; they unlock the hab modules above, whose
-   `controlPointCapacity` is **positive**. The same AI goal served by a positive capacity
-   and a negative maintenance is only consistent if negative maintenance means more cap.
-
-`Effect_ControlPointMaintenanceBonus20` is defined but granted by **nothing** in any shipped
-template. It is handled anyway.
-
-### Read the effects from the game's own effect state, not from completed projects
-
-`TIEffectsState.factionEffectsNames` carries each faction's active effects keyed by context.
-It is authoritative in a way a `finishedProjectNames` sweep is not: **the Aliens hold four
-`ControlPointMaintenance` effects granted by none of the 32 projects that grant them**,
-because two of the five list `initialFactionsStr: ["AlienCouncil", ...]` and are handed out
-at campaign start. A project sweep scores the Aliens at 0 and the effect state at 320.
-
-## The base cap — **located, in the save, in two fields**
-
-> **CORRECTION.** The original spec said "No per-faction cap field was found" and told the
-> implementer to check `TIGlobalConfig.json` and `TIFactionTemplate.json`. Neither carries
-> one — `TIGlobalConfig.json` is a 4.7 KB list of UI canvas names, and `TIFactionTemplate`
-> has no cap field — but the save does.
-
-```
-TIGlobalValuesState.controlPointMaintenanceFreebies       400   (this campaign)
-TIMetadataState.controlPointMaintenanceFreebieBonus       150   (every faction)
-TIMetadataState.controlPointMaintenanceFreebieBonusAI       0   (AI factions, on top)
-```
-
-The wiki names both knobs under Customize Campaign (`Game_Options`, raw wikitext, read
-2026-08-22):
-
-> "**Base Control Point Capacity** — Decides the number of cp cap each faction starts with,
-> which decides how many nations you can control before triggering over the CP cap penalty."
->
-> "**AI bonus Control Point Cap** — Decides how much cp cap AI factions will receive, in
-> addition to the base cp cap."
-
-The same page adds that deactivating a faction raises the base by 50 and that the Starting
-Nation Group option adds more. Both are already inside the save's stored numbers, so nothing
-is recomputed from them.
-
-**What is still unresolved:** which of the two save fields the game calls "the base" and
-which "the bonus". `shared/controlPointCap.mjs` reports both by name and sums them, and
-`BASE_CAP_UNRESOLVED` states the ambiguity rather than picking one. On this campaign the sum
-is 550 for the player faction and 550 for the AI factions (the AI bonus is 0 here).
-
-Note `controlPointMaintenanceFreebieBonus` is a **difficulty setting**, so its value is
-campaign-specific. It is read from the save, never hard-coded.
-
-## What else the save carries
-
-- `numControlPoints` and `numControlPoints_unclamped` — **295 occurrences each, per nation,
-  and identical on this save.** They are a nation's CP count, not a faction cap.
-- `StartOfTurnNativeControlPoints` — 295, all zero.
-- `TIGlobalValuesState.fixedPCGDPToRaiseBaseCPMaintenanceCostBy1` — 994,239,000. A
-  campaign-start normalizer whose role is **not established**; it is not used.
-- `TIGlobalValuesState.repairCPMaintenanceScaling` — false. Role not established; not used.
-- **`TIFactionState.history_CPCapOverageByDay`** — a 32-slot array of the game's own overage
-  figure per faction. This is the field that broke the model. See below.
-
-## The cost side — and the order-of-magnitude puzzle it explains
-
-From `Nations`, section "Cost of Control Points" (raw wikitext, read 2026-08-22):
-
-> ```
-> Total Cost of Control Points = (GDP in billions) ^ 0.6 / 2
-> ```
-> "This total cp cost is divided up evenly among all the control points of the nation."
-> "Control points that have sustained a Crackdown or are abandoned do not cost any cp."
-
-**The second line is what an earlier attempt dropped**, and it is the whole of the
-232-versus-2,493 puzzle recorded in the knowledge base on 2026-08-20. Costing 23 held control
-points at the *undivided* national total gives ~2,493 against a councilor-derived capacity of
-~232. With the division applied and the base cap included, the two sides are the same size:
-the observer's modelled cost is **456.7** against a modelled cap of **846**. The
-order-of-magnitude gap was an arithmetic omission plus a missing base, not a units mismatch.
-
-GDP in the save is in **raw dollars**, so `GDP / 1e9` is the billions the formula wants.
-Cross-checked against the wiki's own control-point-count formula
-`max(1, min(round(GDP_Bn^0.18 / 1.09), 6))`, which reproduces the save's `numControlPoints`
-on every nation checked except India — and India sits at 21,068 Bn against the table's
-20,944 Bn boundary, i.e. it has just crossed and the game has not yet added the sixth point.
-
-## What did **not** reconcile
-
-`history_CPCapOverageByDay` is the game's own record, and the composed model disagrees with
-it. Measured 2026-08-22 against MD5-verified frozen copies of two saves:
-
-| | `CombatAutosave.gz` 7/15/2034 | `ExitSave.gz` 1/1/2035 |
+| pair | in-game gap | measured slot offset |
 | :-- | --: | --: |
-| Protectorate modelled maintenance cost | 853.52 | 872.47 |
-| modelled cap (base 400 + councilors + projects) | 840 | 842 |
-| modelled overage | 13.52 | 30.47 |
-| **the save's own recorded overage** | **5.16081** | **10.02051** |
-| cap implied by the recording | 848.36 | 862.45 |
+| `Autosave3` 12/1/2034 → `Autosave2` 12/16/2034 12:00 | 15.5 d | 16 |
+| `Autosave2` 12/16/2034 12:00 → `Autosave` 1/1/2035 | 15.5 d | 15 |
+| `Autosave3` 12/1/2034 → `ExitSave` 1/1/2035 | 31 d | 31 |
 
-Between the two saves the Protectorate's roster, org loadout and completed-project list are
-identical; two councilors each gained one attribute point, so the modelled cap moves by
-**2**. The cap implied by the recordings moves by **14.09**. Nothing modelled moved by
-fourteen. Solving the two equations for a different cost exponent gives `p = 0.5041` with a
-base cap of **−88**, so no exponent rescues it either.
+`Autosave3`'s slot 0 (`10.02051`) is `ExitSave`'s slot **31**. That is precisely the value the
+previous revision quoted as `ExitSave`'s "recorded overage". It was a month old. The same offsets
+hold in `history_MCCapOverageByDay`, so the two share one convention.
 
-Two further measurements bound the problem:
+**2. The Mission Control sibling reconciles exactly.** The brief was right that MC is the better
+place to crack it — but the repo's `missionControlCapacity` (a sum over the faction's nations) is
+not the game's capacity. The save states its own: `TIFactionState.cachedYearlyRevenue.MissionControl`.
+Against that, `history_MCCapOverageByDay[0] === max(0, missionControlUsage − capacity)` **exactly**:
 
-- **The recording's semantics are themselves unverified.** Its sibling
-  `history_MCCapOverageByDay` does not equal (usage − capacity) for Mission Control on the
-  same save: the Servants record **7** while every reading of their usage and capacity puts
-  them hundreds over, and the Aliens record **0** at 420 MC of usage. So a recorded 0 is not
-  evidence a faction is within cap, and a recorded value is not evidence of the exact excess.
-- **The one inequality that does hold** is consistent with a base near 400: on
-  `initiative.gz` (9/10/2029) the Servants cost 585.98 at zero recorded overage, which forces
-  base ≥ 388.
+| faction | usage | capacity | usage − capacity | recorded slot 0 |
+| :-- | --: | --: | --: | --: |
+| the Resistance | 116 | 190 | −74 | 0 |
+| Humanity First | 152 | 179 | −27 | 0 |
+| the Initiative | 161 | 182 | −21 | 0 |
+| **the Servants** | **374** | **371** | **+3** | **3** |
+| the Protectorate | 186 | 226 | −40 | 0 |
+| the Academy | 87 | 93 | −6 | 0 |
+| Project Exodus | 71 | 116 | −45 | 0 |
+| **the Aliens** | **420** | **410** | **+10** | **0** |
 
-**Conclusion: do not gate advice on a derived cap.** The knowledge-base note of 2026-08-20
-reached the same conclusion for a different (and now-explained) reason; it still stands.
+(`ExitSave.gz`, 1/1/2035. `CombatAutosave.gz` 7/15/2034 gives the same shape: everyone under and
+recording 0, the Aliens 11 over and recording 0.) Seven human factions on the nose; the aliens
+over and recording nothing. The multiplier is 1 for Mission Control and a third for control
+points, which is why MC recorded integers and CP did not.
+
+**3. The game says so in its own shipped strings.** `UIGeneralControls.en`:
+
+> `UI.GeneralControls.CPCapOverageCurrent` — "…This value is averaged from how much we have been
+> over the cap during the last month."
+
+and `UINations.en` gives the whole Control Point Capacity panel, which is the composition this
+model follows term for term: `CPMaint4` Base Cap, `CPMaint5` Bonus from Research, `CPMaint10/11/12`
+Bonus from Councilors' Administration / Command / Persuasion, `CPMaint13` Bonus from Habs,
+`CPMaint7` Each Cost Against Cap, `CPMaint8` `{nation} {n}x{each} = {total}`.
+
+---
+
+## The formula, from the game's own methods
+
+```csharp
+TINationState::get_ControlPointMaintenanceCost           // per control point
+    if (alienNation) return 0f;
+    return Mathd.Pow(GDP / TIGlobalValuesState.PCGDPToRaiseBaseCPMaintenanceCostBy1,
+                     globalConfig.controlPointCostScaling)
+           / (global.controlPointMaintenanceDivisor * numControlPoints)
+           * GameStateManager.Time.template.CPMaintenanceModifier;
+
+TIControlPoint::get_CurrentMaintenanceCost
+    return benefitsDisabled ? 0f : BaselineMaintenanceCost;
+
+TIFactionState::GetControlPointMaintenanceFreebieCap
+    if (IsAlienFaction) return 20000f;
+    int b = GlobalValues.controlPointMaintenanceFreebies
+          + (isActivePlayer ? 0 : scenarioCustomizations.controlPointMaintenanceFreebieBonusAI)
+          + activeCouncilors.Sum(c => c.controlPointCapacity)
+          + habs.Sum(h => h.controlPointCapacityValue);
+    return b - TIEffectsState.SumEffectsModifiers(ControlPointMaintenance, this,
+                                                  GlobalValues.controlPointMaintenanceFreebies, null);
+
+TIFactionState::AvailableCPCapSpace                       // the game's own headroom
+    return GetControlPointMaintenanceFreebieCap()
+         - controlPoints.Sum(cp => cp.CurrentMaintenanceCost);
+
+TIFactionState::GetAnnualControlPointMaintenanceCost
+    if (IsAlienFaction) return 0f;
+    float over = cost - cap;
+    return over > 0f ? over * over : 0f;
+```
+
+Constants, from `TIGlobalConfig::.ctor` and `TIStartTimeTemplate::.ctor`:
+
+```
+controlPointCostScaling                            0.6f
+controlPointMaintenanceDivisor                     2f
+TIMissionModifier_ControlPointOverage_Multiplier   0.3333333432674408f
+CPMaintenanceModifier                              1f   (overridden by none of the 5 start times)
+```
+
+`TICouncilorState::get_controlPointCapacity` is exactly three `GetAttribute` calls summed, and
+`get_active` is `status == Active && !detained` — so the wiki's councilor rule is confirmed from
+the code as well.
+
+### Three corrections this forces on the previous model
+
+**1. The base cap is `controlPointMaintenanceFreebies` alone — 400, not 550.** The previous
+revision summed it with the `controlPointMaintenanceFreebieBonus` campaign setting (150) and
+recorded the choice between them as unresolved. The cap method never reads the setting: it is the
+Customize Campaign knob that produced the stored value. `UI.StartScreen.CustomizeCampaign.CPFreebiesTooltip`
+says so in the game's own words — "Base Control Point capacity for all factions". Only the
+AI-only sibling is added, and only for factions the human is not playing. **This was a 150-point
+error on a cap of 841.**
+
+**2. The cost divides GDP by `fixedPCGDPToRaiseBaseCPMaintenanceCostBy1`, not by 1e9.**
+`TIStartTimeTemplate.scaleCPMaintenanceWithStartingGDP` is `true` on all five shipped start times,
+and `get_pcgdpToRaiseBaseCPMaintenanceCostBy1` then freezes `globalGDP_CampaignStart × 6.26e-6`
+for the campaign — 994,239,000 here, implying a campaign-start world GDP of $158.8 trillion. It
+returns a flat 1e9 only when that flag is false. The previous revision listed this field under
+"not established"; it is the divisor.
+
+**3. Only `benefitsDisabled` makes a control point free.** `CurrentMaintenanceCost` tests that flag
+and nothing else, and `SetCrackdownExpiry` writes no such flag. The wiki's "control points that
+have sustained a Crackdown … do not cost any cp" is **not** reproduced by the 1.0.51 code path.
+Crackdown-only holdings are therefore charged, and counted under `crackdownChargedCount` so the
+disagreement is visible rather than settled by preference. The observer holds none on the measured
+save, so nothing here turns on it.
+
+Two smaller ones: the divisor is `TINationState.numControlPoints` (which survives redaction), not
+the projected control-point list, whose length can be short in a filtered mode; and an alien
+nation's control points cost zero outright.
+
+---
+
+## How well it reconciles
+
+The Protectorate is the only faction over cap on any measured save, so it is the only faction
+whose cap the recording pins. Cap implied by `cost − 3 × penalty` against the composed cap:
+
+| save | campaign date | modelled cost | slot 0 | implied cap | composed cap | residual |
+| :-- | :-- | --: | --: | --: | --: | --: |
+| `CombatAutosave.gz` | 7/15/2034 | 856.48690 | 5.829041 | **838.99978** | 840 | +1.00022 |
+| `Autosave3.gz` | 12/1/2034 | 871.18025 | 10.02051 | 841.11872 | 842 | +0.88128 |
+| `Autosave2.gz` | 12/16/2034 | 873.24422 | 10.67072 | 841.23206 | 842 | +0.76794 |
+| `ExitSave.gz` | 1/1/2035 | 875.50316 | 11.44552 | 841.16660 | 842 | +0.83340 |
+
+The implied cap on the first save is an integer to four decimal places — **838.99978 against a
+true cap that must be an integer, because every term is one**. The cost formula is therefore
+exact, and the whole residual lives in the cap. The true cap is 839, then 841 after two councilor
+attribute points; the composition reads 840 then 842, i.e. **+1 in every window, and it does not
+grow across six in-game months**.
+
+(Reading the raw save fields directly rather than the projected snapshot moves the cost by about
+1.7e-4 — the snapshot rounds GDP. It does not move any conclusion.)
+
+The unmodelled point is councilor-attribute resolution: this repo's `resolvedAttributes.effective`
+clamps at 25, while the game's `GetAttribute` call for cap purposes raises its own ceiling by each
+*negative* bonus instead. One point on a six-councilor roster. It is reported in
+`CONTROL_POINT_CAP_ACCURACY` and **not** subtracted out — correcting a measured bias by fitting it
+away is exactly what this brief forbade.
+
+A second, one-sided check: every faction the game records at or under cap is composed at or under
+cap, on every save measured — 6 saves × 7 human factions, no violation. With the 150-point base
+double-count that check passed vacuously; at base 400 the tightest case is the Servants on
+`initiative.gz` (9/10/2029), costing 588.01 against a composed 598 — a margin of 9.99 where the
+double-count would have shown 159.99.
+
+### Why the previous revision's numbers looked hopeless
+
+It compared a cost at date *T* against a penalty from *T−31 days*, and read that penalty as the
+overage. Both errors pull the same way. On `ExitSave.gz`, against a composed cap of 842:
+
+| reading | implied cap | residual |
+| :-- | --: | --: |
+| slot 0, ×3 (correct) | 841.17 | 0.83 |
+| slot 31, ×3 | 845.44 | 3.44 |
+| slot 0, ×1 | 864.06 | 22.1 |
+| slot 31, ×1 (what was measured before) | 865.48 | 23.5 |
+
+And the "disagreement grows" was the same artefact: the stale slot lags a rising series, so the
+lag itself grows with the rate.
 
 ---
 
 ## What was built
 
-`shared/controlPointCap.mjs` — the composition, per faction, with every term attributed:
+`shared/controlPointCap.mjs` — the composition per faction, every term attributed, plus:
 
-- base cap from the save's own two fields, each named
-- every non-detained councilor's Administration + Persuasion + Command, per councilor
-- every completed Administration hab module, named with its hab
-- every `ControlPointMaintenance` effect, with its stored value and its cap contribution
-- the maintenance cost per nation, with the per-control-point division shown and
-  crackdown/abandoned holdings excluded with a reason
-- the save's own recorded overage, labelled with its unverified semantics
-- the residual between the two, and `reconciles: false`
-- `headroom.available: false` **always**, with a reason
-- the quadratic Influence penalty and the `overage / 3` mission exposure, from both the
-  recorded and the modelled overage, each labelled
+- `CONTROL_POINT_OVERAGE_PENALTY_MULTIPLIER` — the float32 literal, so the overage round-trips
+- `readControlPointCostNormalizer` — the campaign GDP divisor, `measured: false` when absent
+- `buildControlPointMaintenance` — per nation, with the divisor's source named
+- `buildControlPointCapReport` — cap, cost, recording, reconciliation, headroom, penalties
+- `CONTROL_POINT_CAP_ACCURACY` — the measured residual, its direction, and the unmodelled term
 
-`shared/intel/controlPointCap.mjs` — `/api/intel/control-point-cap`, one registry row,
-appended rather than slotted so no existing example is renumbered.
+`server/snapshot/factions.js` publishes three figures where it published one stale third of one:
+`controlPointCapPenaltyToday` (slot 0), `controlPointCapPenaltyAveraged` (the window mean, which
+is what the game applies), and `recordedControlPointCapOverage` (slot 0 × 3).
 
-### Absent stays null, everywhere
+`server/snapshot/nations.js` adds `controlPointCount` (the game's own divisor) and `alienNation`.
 
-Four separate refusals, each with a deliberately-broken test proving it fires:
+`shared/intel/controlPointCap.mjs` — `/api/intel/control-point-cap`, now headlining a verdict, the
+observer's headroom, the over-cap factions, and a `recordingSemantics` block so an agent reading
+the raw field can interpret it without this document.
 
-- **No base** → the whole cap is unknown, never 0 and never "no limit".
-- **A short roster** → unknown. Player mode publishes 0 of the Aliens' 6 councilors and 4 of
-  the Protectorate's 6, so summing the visible rows would delete the single largest term and
-  present the remainder as a total. Checked against the faction's own `councilorsCount`; an
-  unreadable headcount makes completeness *unverifiable*, which is treated as incomplete.
-- **A faction with habs but no visible hab-module rows** → unknown. Player mode publishes
-  every faction's habs and only the observer's modules (the Servants: 50 habs / 0 modules in
-  player mode, 50 / 574 in omniscient).
-- **An absent effect list** → unknown, while an empty one is a measured zero.
+### The headroom verdict, and the two bases it comes from
+
+`headroom.available` is now **true**, from one of two bases that are named on every row because
+they are not equally strong:
+
+- **`recorded`** — the save records a positive penalty, so the faction is over cap by exactly three
+  times it. Exact; no composed cap involved.
+- **`composed`** — every cap term and the whole cost were measured. Carries `accuracy`.
+
+It still refuses, loudly, in four cases: an unreadable cap term; a cost that is a floor because
+some holding could not be priced; an unmeasured GDP normalizer (which blocks the composed basis
+but not the recorded one); and a **contradiction** — a composed headroom below zero while the game
+records zero cannot both be true, because the recording is floored at zero.
+
+Measured on the live save, omniscient:
+
+| faction | cap | cost | headroom | basis |
+| :-- | --: | --: | --: | :-- |
+| the Resistance | 773 | 725.58 | 47.42 | composed |
+| Humanity First | 769 | 475.10 | 293.90 | composed |
+| **the Initiative** | **696** | **458.30** | **237.70** | **composed** |
+| the Servants | 900 | 474.39 | 425.61 | composed |
+| **the Protectorate** | 842 | 875.50 | **−34.34** | **recorded** |
+| the Academy | 788 | 267.05 | 520.95 | composed |
+| Project Exodus | 670 | 304.05 | 365.95 | composed |
+| the Aliens | 20000 | 0 | 20000 | alien exemption |
+
+The Protectorate is paying **1,179 Influence a year** for being 34.34 over, and hostile Crackdown /
+Purge / Enthrall Elites / Dominate Nation against it carry **+10.64** — the window mean, not
+today's 11.45.
 
 ### Both modes
 
-The observer's own cap composes **identically** in player and omniscient mode (846 either
-way, same per-councilor breakdown). Every rival's cap **refuses** in player mode on all three
-grounds above, and their recorded overage and effect list are redacted to `null` — added to
-`assertPlayerSnapshotSafe` so a future field beside them fails loudly. The player-mode payload
-is scanned end-to-end for a rival's recorded overage value, not pinned to one field.
+The observer's own cap, cost and headroom compose **identically** in player and omniscient mode
+(696 / 458.30 / 237.70 either way). Every rival refuses in player mode, and all three recorded
+figures — the overage, slot 0 and the window mean — are `null`. All three are in
+`assertPlayerSnapshotSafe`, individually, and the player payload is scanned end to end for their
+omniscient values rather than pinned field by field. The overage is slot 0 × 3, so redacting only
+the derived field would have left the same fact under two other names.
 
-### The engine: an annotation, not a rule
+### The engine: still an annotation, for a different reason
 
-Every control-nation candidate now carries `value.controlPointMaintenance` — what that
-control point would add to maintenance, from the nation's own control-point count. Madagascar's
-Executive costs ~3 cp; one of the USA's six costs ~39.
+Every control-nation candidate still carries `value.controlPointMaintenance`, and **no rule was
+added to the registry**. The reason changed. It used to be that no honest threshold existed. It is
+now that the threshold is not close: the observer has ~238 points of room against a dearest single
+control point of ~39 and a Madagascar Executive of ~3. A cost rule would move no ranking and a veto
+would fire on nothing, and a rule that does nothing today can start vetoing on a future save nobody
+re-measured.
 
-**No rule was added to the registry, and registry order is untouched.** A veto or cost rule
-would have to test against a cap that does not reconcile, and a veto built on a fabricated
-ceiling rejects real recommendations. The marginal figure *is* sound — it does not depend on
-the base cap at all — so it is published as data a reader can compare across candidates,
-with no claim about affordability.
+**No recommendation changed.** Captured before and after against an MD5-verified frozen
+`ExitSave.gz`, both modes, with volatile fields stripped and two identical baseline runs proving
+the harness deterministic: the only differing lines in the whole briefing are the annotation's
+rounding (3 → 5 decimal places, same values) and its formula label. Primary, score, assignment
+count and total expected value are byte-identical — player "Advise Government: United States of
+North America" at 6.997422015983501 with 3 assignments and 19.3, omniscient "Purge the Protectorate
+hold on ExtractiveSector in China" at 68.74825331372958 with 5 assignments and 66.13.
 
-**No recommendation changed.** The cycle plan is byte-identical before and after in both
-modes: primary "Advise Government: United States of North America" at 6.997422015983501, the
-same five assignments in omniscient and three in player, totalExpectedValue 21.41 / 19.3, and
-"Take the Executive control point in Madagascar" still benched at 5.63.
-
-### A defect found and deliberately not fixed here — since fixed, 2026-08-22
-
-**Landed in its own pass.** The arithmetic was corrected and `WEIGHTS.VALUE_POINTS`
-recalibrated 1 → 0.5 alongside it (also in `config/defaults.json`, which is what the
-running server reads). The rule now divides the nation's output by
-`nationControlPointCost()` in `shared/controlPointCap.mjs`, so the formula and its
-citation have one home instead of two. What the paragraph below did not know: the
-omission was a **shape** error, not a scale one — it put 921 of 11,781 nation pairs
-(7.8%) in the wrong order, so no choice of weight could have preserved the old ranking.
-See `docs/README.md`, Shipped.
-
-
-
-`value/gdp-per-cp-cost` in `server/engine/rules/value.js` divides a nation's output by its
-control-point count but charges one control point the **whole nation's** cost, under-valuing
-every multi-CP nation by a factor of 1–6. Correcting it makes the count cancel entirely
-(`valueDensity = 2 × gdpBn^0.4`) and re-weights the expansion family by up to 6×: measured,
-the omniscient primary flips from "Advise Government: USA" (6.997) to "Purge the Protectorate
-hold on ExtractiveSector in China" (20.92 → **140.50**), two councilors are reassigned, and
-totalExpectedValue goes 21.41 → 148.89. `WEIGHTS.VALUE_POINTS` was calibrated against the
-buggy magnitude, so the fix needs a deliberate recalibration alongside it. Filed separately
-rather than landed here.
+---
 
 ## Still unmodelled, named rather than guessed
 
-- Which save field is "the base" and which "the bonus".
-- `LEOControlPointCapacity` on the three Administration modules.
-- `fixedPCGDPToRaiseBaseCPMaintenanceCostBy1` and `repairCPMaintenanceScaling`.
-- The exact semantics of the `history_*CapOverageByDay` family.
-- Whether the cap uses attributes clamped at 25 or uncapped. Both were tried against the
-  Protectorate equations; neither reconciles (implied base 420.45 clamped, 408.45 uncapped,
-  against a candidate base of 400).
+- **The last point of the councilor term.** The game's `GetAttribute` ceiling handling differs from
+  this repo's clamp-at-25. Worth one point in ~840 on the measured roster.
+- `LEOControlPointCapacity` on the three Administration modules. Zero such modules exist anywhere
+  on the measured save, so the whole hab term is a measured zero and this is an untested path.
+- `repairCPMaintenanceScaling` (false here) — a save-migration flag whose role is not established.
+- Whether a crackdown sets `benefitsDisabled` through some path not visible in
+  `SetCrackdownExpiry`. The code path read charges crackdown-only holdings; the wiki says they are
+  free. The observer holds none, so nothing measured turns on it.
+- Only **one faction on four saves** is ever over cap, so the equality that pins the cap has a
+  single subject. Every other faction supplies an inequality only.
 
-## Acceptance — as met
+## Sources
 
-- **The base cap is located and cited.** `TIGlobalValuesState.controlPointMaintenanceFreebies`
-  plus the two campaign-setting fields, cited to `Game_Options`. The original spec's claim
-  that no cap field exists is corrected.
-- **The sign convention is pinned by measurement**, twice, from `showTotal: "Invert"` and
-  from the shared `AI_projectRole` between negative-effect and positive-capacity projects.
-- **The observer's cap is reported with each contribution attributed.** It does **not**
-  reconcile against the save's own recorded overage, and that is reported as the headline
-  rather than smoothed over.
-- **Over-cap upkeep is squared**, with `overCapInfluencePenalty(10) === 100` asserted and the
-  linear form broken deliberately to prove the test fires.
-- **An unknown cap renders as unknown on every surface** and blocks no recommendation into a
-  false "free": `headroom.available` is false unconditionally.
-- **Both modes**, with rival caps omniscient-only and the redaction scanned across the whole
-  player payload.
-- **No directive recommendation changed**, before/after captured in both modes.
-- No `null` / `undefined` / `NaN` / confident `0` reaches a surface.
+- `TerraInvicta_Data/Managed/Assembly-CSharp.dll`, campaign version 1.0.51 — IL read directly
+  2026-08-22 with a purpose-built PE/CLI metadata reader. Methods named inline above.
+- `TIHabModuleTemplate.json`, `TIEffectTemplate.json`, `TIProjectTemplate.json`,
+  `TIStartTimeTemplate.json`, `TIGlobalConfig.json` — shipped templates, read 2026-08-22.
+- `Localization/en/UIGeneralControls.en`, `UINations.en`, `UIStartScreen.en`, `UICouncilor.en`,
+  `UINation.en`, `UIObjectives.en` — shipped strings, read 2026-08-22.
+- wiki `Control Point Capacity`, `Nations`, `Game_Options`, `Aliens` — raw wikitext, read
+  2026-08-22. Where the wiki and the 1.0.51 code disagree (crackdown cost), the code is followed
+  and the disagreement is published.
+- Saves: `initiative.gz` (9/10/2029), `CombatAutosave.gz` (7/15/2034), `Autosave3.gz` (12/1/2034),
+  `Autosave2.gz` (12/16/2034), `Autosave.gz` and `ExitSave.gz` (1/1/2035), plus six saves from
+  older campaigns for the base-cap comparison. All copied to disk and MD5-verified against their
+  sources before and after use.

@@ -54,6 +54,22 @@ function buildNations(rawNations, { controlPointsByNationId, factionsById }) {
       nukes,
       armies,
       missionControl: mc,
+      // `TINationState.numControlPoints` -- the game's OWN divisor in the
+      // control-point cost formula (IL read 2026-08-22:
+      // `Pow(GDP/PCGDP, 0.6) / (2 * numControlPoints)`).
+      //
+      // Not the same thing as `controlPoints.length`, and the difference is
+      // load-bearing in player mode: `controlPoints` is a projected, filterable
+      // list, and dividing by a SHORT list inflates every control point's cost.
+      // The save's own count survives redaction. Absent stays null so the
+      // consumer can fall back to the list length with a recorded reason rather
+      // than dividing by a confident zero.
+      controlPointCount: firstNumericOrNull(n.numControlPoints),
+      // An alien nation's control points cost nothing:
+      // `get_ControlPointMaintenanceCost` returns 0 outright when
+      // `alienNation` is set. Boolean, because an absent flag is a measured
+      // "not an alien nation" on every save checked.
+      alienNation: n.alienNation === true,
       controlPoints: cps,
       executiveFactionId,
       executiveFactionName,
