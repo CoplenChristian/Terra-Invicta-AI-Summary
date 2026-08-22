@@ -166,9 +166,18 @@ function buildRawSnapshot(saveData) {
   const techMatrix = factionsModule.buildTechMatrix(keyProjects, { factions, rawFactions });
 
 
-  // `TIGlobalValuesState.controlPointMaintenanceFreebies` -- half of the base
-  // control-point cap, and the only place the game stores it. The other half is
-  // `campaignSettings.controlPointMaintenanceFreebieBonus`, already parsed.
+  // `TIGlobalValuesState.controlPointMaintenanceFreebies` -- THE WHOLE base
+  // control-point cap, and the only place the game stores it.
+  //
+  // CORRECTION 2026-08-22: this used to be described as "half" of the base,
+  // with `campaignSettings.controlPointMaintenanceFreebieBonus` supplying the
+  // other half. It does not. `TIFactionState::GetControlPointMaintenanceFreebieCap`
+  // (Assembly-CSharp.dll 1.0.51, IL read 2026-08-22) reads
+  // `GlobalValues.controlPointMaintenanceFreebies` and adds ONLY
+  // `scenarioCustomizations.controlPointMaintenanceFreebieBonusAI`, and only for
+  // factions the human is not playing. The freebie BONUS is the Customize
+  // Campaign knob that produced this stored value; adding it again double-counts
+  // it. On this campaign that error was 150 points on a cap of 841.
   //
   // Absent stays null. A base cap read as 0 would render every faction as
   // hundreds of control points over their cap; read as "no limit" it would
@@ -177,6 +186,26 @@ function buildRawSnapshot(saveData) {
   const rawGlobalValuesRow = rawGlobalValues[0] || {};
   const controlPointMaintenanceFreebies = firstNumericOrNull(
     rawGlobalValuesRow.controlPointMaintenanceFreebies
+  );
+  // `TIGlobalValuesState.fixedPCGDPToRaiseBaseCPMaintenanceCostBy1` -- the GDP
+  // normalizer inside the control-point cost formula.
+  //
+  // `TINationState::get_ControlPointMaintenanceCost` (IL read 2026-08-22) is
+  //   Pow(GDP / PCGDPToRaiseBaseCPMaintenanceCostBy1, controlPointCostScaling)
+  //     / (controlPointMaintenanceDivisor * numControlPoints)
+  //     * Time.template.CPMaintenanceModifier
+  // and `get_pcgdpToRaiseBaseCPMaintenanceCostBy1` returns a flat 1e9 when the
+  // start-time template's `scaleCPMaintenanceWithStartingGDP` is false, and
+  // otherwise lazily freezes `globalGDP_CampaignStart * 6.26e-6` for the whole
+  // campaign. This campaign stores 994,239,000, so "GDP in billions" -- which is
+  // what the wiki says and what this repo used -- is 0.58% off inside the base
+  // and 0.35% off in the result.
+  //
+  // Absent stays null and the cost is reported as unnormalized rather than
+  // silently assuming 1e9: an old snapshot and a non-scaling campaign are
+  // indistinguishable from here, and only the second justifies the default.
+  const controlPointCostGdpNormalizer = firstNumericOrNull(
+    rawGlobalValuesRow.fixedPCGDPToRaiseBaseCPMaintenanceCostBy1
   );
 
   return {
@@ -214,9 +243,14 @@ function buildRawSnapshot(saveData) {
       playerFactionName: typeof meta?.playerFactionName === 'string' && meta.playerFactionName.trim() !== ''
         ? meta.playerFactionName.trim()
         : null,
-      // See the note where this is read: half of the base control-point cap,
-      // and null when the save does not carry it.
+      // See the note where this is read: the WHOLE base control-point cap, and
+      // null when the save does not carry it.
       controlPointMaintenanceFreebies,
+      // See the note where this is read: the GDP normalizer inside the
+      // control-point cost formula, frozen at campaign start. Null when the
+      // save does not carry it, which makes the cost unnormalized rather than
+      // wrong-by-default.
+      controlPointCostGdpNormalizer,
       // Where the campaign's research speed setting actually acts: on the
       // effective research COST. Every `researchCost`, `totalCost` and
       // remaining-cost figure on this snapshot is already on this basis, and
