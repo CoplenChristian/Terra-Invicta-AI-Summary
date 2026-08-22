@@ -75,6 +75,27 @@ A fixture captured from post-change output passes by construction. Capture expec
 
 The same applies to a guard that outlives its target: the `SERVICE_ROLE` test scanned one file, and a later split moved the key-resolving code into a sibling it no longer covered. When code moves, re-check what its tests still actually cover.
 
+## A new endpoint or calculation is not done until it reaches the AI surfaces
+
+The dashboard is read by people **and** by agents. A figure that exists only in the browser
+is invisible to every LLM consumer, which is half the point of this project. Anything new —
+an endpoint, a field, a computed verdict — must land in all four places before it counts as
+shipped:
+
+1. **`shared/markdownExports.mjs`** — the AI-friendly exports (`/latest-snapshot.md`,
+   `/latest-war-room.md`, `/latest-threats.md`). Mind the byte budget; if the new figure
+   does not fit, say what was dropped rather than silently truncating.
+2. **`shared/intel/registry.mjs`** — the one table from which route, discovery index and
+   dispatch are all derived. A new resource is a registry row, never a one-off branch.
+3. **`docs/code-index.md`** — regenerate with `npm run index`, and give any new module a
+   hand-written `Purpose:` line first or `tests/codeIndex.test.js` fails.
+4. **`docs/README.md`** — the tracker, in the same commit as the work.
+
+**Measured 2026-08-21: this was being missed.** Of one session's additions, only
+`difficultyLabel` and `capabilities` reached the markdown exports; `riskFloor`, `chain`,
+`reachability` and `benchedOmittedCount` did not. The work was correct, tested and
+browser-verified, and still invisible to every agent reading the exports.
+
 ## Order and completeness are load-bearing
 
 The rule registry is **not** grouped by family — `readiness/unmet-preconditions` sits between two `value/` rules, and `cost/affordability` is a veto after every score. `applyRules` and `scoreCandidates` emit in registry order, so "tidying" it silently reshuffles every explanation the user reads.
