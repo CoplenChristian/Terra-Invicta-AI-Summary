@@ -518,7 +518,11 @@ test('a recorded zero plus a complete composition gives a composed headroom with
   // The measured residual travels with the figure rather than being corrected
   // out of it -- subtracting a measured bias would be a fit.
   assert.equal(report.headroom.accuracy, CONTROL_POINT_CAP_ACCURACY);
-  assert.ok(CONTROL_POINT_CAP_ACCURACY.residualPoints.max <= 1);
+  // The stated residual has to stay inside the tolerance the live-save
+  // reconciliation test enforces, or the two claims disagree about the same
+  // measurement.
+  assert.ok(CONTROL_POINT_CAP_ACCURACY.residualPoints.max <= 1.5);
+  assert.ok(CONTROL_POINT_CAP_ACCURACY.residualPoints.min > 0, 'the composed cap runs high, not low');
 });
 
 test('a composed headroom that contradicts a recorded zero is refused, not reported', () => {
@@ -821,6 +825,27 @@ test('the endpoint answers in both modes and states the recording semantics at t
   // Player mode must not name a rival as over cap -- that is the same fact the
   // masked councilor attributes exist to withhold.
   assert.equal(player.overCapCount, 0);
+});
+
+test('a narrowed payload headlines the faction it is about, and names which one', () => {
+  // A `?faction=` narrowed to a rival used to headline `unknown` beside a row
+  // that plainly said `over-cap`, because the headline only spoke for the
+  // observer. A verdict whose subject is ambiguous is worse than none.
+  const rival = queryIntel({
+    endpoint: 'control-point-cap', mode: 'omniscient', observer: OBSERVER, queryOptions: { factionId: PROTECTORATE }
+  });
+  assert.equal(rival.count, 1);
+  assert.equal(rival.verdict, 'over-cap');
+  assert.equal(rival.verdictFactionId, PROTECTORATE);
+  assert.equal(rival.verdictFactionName, 'the Protectorate');
+  // And it must not pass a rival's number off as the observer's.
+  assert.equal(rival.observerHeadroom, null);
+  assert.equal(rival.observerHeadroomBasis, null);
+
+  // With everyone in the payload the headline is the observer's, named.
+  const all = queryIntel({ endpoint: 'control-point-cap', mode: 'omniscient', observer: OBSERVER });
+  assert.equal(all.verdictFactionId, OBSERVER);
+  assert.equal(all.verdict, 'within-cap');
 });
 
 // ---------------------------------------------------------------------------

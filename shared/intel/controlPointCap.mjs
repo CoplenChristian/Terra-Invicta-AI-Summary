@@ -62,6 +62,12 @@ export function controlPointCapResource(snapshot, options = {}) {
   const answered = items.filter((item) => item.headroom.available);
   const overCap = items.filter((item) => item.headroom.overCap === true);
   const observerRow = items.find((item) => sameId(item.factionId, observerId)) || null;
+  // Narrowing with `?faction=` to somebody other than the observer used to
+  // headline `unknown` beside a row that plainly said `over-cap`, because the
+  // headline only ever spoke for the observer. It now speaks for whichever
+  // faction the request is actually about, and NAMES which one -- a verdict
+  // whose subject is ambiguous is worse than no verdict.
+  const verdictRow = observerRow || (items.length === 1 ? items[0] : null);
 
   return {
     count: items.length,
@@ -69,12 +75,16 @@ export function controlPointCapResource(snapshot, options = {}) {
     intelMode: mode,
     // The headline a consumer should read FIRST. Every other number on this
     // endpoint is downstream of it.
-    verdict: observerRow ? observerRow.verdict : 'unknown',
-    verdictReason: observerRow
-      ? observerRow.verdictReason
-      : 'the observer faction is not present in this payload, so no headroom verdict is emitted for it',
+    verdict: verdictRow ? verdictRow.verdict : 'unknown',
+    verdictReason: verdictRow
+      ? verdictRow.verdictReason
+      : 'this payload carries several factions and none of them is the observer, so no single headline verdict '
+        + 'applies; read the per-faction rows',
+    verdictFactionId: verdictRow ? verdictRow.factionId : null,
+    verdictFactionName: verdictRow ? verdictRow.factionName : null,
     // The observer's own position, lifted out so a consumer does not have to
-    // find its row. Null rather than 0 when it cannot be established.
+    // find its row. Null rather than 0 when it cannot be established, and null
+    // rather than someone else's number when the observer is not in the payload.
     observerHeadroom: observerRow ? observerRow.headroom.value : null,
     observerHeadroomBasis: observerRow ? observerRow.headroom.basis : null,
     recordingSemantics: Object.freeze({

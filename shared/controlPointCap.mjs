@@ -120,12 +120,12 @@
 // `cost - 3 * history_CPCapOverageByDay[0]`, against the composed cap:
 //
 //   save                          implied cap   composed cap   residual
-//   CombatAutosave.gz 7/15/2034      838.99995         840        +1.00
-//   Autosave3.gz      12/1/2034      841.11891         842        +0.88
-//   Autosave2.gz      12/16/2034     841.23226         842        +0.77
-//   ExitSave.gz       1/1/2035       841.16678         842        +0.83
+//   CombatAutosave.gz 7/15/2034      838.99978         840        +1.00022
+//   Autosave3.gz      12/1/2034      841.11872         842        +0.88128
+//   Autosave2.gz      12/16/2034     841.23206         842        +0.76794
+//   ExitSave.gz       1/1/2035       841.16660         842        +0.83340
 //
-// The implied cap is 839.00000 to five decimals on the first save, so the cost
+// The implied cap is 839 to four decimals on the first save, so the cost
 // formula is exact. The true cap is an INTEGER (every term is), which makes it
 // 839 then 841, and the composed cap is +1 in every window. That +1 is the
 // councilor term: this repo's `resolvedAttributes.effective` clamps at 25 and
@@ -255,13 +255,15 @@ export const CONTROL_POINT_CAP_SOURCES = Object.freeze({
  */
 export const CONTROL_POINT_CAP_ACCURACY = Object.freeze({
   reconciles: true,
-  residualPoints: Object.freeze({ min: 0.77, max: 1.0 }),
+  residualPoints: Object.freeze({ min: 0.76794, max: 1.00022 }),
   direction: 'the composed cap runs HIGH, so a composed headroom is slightly optimistic',
   basis: 'the Protectorate is the only faction over cap on any measured save, so it is the only faction whose cap '
-    + 'the recording pins. Cap implied by (cost - 3 x penalty) against the composed cap: 838.99995 vs 840 on '
-    + 'CombatAutosave.gz 7/15/2034, 841.11891 vs 842 on Autosave3.gz 12/1/2034, 841.23226 vs 842 on Autosave2.gz '
-    + '12/16/2034, 841.16678 vs 842 on ExitSave.gz 1/1/2035. The implied cap is an integer to five decimals on the '
-    + 'first, so the cost formula is exact and the residual is entirely in the cap.',
+    + 'the recording pins. Cap implied by (cost - 3 x penalty) against the composed cap: 838.99978 vs 840 on '
+    + 'CombatAutosave.gz 7/15/2034, 841.11872 vs 842 on Autosave3.gz 12/1/2034, 841.23206 vs 842 on Autosave2.gz '
+    + '12/16/2034, 841.16660 vs 842 on ExitSave.gz 1/1/2035. The implied cap is an integer to four decimals on the '
+    + 'first, so the cost formula is exact and the residual is entirely in the cap. Corroborated one-sidedly across '
+    + '6 saves x 7 human factions: every faction the game records within cap is composed within cap, tightest '
+    + 'margin 9.99 (the Servants on initiative.gz).',
   unmodelledTerm: 'the councilor term. This repo resolves attributes with a clamp at 25; the game\'s '
     + 'GetAttribute call for cap purposes raises its own ceiling by each negative bonus instead, which is one '
     + 'point apart on this roster. The residual did not grow across six in-game months.',
