@@ -1,7 +1,7 @@
 // server/snapshot/factions.js
 //
 // Purpose: the faction-level roll-up — relationships, resources and income,
-//   power scores, project state, and alien-activity rows.
+//   power scores, project state, alien-activity rows and the investigation count.
 //
 // The faction-level roll-up: relationships, resources and income, power
 // scores, project state, and the alien-activity rows that hang off regions.
@@ -46,7 +46,10 @@ function normalizeFactionIntelligence(faction) {
       .map(entry => entry.id),
     intel: normalizeEntries(faction.intel),
     highestIntel: normalizeEntries(faction.highestIntel),
-    alienInvestigations: faction.alienInvestigations || []
+    // A plain integer in the save, not a list. `|| []` turned a genuine 0 and
+    // an absent field alike into an empty array, which then read as "zero
+    // investigations" downstream. Absent stays null; zero stays zero.
+    alienInvestigations: firstNumericOrNull(faction.alienInvestigations)
   };
 }
 
@@ -317,6 +320,17 @@ function buildFactions(rawFactions, {
         : null,
       availableProjectsCount: availableProjects.length,
       availableProjectNames: availableProjects,
+      // How many alien-activity investigations this faction has completed. A
+      // plain integer in the save, and the ONLY source of the Xenology research
+      // category bonus that no template carries -- the `InvestigateAlienActivity`
+      // mission resolves to a code-side effect class, so a template sweep cannot
+      // see it. `shared/researchCategoryBonus.mjs` prices it at the wiki's
+      // +1% each (Aliens rev 2026-04-05).
+      //
+      // Absent stays null. `Number(null) === 0` and zero investigations is a
+      // real, different fact from an unreadable count, so the guard is on
+      // presence rather than on truthiness.
+      alienInvestigations: firstNumericOrNull(f.alienInvestigations),
       missionControlUsage: Number.isFinite(Number(f.missionControlUsage)) ? Number(f.missionControlUsage) : null,
       // Mission Control capacity is useful context, but it is deliberately
       // kept separate from missionControlUsage because only used MC affects

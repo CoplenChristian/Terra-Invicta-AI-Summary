@@ -1,10 +1,10 @@
 // server/snapshot/templates.js
 //
-// Purpose: the three template-derived static builders — they read the installed
-//   game templates and depend on no save data.
+// Purpose: the template-derived static builders — they read the installed game
+//   templates and depend on no save data.
 //
-// The three template-derived static builders. They read the installed game
-// templates and depend on no save data at all, which is why they can be called
+// The template-derived static builders. They read the installed game templates
+// and depend on no save data at all, which is why they can be called
 // standalone by tests and why their output is baked onto every snapshot: the
 // hosted worker has no template directory, so anything that reads templates at
 // request time works locally and breaks the deployed site.
@@ -883,6 +883,169 @@ function buildComponentStats() {
   return stats;
 }
 
+// ---------------------------------------------------------------------------
+// Per-category research bonuses -- the shipped `techBonuses` catalogue.
+//
+// Three template families carry `techBonuses`, and nothing else does (verified
+// 2026-08-21 by sweeping all 60 installed template files):
+//
+//   TIHabModuleTemplate    41 of 156
+//   TIOrgTemplate         114 of 381
+//   TITraitTemplate        23 of 157
+//
+// The SAVE carries no computed per-category multiplier at all -- a raw scan for
+// `techBonus`, `categoryBonus`, `researchBonus` and `researchMultiplier` over
+// the 98 MB decompressed save returned zero hits -- so the observer's exposure
+// can only be reconstructed from these templates joined to what the observer
+// actually holds. Baked here for the usual reason: the hosted Cloudflare worker
+// has no template directory.
+//
+// TWO THINGS THIS CATALOGUE RECORDS THAT A BARE SUM WOULD HIDE:
+//
+//   1. `diminishingReturns`. ALL 41 bonus-carrying hab module templates carry
+//      the special rule `TechBonusDiminishingReturns`, and the constant it
+//      implies is shipped NOWHERE -- TIGlobalConfig.json carries only
+//      `globalResearchMultiplier: 1`. So the SUM of two 0.10 modules is not
+//      necessarily the game's effective 0.20, and a consumer must be able to
+//      see that rather than be handed a confident total.
+//   2. `categories`, the research-category vocabulary, read from the
+//      `techCategory` field of every project and tech template. Two shipped
+//      orgs name a category -- "Information" -- that is NOT in it, so a bonus
+//      can reference a category that does not exist. Mapping it to
+//      "InformationScience" would be a guess; it is reported unresolved.
+// ---------------------------------------------------------------------------
+
+/** A finite, non-zero bonus. A missing or unparseable bonus is absent, never 0. */
+function techBonusRows(template) {
+  const rows = Array.isArray(template?.techBonuses) ? template.techBonuses : [];
+  const out = [];
+  for (const row of rows) {
+    const category = typeof row?.category === 'string' && row.category !== '' ? row.category : null;
+    const bonus = stat(row?.bonus);
+    if (category === null || bonus === null) continue;
+    out.push({ category, bonus });
+  }
+  return out;
+}
+
+/** Distinct `dataName`s in a loader map, which keys every template twice. */
+function distinctDataNames(map) {
+  const names = new Set();
+  for (const template of map.values()) {
+    if (template?.dataName) names.add(template.dataName);
+  }
+  return names.size;
+}
+
+/**
+ * The `techBonuses` catalogue: which template grants what, per category, plus
+ * the category vocabulary needed to tell a real category from a typo.
+ *
+ * Keyed by `dataName` throughout, which is what the save's `templateName`,
+ * a councilor's org `templateName` and a councilor's `traitTemplateNames`
+ * all carry.
+ */
+function buildTechBonusCatalogue() {
+  const categories = new Set();
+  for (const project of templateLoader.templates.projects.values()) {
+    if (typeof project?.techCategory === 'string' && project.techCategory !== '') {
+      categories.add(project.techCategory);
+    }
+  }
+  for (const tech of templateLoader.templates.techs.values()) {
+    if (typeof tech?.techCategory === 'string' && tech.techCategory !== '') {
+      categories.add(tech.techCategory);
+    }
+  }
+
+  const habModules = {};
+  for (const template of templateLoader.templates.habModules.values()) {
+    const dataName = template?.dataName;
+    if (!dataName) continue;
+    const bonuses = techBonusRows(template);
+    if (bonuses.length === 0) continue;
+    habModules[dataName] = {
+      displayName: template.friendlyName || dataName,
+      bonuses,
+      // Named in the template, quantified nowhere. Carried so a consumer can
+      // say the summed figure is an upper bound rather than the effective one.
+      diminishingReturns: Array.isArray(template.specialRules)
+        && template.specialRules.includes('TechBonusDiminishingReturns')
+    };
+  }
+
+  const orgs = {};
+  for (const template of templateLoader.templates.orgs.values()) {
+    const dataName = template?.dataName;
+    if (!dataName) continue;
+    const bonuses = techBonusRows(template);
+    if (bonuses.length === 0) continue;
+    orgs[dataName] = {
+      displayName: template.friendlyName || dataName,
+      bonuses,
+      diminishingReturns: false
+    };
+  }
+
+  const traits = {};
+  for (const template of templateLoader.templates.traits.values()) {
+    const dataName = template?.dataName;
+    if (!dataName) continue;
+    const bonuses = techBonusRows(template);
+    if (bonuses.length === 0) continue;
+    traits[dataName] = {
+      displayName: template.friendlyName || dataName,
+      bonuses,
+      diminishingReturns: false
+    };
+  }
+
+  return {
+    // Sorted so the baked payload is byte-stable across runs.
+    categories: [...categories].sort(),
+    categoriesSource: 'the `techCategory` field of every installed project and tech template',
+    habModules,
+    orgs,
+    traits,
+    // How many templates each map was distilled from, so a consumer can see the
+    // catalogue covers the whole install. A template absent from a map was
+    // scanned and grants no techBonus -- that is a measured zero, not a gap.
+    // (The maps are keyed by both dataName and friendlyName by the loader, so
+    // these counts are of DISTINCT dataNames, not map size.)
+    scanned: {
+      habModules: distinctDataNames(templateLoader.templates.habModules),
+      orgs: distinctDataNames(templateLoader.templates.orgs),
+      traits: distinctDataNames(templateLoader.templates.traits),
+      habModulesGranting: Object.keys(habModules).length,
+      orgsGranting: Object.keys(orgs).length,
+      traitsGranting: Object.keys(traits).length
+    },
+    diminishingReturnsRule: 'TechBonusDiminishingReturns',
+    // Whether the SHIPPED DATA states the constant. It does not, and that is
+    // why the curve applied in `shared/researchCategoryBonus.mjs` is labelled a
+    // wiki claim rather than a measurement. If a patch ever ships it, the claim
+    // can be replaced by a reading.
+    diminishingReturnsConstantAvailable: false,
+    diminishingReturnsNote: 'every hab module template that grants a techBonus also carries the special '
+      + 'rule `TechBonusDiminishingReturns`, and no shipped template or config states the constant it '
+      + 'implies -- `TIGlobalConfig.json` carries only `globalResearchMultiplier: 1`. The curve is taken '
+      + 'from the official wiki (`Technology` rev 2026-05-06): above a 50% base bonus per source type, '
+      + 'actual = 50% + 50% x (base - 50%) / (base + 150%), with alien-activity investigations exempt. '
+      + 'See `shared/researchCategoryBonus.mjs` CATEGORY_BONUS_RULES.',
+    // The two sources the wiki names that carry NO `techBonuses` array, listed
+    // here so a consumer of this catalogue can see it is not the whole set.
+    sourcesNotInThisCatalogue: [
+      'alien activity investigations (Xenology only) -- a plain `alienInvestigations` integer on the '
+        + 'faction; the mission resolves to the code-side `TIMissionEffect_InvestigateAlienActivity` and '
+        + 'no template states the rate. Handled from faction state in shared/researchCategoryBonus.mjs.',
+      'ships carrying the Mobile Space Science Lab (SpaceScience only) -- TIUtilityModuleTemplate.json '
+        + 'states it as `specialModuleRules: ["GenerateSpaceScienceBonus"]` with `specialModuleValue`, '
+        + 'not as `techBonuses`, and the snapshot does not carry per-ship utility-module names. Declared '
+        + 'unhandled in shared/researchCategoryBonus.mjs UNHANDLED_SOURCE_TYPES.'
+    ]
+  };
+}
+
 module.exports = {
   MISSION_HATE_SLOT,
   UNLOCK_FAMILIES,
@@ -895,5 +1058,6 @@ module.exports = {
   buildPropellantModules,
   buildProjectGating,
   buildComponentStats,
-  buildEffectIndex
+  buildEffectIndex,
+  buildTechBonusCatalogue
 };

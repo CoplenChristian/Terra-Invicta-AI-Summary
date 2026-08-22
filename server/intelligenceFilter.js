@@ -180,6 +180,11 @@ class IntelligenceFilter {
         propellantModules: rawSnapshot.propellantModules,
         projectGating: rawSnapshot.projectGating,
         componentStats: rawSnapshot.componentStats,
+        // Template data: which org / hab module / trait grants which
+        // per-category research bonus. Identical for every faction. WHICH of
+        // them a faction holds is observer-dependent and lives on the hab
+        // module and councilor records, which the player branch redacts.
+        techBonusCatalogue: rawSnapshot.techBonusCatalogue,
         effectIndex: rawSnapshot.effectIndex,
         miningScarcityWeights: rawSnapshot.miningScarcityWeights,
         isOmniscient: true
@@ -298,6 +303,13 @@ class IntelligenceFilter {
         // research state. Absent stays null and never 0 -- an enemy reported
         // with 0 available projects reads as fully researched out.
         availableProjectsCount: isEnhanced || isObserver ? f.availableProjectsCount : null,
+        // How many alien-activity investigations a RIVAL has completed is their
+        // internal record, not something the player observes, and it converts
+        // directly into their Xenology research rate. Null rather than 0 --
+        // reporting a rival at 0 investigations is a confident claim that they
+        // have never investigated anything, from no evidence. The observer's
+        // own count is legitimately known and survives.
+        alienInvestigations: isEnhanced || isObserver ? f.alienInvestigations : null,
         // Same class again: the top-level `shipDesigns` array is filtered to
         // the observer's own designs below, but each faction object carried an
         // unfiltered inline copy -- 425 enemy hull/weapon/armor loadouts
@@ -550,6 +562,11 @@ class IntelligenceFilter {
       propellantModules: rawSnapshot.propellantModules,
       projectGating: rawSnapshot.projectGating,
       componentStats: rawSnapshot.componentStats,
+      // Template data, unfiltered for the same reason as the unlock index.
+      // The observer's OWN hab modules and councilors survive this branch, so
+      // the observer's own category exposure resolves in player mode; a rival's
+      // does not, and the model reports that rather than a confident zero.
+      techBonusCatalogue: rawSnapshot.techBonusCatalogue,
       // The effect index is template data too. What a given faction has
       // ALREADY activated is not, and that is read from the faction record's
       // completed-project list, which this branch redacts for everyone but the
@@ -683,6 +700,14 @@ class IntelligenceFilter {
       }
       if (this.toFiniteOrNull(faction.availableProjectsCount) !== null) {
         factionLeaks.push(`${faction.ID}:availableProjectsCount`);
+      }
+      // A rival's investigation count converts directly into their Xenology
+      // research rate, so it belongs with the research-state redactions above.
+      if (this.toFiniteOrNull(faction.alienInvestigations) !== null) {
+        factionLeaks.push(`${faction.ID}:alienInvestigations`);
+      }
+      if (this.toFiniteOrNull(snapshot?.factionIntelligence?.[faction.ID]?.alienInvestigations) !== null) {
+        factionLeaks.push(`${faction.ID}:factionIntelligence.alienInvestigations`);
       }
       if (this.toFiniteOrNull(faction.researchBreakdown?.habModules) !== null) {
         factionLeaks.push(`${faction.ID}:researchBreakdown.habModules`);

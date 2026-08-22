@@ -1014,6 +1014,14 @@ test('detail=summary omits the heavy listing and says so; detail=full carries it
   // measured against; the six flat delivery fields on every `bestByState` row;
   // and the per-class `deliveryDemoted` census, which exists precisely so the
   // floor cannot silently remove a row from the top of a ranking.
+  //
+  // Per-category research rates: 250.7 KB -> 270.2 KB on this fixture, WITHOUT
+  // raising the ceiling. Each row gained a `monthsAtCurrentIncomeState` code
+  // plus `categoryResearchBonus` and `flatRateMonths`; what each state MEANS is
+  // stated once in `research.categoryBonuses.durationStates`, not per row.
+  // A first cut that carried the sentence on every row measured 291.6 KB and
+  // failed here, which is exactly what this ceiling is for. On the live save
+  // the fields cost +27.9 KB raw / +4.3 KB gzipped on `summary`.
   assert.ok(summaryBytes < 280 * 1024, `the default response is ${(summaryBytes / 1024).toFixed(1)} KB`);
 });
 

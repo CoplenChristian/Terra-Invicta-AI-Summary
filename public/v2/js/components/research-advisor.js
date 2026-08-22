@@ -94,6 +94,72 @@
     return `${parsed.toFixed(1)} mo`;
   }
 
+  /**
+   * A duration, with the category bonus it does NOT apply named beside it.
+   *
+   * The number is always the flat one. Withdrawing thirteen usable durations to
+   * correct three to five per cent was the wrong trade, and the rate model
+   * measured the flat rate's dominant error to be the whole allocation
+   * multiplier rather than the category term -- so correcting only the category
+   * part would move the figure slightly and look like a fix. The bonus is
+   * stated so a reader can see the estimate is conservative and by roughly what.
+   *
+   * The caveat is deliberately silent about direction and size: it says what is
+   * unapplied, not what the true figure is.
+   *
+   * A row from a snapshot published before the category model existed carries
+   * no state, and renders exactly as it always did.
+   */
+  function researchDuration(row) {
+    if (!row) return UNAVAILABLE;
+    const value = months(row.monthsAtCurrentIncome);
+    if (value === UNAVAILABLE) return value;
+    const state = row.monthsAtCurrentIncomeState || null;
+    if (state === 'flat-rate-boosted') {
+      const bonus = num(row.categoryResearchBonus);
+      return bonus === null ? `${value} (flat rate)` : `${value} (flat; +${(bonus * 100).toFixed(1)}% category)`;
+    }
+    if (state === 'unresolved-category') return `${value} (flat; category unresolved)`;
+    if (state === 'category-unchecked') return `${value} (flat, unchecked)`;
+    return value;
+  }
+
+  /**
+   * The tooltip that explains a labelled research duration.
+   *
+   * Built from the row's state code and its own bonus rather than read from a
+   * per-row sentence: repeating the sentence on every row cost 41 KB on the
+   * military-value payload, which is the duplication its size ceiling exists
+   * to catch.
+   */
+  function researchDurationTitle(row) {
+    if (!row) return '';
+    const state = row.monthsAtCurrentIncomeState || null;
+    if (state === 'flat-rate-boosted') {
+      const bonus = num(row.categoryResearchBonus);
+      return 'This project sits in a research category the observer has boosted'
+        + (bonus === null ? '' : ` by +${(bonus * 100).toFixed(1)}%`)
+        + ', and this figure does NOT apply that bonus. It is the flat rate: remaining cost divided by '
+        + 'the faction\'s measured monthly research income. The allocation model measured on this '
+        + 'campaign says the flat rate\'s dominant error is the whole per-slot allocation multiplier '
+        + '(2.11x), not the category term, so the flat figure is kept rather than corrected by a few '
+        + 'per cent. Treat it as an upper bound.';
+    }
+    if (state === 'unresolved-category') {
+      return 'The flat-rate figure. This project\'s research category could not be resolved, so whether '
+        + 'the observer has boosted it is undecidable.';
+    }
+    if (state === 'category-unchecked') {
+      return 'The unadjusted flat-rate figure. This snapshot carries no per-category research bonus '
+        + 'data, so it has not been checked against a category bonus.';
+    }
+    if (state === 'flat-rate') {
+      return 'This project\'s research category carries no bonus for the observer, so the flat monthly '
+        + 'rate is the right rate for the category term.';
+    }
+    return '';
+  }
+
   const COMPACT_UNITS = [
     [1e12, 'T'],
     [1e9, 'B'],
@@ -312,10 +378,14 @@
     // beside the destination project's own months is two numbers about two
     // different things -- on the live save that read "1,300,325 pts · 63.6 mo",
     // where the 63.6 belongs to the 200,000-point last step alone.
+    //
+    // A chain figure also gets NO category label or tooltip: a chain crosses
+    // several projects that need not share a research category, so the
+    // destination's own bonus does not describe the number shown.
     const chainMeta = isChainRow(row);
     const meta = chainMeta
       ? [`${int(row.chain.totalRemainingCost)} pts`, months(row.chain.monthsAtCurrentIncome)]
-      : [`${int(row.remainingResearchCost)} pts`, months(row.monthsAtCurrentIncome)];
+      : [`${int(row.remainingResearchCost)} pts`, researchDuration(row)];
     const roll = rollNote(row.unlockChance, row.availabilityState);
     if (roll) meta.push(roll);
 
@@ -333,7 +403,7 @@
           <span class="ra-row__name" title="${attr(nameInfo.tooltip)}">${escapeHtml(nameInfo.lead)}${subHtml}</span>
           <span class="ra-row__metric" title="${attr(axisTitle)}">${metricDisplay}</span>
         </div>
-        <div class="ra-row__meta">${escapeHtml(meta.join(' · '))}${notes.length ? ` ${notes.join(' ')}` : ''}</div>
+        <div class="ra-row__meta" title="${attr(chainMeta ? '' : researchDurationTitle(row))}">${escapeHtml(meta.join(' · '))}${notes.length ? ` ${notes.join(' ')}` : ''}</div>
       </li>
     `;
   }
@@ -346,7 +416,7 @@
 
     const meta = [
       `${int(row.remainingResearchCost)} pts`,
-      months(row.monthsAtCurrentIncome)
+      researchDuration(row)
     ];
     const roll = rollNote(row.unlockChance, row.availabilityState);
     if (roll) meta.push(roll);
@@ -362,7 +432,7 @@
           <span class="ra-row__name" title="${attr(row.id)}">${escapeHtml(row.displayName)}</span>
           <span class="ra-row__metric" title="${attr(effectTitle)}">${attr(quantity(row.monthlyValue, row.unit))}</span>
         </div>
-        <div class="ra-row__meta">${escapeHtml(meta.join(' · '))}${notes.length ? ` ${notes.join(' ')}` : ''}</div>
+        <div class="ra-row__meta" title="${attr(researchDurationTitle(row))}">${escapeHtml(meta.join(' · '))}${notes.length ? ` ${notes.join(' ')}` : ''}</div>
       </li>
     `;
   }
@@ -690,7 +760,7 @@
           value: `${row.isFirstInClass ? 'First of kind' : `${mult(row.improvementMultiple)} ${row.axisLabel || 'unnamed axis'}`} · `
             + (chainDrill
               ? `${int(row.chain.totalRemainingCost)} pts · ${months(row.chain.monthsAtCurrentIncome)} (whole chain)`
-              : `${int(row.remainingResearchCost)} pts · ${months(row.monthsAtCurrentIncome)}`)
+              : `${int(row.remainingResearchCost)} pts · ${researchDuration(row)}`)
             + (chainDrill ? ` · ${int(row.chain.stepsCount)} steps` : '')
             + (row.chainPromoted === true && row.destinationAvailabilityLabel
               ? ` · destination is ${String(row.destinationAvailabilityLabel).toLowerCase()}, not startable today`
@@ -716,7 +786,7 @@
         value: `First capability of its kind — no baseline to compare against · `
           + (capChain
             ? `${int(cap.chain.totalRemainingCost)} pts · ${months(cap.chain.monthsAtCurrentIncome)} (whole chain)`
-            : `${int(cap.remainingResearchCost)} pts · ${months(cap.monthsAtCurrentIncome)}`)
+            : `${int(cap.remainingResearchCost)} pts · ${researchDuration(cap)}`)
           + chainInfo
       });
     }
@@ -803,7 +873,7 @@
           facts.push({
             label: `ECONOMIC · ${group.label} · ${row.displayName}`,
             value: `${quantity(row.monthlyValue, row.unit)} · ${int(row.remainingResearchCost)} pts · `
-              + `${months(row.monthsAtCurrentIncome)}`
+              + `${researchDuration(row)}`
           });
         }
       }
