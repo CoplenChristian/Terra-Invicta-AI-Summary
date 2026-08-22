@@ -1339,6 +1339,39 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   // -------------------------------------------------------------------------
   blocks.push(fixedBlock('research-heading', [`## 8. Active Research & Technology Projects`, ``]));
 
+  // Unlocked-technology census.
+  //
+  // The RECORDS panel added 2026-08-21 lists all 165 of these by name and is
+  // searchable; the export carries the COUNT and the route, not the list. The
+  // war room runs to a byte budget and 165 project names would crowd out live
+  // fleet and threat data for a figure an agent can fetch when it needs it.
+  // Both numbers come straight off the filtered snapshot in either mode, so
+  // this is not gated on omniscient data.
+  //
+  // Absent stays absent: a snapshot that does not carry these arrays says so
+  // rather than reporting zero unlocked, which would read as a faction that has
+  // researched nothing.
+  const completedProjectList = Array.isArray(observer?.completedProjects)
+    ? observer.completedProjects
+    : null;
+  const finishedTechList = Array.isArray(filteredSnapshot?.techTree?.finishedTechsNames)
+    ? filteredSnapshot.techTree.finishedTechsNames
+    : null;
+
+  const censusLines = (completedProjectList === null && finishedTechList === null)
+    ? [`*Unlocked-technology census unavailable in this snapshot.*`, ``]
+    : [
+      `**Unlocked technology:** ${
+        completedProjectList === null ? 'projects unavailable' : `${completedProjectList.length} faction projects completed`
+      }; ${
+        finishedTechList === null ? 'techs unavailable' : `${finishedTechList.length} global techs finished`
+      }.`,
+      `Searchable by project, unlocked item or effect at \`/api/intel/tech-search?observer=${observerId}&q=<term>\`; full graph at \`/api/intel/tech-tree\`.`,
+      ``
+    ];
+
+  blocks.push(fixedBlock('unlocked-technology-census', censusLines));
+
   const slotBlock = listBlock('research-slots', {
     headingLines: [`### Global Research Slots`],
     emptyLines: [`*No global research slots tracked.*`],

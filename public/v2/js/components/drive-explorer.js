@@ -422,7 +422,8 @@
           </thead>
           <tbody>${rows.map(row => renderRow(row, payload)).join('')}</tbody>
         </table>
-      </div>`;
+      </div>
+      <div class="de-scroll-hint">SWIPE HORIZONTALLY — DRIVE NAME STAYS PINNED</div>`;
   }
 
   function renderFooter(payload, shownCount, matchedCount) {

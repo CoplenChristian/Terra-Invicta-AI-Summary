@@ -233,10 +233,39 @@ const VIEWS = [
     panels: [
       'factionDonutContainer',
       'researchWatchlist',
+      // "What have I already researched" is a record of what happened, so the
+      // searchable unlocked-technology list sits here rather than beside the
+      // research advisor in COMMAND, which answers "what do I research next".
+      'unlockedTech',
       'sinceLastSave'
     ]
   }
 ];
+
+/**
+ * Show a table's scroll hint only when that table actually overflows.
+ *
+ * The hints used to be revealed by viewport width alone, which got it wrong in
+ * both directions: at 375px they appeared above tables measuring 698/698 with
+ * nothing to scroll to, and a table that did overflow at 1000px got no hint
+ * because the rule stopped at 900px. Width is a proxy; scrollWidth is the fact.
+ */
+function syncScrollHints(root = document) {
+  const pairs = [
+    ['.mc-board-scroll-hint', '.mc-board-table-wrap'],
+    ['.de-scroll-hint', '.de-table-wrap']
+  ];
+  for (const [hintSelector, wrapSelector] of pairs) {
+    root.querySelectorAll(hintSelector).forEach(hint => {
+      // The hint is emitted immediately after its wrapper.
+      const wrap = hint.previousElementSibling;
+      const scrolls = wrap
+        && wrap.matches(wrapSelector)
+        && wrap.scrollWidth > wrap.clientWidth + 1;
+      hint.classList.toggle('is-scrollable', Boolean(scrolls));
+    });
+  }
+}
 
 function assertViewRegistryIntegrity() {
   const seenPanels = new Map();
@@ -309,6 +338,7 @@ function setActiveView(viewId, updateHash = true) {
   });
 
   loadLazyViewPanels(targetView.id);
+  syncScrollHints();
 
   window.MissionControlDetailPanel?.syncPageInert?.();
 }
@@ -324,13 +354,28 @@ function setActiveView(viewId, updateHash = true) {
 const lazyViewLoadKeys = new Map();
 
 function loadLazyViewPanels(viewId) {
-  if (viewId !== 'drives') return;
-  const container = document.getElementById('driveExplorer');
-  if (!container || !window.MissionControlDriveExplorer?.load) return;
   const key = `${state.observer}|${state.mode}`;
-  if (lazyViewLoadKeys.get('drives') === key) return;
-  lazyViewLoadKeys.set('drives', key);
-  window.MissionControlDriveExplorer.load(state.observer, state.mode, container);
+
+  if (viewId === 'drives') {
+    const container = document.getElementById('driveExplorer');
+    if (!container || !window.MissionControlDriveExplorer?.load) return;
+    if (lazyViewLoadKeys.get('drives') === key) return;
+    lazyViewLoadKeys.set('drives', key);
+    window.MissionControlDriveExplorer.load(state.observer, state.mode, container)
+      .finally?.(() => syncScrollHints());
+    return;
+  }
+
+  // The unlocked-technology panel reads the whole research graph (~570KB), the
+  // second largest response the dashboard serves, so it is charged to visitors
+  // who open RECORDS rather than to everyone on load.
+  if (viewId === 'records') {
+    const container = document.getElementById('unlockedTech');
+    if (!container || !window.MissionControlUnlockedTech?.load) return;
+    if (lazyViewLoadKeys.get('records') === key) return;
+    lazyViewLoadKeys.set('records', key);
+    window.MissionControlUnlockedTech.load(state.observer, state.mode, container);
+  }
 }
 
 function initViewNavigation() {
@@ -351,6 +396,9 @@ function initViewNavigation() {
 document.addEventListener('DOMContentLoaded', () => {
   assertViewRegistryIntegrity();
   initViewNavigation();
+  // A table's overflow depends on the viewport, so the hints are re-measured
+  // when it changes rather than assumed from the width they were rendered at.
+  window.addEventListener('resize', () => syncScrollHints());
   initEventListeners();
   initSaveAutodetect();
   state.riskFloorPercent = storedRiskFloorPercent();
@@ -1184,6 +1232,9 @@ function renderDashboard() {
   // key check inside makes this a no-op unless one of them actually changed,
   // so switching modes on COMMAND does not fetch the drive catalogue.
   loadLazyViewPanels(state.activeView);
+  // The board tables were rewritten above, so their overflow -- and therefore
+  // whether each scroll hint is telling the truth -- has just changed.
+  syncScrollHints();
 }
 
 function renderTopHUD() {
@@ -1927,6 +1978,7 @@ window.MissionControlViews = {
   VIEWS,
   assertViewRegistryIntegrity,
   getActiveViewId,
-  setActiveView
+  setActiveView,
+  syncScrollHints
 };
 

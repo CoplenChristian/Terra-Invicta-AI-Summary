@@ -10,7 +10,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**171 modules.**
+**173 modules.**
 
 ## `public/`
 
@@ -23,7 +23,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/council-orders.js` | BS | Browser (ESM) | 349 | renders the at-a-glance answer to "what should each councilor do | — | — |
 | `public/v2/js/components/detail-panel.js` | BS | Browser (ESM) | 150 | the shared detail surface for clickable Mission Control modules. | — | — |
 | `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 637 | renders the Directive Engine v2 Cycle Plan. | — | — |
-| `public/v2/js/components/drive-explorer.js` | BS | Browser (ESM) | 617 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
+| `public/v2/js/components/drive-explorer.js` | BS | Browser (ESM) | 618 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
 | `public/v2/js/components/executive-boards.js` | BS | Browser (ESM) | 416 | renders the executive boards — faction power, resources, and the | — | — |
 | `public/v2/js/components/faction-intel.js` | BS | Browser (ESM) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
 | `public/v2/js/components/fleet-procurement.js` | BS | Browser (ESM) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
@@ -32,8 +32,9 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/mining-expansion.js` | BS | Browser (ESM) | 383 | the mining expansion board — capacity, runways, and need-weighted | — | — |
 | `public/v2/js/components/research-advisor.js` | BS | Browser (ESM) | 1042 | phase 4 of the research advisor, on screen. | — | — |
 | `public/v2/js/components/strategic-commentary.js` | BS | Browser (ESM) | 126 | renders the non-LLM four-layer Strategic Commentary Engine output. | — | — |
+| `public/v2/js/components/unlocked-tech.js` | BS | Browser (ESM) | 357 | renders the searchable list of the observer faction's unlocked | — | — |
 | `public/v2/js/components/world-map.js` | BS | Browser (ESM) | 493 | renders the interactive world/space theater map surface. | — | — |
-| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 1933 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 1985 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (ESM) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
@@ -53,6 +54,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/publish/techGraph.js` | C | Node (CommonJS) | 102 | publish stage 3a — apply the shared/inline/omitted tech-tree mode | `applyTechTreeMode, buildSharedTechGraph, splitTechTree, techGraphFingerprint` | `tests/techGraph.test.js` |
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 258 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
 | `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 240 | browser verification that the Drive Explorer renders the measured | — | — |
+| `scripts/verify_mobile_overflow.js` | C | Node (CommonJS) | 244 | browser verification that no view clips content off-screen on narrow | — | — |
 | `scripts/verify_research_actionability.js` | C | Node (CommonJS) | 196 | browser verification of research-advisor actionability against a | — | — |
 | `scripts/verify_research_tab_layout.js` | C | Node (CommonJS) | 243 | browser verification of the Research Advisor layout and legibility | — | — |
 | `scripts/verify_research_vs_procurement.js` | C | Node (CommonJS) | 384 | browser verification of separating procurement from research and of | — | — |
@@ -179,7 +181,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `shared/intel/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 1278 | the /api/intel/research-ranking projection composing the phase-4 | `dedupeByGateProject, researchRankingResource` | `tests/researchRanking.test.js` |
 | `shared/intel/theaters.mjs` | E | Node + Cloudflare worker (ESM) | 196 | body-by-body posture — the twelve-body theater board and the | `bodyStatusResource, theatersResource` | — |
 | `shared/intelResources.mjs` | **B** E | Node + Cloudflare worker (ESM) | 153 | public entry point for the intel projections — a barrel re-exporting | `COMBAT_POWER_SOURCE, DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, EXPANSION_MINE_LIMIT_GRANTS, EXPANSION_MISSION_TECH_NAMES, EXPANSION_THEATER_ACCESSIBILITY, FLEET_SUMMARY_OMITTED_FIELDS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, MINING_RESOURCES, MINING_SCARCITY_WEIGHTS, …(+59)` | `tests/intelResources.test.js` |
-| `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 1873 | shared markdown export renderers for the model-facing .md endpoints | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, normalizeBody, …(+6)` | `tests/markdownExports.test.js` |
+| `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 1906 | shared markdown export renderers for the model-facing .md endpoints | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, normalizeBody, …(+6)` | `tests/markdownExports.test.js` |
 | `shared/militaryValue.mjs` | E | Node + Cloudflare worker (ESM) | 1227 | military valuation of the unlock families phase 1 did not cover — | `AXIS_SETS, CLASS_KINDS, COMPONENT_CLASS_SPECS, MAGAZINE_BASIS_CODES, MILITARY_CLASS_SPECS, MILITARY_FORMULAE, MOUNT_HARDPOINTS, RATIO_UNAVAILABLE_CODES, WEAPON_CLASS_SPECS, WEAPON_ROLES, armorMetrics, batteryMetrics, …(+15)` | `tests/militaryValue.test.js` |
 | `shared/munitionDelivery.mjs` | E | Node + Cloudflare worker (ESM) | 649 | research advisor phase 5 — whether a munition round actually | `DELIVERY_BASIS_CODES, DELIVERY_FORMULAE, MUNITION_DELIVERY_AXES, buildPointDefenseProfile, munitionDelivery` | `tests/munitionDelivery.test.js` |
 | `shared/propulsion.mjs` | E | Node + Cloudflare worker (ESM) | 758 | the propulsion model — delta-V and acceleration per ship/design, | `COMBAT_ACCELERATION_DISCREPANCY, DESIGN_ROLES, MODEL_AGREEMENT_TOLERANCE, MODEL_CONFIDENCE, PROPULSION_FORMULAE, RANKING_BY_ROLE, accelerationMps2, deltaVKps, effectiveExhaustVelocity, inferDesignRole, rankRefits, refitOntoDrive, …(+2)` | — |
