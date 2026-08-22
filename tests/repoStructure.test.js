@@ -17,11 +17,30 @@
 //      Every moved script therefore anchors on $repoRoot. Pasting back the old
 //      `Join-Path $scriptPath "TerraInvicta.Common.psm1"` silently breaks all
 //      seven scripts at once, and nothing else in the suite would notice.
+//
+// THE PROPERTY IS "NOT TRACKED", NOT "NOT ON DISK".
+//
+// The first cut of this file asserted `fs.existsSync(oldPath) === false` and was
+// wrong. A move guarantees that no *tracked* file remains at the old path; it
+// says nothing about untracked local output. The tool writes 45-odd generated
+// CSVs into csv/ and dated summaries into Again_Save/, .gitignore has always
+// covered them, and they stay wherever the user last ran the tool from. Measured
+// on the main checkout after the move: csv/ held 45 entries, 0 tracked; the
+// tracked README had moved correctly. So the existsSync form failed on every
+// checkout that had ever run the tool -- with no defect behind it -- and the
+// only way to green it was to delete the user's untracked data, which is not
+// ours to remove.
+//
+// `git ls-files` is therefore the instrument throughout: it reads the index, so
+// it answers "is this tracked here" and ignores local output entirely. A run
+// where git cannot answer FAILS rather than passing vacuously -- an
+// unevaluatable check must say so, not fall through to "fine".
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const TOOL_DIR = 'md-generation-reports';
@@ -44,7 +63,9 @@ const TOOL_SCRIPTS_IMPORTING_COMMON = [
   'set_resistance_ship_build_times.ps1'
 ];
 
-// Files created 2025-11-22 that must not reappear at the repository root.
+// Files created 2025-11-22 that must no longer be TRACKED at the repository
+// root. An untracked stray of the same name is a local artefact, not a
+// regression, and is deliberately not asserted on.
 const TOOL_FILES = [
   'ti_data_tools.ps1', 'export_factions.ps1', 'export_factions.py',
   'Get-UnlockedShipComponents.ps1', 'generate_hab_module_tables.ps1',
@@ -52,6 +73,25 @@ const TOOL_FILES = [
   'set_resistance_ship_build_times.ps1', 'TI_DATA_DEV.md', 'TI_DATA_TOOLS.md',
   'summary_prompt_examples.md', 'template.config'
 ];
+
+/**
+ * Files git tracks under `pathspec`, relative to the repository root.
+ *
+ * Reads the index, so untracked local output -- the tool's generated CSVs and
+ * dated summaries -- is invisible to it, which is the whole point. A git that
+ * cannot answer throws: this check must never silently degrade into a pass.
+ */
+function trackedUnder(pathspec) {
+  const probe = spawnSync('git', ['ls-files', '-z', '--', pathspec], {
+    cwd: ROOT,
+    encoding: 'utf8'
+  });
+  if (probe.error) throw new Error(`git ls-files could not run: ${probe.error.message}`);
+  if (probe.status !== 0) {
+    throw new Error(`git ls-files '${pathspec}' exited ${probe.status}: ${probe.stderr.trim()}`);
+  }
+  return probe.stdout.split('\0').filter(Boolean);
+}
 
 function walk(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {
@@ -62,6 +102,17 @@ function walk(dir, out = []) {
   }
   return out;
 }
+
+test('the tracked-file probe can actually answer', () => {
+  // Guards the guard. Every assertion below is "git reports nothing here", and
+  // a broken probe reports nothing too. This pins one path that must be
+  // non-empty, so a git that cannot run fails loudly instead of greening the
+  // whole file.
+  assert.ok(
+    trackedUnder('server').length > 0,
+    'git ls-files reported no tracked files under server/ -- the probe is broken, not the tree'
+  );
+});
 
 test('no dashboard module resolves a path into md-generation-reports', () => {
   // Matches the module-resolution forms only. A prose comment naming the
@@ -93,20 +144,21 @@ test('the shared PowerShell module and config stay at the repository root', () =
   // five parse_*.ps1 parsers Join-Path it against their own directory, which IS
   // the root. Moving it into the tool would break both.
   for (const rel of ['TerraInvicta.Common.psm1', 'config/defaults.json', 'config/config.schema.json']) {
-    assert.equal(fs.existsSync(path.join(ROOT, rel)), true, `${rel} must stay at the repository root`);
+    assert.deepEqual(trackedUnder(rel), [rel], `${rel} must stay tracked at the repository root`);
+    assert.equal(fs.existsSync(path.join(ROOT, rel)), true, `${rel} must be present on disk to be loadable`);
   }
-  assert.equal(
-    fs.existsSync(path.join(ROOT, TOOL_DIR, 'TerraInvicta.Common.psm1')),
-    false,
+  assert.deepEqual(
+    trackedUnder(`${TOOL_DIR}/TerraInvicta.Common.psm1`),
+    [],
     'the shared module must not be duplicated into the tool directory'
   );
 });
 
 test('every moved tool script anchors the shared module and config on its parent', () => {
   for (const script of TOOL_SCRIPTS_IMPORTING_COMMON) {
-    const file = path.join(ROOT, TOOL_DIR, script);
-    assert.equal(fs.existsSync(file), true, `${TOOL_DIR}/${script} is missing`);
-    const src = fs.readFileSync(file, 'utf8');
+    const rel = `${TOOL_DIR}/${script}`;
+    assert.deepEqual(trackedUnder(rel), [rel], `${rel} is not tracked where it should be`);
+    const src = fs.readFileSync(path.join(ROOT, TOOL_DIR, script), 'utf8');
 
     assert.match(
       src,
@@ -143,29 +195,39 @@ test('the Python exporter reads config.json from the repository root', () => {
   assert.match(src, /CONFIG_PATH\s*=\s*REPO_ROOT\s*\/\s*"config\.json"/);
 });
 
-test('no 2025 tool file remains at the repository root', () => {
-  const stragglers = TOOL_FILES.filter(name => fs.existsSync(path.join(ROOT, name)));
-  assert.deepEqual(stragglers, [], 'these belong in md-generation-reports/');
+test('no 2025 tool file is tracked at the repository root', () => {
+  const stragglers = TOOL_FILES.filter(name => trackedUnder(name).length > 0);
+  assert.deepEqual(stragglers, [], `these belong in ${TOOL_DIR}/`);
+  // ...and each one is tracked at its new home, so this cannot pass by the file
+  // simply having been deleted.
+  const missing = TOOL_FILES.filter(name => trackedUnder(`${TOOL_DIR}/${name}`).length === 0);
+  assert.deepEqual(missing, [], `these should be tracked under ${TOOL_DIR}/`);
 });
 
-test('the tool keeps its output directories beside its scripts', () => {
+test('the tool keeps its tracked output directories beside its scripts', () => {
   // config/defaults.json leaves paths.csvSubDir / shipInfoSubDir /
   // againSaveSubDir relative, and the scripts resolve them against their own
-  // directory. If the directories were left at the root those defaults would
-  // point at nothing.
+  // directory. If the TRACKED content were left at the root those defaults
+  // would point at the wrong tree.
+  //
+  // Untracked generated output at the old root is NOT asserted on: csv/ and
+  // Again_Save/ accumulate local CSVs and dated summaries that .gitignore
+  // already covers, and they legitimately survive the move on any checkout that
+  // has run the tool.
   const defaults = JSON.parse(fs.readFileSync(path.join(ROOT, 'config', 'defaults.json'), 'utf8'));
   for (const key of ['csvSubDir', 'shipInfoSubDir', 'againSaveSubDir']) {
     const sub = defaults.paths[key];
     assert.equal(typeof sub, 'string', `paths.${key} must be a relative sub-directory`);
-    assert.equal(
-      fs.existsSync(path.join(ROOT, TOOL_DIR, sub)),
-      true,
-      `paths.${key} = '${sub}' does not resolve under ${TOOL_DIR}/`
+    assert.ok(sub.length > 0, `paths.${key} must not be empty`);
+
+    assert.ok(
+      trackedUnder(`${TOOL_DIR}/${sub}`).length > 0,
+      `paths.${key} = '${sub}' has no tracked content under ${TOOL_DIR}/`
     );
-    assert.equal(
-      fs.existsSync(path.join(ROOT, sub)),
-      false,
-      `paths.${key} = '${sub}' still exists at the repository root`
+    assert.deepEqual(
+      trackedUnder(sub),
+      [],
+      `paths.${key} = '${sub}' still has tracked content at the repository root`
     );
   }
 });
