@@ -522,3 +522,165 @@ test('Commentary panel: an unavailable sweep renders its reason instead of vanis
     assert.ok(!text.includes(token), `rendered text contains "${token}"`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// THE REMAINING CONFIDENT DEFAULTS IN simulation.js
+//
+// Seven of them, all LATENT on the live save and none of them fixed when the
+// `ownRating = 5000` baseline was: `armorMedian || 10`, the `|| 12` / `|| 24`
+// armour percentiles, p10/p50/p90 CV fallbacks of 3250 / 20330 / 70100,
+// `baseConstructionTimeDays || 60` and `queuedCount || 2`.
+//
+// MEASURED on ExitSave.gz (md5 5c0d9ef9...), 2026-08-22: 0 of 57 alien fleets
+// miss `armorMedian` or `shipsCount`, 82 of 82 alien designs carry a positive
+// CV, 24 of 24 observer designs carry a CV, and 0 of 28 hull stats miss
+// `baseConstructionTimeDays` (`Monitor` reads 120). So every one of them fires
+// only on a save this one does not exercise -- and a save that DID exercise
+// them would have published a specific invented number with nothing on the
+// surface saying so. Latent is not fixed.
+//
+// The whole `strategicCommentary` payload is byte-identical in all three modes
+// after these changes, which is the evidence that they were latent.
+// ---------------------------------------------------------------------------
+
+const {
+  buildPlayerOpponentTiers,
+  buildOmniscientOpponentTiers
+} = require('../server/commentary/simulation');
+
+const ratedFacts = (overrides = {}) => ({
+  mode: 'player',
+  snapshotId: 'default-audit-seed',
+  observerId: 4712,
+  shipDesigns: [
+    { factionId: 4712, hullName: 'Monitor', displayName: 'Sentinel', _unnormalizedCombatValue: 12000 }
+  ],
+  shipHullStats: { Monitor: { baseConstructionTimeDays: 120 } },
+  alienFleets: [{ shipsCount: 4, armorMedian: 14 }, { shipsCount: 9, armorMedian: 26 }],
+  ownQueuedShips: [{ factionId: 4712 }, { factionId: 4712 }],
+  actualAlienHate: null,
+  hateVentRatePerDay: null,
+  ...overrides
+});
+
+test('an alien fleet with no readable armour is dropped from the sample, never rated at a default 10cm', () => {
+  // A default of 10 is not a neutral choice: it sits between the two measured
+  // medians below, so an unreadable fleet would have quietly pulled the median
+  // DOWN and reported the aliens as weaker than the readable evidence says.
+  const measuredOnly = buildPlayerOpponentTiers([{ armorMedian: 20 }, { armorMedian: 30 }], 1000);
+  const withUnreadable = buildPlayerOpponentTiers(
+    [{ armorMedian: 20 }, { armorMedian: null }, { armorMedian: 30 }, { armorMedian: 'n/a' }, {}],
+    1000
+  );
+  assert.deepStrictEqual(
+    withUnreadable.map(t => t.opponentRating),
+    measuredOnly.map(t => t.opponentRating),
+    'the unreadable fleets must not move any tier rating'
+  );
+  assert.match(withUnreadable[0].description, /median armor 25\.0cm/,
+    'the median is of the MEASURED fleets, not of a sample padded with 10s');
+});
+
+test('no readable armour at all refuses, and says the fleets were seen but not measured', () => {
+  assert.strictEqual(buildPlayerOpponentTiers([{ armorMedian: null }, {}], 1000), null,
+    'an unmeasurable population must not produce 12cm / 24cm tiers out of nothing');
+  // A measured zero would scale every tier to a rating of 0, which reads as
+  // "any hull wins" rather than as "this could not be rated".
+  assert.strictEqual(buildPlayerOpponentTiers([{ armorMedian: 0 }], 1000), null);
+
+  const sim = runMonteCarloSimulation(ratedFacts({
+    alienFleets: [{ shipsCount: 4, armorMedian: null }, { shipsCount: 9 }]
+  }));
+  assert.strictEqual(sim.available, false);
+  assert.match(sim.reason, /2 alien fleet\(s\) are visible but none carries a readable, positive armour median/);
+  assert.match(sim.reason, /NOT a report that the alien fleets are weak/);
+  assert.ok(!sim.reason.includes('No alien forces visible'),
+    '"nothing is out there" and "I cannot measure what is out there" are opposite statements');
+});
+
+test('fleet size is not an input to the player opponent rating, and the dead computation is gone', () => {
+  // `fleetSizes` was computed from `shipsCount` and never used -- dead since the
+  // tiers were rewritten to key off armour medians, and the only place
+  // `shipsCount` was read here, so the function read as though fleet size were
+  // an input to the rating when it is not.
+  const small = buildPlayerOpponentTiers([{ shipsCount: 1, armorMedian: 20 }], 1000);
+  const large = buildPlayerOpponentTiers([{ shipsCount: 40, armorMedian: 20 }], 1000);
+  const absent = buildPlayerOpponentTiers([{ armorMedian: 20 }], 1000);
+  assert.deepStrictEqual(small, large, 'a 40-ship fleet and a 1-ship fleet of the same armour rate identically');
+  assert.deepStrictEqual(small, absent, 'and an absent shipsCount changes nothing, because it is never read');
+});
+
+test('an alien design population with no readable combat value refuses instead of inventing CVs', () => {
+  // HONEST NOTE ON WHAT THIS PROVES. Restoring `|| 3250` / `|| 20330` /
+  // `|| 70100` leaves this suite GREEN, and that is the correct result: the
+  // sample is filtered to positive finite CVs and refused when empty, and
+  // `samplePercentile` returns null only for an empty array, so an interpolation
+  // between positive values can be neither null nor 0. Those three fallbacks
+  // were UNREACHABLE, not merely latent -- dead code that read as a degrade
+  // path. Removing them is therefore a readability fix, and the assertions
+  // below pin the FILTER, which is the property that keeps them unreachable.
+  // Loosen the filter and the refusal is what catches it.
+  assert.strictEqual(buildOmniscientOpponentTiers([{ _unnormalizedCombatValue: null }, {}]), null,
+    'p10/p50/p90 of 3250 / 20330 / 70100 are three specific numbers with no source');
+  assert.strictEqual(buildOmniscientOpponentTiers([{ _unnormalizedCombatValue: 0 }]), null);
+  assert.strictEqual(buildOmniscientOpponentTiers([]), null);
+  // A negative CV is excluded too, which is what stops a percentile from
+  // interpolating across zero and landing on a falsy value.
+  assert.strictEqual(buildOmniscientOpponentTiers([{ _unnormalizedCombatValue: -5 }]), null);
+  const mixed = buildOmniscientOpponentTiers([
+    { _unnormalizedCombatValue: -5 }, { _unnormalizedCombatValue: 100 }, { _unnormalizedCombatValue: 'x' }
+  ]);
+  assert.strictEqual(mixed.find(t => t.id === 'median-alien-escort').opponentRating, 100,
+    'the negative and the unreadable are dropped, not folded into the sample');
+
+  // A single readable design is still a measurement, and every percentile of a
+  // one-element sample is that element.
+  const single = buildOmniscientOpponentTiers([{ _unnormalizedCombatValue: 4321 }]);
+  assert.strictEqual(single.find(t => t.id === 'median-alien-escort').opponentRating, 4321);
+
+  const sim = runMonteCarloSimulation(ratedFacts({
+    mode: 'omniscient',
+    shipDesigns: [
+      { factionId: 4712, hullName: 'Monitor', displayName: 'Sentinel', _unnormalizedCombatValue: 12000 },
+      { factionId: 4717, factionName: 'the Aliens', hullName: 'Alien Cruiser', _unnormalizedCombatValue: null }
+    ]
+  }));
+  assert.strictEqual(sim.available, false);
+  assert.match(sim.reason, /1 alien design\(s\) are visible but none carries a readable combat value/);
+  assert.match(sim.reason, /No default CV is substituted/);
+});
+
+test('the rebuild clock refuses rather than reporting a 60-day hull or two invented shipyards', () => {
+  // An unreadable build time became a specific 60 days and an EMPTY queue became
+  // two active yards, both under `available: true`, and both went straight into
+  // the dashboard's "~N hulls/mo".
+  const noBuildTime = runMonteCarloSimulation(ratedFacts({ shipHullStats: { Monitor: {} } }))
+    .projections.rebuildClock;
+  assert.strictEqual(noBuildTime.available, false);
+  assert.strictEqual(noBuildTime.monthlyThroughputEst, null, 'never a rate derived from a 60-day default');
+  assert.strictEqual(noBuildTime.baseConstructionDays, null, 'and the unreadable input stays null');
+  assert.match(noBuildTime.reason, /no readable base construction time for Monitor/);
+  assert.match(noBuildTime.reason, /not a report of zero throughput/);
+
+  const noQueue = runMonteCarloSimulation(ratedFacts({ ownQueuedShips: undefined }))
+    .projections.rebuildClock;
+  assert.strictEqual(noQueue.available, false);
+  assert.strictEqual(noQueue.activeShipyardQueues, null, 'an unread queue is not a queue of zero');
+  assert.match(noQueue.reason, /no readable shipyard queue/);
+
+  // An EMPTY queue is a measurement, and its throughput is a measured zero.
+  const emptyQueue = runMonteCarloSimulation(ratedFacts({ ownQueuedShips: [] }))
+    .projections.rebuildClock;
+  assert.strictEqual(emptyQueue.available, true, 'reading an empty queue is a successful reading');
+  assert.strictEqual(emptyQueue.activeShipyardQueues, 0);
+  assert.strictEqual(emptyQueue.monthlyThroughputEst, 0,
+    'nothing queued produces nothing, which is not the same as two yards producing one hull a month');
+
+  // And the measured path is arithmetically unchanged: 30 / (120 / 2) = 0.5,
+  // floored at 1 by the long-standing `Math.max(1, ...)`.
+  const measured = runMonteCarloSimulation(ratedFacts()).projections.rebuildClock;
+  assert.strictEqual(measured.available, true);
+  assert.strictEqual(measured.baseConstructionDays, 120);
+  assert.strictEqual(measured.activeShipyardQueues, 2);
+  assert.strictEqual(measured.monthlyThroughputEst, 1);
+});

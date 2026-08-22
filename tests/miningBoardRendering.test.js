@@ -18,21 +18,22 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..');
 const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'mining-expansion.js');
 const v2ShellPath = path.join(repoRoot, 'public', 'v2', 'index.html');
 const v1ShellPath = path.join(repoRoot, 'public', 'index.html');
 
-// Minimal browser surface: the component only assigns `root.innerHTML`.
+// Minimal browser surface: the component only assigns `root.innerHTML`. The
+// sandbox and the visible-text reader come from the shared harness -- this file
+// used to build `{ window: {} }`, which left the component escaping through a
+// fallback that does not escape, and to strip tags without decoding entities,
+// so any escaped `<` in a site name or figure would have been read as a tag and
+// eaten whole. See `tests/fixtures/renderHarness.js`.
+const { visibleText, runComponent } = require('./fixtures/renderHarness');
+
 function loadMiningComponent() {
-  const source = fs.readFileSync(componentPath, 'utf8');
-  const sandbox = { window: {}, console, fetch: () => Promise.resolve(null) };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: componentPath });
-  return sandbox.window.MissionControlMiningExpansion;
+  return runComponent(componentPath).window.MissionControlMiningExpansion;
 }
 
 function renderToString(payload) {
@@ -40,12 +41,6 @@ function renderToString(payload) {
   const root = { innerHTML: '' };
   component.render(root, payload);
   return root.innerHTML;
-}
-
-// Text a reader would actually see, tags stripped, so an attribute value can
-// never mask a null that reaches the visible copy.
-function visibleText(html) {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 const FORBIDDEN = ['null', 'undefined', 'NaN', '[object Object]'];

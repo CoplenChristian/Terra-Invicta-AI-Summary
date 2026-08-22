@@ -838,3 +838,89 @@ test('a redacted enemy shipyard count stays null instead of becoming a confident
   assert.strictEqual(observed.shipyardCount, 11);
   assert.strictEqual(observed.shipyardQueueCount, 0, 'a genuinely measured zero must still read as zero');
 });
+
+// ---------------------------------------------------------------------------
+// `toFiniteNumber` itself: the coercion every one of the cases above runs on.
+//
+// The three-way absence guard (`null` / `undefined` / `''`) was only the first
+// layer. Behind it sat a bare `Number(value)`, which accepts far more than a
+// numeric field: an ARRAY where a number was expected became a confident 0,
+// `[7]` became 7, `true` became 1, `false` became 0, and a whitespace-only
+// string became 0. Each is the same defect the guard exists to prevent, one
+// type further out -- and the last two are the dangerous pair, because 0 is
+// the most reassuring value most of these fields can take.
+//
+// Tightened 2026-08-22 after measuring that NO caller relied on the loose
+// form: the divergent branch was instrumented and fired 0 times across the
+// whole suite and across 132 captured surfaces (38 intel routes, the filtered
+// snapshot, the briefing and all four markdown exports, in all three modes),
+// every one of which is byte-identical after the change.
+// ---------------------------------------------------------------------------
+
+const { toFiniteNumber, strictFiniteNumber, round, sameId } = require('../shared/util.mjs');
+
+test('toFiniteNumber refuses every non-numeric type instead of coercing it to a number', () => {
+  // The array cases are the ones this was named for. `Number([]) === 0`.
+  assert.strictEqual(toFiniteNumber([]), null, 'an array where a number was expected is unmeasured, not zero');
+  assert.strictEqual(toFiniteNumber([7]), null, 'a one-element array is not a measurement of its element');
+  assert.strictEqual(toFiniteNumber([1, 2]), null);
+
+  // Booleans. `Number(false) === 0` is the reassuring-value case.
+  assert.strictEqual(toFiniteNumber(true), null);
+  assert.strictEqual(toFiniteNumber(false), null, 'a boolean false is not a measured zero');
+
+  // A whitespace-only string is as blank as ''. `Number('  ') === 0`.
+  assert.strictEqual(toFiniteNumber('  '), null);
+  assert.strictEqual(toFiniteNumber('\t\n'), null);
+
+  // Everything else `Number()` would happily accept.
+  assert.strictEqual(toFiniteNumber(new Date(0)), null, 'a Date is not a quantity this model measures');
+  assert.strictEqual(toFiniteNumber({}), null);
+  assert.strictEqual(toFiniteNumber(() => 5), null);
+});
+
+test('toFiniteNumber still reads every genuine measurement, including a measured zero', () => {
+  assert.strictEqual(toFiniteNumber(0), 0, 'a measured zero is a measurement');
+  assert.strictEqual(toFiniteNumber(-4.25), -4.25);
+  assert.strictEqual(toFiniteNumber('0'), 0);
+  assert.strictEqual(toFiniteNumber('42'), 42);
+  assert.strictEqual(toFiniteNumber(' 42 '), 42, 'a padded numeric string is still numeric');
+  assert.strictEqual(toFiniteNumber('1e-4'), 0.0001, 'exponent form is how the smallest cruise accelerations arrive');
+
+  // Absent stays null, unchanged.
+  assert.strictEqual(toFiniteNumber(null), null);
+  assert.strictEqual(toFiniteNumber(undefined), null);
+  assert.strictEqual(toFiniteNumber(''), null);
+
+  // Unparseable stays null, unchanged -- including the thousands-separator
+  // form CLAUDE.md records on 92 of 541 drives. It must NOT become 0 here;
+  // the separator is stripped by the template reader, not by this function.
+  assert.strictEqual(toFiniteNumber('2,130.928'), null);
+  assert.strictEqual(toFiniteNumber('abc'), null);
+  assert.strictEqual(toFiniteNumber(NaN), null);
+  assert.strictEqual(toFiniteNumber(Infinity), null);
+});
+
+test('strictFiniteNumber is the same function object, so the two rules cannot drift apart', () => {
+  // They were two implementations of two different rules until 2026-08-22, and
+  // `sameId` is the standing example in this repo of what happens when a pair
+  // like that is allowed to diverge. The strict name survives because five
+  // call sites chose it deliberately and documented why.
+  assert.strictEqual(strictFiniteNumber, toFiniteNumber,
+    'an alias, not a copy: a second implementation is a second thing to keep in step');
+});
+
+test('the helpers built on toFiniteNumber inherit the refusal rather than a zero', () => {
+  assert.strictEqual(round([]), null, 'rounding an array must not print 0.00');
+  assert.strictEqual(round(true, 2), null);
+  assert.strictEqual(round('  '), null);
+  assert.strictEqual(round(1.005, 2), 1.0, 'a real measurement still rounds');
+
+  // `sameId` compares numerically only when BOTH sides are real numbers. An
+  // array on either side now falls through to the string comparison instead of
+  // matching numerically at 0, so `[]` no longer equals a faction id of 0.
+  assert.strictEqual(sameId([], 0), false, 'an array is not the entity whose id is 0');
+  assert.strictEqual(sameId(false, 0), false);
+  assert.strictEqual(sameId(4712, '4712'), true, 'the case sameId exists for is unaffected');
+  assert.strictEqual(sameId(null, null), false, 'an unresolvable identity still matches nothing');
+});

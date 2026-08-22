@@ -163,21 +163,29 @@ function registerReadOnlyExports(app) {
       const rawSnapshot = snapshotCache.loadOrGetSnapshot(targetPath);
       assertObserver(rawSnapshot, observerId);
       const filtered = snapshotCache.buildFilteredSnapshot(rawSnapshot, mode, observerId);
-      // Section 10 reports the risk floor and the bench truncation, and both are
-      // engine output rather than snapshot data. The shared renderer cannot
-      // build them -- it also runs in the Cloudflare Worker, which has neither
-      // Node CommonJS nor config -- so this runtime hands the plan over. The
-      // hosted worker needs no equivalent: its published rows already carry
-      // `snapshot.missionControlBriefing`, which the renderer falls back to.
+      // Section 10 reports the risk floor, the bench truncation and the primary
+      // recommendation, and all three are engine output rather than snapshot
+      // data. The shared renderer cannot build them -- it also runs in the
+      // Cloudflare Worker, which has neither Node CommonJS nor config -- so this
+      // runtime hands them over. The hosted worker needs no equivalent: its
+      // published rows already carry `snapshot.missionControlBriefing`, and
+      // `primary` is a sibling of `cyclePlan` on the same `engineDirectives`
+      // object, so the renderer's fallback finds both.
+      //
+      // The briefing is generated ONCE and both are read off it: two calls would
+      // be two engine runs against one save, and nothing guarantees the second
+      // agrees with the first.
       //
       // The floor is a request parameter here for the same reason it is on
       // /api/v2/briefing: two clients may hold different risk tolerances against
       // one cached save, and resolving an absent parameter to the CONFIGURED
       // default is the briefing generator's job, never a coercion to 0.
-      const cyclePlan = briefingGenerator
+      const engineDirectives = briefingGenerator
         .generateMissionControlBriefing(filtered, rawSnapshot, { riskFloorPercent })
-        ?.engineDirectives?.cyclePlan ?? null;
-      const markdown = exportGenerator.generateWarRoomMarkdown(filtered, { cyclePlan });
+        ?.engineDirectives ?? null;
+      const cyclePlan = engineDirectives?.cyclePlan ?? null;
+      const primary = engineDirectives?.primary ?? null;
+      const markdown = exportGenerator.generateWarRoomMarkdown(filtered, { cyclePlan, primary });
       res.type('text/markdown; charset=utf-8').set('Cache-Control', 'no-store').send(markdown);
     } catch (err) {
       res.status(err.statusCode || 500).type('text/plain').send(`Error generating war room markdown: ${err.message}`);

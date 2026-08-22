@@ -2115,8 +2115,16 @@ function researchChainPromotionBlocks(filteredSnapshot, observerId, observerName
 function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
   const mode = filteredSnapshot.mode || filteredSnapshot.intelMode || filteredSnapshot.visibility || 'player';
   const endpoint = `/api/v2/briefing?observer=${observerId}&mode=${mode}`;
+  const engineDirectives = filteredSnapshot?.missionControlBriefing?.engineDirectives;
   const plan = options.cyclePlan
-    ?? filteredSnapshot?.missionControlBriefing?.engineDirectives?.cyclePlan
+    ?? engineDirectives?.cyclePlan
+    ?? null;
+  // The PRIMARY recommendation, read the same two ways for the same reason.
+  // It is a sibling of `cyclePlan` on `engineDirectives`, so the worker's
+  // fallback finds it with no worker change, and Express hands it over beside
+  // the plan. See the block below for why it is here at all.
+  const primary = options.primary
+    ?? engineDirectives?.primary
     ?? null;
 
   if (!plan) {
@@ -2168,6 +2176,46 @@ function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
 
   lines.push(`- **Assigned this cycle:** ${countOr(plan.assignments)} councilor(s); `
     + `${countOr(plan.unassigned)} unassigned, ${countOr(plan.committed)} already committed`);
+
+  // THE ONE THING THE ENGINE ACTUALLY RECOMMENDS.
+  //
+  // Until 2026-08-22 this section printed only COUNTS -- risk floor, bench
+  // slice, "5 councilor(s) assigned" -- and none of them move when the
+  // recommendation does. `b5ca8dd` corrected `value/gdp-per-cp-cost` and
+  // recalibrated `VALUE_POINTS`, which changed the omniscient primary from
+  // "Advise Government: USA" to "Purge the Protectorate hold on
+  // ExtractiveSector in China" and took `totalExpectedValue` from 21.41 to
+  // 66.13 -- and all three markdown exports rendered BYTE-IDENTICAL across
+  // that change, in both modes, because the title, the score and the totals
+  // reached no export at all. The largest user-visible change the engine has
+  // produced was invisible to every LLM reading these files.
+  //
+  // It is a summary line rather than a section: the bullet below already names
+  // `/api/v2/briefing` for the rules, odds and per-action breakdown.
+  //
+  // ABSENT STAYS NULL, in three separate places. The line sits inside the
+  // plan-available branch, so a runtime that read nothing says so once above
+  // rather than printing a blank primary. A plan that carries no primary says
+  // that instead of naming one. And the score, the expected value and the
+  // total are each `fixedOr`, so an unmeasured one renders UNAVAILABLE and
+  // never 0.00 -- an expected value of zero is a real and different verdict.
+  //
+  // The EV comes from `primary.assignment.expectedValue`, not from `primary`:
+  // the candidate carries the score, and the expected value only exists once
+  // the action has been PAIRED with a councilor whose odds can be computed. A
+  // primary with no assignment therefore has a score and no EV, which is
+  // reported as exactly that.
+  if (!primary) {
+    lines.push(`- **Primary recommendation:** UNAVAILABLE — this plan carries no primary action. `
+      + `That is not "no action is worth taking": nothing was read.`);
+  } else {
+    const title = typeof primary.title === 'string' && primary.title.trim() !== ''
+      ? primary.title.trim()
+      : 'UNAVAILABLE (the primary action carries no title)';
+    lines.push(`- **Primary:** ${title} — score ${fixedOr(primary.score, 2)}, `
+      + `EV ${fixedOr(primary.assignment?.expectedValue, 2)} `
+      + `| whole-cycle totalExpectedValue ${fixedOr(plan.totalExpectedValue, 2)}`);
+  }
 
   lines.push(`- Full plan, with each action's rules, odds and expected value: \`${endpoint}\``);
   lines.push(``);

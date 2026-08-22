@@ -10,9 +10,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 
 const snapshotBuilder = require('../server/snapshotBuilder');
 const snapshotIdentity = require('../server/snapshotIdentity');
@@ -402,12 +400,15 @@ test('a snapshot published before phase 5 degrades to a stated reason, not a cra
 
 const componentPath = path.join(__dirname, '..', 'public', 'v2', 'js', 'components', 'research-advisor.js');
 
+// The sandbox and the visible-text reader both come from the shared harness:
+// `{ window: {} }` left the component escaping through a fallback that does not
+// escape, and the local one-line `visibleText` stripped tags without decoding
+// entities, so an escaped "<1 mo" was read as a tag and eaten whole. See
+// `tests/fixtures/renderHarness.js`.
+const { visibleText, runComponent } = require('./fixtures/renderHarness');
+
 function loadComponent() {
-  const sandbox = { window: {}, console, fetch: () => Promise.resolve(null) };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(componentPath, 'utf8'), sandbox, { filename: componentPath });
-  return sandbox.window.MissionControlResearchAdvisor;
+  return runComponent(componentPath).window.MissionControlResearchAdvisor;
 }
 
 function renderToString(payload) {
@@ -415,8 +416,6 @@ function renderToString(payload) {
   loadComponent().render(root, payload);
   return root.innerHTML;
 }
-
-const visibleText = (html) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
 const PANEL_BASE = {
   success: true,

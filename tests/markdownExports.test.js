@@ -526,6 +526,25 @@ test('Express server serves /latest-threats.md and /latest-war-room.md on epheme
     assert.match(warRoomRes.headers['content-type'], /text\/markdown/);
     assert.strictEqual(warRoomRes.headers['cache-control'], 'no-store');
     assert.ok(warRoomRes.body.includes('# TI Strategic War Room Briefing'));
+
+    // The engine's PRIMARY recommendation has to survive the route, not just
+    // the renderer. `primary` is engine output like the cycle plan is, so this
+    // runtime has to hand it over -- and dropping it from the route call is a
+    // silent regression the renderer's own tests cannot see. Both modes,
+    // because the two plans genuinely differ rather than one being a redaction
+    // of the other.
+    for (const mode of ['player', 'omniscient']) {
+      const res = await fetchEndpoint(`/latest-war-room.md?observer=4712&mode=${mode}`);
+      assert.strictEqual(res.status, 200, `${mode}: war room must serve`);
+      const primaryLine = res.body.split('\n').find(line => line.startsWith('- **Primary'));
+      assert.ok(primaryLine, `${mode}: section 10 must carry a primary line`);
+      assert.ok(!/UNAVAILABLE — this plan carries no primary/.test(primaryLine),
+        `${mode}: the route must hand the primary over, not leave the renderer to report it missing — got: ${primaryLine}`);
+      assert.match(primaryLine, /score -?[\d,.]+, EV -?[\d,.]+ \| whole-cycle totalExpectedValue -?[\d,.]+/,
+        `${mode}: score, EV and the cycle total must all be measured — got: ${primaryLine}`);
+      assert.ok(!/undefined|null|NaN/.test(primaryLine),
+        `${mode}: no placeholder token may reach the line — got: ${primaryLine}`);
+    }
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -653,6 +672,76 @@ for (const exportMode of EXPORT_MODES) {
       /\*\*Risk floor:\*\* 90% — IN FORCE; an action is vetoed when the LOW end of its odds band is below it/);
     // No floor record at all is a fourth, distinct state.
     assert.match(render(null), /\*\*Risk floor:\*\* UNAVAILABLE — this plan carries no risk-floor record/);
+  });
+
+  test(`section 10 names the primary recommendation, its score and both expected values (${exportMode} mode)`, () => {
+    // Counts alone are not the recommendation. `b5ca8dd` changed the omniscient
+    // primary and took totalExpectedValue from 21.41 to 66.13, and all three
+    // markdown exports rendered BYTE-IDENTICAL across it in both modes, because
+    // none of those figures reached any export.
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const section = sectionTen(renderWarRoomMarkdown(snapshot, {
+      cyclePlan: makeCyclePlan({ totalExpectedValue: 66.13 }),
+      primary: {
+        title: 'Purge the Protectorate hold on ExtractiveSector in China',
+        score: 68.74825331372958,
+        assignment: { expectedValue: 45.93 }
+      }
+    }));
+    assert.match(section,
+      /\*\*Primary:\*\* Purge the Protectorate hold on ExtractiveSector in China — score 68\.75, EV 45\.93 \| whole-cycle totalExpectedValue 66\.13/);
+  });
+
+  test(`section 10 reads the primary off a published snapshot the same way it reads the plan (${exportMode} mode)`, () => {
+    // `primary` is a SIBLING of `cyclePlan` on `engineDirectives`, which is what
+    // lets the hosted worker pick it up with no worker change at all.
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    snapshot.missionControlBriefing = {
+      engineDirectives: {
+        cyclePlan: makeCyclePlan({ totalExpectedValue: 19.3 }),
+        primary: {
+          title: 'Advise Government: United States of North America',
+          score: 6.997422015983501,
+          assignment: { expectedValue: 10.03 }
+        }
+      }
+    };
+    assert.match(sectionTen(renderWarRoomMarkdown(snapshot)),
+      /\*\*Primary:\*\* Advise Government: United States of North America — score 7\.00, EV 10\.03 \| whole-cycle totalExpectedValue 19\.30/);
+  });
+
+  test(`an unmeasured primary, score, EV or total renders UNAVAILABLE and never a confident zero (${exportMode} mode)`, () => {
+    const snapshot = makeMarkdownSnapshot(exportMode);
+
+    // A plan with no primary at all says so, rather than naming one.
+    const noPrimary = sectionTen(renderWarRoomMarkdown(snapshot, { cyclePlan: makeCyclePlan() }));
+    assert.match(noPrimary, /\*\*Primary recommendation:\*\* UNAVAILABLE — this plan carries no primary action/);
+    assert.ok(!/EV 0\.00/.test(noPrimary), 'an unread expected value must not render as 0.00');
+    assert.ok(!/score 0\.00/.test(noPrimary), 'an unread score must not render as 0.00');
+
+    // A primary with no assignment has a score and NO expected value: the EV
+    // only exists once the action is paired with a councilor whose odds are
+    // computable, so it is UNAVAILABLE rather than 0.
+    const unpaired = sectionTen(renderWarRoomMarkdown(snapshot, {
+      cyclePlan: makeCyclePlan({ totalExpectedValue: null }),
+      primary: { title: 'Something', score: 12.5, assignment: null }
+    }));
+    assert.match(unpaired, /\*\*Primary:\*\* Something — score 12\.50, EV UNAVAILABLE \| whole-cycle totalExpectedValue UNAVAILABLE/);
+
+    // An untitled primary is named as untitled rather than rendered blank or
+    // as the string "undefined".
+    const untitled = sectionTen(renderWarRoomMarkdown(snapshot, {
+      cyclePlan: makeCyclePlan(), primary: { title: '   ', score: null }
+    }));
+    assert.match(untitled, /\*\*Primary:\*\* UNAVAILABLE \(the primary action carries no title\) — score UNAVAILABLE/);
+    assert.ok(!/undefined/.test(untitled), 'no rendered token may read "undefined"');
+
+    // And with no plan read at all there is no primary line: the section says
+    // once, above, that nothing was read.
+    const nothingRead = sectionTen(renderWarRoomMarkdown(snapshot));
+    assert.match(nothingRead, /Cycle plan UNAVAILABLE in this runtime/);
+    assert.ok(!/\*\*Primary/.test(nothingRead),
+      'a runtime that read no plan must not print a primary line at all');
   });
 
   test(`an absent bench list renders UNAVAILABLE rather than a count of zero (${exportMode} mode)`, () => {

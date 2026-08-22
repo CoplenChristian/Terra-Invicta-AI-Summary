@@ -20,10 +20,22 @@ const { DESIGN_ROLES } = require('../shared/propulsion.mjs');
 const templateLoader = require('../server/templateLoader');
 const snapshotLoader = require('../server/snapshotLoader');
 
+// The shipped escaper, not a stub and not the component's non-escaping
+// fallback. This sandbox was `{ window: {} }`, so `MissionControlShared` was
+// undefined and the component escaped through
+// `value => String(value ?? '')` -- which does not escape. See
+// `tests/fixtures/renderHarness.js` for what that costs an assertion.
+const { MISSION_CONTROL_SHARED } = require('./fixtures/renderHarness');
+
 // Load client-side Fleet Procurement component in VM context
 function loadFleetProcurementComponent() {
   const code = fs.readFileSync('./public/v2/js/components/fleet-procurement.js', 'utf8');
-  const sandbox = { window: {}, MissionControlDetailPanel: null, console };
+  const sandbox = {
+    window: {},
+    MissionControlShared: MISSION_CONTROL_SHARED,
+    MissionControlDetailPanel: null,
+    console
+  };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(code, sandbox);
@@ -978,12 +990,15 @@ test('research advisor: openSlotDetails displays un-confounded REALLOCATION reas
   const panelMock = {
     open: payload => { panelPayload = payload; }
   };
+  // `escapeHtml: s => s` was not an escaper -- and worse, it returned a raw
+  // `null` unchanged, which a template literal then printed as the string
+  // "null". The shipped one turns that into '' and escapes the five entities.
   const context = {
     window: {
       MissionControlDetailPanel: panelMock,
-      MissionControlShared: { escapeHtml: s => s }
+      MissionControlShared: MISSION_CONTROL_SHARED
     },
-    MissionControlShared: { escapeHtml: s => s },
+    MissionControlShared: MISSION_CONTROL_SHARED,
     MissionControlDetailPanel: panelMock,
     console: { log: () => {}, warn: () => {} }
   };
