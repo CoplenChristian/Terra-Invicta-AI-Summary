@@ -13,39 +13,67 @@
 // the emission order of `scoreBreakdown`.
 
 const { toFiniteNumber } = require('../../../shared/util.mjs');
+const { nationControlPointCost } = require('../../../shared/controlPointCap.mjs');
 const { getWeights } = require('../weights');
 
+// The nation's control-point cost is `GDP_Bn^0.6 / 2` and, per the wiki page
+// `Nations` § "Cost of Control Points" (raw wikitext, read 2026-08-22), that
+// total "is divided up evenly among all the control points of the nation".
+// This rule used to divide the OUTPUT by the control-point count while charging
+// one control point the UNDIVIDED national total, which under-valued every
+// multi-control-point nation by exactly its control-point count -- 6x on China,
+// 2x on Madagascar. Because both sides divide by the same count, the count
+// cancels:
+//
+//     (GDP_Bn / n) / ((GDP_Bn^0.6 / 2) / n)  ==  GDP_Bn / (GDP_Bn^0.6 / 2)
+//                                            ==  2 * GDP_Bn^0.4
+//
+// so the corrected density does not read the count at all. `value/defend-
+// interests` below already prices GDP density with that same undivided ratio;
+// the two now agree, which they did not before.
+//
+// The count is still read for the EXPLANATION -- a reader wants the per-point
+// figures -- and when it is absent the explanation says so instead of asserting
+// 1, which is what the old `|| 1` did.
+//
+// NOT modelled, deliberately: the same wiki section says control points under a
+// Crackdown or abandoned "do not cost any cp". A free control point has an
+// unbounded value density, so pricing one that way would hand it an infinite
+// score; the honest version of that term needs a cap this repo has not
+// established (shared/controlPointCap.mjs refuses the headroom verdict for the
+// same reason). Candidates are therefore priced at the paying rate, which
+// UNDER-states a crackdown or abandoned target rather than over-stating it.
 const gdpPerCpCost = {
   id: 'value/gdp-per-cp-cost',
   kind: 'score',
   appliesTo: (candidate) => candidate.family === 'expansion' && Number.isFinite(candidate.value?.gdpBn),
   evaluate(world, candidate) {
     const gdpBn = candidate.value.gdpBn;
-    if (!(gdpBn > 0)) return 0;
-    const cpCount = toFiniteNumber(candidate.value.cpCountInNation) || 1;
-    const outputPerCp = gdpBn / cpCount;
-    // Notion 09's CP-cost formula. The absolute scale is unverified (plan
-    // §4a: councilor-derived capacity and this formula land an order of
-    // magnitude apart on the live save) -- what IS verified is that cost
-    // is sublinear in GDP while output splits evenly, so value density
-    // rises with GDP. That ordering is all v1 relies on.
-    const cpCost = gdpBn ** 0.6 / 2;
-    if (!(cpCost > 0)) return 0;
-    const valueDensity = outputPerCp / cpCost;
+    const nationTotalCost = nationControlPointCost(gdpBn);
+    if (nationTotalCost === null) return 0;
+    const valueDensity = gdpBn / nationTotalCost;
     return valueDensity * getWeights(world).VALUE_POINTS;
   },
   because(world, candidate) {
     const gdpBn = candidate.value.gdpBn;
-    if (!(gdpBn > 0)) return 'GDP is not available for this control point, so no value density can be scored.';
-    const cpCount = toFiniteNumber(candidate.value.cpCountInNation) || 1;
-    const outputPerCp = gdpBn / cpCount;
-    const cpCost = gdpBn ** 0.6 / 2;
-    const valueDensity = cpCost > 0 ? outputPerCp / cpCost : 0;
-    return `${candidate.target.nation} ($${gdpBn.toFixed(1)}Bn GDP) splits output across ${cpCount} control `
-      + `point(s); CP cost ≈ GDP_Bn^0.6/2 = ${cpCost.toFixed(2)} (Notion 09, absolute scale unverified). `
+    const nationTotalCost = nationControlPointCost(gdpBn);
+    if (nationTotalCost === null) {
+      return 'GDP is not available for this control point, so no value density can be scored.';
+    }
+    const cpCount = toFiniteNumber(candidate.value.cpCountInNation);
+    const valueDensity = gdpBn / nationTotalCost;
+    const split = cpCount !== null && cpCount > 0
+      ? `splits both its output and its control-point cost across ${cpCount} control point(s) — `
+        + `$${(gdpBn / cpCount).toFixed(1)}Bn against ${(nationTotalCost / cpCount).toFixed(2)} cp each`
+      : 'carries no readable control-point count, so the per-point figures cannot be shown';
+    return `${candidate.target.nation} ($${gdpBn.toFixed(1)}Bn GDP) ${split}. The nation's whole cost is `
+      + `GDP_Bn^0.6/2 = ${nationTotalCost.toFixed(2)}, divided evenly among its control points, so the count `
+      + `cancels out of the ratio (wiki Nations, "Cost of Control Points"; absolute scale unverified). `
       + `Value density ${valueDensity.toFixed(3)}.`;
   },
-  source: 'Notion 09 -- output ÷ (GDP_Bn^0.6 / 2); docs/archive/directive-rule-engine-plan.md §3, §4a.',
+  source: 'wiki Nations § "Cost of Control Points" (raw wikitext, read 2026-08-22) -- output ÷ '
+    + '(GDP_Bn^0.6 / 2), both sides divided evenly among the nation\'s control points; '
+    + 'shared/controlPointCap.mjs carries the full citation. Scale is WEIGHTS.VALUE_POINTS.',
   estimateClass: 'heuristic'
 };
 
