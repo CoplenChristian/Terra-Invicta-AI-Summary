@@ -1,7 +1,8 @@
 // shared/engagementModel.mjs
 //
-// Purpose: the seeded Monte Carlo engagement sweep — one hull-count model,
-//   shared by the strategic commentary and the per-fleet THREAT estimates.
+// Purpose: the seeded Monte Carlo engagement sweep and the wording of its
+//   hull band — one hull-count model, shared by the strategic commentary and
+//   the per-fleet THREAT estimates.
 //
 // Moved here from `server/commentary/simulation.js` on 2026-08-22 so the
 // Cloudflare worker can compute the same figure the Node server does; the
@@ -188,6 +189,28 @@ export function simulateEngagement(ownCount, ownRating, opponentRating, prng) {
 }
 
 /**
+ * A p20-p80 hull band in words, pluralised.
+ *
+ * The one place the band becomes a string. `findRequiredHullsForTier` used to
+ * build it inline and rendered a single-hull band as "1 hulls";
+ * `shared/fleetEngagement.mjs` worked around that with its own copy of the
+ * arithmetic rather than fix it, because doing so would have changed strategic-
+ * commentary strings mid-refactor and invalidated the byte-identity proof that
+ * the sweep's move into `shared/` changed nothing. That proof is banked, so the
+ * two copies collapse to this one and the noun is decided once.
+ *
+ * @param {number} p20 - the 20th-percentile hull count.
+ * @param {number} p80 - the 80th-percentile hull count.
+ * @param {string} [prefix] - e.g. `'at least '` for a band over a partial
+ *   opponent rating, which is a floor rather than an estimate.
+ */
+export function hullBandLabel(p20, p80, prefix = '') {
+  const span = p20 === p80 ? `${p20}` : `${p20}–${p80}`;
+  const noun = (p20 === p80 && p20 === 1) ? 'hull' : 'hulls';
+  return `${prefix}${span} ${noun}`;
+}
+
+/**
  * Sweeps hull counts from 1 to `maxHulls` to find the minimum count for
  * P(win) >= 0.80.
  *
@@ -258,13 +281,12 @@ export function findRequiredHullsForTier(
 
   const p20 = Math.round(samplePercentile(winnableSeeds, 0.2));
   const p80 = Math.round(samplePercentile(winnableSeeds, 0.8));
-  const bandLabel = p20 === p80 ? `${p20}` : `${p20}–${p80}`;
 
   return {
     winnable: true,
     p20,
     p80,
-    bandLabel: `${bandLabel} hulls`,
+    bandLabel: hullBandLabel(p20, p80),
     maxHullsSwept: ceiling,
     simulated: true,
     uncertainty

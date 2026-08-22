@@ -46,7 +46,20 @@
 
     const sim = commentaryData.simulation || {};
     let simTableHtml = '';
-    if (sim.available && Array.isArray(sim.tiers) && sim.tiers.length > 0) {
+    // A sweep that could not be run says so. Rendering nothing at all is the
+    // same defect as printing a confident number: a reader cannot tell "no
+    // engagement model was run" from "the panel has nothing to warn about".
+    if (sim.available === false) {
+      simTableHtml = `
+        <div class="commentary-sim-section">
+          <div class="commentary-sim-header">
+            <span>COMBAT THRESHOLDS</span>
+            <span class="commentary-sim-badge">NOT SIMULATED</span>
+          </div>
+          <div class="commentary-empty">${escapeHtml(sim.reason
+            || 'The combat-threshold simulation did not run and gave no reason; no hull count is reported.')}</div>
+        </div>`;
+    } else if (sim.available && Array.isArray(sim.tiers) && sim.tiers.length > 0) {
       simTableHtml = `
         <div class="commentary-sim-section">
           <div class="commentary-sim-header">

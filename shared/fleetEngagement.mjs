@@ -99,7 +99,8 @@ import { samplePercentile } from './prng.mjs';
 import {
   MAX_SIMULATED_HULLS,
   findRequiredHullsForTier,
-  guaranteedWinHullCount
+  guaranteedWinHullCount,
+  hullBandLabel
 } from './engagementModel.mjs';
 
 /**
@@ -633,14 +634,11 @@ function resolveRequirement({ ownRating, composition, seed, reachability }) {
     };
   }
 
-  // The band, in words. Built here rather than reusing `swept.bandLabel`
-  // because that string is published commentary prose -- it renders "1 hulls",
-  // and correcting it there would change strings the strategic commentary has
-  // shipped for months and would invalidate the byte-identity that proves the
-  // sweep's move to `shared/` changed nothing. The number is the same number.
-  const span = swept.p20 === swept.p80 ? `${swept.p20}` : `${swept.p20}–${swept.p80}`;
-  const noun = (swept.p20 === swept.p80 && swept.p20 === 1) ? 'hull' : 'hulls';
-
+  // The band, in words. This file used to carry its own copy of the pluralised
+  // arithmetic, because `findRequiredHullsForTier` rendered "1 hulls" and
+  // correcting it there would have changed strategic-commentary strings and
+  // invalidated the byte-identity proving the sweep's move into `shared/`
+  // changed nothing. That proof is banked and the label now lives in one place.
   return {
     verdict: verdicts.band,
     reason: null,
@@ -648,7 +646,7 @@ function resolveRequirement({ ownRating, composition, seed, reachability }) {
     p80: swept.p80,
     // A rating summed over only part of the fleet is a floor, so the hull count
     // it produces is a floor too and says so in its own label.
-    bandLabel: composition.isLowerBound ? `at least ${span} ${noun}` : `${span} ${noun}`,
+    bandLabel: hullBandLabel(swept.p20, swept.p80, composition.isLowerBound ? 'at least ' : ''),
     hullsAtLeast: composition.isLowerBound ? swept.p20 : null,
     maxHullsSwept: ceiling,
     guaranteedWinAt: guaranteed,

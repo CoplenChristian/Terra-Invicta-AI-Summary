@@ -48,6 +48,13 @@ import {
   FLEET_REACHABILITY_STATES,
   buildFleetEngagement
 } from './fleetEngagement.mjs';
+import {
+  MINING_BONUS_RULES,
+  MINING_BONUS_STACKING,
+  MINING_BONUS_STATES,
+  UNMODELLED_FACTORS,
+  buildMiningTechBonuses
+} from './miningTechBonus.mjs';
 
 // Absence-preserving formatting helpers
 export const isMeasured = (value) =>
@@ -1491,6 +1498,12 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     logisticsLines.push(`| **${name}** | ${stockStr} | ${netStr} | ${runway} |`);
   }
   logisticsLines.push(``);
+  // The mine-output multipliers belong to the war economy, and they sit INSIDE
+  // this block rather than beside it so the last-resort clamp can suppress them
+  // with the rest of section 7's body. A fixed block that never degrades is
+  // fixed overhead in the byte budget, and this document already renders within
+  // a few hundred bytes of its ceiling under 20x fleet growth.
+  for (const line of miningTechBonusLines(observer, observerId)) logisticsLines.push(line);
   blocks.push(fixedBlock('logistics', [`## 7. Logistics & War Economy`, ``], logisticsLines));
 
   // -------------------------------------------------------------------------
@@ -1755,6 +1768,97 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
 
   const maxBytes = isMeasured(options.maxBytes) ? Number(options.maxBytes) : WAR_ROOM_BYTE_BUDGET;
   return renderWithByteBudget(blocks, ladder, clampOrder, maxBytes);
+}
+
+/**
+ * Section 7's mine-output multipliers: which are in force, which project grants
+ * each, and what the adjusted figures still leave out.
+ *
+ * WHY THIS IS IN THE EXPORT AT ALL
+ *
+ * `a615018` measured that `TIHabSiteState.<resource>_day` is the DEPOSIT's rate
+ * and carries no faction's tech bonus, and applied the observer's per-resource
+ * multipliers to three derived surfaces. None of the three is a markdown
+ * export, so until now an agent reading only the .md files saw neither the
+ * multiplier nor the project granting it, and had no way to tell an adjusted
+ * mining figure from a raw one. Per CLAUDE.md that made half this project's
+ * consumers blind to the correction.
+ *
+ * WHAT IT DELIBERATELY DOES NOT SAY
+ *
+ * It publishes no mining RATE of its own. Section 7's table is the save's own
+ * 30-day transaction ledger, which is realised income and already reflects
+ * every bonus; a second, differently-derived per-site figure printed beside it
+ * would invite exactly the double-counting this block warns against. The
+ * adjusted per-site figures live on `/api/intel/mining` and
+ * `/api/intel/mining-expansion`, and the block names them so the label binds to
+ * the numbers it describes.
+ *
+ * ABSENT STAYS NULL
+ *
+ * An observer whose completed-project list cannot be read has an UNKNOWN
+ * multiplier, never x1.0 -- and `resolveObserverFaction` can fall back to the
+ * FIRST faction in the payload when the requested observer is missing, whose
+ * list player mode truncates to five entries. `projectListComplete` is
+ * therefore true only when the faction actually resolved is the one the payload
+ * was filtered for. Nothing here reads a rival's list, so no other faction's
+ * mine bonuses can leak into a player-mode export.
+ */
+function miningTechBonusLines(observer, observerId) {
+  const isRequestedObserver = observer?.ID !== undefined && observer?.ID !== null
+    && sameId(observer.ID, observerId);
+  const bonuses = buildMiningTechBonuses(observer, { projectListComplete: isRequestedObserver });
+
+  const pointer = '`/api/intel/mining` and `/api/intel/mining-expansion`';
+  const moduleFactor = asArray(UNMODELLED_FACTORS)
+    .find(entry => entry.factor === 'mine-module miningModifier') || null;
+  // The range is read from the record that declares the factor unmodelled
+  // rather than retyped here, so the two can never disagree.
+  const moduleRange = moduleFactor ? moduleFactor.range : 'UNAVAILABLE';
+
+  if (bonuses.available !== true) {
+    return [
+      `- **Mine output multipliers:** UNKNOWN — ${bonuses.unavailableReason}. `
+        + `The per-site figures on ${pointer} are RAW deposit rates and are a lower bound, `
+        + `NOT a measured "no bonus".`,
+      ``
+    ];
+  }
+
+  // Registry order, not "boosted first": MINING_BONUS_RULES is the one place
+  // the five resources are ordered, and reordering them here would silently
+  // reshuffle a list a reader compares against the mining board.
+  const entries = asArray(MINING_BONUS_RULES)
+    .map(rule => bonuses.byResource?.[rule.key])
+    .filter(entry => entry && entry.state !== MINING_BONUS_STATES.unknown);
+  const boosted = entries.filter(entry => entry.state === MINING_BONUS_STATES.boosted);
+  const unboosted = entries.filter(entry => entry.state === MINING_BONUS_STATES.measuredNone);
+
+  // The grant is NAMED, never reduced to a bare number: "x1.15" alone gives a
+  // reader no way to check the claim or to tell which project earned it.
+  const boostedText = boosted.length > 0
+    ? boosted.map(entry => `${entry.label} ×${entry.multiplier} from ${entry.grants.join(' + ')}`).join('; ')
+    : null;
+  const unboostedText = unboosted.length > 0
+    ? `${unboosted.map(entry => entry.label).join(', ')} ×1 (list read, no completed grant)`
+    : null;
+
+  const headline = boostedText === null
+    ? `- **Mine output multipliers:** none in force — ${unboostedText}.`
+    : `- **Mine output multipliers:** ${boostedText}.`
+      + (unboostedText === null ? '' : ` ${unboostedText[0].toUpperCase()}${unboostedText.slice(1)}.`);
+
+  return [
+    headline,
+    `  Stacking is ${MINING_BONUS_STACKING.mode} at ×${MINING_BONUS_STACKING.perGrant} per grant `
+      + `(measured ${bonuses.measuredOn}).`,
+    `- These multiply the DEPOSIT rate the save stores per hab site, which is what ${pointer} report. `
+      + `The Monthly Net column above is the save's own 30-day transaction ledger — realised income, `
+      + `already carrying every bonus — so it must NOT be adjusted again.`,
+    `- Every adjusted figure is still a **LOWER BOUND**: it excludes the mine module's own miningModifier, `
+      + `which is larger than the tech bonus and deliberately unmodelled — ${moduleRange}.`,
+    ``
+  ];
 }
 
 /**
