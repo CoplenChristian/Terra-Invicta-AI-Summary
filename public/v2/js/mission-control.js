@@ -249,16 +249,30 @@ const VIEWS = [
  * both directions: at 375px they appeared above tables measuring 698/698 with
  * nothing to scroll to, and a table that did overflow at 1000px got no hint
  * because the rule stopped at 900px. Width is a proxy; scrollWidth is the fact.
+ *
+ * Every hint on the page belongs here. The intelligence library's hint was left
+ * on the width-only rule when the other two were converted. Measured 2026-08-21
+ * against the live save: between 905px and 1040px the library table ran 840px
+ * inside a 637-772px wrapper and the hint was suppressed, so the reader got no
+ * affordance for content they had to scroll to reach. Below 900px the reveal was
+ * unconditional and happened to be true only because `.intel-library-table` sets
+ * `min-width: 840px`, which exceeds the widest wrapper there (632px at 900px) --
+ * true by construction, not by measurement, and false the moment either changes.
  */
 function syncScrollHints(root = document) {
+  // [hint selector, wrapper selector, where the hint sits relative to its
+  // wrapper]. The board and drive hints follow their wrapper; the library emits
+  // its hint as the wrapper's first child, so the relationship is declared
+  // rather than assumed -- assuming it would silently measure nothing and leave
+  // a real overflow unannounced.
   const pairs = [
-    ['.mc-board-scroll-hint', '.mc-board-table-wrap'],
-    ['.de-scroll-hint', '.de-table-wrap']
+    ['.mc-board-scroll-hint', '.mc-board-table-wrap', 'after'],
+    ['.de-scroll-hint', '.de-table-wrap', 'after'],
+    ['.intel-library-table-scroll-hint', '.intel-library-table-wrap', 'inside']
   ];
-  for (const [hintSelector, wrapSelector] of pairs) {
+  for (const [hintSelector, wrapSelector, placement] of pairs) {
     root.querySelectorAll(hintSelector).forEach(hint => {
-      // The hint is emitted immediately after its wrapper.
-      const wrap = hint.previousElementSibling;
+      const wrap = placement === 'inside' ? hint.parentElement : hint.previousElementSibling;
       const scrolls = wrap
         && wrap.matches(wrapSelector)
         && wrap.scrollWidth > wrap.clientWidth + 1;
@@ -559,6 +573,10 @@ function setOverlayOpen(screen, open) {
   screen.hidden = !open;
   screen.toggleAttribute('inert', !open);
   screen.setAttribute('aria-hidden', open ? 'false' : 'true');
+  // An overlay is rendered while it is still hidden, where every width measures
+  // 0 and nothing can be found to overflow. Its tables are therefore measured
+  // the moment it is actually on screen.
+  if (open) syncScrollHints(screen);
   window.MissionControlDetailPanel?.syncPageInert?.();
 }
 

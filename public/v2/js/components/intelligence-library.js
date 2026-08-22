@@ -552,6 +552,13 @@
         }
       };
     });
+
+    // The content panel was just rewritten, so each table's overflow -- and
+    // therefore whether its "swipe horizontally" hint is telling the truth --
+    // has changed. Section tabs re-render in place, so without this a hint
+    // stays on the measurement taken for a different table.
+    var views = global.MissionControlViews;
+    if (views && typeof views.syncScrollHints === 'function') views.syncScrollHints(root);
   }
 
   function render(container, snapshot, briefing, observerId, options) {

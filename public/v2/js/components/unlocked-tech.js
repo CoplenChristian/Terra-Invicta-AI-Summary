@@ -134,11 +134,19 @@
     const payload = await fetchJson(
       `/api/intel/tech-tree?observer=${encodeURIComponent(observerId)}&mode=${encodeURIComponent(mode)}&category=all&includeEffects=false`
     );
-    const nodes = Array.isArray(payload && payload.nodes) ? payload.nodes : [];
-    const projects = nodes.filter(node => node && node.type === 'faction_project');
+    const nodes = Array.isArray(payload && payload.nodes) ? payload.nodes : null;
+    const projects = nodes === null ? [] : nodes.filter(node => node && node.type === 'faction_project');
     state.projects = projects;
-    state.totalProjects = projects.length;
-    state.unlockedCount = projects.filter(isUnlocked).length;
+    // Absent stays null. The research graph is a static parse of the game
+    // templates -- the same 750 projects for every faction, verified against the
+    // live save 2026-08-21 -- so a response carrying no faction_project nodes is
+    // a census that could not be read, not a faction with nothing to research.
+    // `nodes` missing and `nodes` empty are the same unreadable state, and both
+    // used to land on 0, which the footer then printed as the confident and
+    // false "0 unlocked of 0 projects".
+    const censusRead = projects.length > 0;
+    state.totalProjects = censusRead ? projects.length : null;
+    state.unlockedCount = censusRead ? projects.filter(isUnlocked).length : null;
     return projects;
   }
 
@@ -267,6 +275,13 @@
         return `<div class="ut-notice">Nothing ${state.scope === 'unlocked' ? 'unlocked ' : ''}matches “${escapeHtml(query)}”. ${
           state.scope === 'unlocked' ? 'Switch to ALL to search the projects this faction has not completed.' : ''
         }</div>`;
+      }
+      // The census is the evidence for "nothing unlocked". Without it an empty
+      // list is indistinguishable from an unread one, and the panel must not
+      // report the faction has completed nothing on the strength of a graph it
+      // could not read.
+      if (state.totalProjects === null) {
+        return '<div class="ut-notice ut-notice--error">The project census is unavailable, so this panel cannot say what this faction has unlocked.</div>';
       }
       return '<div class="ut-notice">This faction has not completed any research projects yet.</div>';
     }
