@@ -16,6 +16,11 @@
 import { DEFAULT_OBSERVER_FACTION_ID } from '../constants.mjs';
 import { asArray, toFiniteNumber as toFinite, resolveObserverFaction, sameId } from '../util.mjs';
 import { buildAlienHateEconomics } from '../alienHateEconomics.mjs';
+import {
+  applyMiningTechBonus,
+  buildMiningTechBonuses,
+  MINING_BONUS_STATES
+} from '../miningTechBonus.mjs';
 import { MINING_RESOURCES } from './common.mjs';
 
 /**
@@ -243,6 +248,15 @@ export const buildMiningResourceRunways = (observer = {}) => {
  *  - an absent daily rate coerced to a confident 0 t/day. It now reports
  *    unmeasured and is named in `unmeasuredResources`, so a partially scored
  *    site is distinguishable from a fully scored one.
+ *
+ * `config.miningTechBonus` is the observer's per-resource mine-output
+ * multiplier (`shared/miningTechBonus.mjs`). The save stores the DEPOSIT rate,
+ * not the mine's realised output, so a resource the observer holds a completed
+ * project for yields 1.15x per grant more than `site[key]` says. Applying it
+ * here is what stops the board ranking a water-rich site as though the
+ * observer's water bonus did not exist. When the bonus cannot be resolved the
+ * RAW figure stands, `yields[key].bonusApplied` is false and the reason is
+ * carried -- never a silent claim that the multiplier is 1.
  */
 export const scoreMiningSiteCandidate = (site, runways, capacity, config = {}) => {
   const target = toFinite(config.targetRunwayMonths) ?? 12;
@@ -254,23 +268,46 @@ export const scoreMiningSiteCandidate = (site, runways, capacity, config = {}) =
   const measuredDensity = toFinite(site.siteDensity);
   const siteDensity = measuredDensity ?? 1.0;
 
+  const miningTechBonus = config.miningTechBonus || null;
+
   let totalUtilityGain = 0;
   const resourceGains = {};
   const yields = {};
   const unmeasuredResources = [];
+  const bonusUnresolvedResources = [];
 
   for (const { key } of MINING_RESOURCES) {
     const dailyRate = toFinite(site[key]);
     if (dailyRate === null) {
-      yields[key] = { daily: null, monthly: null, measured: false };
+      yields[key] = {
+        daily: null,
+        monthly: null,
+        monthlyRaw: null,
+        measured: false,
+        bonusApplied: false,
+        bonusMultiplier: null,
+        bonusState: MINING_BONUS_STATES.unknown,
+        bonusSource: null
+      };
       unmeasuredResources.push(key);
       continue;
     }
-    const monthlyYield = dailyRate * 30;
+    const rawMonthlyYield = dailyRate * 30;
+    const adjusted = applyMiningTechBonus(rawMonthlyYield, miningTechBonus, key, { places: 1 });
+    // The utility model must see the SAME figure the board reports, or the
+    // ranking and the printed yield disagree. When the multiplier is unknown
+    // `adjusted.value` is the raw figure, flagged, not a silent 1.0.
+    const monthlyYield = adjusted.value;
+    if (adjusted.state === MINING_BONUS_STATES.unknown) bonusUnresolvedResources.push(key);
     yields[key] = {
       daily: Number(dailyRate.toFixed(3)),
-      monthly: Number(monthlyYield.toFixed(1)),
-      measured: true
+      monthly: monthlyYield,
+      monthlyRaw: Number(rawMonthlyYield.toFixed(1)),
+      measured: true,
+      bonusApplied: adjusted.applied,
+      bonusMultiplier: adjusted.multiplier,
+      bonusState: adjusted.state,
+      bonusSource: adjusted.source
     };
 
     const r = runways?.[key];
@@ -335,6 +372,11 @@ export const scoreMiningSiteCandidate = (site, runways, capacity, config = {}) =
     yields,
     resourceGains,
     unmeasuredResources,
+    // Which of the five could not have their mine-output multiplier resolved.
+    // Their `monthly` is the RAW deposit rate x30 and is a LOWER BOUND, which
+    // is a different claim from "measured, and unbonused".
+    bonusUnresolvedResources,
+    yieldsBonusAdjusted: miningTechBonus?.available === true,
     scoreInputsComplete: unmeasuredResources.length === 0,
     siteValue,
     siteValueMeasured: siteValue !== null,
@@ -402,6 +444,23 @@ export const miningExpansionResource = (snapshot, {
   }) || {};
 
   const completedProjects = asArray(observer.completedProjects || observer.finishedProjectNames);
+  // This board is written about the OBSERVER, and the observer's own completed
+  // project list is the one list player mode does not truncate
+  // (server/intelligenceFilter.js keeps `isObserver ? f.completedProjects :
+  // f.completedProjects.slice(0, 5)`). Nothing here reads a rival's list, so
+  // no other faction's mine bonuses can leak into player mode.
+  //
+  // `resolveObserverFaction` can fall back to the first faction when the
+  // requested observer is not in the payload. That fallback faction's list is
+  // NOT known to be complete, so the bonus resolves to `unknown` rather than to
+  // whatever a rival's truncated five entries would imply.
+  // `snapshot.observerFactionId` is the faction the payload was FILTERED for,
+  // and that is the one whose project list survives player mode intact.
+  const isRequestedObserver = observer.ID !== undefined && observer.ID !== null
+    && (sameId(observer.ID, observerId) || sameId(observer.ID, snapshot?.observerFactionId));
+  const miningTechBonus = buildMiningTechBonuses(observer, {
+    projectListComplete: isRequestedObserver
+  });
   const completedTechs = asArray(snapshot?.techTree?.finishedTechsNames || snapshot?.globalResearch?.finishedTechNames);
   const completedTechSet = new Set(completedTechs);
   const completedProjectSet = new Set(completedProjects);
@@ -487,7 +546,8 @@ export const miningExpansionResource = (snapshot, {
 
     const scored = scoreMiningSiteCandidate(site, resourceRunways, capacity, {
       targetRunwayMonths,
-      surplusDiscount
+      surplusDiscount,
+      miningTechBonus
     });
     const candidate = {
       ...scored,
@@ -530,9 +590,17 @@ export const miningExpansionResource = (snapshot, {
 
   const unmeasuredAvailableCount = available.filter(c => c.siteValue === null).length;
 
+  const bonusUnresolvedSiteCount = [...available, ...Array.from(techGatedMap.values()).flatMap(e => e.sites)]
+    .filter(c => asArray(c.bonusUnresolvedResources).length > 0).length;
+
   return {
     capacity,
     resourceRunways,
+    // The observer's per-resource mine-output multipliers, and what they were
+    // applied to. `available: false` means the projected yields below are RAW
+    // deposit rates and are a lower bound, not that the observer holds nothing.
+    miningTechBonus,
+    bonusUnresolvedSiteCount,
     available: rankedAvailable,
     availableTotalCount: available.length,
     availableOmittedCount: available.length - rankedAvailable.length,
@@ -556,7 +624,21 @@ export const miningExpansionResource = (snapshot, {
       assumedDestinationCount > 0
         ? `${assumedDestinationCount} site(s) sit on bodies the space-theater table does not name; their destination `
           + 'tech is ASSUMED to be Mission to the Asteroids (correct for a numbered main-belt rock, a guess otherwise).'
-        : 'Every scored site resolved its destination tech from a named body or a classified space theater.'
+        : 'Every scored site resolved its destination tech from a named body or a classified space theater.',
+      // Projected yields are the save's DEPOSIT rate, and the mine module's own
+      // 1.0x-4.0x miningModifier is still NOT applied to them, so an adjusted
+      // yield remains a lower bound on what a built mine would deliver. Saying
+      // so here is the difference between a labelled lower bound and a figure
+      // presented as the finished answer.
+      miningTechBonus.available
+        ? (miningTechBonus.boostedResources.length > 0
+          ? `Projected yields apply the observer's completed-project mine bonuses (${miningTechBonus.boostedResources
+            .map(key => `${key} x${miningTechBonus.byResource[key].multiplier}`).join(', ')}); `
+            + 'they still exclude the mine module\'s own miningModifier (1.0-4.0), so they are a lower bound.'
+          : 'The observer holds no completed project that raises mine output, so projected yields are the raw '
+            + 'deposit rates; they also exclude the mine module\'s own miningModifier (1.0-4.0).')
+        : `Mining tech bonuses are UNRESOLVED (${miningTechBonus.unavailableReason}). Projected yields are `
+          + 'RAW deposit rates and are a lower bound, NOT a measured "no bonus".'
     ]
   };
 };

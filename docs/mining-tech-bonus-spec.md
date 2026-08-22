@@ -2,6 +2,32 @@
 
 Written 2026-08-22 against `1589907`.
 
+> **ANSWERED 2026-08-22, and the ×1.15 half is implemented.** The save's per-site rates are
+> **PRE-bonus**. See `shared/miningTechBonus.mjs` for the full measurement and
+> `docs/README.md` for the before/after. Three corrections to what follows:
+>
+> 1. **The measurement proposed in "The measurement that will settle it" is not computable.**
+>    `TIMiningProfileTemplate.json` (read 2026-08-22) stores a random *distribution* per
+>    resource — `water_mean` / `water_width` / `water_min` / `water_jump` — not a richness
+>    constant, so a site's stored rate cannot be reproduced from the templates. The anchor
+>    site's own numbers show it: `MercuryPolarMine` has `water_mean 0`, and Tolkien Crater
+>    stores `water 0.07202967`.
+> 2. **What settled it instead.** (a) 280 of 409 sites have no mine module and no owner and
+>    still carry non-zero rates. (b) 405 of 409 sites are byte-identical between two saves
+>    5.3 in-game years apart, across 90 ownership changes, 102 mine-tier changes and
+>    fourteen newly completed mining-bonus projects. (c) `Σ(rate × mineModule.miningModifier)
+>    × 365.25/12 × 1.15^grants` reproduces `cachedYearlyRevenue / 12` at 0.000% error for
+>    five of eight factions.
+> 3. **Attempt 1's ledger ratios were not just noisy, they were the wrong comparator.**
+>    `cachedYearlyRevenue` is the game's own annualised income and is clean;
+>    `recent30DayFlow` nets consumption and trade. The 1.033 water figure is an artefact of
+>    the comparator, not evidence about the rate.
+>
+> **Stacking is multiplicative**, measured: a faction holding both noble-metal grants reads
+> 1.15² = 1.3225 exactly. Two things the change deliberately does **not** model — the mine
+> module's own 1.0–4.0 `miningModifier`, and an unexplained per-faction scalar that is
+> 1.000 for the observer — are named in `UNMODELLED_FACTORS` and tracked in `docs/README.md`.
+
 Thirteen projects raise mine output. The dashboard applies none of them to any figure it
 derives. **Whether that is a defect depends on one unsettled question, and that question
 must be answered before a single line changes.**

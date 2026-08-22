@@ -307,6 +307,40 @@
 
     const unreachableTotal = num(unreachable.totalSites);
 
+    // The projected yields below are the save's DEPOSIT rate lifted by the
+    // observer's completed mine projects. A reader has to be able to tell an
+    // adjusted figure from a raw one, and an UNRESOLVED multiplier has to read
+    // as unresolved rather than as "no bonus" -- so this line is rendered in
+    // all three states and never omitted.
+    const bonus = expansion?.miningTechBonus || null;
+    const bonusBoosted = Array.isArray(bonus?.boostedResources) ? bonus.boostedResources : [];
+    let bonusNote;
+    if (!bonus) {
+      bonusNote = 'MINE TECH BONUSES NOT REPORTED by this snapshot — yields are raw deposit rates.';
+    } else if (bonus.available !== true) {
+      bonusNote = 'MINE TECH BONUSES UNRESOLVED — yields are raw deposit rates and are a lower bound, '
+        + 'not a measured "no bonus".';
+    } else if (bonusBoosted.length === 0) {
+      bonusNote = 'No completed project raises mine output, so yields are the raw deposit rates. '
+        + 'They exclude the mine module\'s own 1.0-4.0 multiplier.';
+    } else {
+      // The multiplier is 1.15 or 1.15^2 = 1.3225, so it needs up to four
+      // decimals and looks wrong padded to four. An UNREADABLE multiplier
+      // reaches here only if `boostedResources` named a resource the byResource
+      // table does not carry, which is a payload contradiction, so it renders
+      // as the unavailable dash rather than as a number.
+      const named = bonusBoosted
+        .map((key) => {
+          const multiplier = num(bonus.byResource?.[key]?.multiplier);
+          const grants = bonus.byResource?.[key]?.grants;
+          const from = Array.isArray(grants) && grants.length ? grants.join(' + ') : 'source not named';
+          return `${key} ×${multiplier === null ? UNAVAILABLE : String(multiplier)} (${from})`;
+        })
+        .join(', ');
+      bonusNote = `Yields include completed-project mine bonuses: ${named}. They still exclude the mine `
+        + 'module\'s own 1.0-4.0 multiplier, so they remain a lower bound.';
+    }
+
     root.innerHTML = `
       <div class="mining-expansion-board">
         <div class="alien-hate-econ-statusbar">
@@ -330,6 +364,8 @@
             ? `<span class="mining-war-floor-pill">War Floor: <strong>${fmt(warFloorDist, 1)} MC</strong> away</span>`
             : '<span class="mining-war-floor-pill is-unknown" title="Needs both used Mission Control and the difficulty multiplier.">War Floor: <strong>unavailable</strong></span>'}
         </div>
+
+        <div class="mining-yield-basis">${escapeHtml(bonusNote)}</div>
 
         <div class="mining-section-title">
           <span>AVAILABLE EXPANSION SITES (${int(totalAvailable)})</span>

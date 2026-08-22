@@ -254,6 +254,51 @@ test('every local asset the v2 and v1 shells reference exists on disk', () => {
   }
 });
 
+// The board's projected yields are the save's DEPOSIT rate lifted by the
+// observer's completed mine projects (shared/miningTechBonus.mjs). A reader
+// staring at "W: +75.5" has no way to tell an adjusted figure from a raw one,
+// so the basis line is rendered in ALL THREE states -- adjusted, measured-none,
+// and unresolved -- and "unresolved" must never read as "no bonus".
+test('the board states what basis its yields are on, in all three bonus states', () => {
+  const adjusted = renderToString({
+    ...LIVE_SHAPED_PAYLOAD,
+    miningTechBonus: {
+      available: true,
+      boostedResources: ['water'],
+      byResource: {
+        water: { multiplier: 1.15, grants: ['Project_ThermalMiningTechniques'] },
+        volatiles: { multiplier: 1, grants: [] }
+      }
+    }
+  });
+  assert.ok(/completed-project mine bonuses/.test(adjusted), 'an adjusted yield says it is adjusted');
+  assert.ok(adjusted.includes('Project_ThermalMiningTechniques'), 'and names the source');
+  assert.ok(/1\.15/.test(adjusted), 'and states the multiplier');
+  assertNoPlaceholderText(adjusted, 'bonus-adjusted payload');
+
+  const none = renderToString({
+    ...LIVE_SHAPED_PAYLOAD,
+    miningTechBonus: { available: true, boostedResources: [], byResource: {} }
+  });
+  assert.ok(/No completed project raises mine output/.test(none), 'a measured absence says so');
+  assert.ok(!/UNRESOLVED/.test(none), 'and is NOT reported as unresolved');
+  assertNoPlaceholderText(none, 'measured-none payload');
+
+  const unresolved = renderToString({
+    ...LIVE_SHAPED_PAYLOAD,
+    miningTechBonus: { available: false, unavailableReason: 'list unreadable', boostedResources: [], byResource: {} }
+  });
+  assert.ok(/UNRESOLVED/.test(unresolved), 'an unresolved multiplier is announced');
+  assert.ok(/lower bound/.test(unresolved), 'and the figure is labelled a lower bound');
+  assert.ok(!/No completed project raises mine output/.test(unresolved),
+    'unresolved must never be rendered as a measured "no bonus"');
+  assertNoPlaceholderText(unresolved, 'unresolved payload');
+
+  const absent = renderToString(LIVE_SHAPED_PAYLOAD);
+  assert.ok(/NOT REPORTED/.test(absent), 'a payload with no bonus block at all says the block is missing');
+  assertNoPlaceholderText(absent, 'payload with no bonus block');
+});
+
 test('the v2 shell loads the mining and council-orders components and mounts the mining board', () => {
   const html = fs.readFileSync(v2ShellPath, 'utf8');
   // These two were referenced by the shell but absent from the hosted asset
