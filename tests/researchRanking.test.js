@@ -725,9 +725,34 @@ const missionControlPath = path.join(repoRoot, 'public', 'v2', 'js', 'mission-co
 
 const fleetComponentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'fleet-procurement.js');
 
+// The REAL escapeHtml, copied from public/v2/js/mission-control.js.
+//
+// The sandbox used to leave `window.MissionControlShared` undefined, so the
+// component fell back to its own `value => String(value ?? '')` -- which does
+// not escape. That made the harness diverge from the browser in a way that
+// mattered exactly once the panel printed a value containing `<`: the panel
+// renders "<1 mo" for a duration under a month, the unescaped `<` opened what
+// `visibleText` then read as a tag, and `<1 mo</div>` was stripped whole. The
+// row's duration silently vanished from "what a reader sees" and the next
+// row's text closed the gap, so the assertion failed on a defect that exists
+// only in the test. No fixture had ever carried a sub-month figure before the
+// allocation-priced chain durations.
+function testEscapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function loadComponent() {
   const source = fs.readFileSync(componentPath, 'utf8');
-  const sandbox = { window: {}, console, fetch: () => Promise.resolve(null) };
+  const sandbox = {
+    window: { MissionControlShared: { escapeHtml: testEscapeHtml } },
+    console,
+    fetch: () => Promise.resolve(null)
+  };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox, { filename: componentPath });
@@ -760,8 +785,23 @@ function renderFleetToString(payload) {
 // What a reader actually sees. Tags are stripped whole, so a `title` attribute
 // can never mask a null that reached the visible copy -- and equally, prose
 // deliberately parked in a tooltip is not counted against the panel.
+//
+// ENTITIES ARE DECODED, added 2026-08-22. The panel prints "<1 mo" for a
+// duration under a month, which `escapeHtml` writes as `&lt;1 mo`; a browser
+// shows "<1 mo" and this helper claimed the reader saw "&lt;1 mo". No
+// assertion had tripped over it because no figure in the fixtures had ever
+// been under a month -- the allocation-priced chain durations are the first.
+// Decoding is what makes "what a reader actually sees" true.
 function visibleText(html) {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 const FORBIDDEN = ['null', 'undefined', 'NaN', '[object Object]'];
@@ -1563,7 +1603,7 @@ test('research-advisor frontend renders chain steps and capability tags', () => 
             chain: {
               stepsCount: 2,
               totalRemainingCost: 7844,
-              monthsAtCurrentIncome: 2.5,
+              monthsAtFullConcentration: 2.5,
               immediateNextStep: { id: 'Project_ColonyCore', displayName: 'Colony Core', cost: 2844, status: 'researching' }
             }
           },
@@ -1588,7 +1628,7 @@ test('research-advisor frontend renders chain steps and capability tags', () => 
   assert.ok(text.includes('2 steps'), 'Renders "2 steps" badge for multi-step chain');
   assert.ok(text.includes('new'), 'Renders "new" tag for first-in-class capability');
   assert.ok(text.includes('First of kind'), 'Renders "First of kind" for capability metric');
-  assert.match(html, /Prerequisite chain: 2 steps, 7,844 pts total \(2\.5 mo at current research income\) \(Immediate next: Colony Core — 2,844 pts\)/, 'tooltip contains chain details');
+  assert.match(html, /Prerequisite chain: 2 steps, 7,844 pts total \(2\.5 mo at full concentration\) \(Immediate next: Colony Core — 2,844 pts\)/, 'tooltip contains chain details');
   // The cost and the duration on the row have to be about the same plan. The
   // 7,844 is the whole chain, so the months beside it must be the chain's 2.5 --
   // never the destination project's own 5, which is the last step alone.
@@ -1748,8 +1788,13 @@ test('a promoted chain lands in its next step group, priced over the whole chain
       assert.equal(row.chain.reachability.state, REACHABILITY_STATES.withinHorizon);
       assert.ok(row.chain.stepsCount > 1);
       assert.ok(row.chain.totalRemainingCost > 0);
-      assert.ok(row.chain.monthsAtCurrentIncome > 0,
+      // Renamed together with its meaning on 2026-08-22: the chain is priced at
+      // FULL CONCENTRATION now, not at the whole faction's income. Keeping the
+      // old field name would have carried a new number under the old reading.
+      assert.ok(row.chain.monthsAtFullConcentration > 0,
         `${mode}: a promoted row carries the WHOLE chain's duration, not the gate's`);
+      assert.equal(row.chain.monthsAtCurrentIncome, undefined,
+        `${mode}: the superseded field name is gone, so no consumer can read the new figure as the old one`);
       assert.equal(row.chainValuePerResearchPoint, chainAwareValuePerResearchPoint(row));
       assert.ok(row.chainValuePerResearchPoint < row.valuePerResearchPoint,
         `${mode}: the whole-chain price is the honest one and is always the smaller of the two`);
@@ -1792,9 +1837,9 @@ test('a multi-step chain is visible in COMMAND without opening the drill-down, i
         `${mode}: the step count is on the card`);
       assert.ok(html.includes('ra-tag--chain'), `${mode}: and it is badged, not buried in prose`);
       const cost = Math.round(row.chain.totalRemainingCost).toLocaleString('en-US');
-      const duration = row.chain.monthsAtCurrentIncome < 1
+      const duration = row.chain.monthsAtFullConcentration < 1
         ? '<1 mo'
-        : `${row.chain.monthsAtCurrentIncome.toFixed(1)} mo`;
+        : `${row.chain.monthsAtFullConcentration.toFixed(1)} mo`;
       assert.ok(text.includes(`${cost} pts · ${duration}`),
         `${mode}: the whole-chain cost and its own duration are shown together`);
       assert.ok(!text.includes(`${destination} → `),

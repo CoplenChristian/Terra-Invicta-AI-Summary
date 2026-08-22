@@ -15,14 +15,24 @@ const templateLoader = require('../templateLoader');
 const techGraph = require('../../shared/techGraph.mjs');
 const { firstNumericOrNull, completionPercent } = require('./numbers');
 const { resolveFactionName } = require('./lookups');
+const {
+  RESEARCH_COST_SCALING_UNKNOWN,
+  effectiveResearchCost,
+  researchCostBasis
+} = require('../../shared/researchCostScaling.mjs');
 
-function buildGlobalResearchSlots(techProgress, { factionsById }) {
+function buildGlobalResearchSlots(techProgress, { factionsById, researchCostScaling = RESEARCH_COST_SCALING_UNKNOWN }) {
   return techProgress.map((slot, index) => {
     const techTemplate = templateLoader.getTech(slot.techTemplateName);
     // An unresolved tech template has no known cost. Substituting a round
     // 10000 produced a completion percentage that looked measured and was
     // invented, so an unknown cost now yields an unknown percentage.
-    const totalCost = firstNumericOrNull(techTemplate?.researchCost);
+    //
+    // EFFECTIVE, not template: the campaign's `researchSpeedMultiplier` acts
+    // on cost. shared/researchCostScaling.mjs carries the measurement, and an
+    // unreadable multiplier leaves the template figure untouched and says so.
+    const templateCost = firstNumericOrNull(techTemplate?.researchCost);
+    const totalCost = effectiveResearchCost(templateCost, researchCostScaling);
     const accumulated = firstNumericOrNull(slot.accumulatedResearch) ?? 0;
     const percent = completionPercent(accumulated, totalCost);
 
@@ -54,8 +64,12 @@ function buildGlobalResearchSlots(techProgress, { factionsById }) {
       totalCost,
       totalCostAvailable: totalCost !== null,
       totalCostSource: totalCost !== null
-        ? 'game template researchCost'
+        ? `game template researchCost, ${researchCostBasis(researchCostScaling)}`
         : 'unavailable: tech template not resolved',
+      // The unscaled figure kept beside the effective one, so a reader can see
+      // what was divided and by what.
+      templateResearchCost: templateCost,
+      researchCostScalingState: researchCostScaling?.state ?? null,
       percent,
       contributions,
       leadFactionId,
@@ -71,7 +85,7 @@ function buildGlobalResearchSlots(techProgress, { factionsById }) {
 // tech-path, tech-search, tech-milestones and research-queue endpoints from
 // the exact same graph. Enemy project status is resolved per-observer/mode at
 // projection time, not here.
-function buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions) {
+function buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions, researchCostScaling = RESEARCH_COST_SCALING_UNKNOWN) {
   const effects = {};
   for (const [id, eff] of templateLoader.templates.effects) effects[id] = eff;
 
@@ -93,7 +107,12 @@ function buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions
     techs: templatesAdapter.allTechs(),
     projects: templatesAdapter.allProjects(),
     effects,
-    componentByEffect: {}
+    componentByEffect: {},
+    // Every node's `researchCost` is the EFFECTIVE cost on this campaign, so
+    // the tech tree, the chain totals, the research queue and every duration
+    // priced from them agree with one another and with the game. The `-1`
+    // sentinel is never scaled -- see effectiveResearchCost.
+    researchCostScaling
   });
 
   // Per-faction status overlay is stored keyed by faction id so any observer
@@ -118,6 +137,10 @@ function buildTechTree(saveData, finishedTechsNames, activeGlobalSlots, factions
     finishedTechsNames,
     globalActive,
     factionStatus,
+    // Which cost basis every `researchCost` on this graph is on, carried with
+    // the graph rather than left for a consumer to infer. A snapshot published
+    // before this existed carries no block at all, which is itself the answer.
+    researchCostScaling,
     counts: { techs: rawGraph.techs.length, projects: rawGraph.projects.length }
   };
 }

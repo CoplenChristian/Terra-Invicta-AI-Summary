@@ -267,8 +267,15 @@ templateTest('tech-path selects cheaper alternate prerequisite route and reports
   assert.ok(remainingIds.includes('Project_ColonyCore'), 'Path must choose cheaper alternate Colony Core');
   assert.ok(!remainingIds.includes('Project_RingCore'), 'Path must not include more expensive Ring Core');
 
-  // Exact numerical assertion accounting for Colony Core's in-progress state (2844 remaining + 5000 Battlestations)
-  assert.strictEqual(livePath.totalRemainingResearchCost, 7844, 'Total remaining cost must be 7844 pts on live save');
+  // Exact numerical assertion accounting for Colony Core's in-progress state.
+  //
+  // HALVED 2026-08-22, from 7,844 to 3,844, and the halving is the point. Both
+  // costs are now the EFFECTIVE ones: Colony Core 1,500 - 156 accumulated =
+  // 1,344 remaining, plus Battlestations at 2,500. This campaign runs
+  // `researchSpeedMultiplier` at 200%, which acts on the effective research
+  // COST -- measured 2026-08-22, see shared/researchCostScaling.mjs -- so the
+  // template figures of 3,000 and 5,000 are not what the game charges.
+  assert.strictEqual(livePath.totalRemainingResearchCost, 3844, 'Total remaining cost must be 3844 pts on live save');
   assert.strictEqual(livePath.researchCostComplete, true);
 
   // Check routesEvaluated reports the decision and route not taken
@@ -279,7 +286,9 @@ templateTest('tech-path selects cheaper alternate prerequisite route and reports
   assert.strictEqual(bsRoute.chosenRoute.type, 'alternate');
   assert.strictEqual(bsRoute.alternativeRoute.id, 'Project_RingCore');
   assert.strictEqual(bsRoute.alternativeRoute.type, 'primary');
-  assert.strictEqual(bsRoute.savings, 2156);
+  // 2,156 -> 1,156 with the same halving: Ring Core 5,000 -> 2,500 against
+  // Colony Core's 1,500 effective cost less its 156 accumulated.
+  assert.strictEqual(bsRoute.savings, 1156);
 
   // Synthetic graph test where Colony Core (3000) and Ring Core (5000) are unstarted
   const synthNodes = [

@@ -136,6 +136,7 @@ export function buildAvailabilityResolver(snapshot, mode, observerId) {
         // duration against the observer's per-category bonus without a second
         // graph lookup. Absent here because there is no graph to read it from.
         category: null,
+        type: null,
         state: AVAILABILITY_STATES.unknown,
         reason: 'no tech tree on this snapshot',
         researchCost: null,
@@ -204,6 +205,7 @@ export function buildAvailabilityResolver(snapshot, mode, observerId) {
     if (!node) {
       return {
         category: null,
+        type: null,
         state: AVAILABILITY_STATES.unknown,
         reason: `project '${projectId}' is not in this snapshot's tech tree`,
         researchCost: null,
@@ -240,6 +242,12 @@ export function buildAvailabilityResolver(snapshot, mode, observerId) {
       // `techCategory`. Carried so a caller can price the duration against the
       // observer's per-category research bonus without a second graph lookup.
       category: node.category ?? null,
+      // `global_tech` or `faction_project`. Carried for the same reason as the
+      // category: the ProjectBonus term of the allocation multiplier applies to
+      // PROJECT slots only, so a caller pricing a duration has to know which
+      // kind of slot the item would sit in, and re-deriving it from the id is a
+      // guess.
+      type: node.type ?? null,
       researchCost,
       researchProgress,
       remainingResearchCost: remaining,
@@ -344,41 +352,38 @@ export function tallyAvailabilityStates(rows) {
 }
 
 /**
- * Months of research at a measured income, or null when income is unmeasured.
+ * A BUDGET figure: remaining cost divided by the faction's WHOLE monthly
+ * research income. Null when income is unmeasured.
  *
- * ONE FLAT RATE, WITH NO CATEGORY TERM, and that is deliberate here. The rate
- * a project is actually researched at varies by CATEGORY -- orgs, hab modules,
- * councilor traits and alien-activity investigations all grant per-category
- * bonuses -- so this figure is only the right answer for a category the
- * observer has not boosted.
+ * THIS IS NOT A COMPLETION TIME AND NO SURFACE MAY PRESENT IT AS ONE. It is
+ * the research analogue of "months of runway at current burn": what the whole
+ * faction's research output is worth against one price tag. A project runs in
+ * ONE slot and receives only that slot's share of the income -- measured at
+ * 0.4658x, 0.2928x, 1.0602x and 0.2928x on the observer's four pipped slots --
+ * so as a completion time this figure was 2.15x to 3.42x OPTIMISTIC on three of
+ * them and 1.06x conservative on the fourth. It is not a bound in either
+ * direction.
  *
- * Callers that know the project's category must go through
- * `monthsAtIncomeForCategory` in `shared/researchCategoryBonus.mjs`, which
- * keeps this flat figure and states the bonus it does not apply beside it.
- * This function stays flat and unaware so that the one place the category
- * question is answered is the one place it can be reviewed.
+ * FOR A COMPLETION TIME, use `monthsAtIncomeForCategory` in
+ * `shared/researchCategoryBonus.mjs`, which prices the duration through
+ * `shared/researchAllocationPricing.mjs` -- the slot's own pip share, its
+ * category bonus and the project bonus, every term read from the save. This
+ * function stays flat and unaware so that the one place allocation is reasoned
+ * about is the one place it can be reviewed.
  *
- * IT IS NOT AN UPPER BOUND ON COMPLETION TIME, and the comment here said it was
- * until 2026-08-22 (tracker 3b). `monthlyIncome` IS the pre-allocation base and
- * the observer's slots did collectively receive 2.11x it -- but that is the
- * whole faction's throughput summed over four slots, and a project sits in one.
- * Per slot the measured factor ran 0.4658x, 0.2928x, 1.0602x and 0.2928x of
- * this income; three of the four are BELOW 1, so this figure was 2.15x to 3.42x
- * OPTIMISTIC on those slots, not conservative. The four sum to the 2.11x, which
- * is exactly the units error the old comment made.
+ * (The four per-slot factors sum to the whole-faction 2.11x, and reading that
+ * sum as a per-slot correction was the units error tracker 3b corrected. The
+ * sum is not a term of itself.)
  *
- * WHAT THIS FIGURE IS: remaining cost divided by the faction's whole measured
- * monthly research income -- a budget figure, the research analogue of "months
- * of runway at current burn". Every caller must label it as such; nothing
- * downstream may present it as a calendar completion date. The only bound the
- * pinned model does yield is the FASTEST achievable duration (all pips on one
- * slot), which is category-dependent and lives in
- * `CATEGORY_RATE_MODEL.durationsStillFlatEvidence.fastestAchievable`.
+ * Two multipliers are deliberately NOT applied here:
  *
- * The engineer multiplier is NOT applied and must not be: `monthlyIncome` is a
- * measured figure read from the save and already includes it. Nor is the
- * campaign's `researchSpeedMultiplier` -- `cachedYearlyRevenue.Research` is
- * already post-multiplier, re-established by measurement 2026-08-22.
+ *   - the engineer bonus, because `monthlyIncome` is measured from the save and
+ *     already includes every flat bonus the observer runs;
+ *   - the campaign's `researchSpeedMultiplier`, because it acts on COST, not on
+ *     income. `remainingCost` therefore arrives already on the effective basis
+ *     (the snapshot applies it). See `shared/researchCostScaling.mjs`, which
+ *     also records why the 2026-08-21 "acts on output, not cost" verdict was
+ *     wrong and what measurement overturned it.
  */
 export function monthsAtIncome(remainingCost, monthlyIncome) {
   const cost = toFinite(remainingCost);

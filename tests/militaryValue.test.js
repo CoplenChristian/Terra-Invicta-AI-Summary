@@ -1022,7 +1022,33 @@ test('detail=summary omits the heavy listing and says so; detail=full carries it
   // A first cut that carried the sentence on every row measured 291.6 KB and
   // failed here, which is exactly what this ceiling is for. On the live save
   // the fields cost +27.9 KB raw / +4.3 KB gzipped on `summary`.
-  assert.ok(summaryBytes < 280 * 1024, `the default response is ${(summaryBytes / 1024).toFixed(1)} KB`);
+  //
+  // RAISED 280 KB -> 310 KB on 2026-08-22 for allocation-priced durations, and
+  // the raise is the deliberate decision this ceiling exists to force. Measured
+  // on this fixture: 270.2 KB -> 300.4 KB (+30.2 KB). Two fields per row buy
+  // it, on every row list the response carries (`bestByState`, `ranked` and the
+  // `deliveryDemoted` census -- one list holding them and another not would put
+  // a headline one-pip figure beside a full range and let a reader compare
+  // them). Both were weighed against this ceiling before being kept:
+  //
+  //   `monthsFastestAllocation` -- the second end of the range. A duration for
+  //     an item that is not in a slot ASSUMES a pip allocation, and the
+  //     assumption moves the answer by more than 7x on this campaign. One
+  //     number would be a counterfactual dressed as a measurement, and this
+  //     figure is not derivable from anything else on the row.
+  //   `monthsAreUpperBound` -- a correctness flag. Without it a bound and a
+  //     point estimate render identically, which is the defect class this repo
+  //     has hit most often.
+  //
+  // THREE further fields were REFUSED for this budget rather than shipped:
+  // `allocationScenario` (the state code already implies it),
+  // `allocatedMonthlyResearch` (exactly `remainingResearchCost /
+  // monthsAtCurrentIncome`), and the per-row basis sentence (stated once in
+  // `research.categoryBonuses.durationStates`). Measured on the LIVE save
+  // rather than on this fixture, because that is where the row count bites:
+  // 361.1 KB as shipped against 413.8 KB with all three, +52.7 KB across 149
+  // rows for information already recoverable from the response.
+  assert.ok(summaryBytes < 310 * 1024, `the default response is ${(summaryBytes / 1024).toFixed(1)} KB`);
 });
 
 test('the family filter narrows to one class without changing the answer for it', () => {

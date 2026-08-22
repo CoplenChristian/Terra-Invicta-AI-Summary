@@ -125,6 +125,36 @@ test('a chain that finishes inside the horizon is within it, and one that does n
   assert.match(beyond.reason, /past the 156-month planning horizon/);
 });
 
+test('the caller\'s priced months decide the gate, not cost over the whole faction income', () => {
+  // A chain is priced at FULL CONCENTRATION by `researchRanking` -- every pip
+  // on the step being worked -- which is a genuine lower bound and roughly 2x
+  // faster than the whole-faction figure for a project chain. The gate has to
+  // test THAT, or it refuses chains the player could actually finish.
+  const cost = 1300325;
+  const fallback = chainReachability({ totalRemainingCost: cost, researchCostComplete: true, horizon: HORIZON });
+  assert.equal(fallback.state, REACHABILITY_STATES.beyondHorizon);
+  assert.ok(fallback.months > 400, 'the fallback is cost / whole-faction income');
+  assert.match(fallback.reason, /whole measured research income/,
+    'and it must say which basis it used, because the two answer differently');
+
+  // The same chain, priced. It now fits, and the verdict flips.
+  const priced = chainReachability({
+    totalRemainingCost: cost, researchCostComplete: true, months: 120, horizon: HORIZON
+  });
+  assert.equal(priced.months, 120, 'the supplied months win over cost / income');
+  assert.equal(priced.state, REACHABILITY_STATES.withinHorizon);
+  assert.match(priced.reason, /at full concentration/,
+    'and the reason names the basis rather than implying the old one');
+
+  // Zero is a real answer -- a chain with nothing left -- so the guard is on
+  // presence, not truthiness. `months: 0` must not fall back to cost / income.
+  const nothingLeft = chainReachability({
+    totalRemainingCost: cost, researchCostComplete: true, months: 0, horizon: HORIZON
+  });
+  assert.equal(nothingLeft.months, 0);
+  assert.equal(nothingLeft.state, REACHABILITY_STATES.withinHorizon);
+});
+
 test('the boundary is inclusive, so a chain exactly the horizon long still counts as reachable', () => {
   const exact = chainReachability({
     totalRemainingCost: HORIZON.points,

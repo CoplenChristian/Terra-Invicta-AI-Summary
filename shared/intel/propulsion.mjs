@@ -36,8 +36,10 @@ import {
   MEASURED_INCOME_BASIS,
   buildResearchCategoryBonuses,
   categoryBonusSummary,
-  monthsAtIncomeForCategory
+  priceResearchDuration,
+  researchDurationFields
 } from '../researchCategoryBonus.mjs';
+import { allocationPricingSummary, buildResearchAllocationPricing } from '../researchAllocationPricing.mjs';
 import { gatesForFamily, unlockIndexCensus } from '../unlockIndex.mjs';
 import { findAlienFaction } from './common.mjs';
 
@@ -257,6 +259,9 @@ export const propulsionResource = (snapshot, {
   // Built once for the whole design sweep: it walks every hab module and
   // councilor the observer holds, and every refit row reads from it.
   const categoryBonuses = buildResearchCategoryBonuses(snapshot, { observerId });
+  // Built once for the same reason: it reads the observer's slot layout and
+  // Projects figures, neither of which varies by refit row.
+  const allocationPricing = buildResearchAllocationPricing(snapshot, { observerId });
 
   const candidates = driveStatsAvailable ? buildCandidateDrives(snapshot, resolver) : [];
 
@@ -275,14 +280,19 @@ export const propulsionResource = (snapshot, {
           propellantModules: snapshot.propellantModules || {}
         });
         const remaining = candidate.availability.remainingResearchCost;
-        // Priced against the gate project's OWN research category. The flat
-        // figure stands for a boosted category and carries the measured bonus
-        // beside it rather than being adjusted by it.
-        const duration = monthsAtIncomeForCategory(
-          remaining,
-          monthlyResearch,
-          categoryBonuses.bonusFor(candidate.availability.category ?? null)
-        );
+        // Priced through the allocation the gate project's own slot receives --
+        // or, when it is not in a slot, through a LABELLED assumed one with the
+        // fastest case beside it. Category and node type both come off the
+        // resolver, so neither is guessed here.
+        const duration = priceResearchDuration({
+          remainingCost: remaining,
+          monthlyIncome: monthlyResearch,
+          categoryBonuses,
+          allocationPricing,
+          itemId: candidate.gateId,
+          category: candidate.availability.category ?? null,
+          type: candidate.availability.type ?? null
+        });
         return {
           ...refit,
           isFittedDrive: candidate.driveId === design.drive?.id,
@@ -293,16 +303,10 @@ export const propulsionResource = (snapshot, {
             reason: candidate.availability.reason,
             researchCost: candidate.availability.researchCost,
             remainingResearchCost: remaining,
-            // Absent stays null: without a measured research income there is no
-            // honest number of months, and "0 months" would read as "immediate".
-            // That is now the only reason this is null.
-            monthsAtCurrentIncome: duration.months,
-            // A state CODE. `research.categoryBonuses.durationStates` spells
-            // each one out once per response, not on every row.
-            monthsAtCurrentIncomeState: duration.state,
-            // The EFFECTIVE bonus after the wiki diminishing-returns rule.
-            categoryResearchBonus: duration.categoryBonus,
-            flatRateMonths: duration.flatRateMonths,
+            // Absent stays null, and there are exactly two reasons for it: no
+            // measured research income, or a slot carrying no pips -- which
+            // receives nothing and so has no time to complete at all.
+            ...researchDurationFields(duration),
             missingPrerequisites: candidate.availability.missingPrerequisites,
             unlockChance: candidate.availability.unlockChance
           }
@@ -374,10 +378,15 @@ export const propulsionResource = (snapshot, {
             gateProjectId: best.research.gateProjectId,
             remainingResearchCost: best.research.remainingResearchCost,
             monthsAtCurrentIncome: best.research.monthsAtCurrentIncome,
-            // Why that duration is what it is. A null on a boosted category is
-            // a withdrawn estimate, not a missing measurement, and the two are
-            // indistinguishable without this.
+            // Why that duration is what it is, and the second end of the range
+            // when the allocation had to be assumed. Both travel because this
+            // is the row `research-ranking` reads: dropping them here made the
+            // advisor print a headline "one pip" figure with no `all-in`
+            // beside it, which is a single confident number for a quantity
+            // that spans 7x -- exactly what the two scenarios exist to avoid.
             monthsAtCurrentIncomeState: best.research.monthsAtCurrentIncomeState,
+            monthsFastestAllocation: best.research.monthsFastestAllocation,
+            monthsAreUpperBound: best.research.monthsAreUpperBound,
             categoryResearchBonus: best.research.categoryResearchBonus,
             flatRateMonths: best.research.flatRateMonths,
             unlockChance: best.research.unlockChance
@@ -461,9 +470,14 @@ export const propulsionResource = (snapshot, {
         : resolver.reason,
       monthlyResearchIncome: monthlyResearch,
       monthlyResearchIncomeBasis: MEASURED_INCOME_BASIS,
-      // The observer's per-category research bonuses, with their sources, and
-      // the model that says why no duration is divided by them.
+      // The observer's per-category research bonuses, with their sources. They
+      // are applied inside the allocation multiplier below.
       categoryBonuses: categoryBonusSummary(categoryBonuses),
+      // The slot allocation every duration on this response is priced through,
+      // plus the campaign research-cost basis its remaining costs are on.
+      allocationPricing: allocationPricingSummary(
+        allocationPricing, snapshot?.metadata?.researchCostScaling ?? null
+      ),
       states: Object.values(AVAILABILITY_STATES)
     },
     driveCatalogue: {

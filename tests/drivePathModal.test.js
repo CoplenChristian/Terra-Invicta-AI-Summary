@@ -101,9 +101,21 @@ templateTest('satisfied prerequisites are additive: the pinned remaining figures
       `[${mode}] 7 of them are faction projects`);
     assert.strictEqual(projection.remainingPath.filter(n => n.type === 'global_tech').length, 5,
       `[${mode}] and 5 are global techs`);
-    assert.strictEqual(projection.remainingFactionResearchCost, 995000, `[${mode}] faction cost`);
-    assert.strictEqual(projection.remainingGlobalResearchCost, 305325, `[${mode}] global cost`);
-    assert.strictEqual(projection.totalRemainingResearchCost, 1300325, `[${mode}] total`);
+    // MOVED 2026-08-22, and the move is the point. These were 995,000 /
+    // 305,325 / 1,300,325 against the raw TEMPLATE costs. This campaign runs
+    // `researchSpeedMultiplier` at 200%, which acts on the effective research
+    // COST (measured; see shared/researchCostScaling.mjs), so the game charges
+    // half. The old figures were not wrong arithmetic; they were the right
+    // arithmetic on a basis the game does not use.
+    //
+    // The faction figure is exactly half because every faction project on this
+    // path is unstarted, so remaining equals cost. The GLOBAL figure is NOT
+    // half of 305,325: accumulated progress is unchanged by the scaling, and
+    // `cost/2 - progress` is not `(cost - progress)/2`. A pin that expected a
+    // uniform halving here would have been asserting the wrong model.
+    assert.strictEqual(projection.remainingFactionResearchCost, 497500, `[${mode}] faction cost`);
+    assert.strictEqual(projection.remainingGlobalResearchCost, 145325, `[${mode}] global cost`);
+    assert.strictEqual(projection.totalRemainingResearchCost, 642825, `[${mode}] total`);
     // `alreadyCompleted` names TARGETS already done. It is a different question
     // from satisfied prerequisites and must not have been repurposed.
     assert.deepStrictEqual(projection.alreadyCompleted, [],
@@ -304,9 +316,11 @@ templateTest('the modal splits the path into faction projects and global techs, 
   }
 
   const facts = new Map(options.facts.map(fact => [fact.label, fact.value]));
-  assert.match(facts.get('FACTION RESEARCH'), /995,000 RP/);
-  assert.match(facts.get('GLOBAL RESEARCH'), /305,325 RP/);
-  assert.match(facts.get('TOTAL REMAINING'), /1,300,325 RP/);
+  // Moved 2026-08-22 for the reason recorded on the pinned figures above: the
+  // campaign's 200% research speed setting acts on cost.
+  assert.match(facts.get('FACTION RESEARCH'), /497,500 RP/);
+  assert.match(facts.get('GLOBAL RESEARCH'), /145,325 RP/);
+  assert.match(facts.get('TOTAL REMAINING'), /642,825 RP/);
   assert.match(facts.get('ALREADY SATISFIED'), /^11 /);
   assert.match(facts.get('GATE PROJECT'), new RegExp(PION_TORCH_GATE));
 

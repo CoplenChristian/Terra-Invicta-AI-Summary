@@ -77,6 +77,7 @@ import { militaryValueResource } from './militaryValue.mjs';
 import { economicValueResource } from './economicValue.mjs';
 import { researchRankingResource } from './researchRanking.mjs';
 import { buildResearchCategoryBonuses, categoryBonusSummary } from '../researchCategoryBonus.mjs';
+import { allocationPricingSummary, buildResearchAllocationPricing } from '../researchAllocationPricing.mjs';
 import { deltaResource } from './delta.mjs';
 import { mobilityResource } from './mobility.mjs';
 import { bodyStatusResource, theatersResource } from './theaters.mjs';
@@ -198,6 +199,15 @@ const INTEL_ENDPOINTS = Object.freeze([
         // from anything else on this surface.
         categoryBonuses: categoryBonusSummary(
           buildResearchCategoryBonuses(snapshot, { observerId })
+        ),
+        // The slot allocation a duration is priced through, and the campaign
+        // cost basis every RP figure on this response is on. This resource is
+        // where an agent reads "43 of 50 RP" for a project whose shipped
+        // template says 100; without the basis block that reads as a bug rather
+        // than as the campaign's 200% research speed setting acting on cost.
+        allocationPricing: allocationPricingSummary(
+          buildResearchAllocationPricing(snapshot, { observerId }),
+          snapshot?.metadata?.researchCostScaling ?? null
         )
       };
     }

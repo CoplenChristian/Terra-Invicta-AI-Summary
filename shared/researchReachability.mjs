@@ -148,13 +148,25 @@ export function buildPlanningHorizon({ snapshot = null, monthlyResearchIncome = 
  * @param {number|null} [options.totalRemainingCost]  the WHOLE chain, not the last step
  * @param {boolean|null} [options.researchCostComplete] false when a step carries the
  *   `researchCost: -1` sentinel, which makes the sum a floor rather than a total
+ * @param {number|null} [options.months] the chain's own priced months. SUPPLY
+ *   THIS. Without it the gate falls back to `cost / whole-faction income`,
+ *   which describes no allocation anyone would run -- it omits the
+ *   +5%-per-pipped-slot term and the category and project bonuses, so it
+ *   overstates a concentrated chain by roughly 2x. The caller prices the chain
+ *   at full concentration (`researchRanking.CHAIN_MONTHS_BASIS`) so the gate
+ *   tests a genuine LOWER bound: a chain that does not fit even at full effort
+ *   certainly does not fit. The fallback is kept only so a caller that has no
+ *   allocation model still gets an answer rather than an exception.
  * @param {Object} [options.horizon]  from `buildPlanningHorizon`
  * @returns {{state: string, months: number|null, horizonMonths: number|null, reason: string}}
  */
-export function chainReachability({ totalRemainingCost = null, researchCostComplete = null, horizon = null } = {}) {
+export function chainReachability({
+  totalRemainingCost = null, researchCostComplete = null, months = null, horizon = null
+} = {}) {
   const horizonMonths = horizon?.available === true ? toFiniteNumber(horizon.months) : null;
   const income = toFiniteNumber(horizon?.monthlyResearchIncome);
   const cost = toFiniteNumber(totalRemainingCost);
+  const pricedMonths = toFiniteNumber(months);
 
   const unknown = (reason) => ({
     state: REACHABILITY_STATES.unknown,
@@ -176,25 +188,32 @@ export function chainReachability({ totalRemainingCost = null, researchCostCompl
     return unknown('a step in this chain carries no research cost, so the chain total is a floor rather '
       + 'than a total and its time to complete is unknown');
   }
-  if (cost === null || !(cost > 0)) {
+  if (pricedMonths === null && (cost === null || !(cost > 0))) {
     return unknown('the remaining cost of this chain is not measurable, so it has no time to complete');
   }
 
-  const months = round(cost / income, 1);
-  if (months > horizonMonths) {
+  // The caller's priced months win when supplied. `pricedMonths === 0` is a
+  // real answer -- a chain with nothing left to research -- so the guard is on
+  // presence, not on truthiness.
+  const chainMonths = pricedMonths === null ? round(cost / income, 1) : pricedMonths;
+  const basis = pricedMonths === null
+    ? 'at the observer\'s whole measured research income, which is not the rate any one slot receives'
+    : 'at full concentration, which is the fastest the chain can be completed';
+
+  if (chainMonths > horizonMonths) {
     return {
       state: REACHABILITY_STATES.beyondHorizon,
-      months,
+      months: chainMonths,
       horizonMonths,
-      reason: `the whole chain is ${months} months of research at the observer's measured income, past `
-        + `the ${horizonMonths}-month planning horizon this campaign's own age sets`
+      reason: `the whole chain is ${chainMonths} months of research ${basis}, past the `
+        + `${horizonMonths}-month planning horizon this campaign's own age sets`
     };
   }
   return {
     state: REACHABILITY_STATES.withinHorizon,
-    months,
+    months: chainMonths,
     horizonMonths,
-    reason: `the whole chain is ${months} months of research at the observer's measured income, inside `
-      + `the ${horizonMonths}-month planning horizon this campaign's own age sets`
+    reason: `the whole chain is ${chainMonths} months of research ${basis}, inside the `
+      + `${horizonMonths}-month planning horizon this campaign's own age sets`
   };
 }
