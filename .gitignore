@@ -31,6 +31,14 @@ md-generation-reports/Again_Save/snippet_pack/*
 !md-generation-reports/Again_Save/snippet_pack/README.md
 md-generation-reports/Again_Save/summary/*
 !md-generation-reports/Again_Save/summary/README.md
+
+# The tool's PRE-MOVE output locations. Anchoring the patterns above to
+# md-generation-reports/ un-ignored these, and a `git add -A` then swept 45
+# generated CSVs into the repo. Any checkout that ran the tool before the move
+# still has output here, so these stay ignored even though nothing is tracked
+# under them. tests/repoStructure.test.js asserts the tracked side.
+csv/
+Again_Save/
 logs/
 
 # Local Supabase snapshot exports (safety net before pruning; can be large)
