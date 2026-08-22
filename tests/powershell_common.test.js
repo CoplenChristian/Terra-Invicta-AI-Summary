@@ -82,9 +82,30 @@ const POWERSHELL_HOST = resolvePowerShellHost();
  * The returned `sentinel` is the load-bearing field: `status === 0` says the
  * process ended cleanly, `sentinel` says the script ran all the way through.
  */
+/**
+ * Every environment variable `Get-TIConfig` lets override the config file.
+ *
+ * Cleared at the top of every probe, and NOT a tidiness measure: `Get-TIConfig`
+ * applies `if ($env:TI_SAVE_PATH) { $defaults.paths.savePath = $env:TI_SAVE_PATH }`
+ * AFTER the merge, so a shell with `TI_SAVE_PATH` set makes the nested-merge
+ * probe assert on the environment rather than on the merge and fail. That is
+ * exactly what a suite which never executed any PowerShell could not discover:
+ * it surfaced the moment these tests started running for real, on a suite run
+ * that happened to have the variable set. `SUPABASE_HISTORY_RETENTION` is
+ * cleared here too and then set deliberately inside the retention probe, which
+ * is the only place it belongs.
+ */
+const CONFIG_ENV_OVERRIDES = [
+  'TI_SAVE_PATH', 'TI_TEMPLATES_DIR',
+  'SUPABASE_CAMPAIGN_KEY', 'SUPABASE_OBSERVER_FACTION_ID', 'SUPABASE_HISTORY_RETENTION'
+];
+
 function runProbe(body) {
   const script = `
     $ErrorActionPreference = 'Stop'
+    foreach ($name in @(${CONFIG_ENV_OVERRIDES.map(name => `'${name}'`).join(', ')})) {
+      if (Test-Path ('Env:' + $name)) { Remove-Item ('Env:' + $name) }
+    }
     Import-Module '${modulePath}' -Force
     $root = '${root}'
 ${body}
@@ -263,6 +284,38 @@ psTest('PowerShell config validates values against the shared JSON schema', `
         throw 'out-of-range port was accepted'
       } catch {
         if ($_.Exception.Message -notmatch 'above the maximum') { throw }
+      }
+    } finally {
+      Remove-Item -LiteralPath $folder -Recurse -Force
+    }`);
+
+psTest('PowerShell config lets the environment override the config file, which is why the probes clear it', `
+    $folder = Join-Path ([IO.Path]::GetTempPath()) ('ti-powershell-env-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $folder | Out-Null
+    try {
+      $configPath = Join-Path $folder 'config.json'
+      '{"paths":{"savePath":"C:/configured/saves","templatesPath":"C:/configured/templates"}}' | Set-Content -LiteralPath $configPath
+
+      # With a clean environment the FILE wins. This is the state every other
+      # probe assumes, and the reason runProbe clears these first.
+      $fromFile = Get-TIConfig -BasePath $root -ConfigPath $configPath
+      if ($fromFile.paths.savePath -ne 'C:/configured/saves') { throw 'the config file did not win with a clean environment' }
+      if ($fromFile.paths.templatesPath -ne 'C:/configured/templates') { throw 'the config file templatesPath did not win' }
+
+      # With the variables set, the ENVIRONMENT wins. Documented behaviour, and
+      # the thing that made a suite run with TI_SAVE_PATH set fail the
+      # nested-merge probe once these tests started actually executing.
+      $env:TI_SAVE_PATH = 'C:/from/environment'
+      $env:TI_TEMPLATES_DIR = 'C:/templates/from/environment'
+      try {
+        $fromEnv = Get-TIConfig -BasePath $root -ConfigPath $configPath
+        if ($fromEnv.paths.savePath -ne 'C:/from/environment') { throw 'TI_SAVE_PATH did not override the config file' }
+        if ($fromEnv.paths.templatesPath -ne 'C:/templates/from/environment') { throw 'TI_TEMPLATES_DIR did not override the config file' }
+        # And the compatibility projection follows it rather than the file.
+        if ($fromEnv.SavePath -ne 'C:/from/environment') { throw 'the legacy SavePath projection disagreed with paths.savePath' }
+      } finally {
+        Remove-Item Env:TI_SAVE_PATH
+        Remove-Item Env:TI_TEMPLATES_DIR
       }
     } finally {
       Remove-Item -LiteralPath $folder -Recurse -Force

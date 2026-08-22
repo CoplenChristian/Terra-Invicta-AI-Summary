@@ -54,18 +54,42 @@ const {
  * The 0.7 / 1.5 / 4.0 multipliers below have no shipped source. See
  * OPPONENT_RATING_BASIS.player -- they are assumptions, and the threshold bands
  * they produce inherit that.
+ *
+ * NO ARMOUR DEFAULTS, since 2026-08-22. This read
+ * `toFiniteNumber(f.armorMedian) || 10` per fleet and then `|| 12` / `|| 24` on
+ * the two percentiles, so an alien fleet whose armour could not be read was
+ * simulated at a specific 10 cm and an unreadable population produced a
+ * specific 12 / 24 cm -- three invented figures that every downstream hull
+ * threshold then inherited as though measured. They are latent on the live save
+ * (0 of 57 alien fleets miss `armorMedian`, measured on ExitSave.gz), and
+ * latent is not fixed: a save that exercised them would have published invented
+ * numbers with nothing on the surface saying so.
+ *
+ * A fleet with no readable armour is DROPPED from the sample rather than
+ * defaulted, and the counts are returned so the caller can say how much of the
+ * observed force the tiers actually rest on. No readable armour at all, or a
+ * non-positive median, refuses: the whole tier scale is `medianArmor / 10`, so
+ * a zero there quietly rates every alien at nothing.
  */
 function buildPlayerOpponentTiers(alienFleets, ownRating) {
   if (!Array.isArray(alienFleets) || alienFleets.length === 0) {
     return null;
   }
 
-  // Extract fleet sizes and armor medians
-  const fleetSizes = alienFleets.map(f => toFiniteNumber(f.shipsCount) || 1).sort((a, b) => a - b);
-  const armors = alienFleets.map(f => toFiniteNumber(f.armorMedian) || 10).sort((a, b) => a - b);
+  // Only measured armour medians. `toFiniteNumber` returns null for an absent,
+  // blank or non-numeric field, and null is not a measurement of 10 cm.
+  const armors = alienFleets
+    .map(f => toFiniteNumber(f.armorMedian))
+    .filter(value => value !== null)
+    .sort((a, b) => a - b);
+  if (armors.length === 0) return null;
 
-  const medianArmor = samplePercentile(armors, 0.5) || 12;
-  const p90Armor = samplePercentile(armors, 0.9) || 24;
+  const medianArmor = samplePercentile(armors, 0.5);
+  const p90Armor = samplePercentile(armors, 0.9);
+  // `samplePercentile` returns null only for an empty sample, which is already
+  // excluded -- but a MEASURED zero would scale every tier to nothing, and a
+  // rating of 0 reads as "any hull wins" rather than as "this was unmeasurable".
+  if (medianArmor === null || p90Armor === null || medianArmor <= 0 || p90Armor <= 0) return null;
 
   // Rating calibrated against own rating
   const baseEscortRating = ownRating * 0.7 * (medianArmor / 10);
@@ -108,6 +132,23 @@ function buildPlayerOpponentTiers(alienFleets, ownRating) {
 
 /**
  * Builds opponent tiers from true design CVs (Omniscient Mode).
+ *
+ * NO CV DEFAULTS, since 2026-08-22 -- and this one is DEAD CODE REMOVAL, not a
+ * behaviour change, which is the honest way to describe it. The three
+ * percentiles read `|| 3250`, `|| 20330` and `|| 70100`: three specific alien
+ * combat values with no source, which would have decided every omniscient hull
+ * threshold outright had they ever fired. They could not. The sample is already
+ * filtered to positive finite values and refused when empty, and
+ * `samplePercentile` returns null only for an empty array, so an interpolation
+ * between positive values can be neither null nor zero. Restoring the three
+ * fallbacks leaves the whole suite green, which is the measurement that says
+ * so.
+ *
+ * They are deleted anyway, because a fallback that reads as a degrade path and
+ * is not one is worse than no fallback: the next person to loosen the filter
+ * inherits three invented numbers. The explicit refusal below is what that
+ * person's change would trip over instead. Measured on ExitSave.gz: 82 of 82
+ * alien designs carry a positive CV.
  */
 function buildOmniscientOpponentTiers(alienDesigns) {
   if (!Array.isArray(alienDesigns) || alienDesigns.length === 0) {
@@ -121,9 +162,10 @@ function buildOmniscientOpponentTiers(alienDesigns) {
 
   if (cvs.length === 0) return null;
 
-  const p10Cv = samplePercentile(cvs, 0.1) || 3250;
-  const p50Cv = samplePercentile(cvs, 0.5) || 20330;
-  const p90Cv = samplePercentile(cvs, 0.9) || 70100;
+  const p10Cv = samplePercentile(cvs, 0.1);
+  const p50Cv = samplePercentile(cvs, 0.5);
+  const p90Cv = samplePercentile(cvs, 0.9);
+  if (p10Cv === null || p50Cv === null || p90Cv === null) return null;
 
   return [
     {
@@ -233,6 +275,12 @@ function runMonteCarloSimulation(facts) {
   let opponentTiers = null;
   let opponentSource = 'observable_fleet_telemetry';
   let opponentRatingBasis = OPPONENT_RATING_BASIS.player;
+  // Why the tiers could not be built, when they could not. "Nothing is out
+  // there" and "something is out there and I cannot measure it" are opposite
+  // strategic statements, and the builders now refuse in both cases rather than
+  // defaulting their way past the second -- so the guard below has to tell them
+  // apart instead of reporting the reassuring one for both.
+  let opponentUnavailableReason = 'No alien forces visible in this intelligence picture; simulation unavailable.';
 
   if (mode === 'omniscient') {
     const alienDesigns = (Array.isArray(shipDesigns) ? shipDesigns : []).filter(
@@ -241,17 +289,27 @@ function runMonteCarloSimulation(facts) {
     opponentTiers = buildOmniscientOpponentTiers(alienDesigns);
     opponentSource = 'true_design_blueprints';
     opponentRatingBasis = OPPONENT_RATING_BASIS.omniscient;
+    if (!opponentTiers && alienDesigns.length > 0) {
+      opponentUnavailableReason = `${alienDesigns.length} alien design(s) are visible but none carries a readable `
+        + 'combat value, so no opponent rating could be measured. No default CV is substituted; this is NOT a '
+        + 'report that the alien designs are weak.';
+    }
   } else {
     opponentTiers = buildPlayerOpponentTiers(alienFleets, ownRating);
     opponentSource = 'observable_fleet_telemetry';
     opponentRatingBasis = OPPONENT_RATING_BASIS.player;
+    if (!opponentTiers && Array.isArray(alienFleets) && alienFleets.length > 0) {
+      opponentUnavailableReason = `${alienFleets.length} alien fleet(s) are visible but none carries a readable, `
+        + 'positive armour median, so no opponent rating could be measured. No default armour is substituted; '
+        + 'this is NOT a report that the alien fleets are weak.';
+    }
   }
 
   // Zero-Opponent Guard: if no opponents are observable, return explicit unavailable state
   if (!opponentTiers || opponentTiers.length === 0) {
     return {
       available: false,
-      reason: 'No alien forces visible in this intelligence picture; simulation unavailable.',
+      reason: opponentUnavailableReason,
       ownBestHull: ownBestHullName,
       ownBestDesign: ownBestDesignName,
       // Measured, and reported even though the sweep did not run. It was
@@ -306,18 +364,55 @@ function runMonteCarloSimulation(facts) {
   }
 
   // 5. Rebuild Throughput Projection
-  const baseHullStat = shipHullStats[ownBestHullName] || {};
-  const baseBuildDays = toFiniteNumber(baseHullStat.baseConstructionTimeDays) || 60;
-  const queuedCount = Array.isArray(ownQueuedShips) ? ownQueuedShips.length : 0;
+  //
+  // NO BUILD-TIME OR QUEUE DEFAULTS, since 2026-08-22. This read
+  // `baseConstructionTimeDays || 60` and `Math.max(1, queuedCount || 2)`, and
+  // both were `available: true` -- so a hull whose build time was not in the
+  // snapshot was reported as a 60-day hull, and an observer with NOTHING queued
+  // was reported as running two shipyards. Both then went straight into a
+  // "~N hulls/mo" figure on the dashboard with no mark saying it was invented.
+  // Measured on ExitSave.gz: 0 of 28 hulls miss `baseConstructionTimeDays` and
+  // `Monitor` reads 120, so both are latent -- and latent is not fixed.
+  //
+  // `queuedCount` of 0 is a MEASUREMENT and stays one: nothing queued means no
+  // throughput, which is a real and useful answer, and it is why the `|| 2` had
+  // to go rather than being replaced by a different floor.
+  const baseHullStat = shipHullStats?.[ownBestHullName] || {};
+  const baseBuildDays = toFiniteNumber(baseHullStat.baseConstructionTimeDays);
+  const queuedCount = Array.isArray(ownQueuedShips) ? ownQueuedShips.length : null;
 
-  const rebuildProjection = {
-    available: true,
-    targetHull: ownBestHullName,
-    baseConstructionDays: baseBuildDays,
-    activeShipyardQueues: queuedCount,
-    monthlyThroughputEst: Math.max(1, Math.round(30 / (baseBuildDays / Math.max(1, queuedCount || 2)))),
-    simulated: true
-  };
+  let rebuildProjection;
+  if (baseBuildDays === null || baseBuildDays <= 0 || queuedCount === null) {
+    const missing = [];
+    if (baseBuildDays === null) missing.push(`no readable base construction time for ${ownBestHullName || 'the target hull'}`);
+    else if (baseBuildDays <= 0) missing.push(`a base construction time of ${baseBuildDays} days, which cannot be divided into a rate`);
+    if (queuedCount === null) missing.push('no readable shipyard queue');
+    rebuildProjection = {
+      available: false,
+      reason: `Production throughput was not projected: ${missing.join(' and ')}. `
+        + 'No default build time or queue count is substituted, so this is not a report of zero throughput.',
+      targetHull: ownBestHullName,
+      baseConstructionDays: baseBuildDays,
+      activeShipyardQueues: queuedCount,
+      monthlyThroughputEst: null,
+      simulated: true
+    };
+  } else {
+    rebuildProjection = {
+      available: true,
+      targetHull: ownBestHullName,
+      baseConstructionDays: baseBuildDays,
+      activeShipyardQueues: queuedCount,
+      // Unchanged arithmetic for every queue of one or more, so no figure this
+      // has ever printed moves. An empty queue is a measured zero rate rather
+      // than the `Math.max(1, ...)` floor, which would report one hull a month
+      // out of a yard that is building nothing.
+      monthlyThroughputEst: queuedCount === 0
+        ? 0
+        : Math.max(1, Math.round(30 / (baseBuildDays / queuedCount))),
+      simulated: true
+    };
+  }
 
   return {
     available: true,
