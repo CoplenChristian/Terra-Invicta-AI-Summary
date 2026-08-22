@@ -24,8 +24,7 @@ import {
 import {
   buildMineModuleCapability,
   buildMineUpgradeOpportunities,
-  MINE_MODULE_STATES,
-  MINE_MODULE_PROJECTION_POLICY
+  MINE_MODULE_STATES
 } from '../mineModuleOutput.mjs';
 import { MINING_RESOURCES } from './common.mjs';
 
