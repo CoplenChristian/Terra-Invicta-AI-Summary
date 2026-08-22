@@ -145,6 +145,7 @@ export {
   DETAIL_LEVELS,
   DEFAULT_DETAIL_LEVEL,
   DETAIL_AWARE_RESOURCES,
+  THRESHOLD_AWARE_RESOURCES,
   isDetailLevel,
   parseDetailLevel,
   measureIntelEndpointSizes,

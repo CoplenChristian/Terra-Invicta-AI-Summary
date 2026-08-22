@@ -298,6 +298,52 @@ test('the hosted adapter defaults to the small payload and honours detail=full',
   );
 });
 
+// --- the minimum-threshold filters on the hosted path ----------------------
+// Same reasoning as `detail` above: the hosted adapter parses its own query
+// string, so a filter verified only against localhost is not verified. What is
+// asserted here is that this runtime READS the parameters and hands them to the
+// same shared projection; what the projection then does with them is pinned
+// against the live save in tests/driveExplorer.test.js, which is the only place
+// a 541-drive catalogue exists to filter.
+
+test('the hosted adapter reads the drive minimums and echoes them only where they apply', async () => {
+  const dir = buildWorkerBundle();
+  const projections = await import(pathToFileURL(path.join(dir, 'projections.js')).href);
+
+  const result = {
+    mode: 'player',
+    row: { observer_faction_id: 4712, observer_faction_name: 'the Initiative', visibility: 'player', difficulty: 'Normal' },
+    snapshot: { observerFactionId: 4712, factions: [{ ID: 4712, displayName: 'the Initiative' }] }
+  };
+
+  const url = new URL('https://example.test/api/intel/drive-explorer?minDeltaV=10&minCruiseAcceleration=0.5&minCombatAcceleration=abc');
+  const payload = projections.buildIntelResource(result, 'drive-explorer', url);
+
+  assert.equal(payload.thresholds.applied.minDeltaV, 10, 'the hosted runtime must read ?minDeltaV=');
+  assert.equal(payload.thresholds.applied.minCruiseAcceleration, 0.5);
+  assert.equal(payload.thresholds.applied.minCombatAcceleration, null, 'and must not coerce a malformed one');
+  assert.deepEqual(payload.thresholds.rejected.map(entry => entry.parameter), ['minCombatAcceleration'],
+    'a malformed minimum is echoed as rejected, not silently dropped');
+  assert.deepEqual(payload.thresholds.active, ['minDeltaV', 'minCruiseAcceleration']);
+
+  // Echoed on the query block, and the units travel with the contract.
+  assert.equal(payload.query.minDeltaV, '10');
+  assert.equal(payload.thresholds.fields.minDeltaV.unit, 'km/s');
+
+  // An absent minimum is null rather than missing, so a client can tell "not
+  // asked for" from "not supported".
+  const bare = projections.buildIntelResource(
+    result, 'drive-explorer', new URL('https://example.test/api/intel/drive-explorer'));
+  assert.equal(bare.query.minDeltaV, null);
+  assert.deepEqual(bare.thresholds.active, []);
+
+  // And an endpoint that ignores them must not echo them as though it applied
+  // them -- the same rule `DETAIL_AWARE_RESOURCES` enforces for `detail`.
+  const fleets = projections.buildIntelResource(
+    result, 'fleets', new URL('https://example.test/api/intel/fleets?minDeltaV=10'));
+  assert.equal('minDeltaV' in fleets.query, false);
+});
+
 test('the hosted index advertises detail and says why sizes are missing', async () => {
   const worker = await loadWorker();
   const response = await worker.fetch(request('https://example.test/api/intel?format=json'), {});

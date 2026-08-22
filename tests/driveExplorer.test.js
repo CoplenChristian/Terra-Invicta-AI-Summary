@@ -330,6 +330,297 @@ test('a zero fixed drive mass is a real value, not a missing one', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 5b. CRUISE ACCELERATION IS A SECOND MEASUREMENT, NOT A RESTATEMENT
+//
+// `combat = cruise * thrustCap` by construction (shared/propulsion.mjs), and
+// `thrustCap` runs 1 to 160 across the shipped catalogue. Every assertion here
+// is a PROPERTY of that relationship rather than a named drive or a fixed
+// figure: which drive tops the cruise ordering depends on the design being rated
+// (a heavier drive raises the hull's wet mass), so a hardcoded name or value
+// would pass on this campaign and fail on the next. The named figures the spec
+// quotes are checked in scripts/verify_drive_explorer.js against whatever the
+// live save actually holds, by reading the payload rather than a constant.
+// ---------------------------------------------------------------------------
+
+test('cruise acceleration travels on the compact row, in the measured register', () => {
+  for (const mode of ['player', 'omniscient']) {
+    const payload = allRows(live(mode), { mode });
+    for (const row of payload.items.slice(0, 60)) {
+      assert.ok('cruiseAccelerationMps2' in row.measured,
+        `[${mode}] ${row.driveId}: cruise acceleration must be on the summary row, not only under detail=full`);
+      assert.ok('cruiseAccelerationMultipleVsFitted' in row.measured,
+        `[${mode}] ${row.driveId}: the cruise column needs its own multiple against the fitted drive`);
+      assert.strictEqual(row.measured.basis, MEASUREMENT_BASIS.measured);
+    }
+    assert.ok('cruiseAccelerationMps2' in payload.selectedDesign.fittedDrivePerformance,
+      `[${mode}] the fitted baseline the column is compared against must be reported too`);
+  }
+});
+
+test('combat acceleration is cruise times this drive\'s own thrust cap, so the two are not near-substitutes', () => {
+  const payload = allRows(live('player'), { detail: 'full' });
+  const computable = payload.items.filter(row => row.measured.computable
+    && row.measured.cruiseAccelerationMps2 !== null
+    && row.measured.combatAccelerationMps2 !== null
+    && row.measured.thrustCap !== null);
+  assert.ok(computable.length > 100, 'the fixture must carry a real catalogue');
+
+  let equalCount = 0;
+  for (const row of computable) {
+    const ratio = row.measured.combatAccelerationMps2 / row.measured.cruiseAccelerationMps2;
+    assert.ok(Math.abs(ratio - row.measured.thrustCap) <= 1e-3 * Math.max(1, row.measured.thrustCap),
+      `${row.driveId}: combat / cruise must be this drive's thrustCap (${ratio} vs ${row.measured.thrustCap})`);
+    if (row.measured.thrustCap === 1) equalCount += 1;
+  }
+  // Both directions: some drives really do have the two equal, and most do not.
+  // If they were near-substitutes the column would not be worth its width.
+  assert.ok(equalCount > 0, 'some drives must have cruise equal to combat');
+  assert.ok(equalCount < computable.length / 2,
+    'and most must not, or the second column would be a restatement of the first');
+});
+
+test('sorting by cruise acceleration orders by cruise, and unknown never ranks as zero', () => {
+  for (const mode of ['player', 'omniscient']) {
+    const payload = allRows(live(mode), { mode, sort: 'cruise-acceleration' });
+    assert.strictEqual(payload.sorts.applied, 'cruise-acceleration');
+    const values = payload.items.map(row => row.measured.cruiseAccelerationMps2);
+    const measured = values.filter(value => value !== null);
+    for (let i = 1; i < measured.length; i += 1) {
+      assert.ok(measured[i - 1] >= measured[i],
+        `[${mode}] the cruise sort must be descending (${measured[i - 1]} then ${measured[i]})`);
+    }
+    const firstNull = values.indexOf(null);
+    if (firstNull !== -1) {
+      assert.ok(values.slice(firstNull).every(value => value === null),
+        `[${mode}] an unmeasured cruise acceleration must sort last, never as zero`);
+    }
+    // The ordering is genuinely different from the combat one, or the sort key
+    // would be redundant with a column already on screen.
+    const byCombat = allRows(live(mode), { mode, sort: 'combat-acceleration' });
+    assert.notDeepStrictEqual(
+      payload.items.map(row => row.driveId),
+      byCombat.items.map(row => row.driveId),
+      `[${mode}] the cruise ordering must not be the combat ordering`
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 5c. MINIMUM THRESHOLDS -- AND AN UNTESTABLE ROW IS NOT A FAILED ONE
+// ---------------------------------------------------------------------------
+
+const thresholded = (snapshot, thresholds, options = {}) =>
+  allRows(snapshot, { thresholds, ...options });
+
+test('the minimum filters return only rows meeting every one of them, in both modes', () => {
+  for (const mode of ['player', 'omniscient']) {
+    const snapshot = live(mode);
+    const unfiltered = allRows(snapshot, { mode });
+    const payload = thresholded(snapshot, { minDeltaV: '10', minCombatAcceleration: '20' }, { mode });
+
+    assert.deepStrictEqual(payload.thresholds.applied, {
+      minDeltaV: 10,
+      minCombatAcceleration: 20,
+      minCruiseAcceleration: null
+    }, `[${mode}] the applied minimums must be echoed as parsed numbers`);
+    assert.deepStrictEqual(payload.thresholds.rejected, [], `[${mode}] nothing well-formed may be rejected`);
+
+    assert.ok(payload.items.length > 0, `[${mode}] the fixture must leave something to look at`);
+    assert.ok(payload.items.length < unfiltered.items.length, `[${mode}] and the filter must actually remove rows`);
+    for (const row of payload.items) {
+      assert.ok(row.measured.deltaVKps >= 10, `[${mode}] ${row.driveId} is below the delta-V minimum`);
+      assert.ok(row.measured.combatAccelerationMps2 >= 20,
+        `[${mode}] ${row.driveId} is below the combat-acceleration minimum`);
+    }
+
+    // Every drive the filter removed is accounted for as exactly one of the
+    // three exclusion reasons.
+    const exclusions = payload.filters.thresholdExclusions;
+    assert.strictEqual(
+      payload.filters.matched
+      + payload.filters.excludedByStatusOrFamilyCount
+      + exclusions.belowThresholdCount
+      + exclusions.untestableCount,
+      payload.driveCatalogue.rated,
+      `[${mode}] the four filter outcomes must partition the rated catalogue`
+    );
+    assert.strictEqual(payload.filters.reconciles, true,
+      `[${mode}] the endpoint must report its own filter reconciliation`);
+    assert.strictEqual(payload.filters.matched + payload.filters.filteredOutCount, payload.driveCatalogue.rated);
+  }
+});
+
+test('a minimum on cruise acceleration selects a different set than the same minimum on combat', () => {
+  const snapshot = live('player');
+  const byCruise = thresholded(snapshot, { minCruiseAcceleration: '1' });
+  const byCombat = thresholded(snapshot, { minCombatAcceleration: '1' });
+  assert.ok(byCruise.items.length > 0 && byCombat.items.length > 0, 'both minimums must match something');
+  assert.ok(byCruise.items.length < byCombat.items.length,
+    'cruise is combat divided by thrustCap, so the same minimum on cruise is strictly the harder test');
+  for (const row of byCruise.items) {
+    assert.ok(row.measured.cruiseAccelerationMps2 >= 1, `${row.driveId} is below the cruise minimum`);
+  }
+});
+
+test('a row with no measured value for a filtered field is excluded as UNTESTABLE, not counted as a failure', () => {
+  // Proven twice: on a synthetic row, and on the live save's own unflown design,
+  // which has no measured baseline for anything.
+  const snapshot = live('player');
+  const base = allRows(snapshot);
+  const fittedId = base.selectedDesign.fittedDrive.driveId;
+
+  // (a) synthetic: one drive stripped of its cruise measurement, everything else
+  //     left measurable and comfortably above the minimum.
+  const strippedId = base.items.find(row =>
+    row.driveId !== fittedId && row.measured.cruiseAccelerationMps2 >= 1).driveId;
+  const synthetic = {
+    ...snapshot,
+    driveStats: {
+      ...snapshot.driveStats,
+      [strippedId]: { ...snapshot.driveStats[strippedId], thrust_N: null, thrustRating_GW: null }
+    }
+  };
+  const syntheticPayload = thresholded(synthetic, { minCruiseAcceleration: '1' });
+  const exclusions = syntheticPayload.filters.thresholdExclusions;
+  assert.ok(exclusions.untestableCount >= 1,
+    'a drive with no measurable cruise acceleration must be counted as untestable');
+  assert.ok(exclusions.untestableDrives.some(entry => entry.driveId === strippedId),
+    'and named, with the measurement that was missing');
+  const named = exclusions.untestableDrives.find(entry => entry.driveId === strippedId);
+  assert.deepStrictEqual(named.unmeasuredFields, ['cruiseAccelerationMps2']);
+  assert.ok(named.reason.length > 0, 'an untestable row must carry the reason it could not be tested');
+  assert.ok(!syntheticPayload.items.some(row => row.driveId === strippedId),
+    'and it must not be shown as though it had passed either');
+
+  // (b) the live save: a design nobody flies has no measured mass, so EVERY row
+  //     is untestable and NONE of them is a failure. `Number(null) === 0` would
+  //     report all 541 as below the threshold instead.
+  const unflown = base.designs.find(design => design.shipsInService === 0);
+  assert.ok(unflown, 'the observer must own a design with no hull in service');
+  const unmeasurable = thresholded(snapshot, { minDeltaV: '10' }, { designId: unflown.designId });
+  const unmeasured = unmeasurable.filters.thresholdExclusions;
+  assert.strictEqual(unmeasurable.items.length, 0, 'nothing can match a minimum nothing can be tested against');
+  assert.strictEqual(unmeasured.belowThresholdCount, 0,
+    'not one row may be reported as having failed a test that could not be run');
+  assert.strictEqual(unmeasured.untestableCount, unmeasurable.driveCatalogue.rated,
+    'every rated drive must be counted as untestable instead');
+  // The list of them truncates and says so.
+  assert.strictEqual(
+    unmeasured.untestableDrives.length + unmeasured.untestableOmittedCount,
+    unmeasured.untestableTotalCount,
+    'the named-untestable list must reconcile with its own total'
+  );
+  assert.ok(unmeasured.untestableOmittedCount > 0, 'the fixture must actually truncate that list');
+});
+
+test('a malformed or negative minimum is rejected and echoed, never coerced', () => {
+  const snapshot = live('player');
+  const unfiltered = allRows(snapshot);
+
+  for (const value of ['abc', '-5', '1e400', 'NaN', 'Infinity', '10px', '', ' ']) {
+    const payload = thresholded(snapshot, { minDeltaV: value });
+    assert.strictEqual(payload.thresholds.applied.minDeltaV, null,
+      `minDeltaV='${value}' must not become a filter`);
+    assert.strictEqual(payload.items.length, unfiltered.items.length,
+      `minDeltaV='${value}' must leave the result set untouched, not silently filter on 0 or NaN`);
+    assert.strictEqual(payload.filters.thresholdExclusions.belowThresholdCount, 0);
+    assert.strictEqual(payload.filters.thresholdExclusions.untestableCount, 0);
+
+    const isBlank = value.trim() === '';
+    if (isBlank) {
+      assert.deepStrictEqual(payload.thresholds.rejected, [],
+        'an empty value is absent, not malformed');
+    } else {
+      assert.strictEqual(payload.thresholds.rejected.length, 1,
+        `minDeltaV='${value}' must be echoed as rejected rather than ignored silently`);
+      assert.strictEqual(payload.thresholds.rejected[0].parameter, 'minDeltaV');
+      assert.strictEqual(payload.thresholds.rejected[0].value, value.trim());
+      assert.ok(payload.thresholds.rejected[0].reason.length > 0);
+    }
+  }
+
+  // A zero minimum is a real filter, not an absent one: nothing measured fails
+  // it, but nothing UNMEASURED can be shown to pass it either.
+  const zero = thresholded(snapshot, { minDeltaV: '0' });
+  assert.strictEqual(zero.thresholds.applied.minDeltaV, 0);
+  assert.deepStrictEqual(zero.thresholds.active, ['minDeltaV']);
+});
+
+test('the units each minimum is in travel on the response', () => {
+  const payload = allRows(live('player'));
+  assert.strictEqual(payload.thresholds.fields.minDeltaV.unit, 'km/s');
+  assert.strictEqual(payload.thresholds.fields.minDeltaV.measure, 'deltaVKps');
+  assert.strictEqual(payload.thresholds.fields.minCombatAcceleration.unit, 'm/s2');
+  assert.strictEqual(payload.thresholds.fields.minCruiseAcceleration.measure, 'cruiseAccelerationMps2');
+  assert.match(payload.thresholds.semantics, /could not be tested/,
+    'the response must state what happens to an unmeasured row, not leave it to be guessed');
+});
+
+test('the local route parses the minimums off the query string, in both modes', async () => {
+  // The projection is proven above; this is the OTHER half -- that the Express
+  // route actually reads `?minDeltaV=` and hands it through. A filter parsed
+  // nowhere is a filter no agent can use, and no unit test of the projection
+  // would notice.
+  const app = require('../server');
+  const server = await new Promise(resolve => {
+    const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
+  });
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    for (const mode of ['player', 'omniscient']) {
+      const query = `observer=${OBSERVER}&mode=${mode}&limit=1000`;
+      const [plain, filteredResponse, rejectedResponse] = await Promise.all([
+        fetch(`${base}/api/intel/drive-explorer?${query}`).then(response => response.json()),
+        fetch(`${base}/api/intel/drive-explorer?${query}&minDeltaV=10&minCombatAcceleration=20`).then(response => response.json()),
+        fetch(`${base}/api/intel/drive-explorer?${query}&minDeltaV=abc`).then(response => response.json())
+      ]);
+
+      assert.strictEqual(filteredResponse.success, true, `[${mode}] the filtered request must succeed`);
+      assert.strictEqual(filteredResponse.thresholds.applied.minDeltaV, 10,
+        `[${mode}] the route must hand ?minDeltaV= through to the projection`);
+      assert.strictEqual(filteredResponse.thresholds.applied.minCombatAcceleration, 20);
+      assert.ok(filteredResponse.items.length > 0 && filteredResponse.items.length < plain.items.length,
+        `[${mode}] and it must actually narrow the answer`);
+      for (const row of filteredResponse.items) {
+        assert.ok(row.measured.deltaVKps >= 10 && row.measured.combatAccelerationMps2 >= 20,
+          `[${mode}] ${row.driveId} does not meet the minimums the route was given`);
+      }
+      // Echoed on the query block for this resource, so a caller can see what
+      // the server thought it was asked.
+      assert.strictEqual(filteredResponse.query.minDeltaV, '10');
+      assert.strictEqual(filteredResponse.query.minCruiseAcceleration, null);
+
+      // A malformed minimum answers 200 with the rejection echoed -- the same
+      // treatment an unrecognised ?sort= gets -- and does NOT filter.
+      assert.strictEqual(rejectedResponse.success, true);
+      assert.strictEqual(rejectedResponse.thresholds.applied.minDeltaV, null);
+      assert.strictEqual(rejectedResponse.thresholds.rejected[0].parameter, 'minDeltaV');
+      assert.strictEqual(rejectedResponse.items.length, plain.items.length,
+        `[${mode}] a rejected minimum must not silently filter on 0`);
+    }
+
+    // The echo appears only on the resource that honours the parameters.
+    const fleets = await fetch(`${base}/api/intel/fleets?observer=${OBSERVER}&minDeltaV=10`).then(r => r.json());
+    assert.ok(!('minDeltaV' in fleets.query),
+      'an endpoint that ignores the minimums must not echo them as though it applied them');
+  } finally {
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});
+
+test('the threshold filters compose with the categorical ones rather than replacing them', () => {
+  const snapshot = live('player');
+  const payload = thresholded(snapshot, { minDeltaV: '10' }, { status: DRIVE_AVAILABILITY.fittable });
+  assert.ok(payload.filters.excludedByStatusOrFamilyCount > 0, 'the status filter must still remove rows');
+  assert.ok(payload.filters.thresholdExclusions.belowThresholdCount > 0, 'and the minimum must remove more');
+  for (const row of payload.items) {
+    assert.strictEqual(row.availability.bucket, DRIVE_AVAILABILITY.fittable);
+    assert.ok(row.measured.deltaVKps >= 10);
+  }
+  assert.strictEqual(payload.filters.reconciles, true);
+});
+
+// ---------------------------------------------------------------------------
 // 6. THE TWO REGISTERS -- MEASURED VS ESTIMATE
 // ---------------------------------------------------------------------------
 
@@ -643,6 +934,248 @@ test('the panel renders both registers, the estimate caption, and no null placeh
   assert.ok(!/\bnull\b/.test(stripped), 'no null may reach the rendered text');
   assert.ok(!/\bundefined\b/.test(stripped), 'no undefined may reach the rendered text');
   assert.ok(!/\bNaN\b/.test(stripped), 'no NaN may reach the rendered text');
+});
+
+test('the panel renders the cruise column it already offered a sort for', () => {
+  const panel = loadPanel();
+  const payload = allRows(live('player'));
+  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+
+  panel.render(container, payload);
+  const html = container.innerHTML;
+
+  assert.match(html, /CRUISE ACCEL m\/s²/, 'the cruise column must have a header');
+  assert.match(html, /COMBAT ACCEL m\/s²/, 'beside the combat one, not instead of it');
+  // In the MEASURED register, exactly like its two neighbours: three measured
+  // header cells and three measured value cells on every row.
+  const measuredHeaders = (html.match(/de-th--measured/g) || []).length;
+  assert.strictEqual(measuredHeaders, 3, 'delta-V, combat and cruise are all measured columns');
+  const firstRow = html.match(/<tr class="de-row[\s\S]*?<\/tr>/)[0];
+  const cells = [...firstRow.matchAll(/de-measured__value">([^<]*)</g)].map(match => match[1]);
+  assert.strictEqual(cells.length, 3, 'every row must carry three measured figures');
+
+  // The three columns are in the order the header declares them.
+  const headerOrder = [...html.matchAll(/<th class="de-th[^"]*"[^>]*>([^<]*)</g)].map(match => match[1].trim());
+  assert.deepStrictEqual(headerOrder.slice(0, 4),
+    ['DRIVE', 'ΔV km/s', 'COMBAT ACCEL m/s²', 'CRUISE ACCEL m/s²']);
+
+  // The smallest measured accelerations must survive the trip to the screen as
+  // numbers. `toFixed(3)` renders them as `0.000`, which is indistinguishable
+  // from a measured zero -- the exact defect the rest of this panel avoids.
+  const smallest = payload.items
+    .filter(row => row.measured.cruiseAccelerationMps2 !== null && row.measured.cruiseAccelerationMps2 < 0.001)
+    .slice(0, 5);
+  assert.ok(smallest.length > 0, 'the live catalogue must carry accelerations below 0.001 for this to test anything');
+  const bySmallest = { ...payload, items: smallest };
+  panel.render(container, bySmallest);
+  const smallRows = [...container.innerHTML.matchAll(/<tr class="de-row[\s\S]*?<\/tr>/g)].map(match => match[0]);
+  for (const rendered of smallRows) {
+    const cells = [...rendered.matchAll(/de-measured__value">([^<]*)</g)].map(match => match[1]);
+    for (const index of [1, 2]) {
+      assert.notStrictEqual(cells[index], '0.000',
+        'a measured acceleration below 0.001 must not render as a confident 0.000');
+      assert.ok(Number(cells[index]) > 0,
+        `a measured acceleration must render as a positive number, got '${cells[index]}'`);
+    }
+  }
+});
+
+test('a small acceleration renders as a small number, never as a confident 0.000', () => {
+  const { accel } = loadPanel()._internals;
+  // The live catalogue's smallest measured acceleration. `toFixed(3)` printed
+  // this as `0.000`, which a reader cannot tell from a measured zero.
+  assert.strictEqual(accel(0.00016846), '0.000168');
+  assert.strictEqual(accel(0.01010778), '0.0101');
+  assert.strictEqual(accel(20.59560406), '20.6');
+  assert.strictEqual(accel(606.46655067), '606');
+  // A measured zero is still a zero; an ABSENT value is the em dash.
+  assert.strictEqual(accel(0), '0');
+  assert.strictEqual(accel(null), '—');
+  assert.strictEqual(accel(undefined), '—');
+  assert.strictEqual(accel(''), '—');
+  assert.strictEqual(accel('not a number'), '—');
+});
+
+test('a null cruise acceleration renders as unavailable and sorts last, never as zero', () => {
+  const panel = loadPanel();
+  const live_ = allRows(live('player'));
+  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+
+  // A synthetic row: computable overall, with only the cruise measurement absent.
+  // shared/propulsion.mjs and shared/intel/driveExplorer.mjs both have paths that
+  // produce exactly this, and the live catalogue currently has none of them.
+  const rows = live_.items.slice(0, 6).map(row => JSON.parse(JSON.stringify(row)));
+  rows[0] = {
+    ...rows[0],
+    driveId: 'SyntheticNullCruise',
+    displayName: 'Synthetic Null Cruise',
+    isFittedDrive: false,
+    measured: {
+      ...rows[0].measured,
+      computable: true,
+      cruiseAccelerationMps2: null,
+      cruiseAccelerationMultipleVsFitted: null
+    }
+  };
+  const payload = { ...live_, items: rows };
+
+  panel._internals.state.sort = 'cruise-acceleration';
+  panel._internals.state.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '' };
+  try {
+    panel.render(container, payload);
+    const rendered = [...container.innerHTML.matchAll(/<tr class="de-row[\s\S]*?<\/tr>/g)].map(match => match[0]);
+    const synthetic = rendered.find(row => /Synthetic Null Cruise/.test(row));
+    assert.ok(synthetic, 'the synthetic row must render at all');
+
+    const cells = [...synthetic.matchAll(/de-measured__value">([^<]*)</g)].map(match => match[1]);
+    assert.strictEqual(cells[2], '—', 'an unmeasured cruise acceleration renders as an em dash, never as 0');
+    assert.match(synthetic, /UNAVAILABLE/, 'and says so in the sub-line rather than showing a multiple');
+
+    assert.strictEqual(rendered.indexOf(synthetic), rendered.length - 1,
+      'and it sorts last under the cruise sort rather than as though it were zero');
+
+    // Filtered on, it is untestable rather than a failure.
+    panel._internals.state.thresholds.minCruiseAcceleration = '1';
+    const outcome = panel._internals.visibleRows(rows);
+    assert.strictEqual(outcome.untestableCount, 1);
+    assert.strictEqual(outcome.untestableDrives[0].driveId, 'SyntheticNullCruise');
+    assert.ok(!outcome.rows.some(row => row.driveId === 'SyntheticNullCruise'));
+  } finally {
+    panel._internals.state.sort = 'delta-v';
+    panel._internals.state.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '' };
+  }
+});
+
+test('the panel and the endpoint reach the same answer for the same minimums', () => {
+  // The panel filters client-side because it already holds all 541 rows, so the
+  // rule exists twice. This is what stops the two drifting: same thresholds,
+  // same rows, same three counts, in both modes.
+  const panel = loadPanel();
+  const matrix = [
+    { minDeltaV: '10' },
+    { minCombatAcceleration: '20' },
+    { minCruiseAcceleration: '1' },
+    { minDeltaV: '10', minCombatAcceleration: '20' },
+    { minDeltaV: '10', minCombatAcceleration: '20', minCruiseAcceleration: '0.5' },
+    { minDeltaV: '0' },
+    { minDeltaV: '1e-4' },
+    { minDeltaV: '999999' },
+    { minDeltaV: 'abc' },
+    { minDeltaV: '-5' }
+  ];
+
+  for (const mode of ['player', 'omniscient']) {
+    const snapshot = live(mode);
+    // Three populations, because the live catalogue on its own has no null
+    // measurement and would leave the untestable branch of both implementations
+    // unexercised -- a `Number(null)` reintroduced on either side would pass.
+    //
+    //   flown       every row measured
+    //   unflown     no row measured at all (a design with no hull in service)
+    //   partial     one row stripped of its thrust, so only IT is unmeasured
+    const base = allRows(snapshot, { mode });
+    const unflownId = base.designs.find(design => design.shipsInService === 0).designId;
+    const strippedId = base.items.find(row =>
+      !row.isFittedDrive && row.measured.cruiseAccelerationMps2 >= 1).driveId;
+    const partialSnapshot = {
+      ...snapshot,
+      driveStats: {
+        ...snapshot.driveStats,
+        [strippedId]: { ...snapshot.driveStats[strippedId], thrust_N: null, thrustRating_GW: null }
+      }
+    };
+    const scenarios = [
+      { label: 'flown', snapshot, options: {} },
+      { label: 'unflown', snapshot, options: { designId: unflownId } },
+      { label: 'partial', snapshot: partialSnapshot, options: {} }
+    ];
+
+    for (const scenario of scenarios) {
+      const unfiltered = allRows(scenario.snapshot, { mode, ...scenario.options });
+      for (const thresholds of matrix) {
+      const endpoint = allRows(scenario.snapshot, { mode, ...scenario.options, thresholds });
+      panel._internals.state.thresholds = {
+        minDeltaV: thresholds.minDeltaV ?? '',
+        minCombatAcceleration: thresholds.minCombatAcceleration ?? '',
+        minCruiseAcceleration: thresholds.minCruiseAcceleration ?? ''
+      };
+      const browser = panel._internals.visibleRows(unfiltered.items);
+      const label = `[${mode}/${scenario.label}] ${JSON.stringify(thresholds)}`;
+
+      // `Array.from` and not `.map`: the panel runs in a vm realm, so an array
+      // it builds carries THAT realm's Array.prototype and `deepStrictEqual`
+      // compares prototypes. Without this the assertion fails on two arrays
+      // whose contents are identical, which is a very confusing way to be red.
+      assert.deepStrictEqual(
+        Array.from(browser.rows, row => row.driveId).sort(),
+        endpoint.items.map(row => row.driveId).sort(),
+        `${label}: the panel and the endpoint must admit the same drives`
+      );
+      assert.strictEqual(browser.belowThresholdCount,
+        endpoint.filters.thresholdExclusions.belowThresholdCount,
+        `${label}: the below-threshold counts must agree`);
+      assert.strictEqual(browser.untestableCount,
+        endpoint.filters.thresholdExclusions.untestableCount,
+        `${label}: the untestable counts must agree`);
+      assert.deepStrictEqual(
+        Array.from(browser.thresholds.rejected, entry => entry.key),
+        endpoint.thresholds.rejected.map(entry => entry.parameter),
+        `${label}: the two must reject exactly the same inputs`
+      );
+      }
+    }
+
+    // The matrix is only worth running if the untestable branch is genuinely
+    // reached on both sides. Asserted rather than assumed, because a live save
+    // with no null measurement would leave `Number(null) === 0` undetected.
+    panel._internals.state.thresholds = { minDeltaV: '10', minCombatAcceleration: '', minCruiseAcceleration: '' };
+    const unflownRows = allRows(snapshot, { mode, designId: unflownId }).items;
+    assert.ok(panel._internals.visibleRows(unflownRows).untestableCount > 0,
+      `[${mode}] the unflown scenario must actually exercise the untestable branch`);
+    panel._internals.state.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '1' };
+    const partialRows = allRows(partialSnapshot, { mode }).items;
+    const partialOutcome = panel._internals.visibleRows(partialRows);
+    assert.strictEqual(partialOutcome.untestableCount, 1,
+      `[${mode}] the partial scenario must leave exactly the stripped drive untestable`);
+    assert.ok(partialOutcome.belowThresholdCount > 0,
+      `[${mode}] and must still have genuine failures beside it, or the two are not distinguished`);
+  }
+  panel._internals.state.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '' };
+});
+
+test('the panel labels the unit on every minimum control, and says what an untestable row means', () => {
+  const panel = loadPanel();
+  const payload = allRows(live('player'));
+  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+
+  panel.render(container, payload);
+  const html = container.innerHTML;
+  // "> 10" is ambiguous between km/s and m/s², so each control names its unit.
+  assert.match(html, /MIN ΔV \(km\/s\)/);
+  assert.match(html, /MIN COMBAT ACCEL \(m\/s²\)/);
+  assert.match(html, /MIN CRUISE ACCEL \(m\/s²\)/);
+  for (const entry of panel._internals.THRESHOLDS) {
+    assert.ok(html.includes(`data-de-threshold="${entry.key}"`), `${entry.key} must have a control`);
+    assert.ok(html.includes(entry.placeholder), `${entry.key}'s placeholder must state its unit too`);
+  }
+
+  panel._internals.state.thresholds = { minDeltaV: '10', minCombatAcceleration: '', minCruiseAcceleration: '' };
+  try {
+    panel.render(container, payload);
+    const filteredHtml = container.innerHTML;
+    assert.match(filteredHtml, /MINIMUMS ACTIVE/, 'an active minimum must announce itself');
+    assert.match(filteredHtml, /measured and fall short/, 'the failures must be counted on screen');
+    assert.match(filteredHtml, /untestable/i, 'and the untestable exclusions named as a separate category');
+
+    panel._internals.state.thresholds.minDeltaV = 'abc';
+    panel.render(container, payload);
+    assert.match(container.innerHTML, /IGNORED rather than/,
+      'a rejected minimum must say it was ignored, not silently behave as no filter');
+    const stripped = container.innerHTML.replace(/<[^>]*>/g, ' ');
+    assert.ok(!/\bNaN\b/.test(stripped), 'and must not leak a NaN while doing it');
+  } finally {
+    panel._internals.state.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '' };
+  }
 });
 
 test('the panel distinguishes an unavailable destination table from zero destinations', () => {

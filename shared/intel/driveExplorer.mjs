@@ -70,6 +70,28 @@
 //
 // so a capped or filtered list can always be reconciled back to all 541 drives.
 //
+// ---------------------------------------------------------------------------
+// AN UNTESTABLE ROW IS NOT A FAILED ROW
+// ---------------------------------------------------------------------------
+//
+// `?minDeltaV=`, `?minCombatAcceleration=` and `?minCruiseAcceleration=` are
+// inclusive minimums over the MEASURED block, combined with AND. Their whole
+// risk is that `Number(null) === 0`: a null measurement tested against `>= 10`
+// silently becomes `0 >= 10` and the row is thrown away as though it had been
+// measured and found wanting.
+//
+// So `filters.filteredOutCount` is decomposed rather than left as one number:
+//
+//   filters.matched
+//   + filters.excludedByStatusOrFamilyCount
+//   + filters.thresholdExclusions.belowThresholdCount
+//   + filters.thresholdExclusions.untestableCount
+//   == driveCatalogue.rated
+//
+// and `filters.reconciles` reports that identity rather than asserting it. The
+// untestable drives are NAMED, with the measurement that was missing, capped and
+// with the omitted count carried.
+//
 // Plain ESM, no Node built-ins, no imports outside `shared/`.
 
 import { DEFAULT_OBSERVER_FACTION_ID } from '../constants.mjs';
@@ -88,6 +110,11 @@ import {
 import { evaluatePowerBudget, evaluateReactorClass } from '../refitAdvisor.mjs';
 import { buildTechPath, observerGraph } from '../techGraph.mjs';
 import { mobilityResource } from './mobility.mjs';
+import {
+  DRIVE_THRESHOLD_FILTERS,
+  DRIVE_THRESHOLD_PARAMETERS,
+  parseDriveThresholds
+} from '../requestValidation.mjs';
 
 /**
  * What kind of statement a figure is. Carried on the response and on every
@@ -533,6 +560,68 @@ function comparatorFor(sort) {
   return numeric(row => row.measured.deltaVKps);
 }
 
+// ---------------------------------------------------------------------------
+// MINIMUM THRESHOLDS ON THE MEASURED COLUMNS
+//
+// `Number(null) === 0`, so a null measurement tested against `>= 10` silently
+// becomes `0 >= 10` and the row is discarded as though it had been measured and
+// found wanting. A row that could not be tested is NOT a row that failed, and
+// the two are counted separately all the way to the consumer.
+//
+// The three outcomes are three-valued (Kleene) logic over an AND of minimums,
+// which is stricter and more useful than "any null makes the row untestable":
+//
+//   below       at least one threshold was TESTABLE and definitely failed. The
+//               conjunction is then definitely false whatever the unknowns are,
+//               so this is a real failure and is counted as one.
+//   untestable  every testable threshold passed, and at least one field the
+//               caller filtered on is unmeasured. The answer is unknown, so the
+//               row is excluded and counted as untestable -- never as a failure,
+//               and never silently admitted either.
+//   pass        every threshold was testable and every one of them was met.
+//
+// `unmeasuredFields` names WHICH measurement was missing, because "excluded, we
+// could not tell" is only actionable if the reader knows what was absent.
+// ---------------------------------------------------------------------------
+
+const THRESHOLD_OUTCOME = Object.freeze({
+  pass: 'pass',
+  below: 'below',
+  untestable: 'untestable'
+});
+
+/**
+ * Tests one row against the active minimums.
+ *
+ * @param {Object} row      a rated drive row
+ * @param {Object} applied  parameter -> minimum, or null where not filtered on
+ * @returns {{ outcome: string, unmeasuredFields: string[], failedFields: string[] }}
+ */
+function testThresholds(row, applied) {
+  const unmeasuredFields = [];
+  const failedFields = [];
+  for (const parameter of DRIVE_THRESHOLD_PARAMETERS) {
+    const minimum = applied?.[parameter] ?? null;
+    if (minimum === null) continue;
+    const { measure } = DRIVE_THRESHOLD_FILTERS[parameter];
+    // `toFinite` is the guard: it maps null, '', undefined and NaN alike onto
+    // null rather than onto 0, which is the whole point of this branch.
+    const value = toFinite(row.measured?.[measure]);
+    if (value === null) unmeasuredFields.push(measure);
+    else if (value < minimum) failedFields.push(measure);
+  }
+  if (failedFields.length > 0) {
+    return { outcome: THRESHOLD_OUTCOME.below, unmeasuredFields, failedFields };
+  }
+  if (unmeasuredFields.length > 0) {
+    return { outcome: THRESHOLD_OUTCOME.untestable, unmeasuredFields, failedFields };
+  }
+  return { outcome: THRESHOLD_OUTCOME.pass, unmeasuredFields, failedFields };
+}
+
+/** How many untestable drives are named individually before the list truncates. */
+const UNTESTABLE_LIST_LIMIT = 20;
+
 /**
  * Drive Explorer: every drive rated against one of the observer's designs.
  *
@@ -549,6 +638,10 @@ export const driveExplorerResource = (snapshot, {
   sort = null,
   status = null,
   family = null,
+  // Raw, exactly as the query string carried them. Both runtimes hand the
+  // unparsed value straight through and the shared parser decides, so neither
+  // can accept a threshold the other rejects.
+  thresholds = null,
   detail = 'summary'
 } = {}) => {
   const driveStats = snapshot.driveStats || {};
@@ -561,6 +654,11 @@ export const driveExplorerResource = (snapshot, {
     : String(sort).trim().toLowerCase();
   const activeSort = DRIVE_SORTS.includes(requestedSort) ? requestedSort : DEFAULT_DRIVE_SORT;
   const sortRejected = DRIVE_SORTS.includes(requestedSort) ? null : requestedSort;
+
+  // Parsed up here, beside the sort, so a rejected threshold is echoed even on
+  // the branch that has no design to rate anything against. A caller who typed
+  // `minDeltaV=abc` must be told, not answered as though they had typed nothing.
+  const thresholdRequest = parseDriveThresholds(thresholds || {});
 
   const designs = buildDesignIndex(snapshot, observerId);
   const requestedDesignId = designId === null || designId === undefined || String(designId).trim() === ''
@@ -605,6 +703,24 @@ export const driveExplorerResource = (snapshot, {
       }
     },
     sorts: { values: DRIVE_SORTS, default: DEFAULT_DRIVE_SORT, applied: activeSort, rejected: sortRejected },
+    // What was ASKED for. What it removed is reported under `filters` beside the
+    // status and family counts, the same split `sorts` and `filters` already
+    // make. `fields` carries the unit each parameter is in, because `> 10` is
+    // ambiguous between km/s and m/s2 to a machine reader as much as a human one.
+    thresholds: {
+      basis: MEASUREMENT_BASIS.measured,
+      fields: DRIVE_THRESHOLD_FILTERS,
+      applied: thresholdRequest.applied,
+      active: thresholdRequest.active,
+      // A malformed minimum is ignored AND echoed, never coerced: `Number('abc')`
+      // is NaN and `Number('')` is 0, and either would answer a different
+      // question than the caller asked.
+      rejected: thresholdRequest.rejected,
+      semantics: 'Minimums, inclusive, combined with AND. A row whose value for a filtered field is unmeasured is '
+        + 'EXCLUDED and counted under filters.thresholdExclusions.untestableCount -- it is a row that could not be '
+        + 'tested, never a row that failed. A row that definitely fails any testable minimum is counted as a failure '
+        + 'whatever else is unmeasured.'
+    },
     designs: pickerRows,
     designCount: pickerRows.length
   };
@@ -743,6 +859,10 @@ export const driveExplorerResource = (snapshot, {
         deltaVKpsVsFitted: differenceOf(refit.deltaVKps, fittedRefit?.deltaVKps),
         deltaVMultipleVsFitted: multipleOf(refit.deltaVKps, fittedRefit?.deltaVKps),
         combatAccelerationMultipleVsFitted: multipleOf(refit.combatAccelerationMps2, fittedRefit?.combatAccelerationMps2),
+        // Cruise gets its own multiple rather than borrowing combat's: the two
+        // differ by each drive's own `thrustCap`, which runs 1 to 160 across the
+        // catalogue, so they are the same number on only 72 of 541 drives.
+        cruiseAccelerationMultipleVsFitted: multipleOf(refit.cruiseAccelerationMps2, fittedRefit?.cruiseAccelerationMps2),
         ...(verbose
           ? {
             source: 'model',
@@ -756,8 +876,8 @@ export const driveExplorerResource = (snapshot, {
             thrustN: refit.computable ? refit.thrustN : null,
             thrustCap: refit.computable ? refit.thrustCap : null,
             flatMassTons: toFinite(drive?.flatMass_tons),
-            cruiseAccelerationMultipleVsFitted: multipleOf(refit.cruiseAccelerationMps2, fittedRefit?.cruiseAccelerationMps2),
             combatAccelerationMps2VsFitted: differenceOf(refit.combatAccelerationMps2, fittedRefit?.combatAccelerationMps2, 6),
+            cruiseAccelerationMps2VsFitted: differenceOf(refit.cruiseAccelerationMps2, fittedRefit?.cruiseAccelerationMps2, 6),
             basisNote: refit.basis || null
           }
           : {})
@@ -831,7 +951,31 @@ export const driveExplorerResource = (snapshot, {
   const familyMatches = (row) => requestedFamily === null
     || String(row.classification || '').toLowerCase() === requestedFamily;
 
-  const filtered = rows.filter(row => statusMatches(row) && familyMatches(row));
+  // The categorical filters run first, so "untestable" is measured over the
+  // population the caller actually asked about. A drive already excluded by its
+  // availability bucket is not a drive whose delta-V could not be tested.
+  const inScope = rows.filter(row => statusMatches(row) && familyMatches(row));
+  const excludedByStatusOrFamilyCount = rows.length - inScope.length;
+
+  const filtered = [];
+  const untestableDrives = [];
+  let belowThresholdCount = 0;
+  for (const row of inScope) {
+    const verdict = testThresholds(row, thresholdRequest.applied);
+    if (verdict.outcome === THRESHOLD_OUTCOME.pass) {
+      filtered.push(row);
+    } else if (verdict.outcome === THRESHOLD_OUTCOME.untestable) {
+      untestableDrives.push({
+        driveId: row.driveId,
+        displayName: row.displayName || row.driveId,
+        unmeasuredFields: verdict.unmeasuredFields,
+        reason: row.measured.reason
+          || `this drive has no measured ${verdict.unmeasuredFields.join(' or ')} against this design, so the minimum could not be tested`
+      });
+    } else {
+      belowThresholdCount += 1;
+    }
+  }
   filtered.sort(comparatorFor(activeSort));
 
   const requestedLimit = toFinite(limit);
@@ -911,7 +1055,26 @@ export const driveExplorerResource = (snapshot, {
       matched: filtered.length,
       // A filter that matched nothing is reported as such rather than
       // presenting an empty list as "there are no drives".
-      filteredOutCount: rows.length - filtered.length
+      filteredOutCount: rows.length - filtered.length,
+      // The decomposition of that total. Without it "469 filtered out" cannot be
+      // read: a reader cannot tell a drive that failed the minimum from a drive
+      // nobody could measure, and those are different facts.
+      excludedByStatusOrFamilyCount,
+      thresholdExclusions: {
+        belowThresholdCount,
+        untestableCount: untestableDrives.length,
+        // Named, not just counted -- "excluded, could not tell" is only
+        // actionable when the reader knows which drives and which measurement.
+        untestableDrives: untestableDrives.slice(0, UNTESTABLE_LIST_LIMIT),
+        untestableTotalCount: untestableDrives.length,
+        untestableOmittedCount: Math.max(0, untestableDrives.length - UNTESTABLE_LIST_LIMIT)
+      },
+      // The four categories partition the rated set. Reported rather than
+      // asserted so a consumer can check it instead of trusting it.
+      reconciles: filtered.length
+        + excludedByStatusOrFamilyCount
+        + belowThresholdCount
+        + untestableDrives.length === rows.length
     },
     unresolvedDrives,
     unresolvedCount: unresolvedDrives.length,

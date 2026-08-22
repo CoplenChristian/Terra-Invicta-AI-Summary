@@ -1,7 +1,8 @@
 /**
  * Verification script for the DRIVES view (docs/drive-explorer-spec.md).
  * Purpose: browser verification that the Drive Explorer renders the measured
- *   and estimated halves in visibly different registers, in both intel modes.
+ *   and estimated halves in visibly different registers and that its minimum
+ *   filters agree with the endpoint, in both intel modes.
  *
  * WHY THIS READS COMPUTED STYLE RATHER THAN SOURCE
  * -----------------------------------------------
@@ -74,14 +75,48 @@ async function verifyMode(page, mode) {
         color: s.color
       };
     };
+    // The cruise column joined the measured half on 2026-08-22 and has to be in
+    // the SAME register as its two neighbours, read off the rendered document
+    // rather than off the stylesheet. Its cell is the third measured value in a
+    // row, in the order the header declares.
+    const rowCells = Array.from(
+      (document.querySelector('.de-table tbody tr') || document).querySelectorAll('.de-measured__value'));
     return {
       measured: read(measured),
       estimate: read(estimate),
+      measuredCellCount: rowCells.length,
+      measuredCellStyles: rowCells.map(read),
+      headers: Array.from(document.querySelectorAll('.de-table thead th')).map(th => ({
+        text: th.textContent.trim(),
+        measuredClass: th.classList.contains('de-th--measured')
+      })),
       estimateBorderLeft: estimateCell ? getComputedStyle(estimateCell).borderLeftStyle : null,
       rootTextDim: getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim(),
       rootText: getComputedStyle(document.documentElement).getPropertyValue('--text').trim()
     };
   });
+
+  // --- 2a. the cruise column exists and computes as a MEASUREMENT ----------
+  const cruiseHeader = styles.headers.find(header => /CRUISE ACCEL/.test(header.text));
+  check(cruiseHeader !== undefined, 'a CRUISE ACCEL column is rendered', styles.headers.map(h => h.text));
+  check(cruiseHeader !== undefined && /m\/s²/.test(cruiseHeader.text),
+    'and it names its unit in the header', cruiseHeader && cruiseHeader.text);
+  check(cruiseHeader !== undefined && cruiseHeader.measuredClass,
+    'the cruise column carries the measured header class');
+  check(styles.measuredCellCount === 3,
+    'every row renders three measured figures: delta-V, combat and cruise', styles.measuredCellCount);
+  if (styles.measuredCellStyles.length === 3) {
+    const [dv, combat, cruise] = styles.measuredCellStyles;
+    check(
+      cruise.fontFamily === dv.fontFamily && cruise.fontStyle === dv.fontStyle
+      && cruise.fontWeight === dv.fontWeight && cruise.color === dv.color,
+      'the cruise figure COMPUTES in the same register as delta-V and combat',
+      { dv, combat, cruise }
+    );
+    check(styles.estimate === null || cruise.fontStyle !== styles.estimate.fontStyle,
+      'and in a different one from the estimate column',
+      { cruise: cruise.fontStyle, estimate: styles.estimate && styles.estimate.fontStyle });
+  }
 
   check(styles.measured !== null, 'a measured value cell is present in the table');
   check(styles.estimate !== null, 'an estimate value cell is present in the table');
@@ -191,6 +226,114 @@ async function verifyMode(page, mode) {
     'the fitted drive appears exactly once, whatever the sort', sortState.fittedRowCount);
   check(sortState.fittedPinnedFirst,
     'the fitted drive stays visible as the baseline every multiple is measured against');
+
+  // --- 7. the cruise sort orders the cruise column, not an invisible key ----
+  // The expected top value is read from the PAYLOAD, never hardcoded: which
+  // drive tops the ordering depends on the design being rated, so a fixed name
+  // would pass on this campaign and fail on the next.
+  await page.selectOption('[data-de-sort]', 'cruise-acceleration');
+  await page.waitForTimeout(150);
+  const cruiseSort = await page.evaluate(() => {
+    const payload = window.MissionControlDriveExplorer._internals.state.payload;
+    const best = payload.items
+      .filter(row => !row.isFittedDrive && row.measured.cruiseAccelerationMps2 !== null)
+      .reduce((top, row) =>
+        top === null || row.measured.cruiseAccelerationMps2 > top.measured.cruiseAccelerationMps2 ? row : top, null);
+    const rows = Array.from(document.querySelectorAll('.de-table tbody tr'));
+    const cruiseCells = rows
+      .filter(tr => !tr.classList.contains('de-row--fitted'))
+      .slice(0, 10)
+      .map(tr => {
+        const cells = tr.querySelectorAll('.de-measured__value');
+        return cells.length > 2 ? cells[2].textContent.trim() : null;
+      });
+    const firstName = rows.filter(tr => !tr.classList.contains('de-row--fitted'))[0];
+    return {
+      expectedTopDrive: best ? best.displayName : null,
+      expectedTopValue: best ? best.measured.cruiseAccelerationMps2 : null,
+      renderedTopDrive: firstName ? firstName.querySelector('.de-name').textContent.trim() : null,
+      cruiseCells,
+      // Combat and cruise on the same row, so their ratio can be checked to be
+      // the drive's own thrust cap rather than 1.
+      pairs: rows.filter(tr => !tr.classList.contains('de-row--fitted')).slice(0, 10).map(tr => {
+        const cells = tr.querySelectorAll('.de-measured__value');
+        return cells.length > 2
+          ? { combat: Number(cells[1].textContent.trim()), cruise: Number(cells[2].textContent.trim()) }
+          : null;
+      }).filter(Boolean)
+    };
+  });
+  const cruiseValues = cruiseSort.cruiseCells.map(Number).filter(Number.isFinite);
+  check(cruiseValues.length >= 3 && cruiseValues.every((value, i) => i === 0 || cruiseValues[i - 1] >= value),
+    'sorting by cruise acceleration orders the CRUISE column descending', cruiseSort.cruiseCells);
+  check(cruiseSort.renderedTopDrive === cruiseSort.expectedTopDrive,
+    'and the top row is the drive the payload says has the highest measured cruise acceleration',
+    { rendered: cruiseSort.renderedTopDrive, expected: cruiseSort.expectedTopDrive, value: cruiseSort.expectedTopValue });
+  check(cruiseSort.pairs.some(pair => pair.combat > pair.cruise * 1.5),
+    'combat and cruise are visibly different figures on the same row, not a duplicated column',
+    cruiseSort.pairs.slice(0, 3));
+  check(cruiseSort.cruiseCells.every(text => text !== '0.000' && text !== '0.00'),
+    'no measured acceleration renders as a confident zero', cruiseSort.cruiseCells);
+
+  // --- 8. the minimum-threshold controls ----------------------------------
+  await page.selectOption('[data-de-sort]', 'delta-v');
+  await page.fill('[data-de-threshold="minDeltaV"]', '10');
+  await page.fill('[data-de-threshold="minCombatAcceleration"]', '20');
+  await page.waitForTimeout(200);
+  const filteredState = await page.evaluate(async () => {
+    const panel = window.MissionControlDriveExplorer;
+    const rows = Array.from(document.querySelectorAll('.de-table tbody tr'));
+    const outcome = panel._internals.visibleRows(panel._internals.state.payload.items);
+    // The SAME thresholds against the endpoint, so the browser and the API are
+    // compared on the live save rather than assumed to agree.
+    const url = `/api/intel/drive-explorer?observer=4712&mode=${panel._internals.state.mode}`
+      + '&limit=1000&minDeltaV=10&minCombatAcceleration=20';
+    const endpoint = await fetch(url).then(response => response.json());
+    return {
+      renderedRowCount: rows.length,
+      matched: outcome.rows.length,
+      below: outcome.belowThresholdCount,
+      untestable: outcome.untestableCount,
+      endpointMatched: endpoint.filters.matched,
+      endpointBelow: endpoint.filters.thresholdExclusions.belowThresholdCount,
+      endpointUntestable: endpoint.filters.thresholdExclusions.untestableCount,
+      endpointApplied: endpoint.thresholds.applied,
+      violations: outcome.rows.filter(row =>
+        !(row.measured.deltaVKps >= 10 && row.measured.combatAccelerationMps2 >= 20)).length,
+      noticeText: (document.querySelector('.de-notice--filters') || {}).textContent || ''
+    };
+  });
+  check(filteredState.matched > 0 && filteredState.violations === 0,
+    'the minimums admit only drives that meet both of them', filteredState);
+  check(filteredState.matched === filteredState.endpointMatched
+    && filteredState.below === filteredState.endpointBelow
+    && filteredState.untestable === filteredState.endpointUntestable,
+    'the browser and /api/intel/drive-explorer reach the same counts for the same minimums', filteredState);
+  check(filteredState.endpointApplied.minDeltaV === 10 && filteredState.endpointApplied.minCombatAcceleration === 20,
+    'the endpoint parses the same minimums off its query string', filteredState.endpointApplied);
+  check(/MINIMUMS ACTIVE/.test(filteredState.noticeText) && /untestable|untested/i.test(filteredState.noticeText),
+    'the active minimums and the untestable category are stated on screen', filteredState.noticeText.slice(0, 200));
+
+  // A malformed minimum is announced and ignored, never coerced to zero.
+  await page.fill('[data-de-threshold="minDeltaV"]', 'abc');
+  await page.fill('[data-de-threshold="minCombatAcceleration"]', '');
+  await page.waitForTimeout(200);
+  const rejectedState = await page.evaluate(() => {
+    const panel = window.MissionControlDriveExplorer;
+    const outcome = panel._internals.visibleRows(panel._internals.state.payload.items);
+    return {
+      matched: outcome.rows.length,
+      total: panel._internals.state.payload.items.length,
+      warning: (document.querySelector('.de-notice--warn') || {}).textContent || ''
+    };
+  });
+  check(rejectedState.matched === rejectedState.total,
+    'a rejected minimum filters nothing rather than silently filtering on zero', rejectedState);
+  check(/IGNORED/.test(rejectedState.warning),
+    'and says on screen that it was ignored', rejectedState.warning.slice(0, 160));
+
+  await page.fill('[data-de-threshold="minDeltaV"]', '');
+  await page.waitForTimeout(150);
 
   return { styles, table };
 }

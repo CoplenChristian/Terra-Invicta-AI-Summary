@@ -373,8 +373,13 @@ const INTEL_ENDPOINTS = Object.freeze([
     // `design` selects the hull, `status` narrows to one availability bucket or
     // state, `family` to one drive classification, and `sort` reorders.
     detail: true,
-    project: (snapshot, { observerId, mode, designId, limit, sort, status, family, detail }) =>
-      driveExplorerResource(snapshot, { observerId, mode, designId, limit, sort, status, family, detail })
+    // Honours the minimum-threshold filters on its measured columns. Flagged
+    // here for the same reason `detail` is: the adapters echo a parameter only
+    // where it did something, so the echo never implies a filter that was
+    // ignored. `THRESHOLD_AWARE_RESOURCES` is derived from this flag.
+    thresholds: true,
+    project: (snapshot, { observerId, mode, designId, limit, sort, status, family, thresholds, detail }) =>
+      driveExplorerResource(snapshot, { observerId, mode, designId, limit, sort, status, family, thresholds, detail })
   },
   {
     key: 'militaryValue',
@@ -464,6 +469,18 @@ export const SUPPORTED_RESOURCES = new Set(PROJECTION_BY_ROUTE.keys());
  */
 export const DETAIL_AWARE_RESOURCES = Object.freeze(
   new Set(INTEL_ENDPOINTS.filter(entry => entry.detail === true).map(entry => entry.route))
+);
+
+/**
+ * Routes that honour the minimum-threshold filters, derived from the table's own
+ * `thresholds: true` for the same reason.
+ *
+ * Both adapters echo `minDeltaV` and its siblings only for these routes, so the
+ * echo cannot imply that a parameter did something on an endpoint that ignored
+ * it -- the rule `DETAIL_AWARE_RESOURCES` already exists to enforce for `detail`.
+ */
+export const THRESHOLD_AWARE_RESOURCES = Object.freeze(
+  new Set(INTEL_ENDPOINTS.filter(entry => entry.thresholds === true).map(entry => entry.route))
 );
 
 // Public discovery map shared by the local Express API and hosted worker.
@@ -577,6 +594,10 @@ export const buildResourceProjection = (snapshot, resource, {
   quantity = 1,
   status = null,
   sort = null,
+  // The minimum-threshold filters, RAW as the query string carried them. The
+  // shared parser inside the projection decides what a valid minimum is, so the
+  // local route and the hosted worker cannot drift on it.
+  thresholds = null,
   previousSnapshot = null,
   mode = 'player',
   weights = null,
@@ -601,6 +622,7 @@ export const buildResourceProjection = (snapshot, resource, {
     quantity,
     status,
     sort,
+    thresholds,
     previousSnapshot,
     mode,
     weights,
