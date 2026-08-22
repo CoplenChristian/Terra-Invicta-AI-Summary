@@ -11,10 +11,19 @@
 // different inputs.
 
 import { asArray, toFiniteNumber as toFinite } from '../util.mjs';
+import { resolveMineModuleMultiplier } from '../mineModuleOutput.mjs';
 import { MINING_RESOURCES, bodyMatches, factionMatches, siteMonthlyOutput } from './common.mjs';
 
 export const miningResourceRow = (site) => {
   const output = siteMonthlyOutput(site);
+  // The mine module's own output multiplier, published beside the deposit rate
+  // rather than folded into it. This row is emitted for EVERY faction, and the
+  // per-faction tech bonus is not knowable for a rival, so the row cannot state
+  // a realised output -- but the module term is a measurement off this site's
+  // own module and belongs in the payload. `null` is the honest answer for a
+  // site with no mine and for a module this build does not recognise; the state
+  // beside it says which.
+  const mineModule = resolveMineModuleMultiplier(site);
   return {
   site: site.displayName,
   owner: site.factionName,
@@ -41,6 +50,11 @@ export const miningResourceRow = (site) => {
   resourceRateUnit: site.resourceRateUnit,
   mineTier: site.mineTier,
   mineModule: site.mineModuleTemplate,
+  // Read from the module's own template, never from `mineTier` -- the alien
+  // Settlement complex is x2.0 at the same tier the human one is x1.5.
+  mineModuleMultiplier: mineModule.multiplier,
+  mineModuleMultiplierState: mineModule.state,
+  mineModuleProducing: mineModule.operational,
   constructionStatus: site.constructionStatus,
   daysRemaining: site.daysRemaining,
   completionDate: site.completionDate,

@@ -6864,6 +6864,85 @@ button.council-orders__row:focus-visible {
   text-transform: uppercase;
 }
 
+/* --- the two registers on the mining board -------------------------------
+   Deliberately the same shapes as .de-measured / .de-estimate on the Drive
+   Explorer and .fe-meas / .fe-est on the fleet board: one page, one convention
+   for "this was read off the save" versus "this was modelled".
+
+   It matters more here than anywhere else on this board. The mine module's own
+   output multiplier is a MEASUREMENT on a site the observer already holds and a
+   DECISION on one it does not, and the two sit two rows apart. Rendering them
+   at the same weight would launder the projection into a reading, which is
+   exactly why the projection is kept out of the utility score.
+
+   Asserted off the live DOM with getComputedStyle by
+   scripts/verify_mining_registers.js -- source inspection is not evidence,
+   because --text-muted was once defined self-referentially and 164 rules
+   silently fell back to `inherit`. */
+
+.mining-meas__value {
+  font-family: var(--mono);
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mining-est {
+  font-family: var(--sans);
+  font-style: italic;
+  color: var(--text-dim);
+}
+
+.mining-est__value {
+  font-family: var(--sans);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.mining-est__tag {
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  padding: 0 3px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 2px;
+  color: var(--text-dim);
+}
+
+.mining-module-band {
+  display: block;
+  margin-top: 2px;
+}
+
+/* --- mine upgrades: the measured half of the module multiplier ----------- */
+
+.mining-upgrades {
+  margin: 8px 0 10px;
+}
+
+.mining-upgrades-note {
+  padding: 4px 6px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.mining-upgrades-blocked {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
+.mining-upgrade-step {
+  white-space: nowrap;
+}
+
 .mining-tag {
   display: inline-block;
   padding: 1px 5px;

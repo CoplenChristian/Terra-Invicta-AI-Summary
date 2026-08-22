@@ -21,6 +21,11 @@ import {
   buildMiningTechBonuses,
   MINING_BONUS_STATES
 } from '../miningTechBonus.mjs';
+import {
+  buildMineModuleCapability,
+  buildMineUpgradeOpportunities,
+  MINE_MODULE_STATES
+} from '../mineModuleOutput.mjs';
 import { MINING_RESOURCES } from './common.mjs';
 
 /**
@@ -257,6 +262,17 @@ export const buildMiningResourceRunways = (observer = {}) => {
  * observer's water bonus did not exist. When the bonus cannot be resolved the
  * RAW figure stands, `yields[key].bonusApplied` is false and the reason is
  * carried -- never a silent claim that the multiplier is 1.
+ *
+ * THE MINE MODULE'S OWN MULTIPLIER IS DELIBERATELY NOT IN THIS SCORE. Every
+ * site scored here is UNOWNED and carries no mine module -- 272 of 272 on the
+ * measured save -- so applying one means DECIDING which tier gets built. The
+ * score saturates, so a uniform assumed multiplier reorders the board rather
+ * than scaling it (60 of 85 move between x1.00 and x1.25, 64 of 85 between
+ * x1.25 and x1.50), and the top nine are identical under every multiplier
+ * tested. `config.mineModuleCapability` therefore supplies a BAND over the
+ * tiers the observer can actually build, published on each candidate as
+ * `moduleMultiplier.projectedRange` and never folded into `siteValue`.
+ * `shared/mineModuleOutput.mjs` carries the decision and its evidence.
  */
 export const scoreMiningSiteCandidate = (site, runways, capacity, config = {}) => {
   const target = toFinite(config.targetRunwayMonths) ?? 12;
@@ -387,7 +403,42 @@ export const scoreMiningSiteCandidate = (site, runways, capacity, config = {}) =
     valuePerHate,
     // Unowned sites have no mine under construction, so the save carries no
     // build duration for them. Null, never 0 -- "instant" would be a lie.
-    buildTimeDays: toFinite(site.buildDurationDays)
+    buildTimeDays: toFinite(site.buildDurationDays),
+    // The mine module's own output multiplier, which is NOT in `siteValue`
+    // above and says so. `multiplier: null` is the point: this site has no
+    // mine, so there is nothing to read, and a 1.0 would claim an Outpost
+    // complex that does not exist. `projectedRange` is the observer's own
+    // buildable band and is an ESTIMATE -- a range rather than a point
+    // precisely so it cannot be mistaken for a reading.
+    moduleMultiplier: buildCandidateModuleBand(site, config.mineModuleCapability || null)
+  };
+};
+
+/**
+ * The unowned candidate's module-multiplier block: absent measurement, plus the
+ * observer's buildable band as a labelled estimate.
+ *
+ * A site that somehow DOES carry a module (a snapshot that classed an owned
+ * site as unowned) reports the measured multiplier rather than the band, so the
+ * block never claims "no mine" about a site that has one.
+ */
+const buildCandidateModuleBand = (site, capability) => {
+  const resolved = typeof site?.mineModuleTemplate === 'string' && site.mineModuleTemplate.trim() !== '';
+  const range = capability?.projectedMultiplierRange || null;
+  // Deliberately terse, and the reason is measured. The band and the reasoning
+  // are IDENTICAL on every row -- they are facts about the observer, not about
+  // the site -- so carrying them per row duplicated ~290 bytes across 357
+  // emitted rows and grew this endpoint by 23%. They live ONCE at the top level
+  // in `mineModuleCapability`, and `see` points there. What the row must carry
+  // on its own is the part a reader could get wrong: that the multiplier is
+  // NOT a number here, and that the score does not contain it.
+  return {
+    // Never 1.0. See shared/mineModuleOutput.mjs.
+    multiplier: null,
+    state: resolved ? MINE_MODULE_STATES.unknown : MINE_MODULE_STATES.notBuilt,
+    excludedFromScore: true,
+    projectedRangeAvailable: range !== null,
+    see: 'mineModuleCapability'
   };
 };
 
@@ -459,6 +510,13 @@ export const miningExpansionResource = (snapshot, {
   const isRequestedObserver = observer.ID !== undefined && observer.ID !== null
     && (sameId(observer.ID, observerId) || sameId(observer.ID, snapshot?.observerFactionId));
   const miningTechBonus = buildMiningTechBonuses(observer, {
+    projectListComplete: isRequestedObserver
+  });
+  // The tiers the observer can build. Same completeness gate as the tech
+  // bonuses and for the same reason: player mode truncates a rival's completed
+  // projects to five entries, so a band read from a fallback faction's list
+  // would be wrong rather than absent.
+  const mineModuleCapability = buildMineModuleCapability(observer, {
     projectListComplete: isRequestedObserver
   });
   const completedTechs = asArray(snapshot?.techTree?.finishedTechsNames || snapshot?.globalResearch?.finishedTechNames);
@@ -547,7 +605,8 @@ export const miningExpansionResource = (snapshot, {
     const scored = scoreMiningSiteCandidate(site, resourceRunways, capacity, {
       targetRunwayMonths,
       surplusDiscount,
-      miningTechBonus
+      miningTechBonus,
+      mineModuleCapability
     });
     const candidate = {
       ...scored,
@@ -593,6 +652,20 @@ export const miningExpansionResource = (snapshot, {
   const bonusUnresolvedSiteCount = [...available, ...Array.from(techGatedMap.values()).flatMap(e => e.sites)]
     .filter(c => asArray(c.bonusUnresolvedResources).length > 0).length;
 
+  // Upgrading an existing mine multiplies a site the observer ALREADY holds by
+  // a measured factor and costs nothing against the mine limit, while the
+  // candidates above each cost one of `capacity.headroom`. Both belong on the
+  // same board or the board only ever argues for new claims.
+  const mineUpgrades = buildMineUpgradeOpportunities({
+    habSites,
+    observerId: observer.ID ?? observerId,
+    capability: mineModuleCapability,
+    miningTechBonus,
+    resources: MINING_RESOURCES,
+    applyTechBonus: applyMiningTechBonus,
+    sameId
+  });
+
   return {
     capacity,
     resourceRunways,
@@ -601,6 +674,14 @@ export const miningExpansionResource = (snapshot, {
     // deposit rates and are a lower bound, not that the observer holds nothing.
     miningTechBonus,
     bonusUnresolvedSiteCount,
+    // The mine complexes the observer can build, and the band they imply for a
+    // site that does not have one yet. This is the ONLY projection on this
+    // board and it is a range, never folded into a score.
+    mineModuleCapability,
+    // The measured half of the same term: what upgrading the observer's own
+    // mines is worth, at zero cost against the mine limit. Every number here
+    // comes from the save or the templates.
+    mineUpgrades,
     available: rankedAvailable,
     availableTotalCount: available.length,
     availableOmittedCount: available.length - rankedAvailable.length,
@@ -638,7 +719,27 @@ export const miningExpansionResource = (snapshot, {
           : 'The observer holds no completed project that raises mine output, so projected yields are the raw '
             + 'deposit rates; they also exclude the mine module\'s own miningModifier (1.0-4.0).')
         : `Mining tech bonuses are UNRESOLVED (${miningTechBonus.unavailableReason}). Projected yields are `
-          + 'RAW deposit rates and are a lower bound, NOT a measured "no bonus".'
+          + 'RAW deposit rates and are a lower bound, NOT a measured "no bonus".',
+      // The refusal, stated where a reader of the ranking will see it. Without
+      // this line the ordering reads as though the module multiplier had been
+      // accounted for and found not to matter.
+      mineModuleCapability.projectedMultiplierRange !== null
+        ? 'The mine module\'s own output multiplier is NOT in siteValue and does NOT affect this ranking. '
+          + 'Every site here is unowned and has no module, so applying one would be a decision about which '
+          + `tier gets built: the observer can build x${mineModuleCapability.projectedMultiplierRange.low} to `
+          + `x${mineModuleCapability.projectedMultiplierRange.high}, and the score saturates, so a uniform `
+          + 'assumed multiplier reorders the board rather than scaling it (measured: 64 of 85 candidates move '
+          + 'between x1.25 and x1.50). Each row carries the band as an ESTIMATE instead.'
+        : 'The mine module\'s own output multiplier is NOT in siteValue and does NOT affect this ranking, and '
+          + `no band can be stated either: ${mineModuleCapability.available === true
+            ? 'the observer has completed no mine-complex project'
+            : mineModuleCapability.unavailableReason}.`,
+      mineUpgrades.totalMonthlyGainMeasured && mineUpgrades.counts.available > 0
+        ? `${mineUpgrades.counts.available} of the observer's own operational mines have a researched upgrade, `
+          + 'which multiplies a site it already holds and costs NOTHING against the mine limit, while every '
+          + 'candidate above costs one of the remaining headroom. See mineUpgrades — those figures are '
+          + 'measured, not projected.'
+        : 'No upgrade is available on the observer\'s own mines; see mineUpgrades.counts for why.'
     ]
   };
 };

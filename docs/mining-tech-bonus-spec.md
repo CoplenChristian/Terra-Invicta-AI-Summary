@@ -27,6 +27,23 @@ Written 2026-08-22 against `1589907`.
 > 1.15² = 1.3225 exactly. Two things the change deliberately does **not** model — the mine
 > module's own 1.0–4.0 `miningModifier`, and an unexplained per-faction scalar that is
 > 1.000 for the observer — are named in `UNMODELLED_FACTORS` and tracked in `docs/README.md`.
+>
+> **UPDATE 2026-08-22 — the mine-module half is now closed too.** `shared/mineModuleOutput.mjs`
+> reads the multiplier **per site** from `mineModuleTemplate` (by name, never by `mineTier`:
+> the alien Settlement complex is ×2.0 where the human one is ×1.5) and applies it to the
+> observer's owned figures. With both terms in, the observer's monthly mined output
+> reconciles against the game's own `financials.projectedMonthlyIncome` at **0.004%** on all
+> five resources, so its owned figures are no longer a lower bound. A **non-operational mine
+> produces nothing** — measured: folding `building` modules in turns Project Exodus's
+> five-resource reconciliation spread from 1.4e-5 into 1.2e+0.
+>
+> The multiplier is **deliberately not projected onto unowned candidates.** The expansion
+> score saturates, so a uniform assumed multiplier reorders the board rather than scaling it
+> (64 of 85 candidates move between ×1.25 and ×1.50) while the top nine are identical under
+> every multiplier tested — so a projection buys nothing and costs an ordering the save does
+> not support. `MINE_MODULE_PROJECTION_POLICY` records the decision and the alternatives it
+> rejected; each candidate carries the observer's buildable **band** in the estimate register
+> instead. The per-faction scalar in (b) remains the only open half.
 
 Thirteen projects raise mine output. The dashboard applies none of them to any figure it
 derives. **Whether that is a defect depends on one unsettled question, and that question
