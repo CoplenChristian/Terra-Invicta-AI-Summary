@@ -180,7 +180,43 @@
     return `<span class="mining-runway-pill ${badgeClass}" title="${attr(title)}"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(text)}</span>`;
   }
 
-  function renderCandidateRow(c) {
+  /**
+   * The mine module's own multiplier for an UNOWNED site: never a number.
+   *
+   * Rendered in the ESTIMATE register (`.mining-est`), deliberately the same
+   * shape as `.de-estimate` on the Drive Explorer, because it is a projection
+   * over the tiers the observer could build and not a reading off the save.
+   * Rendering it at the same weight as the measured yield beside it would
+   * launder the projection into a measurement, which is the whole reason it is
+   * kept out of the score.
+   */
+  function renderModuleBand(band, capability) {
+    if (!band || typeof band !== 'object') return '';
+    // The band is a fact about the OBSERVER, identical on every row, so the
+    // payload carries it once on the capability block and the row only says
+    // whether one could be stated at all.
+    const range = capability && capability.projectedMultiplierRange;
+    const low = band.projectedRangeAvailable === false ? null : num(range && range.low);
+    const high = band.projectedRangeAvailable === false ? null : num(range && range.high);
+    if (low === null || high === null) {
+      const why = (capability && capability.available === true)
+        ? 'The observer has completed no mine-complex project, so there is no tier it could build here.'
+        : ((capability && capability.unavailableReason)
+          || 'The observer\'s buildable mine tiers are unresolved, so no band can be stated.');
+      return `<small class="mining-est mining-module-band is-unavailable" title="${attr(why)}">`
+        + `Mine module multiplier: UNKNOWN — not in the score</small>`;
+    }
+    const title = 'ESTIMATE, not a measurement. This site has no mine, so its module multiplier depends on '
+      + `which complex gets built: ${range.lowLabel || range.lowModule} ×${low} to `
+      + `${range.highLabel || range.highModule} ×${high}. It is deliberately NOT in the utility score — `
+      + 'the score saturates, so a uniform assumed multiplier reorders the board rather than scaling it.';
+    return `<small class="mining-est mining-module-band" title="${attr(title)}">`
+      + `<span class="mining-est__tag">EST</span> `
+      + `<span class="mining-est__value">×${low}–×${high} once mined</span>`
+      + `</small>`;
+  }
+
+  function renderCandidateRow(c, capability) {
     const hateCost = num(c.hateCost);
     const hateKnown = hateCost !== null;
     let hateBadge;
@@ -193,6 +229,7 @@
     }
 
     const yieldInfo = formatYields(c.yields);
+    const bandMarkup = renderModuleBand(c.moduleMultiplier, capability);
     const densityAssumed = c.siteDensityAssumed === true || c.siteDensityMeasured === false;
     const densityText = `Density: ${fmt(c.siteDensity, 2)}x`;
     const densityMarkup = densityAssumed
@@ -232,9 +269,10 @@
           }</small>
         </td>
         <td class="mining-yields-cell">
-          <div class="mining-yields-text${yieldInfo.unmeasured.length ? ' is-partial' : ''}"${
+          <div class="mining-meas__value mining-yields-text${yieldInfo.unmeasured.length ? ' is-partial' : ''}"${
             yieldInfo.unmeasured.length ? ` title="${attr(`Unmeasured in this snapshot: ${yieldInfo.unmeasured.join(', ')}`)}"` : ''
           }>${escapeHtml(yieldInfo.text)}</div>
+          ${bandMarkup}
           ${densityMarkup}
         </td>
         <td class="mining-value-cell">
@@ -251,6 +289,110 @@
     `;
   }
 
+  const UPGRADE_ROW_LIMIT = 5;
+
+  /**
+   * The MEASURED half of the mine-module multiplier: what upgrading the
+   * observer's own mines is worth.
+   *
+   * Every number here is read off the save and the templates, so it renders in
+   * the measured register — the opposite of the band on a candidate row. It
+   * sits above the candidate table on purpose: an upgrade costs NOTHING against
+   * the mine limit while every candidate below costs one of the remaining
+   * headroom, and a board that only ever lists new claims cannot say that.
+   */
+  function renderUpgrades(upgrades, capacity) {
+    if (!upgrades || typeof upgrades !== 'object') return '';
+    const counts = upgrades.counts || {};
+    const available = num(counts.available);
+    const totals = upgrades.totalMonthlyGain;
+
+    if (upgrades.totalMonthlyGainMeasured !== true) {
+      return `
+        <div class="mining-upgrades mining-upgrades--unavailable">
+          <div class="mining-section-title"><span>MINE UPGRADES</span></div>
+          <div class="mining-upgrades-note">UPGRADE HEADROOM UNRESOLVED — the observer's buildable mine tiers
+          could not be read, so whether any mine can be upgraded is unknown, not "none".</div>
+        </div>
+      `;
+    }
+
+    const gainParts = [];
+    for (const [key, label] of RESOURCE_LABELS) {
+      const value = totals && Object.prototype.hasOwnProperty.call(totals, key) ? num(totals[key]) : null;
+      if (value === null) {
+        gainParts.push(`${label}: ${UNAVAILABLE}`);
+      } else if (value > 0) {
+        gainParts.push(`${label}: +${value.toFixed(1)}`);
+      }
+    }
+
+    const rows = (Array.isArray(upgrades.opportunities) ? upgrades.opportunities : [])
+      .filter(o => o && o.state === 'available')
+      .slice(0, UPGRADE_ROW_LIMIT)
+      .map(o => {
+        const parts = [];
+        for (const [key, label] of RESOURCE_LABELS) {
+          const value = o.monthlyGain ? num(o.monthlyGain[key]) : null;
+          if (value === null) parts.push(`${label}: ${UNAVAILABLE}`);
+          else if (value > 0) parts.push(`${label}: +${value.toFixed(1)}`);
+        }
+        return `
+          <tr class="mining-upgrade-row">
+            <td class="mining-site-cell">
+              <strong class="mining-site-name">${escapeHtml(o.displayName || 'Unnamed site')}</strong>
+              <small class="mining-site-body">${escapeHtml(o.parentBodyName || 'Unknown body')}</small>
+            </td>
+            <td class="mining-upgrade-step mining-meas__value">×${fmt(o.currentMultiplier, 2)} → ×${fmt(o.nextMultiplier, 2)}</td>
+            <td class="mining-yields-cell mining-meas__value">${escapeHtml(parts.length ? parts.join(' · ') : 'No measured gain')}</td>
+            <td class="mining-cost-cell"><span class="mining-tag mining-tag--free">0 MINE SLOTS</span></td>
+          </tr>
+        `;
+      }).join('');
+
+    const blocked = [];
+    if (num(counts.noUpgradePath) > 0) {
+      blocked.push(`${int(counts.noUpgradePath)} at their template ceiling (nothing upgrades from that module)`);
+    }
+    if (num(counts.notResearched) > 0) {
+      blocked.push(`${int(counts.notResearched)} awaiting the successor project`);
+    }
+    if (num(counts.notOperational) > 0) {
+      blocked.push(`${int(counts.notOperational)} not operational yet`);
+    }
+    if (num(counts.unknownModule) > 0) {
+      blocked.push(`${int(counts.unknownModule)} carrying an unrecognised module`);
+    }
+
+    const headroom = num(capacity && capacity.headroom);
+
+    return `
+      <div class="mining-upgrades">
+        <div class="mining-section-title">
+          <span>MINE UPGRADES — ${int(available)} AVAILABLE</span>
+          <small>Measured: the observer's own operational mines</small>
+        </div>
+        <div class="mining-upgrades-note">
+          Upgrading multiplies a site already held and costs <strong>0</strong> against the mine limit${
+            headroom === null ? '' : `, where a new claim costs one of the ${int(headroom)} remaining`
+          }.
+          Total measured gain: <strong class="mining-meas__value">${escapeHtml(gainParts.length ? gainParts.join(' · ') : 'none')}</strong> per month.
+        </div>
+        ${rows ? `
+          <div class="mining-table-wrap">
+            <table class="mining-table mining-table--upgrades">
+              <thead>
+                <tr><th>Site &amp; Body</th><th>Multiplier</th><th>Monthly Gain</th><th>Cost</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        ` : '<div class="mining-upgrades-note">No mine has a researched upgrade available.</div>'}
+        ${blocked.length ? `<small class="mining-upgrades-blocked">Excluded: ${escapeHtml(blocked.join('; '))}.</small>` : ''}
+      </div>
+    `;
+  }
+
   function render(root, payload) {
     if (!root) return;
 
@@ -260,6 +402,10 @@
     const techGated = Array.isArray(expansion?.techGated) ? expansion.techGated : [];
     const unreachable = expansion?.unreachable || {};
     const runways = expansion?.resourceRunways || {};
+    // Read once, above every consumer: the candidate row renderer needs it
+    // too, and the payload keeps the projection reasoning here rather than
+    // repeating it on all 272 scored sites.
+    const capability = expansion?.mineModuleCapability || null;
 
     if (!capacity) {
       root.innerHTML = '<div class="alien-hate-econ-empty">MINING EXPANSION DATA UNAVAILABLE</div>';
@@ -277,7 +423,7 @@
     // silently the capped length reads as "this is everything".
     const totalAvailable = num(expansion?.availableTotalCount) ?? available.length;
     const shownRows = available.slice(0, ROW_LIMIT);
-    const availableRows = shownRows.map(renderCandidateRow).join('');
+    const availableRows = shownRows.map(function (row) { return renderCandidateRow(row, capability); }).join('');
 
     // A group with an unreadable site count must not fold into the total as a
     // zero -- the header would then under-report a known-incomplete figure.
@@ -321,8 +467,7 @@
       bonusNote = 'MINE TECH BONUSES UNRESOLVED — yields are raw deposit rates and are a lower bound, '
         + 'not a measured "no bonus".';
     } else if (bonusBoosted.length === 0) {
-      bonusNote = 'No completed project raises mine output, so yields are the raw deposit rates. '
-        + 'They exclude the mine module\'s own 1.0-4.0 multiplier.';
+      bonusNote = 'No completed project raises mine output, so yields carry no tech multiplier.';
     } else {
       // The multiplier is 1.15 or 1.15^2 = 1.3225, so it needs up to four
       // decimals and looks wrong padded to four. An UNREADABLE multiplier
@@ -337,8 +482,32 @@
           return `${key} ×${multiplier === null ? UNAVAILABLE : String(multiplier)} (${from})`;
         })
         .join(', ');
-      bonusNote = `Yields include completed-project mine bonuses: ${named}. They still exclude the mine `
-        + 'module\'s own 1.0-4.0 multiplier, so they remain a lower bound.';
+      bonusNote = `Yields include completed-project mine bonuses: ${named}.`;
+    }
+
+    // The mine module's own multiplier, said once for the whole table rather
+    // than repeated per row. It is NOT in the score and the note says so,
+    // because a ranking that silently excluded it would read as one that had
+    // accounted for it.
+    const range = capability && capability.projectedMultiplierRange;
+    const rangeLow = num(range && range.low);
+    const rangeHigh = num(range && range.high);
+    let moduleNote;
+    if (!capability) {
+      moduleNote = 'MINE MODULE MULTIPLIER NOT REPORTED by this snapshot — yields are deposit rates with no '
+        + 'module term, and the score excludes it.';
+    } else if (rangeLow === null || rangeHigh === null) {
+      moduleNote = 'Mine module multiplier: UNKNOWN — '
+        + (capability.available === true
+          ? 'the observer has completed no mine-complex project, so there is no tier it could build.'
+          : String(capability.unavailableReason || 'the observer\'s buildable tiers are unresolved.'))
+        + ' It is excluded from the utility score either way.';
+    } else {
+      moduleNote = `ESTIMATE — a built mine multiplies these deposit rates by ×${rangeLow} to ×${rangeHigh} `
+        + `(${range.lowLabel || range.lowModule} to ${range.highLabel || range.highModule}, the tiers the `
+        + 'observer has researched). It is deliberately NOT in the utility score: every site here is unowned, '
+        + 'so the tier is a decision rather than a reading, and the score saturates — a uniform assumed '
+        + 'multiplier reorders this board rather than scaling it.';
     }
 
     root.innerHTML = `
@@ -366,6 +535,9 @@
         </div>
 
         <div class="mining-yield-basis">${escapeHtml(bonusNote)}</div>
+        <div class="mining-yield-basis mining-est">${escapeHtml(moduleNote)}</div>
+
+        ${renderUpgrades(expansion?.mineUpgrades, capacity)}
 
         <div class="mining-section-title">
           <span>AVAILABLE EXPANSION SITES (${int(totalAvailable)})</span>

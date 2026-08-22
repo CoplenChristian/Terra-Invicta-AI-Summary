@@ -137,9 +137,12 @@ export const normalizeCostObject = (cost) => {
 // 90 ownership changes, 102 mine-tier changes and fourteen newly completed
 // mining-bonus projects. So two things are missing from `total` below and are
 // deliberately NOT applied here:
-//   * the mine module's `miningModifier` (1.0-4.0). Applying it needs a decision
-//     about an unowned site with no module, so it is named as unhandled in
-//     `UNMODELLED_FACTORS` rather than guessed.
+//   * the mine module's `miningModifier` (1.0-4.0). It IS measurable per site --
+//     `shared/mineModuleOutput.mjs` reads it off `mineModuleTemplate` and the
+//     observer's own figures carry it -- but this primitive is called for EVERY
+//     faction's row, including unowned sites with no module at all, so it stays
+//     out of `total` for the same reason the tech bonus does: the caller knows
+//     whose site it is and this function does not.
 //   * the owning faction's `Effect_Mining<Resource>Bonus` multipliers. Those ARE
 //     applied, by the caller, via `applyMiningTechBonus` -- this primitive has
 //     no faction to attribute them to, and silently assuming the observer's

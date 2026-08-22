@@ -69,10 +69,13 @@
 //   (`Effect_SpaceMiningBonus10`) and reads 1.28, not 1.10, so how the additive
 //   fraction is combined is NOT settled by this save. Declared unhandled.
 // * The mine module's own `miningModifier` (1.0 / 1.25 / 1.5 / 2.0 / 4.0).
-//   It is genuinely missing from the dashboard's derived figures too, but it is
-//   a separate defect with a separate blast radius -- an unowned candidate site
-//   has no mine module at all, so projecting its yield needs a decision about
-//   which tier would be built. Named in `UNMODELLED_FACTORS`.
+//   THIS MODULE still does not apply it -- it has no site to read a module off
+//   -- but it is no longer missing from the dashboard. `shared/mineModuleOutput.mjs`
+//   reads it per site and the observer's owned figures now carry it; with both
+//   terms in, the observer's monthly mined output reconciles against the game's
+//   own `projectedMonthlyIncome` to 0.004%. What is still unmodelled is the
+//   projection for an UNOWNED candidate, which has no module at all. Named in
+//   `UNMODELLED_FACTORS` with that split spelled out.
 // * The campaign's 200% `miningProductivityMultiplier`. It is ALREADY inside
 //   the stored `_day` rate: the income model above reconciles with no factor of
 //   two anywhere, and the observer's `B` is 1.000. Re-applying it would be a 2x
@@ -190,11 +193,20 @@ export const ADDITIVE_MINING_BONUS_PROJECTS = Object.freeze([
  */
 export const UNMODELLED_FACTORS = Object.freeze([
   Object.freeze({
+    // STILL UNMODELLED BY THIS MODULE, and still unmodelled for an unowned
+    // site anywhere -- but no longer unmodelled everywhere. As of the change
+    // that added `shared/mineModuleOutput.mjs` it is READ PER SITE for a mine
+    // that exists, which closed the observer's owned figures. What remains
+    // unmodelled is the PROJECTION half, deliberately: an unowned candidate has
+    // no module, and picking a tier for it is a decision rather than a reading.
     factor: 'mine-module miningModifier',
     range: '1.0 (Outpost) / 1.25 (Automated) / 1.5 (Settlement) / 2.0 (Colony) / 4.0 (Alien Colony)',
-    reason: 'the stored site rate is the deposit rate, so a built mine multiplies it. Projecting an '
-      + 'UNOWNED candidate site would need a decision about which tier gets built, which is a separate '
-      + 'change with a separate blast radius.',
+    reason: 'the stored site rate is the deposit rate, so a built mine multiplies it. For a site that HAS '
+      + 'a mine this is now measured per site by shared/mineModuleOutput.mjs and is applied to the '
+      + 'observer\'s owned figures. It stays unmodelled for an UNOWNED candidate, whose tier would have to '
+      + 'be decided rather than read: the expansion score saturates, so a uniform assumed multiplier '
+      + 'reorders that board rather than scaling it (64 of 85 candidates move between x1.25 and x1.50). '
+      + 'The band the observer could build is published beside the score instead.',
     source: 'TIHabModuleTemplate.json, read 2026-08-22'
   }),
   Object.freeze({
