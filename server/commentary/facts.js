@@ -126,8 +126,30 @@ function extractFacts({
   const alienShipsCount = alienFleets.reduce((sum, f) => sum + (toFiniteNumber(f.shipsCount) || 0), 0);
 
   // Shipyard Queues & Production
-  const shipyardQueues = Array.isArray(snapshot.shipyardQueues) ? snapshot.shipyardQueues : [];
-  const ownQueuedShips = shipyardQueues.filter(q => sameId(q.factionId, observerId) || sameId(q.factionID, observerId));
+  //
+  // AN ABSENT QUEUE IS NOT AN EMPTY QUEUE, since 2026-08-22. This read
+  // `Array.isArray(snapshot.shipyardQueues) ? snapshot.shipyardQueues : []`, so
+  // a snapshot that carried no `shipyardQueues` field at all produced an empty
+  // array, an `ownQueuedShips` of `[]`, and a `queuedCount` of 0 downstream --
+  // which `simulation.js` correctly treats as the MEASUREMENT "nothing is
+  // queued" and reports as a throughput of zero under `available: true`. The
+  // refusal that file added at its own boundary (`queuedCount === null`) could
+  // never fire, because nothing upstream of it could ever produce a null.
+  //
+  // "This faction is building nothing" and "nobody read this faction's build
+  // queue" are opposite operational statements, and the second one now says so:
+  // an absent or non-array field yields `null`, which is what
+  // `runMonteCarloSimulation` already knows how to refuse on.
+  //
+  // NO FALLBACK TO `rawSnapshot`. `shipHullStats` and `shipDesigns` above read
+  // through to the raw snapshot because they are static reference data, but
+  // shipyard queues are FILTERED intelligence -- reaching around the filter to
+  // the raw save would decide for the intelligence filter what the observer may
+  // see. Unreadable here stays unreadable.
+  const shipyardQueues = Array.isArray(snapshot.shipyardQueues) ? snapshot.shipyardQueues : null;
+  const ownQueuedShips = shipyardQueues === null
+    ? null
+    : shipyardQueues.filter(q => sameId(q.factionId, observerId) || sameId(q.factionID, observerId));
 
   // Hate Trend & Venting Rate
   let elapsedDays = toFiniteNumber(delta.period?.days);

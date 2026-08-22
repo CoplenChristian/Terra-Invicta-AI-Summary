@@ -104,14 +104,60 @@
           <small style="color: var(--text-dim); font-size: 9px;">To cross below war threshold</small>
         </div>
       `);
+    } else if (proj.hateVent && proj.hateVent.reason) {
+      // Four different reasons used to reach this component as one bare `null`,
+      // and the card simply not rendering read as "hostility has no venting
+      // story". One of the four is player mode's redaction of the true hate
+      // value, under which this projection can never be produced at all -- the
+      // opposite of a reassuring finding, and it now says so on the page.
+      projCards.push(`
+        <div class="commentary-proj-card">
+          <div class="commentary-proj-label">HATE VENT HORIZON</div>
+          <div class="commentary-proj-val">UNAVAILABLE</div>
+          <small style="color: var(--text-dim); font-size: 9px;">${escapeHtml(proj.hateVent.reason)}</small>
+        </div>
+      `);
     }
 
     if (proj.rebuildClock && proj.rebuildClock.available) {
+      // A SUB-1 RATE IS READ THE OTHER WAY UP.
+      //
+      // This card printed `~1 hulls/mo` for a computed 0.25 while the model
+      // carried a `Math.max(1, Math.round(...))` floor. The floor is gone, so
+      // the value arriving here is now the real rate -- and below one hull a
+      // month the useful sentence is the reciprocal: "one every 120 days" is
+      // actionable where "0.25 hulls/mo" invites a reader to round it back up.
+      //
+      // The "~" is dropped once the rate is stated exactly. A measured 0 (a
+      // queue that was read and is empty) is a reading and prints as 0.
+      const clock = proj.rebuildClock;
+      const rate = Number(clock.monthlyThroughputEst);
+      const days = Number(clock.daysPerHullEst);
+      const subMonthly = Number.isFinite(rate) && rate > 0 && rate < 1 && Number.isFinite(days);
+      const headline = subMonthly
+        ? `1 per ${days} days`
+        : `${Number.isFinite(rate) ? rate : 'UNAVAILABLE'} hulls/mo`;
+      const detail = subMonthly
+        ? `${rate} hulls/mo — under one a month`
+        : (Number.isFinite(days) ? `1 per ${days} days` : 'nothing queued');
+      // "active yards" was wrong: `shipyardQueues` entries are per-SHIP, so
+      // this is the number of hulls in the build queue, and the rate above
+      // assumes they build in parallel.
       projCards.push(`
         <div class="commentary-proj-card">
           <div class="commentary-proj-label">PRODUCTION THROUGHPUT</div>
-          <div class="commentary-proj-val">~${escapeHtml(String(proj.rebuildClock.monthlyThroughputEst))} hulls/mo</div>
-          <small style="color: var(--text-dim); font-size: 9px;">${escapeHtml(proj.rebuildClock.targetHull)} (${escapeHtml(String(proj.rebuildClock.activeShipyardQueues))} active yards)</small>
+          <div class="commentary-proj-val">${escapeHtml(headline)}</div>
+          <small style="color: var(--text-dim); font-size: 9px;">${escapeHtml(clock.targetHull)} — ${escapeHtml(detail)} (${escapeHtml(String(clock.activeShipyardQueues))} ship(s) queued, assumed parallel)</small>
+        </div>
+      `);
+    } else if (proj.rebuildClock && proj.rebuildClock.reason) {
+      // A projection that could not be run says why, rather than the card
+      // simply not appearing beside a card that did run.
+      projCards.push(`
+        <div class="commentary-proj-card">
+          <div class="commentary-proj-label">PRODUCTION THROUGHPUT</div>
+          <div class="commentary-proj-val">UNAVAILABLE</div>
+          <small style="color: var(--text-dim); font-size: 9px;">${escapeHtml(proj.rebuildClock.reason)}</small>
         </div>
       `);
     }

@@ -666,6 +666,7 @@ test('the rebuild clock refuses rather than reporting a 60-day hull or two inven
     .projections.rebuildClock;
   assert.strictEqual(noQueue.available, false);
   assert.strictEqual(noQueue.activeShipyardQueues, null, 'an unread queue is not a queue of zero');
+  assert.strictEqual(noQueue.daysPerHullEst, null, 'and no per-hull time is derived from it either');
   assert.match(noQueue.reason, /no readable shipyard queue/);
 
   // An EMPTY queue is a measurement, and its throughput is a measured zero.
@@ -675,12 +676,177 @@ test('the rebuild clock refuses rather than reporting a 60-day hull or two inven
   assert.strictEqual(emptyQueue.activeShipyardQueues, 0);
   assert.strictEqual(emptyQueue.monthlyThroughputEst, 0,
     'nothing queued produces nothing, which is not the same as two yards producing one hull a month');
+  assert.strictEqual(emptyQueue.daysPerHullEst, null,
+    'nothing is being built, so there is no per-hull time — and 0 days would read as instant delivery');
+});
 
-  // And the measured path is arithmetically unchanged: 30 / (120 / 2) = 0.5,
-  // floored at 1 by the long-standing `Math.max(1, ...)`.
-  const measured = runMonteCarloSimulation(ratedFacts()).projections.rebuildClock;
-  assert.strictEqual(measured.available, true);
-  assert.strictEqual(measured.baseConstructionDays, 120);
-  assert.strictEqual(measured.activeShipyardQueues, 2);
-  assert.strictEqual(measured.monthlyThroughputEst, 1);
+// ---------------------------------------------------------------------------
+// A THROUGHPUT FLOOR IS NOT A THROUGHPUT MEASUREMENT
+//
+// `monthlyThroughputEst` was `Math.max(1, Math.round(30 / (days / queued)))`.
+// Both halves destroyed the answer at the low end: `Math.round` takes every
+// rate under 0.5 to 0, and `Math.max(1, ...)` replaces that 0 with a 1. So a
+// hull the observer can finish once every four months was published to the
+// dashboard as "~1 hulls/mo" -- a number the model never produced, with
+// nothing on the surface marking it as a floor.
+//
+// The sub-1 answer is the important one rather than an edge case to smooth
+// away: "you cannot replace this hull inside a month" and "you replace one a
+// month" lead to opposite decisions about accepting an engagement.
+//
+// EXPECTED VALUES CAPTURED BEFORE THE CHANGE, from the arithmetic rather than
+// from the new output: 30 / (120 / 2) is 0.5 and 30 / (120 / 1) is 0.25, and
+// the old code printed 1 for both.
+// ---------------------------------------------------------------------------
+test('the rebuild clock reports the rate it computed, with no floor and no rounding to whole hulls', () => {
+  const clockFor = (queued, hullDays = 120) => runMonteCarloSimulation(ratedFacts({
+    ownQueuedShips: new Array(queued).fill({ factionId: 4712 }),
+    shipHullStats: { Monitor: { baseConstructionTimeDays: hullDays } }
+  })).projections.rebuildClock;
+
+  // The two cases the floor used to swallow. Both previously printed 1.
+  const two = clockFor(2);
+  assert.strictEqual(two.available, true);
+  assert.strictEqual(two.baseConstructionDays, 120);
+  assert.strictEqual(two.activeShipyardQueues, 2);
+  assert.strictEqual(two.monthlyThroughputEst, 0.5, '30 / (120 / 2) is 0.5, and 0.5 is the answer');
+  assert.strictEqual(two.daysPerHullEst, 60, 'the same measurement read the way a sub-1 rate is usable');
+
+  const one = clockFor(1);
+  assert.strictEqual(one.monthlyThroughputEst, 0.25, 'a quarter of a hull a month is not one hull a month');
+  assert.strictEqual(one.daysPerHullEst, 120);
+
+  // Above 1 the rounding mattered too: 30 / (120 / 5) is 1.25 and printed 1.
+  // This is the LIVE SAVE's state (ExitSave.gz, 1/1/2035, both modes).
+  assert.strictEqual(clockFor(5).monthlyThroughputEst, 1.25);
+  assert.strictEqual(clockFor(5).daysPerHullEst, 24);
+
+  // THREE SIGNIFICANT FIGURES, not two decimal places. A 4,000-day capital
+  // hull with one in the queue runs at 0.0075/mo; `round(x, 2)` would print
+  // that as 0 -- a confident measured zero standing in for "one every eleven
+  // years", which is the same defect in a second costume.
+  const glacial = clockFor(1, 4000);
+  assert.strictEqual(glacial.monthlyThroughputEst, 0.0075);
+  assert.strictEqual(glacial.daysPerHullEst, 4000);
+  assert.notStrictEqual(glacial.monthlyThroughputEst, 0,
+    'an extremely slow yard is not a stopped yard');
+
+  // And the floor is gone in the direction that matters: nothing here reports
+  // a rate of exactly 1 that the arithmetic did not produce.
+  for (const queued of [1, 2, 3, 5]) {
+    const clock = clockFor(queued);
+    assert.strictEqual(clock.monthlyThroughputEst, Number((30 / (120 / queued)).toPrecision(3)),
+      `queue of ${queued}: the published rate must equal the computed rate`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// AN ABSENT SHIPYARD QUEUE IS NOT AN EMPTY ONE
+//
+// `facts.js` flattened a missing `snapshot.shipyardQueues` to `[]`, so the
+// refusal `simulation.js` added at its own boundary (`queuedCount === null`)
+// could never fire: nothing upstream could produce a null. A snapshot nobody
+// had read the queues from was reported as a faction building nothing, under
+// `available: true`, with a measured-looking throughput of 0.
+// ---------------------------------------------------------------------------
+test('an absent shipyard queue reaches the simulation as null, and an empty one as a measured zero', () => {
+  const baseSnapshot = {
+    mode: 'player',
+    observerFactionId: 4712,
+    shipHullStats: { Monitor: { constructionTier: 2, baseConstructionTimeDays: 120 } },
+    shipDesigns: [{ factionId: 4712, hullName: 'Monitor', displayName: 'Cimarron', _unnormalizedCombatValue: 19783 }],
+    fleets: [{ factionId: 4717, factionName: 'the Aliens', shipsCount: 4, armorMedian: 14 }]
+  };
+
+  // Absent entirely.
+  assert.strictEqual(extractFacts({ snapshot: baseSnapshot }).ownQueuedShips, null,
+    'a snapshot with no shipyardQueues field has an UNREAD queue, not an empty one');
+  // Present but not an array is equally unreadable.
+  assert.strictEqual(extractFacts({ snapshot: { ...baseSnapshot, shipyardQueues: null } }).ownQueuedShips, null);
+  assert.strictEqual(extractFacts({ snapshot: { ...baseSnapshot, shipyardQueues: 'n/a' } }).ownQueuedShips, null);
+
+  // Present and empty is a reading, and stays one.
+  assert.deepStrictEqual(extractFacts({ snapshot: { ...baseSnapshot, shipyardQueues: [] } }).ownQueuedShips, [],
+    'an empty array was READ, and "this faction is building nothing" is a real finding');
+  // Present with entries filters to the observer's own, as before.
+  assert.strictEqual(extractFacts({
+    snapshot: {
+      ...baseSnapshot,
+      shipyardQueues: [{ factionId: 4712 }, { factionID: 4712 }, { factionId: 4717 }]
+    }
+  }).ownQueuedShips.length, 2);
+
+  // It must NOT reach around the intelligence filter to the raw save: shipyard
+  // queues are filtered intelligence, unlike the static hull/design reference
+  // data above them.
+  assert.strictEqual(
+    extractFacts({ snapshot: baseSnapshot, rawSnapshot: { shipyardQueues: [{ factionId: 4712 }] } }).ownQueuedShips,
+    null,
+    'unreadable through the filter stays unreadable'
+  );
+
+  // End to end: the refusal that could never fire now fires.
+  const unread = generateStrategicCommentary({ snapshot: baseSnapshot, snapshotId: 'absent-queue-seed' })
+    .simulation.projections.rebuildClock;
+  assert.strictEqual(unread.available, false, 'a queue nobody read is not a queue of zero ships');
+  assert.strictEqual(unread.activeShipyardQueues, null);
+  assert.strictEqual(unread.monthlyThroughputEst, null);
+  assert.match(unread.reason, /no readable shipyard queue/);
+  assert.match(unread.reason, /not a report of zero throughput/);
+
+  const read = generateStrategicCommentary({
+    snapshot: { ...baseSnapshot, shipyardQueues: [] },
+    snapshotId: 'absent-queue-seed'
+  }).simulation.projections.rebuildClock;
+  assert.strictEqual(read.available, true, 'and reading an empty queue still succeeds');
+  assert.strictEqual(read.monthlyThroughputEst, 0);
+});
+
+// ---------------------------------------------------------------------------
+// FOUR REASONS FOR NO HATE-VENT HORIZON, AND THEY ARE NOT THE SAME REASON
+//
+// The projection was `null` behind one four-clause `if`, so every reason
+// arrived at the consumer identically. One of the four is player mode's
+// redaction of `actualAlienHate` -- under which the first clause can never
+// pass, so player mode could not produce a horizon under ANY campaign state
+// and said so with the same silence it uses for "hostility is below the
+// floor". An unmeasurable input reported as a reassuring finding is the shape
+// of the Total War veto defect in CLAUDE.md.
+// ---------------------------------------------------------------------------
+test('the hate vent horizon tells its four unavailable states apart, and never reports redaction as calm', () => {
+  const vent = (overrides) => runMonteCarloSimulation(ratedFacts(overrides)).projections.hateVent;
+
+  // 1. Redacted hate. This is the ONLY branch player mode can reach.
+  const redacted = vent({ actualAlienHate: null, hateVentRatePerDay: -0.4 });
+  assert.strictEqual(redacted.available, false);
+  assert.strictEqual(redacted.projectedDaysLow, null, 'absent stays null: not a horizon of zero days');
+  assert.match(redacted.reason, /redacted outright/);
+  assert.match(redacted.reason, /NOT a report that hostility is stable/);
+
+  // 2. Hate is readable but the TREND is not.
+  const noTrend = vent({ actualAlienHate: 168, hateVentRatePerDay: null });
+  assert.strictEqual(noTrend.available, false);
+  assert.match(noTrend.reason, /no hate trend could be measured/);
+  assert.match(noTrend.reason, /NOT a report that hostility is flat/);
+
+  // 3. Hate is RISING. A measured finding, and the opposite of the above.
+  const rising = vent({ actualAlienHate: 168, hateVentRatePerDay: 0.4 });
+  assert.strictEqual(rising.available, false);
+  assert.match(rising.reason, /not venting/);
+
+  // 4. Already below the threshold. Also a measured finding.
+  const belowFloor = vent({ actualAlienHate: 42.86, hateVentRatePerDay: -0.4 });
+  assert.strictEqual(belowFloor.available, false);
+  assert.match(belowFloor.reason, /at or below the 50 war threshold/);
+  assert.match(belowFloor.reason, /MEASURED state/);
+
+  // All four are distinguishable from each other, which the single `null` was not.
+  const reasons = [redacted.reason, noTrend.reason, rising.reason, belowFloor.reason];
+  assert.strictEqual(new Set(reasons).size, 4, 'four states, four reasons');
+
+  // And the available path still produces a band, unchanged.
+  const venting = vent({ actualAlienHate: 168, hateVentRatePerDay: -0.4 });
+  assert.strictEqual(venting.available, true);
+  assert.strictEqual(venting.currentHate, 168);
+  assert.match(venting.bandLabel, /^\d+–\d+ campaign days$/);
 });

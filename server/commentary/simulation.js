@@ -36,6 +36,7 @@
 
 const { samplePercentile } = require('./prng');
 const { toFiniteNumber, sameId } = require('../../shared/util.mjs');
+const { ALIEN_HATE_WAR_THRESHOLD } = require('../alienHateEconomics');
 const {
   BATTLE_TRIALS_PER_COUNT,
   MAX_SIMULATED_HULLS,
@@ -47,6 +48,25 @@ const {
   guaranteedWinHullCount,
   simulateEngagement
 } = require('../../shared/engagementModel.mjs');
+
+/**
+ * A rate to three SIGNIFICANT figures, never to a fixed number of decimals.
+ *
+ * `round(value, 2)` would print a throughput of 0.004 hulls/mo as `0` -- a
+ * confident measured zero standing in for "one hull every twenty years", which
+ * is the `Number(null) === 0` failure in a second costume. The catalogue of
+ * hull build times runs from tens of days to thousands, so the bottom of the
+ * range is reachable. Three significant figures is the same rule and the same
+ * reasoning as `accelOr` in shared/markdownExports.mjs.
+ *
+ * A measured 0 stays 0: it is a reading (nothing queued produces nothing), and
+ * it is deliberately not what an unreadable input renders as.
+ */
+function toSignificant(value, digits = 3) {
+  if (!Number.isFinite(value)) return null;
+  if (value === 0) return 0;
+  return Number(value.toPrecision(digits));
+}
 
 /**
  * Builds opponent tiers from observable fleet metrics (Player Mode).
@@ -347,9 +367,67 @@ function runMonteCarloSimulation(facts) {
   }
 
   // 4. Hate Vent Projection
-  let hateVentProjection = null;
-  if (actualAlienHate !== null && actualAlienHate > 50 && hateVentRatePerDay !== null && hateVentRatePerDay < 0) {
-    const daysToClear = (actualAlienHate - 50) / Math.abs(hateVentRatePerDay);
+  //
+  // FOUR REASONS FOR NO PROJECTION, AND THEY ARE NOT THE SAME REASON.
+  //
+  // Until 2026-08-22 this was `let hateVentProjection = null` behind a single
+  // four-clause `if`, so every one of the reasons below arrived at the consumer
+  // as the same bare `null`. The dashboard renders a projection card only when
+  // `hateVent.available` is true, so all four read on the page as the absence
+  // of a hate-venting story -- and one of them is not a story about hate at
+  // all.
+  //
+  // THE PLAYER-MODE ONE IS THE DANGEROUS ONE. `campaignPosture.actualAlienHate`
+  // is null in player mode by redaction (measured on the live save 2026-08-22:
+  // 42.86 omniscient, null player), so the first clause can NEVER pass there.
+  // Player mode therefore could not produce a vent horizon under any campaign
+  // state whatsoever, and said so with the same silence it uses for "hostility
+  // is below the floor" -- an unmeasurable input reported as a reassuring
+  // finding. That is the exact shape of the Total War veto defect in CLAUDE.md.
+  //
+  // The threshold is `ALIEN_HATE_WAR_THRESHOLD` rather than a literal 50. Both
+  // literals were already that constant's value, so nothing moves.
+  let hateVentProjection;
+  const ventBase = {
+    available: false,
+    currentHate: actualAlienHate,
+    ventRatePerDay: hateVentRatePerDay,
+    projectedDaysLow: null,
+    projectedDaysHigh: null,
+    bandLabel: null,
+    simulated: true
+  };
+  if (actualAlienHate === null) {
+    hateVentProjection = {
+      ...ventBase,
+      reason: 'the true alien hate value is not in this intelligence picture, so no venting horizon can be '
+        + 'projected. In player mode it is redacted outright, which means this branch is the ONLY outcome '
+        + `player mode can reach. This is NOT a report that hostility is stable or below ${ALIEN_HATE_WAR_THRESHOLD}.`
+    };
+  } else if (hateVentRatePerDay === null) {
+    hateVentProjection = {
+      ...ventBase,
+      reason: 'no hate trend could be measured: the comparison against a previous save produced neither a '
+        + 'hate delta nor an elapsed-day count, so the venting RATE is unknown. This is NOT a report that '
+        + 'hostility is flat.'
+    };
+  } else if (hateVentRatePerDay >= 0) {
+    hateVentProjection = {
+      ...ventBase,
+      // The sign is always non-negative in this branch, so it is written as a
+      // literal rather than as a ternary that can only take one arm.
+      reason: `hostility is not venting: the measured trend is +${hateVentRatePerDay} hate/day. A horizon to `
+        + `${ALIEN_HATE_WAR_THRESHOLD} is only projected while the trend is downward.`
+    };
+  } else if (actualAlienHate <= ALIEN_HATE_WAR_THRESHOLD) {
+    hateVentProjection = {
+      ...ventBase,
+      reason: `hostility is already at or below the ${ALIEN_HATE_WAR_THRESHOLD} war threshold this horizon `
+        + `measures down to (currently ${actualAlienHate}), so there is nothing to project. This is a MEASURED `
+        + 'state, not an unreadable one.'
+    };
+  } else {
+    const daysToClear = (actualAlienHate - ALIEN_HATE_WAR_THRESHOLD) / Math.abs(hateVentRatePerDay);
     const lowDays = Math.max(1, Math.round(daysToClear * 0.85));
     const highDays = Math.max(lowDays + 1, Math.round(daysToClear * 1.15));
     hateVentProjection = {
@@ -395,21 +473,48 @@ function runMonteCarloSimulation(facts) {
       baseConstructionDays: baseBuildDays,
       activeShipyardQueues: queuedCount,
       monthlyThroughputEst: null,
+      daysPerHullEst: null,
       simulated: true
     };
   } else {
+    // NO THROUGHPUT FLOOR, since 2026-08-22.
+    //
+    // This read `Math.max(1, Math.round(30 / (baseBuildDays / queuedCount)))`,
+    // and both operations destroyed the answer at the low end. `Math.round`
+    // takes every rate under 0.5 to 0, and `Math.max(1, ...)` then replaces
+    // that 0 with a 1 -- so a hull the observer can build once every four
+    // months was published as "~1 hulls/mo", a number the model never
+    // produced, presented with no mark saying it was a floor.
+    //
+    // The sub-1 answer is the IMPORTANT one, not an edge case to be smoothed
+    // away: "you cannot replace this hull inside a month" and "you replace one
+    // a month" lead to opposite decisions about whether to accept an
+    // engagement. On the live save (ExitSave.gz, 1/1/2035) the true rate is
+    // 1.25 hulls/mo in both modes and the old code printed 1; at the far more
+    // common single-queued-hull state the true rate is 0.25 and the old code
+    // printed the same 1.
+    //
+    // `daysPerHullEst` is the same measurement read the way a sub-1 rate is
+    // actually usable -- 0.25 hulls/mo is one Monitor every 120 days.
+    //
+    // WHAT THE FIGURE ASSUMES, AND WHY THE EXPORT SAYS SO. `queuedCount` is a
+    // count of QUEUED SHIPS, not of shipyards (`shipyardQueues` entries are
+    // per-ship; war-room section 5 heads the same array "N ship(s) building").
+    // Dividing the build time by it therefore assumes those hulls build in
+    // PARALLEL. Five ships queued at one yard build serially and the true rate
+    // would be 0.25, not 1.25. That assumption predates this change and is left
+    // in place rather than silently re-modelled, but it is no longer unstated:
+    // section 11 of /latest-war-room.md prints it beside the rate.
+    const daysPerHull = queuedCount === 0 ? null : baseBuildDays / queuedCount;
     rebuildProjection = {
       available: true,
       targetHull: ownBestHullName,
       baseConstructionDays: baseBuildDays,
       activeShipyardQueues: queuedCount,
-      // Unchanged arithmetic for every queue of one or more, so no figure this
-      // has ever printed moves. An empty queue is a measured zero rate rather
-      // than the `Math.max(1, ...)` floor, which would report one hull a month
-      // out of a yard that is building nothing.
-      monthlyThroughputEst: queuedCount === 0
-        ? 0
-        : Math.max(1, Math.round(30 / (baseBuildDays / queuedCount))),
+      // An empty queue is a MEASURED zero rate. It is the one zero here that is
+      // a reading, and it is why the floor had to go rather than be lowered.
+      monthlyThroughputEst: queuedCount === 0 ? 0 : toSignificant(30 / daysPerHull),
+      daysPerHullEst: toSignificant(daysPerHull),
       simulated: true
     };
   }
