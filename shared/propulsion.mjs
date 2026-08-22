@@ -511,6 +511,59 @@ export function shipPropulsion({ ship, design, driveStats = {}, propellantModule
 }
 
 /**
+ * The constant-dry-mass caveat, in three states rather than two.
+ *
+ * `0 t` IS A MEASUREMENT HERE, and the wording now says so. The caveat used to
+ * read "this drive's fixed mass is 78 t against the fitted drive's 0 t", and a
+ * reader had no way to tell a measured zero from a null coerced to one -- which
+ * is the defect class this repo keeps re-finding. Measured 2026-08-22 against
+ * `TIDriveTemplate.json`: **all 541 drives carry `flatMass_tons` explicitly**,
+ * 487 of them at a genuine 0 and 54 non-zero, so every zero the caveat has ever
+ * printed was real. `stat()` in `server/snapshot/templates.js` already maps an
+ * absent field to null rather than 0, so the coercion was never possible from
+ * the shipped templates -- but nothing on the surface said that, and a snapshot
+ * published before `flatMass_tons` was baked would carry the field as absent.
+ *
+ * THE THIRD STATE IS THE ACTUAL BUG. The old expression was
+ * `fitted !== null && candidate !== null && fitted !== candidate ? caveat : null`,
+ * so when EITHER side was unreadable the row carried no caveat at all -- and no
+ * caveat reads as "dry mass is unaffected", which is a check that could not be
+ * evaluated falling through to the reassuring answer. It now says the
+ * comparison could not be made, per the rule that unknown is never safe.
+ *
+ * @param {number|null} fittedFlatMassTons     Fixed mass of the drive now fitted.
+ * @param {number|null} candidateFlatMassTons  Fixed mass of the drive being rated.
+ * @returns {string|null} null ONLY when both are measured and equal.
+ */
+function describeDryMassChange(fittedFlatMassTons, candidateFlatMassTons) {
+  const fittedKnown = fittedFlatMassTons !== null;
+  const candidateKnown = candidateFlatMassTons !== null;
+
+  if (!fittedKnown || !candidateKnown) {
+    const unreadable = !fittedKnown && !candidateKnown
+      ? 'neither this drive\'s fixed mass nor the fitted drive\'s is readable in this snapshot'
+      : (!candidateKnown
+        ? `the fitted drive's fixed mass reads ${fittedFlatMassTons} t but this drive's is not readable in this snapshot`
+        : `this drive's fixed mass reads ${candidateFlatMassTons} t but the fitted drive's is not readable in this snapshot`);
+    return `constant-dry-mass refit: ${unreadable}, so whether the swap changes the ship's dry mass is UNKNOWN`
+      + ' and the figures below may understate or overstate by an unmeasured amount';
+  }
+
+  if (fittedFlatMassTons === candidateFlatMassTons) return null;
+
+  // Both measured. The parenthetical is added ONLY when one side is zero,
+  // because that is the only reading a caveat of this shape could ever be
+  // mistaken for an absence -- and the sentence stays exactly as it was
+  // everywhere else.
+  const zeroNote = (fittedFlatMassTons === 0 || candidateFlatMassTons === 0)
+    ? ' (both read from the drive templates; a 0 t here is a measurement, not an absent field)'
+    : '';
+  return `constant-dry-mass refit: this drive's fixed mass is ${candidateFlatMassTons} t against the fitted `
+    + `drive's ${fittedFlatMassTons} t${zeroNote}, so the figures below do not account for the `
+    + `${round(candidateFlatMassTons - fittedFlatMassTons, 2)} t difference`;
+}
+
+/**
  * Rated performance for a candidate drive fitted to an existing hull.
  *
  * The refit holds the ship's dry mass and tank capacity constant and swaps only
@@ -519,8 +572,8 @@ export function shipPropulsion({ ship, design, driveStats = {}, propellantModule
  * built -- it reproduces the measured figures for the drive they DO fly.
  *
  * Two caveats travel with every row rather than being buried:
- *   - `dryMassCaveat` when the candidate's fixed drive mass differs from the
- *     fitted drive's, since constant dry mass then understates or overstates.
+ *   - `dryMassCaveat` (see `describeDryMassChange`), which is null ONLY when
+ *     both fixed masses are measured and equal -- never when one is unreadable.
  *   - the EV multiplier is recomputed for the candidate, so a hydrogen-tankage
  *     module that boosts the current drive contributes nothing to a candidate
  *     that burns something else.
@@ -554,9 +607,7 @@ export function refitOntoDrive({ baseline, design, candidateDriveId, candidateDr
   const ev = effectiveExhaustVelocity(candidateDrive, design, propellantModules);
   const fittedFlatMass = toFinite(baseline?.drive?.flatMassTons);
   const candidateFlatMass = toFinite(candidateDrive.flatMass_tons);
-  const dryMassCaveat = (fittedFlatMass !== null && candidateFlatMass !== null && fittedFlatMass !== candidateFlatMass)
-    ? `constant-dry-mass refit: this drive's fixed mass is ${candidateFlatMass} t against the fitted drive's ${fittedFlatMass} t, so the figures below do not account for the ${round(candidateFlatMass - fittedFlatMass, 2)} t difference`
-    : null;
+  const dryMassCaveat = describeDryMassChange(fittedFlatMass, candidateFlatMass);
 
   return {
     ...row,

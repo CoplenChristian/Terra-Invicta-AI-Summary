@@ -368,6 +368,55 @@ test('a refit that loses the hydrogen EV multiplier reports the module as inappl
   assert.match(refit.inapplicableEvModules[0].reason, /hydrogen/i);
 });
 
+test('the constant-dry-mass caveat separates a measured 0 t from an unreadable one', () => {
+  // The §9 caveat reads "this drive's fixed mass is 78 t against the fitted
+  // drive's 0 t", and a 0 t there is either a reading or a null coerced to one.
+  // MEASURED 2026-08-22 against TIDriveTemplate.json: all 541 drives carry
+  // `flatMass_tons` explicitly, 487 of them at a genuine 0 -- so every zero the
+  // caveat has printed was real. What was NOT safe was the third state.
+  const row = observerRows[0];
+  const design = SAMPLE.designs[row.ship.hullName];
+  const baseline = propulsionFor(row);
+  const heavy = { ...SAMPLE.driveStats[design.driveName], flatMass_tons: 78 };
+  const refitWith = (fittedFlatMassTons, candidateDrive) => refitOntoDrive({
+    baseline: { ...baseline, drive: { ...baseline.drive, flatMassTons: fittedFlatMassTons } },
+    design,
+    candidateDriveId: design.driveName,
+    candidateDrive,
+    propellantModules: SAMPLE.propellantModules
+  });
+
+  // 1. Both measured and different, one of them zero: the caveat fires AND says
+  //    the zero is a reading.
+  const measuredZero = refitWith(0, heavy);
+  assert.equal(measuredZero.computable, true);
+  assert.match(measuredZero.dryMassCaveat, /fixed mass is 78 t against the fitted drive's 0 t/);
+  assert.match(measuredZero.dryMassCaveat, /a 0 t here is a measurement, not an absent field/);
+  assert.match(measuredZero.dryMassCaveat, /78 t difference/);
+
+  // 2. Both measured and equal: still no caveat. The fix must not turn the
+  //    caveat into noise that fires on every row.
+  assert.equal(refitWith(78, heavy).dryMassCaveat, null);
+  assert.equal(refitWith(0, { ...heavy, flatMass_tons: 0 }).dryMassCaveat, null);
+
+  // 3. THE ACTUAL DEFECT. When either side is unreadable the old expression
+  //    produced no caveat at all, and no caveat reads as "dry mass is
+  //    unaffected" -- a check that could not be evaluated falling through to the
+  //    reassuring answer. Each direction must say UNKNOWN instead.
+  const fittedUnknown = refitWith(null, heavy);
+  assert.equal(fittedUnknown.computable, true, 'the refit is still computable; only the caveat is unknown');
+  assert.match(fittedUnknown.dryMassCaveat, /UNKNOWN/);
+  assert.match(fittedUnknown.dryMassCaveat, /the fitted drive's is not readable/);
+
+  const candidateUnknown = refitWith(0, { ...heavy, flatMass_tons: null });
+  assert.match(candidateUnknown.dryMassCaveat, /UNKNOWN/);
+  assert.match(candidateUnknown.dryMassCaveat, /this drive's is not readable/);
+
+  const neitherKnown = refitWith(null, { ...heavy, flatMass_tons: undefined });
+  assert.match(neitherKnown.dryMassCaveat, /UNKNOWN/);
+  assert.match(neitherKnown.dryMassCaveat, /neither this drive's fixed mass nor the fitted drive's/);
+});
+
 test('a refit against an unmeasurable baseline is reported as uncomputable, not as zero', () => {
   const row = observerRows[0];
   const design = SAMPLE.designs[row.ship.hullName];

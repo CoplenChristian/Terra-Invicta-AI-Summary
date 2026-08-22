@@ -725,38 +725,15 @@ const missionControlPath = path.join(repoRoot, 'public', 'v2', 'js', 'mission-co
 
 const fleetComponentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'fleet-procurement.js');
 
-// The REAL escapeHtml, copied from public/v2/js/mission-control.js.
-//
-// The sandbox used to leave `window.MissionControlShared` undefined, so the
-// component fell back to its own `value => String(value ?? '')` -- which does
-// not escape. That made the harness diverge from the browser in a way that
-// mattered exactly once the panel printed a value containing `<`: the panel
-// renders "<1 mo" for a duration under a month, the unescaped `<` opened what
-// `visibleText` then read as a tag, and `<1 mo</div>` was stripped whole. The
-// row's duration silently vanished from "what a reader sees" and the next
-// row's text closed the gap, so the assertion failed on a defect that exists
-// only in the test. No fixture had ever carried a sub-month figure before the
-// allocation-priced chain durations.
-function testEscapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+// The REAL escapeHtml and the entity-decoding `visibleText` now live in
+// `tests/fixtures/renderHarness.js`, which executes the shipped
+// `public/v2/js/shared.js` rather than copying it. Both defects the local
+// copies here carried -- a sandbox whose escapeHtml did not escape, and a
+// visibleText that did not decode -- are documented at the top of that file.
+const { visibleText, runComponent } = require('./fixtures/renderHarness');
 
 function loadComponent() {
-  const source = fs.readFileSync(componentPath, 'utf8');
-  const sandbox = {
-    window: { MissionControlShared: { escapeHtml: testEscapeHtml } },
-    console,
-    fetch: () => Promise.resolve(null)
-  };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: componentPath });
-  return sandbox.window.MissionControlResearchAdvisor;
+  return runComponent(componentPath).window.MissionControlResearchAdvisor;
 }
 
 function renderToString(payload) {
@@ -766,13 +743,12 @@ function renderToString(payload) {
   return root.innerHTML;
 }
 
+// This sandbox was still `{ window: {} }` after its sibling above was repaired,
+// so the fleet panel was rendering through the non-escaping fallback while the
+// research panel rendered through the real escaper. Half-fixed is its own trap:
+// two harnesses in one file that disagree about what the browser does.
 function loadFleetComponent() {
-  const source = fs.readFileSync(fleetComponentPath, 'utf8');
-  const sandbox = { window: {}, console, fetch: () => Promise.resolve(null) };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: fleetComponentPath });
-  return sandbox.window.MissionControlFleetProcurement;
+  return runComponent(fleetComponentPath).window.MissionControlFleetProcurement;
 }
 
 function renderFleetToString(payload) {
@@ -780,28 +756,6 @@ function renderFleetToString(payload) {
   const root = { innerHTML: '', querySelector: () => null };
   component.render(root, payload);
   return root.innerHTML;
-}
-
-// What a reader actually sees. Tags are stripped whole, so a `title` attribute
-// can never mask a null that reached the visible copy -- and equally, prose
-// deliberately parked in a tooltip is not counted against the panel.
-//
-// ENTITIES ARE DECODED, added 2026-08-22. The panel prints "<1 mo" for a
-// duration under a month, which `escapeHtml` writes as `&lt;1 mo`; a browser
-// shows "<1 mo" and this helper claimed the reader saw "&lt;1 mo". No
-// assertion had tripped over it because no figure in the fixtures had ever
-// been under a month -- the allocation-priced chain durations are the first.
-// Decoding is what makes "what a reader actually sees" true.
-function visibleText(html) {
-  return html
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 const FORBIDDEN = ['null', 'undefined', 'NaN', '[object Object]'];
@@ -814,6 +768,111 @@ function assertNoPlaceholderText(html, label) {
       `${label}: rendered text contains "${token}" near: ${text.slice(Math.max(0, index - 60), index + 60)}`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// THE HARNESS ITSELF
+//
+// Every assertion below this line reads the panel through `visibleText`, so a
+// harness that lies about what a reader sees weakens all of them at once. This
+// test pins both halves against the case that exposed them -- a chain duration
+// under a month, which the panel prints as "<1 mo" -- and, in its last third,
+// reproduces the OLD harness to show what it silently dropped. Without that
+// third part the test would pass just as happily on the broken version.
+// ---------------------------------------------------------------------------
+
+const { escapeHtml } = require('./fixtures/renderHarness');
+
+/** A promoted chain whose whole-chain duration is under one month. */
+const subMonthChainPayload = () => ({
+  success: true,
+  sources: {
+    propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true }
+  },
+  research: { monthlyResearchIncome: 4000 },
+  ordering: { deficitApplied: false },
+  deficit: { applied: false, capability: { canContest: 'unknown' } },
+  military: {
+    rankedCount: 1,
+    candidatesConsidered: 1,
+    unrankable: { counts: {}, reasons: [] },
+    groups: [{
+      state: 'researchable-now',
+      label: 'Researchable now',
+      actionable: true,
+      count: 1,
+      items: [{
+        id: 'chain-row',
+        displayName: 'Destination Hull',
+        axisLabel: 'combat acceleration',
+        improvementMultiple: 2,
+        valuePerResearchPoint: 0.001,
+        remainingResearchCost: 900,
+        monthsAtCurrentIncome: 0.2,
+        clearsFloor: true,
+        availabilityState: 'researchable-now',
+        chainPromoted: true,
+        chain: {
+          stepsCount: 2,
+          totalRemainingCost: 900,
+          monthsAtFullConcentration: 0.22,
+          destinationDisplayName: 'Destination Hull',
+          immediateNextStep: { displayName: 'First Step', cost: 400 }
+        }
+      }]
+    }]
+  },
+  economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {}, reasons: [] }, units: [] }
+});
+
+/**
+ * The panel rendered through the sandbox this file used to build: no
+ * `MissionControlShared`, so the component falls back to its own
+ * `value => String(value ?? '')`, which does not escape.
+ */
+function renderThroughTheOldBrokenSandbox(payload) {
+  const source = fs.readFileSync(componentPath, 'utf8');
+  const sandbox = { window: {}, console, fetch: () => Promise.resolve(null) };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(source, sandbox, { filename: componentPath });
+  const root = { innerHTML: '', querySelector: () => null };
+  sandbox.window.MissionControlResearchAdvisor.render(root, payload);
+  return root.innerHTML;
+}
+
+test('the render harness reports what a browser shows, not the markup, for a sub-month duration', () => {
+  // 1. The escaper is the shipped one and it actually escapes.
+  assert.equal(escapeHtml('<1 mo'), '&lt;1 mo');
+  assert.equal(escapeHtml('Ceres & Vesta'), 'Ceres &amp; Vesta');
+  assert.equal(escapeHtml(null), '', 'a null must not reach the page as the word "null"');
+
+  // 2. `visibleText` decodes, so the entity is reported as the character.
+  assert.equal(visibleText('<div class="ra-row">&lt;1 mo</div>'), '<1 mo');
+  assert.equal(visibleText('<span>Ceres &amp; Vesta</span>'), 'Ceres & Vesta');
+  assert.equal(visibleText('<span>&amp;lt;1 mo</span>'), '&lt;1 mo',
+    'a literal ampersand-escape decodes once, not twice');
+  assert.equal(visibleText('<span title="hidden prose">shown</span>'), 'shown',
+    'and a tooltip is still not counted as visible copy');
+
+  // 3. End to end through the real panel: the duration survives.
+  const html = renderToString(subMonthChainPayload());
+  assert.ok(html.includes('&lt;1 mo'), 'the panel escapes the "<" before it reaches the page');
+  const text = visibleText(html);
+  assert.ok(text.includes('900 pts · <1 mo'),
+    `the whole-chain cost and its sub-month duration must both be visible; got: ${text}`);
+
+  // 4. What the OLD harness did with the same payload. The unescaped "<"
+  //    opened what the tag-stripper read as a tag and `<1 mo</span>` was
+  //    removed whole, so the duration vanished from "what a reader sees" and
+  //    the next fragment closed the gap. This assertion is the proof that
+  //    parts 1-3 are testing something real rather than passing by luck.
+  const brokenText = visibleText(renderThroughTheOldBrokenSandbox(subMonthChainPayload()));
+  assert.ok(!brokenText.includes('<1 mo'),
+    'the pre-2026-08-22 sandbox is expected to LOSE the duration — if it no longer does, '
+    + 'the component stopped escaping and this whole harness argument needs revisiting');
+  assert.ok(brokenText.includes('900 pts'),
+    'and it loses only the duration, which is exactly why nobody noticed');
+});
 
 test('the panel is mounted in the COMMAND view and loaded by the shell', () => {
   const html = fs.readFileSync(v2ShellPath, 'utf8');

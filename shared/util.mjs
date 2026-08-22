@@ -22,31 +22,36 @@
 export const asArray = (value) => (Array.isArray(value) ? value : []);
 
 /**
- * Absent stays null.
+ * Absent stays null. Only a number or a non-blank numeric string counts.
  *
  * `Number(null) === 0` and `Number('') === 0`, both finite, so a bare
  * `Number.isFinite` guard turns a missing or redacted field into a confident
  * zero. That is the single most-repeated bug class in this repo's history --
  * presence is checked before coercion.
  *
- * Returns null for absent/blank/unparseable input, a finite number otherwise.
+ * `Number()` COERCION IS NOT PRESENCE, either. This used to read
+ * `Number(value)` after the three-way absence guard, which let everything else
+ * `Number()` accepts through: `[]` became a confident **0**, `[7]` became 7,
+ * `true` became 1, `false` became 0, and a whitespace-only `'  '` became 0.
+ * Every one of those is the same defect the absence guard exists to prevent,
+ * one type further out -- an array where a number was expected is an
+ * unmeasured field, not a measurement of zero.
+ *
+ * Tightened 2026-08-22, and the tightening was MEASURED to be a no-op before
+ * it was made rather than assumed: the divergent branch was instrumented to
+ * record every input for which the loose and strict rules disagree, and it
+ * fired **0 times** across the whole test suite AND across 132 captured
+ * surfaces (38 intel routes, the filtered snapshot, the briefing and all four
+ * markdown exports, in all three modes). No caller relied on the loose
+ * coercion; every caller that could reach it would have been reading a
+ * confident zero. All 132 surfaces are byte-identical after the change,
+ * against a frozen MD5-verified `ExitSave.gz` with two identical baseline
+ * runs taken first.
+ *
+ * Returns null for absent/blank/unparseable/non-numeric input, a finite number
+ * otherwise.
  */
 export const toFiniteNumber = (value) => {
-  if (value === null || value === undefined || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-/**
- * The stricter sibling: only an actual number or a non-blank numeric string
- * counts as a measurement. `toFiniteNumber` accepts anything `Number()` can
- * coerce, so `true` becomes 1 and `[]` becomes 0 -- fine when the input is
- * known to be a numeric field, wrong when it is an arbitrary snapshot value
- * that may hold a boolean or an array. `server/briefingGenerator.js` reads
- * exactly that kind of field and has always used this stricter form; it is
- * named separately rather than merged so the difference stays deliberate.
- */
-export const strictFiniteNumber = (value) => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'string' && value.trim() !== '') {
     const parsed = Number(value);
@@ -54,6 +59,23 @@ export const strictFiniteNumber = (value) => {
   }
   return null;
 };
+
+/**
+ * The name the strict rule already had, kept as an ALIAS of the same function
+ * object rather than a second implementation.
+ *
+ * These were two functions with two rules until 2026-08-22. The loose one was
+ * the hole described above; the strict one was always the correct behaviour,
+ * and five call sites (`server/briefing/format.js`, `shared/campaignElapsed.mjs`,
+ * `shared/researchCostScaling.mjs`) had each chosen it deliberately and said so
+ * in a comment. Those comments are still worth reading, so the name stays and
+ * keeps documenting the intent -- but it is now `toFiniteNumber` itself, not a
+ * copy of it, so the two can no longer drift the way `sameId` once did.
+ *
+ * `strictFiniteNumber === toFiniteNumber` is asserted in
+ * `tests/absentStaysNull.test.js`.
+ */
+export const strictFiniteNumber = toFiniteNumber;
 
 /** Round to `places` decimals, preserving null for an unmeasured input. */
 export const round = (value, places = 2) => {
