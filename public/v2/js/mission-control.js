@@ -204,6 +204,19 @@ const VIEWS = [
     ]
   },
   {
+    // "Which drive should this hull carry" is its own question and its own
+    // 541-row surface, so it gets its own view rather than being nested inside
+    // FLEET, which is already dense. Its panel is lazily loaded on first
+    // activation -- see loadLazyViewPanels -- because the drive catalogue is
+    // the largest response on the site and nothing else on the page needs it.
+    id: 'drives',
+    label: 'DRIVES',
+    sectionId: 'view-drives',
+    panels: [
+      'driveExplorer'
+    ]
+  },
+  {
     id: 'threat',
     label: 'THREAT',
     sectionId: 'view-threat',
@@ -295,7 +308,29 @@ function setActiveView(viewId, updateHash = true) {
     }
   });
 
+  loadLazyViewPanels(targetView.id);
+
   window.MissionControlDetailPanel?.syncPageInert?.();
+}
+
+/**
+ * Panels that fetch on first activation of their view rather than on load.
+ *
+ * The drive catalogue is 541 rows against one design and is the largest
+ * response the dashboard serves. Fetching it eagerly would charge every visitor
+ * for a view most of them never open, so it is loaded when the view is first
+ * shown and re-loaded when the observer or mode changes underneath it.
+ */
+const lazyViewLoadKeys = new Map();
+
+function loadLazyViewPanels(viewId) {
+  if (viewId !== 'drives') return;
+  const container = document.getElementById('driveExplorer');
+  if (!container || !window.MissionControlDriveExplorer?.load) return;
+  const key = `${state.observer}|${state.mode}`;
+  if (lazyViewLoadKeys.get('drives') === key) return;
+  lazyViewLoadKeys.set('drives', key);
+  window.MissionControlDriveExplorer.load(state.observer, state.mode, container);
 }
 
 function initViewNavigation() {
@@ -1145,6 +1180,10 @@ function renderDashboard() {
   renderResearchWatchlist();
   renderSinceLastSave();
   renderDirectivesStream();
+  // A mode or observer switch invalidates the lazily loaded panels too. The
+  // key check inside makes this a no-op unless one of them actually changed,
+  // so switching modes on COMMAND does not fetch the drive catalogue.
+  loadLazyViewPanels(state.activeView);
 }
 
 function renderTopHUD() {

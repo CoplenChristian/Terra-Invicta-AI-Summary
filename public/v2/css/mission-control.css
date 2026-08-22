@@ -7475,3 +7475,400 @@ button.council-orders__row:focus-visible {
   padding: 2px 8px;
 }
 
+/* =========================================================================
+   DRIVE EXPLORER  (public/v2/js/components/drive-explorer.js)
+
+   TWO REGISTERS, AND THE SEPARATION IS THE FEATURE.
+
+   `.de-measured` is a measurement: mono, full-contrast --text, upright.
+   `.de-estimate` is a heuristic: sans, italic, --text-dim, with a dashed rule
+   marking where the measured columns end and a literal "ESTIMATE" caption
+   above the column.
+
+   Rendering the two at the same visual weight would launder the estimate into
+   a measurement, which is the failure this whole view exists to avoid. Both
+   rule sets are asserted in tests/driveExplorer.test.js and read back off the
+   live DOM with getComputedStyle by scripts/verify_drive_explorer.js -- source
+   inspection is not evidence, because --text-muted was once defined
+   self-referentially and 164 rules silently fell back to `inherit`.
+   ========================================================================= */
+
+.de-picker {
+  margin-bottom: 10px;
+}
+
+.de-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.de-control {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.de-control--count {
+  margin-left: auto;
+  align-items: flex-end;
+}
+
+.de-control__label {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.de-select,
+.de-input {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text);
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 3px 6px;
+  min-width: 150px;
+}
+
+.de-select:focus-visible,
+.de-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.de-count {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text-soft);
+}
+
+/* --- design summary strip ------------------------------------------------ */
+
+.de-summary {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-inset);
+  padding: 8px 10px;
+}
+
+.de-summary__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.de-summary__cell {
+  min-width: 110px;
+}
+
+.de-summary__label {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.de-summary__value {
+  font-family: var(--mono);
+  font-size: var(--fs-row);
+  color: var(--text);
+}
+
+.de-summary__sub {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.de-unit {
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+/* --- the two registers --------------------------------------------------- */
+
+.de-measured {
+  font-family: var(--mono);
+  font-style: normal;
+  color: var(--text);
+}
+
+.de-measured__value {
+  font-family: var(--mono);
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.de-estimate {
+  font-family: var(--sans);
+  font-style: italic;
+  color: var(--text-dim);
+}
+
+.de-estimate__value {
+  font-family: var(--sans);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.de-estimate__text {
+  font-family: var(--sans);
+  font-style: italic;
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.de-tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  padding: 0 4px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.de-tag--measured {
+  font-style: normal;
+  color: var(--canvas);
+  background: var(--accent);
+}
+
+.de-tag--estimate {
+  font-style: italic;
+  color: var(--warning);
+  background: transparent;
+  border: 1px dashed var(--warning);
+}
+
+.de-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 8px 0 2px;
+}
+
+.de-legend__item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1 1 280px;
+}
+
+.de-legend__text {
+  font-size: var(--fs-meta);
+  line-height: 1.4;
+}
+
+/* --- table --------------------------------------------------------------- */
+
+.de-table-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  margin-top: 8px;
+  max-height: 620px;
+}
+
+.de-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.de-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-strong);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.de-th__caption {
+  display: block;
+  font-size: var(--fs-tag);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.de-th--estimate {
+  border-left: 1px dashed var(--line-strong);
+}
+
+.de-th__caption--estimate {
+  font-family: var(--sans);
+  font-style: italic;
+  letter-spacing: 0;
+  color: var(--warning);
+}
+
+.de-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.de-row--fitted {
+  background: var(--accent-soft);
+}
+
+.de-row--uncomputable .de-measured__value {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.de-cell {
+  padding: 4px 8px;
+  vertical-align: top;
+  font-size: var(--fs-metric);
+}
+
+.de-cell--number {
+  text-align: right;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+.de-cell--estimate {
+  border-left: 1px dashed var(--line-strong);
+  min-width: 170px;
+}
+
+.de-cell__sub {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.de-name {
+  font-family: var(--mono);
+  font-size: var(--fs-row);
+  color: var(--text);
+}
+
+.de-chip {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.05em;
+  padding: 0 4px;
+  border-radius: 2px;
+  border: 1px solid var(--line-strong);
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.de-chip--ok {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.de-chip--warn {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.de-chip--block {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.de-chip--unknown {
+  color: var(--text-dim);
+  border-color: var(--line-strong);
+}
+
+.de-caveat {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--warning);
+  border-bottom: 1px dotted var(--warning);
+  cursor: help;
+}
+
+.de-caveat--muted {
+  color: var(--text-dim);
+  border-bottom-color: var(--text-dim);
+}
+
+.de-caveat--fitted {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* --- footer -------------------------------------------------------------- */
+
+.de-destination-table {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 3px;
+  background: var(--surface-inset);
+}
+
+.de-destination-table__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.de-destination-table__rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.de-destination {
+  font-family: var(--sans);
+  font-style: italic;
+  font-size: var(--fs-meta);
+  color: var(--text-soft);
+}
+
+.de-destination__dv {
+  color: var(--text-dim);
+}
+
+.de-notice {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: var(--fs-meta);
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.de-notice--warn {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.de-unresolved {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.de-reconcile {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+

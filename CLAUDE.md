@@ -277,6 +277,7 @@ parameters.
 /api/intel/alien-threat?observer=4712&mode=omniscient
 /api/intel/delta?observer=4712&mode=omniscient
 /api/intel/mobility?observer=4712&fleet=<fleetId>
+/api/intel/drive-explorer?observer=4712&mode=omniscient&design=<designId>&sort=delta-v&status=fittable&limit=25
 /api/intel/production-plan?observer=4712&mode=omniscient&design=playerShipTemplate584&quantity=4 (or POST)
 /api/intel/body-status?body=Mars&observer=4712&mode=omniscient
 ```
@@ -306,6 +307,15 @@ selected mode (`player` = only legitimately known; `omniscient` = full).
   (`ship_hull|weapon|missile|point_defense|drive|reactor|battery|radiator|armor|utility|hab_module|mine|shipyard|intel_capability`).
 - These endpoints require a snapshot published with the `techTree` payload
   (re-publish after upgrading); otherwise they return a 503 guidance error.
+
+`drive-explorer` rates every drive in the 541-entry catalogue against one of the
+observer's designs. Two things about it are load-bearing: the `measured` block on
+each row is the propulsion model against that hull's own measured mass, while the
+`estimatedDestinations` block is a labelled heuristic with only nine destinations
+modelled — an absent body is not an unreachable one. It is the one endpoint whose
+`?limit=` may exceed 100 (`CATALOGUE_LIMIT_BOUNDS`, up to 1,000), because the
+whole catalogue is the request; `?sort=`, `?status=` and `?family=` narrow it and
+`detail=full` adds the reasons, prerequisites and research chains.
 
 Each resource response includes save metadata, `intelMode`, `visibility`, a
 `count`, and a focused `items` array (or focused top-level summary fields).

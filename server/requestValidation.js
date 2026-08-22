@@ -106,8 +106,12 @@ module.exports = {
   hasControlCharacters: shared.hasControlCharacters,
   isBoundedInteger: shared.isBoundedInteger,
   usesQuantityAsLimit: shared.usesQuantityAsLimit,
+  limitBoundsFor: shared.limitBoundsFor,
+  limitLabelFor: shared.limitLabelFor,
   MINING_LIMIT_RESOURCES: shared.MINING_LIMIT_RESOURCES,
   MINING_LIMIT_BOUNDS: shared.MINING_LIMIT_BOUNDS,
+  CATALOGUE_LIMIT_BOUNDS: shared.CATALOGUE_LIMIT_BOUNDS,
+  CATALOGUE_LIMIT_RESOURCES: shared.CATALOGUE_LIMIT_RESOURCES,
   HISTORY_LIMIT_BOUNDS: shared.HISTORY_LIMIT_BOUNDS,
   HISTORY_LIMIT_DEFAULT: shared.HISTORY_LIMIT_DEFAULT,
   BODY_FILTER_MESSAGE: shared.BODY_FILTER_MESSAGE

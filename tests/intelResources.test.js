@@ -134,7 +134,7 @@ test('the ships manifest is a roll-up that never loses a ship', () => {
   assert.strictEqual(full.count, summary.shipsTotal, 'full returns one row per ship');
 });
 
-test('only the five heavy endpoints honour detail, and the echo says so', async () => {
+test('only the six heavy endpoints honour detail, and the echo says so', async () => {
   const shared = await import('../shared/intelResources.mjs');
   // `military-value` joined fleets and ships on 2026-08-21: its full
   // seventeen-class candidate listing is a 559 KB response against a 146 KB
@@ -146,9 +146,15 @@ test('only the five heavy endpoints honour detail, and the echo says so', async 
   // its full listing is every row of every availability group in both tracks
   // plus every candidate that could not be ranked, against a summary that is
   // the head of each group.
+  // `drive-explorer` joined on 2026-08-21: a full row carries every reason,
+  // prerequisite, unlock chance and chain record, measured at ~2.8 KB against
+  // ~1.0 KB for the scannable row, across a 541-drive catalogue.
+  //
+  // This list is exact on purpose. A detail-aware endpoint added without
+  // updating it would ship a parameter the discovery index does not advertise.
   assert.deepStrictEqual(
     Array.from(shared.DETAIL_AWARE_RESOURCES).sort(),
-    ['economic-value', 'fleets', 'military-value', 'research-ranking', 'ships']
+    ['drive-explorer', 'economic-value', 'fleets', 'military-value', 'research-ranking', 'ships']
   );
 
   const snapshot = omniscientSnapshot();

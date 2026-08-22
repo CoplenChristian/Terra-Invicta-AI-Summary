@@ -40,6 +40,7 @@ import {
   SHIP_CONSTRUCTION_MODULES,
   HAB_CONSTRUCTION_MODULES
 } from './strategicSnapshot.mjs';
+import { DRIVE_AVAILABILITY, driveExplorerResource } from './intel/driveExplorer.mjs';
 
 // Absence-preserving formatting helpers
 export const isMeasured = (value) =>
@@ -1389,6 +1390,22 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   }
 
   // -------------------------------------------------------------------------
+  // SECTION 9: DRIVE EXPLORER
+  //
+  // The two halves are rendered in different registers here for the same reason
+  // the page does it: delta-V and acceleration are MEASURED against this hull's
+  // own mass, while destination reachability is a labelled heuristic estimate.
+  // The estimate line says so in its own words rather than relying on the
+  // reader to know which is which, and it states that only nine destinations
+  // are modelled.
+  // -------------------------------------------------------------------------
+  blocks.push(fixedBlock(
+    'drive-explorer',
+    [`## 9. Drive Explorer (refit options for one design)`, ``],
+    driveExplorerLines(filteredSnapshot, observerId)
+  ));
+
+  // -------------------------------------------------------------------------
   // DEGRADATION ORDER -- deliberate, and the reason for each position.
   //
   // A war-room brief exists to answer "what can hurt me, and what do I have to
@@ -1439,6 +1456,9 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   // Last resort if even an entry-free document will not fit: suppress whole
   // section BODIES in the same priority order. Section headers always survive.
   const clampOrder = [
+    // Reference material and a what-if, so it is the first body to give way and
+    // the last thing anyone needs in a war-room brief cut to the bone.
+    'drive-explorer',
     'research-projects', 'research-slots', 'research-heading',
     'habs',
     'construction-modules', 'construction-stations', 'construction-queues', 'construction-heading',
@@ -1451,6 +1471,114 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
 
   const maxBytes = isMeasured(options.maxBytes) ? Number(options.maxBytes) : WAR_ROOM_BYTE_BUDGET;
   return renderWithByteBudget(blocks, ladder, clampOrder, maxBytes);
+}
+
+/**
+ * Section 9 of the war room: what every drive would do to one of our designs.
+ *
+ * Deliberately small -- the point of the block is that the surface EXISTS and
+ * carries its two headline answers plus the honest census, not that it
+ * reproduces 541 rows. `/api/intel/drive-explorer` carries the rest, and the
+ * block names it.
+ *
+ * The estimate line is a separate bullet in its own words. Folding destination
+ * reachability into a bullet beside a delta-V figure would present a heuristic
+ * as a measurement, which is precisely what this feature exists not to do.
+ */
+function driveExplorerLines(filteredSnapshot, observerId) {
+  const endpoint = `/api/intel/drive-explorer?observer=${observerId}&detail=full&limit=1000`;
+  let explorer;
+  try {
+    explorer = driveExplorerResource(filteredSnapshot, {
+      observerId,
+      mode: filteredSnapshot.intelMode || filteredSnapshot.visibility || 'player',
+      status: DRIVE_AVAILABILITY.fittable,
+      limit: 1000
+    });
+  } catch (err) {
+    return [`*Drive Explorer unavailable: ${err.message}*`, ``];
+  }
+
+  if (!explorer.driveCatalogue.available || !explorer.selectedDesign) {
+    // An honest unavailable state, naming which half is missing. Never a
+    // fabricated placeholder row.
+    return [`*Drive Explorer unavailable: ${explorer.driveCatalogue.reason || explorer.reason || 'no drive catalogue or observer design in this snapshot'}.*`, ``];
+  }
+
+  const design = explorer.selectedDesign;
+  const census = explorer.availabilityCensus;
+  const fitted = design.fittedDrivePerformance;
+  const lines = [];
+
+  lines.push(`- **Design:** ${design.displayName}${design.hullName ? ` (${design.hullName})` : ''} | `
+    + `${localeOr(design.shipsInService)} hull(s) in service | `
+    + `Reactor: ${design.reactor.powerPlantClass || 'UNAVAILABLE'}`
+    + `${isMeasured(design.reactor.maxOutputGW) ? ` (${fixedOr(design.reactor.maxOutputGW, 1)} GW)` : ''}`);
+  lines.push(`- **Fitted drive (MEASURED):** ${design.fittedDrive.displayName || 'UNAVAILABLE'} — `
+    + `${fixedOr(fitted.deltaVKps, 2)} km/s ΔV, ${fixedOr(fitted.combatAccelerationMps2, 3)} m/s² combat accel`
+    + `${fitted.computable ? '' : ` (not computable: ${fitted.reason || design.baselineUnmeasuredReason || 'unmeasured'})`}`);
+  lines.push(`- **Catalogue:** ${localeOr(explorer.driveCatalogue.total)} drives — `
+    + `${localeOr(census[DRIVE_AVAILABILITY.fittable])} fittable today, `
+    + `${localeOr(census[DRIVE_AVAILABILITY.researchable])} researchable, `
+    + `${localeOr(census[DRIVE_AVAILABILITY.never])} never researchable, `
+    + `${localeOr(census[DRIVE_AVAILABILITY.unresolved])} unresolved`);
+  lines.push(`- **Reactor gate:** ${localeOr(explorer.reactorCompatibilityCensus.compatible)} of `
+    + `${localeOr(explorer.driveCatalogue.rated)} drives can be powered by this design's reactor; `
+    + `${localeOr(explorer.reactorCompatibilityCensus.incompatible)} need a different reactor class and are shown marked rather than hidden`);
+
+  // The two headline answers, both restricted to what is fittable today and to
+  // what the reactor can actually power. A drive the reactor cannot power is
+  // never presented as an option.
+  const options = asArray(explorer.items)
+    .filter(row => !row.isFittedDrive && row.reactor.compatible === true && row.measured.computable);
+  const bestBy = (read) => options.reduce((best, row) => {
+    const value = num(read(row));
+    if (value === null) return best;
+    const bestValue = best === null ? null : num(read(best));
+    return bestValue === null || value > bestValue ? row : best;
+  }, null);
+  const bestDeltaV = bestBy(row => row.measured.deltaVKps);
+  const bestAccel = bestBy(row => row.measured.combatAccelerationMps2);
+
+  const optionLine = (label, row) => {
+    if (!row) {
+      return `- **${label}:** none — no drive that is both fittable today and compatible with this design's `
+        + `reactor has a computable figure in this snapshot`;
+    }
+    return `- **${label} (MEASURED):** ${row.displayName} — ${fixedOr(row.measured.deltaVKps, 2)} km/s ΔV `
+      + `(${fixedOr(row.measured.deltaVMultipleVsFitted, 2)}× fitted), `
+      + `${fixedOr(row.measured.combatAccelerationMps2, 3)} m/s² combat accel `
+      + `(${fixedOr(row.measured.combatAccelerationMultipleVsFitted, 2)}× fitted)`
+      + `${row.measured.dryMassCaveat ? ` — CAVEAT: ${row.measured.dryMassCaveat}` : ''}`;
+  };
+  lines.push(optionLine('Best fittable today by ΔV', bestDeltaV));
+  lines.push(optionLine('Best fittable today by combat acceleration', bestAccel));
+
+  // The estimate, in its own register and its own words.
+  //
+  // `destinationsModelled` is deliberately NOT defaulted to 0. An unreadable
+  // destination table means no destination was evaluated, which is a different
+  // statement from "zero destinations are modelled" -- and the second one reads
+  // as a measurement of nothing rather than an absence of measurement.
+  const model = explorer.destinationModel;
+  if (model && model.available) {
+    const modelled = model.destinationsModelled;
+    lines.push(`- *ESTIMATE, not a measurement — destination reachability comes from a fixed heuristic ΔV table. `
+      + `Only ${localeOr(modelled)} destination(s) are modelled; a body absent from that list is not an unreachable one.*`);
+    const opened = bestDeltaV ? asArray(bestDeltaV.estimatedDestinations.opensUp) : [];
+    lines.push(`- *Estimated destinations opened by the best fittable ΔV option: `
+      + `${opened.length > 0 ? opened.join(', ') : 'none beyond what the fitted drive already reaches'} `
+      + `(${localeOr(bestDeltaV ? bestDeltaV.estimatedDestinations.reachableCount : null)} of ${localeOr(modelled)} modelled reachable).*`);
+  } else {
+    lines.push(`- *ESTIMATE, not a measurement — destination reachability comes from a fixed heuristic ΔV table, `
+      + `and a body absent from that table is not an unreachable one.*`);
+    lines.push(`- *Estimated destinations NOT EVALUATED (which is not the same as none being reachable): `
+      + `${model?.reason || 'no destination table could be read for this design'}.*`);
+  }
+
+  lines.push(`- Full listing (${localeOr(explorer.driveCatalogue.total)} drives, sortable and filterable): \`${endpoint}\``);
+  lines.push(``);
+  return lines;
 }
 
 // ---------------------------------------------------------------------------

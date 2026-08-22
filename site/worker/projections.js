@@ -36,9 +36,10 @@ import {
 } from '../shared/techGraph.mjs';
 import {
   BODY_FILTER_MESSAGE,
-  MINING_LIMIT_BOUNDS,
   exceedsBodyFilterLimits,
   isBoundedInteger,
+  limitBoundsFor,
+  limitLabelFor,
   parsePositiveIntegerOrNull,
   usesQuantityAsLimit
 } from '../shared/requestValidation.mjs';
@@ -89,10 +90,14 @@ export const validateResourceQuery = (url) => {
       (theater !== null && exceedsBodyFilterLimits(theater))) {
     return BODY_FILTER_MESSAGE;
   }
-  const isMiningProspects = usesQuantityAsLimit(pathResource(url.pathname));
+  const resource = pathResource(url.pathname);
+  const isMiningProspects = usesQuantityAsLimit(resource);
   const limit = url.searchParams.get('limit') || (isMiningProspects ? url.searchParams.get('quantity') : null);
-  if (limit !== null && !isBoundedInteger(limit, MINING_LIMIT_BOUNDS)) {
-    return `Invalid mining prospects limit. Use an integer from ${MINING_LIMIT_BOUNDS.min} to ${MINING_LIMIT_BOUNDS.max}.`;
+  // Bounds and wording both come from the shared table so this runtime cannot
+  // reject a limit the local route accepts.
+  const limitBounds = limitBoundsFor(resource);
+  if (limit !== null && !isBoundedInteger(limit, limitBounds)) {
+    return `Invalid ${limitLabelFor(resource)}. Use an integer from ${limitBounds.min} to ${limitBounds.max}.`;
   }
   const detail = url.searchParams.get('detail');
   if (detail !== null && parseDetailLevel(detail) === null) {
