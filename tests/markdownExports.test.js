@@ -666,8 +666,19 @@ for (const exportMode of EXPORT_MODES) {
     assert.match(section, /\*\*Risk floor:\*\* 0% — CONFIGURED but NOT IN FORCE/);
     // Truncation announces itself: carried, total and omitted all present.
     assert.match(section, /\*\*Bench:\*\* 8 of 46 candidate action\(s\) carried, 38 omitted/);
-    // And it says WHICH eight, because the slice is generation order.
-    assert.match(section, /NOT the highest-value few/);
+    // And it says WHICH eight AND in what order, because those are two
+    // different rules: the engine selects by score and emits by generation
+    // index. Stating only the counts would let a reader take the sequence for a
+    // ranking; stating only the selection would let them take it for one too.
+    assert.match(section, /HIGHEST-SCORING few/);
+    assert.match(section, /ties broken by candidate-generation order/);
+    assert.match(section, /sequence is NOT a ranking/);
+    // The rule this replaced on 2026-08-22. It described the slice as arbitrary
+    // and must not survive anywhere in the section.
+    assert.ok(!/FIRST few in candidate-generation order/.test(section),
+      'the superseded "first few generated" claim must be gone, not merely added to');
+    assert.ok(!/NOT the highest-value few/.test(section),
+      'section 10 must no longer deny that the carried entries are the highest-value few');
     assert.match(section, /\*\*Assigned this cycle:\*\* 3 councilor\(s\); 0 unassigned, 1 already committed/);
     assert.ok(section.includes(`/api/v2/briefing?observer=4712&mode=${exportMode}`),
       'section 10 must name the endpoint carrying the full plan');

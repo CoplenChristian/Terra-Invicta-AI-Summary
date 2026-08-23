@@ -2234,12 +2234,17 @@ function researchChainPromotionBlocks(filteredSnapshot, observerId, observerName
  *
  * WHAT THE BENCH COUNTS ACTUALLY MEAN
  *
- * `benched` is a SLICE, and it is deliberately not re-sorted: the engine emits
- * candidates in registry order and that order is load-bearing for every
- * explanation a reader sees, so re-ranking the slice would silently change
- * which entries appear. The line therefore states both the counts AND the
- * ordering rule -- a reader told "8 of 46" without it would reasonably assume
- * the eight are the best eight.
+ * `benched` is a SLICE, and the two questions "which entries survive the cap"
+ * and "in what order are they emitted" get different answers, so the line
+ * states both. The engine SELECTS the highest-scoring few (ties broken by
+ * candidate-generation index) and then RENDERS them in generation order,
+ * because registry emission order is load-bearing for how explanations are
+ * built while the display cap is a separate concern.
+ *
+ * A reader told "8 of 46" without that would get it wrong in one of two ways:
+ * before 2026-08-22 they would assume the eight were the best eight when the
+ * slice was arbitrary, and now they would assume the sequence is a ranking when
+ * it is not. Both counts and the ordering rule therefore travel together.
  */
 function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
   const mode = filteredSnapshot.mode || filteredSnapshot.intelMode || filteredSnapshot.visibility || 'player';
@@ -2300,8 +2305,10 @@ function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
 
   lines.push(`- **Bench:** ${countOr(plan.benched)} of ${localeOr(plan.benchedTotalCount)} candidate `
     + `action(s) carried, ${localeOr(plan.benchedOmittedCount)} omitted for transport. The listed entries are `
-    + `the FIRST few in candidate-generation order, NOT the highest-value few — emission order is `
-    + `load-bearing for every explanation, so the slice is deliberately not re-ranked`);
+    + `the HIGHEST-SCORING few, ties broken by candidate-generation order, and the carried array is then `
+    + `ordered by generation rather than by score — so it holds the best few but its sequence is NOT a `
+    + `ranking. Selection and presentation are separate because emission order is load-bearing for how `
+    + `explanations are built`);
 
   lines.push(`- **Assigned this cycle:** ${countOr(plan.assignments)} councilor(s); `
     + `${countOr(plan.unassigned)} unassigned, ${countOr(plan.committed)} already committed`);

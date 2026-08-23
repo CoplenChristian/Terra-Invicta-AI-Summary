@@ -10,6 +10,9 @@
  * 3. Local pairwise swaps to optimize aggregate team value.
  * 4. Opportunity cost and switching penalty computation for every assignment.
  * 5. Benched and budget-displaced alternative tracking with explicit reasons.
+ *    The bench cap SELECTS the highest-scoring few and then EMITS them in
+ *    candidate-generation order, so the carried list is the best few without
+ *    its sequence becoming a ranking (see compareBenchSelection).
  * 6. Free-action assignment suggestions for unallocated councilors.
  * 7. The player's configured success-odds floor, applied as a pairing-scoped
  *    veto (server/engine/rules/risk.js) once odds exist -- which is here,
@@ -66,6 +69,39 @@ const RISK_FLOOR_LIST_LIMIT = 25;
  * cap is load-bearing rather than theoretical.
  */
 const BENCHED_LIST_LIMIT = 8;
+
+/**
+ * Orders bench records for SELECTION against BENCHED_LIST_LIMIT. It decides
+ * WHICH entries survive the cap; it does not decide the order they are emitted
+ * in, which is restored to generation order immediately afterwards.
+ *
+ * Three properties, in the order they are applied:
+ *
+ *   1. Highest `selectionScore` first, so the cap keeps the best few rather
+ *      than whatever the candidate generators emitted first.
+ *   2. Ties break on generation index. Ties are the COMMON case here -- 39 of
+ *      the 427 omniscient bench entries score exactly 3 -- so leaving this to
+ *      sort stability would leave the rule unstated. Two runs of one save must
+ *      agree or the frozen-save harness reports a phantom diff.
+ *   3. A null `selectionScore` sorts after every readable one. It means "no
+ *      readable score", not "a score of zero": a candidate nobody could score
+ *      must not take a place from one that was measured, and must not be pushed
+ *      below genuinely negative scores either -- it is unranked, so it is last.
+ *      Two nulls hold generation order between themselves.
+ *
+ * @param {{ record: { selectionScore: number|null }, index: number }} a
+ * @param {{ record: { selectionScore: number|null }, index: number }} b
+ * @returns {number}
+ */
+function compareBenchSelection(a, b) {
+  const left = a.record.selectionScore;
+  const right = b.record.selectionScore;
+  if (left === null && right === null) return a.index - b.index;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  if (left !== right) return right - left;
+  return a.index - b.index;
+}
 
 /**
  * Extracts active mission details from a councilor object.
@@ -662,13 +698,35 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
   const committedCouncilorKeys = new Set(committed.map((c) => String(c.councilorId)));
 
   // 4. Benched Candidates
-  const benched = [];
+  //
+  // Each entry is recorded beside the key it will be SELECTED by rather than
+  // carrying that key in the payload: `selectionScore` is an ordering input,
+  // not a figure any consumer reads. Only `record.entry` is ever emitted, as
+  // `cappedBenched` below.
+  const benchedRecords = [];
   for (const candidate of candidates) {
     const candId = candidate.id || candidate.key || candidate.title;
     if (!claimedCandidateIds.has(candId)) {
       const ownPairings = pairings.filter(p => p.candidateId === candId);
       const bestPairing = ownPairings[0];
-      const score = Number(candidate.score ?? candidate.baseValue ?? bestPairing?.expectedValue ?? 0);
+      // One chain, read twice, because display and ordering want different
+      // answers to "no readable score".
+      //
+      // `score` keeps its existing display contract exactly -- an entry nobody
+      // could score renders 0.00, which is what `?? 0` produced before and what
+      // every consumer of this field already expects.
+      //
+      // `selectionScore` refuses that coercion. It is null when no source value
+      // was present, and null when one was present but unreadable, so a
+      // candidate nobody could score never takes a bench place from one that
+      // was measured -- `Number(null) === 0` would have ranked it above every
+      // negative-scoring candidate on the board. Measured on the live save
+      // 2026-08-22 (frozen `ExitSave.gz`): 0 of 427 omniscient and 0 of 46
+      // player bench entries have an unreadable score, so this is a guard
+      // against a shape that does not occur today, not a live correction.
+      const rawScore = candidate.score ?? candidate.baseValue ?? bestPairing?.expectedValue ?? null;
+      const score = rawScore === null ? 0 : Number(rawScore);
+      const selectionScore = Number.isFinite(score) && rawScore !== null ? score : null;
 
       // "Displaced by a higher-value allocation" is a claim about VALUE. When
       // the risk floor is what removed every way of running this mission,
@@ -692,14 +750,17 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
         displacedBy = `Displaced by ${assignments[0].councilor.name} assigned to direct high-priority mission.`;
       }
 
-      benched.push({
-        candidateId: candId,
-        title: candidate.title || candidate.friendlyName || candidate.missionType || 'Alternative Candidate',
-        score: Number(score.toFixed(2)),
-        // True only when the floor removed EVERY way of running this mission,
-        // so a consumer can separate a risk hold from a value trade-off.
-        riskFloorHeld: allBelowFloor,
-        displacedBy
+      benchedRecords.push({
+        selectionScore,
+        entry: {
+          candidateId: candId,
+          title: candidate.title || candidate.friendlyName || candidate.missionType || 'Alternative Candidate',
+          score: Number(score.toFixed(2)),
+          // True only when the floor removed EVERY way of running this mission,
+          // so a consumer can separate a risk hold from a value trade-off.
+          riskFloorHeld: allBelowFloor,
+          displacedBy
+        }
       });
     }
   }
@@ -781,12 +842,43 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
   const cappedRiskFloorVetoed = [...riskFloorVetoed].sort(byExpectedValueDesc).slice(0, RISK_FLOOR_LIST_LIMIT);
   const cappedRiskFloorUnverified = [...riskFloorUnverified].sort(byExpectedValueDesc).slice(0, RISK_FLOOR_LIST_LIMIT);
 
-  // The bench is capped for the same reason and reported the same way. The
-  // slice is deliberately NOT re-sorted: `benched` is emitted in candidate
-  // generation order, and `applyRules`/`scoreCandidates` order is load-bearing
-  // for every explanation the reader sees, so re-ranking here would silently
-  // reshuffle which eight appear. Only the counts are new.
-  const cappedBenched = benched.slice(0, BENCHED_LIST_LIMIT);
+  // The bench is capped for the same reason and reported the same way, but the
+  // cap answers two separable questions and answers them differently.
+  //
+  // WHICH ENTRIES SURVIVE: the highest-scoring ones. A plain slice of
+  // generation order showed whatever the candidate generators happened to emit
+  // first. Measured on the live save 2026-08-22 (frozen `ExitSave.gz`,
+  // md5 5c0d9ef98213c91d8187ae11bf885d57) that meant an omniscient bench of one
+  // 5.63, six score-3 Investigate/Turn rows on three councilors and one 9 --
+  // while five 68.75 purges and five 50.64s sat among the 419 hidden. A reader
+  // shown that would reasonably conclude their alternatives were all score-3
+  // investigations, which is false.
+  //
+  // IN WHAT ORDER THEY ARE EMITTED: generation order, unchanged. Registry
+  // emission order is load-bearing for every explanation the reader sees, and
+  // the previous comment here defended it -- correctly, but against the wrong
+  // question. That property governs how explanations are BUILT, by
+  // `applyRules` and `scoreCandidates` firing in registry order; it says
+  // nothing about which rows survive a display cap. Selecting by score and then
+  // restoring generation order keeps both, and neither `applyRules` nor
+  // `scoreCandidates` is touched.
+  //
+  // A consequence worth stating rather than leaving implied: the emitted list
+  // is therefore NOT in descending score order, and must not be read as a
+  // ranking. It is the best few, in the order the engine produced them.
+  //
+  // TIES break on generation index, which is the common case and not an edge
+  // one -- 39 of the 427 omniscient entries score exactly 3. The tiebreak is
+  // stated explicitly rather than left to sort stability so that two runs of
+  // one save can never disagree, which the frozen-save harness would catch.
+  //
+  // AN UNREADABLE SCORE SORTS LAST, never as 0. See `selectionScore` above.
+  const cappedBenched = benchedRecords
+    .map((record, index) => ({ record, index }))
+    .sort(compareBenchSelection)
+    .slice(0, BENCHED_LIST_LIMIT)
+    .sort((a, b) => a.index - b.index)
+    .map((wrapped) => wrapped.record.entry);
 
   return {
     assignments,
@@ -799,9 +891,14 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     // it. `committed` and `unassigned` above are deliberately uncapped -- they
     // are bounded by the councilor roster, not by candidate breadth -- so they
     // carry no such counts.
+    //
+    // Both counts are taken over the WHOLE bench, never over the selected
+    // slice: announcing the cap is the only thing they exist for, and reading
+    // them off `cappedBenched` would report "8 of 8, 0 omitted" while hiding
+    // 419 rows.
     benched: cappedBenched,
-    benchedTotalCount: benched.length,
-    benchedOmittedCount: benched.length - cappedBenched.length,
+    benchedTotalCount: benchedRecords.length,
+    benchedOmittedCount: benchedRecords.length - cappedBenched.length,
     budgetDisplaced,
     budgets: budgets.getSummary(),
     budgetChecksUnevaluated,

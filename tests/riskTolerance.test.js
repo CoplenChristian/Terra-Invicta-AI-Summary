@@ -478,6 +478,159 @@ test('an uncapped bench reports zero omitted rather than omitting the field', ()
 });
 
 // ---------------------------------------------------------------------------
+// WHICH EIGHT SURVIVE THE CAP, AND IN WHAT ORDER THEY ARE EMITTED
+//
+// Two separable questions, and until 2026-08-22 the code answered both with
+// "the first eight generated". Measured on the frozen `ExitSave.gz`, that put
+// six score-3 Investigate/Turn rows on the omniscient bench while five 68.75
+// purges sat among the 419 hidden.
+//
+// SELECTION is now by score; PRESENTATION stays generation order, because
+// registry emission order is load-bearing for how explanations are built. The
+// fixture below is a PERMUTATION of scores against generation index precisely
+// so that the two properties fail separately: a slice of generation order picks
+// a different SET, and a ranked emission produces a different SEQUENCE from the
+// same set.
+// ---------------------------------------------------------------------------
+
+// score[i] = (i * 7) % 20 -- a full-cycle permutation of 0..19, so no prefix of
+// generation order is a prefix of score order and vice versa.
+const PERMUTED_SCORES = Array.from({ length: 20 }, (_, i) => (i * 7) % 20);
+
+function permutedBenchPlan() {
+  const candidates = PERMUTED_SCORES.map((score, i) => straddlingCandidate({
+    id: `perm-${i}`,
+    title: `Permuted candidate ${i}`,
+    score,
+    target: { kind: 'councilor', councilorName: `Target ${i}` }
+  }));
+  return planWith(0, candidates, [operative()]);
+}
+
+test('the bench cap SELECTS the highest-scoring eight, not the first eight generated', () => {
+  const plan = permutedBenchPlan();
+  assert.strictEqual(plan.benched.length, 8);
+
+  // The claimed candidate is whichever one the allocator assigned; the bench is
+  // everything else. Deriving the expectation from the FIXTURE's own declared
+  // scores rather than from the plan's bench is what keeps this from passing by
+  // construction.
+  const claimed = new Set(plan.assignments.map((a) => a.candidateId));
+  const benchable = PERMUTED_SCORES
+    .map((score, index) => ({ id: `perm-${index}`, score, index }))
+    .filter((row) => !claimed.has(row.id));
+  assert.strictEqual(benchable.length, 19, 'exactly one candidate must be assigned or the fixture is wrong');
+
+  const bySelection = [...benchable].sort((a, b) => (b.score - a.score) || (a.index - b.index));
+  const expectedIds = new Set(bySelection.slice(0, 8).map((row) => row.id));
+  assert.deepStrictEqual(
+    new Set(plan.benched.map((b) => b.candidateId)),
+    expectedIds,
+    'the eight carried must be the eight highest-scoring'
+  );
+
+  // Stated as a fact rather than as a re-run of the algorithm: every carried
+  // entry outscores every dropped one.
+  const carried = plan.benched.map((b) => b.score);
+  const dropped = bySelection.slice(8).map((row) => row.score);
+  assert.ok(
+    Math.min(...carried) > Math.max(...dropped),
+    `the worst carried score (${Math.min(...carried)}) must beat the best dropped one (${Math.max(...dropped)})`
+  );
+
+  // The old behaviour, pinned negatively: a slice of generation order would
+  // have carried perm-0 (score 0) and perm-3 (score 1).
+  const carriedIds = plan.benched.map((b) => b.candidateId);
+  assert.ok(!carriedIds.includes('perm-0'), 'a generation-order slice would have carried the score-0 candidate');
+  assert.ok(!carriedIds.includes('perm-3'), 'a generation-order slice would have carried the score-1 candidate');
+});
+
+test('the selected eight are EMITTED in generation order, so the bench is not a ranking', () => {
+  const plan = permutedBenchPlan();
+  const carriedIndices = plan.benched.map((b) => Number(b.candidateId.replace('perm-', '')));
+
+  assert.deepStrictEqual(
+    carriedIndices,
+    [...carriedIndices].sort((a, b) => a - b),
+    'the carried entries must appear in candidate-generation order'
+  );
+
+  // And the scores must NOT be monotonic, or "generation order" and "ranked
+  // order" would be indistinguishable and this test would prove nothing. The
+  // permutation guarantees it; asserting it makes the guarantee load-bearing.
+  const scores = plan.benched.map((b) => b.score);
+  const descending = [...scores].sort((a, b) => b - a);
+  const ascending = [...scores].sort((a, b) => a - b);
+  assert.notDeepStrictEqual(scores, descending, 'the emitted bench must not be ranked highest-first');
+  assert.notDeepStrictEqual(scores, ascending, 'the emitted bench must not be ranked lowest-first');
+});
+
+test('tied scores break on generation index, so two runs of one save agree', () => {
+  // Ties are the COMMON case, not an edge one: 39 of the 427 omniscient bench
+  // entries on the frozen save score exactly 3.
+  const candidates = Array.from({ length: 12 }, (_, i) => straddlingCandidate({
+    id: `tie-${i}`,
+    title: `Tied candidate ${i}`,
+    score: 3,
+    target: { kind: 'councilor', councilorName: `Target ${i}` }
+  }));
+  const first = planWith(0, candidates, [operative()]);
+  const second = planWith(0, candidates, [operative()]);
+
+  const ids = first.benched.map((b) => b.candidateId);
+  assert.strictEqual(ids.length, 8);
+  assert.deepStrictEqual(ids, second.benched.map((b) => b.candidateId),
+    'an all-tied bench must select the same eight on every run');
+  // The stated tiebreak: earliest generated wins. One candidate is assigned, so
+  // the bench starts at tie-1.
+  assert.deepStrictEqual(ids, ['tie-1', 'tie-2', 'tie-3', 'tie-4', 'tie-5', 'tie-6', 'tie-7', 'tie-8']);
+});
+
+test('a candidate whose score cannot be read sorts LAST, never as a zero that outranks negatives', () => {
+  // Eight genuinely negative scores against one unreadable one, into an
+  // 8-entry cap. `Number('not-a-number')` is NaN and `Number(null)` is 0 --
+  // either coercion would rank the unreadable candidate above all eight
+  // measured ones and drop a real entry to make room for it.
+  const candidates = [
+    straddlingCandidate({ id: 'winner', title: 'Winner', score: 100, target: { kind: 'councilor', councilorName: 'W' } }),
+    ...Array.from({ length: 8 }, (_, i) => straddlingCandidate({
+      id: `neg-${i}`,
+      title: `Negative ${i}`,
+      score: -(i + 1),
+      target: { kind: 'councilor', councilorName: `N${i}` }
+    })),
+    straddlingCandidate({
+      id: 'unreadable',
+      title: 'Unreadable score',
+      score: 'not-a-number',
+      target: { kind: 'councilor', councilorName: 'U' }
+    })
+  ];
+  const plan = planWith(0, candidates, [operative()]);
+
+  assert.deepStrictEqual(plan.assignments.map((a) => a.candidateId), ['winner'],
+    'the fixture needs the high scorer assigned so exactly nine reach the bench');
+  assert.strictEqual(plan.benched.length, 8);
+  assert.strictEqual(plan.benchedTotalCount, 9);
+  assert.strictEqual(plan.benchedOmittedCount, 1);
+
+  const ids = plan.benched.map((b) => b.candidateId);
+  assert.ok(!ids.includes('unreadable'),
+    'an unreadable score must not take a bench place from a measured one');
+  assert.deepStrictEqual(ids, ['neg-0', 'neg-1', 'neg-2', 'neg-3', 'neg-4', 'neg-5', 'neg-6', 'neg-7'],
+    'every measured candidate survives, including the -8');
+});
+
+test('the bench counts are taken over the WHOLE bench, not over the selected slice', () => {
+  const plan = permutedBenchPlan();
+  assert.strictEqual(plan.benched.length, 8);
+  assert.strictEqual(plan.benchedTotalCount, 19,
+    'the total must count every benched candidate, not the eight that survived the cap');
+  assert.strictEqual(plan.benchedOmittedCount, 11);
+  assert.strictEqual(plan.benched.length + plan.benchedOmittedCount, plan.benchedTotalCount);
+});
+
+// ---------------------------------------------------------------------------
 // CONFIGURATION: absent means the configured default, and 0 is a real choice
 // ---------------------------------------------------------------------------
 
