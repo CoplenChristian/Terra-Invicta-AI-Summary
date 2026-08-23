@@ -9,7 +9,8 @@
  *   - Shared Portfolio Budgets: tracks set-level hate, influence, ops, and MC consumption
  *   - Strategic Clocks: tracks expiring wards, alien passive hate acceleration, and countdowns
  *   - Multi-Cycle Horizon: explains forward-looking enablement chains (e.g. Investigate -> Turn)
- *   - Benched Candidates: names what was displaced and why
+ *   - Benched Candidates: names what was displaced and why, one row per
+ *     (mission, target) sibling group with the count each row stands for
  *   - Risk floor: the player's minimum success chance, the control that sets
  *     it, and every action it held back (docs/risk-tolerance-spec.md)
  *
@@ -392,14 +393,26 @@
   }
 
   /**
-   * How many benched rows this board shows. The engine already capped the list
-   * (BENCHED_LIST_LIMIT in server/engine/assignment.js), so this is a SECOND
-   * truncation stacked on the first -- which is exactly why the note below
-   * counts against `benchedTotalCount`, the engine's true total, and not
-   * against the shortened array that arrived.
+   * The bench, rendered WHOLE.
+   *
+   * There used to be a `BENCHED_RENDER_LIMIT = 5` here, slicing the engine's
+   * eight a second time in generation order. It was correct by luck -- measured
+   * 2026-08-22 on `ExitSave.gz`, the five it happened to show were the best
+   * five in both modes -- and it was a second truncation stacked on the first,
+   * announced by neither.
+   *
+   * The fix is to stop deciding, not to duplicate the rule. The engine's
+   * selection (`shared/benchSelection.mjs`) is the only selection, and this
+   * board renders every row it was handed. The comparator deliberately is NOT
+   * reimplemented here: these components are classic `<script>` tags with no
+   * `type="module"`, so they cannot import `shared/*.mjs` at all, and a
+   * hand-copied comparator would be a second statement of the rule waiting to
+   * drift from the first.
+   *
+   * Each row now stands for a whole (mission, target) sibling group, so three
+   * numbers travel: how many ROWS are shown, how many CANDIDATES those rows
+   * account for, and the true bench total.
    */
-  const BENCHED_RENDER_LIMIT = 5;
-
   function renderBenched(cyclePlan) {
     const benched = Array.isArray(cyclePlan.benched) ? cyclePlan.benched : [];
     if (benched.length === 0) return '';
@@ -407,21 +420,40 @@
     // what is actually in hand rather than inventing a total, matching
     // renderRiskFloorHeld above.
     const total = num(cyclePlan.benchedTotalCount) ?? benched.length;
-    const shown = benched.slice(0, BENCHED_RENDER_LIMIT);
-    const omitted = Math.max(0, total - shown.length);
+    // Absent stays null. A payload from before the grouping change carries no
+    // represented count, and 0 would be a measurement of something nobody read.
+    const represented = num(cyclePlan.benchedRepresentedCount);
+    const omitted = Math.max(0, total - benched.length);
     return `
       <div class="directive-benched-section">
         <div class="directive-subheading">BENCHED ALTERNATIVES &amp; TRADE-OFFS (${total})</div>
         <div class="directive-benched-list">
-          ${shown.map(b => {
+          ${benched.map(b => {
             const candidate = b.candidate || b;
             const score = num(candidate.score);
+            // An older payload has no group fields at all. It renders as a
+            // plain row -- never "+0 more", never "+undefined more".
+            const groupCount = num(b.groupCount);
+            const collapsed = groupCount !== null && groupCount > 1;
+            const note = typeof b.groupNote === 'string' && b.groupNote.trim() !== ''
+              ? b.groupNote
+              : null;
+            // A collapsed row with no note still says it is collapsed, without
+            // inventing the target the note would have named.
+            const groupLine = !collapsed
+              ? ''
+              : `<div class="directive-benched-group">${escapeHtml(
+                note !== null
+                  ? note
+                  : `+${groupCount - 1} more sibling option${groupCount - 1 === 1 ? '' : 's'}`
+              )}</div>`;
             return `
               <div class="directive-benched-item">
                 <div class="directive-benched-header">
                   <span class="directive-benched-title">${escapeHtml(candidate.title || candidate.missionType || 'Alternative')}</span>
                   ${score !== null ? `<span class="directive-benched-score">Score ${score.toFixed(2)}</span>` : ''}
                 </div>
+                ${groupLine}
                 <div class="directive-benched-reason">
                   <span class="directive-displaced-label">DISPLACED BY:</span> ${escapeHtml(b.displacedBy || 'Higher expected value team assignment.')}
                 </div>
@@ -430,7 +462,10 @@
         </div>
         ${omitted > 0 ? `
           <div class="directive-benched-omitted">
-            Showing ${shown.length} of ${total} benched;
+            Showing ${benched.length} row${benched.length === 1 ? '' : 's'} of ${total} benched,
+            ${represented === null
+              ? 'standing for an unrecorded number of candidates'
+              : `standing for ${represented} candidate${represented === 1 ? '' : 's'}`};
             ${omitted} further alternative${omitted === 1 ? ' is' : 's are'} omitted from this view.
           </div>` : ''}
       </div>`;

@@ -2234,17 +2234,33 @@ function researchChainPromotionBlocks(filteredSnapshot, observerId, observerName
  *
  * WHAT THE BENCH COUNTS ACTUALLY MEAN
  *
- * `benched` is a SLICE, and the two questions "which entries survive the cap"
- * and "in what order are they emitted" get different answers, so the line
- * states both. The engine SELECTS the highest-scoring few (ties broken by
- * candidate-generation index) and then RENDERS them in generation order,
- * because registry emission order is load-bearing for how explanations are
- * built while the display cap is a separate concern.
+ * `benched` is a SLICE, and THREE questions have to be answered about it, so
+ * the line answers all three.
  *
- * A reader told "8 of 46" without that would get it wrong in one of two ways:
- * before 2026-08-22 they would assume the eight were the best eight when the
- * slice was arbitrary, and now they would assume the sequence is a ranking when
- * it is not. Both counts and the ordering rule therefore travel together.
+ *   WHICH ENTRIES SURVIVE. One row per (mission, coarse target) sibling group,
+ *   groups ranked by their best-scoring member, ties broken by
+ *   candidate-generation index. Not the best eight INDIVIDUALS: measured
+ *   2026-08-22 on frozen `ExitSave.gz`, that carried 2 distinct mission shapes
+ *   across 8 omniscient rows -- five siblings of the primary recommendation
+ *   itself -- so the bench read "five more of the thing you were already told
+ *   to do". Grouping gives 8 distinct shapes over the same 8 rows.
+ *
+ *   HOW MUCH OF THE BENCH THE ROWS ACCOUNT FOR. Each row stands for its whole
+ *   group, so eight rows account for 33 of 427 rather than 8 of 427.
+ *   `benchedRepresentedCount` is a THIRD figure beside the existing two, not a
+ *   redefinition of either: `benchedOmittedCount` still counts rows not
+ *   carried, and `benched.length + benchedOmittedCount === benchedTotalCount`
+ *   still holds.
+ *
+ *   IN WHAT ORDER THEY ARE EMITTED. Generation order, because registry emission
+ *   order is load-bearing for how explanations are built while the display cap
+ *   is a separate concern -- so the sequence is NOT a ranking.
+ *
+ * A reader told "8 of 427" without those would get it wrong in one of three
+ * ways: before 2026-08-22 they would assume the eight were the best eight when
+ * the slice was arbitrary; then that the sequence is a ranking when it is not;
+ * and now that eight rows means eight options when it means eight groups. All
+ * three counts and the ordering rule therefore travel together.
  */
 function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
   const mode = filteredSnapshot.mode || filteredSnapshot.intelMode || filteredSnapshot.visibility || 'player';
@@ -2304,11 +2320,14 @@ function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
     + `— odds that could not be computed are never counted as clearing the floor`);
 
   lines.push(`- **Bench:** ${countOr(plan.benched)} of ${localeOr(plan.benchedTotalCount)} candidate `
-    + `action(s) carried, ${localeOr(plan.benchedOmittedCount)} omitted for transport. The listed entries are `
-    + `the HIGHEST-SCORING few, ties broken by candidate-generation order, and the carried array is then `
-    + `ordered by generation rather than by score — so it holds the best few but its sequence is NOT a `
-    + `ranking. Selection and presentation are separate because emission order is load-bearing for how `
-    + `explanations are built`);
+    + `action(s) carried, ${localeOr(plan.benchedOmittedCount)} omitted for transport — but those rows ACCOUNT FOR `
+    + `${localeOr(plan.benchedRepresentedCount)} of ${localeOr(plan.benchedTotalCount)}, because each row stands for `
+    + `its whole sibling group. The listed entries are ONE ROW PER (mission, target) GROUP — the HIGHEST-SCORING few `
+    + `groups, each ranked by its best-scoring member, ties broken by candidate-generation order — and the carried `
+    + `array is then ordered by generation rather than by score, so the sequence is NOT a ranking and the row count `
+    + `counts GROUPS rather than options. A row's \`groupCount\` is how many candidates it stands for and `
+    + `\`groupNote\` names them; \`groupScoreLow\` / \`groupScoreHigh\` are the group's own score range, null when no `
+    + `member could be scored`);
 
   lines.push(`- **Assigned this cycle:** ${countOr(plan.assignments)} councilor(s); `
     + `${countOr(plan.unassigned)} unassigned, ${countOr(plan.committed)} already committed`);
