@@ -27,6 +27,20 @@ Last updated 2026-08-22.
 - **A worktree has no `config.json`.** It is gitignored, so every save-backed test errors in
   a fresh agent worktree until it is copied across from the main checkout. Harmless once
   known, but it presents as a wall of failures unrelated to the change under test.
+- **A worktree has no `dist/` either, so the suite reports 2 skips rather than 1.**
+  `tests/directiveEngineV2.test.js` skips the published-snapshot degrade path when
+  `dist/data/snapshot-player-4712.json` is absent, and that file is build output from
+  `npm run build:site`. It costs one *passing* test, so an agent reconciling counts against
+  a main-checkout baseline will find themselves one short with nothing failing. Copying the
+  file across from the main checkout restores it (verified 2026-08-22: 1329 / 1328 / 0 fail
+  / 1 skip with it, 1329 / 1327 / 0 fail / 2 skip without).
+- **`BENCHED_RENDER_LIMIT = 5` in `public/v2/js/components/directive-board.js` still slices
+  in generation order.** The engine's cap now selects by score (tracker item 6), but the
+  board then takes the first five of those eight by generation index. Measured
+  2026-08-22 on `ExitSave.gz`, the five it shows *are* the best five in both modes — so it
+  does not bite today, but it is correct by luck. Fixing it properly means lifting the
+  comparator into `shared/` rather than duplicating it in browser ESM, which is the
+  discipline `parseDriveThresholds` exists for.
 - ~~**The strategic commentary's throughput figure conflates queued SHIPS with shipyards.**~~
   **CLOSED 2026-08-22 — measured, and the dividend turned out to be wrong too.** See the Shipped
   table row "the shipyard throughput model".
