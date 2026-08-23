@@ -684,6 +684,44 @@ for (const exportMode of EXPORT_MODES) {
       'section 10 must name the endpoint carrying the full plan');
   });
 
+  test(`section 10 says the bench rows are GROUPS and how much of the bench they account for (${exportMode} mode)`, () => {
+    // Eight rows standing for 33 candidates. Without the third figure a reader
+    // takes eight rows for eight options, which is the exact misreading the
+    // grouping rule exists to fix -- measured 2026-08-22, the best eight
+    // INDIVIDUALS were 2 distinct mission shapes across 8 omniscient rows.
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const plan = makeCyclePlan({
+      benchedTotalCount: 427,
+      benchedOmittedCount: 419,
+      benchedRepresentedCount: 33
+    });
+    const section = sectionTen(renderWarRoomMarkdown(snapshot, { cyclePlan: plan }));
+
+    assert.match(section, /ACCOUNT FOR 33 of 427/);
+    assert.match(section, /ONE ROW PER \(mission, target\) GROUP/);
+    assert.match(section, /counts GROUPS rather than options/);
+    assert.match(section, /groupCount/);
+    // The superseded claim: that the carried entries are the best few
+    // INDIVIDUALS. Row 4 of the live omniscient bench scores 44.16 while four
+    // hidden China siblings score 68.75, so that reading is now false.
+    assert.ok(!/HIGHEST-SCORING few candidate/.test(section));
+    assert.ok(!/the HIGHEST-SCORING few, ties/.test(section),
+      'the pre-grouping phrasing must be gone, not merely added to');
+  });
+
+  test(`section 10 reports an absent represented count as UNAVAILABLE, never as zero (${exportMode} mode)`, () => {
+    // A snapshot published before this change carries no
+    // `benchedRepresentedCount`. `Number(null) === 0` would render "ACCOUNT FOR
+    // 0 of 427" -- a measurement of something nobody read.
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const plan = makeCyclePlan({ benchedTotalCount: 427, benchedOmittedCount: 419 });
+    delete plan.benchedRepresentedCount;
+    const section = sectionTen(renderWarRoomMarkdown(snapshot, { cyclePlan: plan }));
+
+    assert.match(section, /ACCOUNT FOR UNAVAILABLE of 427/);
+    assert.ok(!/ACCOUNT FOR 0 of/.test(section), 'an unread represented count must not render as 0');
+  });
+
   test(`section 10 falls back to the published snapshot's own briefing, which is how the hosted worker gets it (${exportMode} mode)`, () => {
     const snapshot = makeMarkdownSnapshot(exportMode);
     // Exactly the shape scripts/publish/rows.js writes onto a published row.

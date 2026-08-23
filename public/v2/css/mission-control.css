@@ -6236,8 +6236,16 @@ body.intelligence-library-open {
   text-transform: uppercase;
 }
 
-/* The bench is capped twice -- once by the engine, once by this board -- so the
-   note that says so is styled like its risk-floor counterpart. */
+/* What a collapsed row stands for: the other siblings of the same (mission,
+   target) group, which the engine folded into this one row. Set below the
+   title rather than beside the score so a long note wraps on its own line. */
+.directive-benched-group {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* The bench is capped by the engine and rendered whole by this board, so the
+   note that announces the cap is styled like its risk-floor counterpart. */
 .directive-benched-omitted {
   margin-top: 8px;
   font-size: 11px;

@@ -28,15 +28,18 @@
  */
 const CANDIDATE_FAMILIES = Object.freeze(['expansion', 'defense', 'council', 'intelligence', 'advisory']);
 
-function looksUnresolved(value) {
-  if (value === null || value === undefined) return true;
-  const text = String(value).trim();
-  if (text === '') return true;
-  // `${nation.id || nation.name}` on a record carrying neither stringifies to
-  // "undefined", which is a perfectly valid Set key -- so 295 distinct nations
-  // collapsed onto one entry and 294 candidates vanished into the dedupe.
-  return /(^|[:\-/])(undefined|null|NaN)([:\-/]|$)/.test(text);
-}
+// `looksUnresolved` used to be defined here. It moved to `shared/util.mjs` on
+// 2026-08-22 because `shared/benchSelection.mjs` needs the SAME rule and, like
+// every module under `shared/`, it also runs in the Cloudflare Worker and
+// cannot `require` this CommonJS file.
+//
+// It is re-exported as the SAME FUNCTION OBJECT, not wrapped: `require`ing it
+// here and putting it straight back into `module.exports` keeps
+// `server/engine/candidates/index.js` -- which imports it from `./normalize` --
+// working unchanged, and keeps reference identity intact. A wrapper would be a
+// second implementation waiting to drift, which is exactly how `sameId` once
+// split into two rules that disagreed.
+const { looksUnresolved } = require('../../../shared/util.mjs');
 
 /**
  * Reduces the template's three hate outcome slots to the {low, high} envelope

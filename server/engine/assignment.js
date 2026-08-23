@@ -2,7 +2,7 @@
  * server/engine/assignment.js
  * Purpose: the cycle-plan assignment allocator that binds candidates to
  *   councilors across the allocation cycle, including the pairing-scoped
- *   success-odds floor.
+ *   success-odds floor and the sibling-grouped bench cap.
  *
  * Implements the cycle plan assignment allocator:
  * 1. Greedy expected-value allocation under shared portfolio budgets.
@@ -10,9 +10,11 @@
  * 3. Local pairwise swaps to optimize aggregate team value.
  * 4. Opportunity cost and switching penalty computation for every assignment.
  * 5. Benched and budget-displaced alternative tracking with explicit reasons.
- *    The bench cap SELECTS the highest-scoring few and then EMITS them in
- *    candidate-generation order, so the carried list is the best few without
- *    its sequence becoming a ranking (see compareBenchSelection).
+ *    The bench cap SELECTS the highest-scoring few GROUPS of siblings -- one
+ *    row per (mission, target) group, each carrying how many candidates it
+ *    stands for -- and then EMITS them in candidate-generation order, so the
+ *    carried list is the best few DISTINCT options without its sequence
+ *    becoming a ranking (see shared/benchSelection.mjs).
  * 6. Free-action assignment suggestions for unallocated councilors.
  * 7. The player's configured success-odds floor, applied as a pairing-scoped
  *    veto (server/engine/rules/risk.js) once odds exist -- which is here,
@@ -36,6 +38,15 @@ const {
 // unidentified councilor with every other one. `sameId` treats an absent id as
 // matching nothing, which is the whole point of the helper.
 const { sameId } = require('../../shared/util.mjs');
+// The bench cap's selection rule. It lives under `shared/` rather than here
+// because `public/v2/js/components/directive-board.js` must not re-decide it --
+// the board renders every row it is handed -- and because a rule stated in two
+// places is a rule waiting to drift.
+const {
+  BENCH_SELECTION_LIMIT,
+  benchGroupIdentity,
+  selectBenchRows
+} = require('../../shared/benchSelection.mjs');
 
 const FREE_ACTIONS = Object.freeze(['Surveil Location', 'Protect Councilor', 'Go To Ground']);
 
@@ -60,48 +71,6 @@ const UNASSIGNED_REASON_DETAIL = Object.freeze({
  * quiet truncation.
  */
 const RISK_FLOOR_LIST_LIMIT = 25;
-
-/**
- * How many benched candidates the plan carries. Same contract as
- * RISK_FLOOR_LIST_LIMIT: the cap bounds the payload, and the true total plus
- * the number omitted travel beside the list so eight rows are never mistaken
- * for the whole bench. On the live save the bench runs well past this, so the
- * cap is load-bearing rather than theoretical.
- */
-const BENCHED_LIST_LIMIT = 8;
-
-/**
- * Orders bench records for SELECTION against BENCHED_LIST_LIMIT. It decides
- * WHICH entries survive the cap; it does not decide the order they are emitted
- * in, which is restored to generation order immediately afterwards.
- *
- * Three properties, in the order they are applied:
- *
- *   1. Highest `selectionScore` first, so the cap keeps the best few rather
- *      than whatever the candidate generators emitted first.
- *   2. Ties break on generation index. Ties are the COMMON case here -- 39 of
- *      the 427 omniscient bench entries score exactly 3 -- so leaving this to
- *      sort stability would leave the rule unstated. Two runs of one save must
- *      agree or the frozen-save harness reports a phantom diff.
- *   3. A null `selectionScore` sorts after every readable one. It means "no
- *      readable score", not "a score of zero": a candidate nobody could score
- *      must not take a place from one that was measured, and must not be pushed
- *      below genuinely negative scores either -- it is unranked, so it is last.
- *      Two nulls hold generation order between themselves.
- *
- * @param {{ record: { selectionScore: number|null }, index: number }} a
- * @param {{ record: { selectionScore: number|null }, index: number }} b
- * @returns {number}
- */
-function compareBenchSelection(a, b) {
-  const left = a.record.selectionScore;
-  const right = b.record.selectionScore;
-  if (left === null && right === null) return a.index - b.index;
-  if (left === null) return 1;
-  if (right === null) return -1;
-  if (left !== right) return right - left;
-  return a.index - b.index;
-}
 
 /**
  * Extracts active mission details from a councilor object.
@@ -699,10 +668,11 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
 
   // 4. Benched Candidates
   //
-  // Each entry is recorded beside the key it will be SELECTED by rather than
-  // carrying that key in the payload: `selectionScore` is an ordering input,
-  // not a figure any consumer reads. Only `record.entry` is ever emitted, as
-  // `cappedBenched` below.
+  // Each entry is recorded beside the keys it will be SELECTED by rather than
+  // carrying them in the payload: `selectionScore` is an ordering input and
+  // `identity` a grouping input, and neither is a figure any consumer reads.
+  // Only `record.entry` reaches the payload, as `cappedBenched` below --
+  // widened there with the group counts the row stands for.
   const benchedRecords = [];
   for (const candidate of candidates) {
     const candId = candidate.id || candidate.key || candidate.title;
@@ -752,6 +722,11 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
 
       benchedRecords.push({
         selectionScore,
+        // The (mission, coarse target) group this candidate belongs to, or null
+        // when any component of that identity is unreadable. Null means a group
+        // of ONE -- never a shared "unknown" bucket, because an unreadable key
+        // is not a shared key. See shared/benchSelection.mjs.
+        identity: benchGroupIdentity(candidate),
         entry: {
           candidateId: candId,
           title: candidate.title || candidate.friendlyName || candidate.missionType || 'Alternative Candidate',
@@ -843,24 +818,30 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
   const cappedRiskFloorUnverified = [...riskFloorUnverified].sort(byExpectedValueDesc).slice(0, RISK_FLOOR_LIST_LIMIT);
 
   // The bench is capped for the same reason and reported the same way, but the
-  // cap answers two separable questions and answers them differently.
+  // cap answers three separable questions and answers them differently. The
+  // rule itself lives in `shared/benchSelection.mjs`; what follows is why it is
+  // shaped the way it is.
   //
-  // WHICH ENTRIES SURVIVE: the highest-scoring ones. A plain slice of
-  // generation order showed whatever the candidate generators happened to emit
-  // first. Measured on the live save 2026-08-22 (frozen `ExitSave.gz`,
-  // md5 5c0d9ef98213c91d8187ae11bf885d57) that meant an omniscient bench of one
-  // 5.63, six score-3 Investigate/Turn rows on three councilors and one 9 --
-  // while five 68.75 purges and five 50.64s sat among the 419 hidden. A reader
-  // shown that would reasonably conclude their alternatives were all score-3
-  // investigations, which is false.
+  // WHICH ENTRIES SURVIVE: the highest-scoring GROUPS of siblings, one row per
+  // group. Two earlier answers were measured on the live save 2026-08-22
+  // (frozen `ExitSave.gz`, md5 5c0d9ef98213c91d8187ae11bf885d57) and both were
+  // worse. A plain slice of generation order showed one 5.63, six score-3
+  // Investigate/Turn rows and one 9, while five 68.75 purges sat among the 419
+  // hidden -- a reader would conclude their alternatives were all score-3
+  // investigations, which is false. Selecting the best eight INDIVIDUALS fixed
+  // the scores and broke the variety: 2 distinct mission shapes across 8 rows,
+  // five of them siblings of the primary recommendation itself, so the bench
+  // read "five more of the thing you were already told to do". Selecting the
+  // best eight GROUPS gives 8 distinct shapes over the same 8 rows, accounting
+  // for 33 of the 427 candidates rather than 8, and drops the best candidate no
+  // row stands for from 50.64 to 23.74.
   //
   // IN WHAT ORDER THEY ARE EMITTED: generation order, unchanged. Registry
-  // emission order is load-bearing for every explanation the reader sees, and
-  // the previous comment here defended it -- correctly, but against the wrong
-  // question. That property governs how explanations are BUILT, by
-  // `applyRules` and `scoreCandidates` firing in registry order; it says
-  // nothing about which rows survive a display cap. Selecting by score and then
-  // restoring generation order keeps both, and neither `applyRules` nor
+  // emission order is load-bearing for every explanation the reader sees. That
+  // property governs how explanations are BUILT, by `applyRules` and
+  // `scoreCandidates` firing in registry order; it says nothing about which
+  // rows survive a display cap. Selecting by score and then restoring
+  // generation order keeps both, and neither `applyRules` nor
   // `scoreCandidates` is touched.
   //
   // A consequence worth stating rather than leaving implied: the emitted list
@@ -873,12 +854,10 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
   // one save can never disagree, which the frozen-save harness would catch.
   //
   // AN UNREADABLE SCORE SORTS LAST, never as 0. See `selectionScore` above.
-  const cappedBenched = benchedRecords
-    .map((record, index) => ({ record, index }))
-    .sort(compareBenchSelection)
-    .slice(0, BENCHED_LIST_LIMIT)
-    .sort((a, b) => a.index - b.index)
-    .map((wrapped) => wrapped.record.entry);
+  // AN UNREADABLE GROUP KEY makes a record its own group of one, never a member
+  // of a shared "unknown" group -- an unreadable key is not a shared key.
+  const { rows: cappedBenched, representedCount: benchedRepresentedCount } =
+    selectBenchRows(benchedRecords, { limit: BENCH_SELECTION_LIMIT });
 
   return {
     assignments,
@@ -896,9 +875,21 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     // slice: announcing the cap is the only thing they exist for, and reading
     // them off `cappedBenched` would report "8 of 8, 0 omitted" while hiding
     // 419 rows.
+    //
+    // `benchedOmittedCount` keeps its existing meaning EXACTLY -- rows not
+    // carried -- so `benched.length + benchedOmittedCount === benchedTotalCount`
+    // still holds and the four existing tests that pin it are untouched. The
+    // new figure is a third one beside them rather than a redefinition of
+    // either: `benchedRepresentedCount` is how many candidates the carried rows
+    // actually ACCOUNT FOR, which is a different question from how many rows
+    // there are. Eight rows, 419 not carried, 33 accounted for.
+    //
+    // Invariants: benched.length <= benchedRepresentedCount <= benchedTotalCount,
+    // and benchedRepresentedCount === sum(row.groupCount).
     benched: cappedBenched,
     benchedTotalCount: benchedRecords.length,
     benchedOmittedCount: benchedRecords.length - cappedBenched.length,
+    benchedRepresentedCount,
     budgetDisplaced,
     budgets: budgets.getSummary(),
     budgetChecksUnevaluated,

@@ -1,7 +1,7 @@
 // shared/util.mjs
 //
 // Purpose: the one home for the small helpers copied across the repo — asArray,
-//   toFiniteNumber, round, sameId, and the shared constants.
+//   toFiniteNumber, round, sameId, looksUnresolved, and the shared constants.
 //
 // The one home for the small helpers that had been copy-pasted across the
 // repo: `asArray` existed five times, the presence-guarded numeric coercion
@@ -109,6 +109,40 @@ export const sameId = (left, right) => {
   if (a !== null && b !== null) return a === b;
   if (left === null || left === undefined || right === null || right === undefined) return false;
   return String(left) === String(right);
+};
+
+/**
+ * Whether a value is unusable as part of an identity KEY.
+ *
+ * The counterpart to `sameId` for the other half of the same problem: `sameId`
+ * refuses to MATCH an absent id, and this refuses to BUILD a key out of one.
+ *
+ * Three rejections, and the third is the one that has actually shipped bugs
+ * twice in this repo. `${nation.id || nation.name}` on a record carrying
+ * neither stringifies to the literal text `"undefined"`, which is a perfectly
+ * valid `Set` key and a perfectly valid `Map` key -- so 295 distinct nations
+ * collapsed onto one entry and 294 candidates vanished into the dedupe, and
+ * separately every candidate id collapsed to `advise-nation-undefined` /
+ * `purge-undefined-0` leaving 1 of 303 alive. An unresolvable identity must
+ * never become a silently-colliding string; the record is dropped, or made a
+ * group of one, with a recorded reason instead.
+ *
+ * The token test is anchored on the separators a composed key uses (`:`, `-`,
+ * `/`) or on the whole string, so a legitimate name containing the substring
+ * -- "Nullarbor Station", "Undefined Territories" -- is not rejected.
+ *
+ * Lived in `server/engine/candidates/normalize.js` until 2026-08-22 and moved
+ * here when `shared/benchSelection.mjs` needed the SAME rule: that module runs
+ * in the Cloudflare Worker and cannot `require` the CommonJS original. It is
+ * re-exported from `normalize.js` as the same function object rather than
+ * copied, because a copy is the thing that let `sameId` split into two rules
+ * that disagreed.
+ */
+export const looksUnresolved = (value) => {
+  if (value === null || value === undefined) return true;
+  const text = String(value).trim();
+  if (text === '') return true;
+  return /(^|[:\-/])(undefined|null|NaN)([:\-/]|$)/.test(text);
 };
 
 /**

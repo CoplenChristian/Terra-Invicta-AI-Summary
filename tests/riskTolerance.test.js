@@ -631,6 +631,410 @@ test('the bench counts are taken over the WHOLE bench, not over the selected sli
 });
 
 // ---------------------------------------------------------------------------
+// WHETHER THE SURVIVORS ARE DIFFERENT FROM EACH OTHER
+//
+// A third question the cap has to answer, and score-selection alone answers it
+// badly. Measured on frozen `ExitSave.gz` (md5 5c0d9ef98213c91d8187ae11bf885d57)
+// the best eight INDIVIDUALS were 2 distinct mission shapes across 8 omniscient
+// rows -- five "Purge the Protectorate hold on … in China" siblings of the
+// primary recommendation itself, then three India purges -- so the bench read
+// "five more of the thing you were already told to do" while 419 rows stayed
+// hidden.
+//
+// The cap now selects the best eight GROUPS, keyed on mission + the COARSE
+// target entity. Measured: 8 distinct shapes over the same 8 rows, accounting
+// for 33 of 427 candidates rather than 8, with the best candidate no row stands
+// for falling from 50.64 to 23.74. Player mode is untouched -- 46 groups from 46
+// candidates, nothing collapses, and the emitted rows are identical.
+//
+// The existing bench fixtures above target `{ kind: 'councilor', councilorName }`
+// with NO `councilorId`, which is deliberately UNGROUPABLE, so every assertion
+// above still describes singleton rows and none of them needed editing.
+// ---------------------------------------------------------------------------
+
+const {
+  BENCH_SELECTION_LIMIT,
+  benchGroupIdentity,
+  describeBenchGroup,
+  selectBenchRows
+} = require('../shared/benchSelection.mjs');
+const { looksUnresolved } = require('../shared/util.mjs');
+const { looksUnresolved: normalizeLooksUnresolved } = require('../server/engine/candidates/normalize');
+
+/** A Purge against one control point inside a named nation. */
+function purgeIn(nation, index, score) {
+  return straddlingCandidate({
+    id: `purge-${nation}-${index}`,
+    title: `Purge rival hold ${index} in ${nation}`,
+    score,
+    target: { kind: 'controlPoint', nation }
+  });
+}
+
+/** The high scorer the allocator will assign, kept out of every group. */
+function assignedWinner() {
+  return straddlingCandidate({
+    id: 'winner',
+    title: 'Winner',
+    score: 1000,
+    target: { kind: 'councilor', councilorName: 'W' }
+  });
+}
+
+// Four groups: 5 China purges (identical scores), 3 India purges (a SPREAD, so
+// the spread note form is exercised on live output rather than assumed away),
+// 2 Defend Interests in China -- same nation, DIFFERENT mission, so a different
+// group -- and one lone Brazil purge. Eleven benched candidates, four rows.
+function groupedBenchPlan() {
+  const candidates = [
+    assignedWinner(),
+    ...[0, 1, 2, 3, 4].map((i) => purgeIn('China', i, 68.75)),
+    ...[0, 1, 2].map((i) => purgeIn('India', i, 50.64 - i * 1.77)),
+    ...[0, 1].map((i) => straddlingCandidate({
+      id: `defend-China-${i}`,
+      title: `Defend Interests ${i} in China`,
+      missionType: 'Defend Interests',
+      score: 30,
+      target: { kind: 'controlPoint', nation: 'China' }
+    })),
+    purgeIn('Brazil', 0, 10)
+  ];
+  return planWith(0, candidates, [operative()]);
+}
+
+test('the bench carries one row per (mission, target) group, not one per sibling', () => {
+  const plan = groupedBenchPlan();
+  assert.deepStrictEqual(plan.assignments.map((a) => a.candidateId), ['winner'],
+    'the fixture needs exactly the winner assigned or the group sizes below are wrong');
+
+  // Eleven benched candidates. Ungrouped they would fill the cap with eight
+  // rows, five of them China siblings; grouped they are four distinct options.
+  assert.strictEqual(plan.benchedTotalCount, 11);
+  assert.strictEqual(plan.benched.length, 4,
+    'four groups exist, so four rows are carried -- not eight sibling rows');
+  assert.ok(plan.benched.length < BENCH_SELECTION_LIMIT,
+    'the fixture must sit UNDER the cap, or "4 rows" could be a cap artefact rather than grouping');
+
+  // Stated as identities rather than as a re-run of the algorithm.
+  const rows = new Map(plan.benched.map((b) => [b.candidateId, b]));
+  assert.deepStrictEqual(
+    [...rows.keys()].sort(),
+    ['defend-China-0', 'purge-Brazil-0', 'purge-China-0', 'purge-India-0'].sort()
+  );
+
+  // Same nation, different mission: NOT merged. Family-based grouping was
+  // measured and rejected partly because it folds distinct actions together.
+  assert.ok(rows.has('purge-China-0') && rows.has('defend-China-0'),
+    'Purge and Defend Interests in one nation are two options, not one');
+});
+
+test('a collapsed row says how many candidates it stands for, and its note names them', () => {
+  const plan = groupedBenchPlan();
+  const rows = new Map(plan.benched.map((b) => [b.candidateId, b]));
+
+  const china = rows.get('purge-China-0');
+  assert.strictEqual(china.groupCount, 5);
+  assert.strictEqual(china.groupOmittedCount, 4);
+  assert.strictEqual(china.groupNote, '+4 more Purge options in China, all scoring 68.75');
+
+  const india = rows.get('purge-India-0');
+  assert.strictEqual(india.groupCount, 3);
+  assert.strictEqual(india.groupOmittedCount, 2);
+  // The SPREAD form. All seven collapsed groups on the live save happen to have
+  // a spread of exactly 0.00, so this form only exists if a fixture creates it.
+  assert.strictEqual(india.groupNote, '+2 more Purge options in India, scoring 50.64 down to 47.10');
+  assert.strictEqual(india.groupScoreHigh, 50.64);
+  assert.strictEqual(india.groupScoreLow, 47.10);
+
+  const brazil = rows.get('purge-Brazil-0');
+  assert.strictEqual(brazil.groupCount, 1, 'a group of one is still a group');
+  assert.strictEqual(brazil.groupOmittedCount, 0);
+  assert.strictEqual(brazil.groupNote, null, 'a singleton must not claim siblings it does not have');
+
+  // Every row carries the fields, always -- an absent count is what a consumer
+  // would render as "+undefined more".
+  for (const row of plan.benched) {
+    assert.ok(Number.isInteger(row.groupCount) && row.groupCount >= 1, `groupCount on ${row.candidateId}`);
+    assert.strictEqual(row.groupOmittedCount, row.groupCount - 1);
+    assert.ok(Object.hasOwn(row, 'groupScoreLow') && Object.hasOwn(row, 'groupScoreHigh'));
+    assert.ok(Number.isInteger(row.groupRiskFloorHeldCount));
+  }
+});
+
+test('the three bench counts reconcile, and the represented count is the sum of the group counts', () => {
+  const plan = groupedBenchPlan();
+
+  // The NEW figure: how many candidates the carried rows actually account for.
+  // Every benched candidate belongs to one of the four groups, so all eleven.
+  assert.strictEqual(plan.benchedRepresentedCount, 11);
+  assert.strictEqual(
+    plan.benched.reduce((sum, row) => sum + row.groupCount, 0),
+    plan.benchedRepresentedCount,
+    'benchedRepresentedCount must be the sum of the emitted groupCounts'
+  );
+
+  // The EXISTING invariant, unchanged: `benchedOmittedCount` still counts rows
+  // not carried, so these two still reconstruct the total.
+  assert.strictEqual(plan.benchedOmittedCount, 7);
+  assert.strictEqual(
+    plan.benched.length + plan.benchedOmittedCount,
+    plan.benchedTotalCount,
+    'shown + omitted must still reconstruct the total'
+  );
+
+  assert.ok(plan.benched.length <= plan.benchedRepresentedCount);
+  assert.ok(plan.benchedRepresentedCount <= plan.benchedTotalCount);
+});
+
+test('an unreadable group key makes a record its own group of one — never a shared unknown bucket', () => {
+  // Five candidates that would be one group if `councilorName` were allowed to
+  // stand in for a missing `councilorId`. Two councilors can share a display
+  // name, so merging them would FABRICATE an identity.
+  const nameless = Array.from({ length: 5 }, (_, i) => straddlingCandidate({
+    id: `nameless-${i}`,
+    title: `Investigate the mole ${i}`,
+    missionType: 'Investigate Councilor',
+    score: 40 - i,
+    target: { kind: 'councilor', councilorName: 'Alexandra Bureau' }
+  }));
+  const plan = planWith(0, [assignedWinner(), ...nameless], [operative()]);
+
+  assert.strictEqual(plan.benchedTotalCount, 5);
+  assert.strictEqual(plan.benched.length, 5, 'five unidentifiable records are five rows, never one');
+  for (const row of plan.benched) {
+    assert.strictEqual(row.groupCount, 1, `${row.candidateId} must stand alone`);
+    assert.strictEqual(row.groupNote, null);
+  }
+  assert.strictEqual(plan.benchedRepresentedCount, 5);
+
+  // The rule stated directly on the identity function: a name is not an id.
+  assert.strictEqual(
+    benchGroupIdentity({ missionType: 'Investigate Councilor', target: { kind: 'councilor', councilorName: 'Alexandra Bureau' } }),
+    null
+  );
+  assert.strictEqual(
+    benchGroupIdentity({ missionType: 'Investigate Councilor', target: { kind: 'councilor', councilorId: 7, councilorName: 'Alexandra Bureau' } }).key,
+    'Investigate Councilor|councilor:7'
+  );
+
+  // An unrecognised target kind is ungroupable too -- the safe direction.
+  assert.strictEqual(
+    benchGroupIdentity({ missionType: 'Detain', target: { kind: 'alienCouncilor', councilorId: 12 } }),
+    null
+  );
+});
+
+test('a literal "undefined" in the key is unreadable, not a valid group everything collapses onto', () => {
+  // `${nation.id || nation.name}` on a record carrying neither stringifies to
+  // "undefined", which is a perfectly valid Map key. That exact string has
+  // collapsed records twice in this repo's history.
+  for (const poison of ['undefined', 'null', 'NaN', '', '   ', null, undefined]) {
+    assert.strictEqual(
+      benchGroupIdentity({ missionType: 'Purge', target: { kind: 'controlPoint', nation: poison } }),
+      null,
+      `nation=${JSON.stringify(poison)} must not produce a group key`
+    );
+  }
+  // And a legitimate name that merely CONTAINS the token is not rejected.
+  assert.strictEqual(
+    benchGroupIdentity({ missionType: 'Purge', target: { kind: 'controlPoint', nation: 'Nullarbor Republic' } }).key,
+    'Purge|nation:Nullarbor Republic'
+  );
+
+  // The scope ID and the scope LABEL are checked independently. On a
+  // `controlPoint` the two read the same field, so a test using only that kind
+  // proves whichever check runs first and nothing about the other -- and
+  // `nation`/`hab` are exactly the kinds where they diverge (`id ?? name`
+  // against `displayName ?? name`).
+  assert.strictEqual(
+    benchGroupIdentity({ missionType: 'Advise', target: { kind: 'nation', id: 'nation-undefined', displayName: 'Chad' } }),
+    null,
+    'an unresolved id must not group, however readable its display name'
+  );
+  assert.strictEqual(
+    benchGroupIdentity({ missionType: 'Advise', target: { kind: 'nation', id: 77, displayName: 'undefined' } }),
+    null,
+    'an unresolved label must not group, however readable its id'
+  );
+  assert.strictEqual(
+    benchGroupIdentity({ missionType: 'Advise', target: { kind: 'nation', id: 77, displayName: 'Chad' } }).key,
+    'Advise|nation:77'
+  );
+  // The mission name is a component too.
+  for (const badMission of ['', '   ', 'undefined', null, undefined, 7]) {
+    assert.strictEqual(
+      benchGroupIdentity({ missionType: badMission, target: { kind: 'nation', id: 77, displayName: 'Chad' } }),
+      null,
+      `missionType=${JSON.stringify(badMission)} must not produce a group key`
+    );
+  }
+  // As is the target kind, and an absent target altogether.
+  assert.strictEqual(benchGroupIdentity({ missionType: 'Advise', target: { id: 77, displayName: 'Chad' } }), null);
+  assert.strictEqual(benchGroupIdentity({ missionType: 'Advise' }), null);
+  assert.strictEqual(benchGroupIdentity(null), null);
+  // `type` is accepted where `kind` is absent, which is the pair
+  // `normalizeCandidate` mirrors.
+  assert.strictEqual(
+    benchGroupIdentity({ missionType: 'Advise', target: { type: 'nation', id: 77, displayName: 'Chad' } }).key,
+    'Advise|nation:77'
+  );
+
+  const poisoned = Array.from({ length: 4 }, (_, i) => straddlingCandidate({
+    id: `poison-${i}`,
+    title: `Purge somewhere ${i}`,
+    score: 40 - i,
+    target: { kind: 'controlPoint', nation: 'undefined' }
+  }));
+  const plan = planWith(0, [assignedWinner(), ...poisoned], [operative()]);
+  assert.strictEqual(plan.benched.length, 4, 'four "undefined" nations are four rows, not one');
+  assert.strictEqual(plan.benchedRepresentedCount, 4);
+  for (const row of plan.benched) assert.strictEqual(row.groupCount, 1);
+
+  // `looksUnresolved` is the SAME FUNCTION OBJECT the candidate normalizer uses.
+  // It moved to shared/util.mjs so the worker-safe module could read it; a copy
+  // is how `sameId` once split into two rules that disagreed.
+  assert.strictEqual(looksUnresolved, normalizeLooksUnresolved);
+});
+
+test('a group is represented by its highest scorer, ties broken by earliest generation', () => {
+  // Generation order 0..2 against scores 10, 40, 25: neither the first nor the
+  // last generated is the best, so a representative rule that took either would
+  // be caught here.
+  const spread = [
+    purgeIn('Chile', 0, 10),
+    purgeIn('Chile', 1, 40),
+    purgeIn('Chile', 2, 25)
+  ];
+  const spreadPlan = planWith(0, [assignedWinner(), ...spread], [operative()]);
+  assert.strictEqual(spreadPlan.benched.length, 1);
+  assert.strictEqual(spreadPlan.benched[0].candidateId, 'purge-Chile-1',
+    'the representative must be the group\'s best scorer, not its first or last member');
+  assert.strictEqual(spreadPlan.benched[0].score, 40);
+  assert.strictEqual(spreadPlan.benched[0].groupScoreHigh, 40);
+  assert.strictEqual(spreadPlan.benched[0].groupScoreLow, 10);
+
+  // Ties are the common case -- 39 of the 427 omniscient bench entries score
+  // exactly 3 -- so the tiebreak is stated rather than left to sort stability.
+  const tied = [0, 1, 2, 3].map((i) => purgeIn('Peru', i, 12));
+  const tiedPlan = planWith(0, [assignedWinner(), ...tied], [operative()]);
+  assert.strictEqual(tiedPlan.benched.length, 1);
+  assert.strictEqual(tiedPlan.benched[0].candidateId, 'purge-Peru-0',
+    'an all-tied group is represented by its earliest-generated member');
+  assert.strictEqual(tiedPlan.benched[0].groupCount, 4);
+});
+
+// A permutation of scores against generation index, one group per candidate, so
+// that "grouping is on" cannot hide a reordering. score[i] = (i * 7) % 20.
+function permutedGroupedBenchPlan() {
+  const candidates = PERMUTED_SCORES.map((score, i) => straddlingCandidate({
+    id: `pg-${i}`,
+    title: `Permuted grouped candidate ${i}`,
+    score,
+    target: { kind: 'controlPoint', nation: `Nation ${i}` }
+  }));
+  return planWith(0, candidates, [operative()]);
+}
+
+test('grouping does not reorder the bench — emission stays candidate-generation order', () => {
+  const plan = permutedGroupedBenchPlan();
+  assert.strictEqual(plan.benched.length, 8);
+
+  const carriedIndices = plan.benched.map((b) => Number(b.candidateId.replace('pg-', '')));
+  assert.deepStrictEqual(
+    carriedIndices,
+    [...carriedIndices].sort((a, b) => a - b),
+    'the carried rows must appear in candidate-generation order'
+  );
+
+  // And the scores must NOT be monotonic, or "generation order" and "ranked
+  // order" would be indistinguishable and this test would prove nothing.
+  const scores = plan.benched.map((b) => b.score);
+  assert.notDeepStrictEqual(scores, [...scores].sort((a, b) => b - a));
+  assert.notDeepStrictEqual(scores, [...scores].sort((a, b) => a - b));
+
+  // Every row is its own group here, so the represented count must equal the
+  // row count -- grouping that merged unrelated nations would show up as more.
+  assert.strictEqual(plan.benchedRepresentedCount, 8);
+});
+
+test('two runs of one fixture agree, rows and counts alike', () => {
+  const first = groupedBenchPlan();
+  const second = groupedBenchPlan();
+  assert.deepStrictEqual(first.benched, second.benched);
+  assert.strictEqual(first.benchedRepresentedCount, second.benchedRepresentedCount);
+  assert.strictEqual(first.benchedTotalCount, second.benchedTotalCount);
+  assert.strictEqual(first.benchedOmittedCount, second.benchedOmittedCount);
+});
+
+test('a group whose members could not be scored reports a null range, never a range of zero', () => {
+  // `Number(null) === 0`, so an unscored group is the exact shape that renders
+  // as a confident "all scoring 0.00" if presence is not checked first.
+  const { rows } = selectBenchRows([
+    { selectionScore: null, identity: benchGroupIdentity({ missionType: 'Purge', target: { kind: 'controlPoint', nation: 'Chad' } }), entry: { candidateId: 'a' } },
+    { selectionScore: null, identity: benchGroupIdentity({ missionType: 'Purge', target: { kind: 'controlPoint', nation: 'Chad' } }), entry: { candidateId: 'b' } }
+  ], { limit: 8 });
+
+  assert.strictEqual(rows.length, 1);
+  assert.strictEqual(rows[0].groupCount, 2);
+  assert.strictEqual(rows[0].groupScoreLow, null);
+  assert.strictEqual(rows[0].groupScoreHigh, null);
+  assert.notStrictEqual(rows[0].groupScoreLow, 0);
+  assert.strictEqual(rows[0].groupNote, '+1 more Purge option in Chad; their scores could not be read');
+});
+
+test('a partly-scored group reports the range it read and says how many it did not', () => {
+  const identity = benchGroupIdentity({ missionType: 'Purge', target: { kind: 'controlPoint', nation: 'Chad' } });
+  const { rows } = selectBenchRows([
+    { selectionScore: 9, identity, entry: { candidateId: 'a' } },
+    { selectionScore: null, identity, entry: { candidateId: 'b' } },
+    { selectionScore: 9, identity, entry: { candidateId: 'c' } }
+  ], { limit: 8 });
+
+  assert.strictEqual(rows[0].groupCount, 3);
+  assert.strictEqual(rows[0].groupScoreLow, 9);
+  assert.strictEqual(rows[0].groupScoreHigh, 9);
+  // "all scoring 9.00" would be a claim about a member nobody read.
+  assert.strictEqual(
+    rows[0].groupNote,
+    '+2 more Purge options in Chad, scoring 9.00; 1 of the group carried no readable score'
+  );
+});
+
+test('a mixed group does not read as uniformly risk-held', () => {
+  const identity = benchGroupIdentity({ missionType: 'Purge', target: { kind: 'controlPoint', nation: 'Chad' } });
+  const { rows, representedCount } = selectBenchRows([
+    { selectionScore: 9, identity, entry: { candidateId: 'a', riskFloorHeld: false } },
+    { selectionScore: 8, identity, entry: { candidateId: 'b', riskFloorHeld: true } },
+    { selectionScore: 7, identity, entry: { candidateId: 'c', riskFloorHeld: true } }
+  ], { limit: 8 });
+
+  assert.strictEqual(representedCount, 3);
+  // `riskFloorHeld` describes the REPRESENTATIVE; the count is what stops the
+  // row reading as if the whole group cleared the floor.
+  assert.strictEqual(rows[0].riskFloorHeld, false);
+  assert.strictEqual(rows[0].groupRiskFloorHeldCount, 2);
+});
+
+test('the note describes the GROUP and takes its preposition from the target kind', () => {
+  const forKind = (kind, label) => describeBenchGroup({
+    identity: { kind, label, missionType: 'Advise' },
+    count: 2,
+    scoreLow: 4,
+    scoreHigh: 4,
+    unreadableScoreCount: 0
+  });
+  assert.match(forKind('nation', 'Chad'), /options? in Chad/);
+  assert.match(forKind('controlPoint', 'Chad'), /options? in Chad/);
+  assert.match(forKind('hab', 'Coronado Base'), /options? at Coronado Base/);
+  assert.match(forKind('councilor', 'A. Bureau'), /options? against A\. Bureau/);
+  assert.match(forKind('capability', 'the Aliens'), /options? against the Aliens/);
+
+  // Nothing to describe: a singleton, and a group nobody could identify.
+  assert.strictEqual(describeBenchGroup({ identity: { kind: 'nation', label: 'Chad', missionType: 'Advise' }, count: 1, scoreLow: 4, scoreHigh: 4 }), null);
+  assert.strictEqual(describeBenchGroup({ identity: null, count: 3, scoreLow: 4, scoreHigh: 4 }), null);
+});
+
+// ---------------------------------------------------------------------------
 // CONFIGURATION: absent means the configured default, and 0 is a real choice
 // ---------------------------------------------------------------------------
 

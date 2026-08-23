@@ -10,7 +10,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**189 modules.**
+**190 modules.**
 
 ## `public/`
 
@@ -22,7 +22,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/alien-hate-economics.js` | BS | Browser (ESM) | 324 | renders the save-derived Mission Control hate floor without | — | — |
 | `public/v2/js/components/council-orders.js` | BS | Browser (ESM) | 349 | renders the at-a-glance answer to "what should each councilor do | — | — |
 | `public/v2/js/components/detail-panel.js` | BS | Browser (ESM) | 220 | the shared detail surface for clickable Mission Control modules — | — | — |
-| `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 637 | renders the Directive Engine v2 Cycle Plan. | — | — |
+| `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 672 | renders the Directive Engine v2 Cycle Plan. | — | — |
 | `public/v2/js/components/drive-explorer.js` | BS | Browser (ESM) | 1187 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
 | `public/v2/js/components/executive-boards.js` | BS | Browser (ESM) | 416 | renders the executive boards — faction power, resources, and the | — | — |
 | `public/v2/js/components/faction-intel.js` | BS | Browser (ESM) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
@@ -92,7 +92,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/directives/space.js` | C | Node (CommonJS) | 73 | the space-department ladder — the off-world mining grid and orbital | `buildSpaceDirectives` | — |
 | `server/earthTheater.js` | C | Node (CommonJS) | 106 | the Earth theater partition — six regional groupings of nations and | `EARTH_THEATERS, buildTheaterStatus` | — |
 | `server/engine/adviseEconomics.js` | C | Node (CommonJS) | 238 | pure calculations for the Advise mission on Nations and Habs. | `computeAdviseHabBonuses, computeAdviseNationBonuses, computeBaseIP, evaluateAdviseValue, getCouncilorAttribute` | `tests/adviseEconomics.test.js` |
-| `server/engine/assignment.js` | C | Node (CommonJS) | 935 | the cycle-plan assignment allocator that binds candidates to | `allocateCyclePlan, computeOngoingMissionBenefit, getActiveMissionInfo` | — |
+| `server/engine/assignment.js` | C | Node (CommonJS) | 926 | the cycle-plan assignment allocator that binds candidates to | `allocateCyclePlan, computeOngoingMissionBenefit, getActiveMissionInfo` | — |
 | `server/engine/budgets.js` | C | Node (CommonJS) | 259 | tracks the shared portfolio budget pools across the entire | `BudgetPoolManager, readPoolCapacity` | — |
 | `server/engine/campaignDate.js` | C | Node (CommonJS) | 65 | campaign-date parsing and the Defend Interests ward status derived | `defenseStatus, parseCampaignDate` | — |
 | `server/engine/candidates/controlPoints.js` | C | Node (CommonJS) | 130 | the open control-point candidate generator — neutral control points | `buildControlNationCandidate, generateOpenControlPointCandidates` | — |
@@ -101,7 +101,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/engine/candidates/index.js` | C | Node (CommonJS) | 84 | the generation pass — run every generator, attach mission specs, | `generateCandidates` | — |
 | `server/engine/candidates/intelligence.js` | C | Node (CommonJS) | 126 | the intelligence candidate generator — capability without a | `ALIEN_DETAIN_STORY_GATE, generateIntelligenceCandidates` | — |
 | `server/engine/candidates/missions.js` | C | Node (CommonJS) | 518 | the generic data-driven candidate generator pairing MissionSpecs | `generateMissionCandidatesFromSpecs, resolveControlPointId, resolveEntityId` | — |
-| `server/engine/candidates/normalize.js` | C | Node (CommonJS) | 149 | one candidate schema for every candidate, whatever generator | `CANDIDATE_FAMILIES, hateEnvelopeFromSlots, looksUnresolved, normalizeCandidate` | — |
+| `server/engine/candidates/normalize.js` | C | Node (CommonJS) | 152 | one candidate schema for every candidate, whatever generator | `CANDIDATE_FAMILIES, hateEnvelopeFromSlots, looksUnresolved, normalizeCandidate` | — |
 | `server/engine/clocks.js` | C | Node (CommonJS) | 115 | computes strategic clocks, ward expirations, passive accrual rates, | `computeStrategicClocks, getUrgencyMultiplier` | — |
 | `server/engine/feasibility.js` | C | Node (CommonJS) | 164 | evaluates candidate-councilor pairing feasibility against | `evaluateCondition, evaluatePairingFeasibility, isCouncilorFree, isCouncilorHuman, isCouncilorOnEarth` | — |
 | `server/engine/missionCatalogue.js` | C | Node (CommonJS) | 94 | structured query access to the MissionSpec objects baked into the | `MissionCatalogue` | — |
@@ -159,6 +159,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
 | `shared/alienHateEconomics.mjs` | E | Node + Cloudflare worker (ESM) | 353 | pure alien minimum-hate floor and total-war gate calculation from | `ALIEN_HATE_CONCEALMENT_FACTOR, ALIEN_HATE_REDUCTION_PROJECTS, ALIEN_HATE_WAR_THRESHOLD, ALIEN_MAX_HATE, ALIEN_TOTAL_WAR_HATE, ALIEN_TOTAL_WAR_YEARS, DIFFICULTY_MULTIPLIERS, buildAlienHateEconomics, buildTotalWarState` | `tests/alienHateEconomics.test.js` |
 | `shared/apiSurface.mjs` | E | Node + Cloudflare worker (ESM) | 130 | the /api/intel discovery index and export-markdown selection shared | `DEFAULT_CAMPAIGN_KEY, INTEL_API_TITLE, buildIntelApiIndex, hasExportMarkdown, renderIntelApiIndexHtml, resolveSupabaseReadKey, selectExportMarkdown` | — |
+| `shared/benchSelection.mjs` | E | Node + Cloudflare worker (ESM) | 354 | the bench cap's selection rule — one row per (mission, target) | `BENCH_SELECTION_LIMIT, benchGroupIdentity, compareBenchSelection, describeBenchGroup, selectBenchRows` | — |
 | `shared/campaignElapsed.mjs` | E | Node + Cloudflare worker (ESM) | 200 | resolve elapsed campaign time, campaign year and alien progression | `CAMPAIGN_AGE_SOURCES, DAYS_PER_CAMPAIGN_YEAR, resolveAlienProgressionSpeed, resolveCampaignElapsed, resolveCampaignYear` | `tests/campaignElapsed.test.js` |
 | `shared/campaignSettings.mjs` | E | Node + Cloudflare worker (ESM) | 363 | parse the save's custom-difficulty block and label a customised | `CAMPAIGN_SETTINGS_UNAVAILABLE, CAMPAIGN_SETTING_FIELDS, CAMPAIGN_SETTING_NUMERIC_FIELDS, CAMPAIGN_SETTING_VERDICTS, SETTING_KINDS, buildCampaignSettings, describeCampaignDifficulty, formatCampaignSettingValue, parseCampaignSettingFlag, parseCampaignSettingNumber` | `tests/campaignSettings.test.js` |
 | `shared/constants.mjs` | E | Node + Cloudflare worker (ESM) | 10 | shared constants — faction ids, intelligence modes, display names. | `ALIEN_FACTION_DISPLAY_NAME, ALIEN_FACTION_ID, DEFAULT_OBSERVER_FACTION_ID, INITIATIVE_DISPLAY_NAME, INTELLIGENCE_MODES, SERVANTS_DISPLAY_NAME, SUPPORTED_MODES` | — |
@@ -191,7 +192,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `shared/intel/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 1358 | the /api/intel/research-ranking projection composing the phase-4 | `CHAIN_MONTHS_BASIS, dedupeByGateProject, researchRankingResource` | `tests/researchRanking.test.js` |
 | `shared/intel/theaters.mjs` | E | Node + Cloudflare worker (ESM) | 196 | body-by-body posture — the twelve-body theater board and the | `bodyStatusResource, theatersResource` | — |
 | `shared/intelResources.mjs` | **B** E | Node + Cloudflare worker (ESM) | 154 | public entry point for the intel projections — a barrel re-exporting | `COMBAT_POWER_SOURCE, DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, EXPANSION_MINE_LIMIT_GRANTS, EXPANSION_MISSION_TECH_NAMES, EXPANSION_THEATER_ACCESSIBILITY, FLEET_SUMMARY_OMITTED_FIELDS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, MINING_RESOURCES, MINING_SCARCITY_WEIGHTS, …(+60)` | `tests/intelResources.test.js` |
-| `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 3050 | shared markdown export renderers for the model-facing .md endpoints | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, accelOr, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, …(+8)` | `tests/markdownExports.test.js` |
+| `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 3069 | shared markdown export renderers for the model-facing .md endpoints | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, accelOr, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, …(+8)` | `tests/markdownExports.test.js` |
 | `shared/militaryValue.mjs` | E | Node + Cloudflare worker (ESM) | 1227 | military valuation of the unlock families phase 1 did not cover — | `AXIS_SETS, CLASS_KINDS, COMPONENT_CLASS_SPECS, MAGAZINE_BASIS_CODES, MILITARY_CLASS_SPECS, MILITARY_FORMULAE, MOUNT_HARDPOINTS, RATIO_UNAVAILABLE_CODES, WEAPON_CLASS_SPECS, WEAPON_ROLES, armorMetrics, batteryMetrics, …(+15)` | `tests/militaryValue.test.js` |
 | `shared/mineModuleOutput.mjs` | E | Node + Cloudflare worker (ESM) | 755 | the mine module's own output multiplier — measured per built mine, | `MINE_MODULE_MEASURED_ON, MINE_MODULE_PROJECTION_POLICY, MINE_MODULE_STATES, MINE_MODULE_TEMPLATES, MINE_OPERATIONAL_STATUS, applyMineModuleMultiplier, buildMineModuleCapability, buildMineUpgradeOpportunities, mineModuleDataAvailable, resolveMineModuleMultiplier` | `tests/mineModuleOutput.test.js` |
 | `shared/miningTechBonus.mjs` | E | Node + Cloudflare worker (ESM) | 426 | the observer's per-resource mine-output multipliers from completed | `ADDITIVE_MINING_BONUS_PROJECTS, MINING_BONUS_MEASURED_ON, MINING_BONUS_RULES, MINING_BONUS_STACKING, MINING_BONUS_STATES, UNMODELLED_FACTORS, applyMiningTechBonus, buildMiningTechBonuses, miningTechBonusCaveat` | `tests/miningTechBonus.test.js` |
@@ -212,7 +213,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `shared/strategicSnapshot.mjs` | E | Node + Cloudflare worker (ESM) | 617 | reduce a full raw snapshot to a compact strategic_snapshot_v1 | `DEFAULT_HISTORY_POLICY, HAB_CONSTRUCTION_MODULES, MINE_LIMIT_GRANTS, SHIP_CONSTRUCTION_MODULES, STRATEGIC_SNAPSHOT_SCHEMA, STRATEGIC_SNAPSHOT_VERSION, buildStrategicSnapshot, deriveEvents` | `tests/strategicSnapshot.test.js` |
 | `shared/techGraph.mjs` | E | Node + Cloudflare worker (ESM) | 1172 | pure tech-tree normalisation and dependency-graph helpers shared by | `CATEGORIES, ROLLED_AVAILABILITY_CAVEAT, SATISFIED_PREREQUISITE_LIMIT, STATUSES, UNLOCK_CLASSES, applySaveState, asArray, buildProjectOpportunities, buildResearchQueue, buildResearchQueueProjection, buildTechGraph, buildTechMatrix, …(+16)` | `tests/techGraph.test.js` |
 | `shared/unlockIndex.mjs` | E | Node + Cloudflare worker (ESM) | 116 | read accessors over the baked unlock index built at snapshot-build | `buildItemGateMap, gateForItem, gatesForFamily, unlockIndexCensus, unlockIndexUnavailableReason, unlocksForGate` | `tests/unlockIndex.test.js` |
-| `shared/util.mjs` | E | Node + Cloudflare worker (ESM) | 189 | the one home for the small helpers copied across the repo — asArray, | `METERS_PER_AU, MS_PER_DAY, ONE_TRILLION, asArray, resolveObserverFaction, round, sameId, strictFiniteNumber, toFiniteNumber` | — |
+| `shared/util.mjs` | E | Node + Cloudflare worker (ESM) | 223 | the one home for the small helpers copied across the repo — asArray, | `METERS_PER_AU, MS_PER_DAY, ONE_TRILLION, asArray, looksUnresolved, resolveObserverFaction, round, sameId, strictFiniteNumber, toFiniteNumber` | — |
 
 ## `site/`
 
