@@ -14,13 +14,15 @@ Last updated 2026-08-23.
 
 ## Open work
 
-| # | doc | state |
-| :-- | :-- | :-- |
-| 3 | `research-category-rate-spec.md` | **CLOSED 2026-08-22 — durations are priced, and a second, larger defect was found while doing it.** See the Shipped table |
-| 3d | `mining-tech-bonus-spec.md` | **CLOSED 2026-08-22 — all three halves have shipped.** (a) the ×1.15 project grants, (b) the mine module's own `miningModifier` (measured per site, deliberately **refused** as a projection for an unowned candidate), and (c) **the per-faction scalar, which was never unexplained — it is `1 + Σ(active org miningBonus) + Σ(SpaceMiningBonus effect values)`.** With it applied, all eight factions reconcile against their own `cachedYearlyRevenue` at **0.0022%** on all five resources. See the Shipped table |
-| 7 | `control-point-cap-spec.md` | **CLOSED 2026-08-22 — and re-opened and re-closed the same day by an owner's intel-model decision: the faction CP cap is no longer locked behind omniscient.** The `recorded` basis composes nothing — it reads `history_CPCapOverageByDay` and needs no masked councilor attribute, hab module or cap project — so a rival the game records over cap is now stated in player mode too (the Protectorate, −34.34, `over-cap`, 1,179 Influence/year, +10.64 to every hostile Crackdown / Purge / Enthrall / Dominate). The `composed` basis still refuses for a rival, and **a floored zero is not headroom**: a recorded 0 is `max(0, cost − cap)` bottoming out, so it bounds without locating and the five such rivals stay `unknown` with `overCap: null`, never `false`. `assertPlayerSnapshotSafe` and the whole-payload leak scan were **retargeted, not deleted**. The war-room export finally carries the cap — the gap the row below left open. See the Shipped table |
-| 7 | `control-point-cap-spec.md` (first closure) | **CLOSED 2026-08-22 — the absolute cap reconciles, and `headroom.available` is emitted.** The blocker was never the composition: it was that `history_CPCapOverageByDay` was read as the overage and its LAST slot as the most recent sample. It is a 32-day window, newest first, of the mission-defence penalty — the overage over three. Read correctly, and with the base cap corrected from 550 to 400 (the campaign knob was double-counted) and the GDP divisor corrected from 1e9 to the campaign normalizer, the composed cap sits ~1 point in 840 from the cap the game itself implies, and does not drift. See the Shipped table |
-| 6 | bench ordering | **CLOSED 2026-08-22 — selection is by score, presentation stays generation order, and the result is genuinely better in player mode and arguably worse in omniscient.** The trade-off the recommendation did not anticipate is real and is written up in the Shipped table: score-selection surfaces the truth (the best alternatives really are 68.75, not 3) at the cost of the variety generation order happened to give. See the Shipped table |
+**Empty as of 2026-08-23.** Every tracked item is in the Shipped table below or in
+*Closed as needing no work*, each with its measurement. The two entries under follow-ups
+are worktree environment quirks, not defects in the dashboard.
+
+The next thing this repo owes its owner is a **publish and deploy** — the hosted site is
+serving snapshots that predate roughly 114 commits of correctness work, including several
+figures that changed materially (the total-war gate, research costs, the directive engine's
+primary recommendation). `npm run push:supabase` then a worker deploy; both are the owner's
+action, and `push:dry-run` exists to rehearse it.
 
 ### Small follow-ups, unassigned
 
