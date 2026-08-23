@@ -2,7 +2,8 @@
  * server/engine/assignment.js
  * Purpose: the cycle-plan assignment allocator that binds candidates to
  *   councilors across the allocation cycle, including the pairing-scoped
- *   success-odds floor and the sibling-grouped bench cap.
+ *   success-odds floor, the sibling-grouped bench cap, and the measured reason
+ *   each benched candidate was not taken.
  *
  * Implements the cycle plan assignment allocator:
  * 1. Greedy expected-value allocation under shared portfolio budgets.
@@ -14,7 +15,12 @@
  *    row per (mission, target) group, each carrying how many candidates it
  *    stands for -- and then EMITS them in candidate-generation order, so the
  *    carried list is the best few DISTINCT options without its sequence
- *    becoming a ranking (see shared/benchSelection.mjs).
+ *    becoming a ranking (see shared/benchSelection.mjs). Each row states the
+ *    obstacle that actually bound it, taken from what the allocator measured
+ *    (see `classifyDisplacement`), and the bench as a whole reports how many of
+ *    its rows could be taken TOGETHER against the pool that refused them (see
+ *    `summariseBenchBudget`) -- eight rows sharing one budget are not eight
+ *    independent options.
  * 6. Free-action assignment suggestions for unallocated councilors.
  * 7. The player's configured success-odds floor, applied as a pairing-scoped
  *    veto (server/engine/rules/risk.js) once odds exist -- which is here,
@@ -139,6 +145,371 @@ function classifyUnassigned(ownPairings, claimedCandidateIds) {
   if (ownPairings.every((p) => p.riskFloorVetoed === true)) return 'risk-floor';
   if (ownPairings.every((p) => claimedCandidateIds.has(p.candidateId))) return 'all-candidates-claimed';
   return 'budget-exhausted';
+}
+
+/**
+ * WHY A BENCHED CANDIDATE IS BENCHED, taken from what the allocator measured
+ * rather than from what is easy to say.
+ *
+ * ---------------------------------------------------------------------------
+ * THE DEFECT THIS REPLACES
+ * ---------------------------------------------------------------------------
+ *
+ * Every bench row that was not risk-floor held used to read
+ * `Displaced by ${assignments[0].councilor.name} assigned to direct
+ * high-priority mission.` -- the FIRST assignment's councilor, named regardless
+ * of whether that operative had anything to do with this candidate. Measured
+ * 2026-08-23 on frozen `ExitSave.gz` (md5 5c0d9ef98213c91d8187ae11bf885d57):
+ *
+ *   * OMNISCIENT: all 8 rows said "Displaced by Hemaraj Pavanaja". All 8 were
+ *     in fact refused by the alienHate budget, each charging 4.57 hate against
+ *     3.16 left in a 7.90 cycle cap -- and the operative the refusal names is
+ *     Mahangeet Pakimor, not Hemaraj Pavanaja. The engine had computed the
+ *     pool, the charge and the 1.41 shortfall and thrown all three away.
+ *   * PLAYER: all 8 rows said "Displaced by Beth Hofmann". Seven of the eight
+ *     had EVERY way of running them refused as a value-destroying switch, and
+ *     Beth Hofmann was the WORST-scoring operative on all eight lists. The
+ *     eighth was genuine contention -- by Brad Lester and Mahangeet Pakimor.
+ *
+ * That is worse than no reason at all, because a reader acts on it: "free up a
+ * councilor and I can do this" is exactly the wrong conclusion when a budget
+ * refused an operative who was already free.
+ *
+ * ---------------------------------------------------------------------------
+ * WHICH REASON BINDS WHEN SEVERAL APPLY
+ * ---------------------------------------------------------------------------
+ *
+ * A candidate has one pairing per operative and each pairing hit its own
+ * obstacle, so "the reason" is a choice. The rule is THE OBSTACLE NEAREST TO
+ * TAKEABLE -- the one a reader would have to move first -- and the order is
+ * stated here rather than left to fall out of the loop:
+ *
+ *   1. BUDGET. A refused pairing had already passed every other gate: its
+ *      councilor was free, unclaimed, above the floor and not switch-rejected,
+ *      and the pool still said no. Nothing but the budget stands in the way, so
+ *      it binds over anything else and it REFUTES the councilor reading.
+ *   2. CONTENTION. An operative could have run it and was taken by higher-value
+ *      work. Actionable, and the work that took them is named.
+ *   3. SWITCH-REJECTED. Every way of running it would break a posting worth
+ *      more than the mission returns.
+ *   4. RISK FLOOR. Every way of running it was below the player's own floor.
+ *      Checked through `allBelowFloor`, which the caller computes, so the
+ *      existing wording and its test are untouched.
+ *   5. MIXED. More than one of (3) and (4) applies and neither covers it. The
+ *      tally is stated instead of one member's reason being generalised.
+ *   6. NO PRICEABLE OPERATIVE. There were no pairings at all -- see
+ *      `droppedPairings` for what could not be priced.
+ *
+ * ABSENT STAYS NULL. There is no fallback branch that names an unrelated
+ * councilor, and `undetermined` is a reachable outcome that says so in words.
+ * `obstacles` always tallies every pairing, so `undetermined` can be recognised
+ * as a classification gap rather than a property of the save.
+ *
+ * @param {Object} input
+ * @returns {{ cause: string, displacedBy: string, obstacles: Object,
+ *             budgetRefusal: Object|null }}
+ */
+function classifyDisplacement({
+  candidateId,
+  ownPairings,
+  allBelowFloor,
+  budgetRefusal,
+  budgetRefusedPairKeys,
+  assignedCouncilorIds,
+  assignmentByCouncilorKey,
+  riskFloorPercent
+}) {
+  // Per-pairing tally. A recorded refusal is a FACT and is read first; the rest
+  // are properties of the pairing itself, and contention is last because it is
+  // the only one that depends on what the rest of the plan happened to do.
+  const contended = [];
+  const switchRejected = [];
+  const floorVetoed = [];
+  const budgetRefused = [];
+  const unclassified = [];
+  for (const pairing of ownPairings) {
+    if (budgetRefusedPairKeys.has(`${candidateId}|${pairing.councilorId}`)) {
+      budgetRefused.push(pairing);
+    } else if (pairing.riskFloorVetoed === true) {
+      floorVetoed.push(pairing);
+    } else if (pairing.switchRejected) {
+      switchRejected.push(pairing);
+    } else if (assignedCouncilorIds.has(String(pairing.councilorId))) {
+      contended.push(pairing);
+    } else {
+      unclassified.push(pairing);
+    }
+  }
+  const obstacles = {
+    pairingCount: ownPairings.length,
+    budgetRefusedCount: budgetRefused.length,
+    contendedCount: contended.length,
+    switchRejectedCount: switchRejected.length,
+    riskFloorVetoedCount: floorVetoed.length,
+    unclassifiedCount: unclassified.length
+  };
+
+  if (ownPairings.length === 0) {
+    return {
+      cause: 'no-priceable-operative',
+      obstacles,
+      budgetRefusal: null,
+      displacedBy: 'No operative could be priced for this action, so no way of running it was '
+        + 'evaluated — it was not weighed against the plan and lost.'
+    };
+  }
+
+  if (allBelowFloor) {
+    const bandLows = ownPairings
+      .map((pairing) => (typeof pairing.riskFloor?.bandLow === 'number' ? pairing.riskFloor.bandLow : null))
+      .filter((value) => value !== null);
+    const closest = bandLows.length > 0 ? Math.max(...bandLows) : null;
+    return {
+      cause: 'risk-floor',
+      obstacles,
+      budgetRefusal: null,
+      displacedBy: `Held back by your ${riskFloorPercent}% risk floor`
+        + (closest === null
+          ? ' — no operative produced a readable odds band for it.'
+          : ` — the best available operative reads ${closest}% at the low end of its band.`)
+    };
+  }
+
+  if (budgetRefusal) {
+    return {
+      cause: 'budget',
+      obstacles,
+      budgetRefusal,
+      displacedBy: describeBudgetRefusal(budgetRefusal)
+    };
+  }
+
+  if (contended.length > 0) {
+    // The operative whose pairing scored highest -- `pairings` is sorted by
+    // expected value descending, so the first contended entry is that one.
+    const best = contended[0];
+    const took = assignmentByCouncilorKey.get(String(best.councilorId)) || null;
+    const tookTitle = took?.candidate?.title || took?.candidate?.friendlyName || null;
+    const others = contended.length - 1;
+    // Both values are `fixedOr`-style: an unreadable expected value says so
+    // rather than printing 0.00, which is a real and different verdict.
+    const ev = (value) => (typeof value === 'number' && Number.isFinite(value)
+      ? value.toFixed(2)
+      : 'an unreadable value');
+    const tookText = tookTitle === null
+      ? ', who the plan assigned elsewhere this cycle'
+      : `, assigned instead to ${tookTitle} (EV ${ev(took?.expectedValue)})`;
+    return {
+      cause: 'councilor-contention',
+      obstacles,
+      budgetRefusal: null,
+      displacedBy: `Displaced by ${best.councilor?.name || 'an operative'}${tookText}, `
+        + `which outscored the ${ev(best.expectedValue)} this action returns in their hands`
+        + (others > 0
+          ? ` — ${others} further operative${others === 1 ? ' was' : 's were'} likewise taken.`
+          : '.')
+    };
+  }
+
+  if (switchRejected.length === ownPairings.length) {
+    const closest = switchRejected
+      .map((pairing) => (typeof pairing.expectedValue === 'number' ? pairing : null))
+      .filter((pairing) => pairing !== null)[0] || null;
+    return {
+      cause: 'switch-rejected',
+      obstacles,
+      budgetRefusal: null,
+      displacedBy: `Held by active commitments — all ${ownPairings.length} way`
+        + `${ownPairings.length === 1 ? '' : 's'} of running it would break a posting worth more than the `
+        + 'mission returns'
+        + (closest === null
+          ? ', and none carried a readable net value.'
+          : `; the closest is ${closest.councilor?.name || 'an operative'} at net `
+            + `${closest.expectedValue.toFixed(2)}.`)
+    };
+  }
+
+  if (switchRejected.length > 0 || floorVetoed.length > 0) {
+    const parts = [];
+    if (floorVetoed.length > 0) parts.push(`${floorVetoed.length} by your ${riskFloorPercent}% risk floor`);
+    if (switchRejected.length > 0) {
+      parts.push(`${switchRejected.length} as a switch that costs more than the mission returns`);
+    }
+    if (unclassified.length > 0) parts.push(`${unclassified.length} for a reason the plan did not record`);
+    return {
+      cause: 'mixed',
+      obstacles,
+      budgetRefusal: null,
+      displacedBy: `Held for more than one reason across the ${ownPairings.length} ways of running it: `
+        + `${parts.join(', ')}. No single obstacle accounts for it.`
+    };
+  }
+
+  // Reachable only if the allocator grows a path this function does not know
+  // about. It says so rather than borrowing a neighbouring row's reason.
+  return {
+    cause: 'undetermined',
+    obstacles,
+    budgetRefusal: null,
+    displacedBy: `Not taken this cycle, and the plan did not record which of the `
+      + `${ownPairings.length} ways of running it was refused. This is an unrecorded reason, `
+      + 'not an absent one.'
+  };
+}
+
+/**
+ * HOW MANY OF THE SHOWN OPTIONS COULD ACTUALLY BE TAKEN TOGETHER.
+ *
+ * The bench presents its rows as a list of alternatives, which invites the
+ * reading that they are independently available. On the frozen save's
+ * omniscient plan they are not: all eight draw on ONE cycle hate budget, each
+ * charges 4.57 against 3.16 remaining, and the honest answer is that none of
+ * them can be added to the committed plan. A reader shown eight purges and no
+ * budget would reasonably conclude they could take several.
+ *
+ * WHAT THIS IS ALLOWED TO USE. Only charges the allocator actually MEASURED --
+ * that is, the ones on recorded refusals. A row the budget never evaluated has
+ * no charge, and inventing one from its best pairing would be exactly the
+ * fabrication this file's null discipline exists to stop. Such a row is counted
+ * under `unpricedRowCount` and is never counted as fitting.
+ *
+ * WHY CHEAPEST-FIRST. For a single pool, taking the cheapest options first
+ * maximises how MANY fit, so the count is the largest honest answer rather than
+ * an arbitrary one. It is still an UPPER BOUND, because only the pool that
+ * refused was priced for these rows: another pool could refuse one of them and
+ * this function would not know.
+ *
+ * MORE THAN ONE POOL REFUSES. Then the question is a multi-dimensional knapsack
+ * over charges most of which were never measured, and the answer is null with
+ * the pools named -- not a single-pool figure presented as the whole answer.
+ *
+ * @param {Array<Object>} rows The EMITTED bench rows, which are what a reader sees.
+ * @param {Object} summary `BudgetPoolManager#getSummary()` AFTER allocation.
+ * @returns {Object}
+ */
+function summariseBenchBudget(rows, summary) {
+  const list = Array.isArray(rows) ? rows : [];
+  const priced = list
+    .map((row) => row?.budgetRefusal || null)
+    .filter((refusal) => refusal !== null
+      && refusal.chargeMeasured !== false
+      && typeof refusal.charge === 'number'
+      && Number.isFinite(refusal.charge));
+  const pools = [...new Set(list
+    .map((row) => row?.budgetRefusal?.pool)
+    .filter((pool) => typeof pool === 'string' && pool !== ''))];
+
+  const base = {
+    rowCount: list.length,
+    pricedRowCount: priced.length,
+    unpricedRowCount: list.length - priced.length,
+    pools,
+    pool: pools.length === 1 ? pools[0] : null,
+    // Absent stays null in all three: no pool, several pools, and an unmeasured
+    // cap each give null rather than a number that would read as measured.
+    jointlyAffordableCount: null,
+    jointlyAffordableIsUpperBound: null,
+    cap: null,
+    used: null,
+    remaining: null,
+    unit: null,
+    capMeasured: null,
+    reason: null
+  };
+
+  if (pools.length === 0) {
+    return {
+      ...base,
+      reason: 'No bench row on this plan was refused by a budget, so no row carries a measured '
+        + 'charge and the number that jointly fit was not computed. That is not a finding that '
+        + 'they all fit: their budgets were never tested.'
+    };
+  }
+  if (pools.length > 1) {
+    return {
+      ...base,
+      reason: `Bench rows were refused by more than one pool (${pools.join(', ')}), and only the pool `
+        + 'that refused each row was priced, so no joint total can be computed without inventing the '
+        + 'charges that were never measured.'
+    };
+  }
+
+  const pool = pools[0];
+  const poolSummary = summary?.[pool] || null;
+  const cap = typeof poolSummary?.cap === 'number' && Number.isFinite(poolSummary.cap) ? poolSummary.cap : null;
+  const used = typeof poolSummary?.used === 'number' && Number.isFinite(poolSummary.used) ? poolSummary.used : null;
+  if (cap === null || used === null) {
+    return {
+      ...base,
+      pool,
+      unit: poolSummary?.unit ?? null,
+      capMeasured: poolSummary?.capMeasured ?? null,
+      reason: `The ${pool} pool refused bench rows but its cap or usage could not be read after `
+        + 'allocation, so what remains — and therefore how many rows fit it — is unknown, not zero.'
+    };
+  }
+
+  const remaining = Math.max(0, Number((cap - used).toFixed(2)));
+  let running = 0;
+  let fits = 0;
+  for (const refusal of [...priced].sort((a, b) => a.charge - b.charge)) {
+    if (Number((running + refusal.charge).toFixed(2)) > remaining) break;
+    running = Number((running + refusal.charge).toFixed(2));
+    fits += 1;
+  }
+
+  return {
+    ...base,
+    pool,
+    cap,
+    used,
+    remaining,
+    unit: poolSummary?.unit ?? null,
+    capMeasured: poolSummary?.capMeasured ?? null,
+    jointlyAffordableCount: fits,
+    // Cheapest-first is the maximum for one pool, and only one pool was priced.
+    jointlyAffordableIsUpperBound: true,
+    reason: base.unpricedRowCount > 0
+      ? `${fits} of the ${priced.length} priced row(s) fit the ${remaining} ${poolSummary?.unit || pool} `
+        + `remaining; ${base.unpricedRowCount} further row(s) carry no measured charge and are neither `
+        + 'counted as fitting nor as refused.'
+      : `${fits} of the ${list.length} row(s) shown fit the ${remaining} ${poolSummary?.unit || pool} `
+        + `left of a ${cap} cycle cap after the plan's committed ${used}.`
+  };
+}
+
+/**
+ * The refusal, in words, with every number a reader needs to act on it.
+ *
+ * It states the CHARGE and what was LEFT as well as the shortfall, because
+ * "1.41 short" alone cannot answer "would a cheaper option have fitted?" -- and
+ * it names the operative who was free, because that is the fact which refutes
+ * "free up a councilor and I could do this".
+ *
+ * ABSENT STAYS NULL: a charge nobody could price is reported as unpriced, never
+ * printed as a number, and a pool that could not be checked at all is named
+ * beside the one that refused rather than being left to read as fine.
+ */
+function describeBudgetRefusal(refusal) {
+  const n = (value, digits = 2) => (typeof value === 'number' && Number.isFinite(value)
+    ? value.toFixed(digits)
+    : 'UNAVAILABLE');
+  const unit = refusal.unit || refusal.pool;
+  const chargeText = refusal.chargeMeasured === false
+    ? `an UNPRICED ${unit} charge`
+    : `${n(refusal.charge)} ${unit}`;
+  const who = refusal.councilorName
+    ? `${refusal.councilorName} was free to run it`
+    : 'an operative was free to run it';
+  const alsoUnmeasured = Array.isArray(refusal.unmeasuredPools) && refusal.unmeasuredPools.length > 0
+    ? ` The ${refusal.unmeasuredPools.join(' and ')} pool${refusal.unmeasuredPools.length === 1 ? '' : 's'} `
+      + `could not be checked at all, so ${refusal.unmeasuredPools.length === 1 ? 'it is' : 'they are'} `
+      + 'unverified rather than clear.'
+    : '';
+  return `Displaced by the ${refusal.pool} budget, not by a busy councilor — it charges ${chargeText} `
+    + `against ${n(refusal.remaining)} left of a ${n(refusal.cap)} cycle cap `
+    + `(${n(refusal.used)} already committed), ${n(refusal.shortfall)} short. `
+    + `${who}, so freeing another operative does not make this affordable.${alsoUnmeasured}`;
 }
 
 /**
@@ -480,19 +851,54 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     // on the assignment so the card can say the exposure is unmeasured. The
     // engine's hate/total-war-budget veto is what keeps such a candidate out
     // of `surviving` in the first place.
+    //
+    // `hateChargeMeasured` is what stops the 0 on that fallback branch being
+    // read back as a measurement. It is the difference between "this action
+    // generates no hate" and "nobody could price the hate it generates", and
+    // the second must never be counted as fitting a hate budget.
+    const hateChargeMeasured = typeof pairing.hateForBudget === 'number'
+      || typeof pairing.expectedHate === 'number';
     const hateCharge = typeof pairing.hateForBudget === 'number'
       ? pairing.hateForBudget
       : (typeof pairing.expectedHate === 'number' ? pairing.expectedHate : 0);
 
     const affordability = budgets.canAfford(pairing.cost, hateCharge);
     if (!affordability.affordable) {
+      // A refusal is a MEASUREMENT, and it is the only place the engine ever
+      // learns why an action it wanted could not be taken. It used to record
+      // the pool and the shortfall and throw the rest away, which left every
+      // consumer able to say "refused" and unable to say by how much, out of
+      // what, or whether a second option would have fitted beside the first.
+      //
+      // `councilorName` matters more than it looks: this pairing reached the
+      // affordability check, so its councilor was FREE and willing at that
+      // moment and the budget still said no. That is what makes "free up a
+      // councilor and you could do this" a false reading of the refusal, and
+      // naming the operative is what lets a card say so.
       budgetDisplaced.push({
         candidateId: pairing.candidateId,
         councilorId: pairing.councilorId,
+        councilorName: pairing.councilor?.name || null,
         title: pairing.candidate?.title || pairing.candidate?.friendlyName || 'Candidate',
+        expectedValue: pairing.expectedValue,
         pool: affordability.pool,
-        shortfall: affordability.shortfall
+        shortfall: affordability.shortfall,
+        charge: affordability.charge,
+        // Only the hate pool can be charged from an unmeasured source; a
+        // resource cost is a number on the candidate or it is 0.
+        chargeMeasured: affordability.pool === 'alienHate' ? hateChargeMeasured : true,
+        cap: affordability.cap,
+        used: affordability.used,
+        remaining: affordability.remaining,
+        unit: affordability.unit,
+        // A pool that refused says nothing about a pool that could not be
+        // checked. Both travel, so "refused by hate" never implies "and the
+        // money was fine".
+        unmeasuredPools: affordability.unmeasuredPools
       });
+      for (const pool of affordability.unmeasuredPools) {
+        if (!budgetChecksUnevaluated.includes(pool)) budgetChecksUnevaluated.push(pool);
+      }
       continue;
     }
 
@@ -673,6 +1079,31 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
   // `identity` a grouping input, and neither is a figure any consumer reads.
   // Only `record.entry` reaches the payload, as `cappedBenched` below --
   // widened there with the group counts the row stands for.
+
+  // The refusals, indexed for the bench loop. Keyed on the candidate for the
+  // reason a row states, and on the (candidate, councilor) pair for the tally
+  // that classifies every way of running it.
+  //
+  // `pairings` is sorted by expected value descending and the greedy pass walks
+  // it in that order, so the FIRST refusal recorded for a candidate is the one
+  // its best-valued free operative hit. That is the refusal a reader is asking
+  // about, and taking the first makes the choice deterministic rather than
+  // leaving it to whichever entry a later filter happened to reach.
+  const budgetRefusalByCandidate = new Map();
+  const budgetRefusedPairKeys = new Set();
+  for (const refusal of budgetDisplaced) {
+    if (!budgetRefusalByCandidate.has(refusal.candidateId)) {
+      budgetRefusalByCandidate.set(refusal.candidateId, refusal);
+    }
+    budgetRefusedPairKeys.add(`${refusal.candidateId}|${refusal.councilorId}`);
+  }
+
+  // `assignmentByCouncilorKey` (built in 3b, after the swap pass) is what lets
+  // a row displaced by contention name the work that took the operative rather
+  // than asserting one. It is deliberately the SAME map `committed` resolves
+  // against: a second one built here could disagree with it about one
+  // councilor, which is the contradiction 3b exists to prevent.
+
   const benchedRecords = [];
   for (const candidate of candidates) {
     const candId = candidate.id || candidate.key || candidate.title;
@@ -706,19 +1137,18 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
         && ownPairings.length > 0
         && ownPairings.every((pairing) => pairing.riskFloorVetoed === true);
 
-      let displacedBy = 'Displaced by higher expected value allocation across team.';
-      if (allBelowFloor) {
-        const bandLows = ownPairings
-          .map((pairing) => (typeof pairing.riskFloor?.bandLow === 'number' ? pairing.riskFloor.bandLow : null))
-          .filter((value) => value !== null);
-        const closest = bandLows.length > 0 ? Math.max(...bandLows) : null;
-        displacedBy = `Held back by your ${riskFloorPercent}% risk floor`
-          + (closest === null
-            ? ' — no operative produced a readable odds band for it.'
-            : ` — the best available operative reads ${closest}% at the low end of its band.`);
-      } else if (assignments.length > 0) {
-        displacedBy = `Displaced by ${assignments[0].councilor.name} assigned to direct high-priority mission.`;
-      }
+      const budgetRefusal = budgetRefusalByCandidate.get(candId) || null;
+      const displacement = classifyDisplacement({
+        candidateId: candId,
+        ownPairings,
+        allBelowFloor,
+        budgetRefusal,
+        budgetRefusedPairKeys,
+        assignedCouncilorIds,
+        assignmentByCouncilorKey,
+        riskFloorPercent
+      });
+      const displacedBy = displacement.displacedBy;
 
       benchedRecords.push({
         selectionScore,
@@ -734,7 +1164,17 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
           // True only when the floor removed EVERY way of running this mission,
           // so a consumer can separate a risk hold from a value trade-off.
           riskFloorHeld: allBelowFloor,
-          displacedBy
+          displacedBy,
+          // The machine-readable form of the same verdict, so a consumer never
+          // has to parse the sentence. `cause` is the obstacle that actually
+          // bound; `obstacles` is the tally across every way of running it.
+          displacementCause: displacement.cause,
+          displacementObstacles: displacement.obstacles,
+          // The refusal itself when a budget is what bound -- pool, charge,
+          // what was left, and by how much it fell short. Null when no budget
+          // refused this candidate, which is NOT the same as it being free:
+          // a candidate no pairing ever priced never reached a budget at all.
+          budgetRefusal: displacement.budgetRefusal
         }
       });
     }
@@ -859,6 +1299,14 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
   const { rows: cappedBenched, representedCount: benchedRepresentedCount } =
     selectBenchRows(benchedRecords, { limit: BENCH_SELECTION_LIMIT });
 
+  // Computed over the EMITTED rows rather than the whole bench, because the
+  // question it answers -- "how many of these can I actually take?" -- is asked
+  // about the list the reader is looking at. The group counts beside each row
+  // say how many further siblings it stands for; those siblings draw on the
+  // same pool, so taking one of a group is taking one of the shown options.
+  const budgetSummary = budgets.getSummary();
+  const benchBudget = summariseBenchBudget(cappedBenched, budgetSummary);
+
   return {
     assignments,
     unassigned,
@@ -890,8 +1338,13 @@ function allocateCyclePlan(candidates = [], ownCouncilors = [], world = {}, opti
     benchedTotalCount: benchedRecords.length,
     benchedOmittedCount: benchedRecords.length - cappedBenched.length,
     benchedRepresentedCount,
+    // What the shown rows cost against the pool that refused them, and how many
+    // of them could be taken together. The bench reads as a list of independent
+    // alternatives without this; on the frozen save's omniscient plan all eight
+    // draw on one 7.90 hate cap with 3.16 left and NONE of them fits.
+    benchBudget,
     budgetDisplaced,
-    budgets: budgets.getSummary(),
+    budgets: budgetSummary,
     budgetChecksUnevaluated,
     droppedPairings,
     clocks,

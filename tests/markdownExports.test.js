@@ -842,6 +842,110 @@ for (const exportMode of EXPORT_MODES) {
     assert.match(section, /\*\*Assigned this cycle:\*\* UNAVAILABLE councilor\(s\)/);
   });
 
+  // -------------------------------------------------------------------------
+  // THE BUDGET THAT MAKES THE BENCH INTERPRETABLE
+  //
+  // Section 10 listed eight bench rows and said nothing about what they cost.
+  // On the frozen save's omniscient plan all eight draw on ONE cycle hate cap
+  // of 7.90 with 3.16 left, and each charges 4.57 -- so the honest answer to
+  // "how many of these can I take?" is none, and no export said so.
+  // -------------------------------------------------------------------------
+
+  test(`section 10 states the cycle hate budget and how many bench rows fit it (${exportMode} mode)`, () => {
+    const section = sectionTen(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode), {
+      cyclePlan: makeCyclePlan({
+        budgets: {
+          alienHate: {
+            used: 4.74, cap: 7.9, capMeasured: true, unit: 'hate',
+            currentHate: 42.86253, currentHateBasis: 'measured', capIsUpperBound: false
+          }
+        },
+        benchBudget: {
+          rowCount: 8, pricedRowCount: 8, unpricedRowCount: 0,
+          pools: ['alienHate'], pool: 'alienHate',
+          jointlyAffordableCount: 0, jointlyAffordableIsUpperBound: true,
+          cap: 7.9, used: 4.74, remaining: 3.16, unit: 'hate', capMeasured: true,
+          reason: 'x'
+        }
+      })
+    }));
+
+    assert.match(section, /\*\*Cycle hate budget:\*\* 4\.74 of 7\.90 used, 3\.16 left \(measured hate 42\.86\)/);
+    assert.match(section, /\*\*Bench affordability:\*\* 0 of the 8 row\(s\) above fit the 3\.16 hate/);
+    assert.match(section, /ALTERNATIVES sharing one pool, not independent options/);
+    assert.match(section, /upper bound/i);
+  });
+
+  test(`section 10 says a floor-derived hate cap can only overstate the budget (${exportMode} mode)`, () => {
+    // Player mode's live shape: `actualAlienHate` is redacted, so the cap comes
+    // from the Mission Control FLOOR and is an upper bound on the real budget.
+    // `capMeasured: true` alone read as "this was measured"; it was not.
+    const section = sectionTen(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode), {
+      cyclePlan: makeCyclePlan({
+        budgets: {
+          alienHate: {
+            used: 0, cap: 8.5, capMeasured: true, unit: 'hate',
+            currentHate: 30.912, currentHateBasis: 'floor', capIsUpperBound: true
+          }
+        }
+      })
+    }));
+
+    assert.match(section, /Mission Control hate FLOOR \(30\.91\)/);
+    assert.match(section, /can only be this size or SMALLER/);
+  });
+
+  test(`section 10 refuses to imply every bench row fits when none was priced (${exportMode} mode)`, () => {
+    const section = sectionTen(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode), {
+      cyclePlan: makeCyclePlan({
+        budgets: {
+          alienHate: {
+            used: 0, cap: 8.5, capMeasured: true, unit: 'hate',
+            currentHate: 30.912, currentHateBasis: 'floor', capIsUpperBound: true
+          }
+        },
+        benchBudget: {
+          rowCount: 8, pricedRowCount: 0, unpricedRowCount: 8, pools: [], pool: null,
+          jointlyAffordableCount: null, jointlyAffordableIsUpperBound: null,
+          cap: null, used: null, remaining: null, unit: null, capMeasured: null,
+          reason: 'No bench row on this plan was refused by a budget, so their budgets were never tested.'
+        }
+      })
+    }));
+
+    assert.match(section, /\*\*Bench affordability:\*\* NOT COMPUTED/);
+    assert.match(section, /never tested/);
+    assert.ok(!/\*\*Bench affordability:\*\* 0 of/.test(section),
+      'an uncomputed total must not render as a measured zero');
+    assert.ok(!/\*\*Bench affordability:\*\* 8 of/.test(section),
+      'and must not imply every row fits either');
+  });
+
+  test(`section 10 reports an unread hate pool and an unread bench budget as unread (${exportMode} mode)`, () => {
+    // A plan from before this change carries neither field. `Number(null) === 0`
+    // would render a measured "0.00 of 0.00 used" and "0 of 8 fit", both of
+    // which are findings nobody made.
+    const plan = makeCyclePlan();
+    delete plan.budgets;
+    delete plan.benchBudget;
+    const section = sectionTen(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode), { cyclePlan: plan }));
+
+    assert.match(section, /\*\*Cycle hate budget:\*\* UNAVAILABLE/);
+    assert.match(section, /\*\*Bench affordability:\*\* UNAVAILABLE/);
+    assert.ok(!/0\.00 of 0\.00 used/.test(section), 'an unread pool must not render as a measured zero');
+    assert.ok(!/\bIt is zero\b/.test(section));
+
+    // And a pool present but unmeasured is a fifth, distinct state: the checks
+    // were skipped, which is not the same as them passing.
+    const unmeasured = sectionTen(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode), {
+      cyclePlan: makeCyclePlan({
+        budgets: { alienHate: { used: 0, cap: null, capMeasured: false, unit: 'hate', currentHate: null, currentHateBasis: null, capIsUpperBound: false } }
+      })
+    }));
+    assert.match(unmeasured, /\*\*Cycle hate budget:\*\* NOT MEASURED/);
+    assert.match(unmeasured, /UNCHECKED rather than being cleared/);
+  });
+
   test(`the chain-promotion block keeps its horizon and its counts even with no chains to list (${exportMode} mode)`, () => {
     const block = chainBlock(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode)));
     assert.ok(block.length > 0, 'the chain-promotion block must render even when empty');

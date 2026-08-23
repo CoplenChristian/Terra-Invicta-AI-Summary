@@ -1,7 +1,8 @@
 /**
  * server/engine/budgets.js
  * Purpose: tracks the shared portfolio budget pools across the entire
- *   allocation cycle.
+ *   allocation cycle, and reports every refusal with the charge, the remaining
+ *   capacity and the basis the cap rests on.
  *
  * Tracks shared portfolio budget pools across the entire allocation cycle.
  * Prevents multiple individually affordable missions from jointly exceeding
@@ -94,6 +95,32 @@ class BudgetPoolManager {
       ? null
       : Math.max(1.0, Math.min(15.0, Number((hateHeadroom * safetyMargin * 0.1).toFixed(1))));
 
+    // WHAT THE CAP WAS DERIVED FROM, which is not the same question as whether
+    // a number came out.
+    //
+    // Player mode redacts `actualAlienHate`, so `measuredHate` is null there
+    // and `effectiveHate` falls back to `minimumAlienHate` -- the Mission
+    // Control floor, which is a LOWER BOUND on hate and observable without
+    // xenology intel. A cap still comes out (8.5 on the frozen save against
+    // omniscient's 7.9), and `capMeasured: true` was the only thing said about
+    // it, which reads as "this cap was measured". It was not: true hate can
+    // only be >= the floor, so the headroom can only be <= this one and the cap
+    // is an UPPER BOUND, not a measurement.
+    //
+    // Refusing the cap outright in that case was considered and rejected -- it
+    // would make every affordability check unevaluated in player mode and so
+    // change which candidates the plan assigns, and an UNBOUNDED hate budget is
+    // a worse failure than an optimistic one. The basis is reported instead, so
+    // every surface that prints the budget can say what it rests on.
+    //
+    // `measured` means a hate reading was present, whether or not the floor
+    // then exceeded it: both inputs were known and the max of two known numbers
+    // is known. `floor` means ONLY the floor was readable. `null` means neither
+    // was, and then there is no cap at all.
+    const currentHateBasis = effectiveHate === null
+      ? null
+      : (measuredHate !== null ? 'measured' : 'floor');
+
     // --- Resource pools ------------------------------------------------
     const influencePool = readPoolCapacity(res, POOL_SOURCE_KEYS.influence);
     const opsPool = readPoolCapacity(res, POOL_SOURCE_KEYS.operations);
@@ -119,6 +146,10 @@ class BudgetPoolManager {
         capMeasured: cycleHateCap !== null,
         headroom: hateHeadroom,
         currentHate: effectiveHate,
+        currentHateBasis,
+        // True when the cap rests on the hate FLOOR rather than a hate reading,
+        // so the real budget can only be this size or smaller.
+        capIsUpperBound: currentHateBasis === 'floor',
         unit: 'hate'
       },
       influence: {
@@ -159,6 +190,32 @@ class BudgetPoolManager {
   }
 
   /**
+   * The three numbers a refusal has to carry for a reader to act on it.
+   *
+   * "The alienHate budget refused this" is not actionable on its own: the
+   * reader cannot tell whether they are 0.1 short or 40 short, nor whether a
+   * second option would fit beside the first. `shortfall` alone answered the
+   * first question and neither of the others, so the CHARGE this action makes
+   * and what was LEFT to pay it with travel with every refusal.
+   *
+   * `charge - remaining === shortfall` by construction, and `remaining` is
+   * clamped at 0 because an over-consumed pool has nothing left rather than a
+   * negative amount of it.
+   */
+  static describeRefusal(pool, poolName, amount) {
+    const remaining = Math.max(0, Number((pool.cap - pool.used).toFixed(2)));
+    return {
+      pool: poolName,
+      shortfall: Number((pool.used + amount - pool.cap).toFixed(2)),
+      charge: Number(amount.toFixed(2)),
+      cap: pool.cap,
+      used: Number(pool.used.toFixed(2)),
+      remaining,
+      unit: pool.unit
+    };
+  }
+
+  /**
    * A pool whose cap is unmeasured cannot answer "can we afford this". It is
    * reported through `evaluated: false` and `unmeasuredPools` rather than
    * silently passing as affordable or silently failing as broke -- the caller
@@ -176,8 +233,7 @@ class BudgetPoolManager {
           affordable: false,
           evaluated: true,
           unmeasuredPools,
-          pool: 'alienHate',
-          shortfall: Number((this.pools.alienHate.used + expHate - this.pools.alienHate.cap).toFixed(2))
+          ...BudgetPoolManager.describeRefusal(this.pools.alienHate, 'alienHate', expHate)
         };
       }
     }
@@ -194,8 +250,7 @@ class BudgetPoolManager {
           affordable: false,
           evaluated: true,
           unmeasuredPools,
-          pool: poolName,
-          shortfall: Number((pool.used + amount - pool.cap).toFixed(2))
+          ...BudgetPoolManager.describeRefusal(pool, poolName, amount)
         };
       }
     }
@@ -239,7 +294,12 @@ class BudgetPoolManager {
     return {
       alienHate: summarise('alienHate', {
         headroom: this.pools.alienHate.headroom,
-        currentHate: this.pools.alienHate.currentHate
+        currentHate: this.pools.alienHate.currentHate,
+        // `capMeasured` says a number came out; these two say what it rests on.
+        // See the constructor for why a floor-derived cap is kept rather than
+        // refused.
+        currentHateBasis: this.pools.alienHate.currentHateBasis,
+        capIsUpperBound: this.pools.alienHate.capIsUpperBound
       }),
       influence: summarise('influence'),
       operations: summarise('operations'),

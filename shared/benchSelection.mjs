@@ -2,7 +2,8 @@
 //
 // Purpose: the bench cap's selection rule — one row per (mission, target)
 //   sibling group, so the carried rows are distinct OPTIONS rather than
-//   several spellings of one.
+//   several spellings of one, each carrying how many of its members share the
+//   representative's risk-floor and budget verdicts.
 //
 // ---------------------------------------------------------------------------
 // WHY THIS EXISTS
@@ -336,6 +337,25 @@ export function selectBenchRows(records, { limit = BENCH_SELECTION_LIMIT } = {})
       .filter((member) => member.record.entry?.riskFloorHeld === true)
       .length;
 
+    // The same problem, for the same reason, one row down: `displacedBy` and
+    // `budgetRefusal` also describe the REPRESENTATIVE only. A group whose
+    // members were held back for different reasons must not present one
+    // member's reason as the group's, so the count of members a budget
+    // actually refused travels beside it. When it equals `groupCount` the
+    // representative's sentence is true of every member; when it is between 1
+    // and count-1 the group is MIXED and a consumer must say so; when it is 0
+    // no member was refused by a budget at all.
+    //
+    // Counted off `budgetRefusal` rather than off `displacementCause`, because
+    // a member can carry a recorded refusal while a nearer obstacle bound its
+    // stated cause -- the refusal is the measurement, the cause is the choice.
+    const budgetDisplacedCount = group.members
+      .filter((member) => {
+        const refusal = member.record.entry?.budgetRefusal;
+        return refusal !== null && refusal !== undefined;
+      })
+      .length;
+
     return {
       ...representative.record.entry,
       groupCount: count,
@@ -345,7 +365,8 @@ export function selectBenchRows(records, { limit = BENCH_SELECTION_LIMIT } = {})
         : null,
       groupScoreLow: scoreLow,
       groupScoreHigh: scoreHigh,
-      groupRiskFloorHeldCount: riskFloorHeldCount
+      groupRiskFloorHeldCount: riskFloorHeldCount,
+      groupBudgetDisplacedCount: budgetDisplacedCount
     };
   });
 

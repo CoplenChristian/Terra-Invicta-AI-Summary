@@ -2262,6 +2262,90 @@ function researchChainPromotionBlocks(filteredSnapshot, observerId, observerName
  * and now that eight rows means eight options when it means eight groups. All
  * three counts and the ordering rule therefore travel together.
  */
+/**
+ * The two lines of section 10 that stop eight bench rows reading as eight
+ * independently available options.
+ *
+ * WHY THIS IS IN THE EXPORT AT ALL
+ *
+ * The bench lists alternatives and says nothing about what they COST. On the
+ * frozen save's omniscient plan all eight rows draw on one cycle hate budget:
+ * each charges 4.57 hate against 3.16 left of a 7.90 cap, so the honest answer
+ * to "how many of these can I take?" is NONE — and until now no surface said
+ * so. The dashboard's owner raised exactly this scenario unprompted ("if they
+ * suggest purging and that puts me over the hate cap … then that's a problem").
+ *
+ * WHAT EACH LINE CARRIES, AND WHY BOTH ARE NEEDED
+ *
+ *   BUDGET. The pool's own state — used, cap, and what the cap RESTS ON. Player
+ *   mode redacts the true alien hate, so its cap is derived from the Mission
+ *   Control floor and is an UPPER BOUND on the real budget, not a measurement.
+ *   `capMeasured` alone said only that a number came out; `currentHateBasis`
+ *   says whether it was measured or floored, and the line prints the caveat
+ *   rather than letting an optimistic cap read as a measured one.
+ *
+ *   JOINT AFFORDABILITY. How many of the SHOWN rows fit what remains. It is a
+ *   count over rows whose charge the allocator actually measured; a row it
+ *   never priced is named as unpriced and is never counted as fitting. Where no
+ *   row was priced at all — player mode on this save, where no bench row was
+ *   refused by a budget — the line says the question was not computed rather
+ *   than implying the answer is "all of them".
+ *
+ * ABSENT STAYS NULL throughout: an unavailable summary prints one line saying
+ * the plan carries no bench-budget record, never a cap of 0 with 0 rows fitting
+ * it, which reads as a measured "you can afford nothing".
+ */
+function benchBudgetLines(plan) {
+  const summary = plan?.benchBudget ?? null;
+  const hate = plan?.budgets?.alienHate ?? null;
+  const lines = [];
+
+  // The pool the cycle actually gates on, stated whether or not it refused a
+  // bench row -- a reader planning purges needs the number before anything is
+  // refused, not only afterwards.
+  if (hate === null) {
+    lines.push(`- **Cycle hate budget:** UNAVAILABLE — this plan carries no alien-hate pool record. `
+      + `That is not a budget of zero: nothing was read.`);
+  } else if (hate.capMeasured !== true) {
+    lines.push(`- **Cycle hate budget:** NOT MEASURED — the snapshot carries no readable alien-hate `
+      + `figure, so no cap could be derived and every hate charge this cycle went UNCHECKED rather `
+      + `than being cleared.`);
+  } else {
+    const basis = hate.currentHateBasis === 'floor'
+      ? ` — derived from the Mission Control hate FLOOR (${fixedOr(hate.currentHate, 2)}), not from a hate `
+        + `reading, so the true budget can only be this size or SMALLER`
+      : ` (measured hate ${fixedOr(hate.currentHate, 2)})`;
+    // Absent stays null on BOTH inputs: one unreadable half makes the remainder
+    // unreadable, never the other half printed as though it were the answer.
+    const cap = num(hate.cap);
+    const used = num(hate.used);
+    const left = (cap === null || used === null) ? null : cap - used;
+    lines.push(`- **Cycle hate budget:** ${fixedOr(hate.used, 2)} of ${fixedOr(hate.cap, 2)} used, `
+      + `${fixedOr(left, 2)} left${basis}`);
+  }
+
+  if (summary === null) {
+    lines.push(`- **Bench affordability:** UNAVAILABLE — this plan carries no bench-budget record, so `
+      + `how many of the rows above could be taken together was not computed. It is not zero.`);
+    return lines;
+  }
+
+  const fits = num(summary.jointlyAffordableCount);
+  if (fits === null) {
+    lines.push(`- **Bench affordability:** NOT COMPUTED — ${summary.reason || 'no reason was recorded'}`);
+    return lines;
+  }
+
+  lines.push(`- **Bench affordability:** ${fits} of the ${localeOr(summary.rowCount)} row(s) above fit the `
+    + `${fixedOr(summary.remaining, 2)} ${summary.unit || summary.pool} left in the ${summary.pool} budget `
+    + `(${fixedOr(summary.used, 2)} of ${fixedOr(summary.cap, 2)} already committed) — cheapest first, which `
+    + `is the LARGEST number that fits, and an upper bound because only the pool that refused them was priced`
+    + (num(summary.unpricedRowCount) ? `; ${summary.unpricedRowCount} row(s) carry no measured charge and are `
+      + `counted neither as fitting nor as refused` : '')
+    + `. The rows are ALTERNATIVES sharing one pool, not independent options.`);
+  return lines;
+}
+
 function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
   const mode = filteredSnapshot.mode || filteredSnapshot.intelMode || filteredSnapshot.visibility || 'player';
   const endpoint = `/api/v2/briefing?observer=${observerId}&mode=${mode}`;
@@ -2328,6 +2412,8 @@ function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
     + `counts GROUPS rather than options. A row's \`groupCount\` is how many candidates it stands for and `
     + `\`groupNote\` names them; \`groupScoreLow\` / \`groupScoreHigh\` are the group's own score range, null when no `
     + `member could be scored`);
+
+  lines.push(...benchBudgetLines(plan));
 
   lines.push(`- **Assigned this cycle:** ${countOr(plan.assignments)} councilor(s); `
     + `${countOr(plan.unassigned)} unassigned, ${countOr(plan.committed)} already committed`);
