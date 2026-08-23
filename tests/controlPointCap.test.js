@@ -29,6 +29,8 @@ const {
   CONTROL_POINT_MAINTENANCE_EFFECTS,
   CONTROL_POINT_OVERAGE_PENALTY_MULTIPLIER,
   COST_FORMULA,
+  RECORDED_POSITION,
+  recordedCapPosition,
   buildControlPointCap,
   buildControlPointCapReport,
   buildControlPointMaintenance,
@@ -46,6 +48,12 @@ const { loadFilteredSnapshot, queryIntel } = require('../server/snapshotLoader')
 const OBSERVER = 4712;
 const PROTECTORATE = 4714;
 const ALIENS = 4717;
+// A faction the game records at ZERO, used to pin the floored-zero rule.
+const RESISTANCE = 4710;
+// The save uses `ID` (capital) and ids arrive as numbers here, but a filtered
+// payload can carry either form, so identity is compared the way the rest of
+// the repo does rather than with `===`.
+const { sameId: sameFaction } = require('../shared/util.mjs');
 
 // ---------------------------------------------------------------------------
 // The mechanic, from the shipped assembly and templates.
@@ -708,81 +716,227 @@ test('the observer composes its own cap identically in both modes', () => {
   );
 });
 
-test('a rival\'s cap is omniscient-only and refuses in player mode', () => {
-  const player = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER });
-  for (const factionId of [PROTECTORATE, ALIENS]) {
-    const report = buildControlPointCapReport(player, { factionId, mode: 'player' });
-    assert.equal(report.recorded.overage, null, `faction ${factionId} must not leak its recorded overage`);
-    assert.equal(report.recorded.penaltyToday, null, `faction ${factionId} must not leak its stored penalty`);
-    if (factionId !== ALIENS) {
-      assert.equal(report.capacity.capAvailable, false, `faction ${factionId} must not compose in player mode`);
-      assert.equal(report.headroom.available, false, `faction ${factionId} must not publish headroom in player mode`);
-    }
+// ---------------------------------------------------------------------------
+// THE 2026-08-22 INTEL-MODEL DECISION.
+//
+// The dashboard's owner decided on 2026-08-22 that the faction control-point cap
+// does not need to be locked behind omniscient. `7174764` refused a rival's cap
+// in player mode on three grounds and redacted the game's own daily recording
+// with it; `4f2f5b1` kept that. These tests were RETARGETED, not deleted: what
+// they guarded did not go away, it moved. The `recorded` basis composes nothing
+// and is now published in both modes; the `composed` basis still refuses for a
+// rival, because its terms genuinely are masked.
+// ---------------------------------------------------------------------------
+
+test('the recording classifier tells a position from a floor from an exemption', () => {
+  // The distinction the whole unlock rests on. A positive penalty LOCATES the
+  // faction; a zero is `max(0, cost - cap)` bottoming out, which BOUNDS it; the
+  // aliens' zero is an exemption artefact and does neither.
+  assert.equal(recordedCapPosition(34.3365589766908), RECORDED_POSITION.position);
+  assert.equal(recordedCapPosition(0), RECORDED_POSITION.boundOnly);
+  assert.equal(recordedCapPosition(0, { alien: true }), RECORDED_POSITION.nothing);
+  assert.equal(recordedCapPosition(34.34, { alien: true }), RECORDED_POSITION.nothing);
+  // ABSENT STAYS NULL. `Number(null) === 0` would classify an unread faction as
+  // bounded at or under cap, which is the reassuring-unknown defect exactly.
+  for (const absent of [null, undefined, '', 'n/a', NaN]) {
+    assert.equal(recordedCapPosition(absent), null, `${JSON.stringify(absent)} must classify as null`);
   }
-  const omniscient = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
-  assert.ok(
-    buildControlPointCapReport(omniscient, { factionId: PROTECTORATE, mode: 'omniscient' }).capacity.capAvailable,
-    'omniscient mode should compose a rival cap'
-  );
 });
 
-test('no rival cap input survives anywhere in the player-mode payload', () => {
+test('a rival the game records OVER cap resolves in player mode, on the recorded basis', () => {
+  // The point of the unlock. The recorded basis reads
+  // `history_CPCapOverageByDay` and composes nothing, so it needs none of the
+  // masked councilor / hab-module / effect terms and answers in either mode.
+  const player = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER });
+  const omniscient = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
+  const p = buildControlPointCapReport(player, { factionId: PROTECTORATE, mode: 'player' });
+  const o = buildControlPointCapReport(omniscient, { factionId: PROTECTORATE, mode: 'omniscient' });
+
+  assert.equal(p.headroom.available, true);
+  assert.equal(p.headroom.basis, 'recorded');
+  assert.equal(p.headroom.overCap, true);
+  assert.equal(p.verdict, 'over-cap');
+  assert.equal(p.recorded.establishes, RECORDED_POSITION.position);
+  // The SAME figure as omniscient, because it comes from the same raw field and
+  // no composition is involved.
+  assert.equal(p.headroom.value, o.headroom.value);
+  assert.equal(p.recorded.overage, o.recorded.overage);
+  assert.equal(p.penalties.influencePerYearFromRecorded, o.penalties.influencePerYearFromRecorded);
+  // The exposure the game APPLIES is the window mean, not today's slot, and
+  // both survive into player mode.
+  assert.equal(p.penalties.missionExposureApplied, o.penalties.missionExposureApplied);
+  assert.notEqual(p.penalties.missionExposureApplied, p.penalties.missionExposureToday);
+
+  // AND THE LINE STILL HOLDS: the composed basis refuses, because its terms are
+  // masked. Unlocking the verdict must not have unlocked the inputs.
+  assert.equal(p.capacity.capAvailable, false, 'a rival must still not COMPOSE a cap in player mode');
+  assert.deepEqual(p.capacity.unreadableTerms, ['councilors', 'habModules', 'effects']);
+  assert.equal(p.capacity.councilorTotal, null);
+  assert.ok(o.capacity.capAvailable, 'omniscient mode should still compose a rival cap');
+});
+
+test('a rival recorded at ZERO is unknown in player mode, never within-cap and never overCap:false', () => {
+  // THE ONE TO GET RIGHT. Publishing the recording made `recorded.available`
+  // true with a FLOORED ZERO. Left alone, the refusal branch's old
+  // `overCap: recordedAvailable ? false : null` would have flipped every such
+  // rival from an honest null to a confident "not over cap" as a side effect --
+  // an unmeasurable state reported as a reassuring one.
+  const player = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER });
+  const zeroRivals = player.factions.filter(f =>
+    !sameFaction(f.ID, OBSERVER) && !sameFaction(f.ID, ALIENS) && Number(f.recordedControlPointCapOverage) === 0);
+  assert.ok(zeroRivals.length > 0, 'the save should carry rivals the game records at zero');
+
+  for (const f of zeroRivals) {
+    const r = buildControlPointCapReport(player, { factionId: f.ID, mode: 'player' });
+    assert.equal(r.recorded.available, true, `${f.displayName}: the recording itself is published`);
+    assert.equal(r.recorded.overage, 0);
+    assert.equal(r.recorded.establishes, RECORDED_POSITION.boundOnly, `${f.displayName}: a zero BOUNDS, not locates`);
+    assert.equal(r.headroom.available, false, `${f.displayName}: a floored zero is not headroom`);
+    assert.equal(r.headroom.value, null);
+    assert.equal(r.headroom.basis, null);
+    assert.equal(r.headroom.overCap, null, `${f.displayName}: overCap must be null, NOT false`);
+    assert.notEqual(r.headroom.overCap, false);
+    assert.equal(r.verdict, 'unknown', `${f.displayName}: not "within-cap"`);
+    // The refusal must SAY the recording bounded it, rather than reading as
+    // though nothing at all were known.
+    assert.match(r.headroom.reason, /FLOOR of max\(0, cost - cap\)/);
+  }
+});
+
+test('the composed basis still corroborates a recorded zero in omniscient', () => {
+  // The other half of the same rule: where the composed terms ARE readable the
+  // zero stops being the only evidence, and the position is located.
+  const omniscient = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
+  const r = buildControlPointCapReport(omniscient, { factionId: RESISTANCE, mode: 'omniscient' });
+  assert.equal(r.recorded.establishes, RECORDED_POSITION.boundOnly);
+  assert.equal(r.headroom.available, true);
+  assert.equal(r.headroom.basis, 'composed');
+  assert.equal(r.headroom.overCap, false);
+  assert.equal(r.verdict, 'within-cap');
+});
+
+test('the recorded cap fields are published in player mode, and the composed inputs are not', () => {
   // Scanned across the WHOLE payload, not pinned to one field: four shipped
   // leaks had the derived field nulled while the raw one it came from survived.
-  // The stored penalty is exactly the overage over three, so BOTH have to go.
+  // Retargeted 2026-08-22 -- the point of the change is that SOME things become
+  // visible, so this now asserts BOTH directions.
   const player = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER });
   const omniscient = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
 
-  const rivalValues = [];
-  for (const f of omniscient.factions) {
-    if (f.ID === OBSERVER) continue;
+  // (a) DELIBERATELY PUBLISHED. Asserted positively so a future silent
+  //     re-redaction fails a test instead of quietly narrowing the intel model.
+  let publishedRecordings = 0;
+  for (const o of omniscient.factions) {
+    if (o.ID === OBSERVER) continue;
+    const p = player.factions.find(f => f.ID === o.ID);
+    assert.ok(p, `${o.ID} missing from the player payload`);
     for (const key of [
-      'recordedControlPointCapOverage', 'controlPointCapPenaltyToday', 'controlPointCapPenaltyAveraged'
+      'recordedControlPointCapOverage', 'controlPointCapPenaltyToday',
+      'controlPointCapPenaltyAveraged', 'recordedControlPointCapOverageSamples'
     ]) {
-      const value = f[key];
-      if (typeof value === 'number' && value !== 0) rivalValues.push(value);
+      assert.equal(p[key], o[key], `${o.displayName}.${key} must be published in player mode (owner's call, 2026-08-22)`);
+      if (typeof o[key] === 'number' && o[key] !== 0) publishedRecordings++;
     }
   }
-  assert.ok(rivalValues.length > 0, 'at least one rival should have a non-zero recorded figure to hunt for');
+  assert.ok(publishedRecordings > 0, 'at least one rival should carry a non-zero recording to have published');
 
-  const serialised = JSON.stringify(player);
-  for (const value of rivalValues) {
+  // (b) STILL WITHHELD -- the composed basis's three inputs, checked across the
+  //     WHOLE payload rather than at the one field each is declared on.
+  //
+  //     STRUCTURALLY, NOT BY SUBSTRING, and that is a measurement not a
+  //     preference: hunting the effect NAMES finds 68 hits in a clean player
+  //     payload (measured 2026-08-22) -- the observer's own row and its
+  //     `capabilities.activeEffects`, plus 64 in the static `techTree` node
+  //     catalogue, which lists which projects GRANT each effect and says
+  //     nothing about who holds one. The names are a shared vocabulary. What
+  //     must not appear is a RIVAL-OWNED list, so that is what is asserted.
+  const capEffectLists = [];
+  (function walk(node, path) {
+    if (node === null || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach((v, i) => walk(v, `${path}[${i}]`)); return; }
+    if (Array.isArray(node.controlPointMaintenanceEffects)) {
+      capEffectLists.push({ path, ownerId: node.ID ?? node.factionId ?? null });
+    }
+    for (const key of Object.keys(node)) walk(node[key], `${path}.${key}`);
+  })(player, '$');
+  for (const found of capEffectLists) {
     assert.ok(
-      !serialised.includes(String(value)),
-      `the player payload leaks a rival's control-point cap telemetry (${value})`
+      sameFaction(found.ownerId, OBSERVER),
+      `${found.path} carries a cap-project list owned by ${found.ownerId}, not the observer`
     );
   }
+  let rivalEffectHoldings = 0;
+  for (const o of omniscient.factions) {
+    if (o.ID === OBSERVER) continue;
+    assert.equal(
+      player.factions.find(f => f.ID === o.ID).controlPointMaintenanceEffects, null,
+      `${o.displayName} leaks controlPointMaintenanceEffects`
+    );
+    rivalEffectHoldings += (o.controlPointMaintenanceEffects || []).length;
+  }
+  assert.ok(rivalEffectHoldings > 0, 'there should be rival cap projects to have withheld');
+  // The observer's own list is NOT collateral damage of the redaction.
+  assert.ok(
+    Array.isArray(player.factions.find(f => f.ID === OBSERVER).controlPointMaintenanceEffects),
+    'the observer\'s own cap projects must survive'
+  );
 
-  for (const faction of player.factions) {
-    if (faction.ID === OBSERVER) continue;
-    assert.equal(faction.recordedControlPointCapOverage, null, `${faction.ID} leaks recordedControlPointCapOverage`);
-    assert.equal(faction.controlPointCapPenaltyToday, null, `${faction.ID} leaks controlPointCapPenaltyToday`);
-    assert.equal(faction.controlPointCapPenaltyAveraged, null, `${faction.ID} leaks controlPointCapPenaltyAveraged`);
-    assert.equal(faction.controlPointMaintenanceEffects, null, `${faction.ID} leaks controlPointMaintenanceEffects`);
+  // A rival's resolved cap attributes are the largest composed term. Attribute
+  // values are small integers that legitimately appear all over the payload, so
+  // they too are checked structurally rather than by substring.
+  for (const c of player.councilors || []) {
+    if (sameFaction(c.factionId, OBSERVER) || c.isOwnCouncilor || c.isTurnedMole) continue;
+    assert.ok(
+      !c.attributes || Object.keys(c.attributes).length === 0,
+      `${c.ID} leaks raw councilor attributes, which the composed cap reads`
+    );
+    for (const attribute of CAP_ATTRIBUTES) {
+      assert.notEqual(
+        c.resolvedAttributes?.baseMeasured?.[attribute], true,
+        `${c.ID}.${attribute} reads as measured in player mode, so the composed cap would silently resolve`
+      );
+    }
+  }
+  // And a rival's hab modules, the third composed term.
+  for (const m of player.habModules || []) {
+    assert.ok(
+      sameFaction(m.factionId, OBSERVER),
+      `the player payload carries a rival hab module (${m.templateName}), which the composed cap reads`
+    );
   }
 });
 
-test('the player-mode redaction assertion covers every cap-input field', () => {
+test('the player-mode redaction assertion is retargeted, not merely loosened', () => {
   // Injected individually, because a single combined check would still pass if
   // only one of the fields were dropped from the assertion.
   const intelligenceFilter = require('../server/intelligenceFilter');
   const base = () => loadFilteredSnapshot({ mode: 'player', observer: OBSERVER, bypassCache: true });
   assert.equal(intelligenceFilter.assertPlayerSnapshotSafe(base()), true);
 
+  // STILL GUARDED: the composed basis's project term.
   const withEffects = base();
   withEffects.factions.find(f => f.ID !== OBSERVER).controlPointMaintenanceEffects =
     ['Effect_ControlPointMaintenanceBonus160'];
   assert.throws(() => intelligenceFilter.assertPlayerSnapshotSafe(withEffects), /hidden faction telemetry/);
 
+  // STILL GUARDED: the councilor term, which is the one the game itself masks.
+  const withAttributes = base();
+  const rivalCouncilor = withAttributes.councilors.find(c => !c.isOwnCouncilor && !c.isTurnedMole);
+  assert.ok(rivalCouncilor, 'the player payload should carry an observed rival councilor');
+  rivalCouncilor.attributes = { Administration: 9, Persuasion: 8, Command: 7 };
+  assert.throws(() => intelligenceFilter.assertPlayerSnapshotSafe(withAttributes), /hidden councilor telemetry/);
+
+  // DELIBERATELY NOT GUARDED as of 2026-08-22: the four recorded fields. The
+  // assertion must NOT throw on them -- if it does, the unlock has been undone.
   for (const field of [
-    'recordedControlPointCapOverage', 'controlPointCapPenaltyToday', 'controlPointCapPenaltyAveraged'
+    'recordedControlPointCapOverage', 'controlPointCapPenaltyToday',
+    'controlPointCapPenaltyAveraged', 'recordedControlPointCapOverageSamples'
   ]) {
     const injected = base();
     injected.factions.find(f => f.ID !== OBSERVER)[field] = 11.44552;
-    assert.throws(
-      () => intelligenceFilter.assertPlayerSnapshotSafe(injected),
-      /hidden faction telemetry/,
-      `the assertion must cover ${field}`
+    assert.equal(
+      intelligenceFilter.assertPlayerSnapshotSafe(injected), true,
+      `${field} is published by owner's decision and must not be asserted against`
     );
   }
 });
@@ -822,9 +976,75 @@ test('the endpoint answers in both modes and states the recording semantics at t
   const protectorate = omniscient.overCapFactions.find(f => f.factionId === PROTECTORATE);
   assert.ok(protectorate, 'the Protectorate should be listed as over cap');
   assert.equal(protectorate.influencePerYear, Number((protectorate.overage ** 2).toFixed(3)));
-  // Player mode must not name a rival as over cap -- that is the same fact the
-  // masked councilor attributes exist to withhold.
-  assert.equal(player.overCapCount, 0);
+
+  // RETARGETED 2026-08-22, owner's intel-model decision. Player mode DOES name
+  // an over-cap rival now: that verdict comes off the game's own recording and
+  // composes nothing, so it needs none of the masked terms. This assertion used
+  // to read `player.overCapCount === 0`.
+  assert.equal(player.overCapCount, omniscient.overCapCount, 'the recorded basis answers in both modes');
+  const playerProtectorate = player.overCapFactions.find(f => f.factionId === PROTECTORATE);
+  assert.ok(playerProtectorate, 'the Protectorate should be named over cap in player mode too');
+  assert.equal(playerProtectorate.overage, protectorate.overage);
+  assert.equal(playerProtectorate.influencePerYear, protectorate.influencePerYear);
+
+  // And the rivals the record only BOUNDS are counted separately, so a consumer
+  // can tell "not recorded over cap, magnitude unknown" from "nothing known".
+  assert.ok(player.boundOnlyCount > 0, 'player mode should report the bound-only rivals');
+  assert.equal(omniscient.boundOnlyCount, 0, 'omniscient composes them, so none is left merely bounded');
+  assert.ok(player.boundOnlyFactions.every(f => /FLOOR of max\(0, cost - cap\)/.test(f.reason)));
+  // The semantics an agent needs to read a zero correctly, without this repo.
+  assert.match(player.recordingSemantics.establishes[RECORDED_POSITION.boundOnly], /FLOOR/);
+  assert.match(player.recordingSemantics.establishes[RECORDED_POSITION.position], /composes nothing/);
+});
+
+test('the war-room export carries the cap, in both modes', () => {
+  // `4f2f5b1` shipped the whole model and put NONE of it in the AI exports, and
+  // said so. A figure that exists only in the browser and the JSON is invisible
+  // to every LLM reading /latest-war-room.md, which is half the point of this
+  // project. Closed 2026-08-22.
+  const { renderWarRoomMarkdown, WAR_ROOM_BYTE_BUDGET } = require('../shared/markdownExports.mjs');
+
+  for (const mode of ['player', 'omniscient']) {
+    const snapshot = loadFilteredSnapshot({ mode, observer: OBSERVER });
+    const md = renderWarRoomMarkdown(snapshot, {});
+    const report = buildControlPointCapReport(snapshot, { factionId: OBSERVER, mode });
+
+    // The observer's own headroom, to the same 2 decimals the block renders.
+    assert.match(md, /\*\*Our control-point cap:\*\*/);
+    assert.ok(
+      md.includes(`${report.headroom.value.toFixed(2)} points of room`),
+      `${mode}: the export should carry the observer's own headroom (${report.headroom.value})`
+    );
+    // The accuracy caveat travels with a composed figure rather than being
+    // dropped on the way to the export.
+    assert.match(md, /composed cap was measured running ~1 point HIGH/);
+
+    // The over-cap rival, which is a targeting fact: it is what makes a hostile
+    // Purge against them cheaper. It rides on the RECORDED basis, so it must
+    // appear in player mode too -- that is the 2026-08-22 unlock.
+    const rival = buildControlPointCapReport(snapshot, { factionId: PROTECTORATE, mode });
+    assert.equal(rival.headroom.overCap, true, `${mode}: the Protectorate should read over cap`);
+    assert.ok(
+      md.includes(`the Protectorate is ${rival.recorded.overage.toFixed(2)} OVER their control-point cap`),
+      `${mode}: the export should name the over-cap rival`
+    );
+    // The exposure the game APPLIES is the window mean, not today's slot, and
+    // the export must not quietly print the wrong one of the two.
+    assert.ok(md.includes(`+${rival.penalties.missionExposureApplied.toFixed(2)}`));
+    assert.ok(md.includes(`not today's ${rival.penalties.missionExposureToday.toFixed(2)}`));
+
+    assert.ok(
+      Buffer.byteLength(md, 'utf8') <= WAR_ROOM_BYTE_BUDGET,
+      `${mode}: the war room must stay inside its byte budget`
+    );
+  }
+
+  // And the floored zero announces itself where it is the only evidence, rather
+  // than the rivals simply going missing from the section.
+  const playerMd = renderWarRoomMarkdown(loadFilteredSnapshot({ mode: 'player', observer: OBSERVER }), {});
+  assert.match(playerMd, /record \*\*no\*\* cap penalty/);
+  assert.match(playerMd, /bounds them at or under cap WITHOUT locating them/);
+  assert.match(playerMd, /\*\*UNKNOWN\*\*, not large/);
 });
 
 test('a narrowed payload headlines the faction it is about, and names which one', () => {

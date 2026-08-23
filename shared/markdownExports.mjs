@@ -55,6 +55,12 @@ import {
   UNMODELLED_FACTORS,
   buildMiningTechBonuses
 } from './miningTechBonus.mjs';
+import {
+  CONTROL_POINT_CAP_ACCURACY,
+  OVER_CAP_EXPOSED_MISSIONS,
+  RECORDED_POSITION,
+  buildControlPointCapReport
+} from './controlPointCap.mjs';
 
 // Absence-preserving formatting helpers
 export const isMeasured = (value) =>
@@ -1569,6 +1575,11 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   // fixed overhead in the byte budget, and this document already renders within
   // a few hundred bytes of its ceiling under 20x fleet growth.
   for (const line of miningTechBonusLines(observer, observerId)) logisticsLines.push(line);
+  // The control-point cap sits in the war economy for the same reason the mine
+  // multipliers do: over cap costs Influence per year and hands every hostile
+  // Crackdown / Purge / Enthrall / Dominate a bonus. It rides INSIDE section 7
+  // so the last-resort clamp can shed it with the rest of the body.
+  for (const line of controlPointCapLines(filteredSnapshot, observerId)) logisticsLines.push(line);
   blocks.push(fixedBlock('logistics', [`## 7. Logistics & War Economy`, ``], logisticsLines));
 
   // -------------------------------------------------------------------------
@@ -1958,6 +1969,96 @@ function miningTechBonusLines(observer, observerId) {
       + `which is larger than the tech bonus and deliberately unmodelled — ${moduleRange}.`,
     ``
   ];
+}
+
+/**
+ * The control-point cap block inside section 7.
+ *
+ * WHY IT IS HERE AT ALL. `4f2f5b1` shipped the whole cap model, both endpoints
+ * and the verdict, and put NONE of it in the exports -- it said so itself, and
+ * `docs/README.md` carries the gap. Every LLM reading `/latest-war-room.md`
+ * therefore had no idea the observer had 238 points of control-point room, nor
+ * that a rival was 34 over and paying for it. Two facts here are directly
+ * actionable and derivable from nothing else in this document:
+ *
+ *   * the observer's OWN headroom, which prices every further control point
+ *     the council could take this cycle;
+ *   * an over-cap RIVAL, which is a standing +bonus on every hostile Crackdown,
+ *     Purge, Enthrall Elites and Dominate Nation aimed at them. That is a
+ *     targeting fact, not a curiosity.
+ *
+ * BOTH MODES, AND THE LINE BETWEEN THEM. Since the owner's 2026-08-22
+ * intel-model decision (header of `shared/controlPointCap.mjs`) the `recorded`
+ * basis is published in player mode too, so the over-cap rival appears in both.
+ * A rival the game records at ZERO does not: that zero is the floor of
+ * `max(0, cost - cap)`, so it bounds without locating, and this block says
+ * "position unknown" rather than printing a reassuring blank.
+ *
+ * The whole model lives in `shared/`, so the Cloudflare Worker computes this
+ * exactly as the local server does -- unlike the engine-derived sections, which
+ * the serving runtime has to hand in.
+ */
+function controlPointCapLines(filteredSnapshot, observerId) {
+  const mode = filteredSnapshot?.mode || 'player';
+  const pointer = '`/api/intel/control-point-cap`';
+  const factions = asArray(filteredSnapshot?.factions);
+  if (factions.length === 0) {
+    return [`- **Control-point cap:** UNAVAILABLE — this snapshot carries no faction rows.`, ``];
+  }
+
+  const reports = factions.map(f => buildControlPointCapReport(filteredSnapshot, { factionId: f?.ID, mode }));
+  const own = reports.find(r => sameId(r.factionId, observerId)) || null;
+
+  const lines = [];
+
+  // The observer's own position. `UNAVAILABLE` when it refuses -- never a 0,
+  // and never a silent omission of the line.
+  if (own === null) {
+    lines.push(`- **Our control-point cap:** UNAVAILABLE — the observer faction is not in this snapshot.`);
+  } else if (own.headroom.available !== true) {
+    lines.push(`- **Our control-point cap:** position UNKNOWN — ${own.headroom.reason}`);
+  } else {
+    const capText = own.capacity.cap === null ? 'UNAVAILABLE' : localeOr(own.capacity.cap);
+    lines.push(`- **Our control-point cap:** ${fixedOr(own.headroom.value, 2)} points of room `
+      + `(${fixedOr(own.maintenance.cost, 2)} maintenance against a cap of ${capText}, basis \`${own.headroom.basis}\`). `
+      + `Over cap costs **overage² Influence a year** and adds the 32-day mean of overage/3 to every hostile `
+      + `${OVER_CAP_EXPOSED_MISSIONS.join(', ')} aimed at us.`);
+    if (own.headroom.basis === 'composed') {
+      lines.push(`  The composed cap was measured running ~1 point HIGH against the cap the game's own record `
+        + `implies, so this room is slightly optimistic (${CONTROL_POINT_CAP_ACCURACY.measuredOn}).`);
+    }
+  }
+
+  // Rivals the game itself records over cap. This needs no composed cap and no
+  // masked term, so it is stated in either mode.
+  const overCap = reports.filter(r => !sameId(r.factionId, observerId) && r.headroom.overCap === true);
+  if (overCap.length > 0) {
+    for (const r of overCap) {
+      lines.push(`- **${r.factionName} is ${fixedOr(r.recorded.overage, 2)} OVER their control-point cap** — `
+        + `costing them ${localeOr(r.penalties.influencePerYearFromRecorded)} Influence a year, and giving our `
+        + `${OVER_CAP_EXPOSED_MISSIONS.join(' / ')} against them **+${fixedOr(r.penalties.missionExposureApplied, 2)}** `
+        + `(the 32-day mean the game applies, not today's ${fixedOr(r.penalties.missionExposureToday, 2)}). `
+        + `Read from the save's own record, so it holds in ${mode} mode.`);
+    }
+  }
+
+  // Everyone else. A recorded zero is a FLOOR: announce that the position is
+  // unknown rather than letting an absent line read as "everyone else is fine".
+  const boundOnly = reports.filter(r =>
+    !sameId(r.factionId, observerId)
+    && r.recorded.establishes === RECORDED_POSITION.boundOnly
+    && r.headroom.available !== true);
+  if (boundOnly.length > 0) {
+    lines.push(`- ${boundOnly.length} other faction(s) record **no** cap penalty. That is the FLOOR of `
+      + `max(0, cost − cap), so it bounds them at or under cap WITHOUT locating them — their room is `
+      + `**UNKNOWN**, not large. Locating it needs their councilor attributes, hab modules and cap projects, `
+      + `which this mode masks. Full rows at ${pointer}.`);
+  } else if (overCap.length === 0) {
+    lines.push(`- No other faction is recorded over their control-point cap. Per-faction rows at ${pointer}.`);
+  }
+
+  lines.push(``);
+  return lines;
 }
 
 /**

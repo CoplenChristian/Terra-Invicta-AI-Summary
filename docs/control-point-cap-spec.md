@@ -3,6 +3,110 @@
 Written 2026-08-22 against `866b8a8`. **Revised 2026-08-22 after implementation against `f451945`.
 Revised again 2026-08-22 against `43f170f`, and this revision overturns the previous one's
 central conclusion: the cap does reconcile, and the headroom verdict is no longer refused.**
+**Revised a fourth time 2026-08-22 against `4f2f5b1` to record the owner's intel-model decision
+below — a rival's cap position is no longer locked behind omniscient.**
+
+---
+
+## The 2026-08-22 intel-model decision — this is the owner's call, not a bug fix
+
+**The dashboard's owner decided on 2026-08-22 that the faction control-point cap does not need to
+be locked behind omniscient.** `7174764` refused a rival's cap in player mode on three grounds and
+redacted the game's own daily recording with it; `4f2f5b1` kept that. The refusal was correct code
+implementing a stricter intel model than its owner wants, so what changed is the model, not a
+defect. **A future reader should not "restore" the redaction as a leak fix.** It is recorded in
+three places for that reason: the header of `shared/controlPointCap.mjs`, the faction projection in
+`server/intelligenceFilter.js`, and here.
+
+The unlock is narrow, and it turns entirely on the distinction between the two bases the previous
+revision introduced:
+
+| | reads | player mode, for a rival |
+| :-- | :-- | :-- |
+| **`recorded`** | `history_CPCapOverageByDay` only | **published.** It composes nothing — no councilor attribute, no hab module, no effect list — so unlocking it unmasks no input, only a conclusion the save states outright |
+| **`composed`** | base + councilors + hab modules + effects, against the cost | **still refuses.** Those terms genuinely are unreadable, and it refuses as `unknown` — never as a number and never as a measured zero |
+
+**Councilor attributes stay masked.** Nothing reads through `maskedAttributes`;
+`councilorCapContribution` still reports an unmeasured councilor as `null`, and
+`assertPlayerSnapshotSafe` still throws on a rival's raw `attributes`.
+
+### A floored zero is not headroom
+
+This is the part that had to be got right, and it is the same shape as the Total War veto and the
+vent horizon: **an unmeasurable state reported as a reassuring one.**
+
+Each slot is `max(0, cost − cap) × multiplier`, so a recorded **zero is the floor**. It pins that
+the faction is not recorded *over* cap and locates nothing — and for the aliens it does not even
+bound, since they read 0 while sitting 10 and 11 over their Mission Control capacity on two measured
+saves. `recordedCapPosition` therefore classifies the recording as one of three things, and every
+row publishes it as `recorded.establishes`:
+
+| `establishes` | when | what follows |
+| :-- | :-- | :-- |
+| `position` | a **positive** penalty | over cap by exactly 3 × it. Exact, mode-independent |
+| `bound-only` | a **zero** on a non-exempt faction | bounded at or under cap, **not located**. Verdict `unknown` unless the composed cap supplies the magnitude |
+| `nothing` | the alien faction | an exemption artefact; not even a bound |
+
+Publishing the recording made `recorded.available` true with a floored zero, and the refusal
+branch's old `overCap: recordedAvailable ? false : null` would have flipped **six rivals from an
+honest `null` to a confident "not over cap"** as a pure side effect of the unlock. `overCap` is now
+`null` wherever the headroom refuses, and a deliberately-broken test (`M3`) proves the old
+expression turns that test red.
+
+### Measured before and after, live save `ExitSave.gz` (1/1/2035), player mode
+
+| faction | before | after | basis | why |
+| :-- | :-- | :-- | :-- | :-- |
+| the Initiative (observer) | 237.70, `within-cap` | **237.70, `within-cap`** | `composed` | unchanged — the observer's own terms were always readable |
+| **the Protectorate** | `unknown` | **−34.34, `over-cap`** | **`recorded`** | the save records a positive penalty; identical to the omniscient figure |
+| the Aliens | 20000, `within-cap` | 20000, `within-cap` | `alien exemption` | unchanged — a hard-coded constant, not intel |
+| the Resistance | `unknown` | `unknown` | — | records **0**: `bound-only`. `overCap: null`, not `false` |
+| Humanity First | `unknown` | `unknown` | — | as above |
+| the Servants | `unknown` | `unknown` | — | as above |
+| the Academy | `unknown` | `unknown` | — | as above |
+| Project Exodus | `unknown` | `unknown` | — | as above |
+
+Endpoint totals move `answered 2 → 3` and `overCap 0 → 1`; `refusedCount` stays 6, and the five
+bound-only rivals are now counted separately under the new `boundOnlyCount` so a consumer can tell
+"not recorded over cap, magnitude unknown" from "nothing known at all".
+
+The Protectorate is paying **1,179 Influence a year** and hands our Crackdown / Purge / Enthrall
+Elites / Dominate Nation against it **+10.64** — the 32-day window mean the game applies, not
+today's 11.45. Both figures now reach player mode.
+
+### Omniscient did not move
+
+The omniscient **snapshot** is byte-identical. The omniscient **endpoint** diff is **purely
+additive** — not one line removed and not one reworded — gaining only `recorded.establishes`,
+`recorded.establishesNote`, `boundOnlyCount: 0`, `boundOnlyFactions: []` and
+`recordingSemantics.establishes`. A field-by-field numeric comparison over all 2,588 pre-existing
+numbers shows **none moved**. (The `recorded`-basis `reason` string was left word for word as it
+was, deliberately: rewording it would have been the single non-additive omniscient difference, and
+the clause it wanted already travels on the new `establishesNote`.) The engine briefing is
+byte-identical in **both** modes, as
+are `/latest-snapshot.md`, the full markdown report and `/latest-threats.md` — the only differing
+files in the whole capture are the two war-room exports, and both diffs are purely additive.
+(Captured against an MD5-verified frozen `ExitSave.gz`, with two identical baseline runs proving
+the harness deterministic.)
+
+### It reaches the AI surfaces — the gap `4f2f5b1` left open
+
+`4f2f5b1` shipped the whole model and put **none** of it in the exports, and said so. A block now
+sits inside war-room **§7 Logistics & War Economy**, carrying the observer's own headroom with its
+accuracy caveat, any rival the game records over cap with the Influence bill and the mission bonus,
+and an explicit announcement that a recorded zero bounds without locating.
+
+Rival cap positions belong there because an over-cap rival is a **targeting fact**: it is what makes
+a hostile Purge against them cheaper, and it is derivable from nothing else in the document.
+**Byte cost: 1,077 bytes in player mode and 748 in omniscient**, against a 30,720-byte budget with
+6,046 / 6,406 bytes of slack remaining. **Nothing was dropped to fit it**, and the block rides
+inside section 7's body so the last-resort clamp can shed it with the rest.
+
+It is not in `/latest-snapshot.md` or `/latest-threats.md`: the compact snapshot is a state
+inventory rather than an economic one, and the cap is a war-economy figure that belongs beside the
+mine multipliers it now sits under. The whole model lives in `shared/`, so the Cloudflare Worker
+renders this exactly as the local server does — unlike the engine-derived sections, which the
+serving runtime has to hand in.
 
 ---
 
@@ -275,12 +379,29 @@ today's 11.45.
 
 ### Both modes
 
+**Superseded in part on 2026-08-22 — see "The 2026-08-22 intel-model decision" at the top.**
+
 The observer's own cap, cost and headroom compose **identically** in player and omniscient mode
-(696 / 458.30 / 237.70 either way). Every rival refuses in player mode, and all three recorded
-figures — the overage, slot 0 and the window mean — are `null`. All three are in
-`assertPlayerSnapshotSafe`, individually, and the player payload is scanned end to end for their
-omniscient values rather than pinned field by field. The overage is slot 0 × 3, so redacting only
-the derived field would have left the same fact under two other names.
+(696 / 458.30 / 237.70 either way). *What follows described the behaviour before the owner's
+decision:* every rival refused in player mode, and all three recorded figures — the overage, slot 0
+and the window mean — were `null`, each asserted individually in `assertPlayerSnapshotSafe`.
+
+**Since 2026-08-22** those four recorded fields are published in every mode; the `recorded` basis
+answers for a rival and the `composed` basis still refuses. `assertPlayerSnapshotSafe` was
+**retargeted, not loosened**: it still throws on a rival's `controlPointMaintenanceEffects` and on a
+rival councilor's raw `attributes`, and the tests now assert **both directions** — that the four
+recorded fields survive (so a silent re-redaction fails a test) and that the composed basis's three
+inputs do not.
+
+**One measurement corrected a test instrument while doing it.** The old whole-payload scan hunted
+the composed inputs by *value*. That is sound for the recorded numbers and **unsound for the effect
+names**: searching a clean player payload for `Effect_ControlPointMaintenance*` finds **68 hits** —
+the observer's own row and its `capabilities.activeEffects`, plus 64 in the static `techTree` node
+catalogue, which lists which projects *grant* each effect and says nothing about who *holds* one.
+The names are a shared vocabulary, so the scan now walks the whole payload structurally, asserting
+that every object carrying a `controlPointMaintenanceEffects` array is owned by the observer.
+Councilor attributes and hab modules are checked structurally for the same reason — attribute values
+are small integers that legitimately appear everywhere.
 
 ### The engine: still an annotation, for a different reason
 

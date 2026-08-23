@@ -1,7 +1,9 @@
 // shared/intel/controlPointCap.mjs
 //
 // Purpose: /api/intel/control-point-cap — the control-point cap, maintenance
-//   cost and headroom per faction, with the accuracy of each verdict stated.
+//   cost and headroom per faction, with the accuracy of each verdict stated,
+//   naming the over-cap factions in either mode and counting separately the
+//   rows the game's record bounds but does not locate.
 //
 // The composition follows the game's own methods, cited term by term in
 // shared/controlPointCap.mjs, and it now reconciles against the game's own
@@ -19,10 +21,19 @@
 // composition contradicts the record (a negative composed headroom while the
 // game records zero cannot both be true).
 //
+// WHAT PLAYER MODE ANSWERS, AS OF THE OWNER'S 2026-08-22 INTEL-MODEL DECISION
+// (recorded in the header of `shared/controlPointCap.mjs`): the `recorded`
+// basis is published in every mode, because it composes nothing. So a rival the
+// game records OVER CAP is named in player mode too, with its overage, its
+// Influence bill and the bonus it hands hostile missions. A rival the game
+// records at ZERO still refuses in player mode -- that zero is the floor of
+// `max(0, cost - cap)`, so it bounds without locating, and the terms that would
+// locate it (councilor attributes, hab modules, cap projects) are masked. Those
+// rows are counted under `boundOnlyCount`, and their verdict is `unknown`, not
+// `within-cap`.
+//
 // `?faction=` narrows to one faction. Without it every faction in the payload
-// is reported, which in player mode means the observer's own row composes and
-// every rival's row refuses -- a rival's cap depends on their councilor
-// attributes, and those are masked.
+// is reported.
 
 import { asArray, sameId } from '../util.mjs';
 import { DEFAULT_OBSERVER_FACTION_ID } from '../constants.mjs';
@@ -32,6 +43,8 @@ import {
   CONTROL_POINT_CAP_ACCURACY,
   CONTROL_POINT_OVERAGE_PENALTY_MULTIPLIER,
   COST_FORMULA,
+  RECORDED_POSITION,
+  RECORDED_POSITION_NOTES,
   buildControlPointCapReport
 } from '../controlPointCap.mjs';
 
@@ -61,6 +74,14 @@ export function controlPointCapResource(snapshot, options = {}) {
   const refused = items.filter((item) => !item.capacity.capAvailable);
   const answered = items.filter((item) => item.headroom.available);
   const overCap = items.filter((item) => item.headroom.overCap === true);
+  // Rows the game's record BOUNDS but does not LOCATE, and whose composed cap
+  // could not supply the magnitude. Counted separately from `refusedCount`,
+  // which is about the cap composition alone: these two overlap but are not the
+  // same set, and a consumer that sees six refusals should be able to tell "the
+  // record says they are not over cap, we just cannot say by how much" from
+  // "nothing whatever is known".
+  const boundOnly = items.filter((item) =>
+    item.recorded.establishes === RECORDED_POSITION.boundOnly && !item.headroom.available);
   const observerRow = items.find((item) => sameId(item.factionId, observerId)) || null;
   // Narrowing with `?faction=` to somebody other than the observer used to
   // headline `unknown` beside a row that plainly said `over-cap`, because the
@@ -95,6 +116,11 @@ export function controlPointCapResource(snapshot, options = {}) {
       overageMultiplier: CONTROL_POINT_OVERAGE_PENALTY_MULTIPLIER,
       overageFromStored: 'overage = stored slot / 0.3333333432674408',
       appliedModifier: 'the mean of the whole window, not slot 0',
+      // What each row's `recorded.establishes` value means, so a consumer can
+      // read the classification without this module. A ZERO IS A FLOOR: it is
+      // the single most misreadable number on this endpoint, because it looks
+      // like a measurement of comfortable room and is not one.
+      establishes: RECORDED_POSITION_NOTES,
       source: CONTROL_POINT_CAP_SOURCES.recording,
       measuredOn: CONTROL_POINT_CAP_MEASURED_ON
     }),
@@ -118,6 +144,13 @@ export function controlPointCapResource(snapshot, options = {}) {
       factionId: item.factionId,
       factionName: item.factionName,
       reason: item.capacity.capReason
+    }))),
+    // Bounded, not located. These are NOT "within cap" -- see `recordingSemantics.establishes`.
+    boundOnlyCount: boundOnly.length,
+    boundOnlyFactions: Object.freeze(boundOnly.map((item) => Object.freeze({
+      factionId: item.factionId,
+      factionName: item.factionName,
+      reason: item.headroom.reason
     }))),
     items
   };

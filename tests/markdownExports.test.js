@@ -1257,12 +1257,30 @@ test('section 11 is the FIRST body the budget suppresses, and its header and poi
   assert.ok(!clamped.includes('Hulls needed for P(win)'),
     'and the counts go with the caveat rather than outliving it');
 
-  // Tighter still: sections 9 and 10 follow, and nothing MEASURED (sections 1
-  // to 6) has given way while the modelled material is still being shed.
-  const tighter = suppressedIn(renderWarRoomMarkdown(snapshot, { ...opts, maxBytes: 4500 }))
-    .map(h => h.replace(/^## /, '').split('.')[0]);
-  assert.deepStrictEqual(tighter.slice().sort(), ['10', '11', '9'],
-    'the two other endpoint-backed sections follow section 11, and nothing measured precedes them');
+  // Tighter still: sections 9 and 10 follow, and nothing MEASURED (sections 2
+  // to 6) gives way while the modelled material is still being shed.
+  //
+  // ASSERTED AS AN ORDER, NOT AT A MAGIC BYTE CAP. This used to probe one
+  // hard-coded 4500-byte ceiling, which made it a claim about a threshold
+  // rather than about priority -- and any content change anywhere in the
+  // document shifts that threshold. Adding the control-point cap block to
+  // section 7 on 2026-08-22 grew this fixture by 268 bytes (15,992 -> 16,260)
+  // and moved section 7's own clamp point from 4,200 to 4,500, so a probe at
+  // exactly 4,500 flipped bands while the ORDER -- 11, 9, 10, 7, 1 -- did not
+  // change at all. Walking the ladder pins what the test is actually for.
+  const ladder = [];
+  for (let cap = 8000; cap >= 2500; cap -= 100) {
+    const at = suppressedIn(renderWarRoomMarkdown(snapshot, { ...opts, maxBytes: cap }))
+      .map(h => h.replace(/^## /, '').split('.')[0]);
+    for (const section of at) if (!ladder.includes(section)) ladder.push(section);
+  }
+  assert.deepStrictEqual(ladder, ['11', '9', '10', '7', '1'],
+    'the clamp order is section 11, then the two other endpoint-backed sections, then section 7, then section 1');
+  // Sections 2 to 6 are the fleet, threat, construction and hab inventories:
+  // they are never reached, at any cap this ladder walks.
+  for (const measured of ['2', '3', '4', '5', '6']) {
+    assert.ok(!ladder.includes(measured), `section ${measured} must never be clamped before the modelled sections`);
+  }
 });
 
 test('section 11 does not grow with the size of the save, at any fleet multiple', () => {
