@@ -412,7 +412,93 @@
    * Each row now stands for a whole (mission, target) sibling group, so three
    * numbers travel: how many ROWS are shown, how many CANDIDATES those rows
    * account for, and the true bench total.
+   *
+   * A FOURTH now travels with them: what the shown rows COST against the pool
+   * that refused them, and how many of them could be taken TOGETHER. Eight rows
+   * listed as alternatives read as eight independently available options; on
+   * the frozen save's omniscient plan they share one 7.90 cycle hate cap with
+   * 3.16 left and each charges 4.57, so NONE of them can be added. The board
+   * renders that header before the list rather than after it, because the
+   * number is what makes the list interpretable at all.
    */
+
+  /**
+   * The bench header: what the pool has left, and how many rows fit it.
+   *
+   * ABSENT STAYS NULL in every branch. An older payload with no `benchBudget`
+   * renders no affordability claim at all rather than "0 fit", which would read
+   * as a measured finding that nothing is affordable. A pool with no readable
+   * cap says the check could not be run, never that the budget is zero.
+   */
+  function renderBenchBudget(cyclePlan) {
+    const summary = cyclePlan && typeof cyclePlan.benchBudget === 'object'
+      ? cyclePlan.benchBudget
+      : null;
+    const hate = cyclePlan && cyclePlan.budgets && typeof cyclePlan.budgets.alienHate === 'object'
+      ? cyclePlan.budgets.alienHate
+      : null;
+    const parts = [];
+
+    if (hate !== null) {
+      const cap = num(hate.cap);
+      const used = num(hate.used);
+      if (hate.capMeasured !== true || cap === null || used === null) {
+        parts.push('<span class="directive-bench-budget-unknown">Cycle hate budget NOT MEASURED — '
+          + 'hate charges this cycle went unchecked, not cleared.</span>');
+      } else {
+        const left = Math.max(0, cap - used);
+        // A cap derived from the Mission Control FLOOR is an upper bound on the
+        // real budget, because true hate can only be at or above that floor.
+        // Player mode redacts the hate reading, so this is the normal case
+        // there and saying nothing would let an optimistic cap read as measured.
+        const caveat = hate.capIsUpperBound === true
+          ? ' <span class="directive-bench-budget-caveat">(from the MC hate floor — an UPPER BOUND, '
+            + 'the real budget can only be smaller)</span>'
+          : '';
+        parts.push(`Cycle hate budget <strong>${used.toFixed(2)} / ${cap.toFixed(2)}</strong> used, `
+          + `<strong>${left.toFixed(2)}</strong> left${caveat}`);
+      }
+    }
+
+    if (summary !== null) {
+      const fits = num(summary.jointlyAffordableCount);
+      if (fits === null) {
+        parts.push(`<span class="directive-bench-budget-unknown">Joint affordability NOT COMPUTED — `
+          + `${escapeHtml(summary.reason || 'no reason was recorded')}</span>`);
+      } else {
+        const rows = num(summary.rowCount);
+        const unpriced = num(summary.unpricedRowCount);
+        parts.push(`<strong>${fits} of ${rows === null ? 'the' : rows} row(s) below fit</strong> what is left `
+          + `— these are ALTERNATIVES sharing one ${escapeHtml(String(summary.pool || 'budget'))} pool, not `
+          + `independent options`
+          + (unpriced ? `; ${unpriced} carry no measured charge and are counted neither way` : ''));
+      }
+    }
+
+    if (parts.length === 0) return '';
+    return `<div class="directive-bench-budget">${parts.join(' · ')}</div>`;
+  }
+
+  /**
+   * What a collapsed row may and may not claim on behalf of its siblings.
+   *
+   * `displacedBy` describes the REPRESENTATIVE. When a group's members were held
+   * back for different reasons, presenting the representative's reason as the
+   * group's is the same defect this whole change exists to remove, one level
+   * down. `groupBudgetDisplacedCount` is what makes the mismatch visible, and it
+   * is only rendered when it actually disagrees with the row's own verdict.
+   */
+  function renderGroupReasonCaveat(row) {
+    const count = num(row.groupCount);
+    const budgetHeld = num(row.groupBudgetDisplacedCount);
+    if (count === null || count < 2 || budgetHeld === null) return '';
+    const rowIsBudget = row.displacementCause === 'budget';
+    if (rowIsBudget && budgetHeld === count) return '';
+    if (!rowIsBudget && budgetHeld === 0) return '';
+    return `<div class="directive-benched-group-caveat">Mixed group: ${budgetHeld} of ${count} `
+      + `option(s) here were refused by a budget, so the reason above does not describe all of them.</div>`;
+  }
+
   function renderBenched(cyclePlan) {
     const benched = Array.isArray(cyclePlan.benched) ? cyclePlan.benched : [];
     if (benched.length === 0) return '';
@@ -427,6 +513,7 @@
     return `
       <div class="directive-benched-section">
         <div class="directive-subheading">BENCHED ALTERNATIVES &amp; TRADE-OFFS (${total})</div>
+        ${renderBenchBudget(cyclePlan)}
         <div class="directive-benched-list">
           ${benched.map(b => {
             const candidate = b.candidate || b;
@@ -455,8 +542,18 @@
                 </div>
                 ${groupLine}
                 <div class="directive-benched-reason">
-                  <span class="directive-displaced-label">DISPLACED BY:</span> ${escapeHtml(b.displacedBy || 'Higher expected value team assignment.')}
+                  <span class="directive-displaced-label">${b.displacementCause === 'budget' ? 'REFUSED BY BUDGET:' : 'NOT TAKEN BECAUSE:'}</span>
+                  ${
+                    // ABSENT STAYS NULL. A payload with no reason says the
+                    // reason was not recorded; it does NOT fall back to a
+                    // sentence about a councilor, which is the fabricated
+                    // explanation this row used to carry on every entry.
+                    escapeHtml(typeof b.displacedBy === 'string' && b.displacedBy.trim() !== ''
+                      ? b.displacedBy
+                      : 'This plan recorded no reason for holding it back. That is an unrecorded reason, not an absent one.')
+                  }
                 </div>
+                ${renderGroupReasonCaveat(b)}
               </div>`;
           }).join('')}
         </div>
