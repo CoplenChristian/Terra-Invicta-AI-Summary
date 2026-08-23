@@ -3,6 +3,9 @@
 // Purpose: the control-point cap, maintenance cost and headroom, composed from
 //   the game's own formula and reconciled against the game's own daily record —
 //   which it now matches, so the headroom verdict is emitted rather than refused.
+//   The `recorded` basis composes nothing and answers in every visibility mode;
+//   the `composed` basis refuses where its terms are masked, and a recorded zero
+//   is classified a floor that bounds without locating.
 //
 // ---------------------------------------------------------------------------
 // WHAT `history_CPCapOverageByDay` ACTUALLY RECORDS — measured 2026-08-22
@@ -141,6 +144,44 @@
 //   * when the game records ZERO the faction is at or under cap by
 //     construction, so a composed headroom that comes out NEGATIVE is a
 //     contradiction — it is reported as one and the verdict is refused.
+//
+// ---------------------------------------------------------------------------
+// WHAT PLAYER MODE PUBLISHES, AND WHY THAT CHANGED -- OWNER'S CALL, 2026-08-22
+// ---------------------------------------------------------------------------
+//
+// `7174764` refused a RIVAL's cap in player mode on three grounds -- masked
+// councilor attributes, stripped hab modules, a redacted effect list -- and
+// redacted the game's daily recording along with them. `4f2f5b1` kept that.
+//
+// THE DASHBOARD'S OWNER DECIDED ON 2026-08-22 THAT THE FACTION CP CAP DOES NOT
+// NEED TO BE LOCKED BEHIND OMNISCIENT. That is an INTEL-MODEL DECISION, not a
+// bug fix: the old behaviour was correct code implementing a stricter model
+// than its owner wants. It is recorded here, in `server/intelligenceFilter.js`
+// and in `docs/control-point-cap-spec.md` so a later reader does not "restore"
+// it as a leak.
+//
+// The unlock is narrow, and the line it holds is the difference between the two
+// bases above:
+//
+//   * THE `recorded` BASIS IS PUBLISHED IN PLAYER MODE. It reads the game's own
+//     `history_CPCapOverageByDay` and COMPOSES NOTHING -- it needs no councilor
+//     attribute, no hab module and no effect list. A rival the game records
+//     over cap is therefore stated exactly, in either mode.
+//   * THE `composed` BASIS STILL REFUSES for a rival in player mode, because
+//     its terms genuinely are unreadable there. It refuses as UNKNOWN, never as
+//     a number and never as a measured zero.
+//   * COUNCILOR ATTRIBUTES STAY MASKED. Nothing here reads through
+//     `maskedAttributes`, and `councilorCapContribution` still reports an
+//     unmeasured councilor as null.
+//
+// AND A FLOORED ZERO IS NOT HEADROOM. `max(0, cost - cap)` means a recorded 0
+// pins only that the faction is not recorded OVER cap; it locates nothing, and
+// for the aliens it does not even bound (they sit 10-11 over their Mission
+// Control capacity and record 0 on both measured saves). So a rival with no
+// positive recording is UNKNOWN in player mode -- `headroom.available: false`,
+// `overCap: null`, verdict `unknown` -- and `recorded.establishes` names which
+// of the three cases it is. Reporting `overCap: false` off that zero would be
+// the Total War veto's defect again: an unmeasurable state rendered reassuring.
 //
 // Keep this file free of runtime-specific imports so the hosted worker can use
 // it alongside the local server.
@@ -316,6 +357,59 @@ export const CAP_ATTRIBUTES = Object.freeze(['Administration', 'Persuasion', 'Co
 export const OVER_CAP_EXPOSED_MISSIONS = Object.freeze([
   'Crackdown', 'Purge', 'Enthrall Elites', 'Dominate Nation'
 ]);
+
+/**
+ * What the game's own daily recording establishes about a faction's position.
+ *
+ * The three are NOT interchangeable, and telling them apart is the whole reason
+ * a rival can be answered in player mode without unmasking anything:
+ *
+ *   * `position`   -- a POSITIVE recorded penalty. The faction is over cap by
+ *                     exactly three times it. Exact, and NO composed cap is
+ *                     involved, so none of the masked councilor, hab-module or
+ *                     effect terms is needed to state it.
+ *   * `bound-only` -- a recorded ZERO on a faction the recording applies to.
+ *                     Each slot is `max(0, cost - cap) x multiplier`, so a zero
+ *                     is the FLOOR: it says the faction is not recorded over
+ *                     cap and says NOTHING about by how much it is under. A
+ *                     bound is not a position. Turning it into a headroom
+ *                     figure, or into a reassuring `overCap: false`, is the
+ *                     defect this distinction exists to prevent.
+ *   * `nothing`    -- the alien faction, whose cap is a hard-coded 20000 and
+ *                     whose zero is an exemption artefact. Measured 2026-08-22
+ *                     on the Mission Control sibling: the Aliens sit 10 and 11
+ *                     over their MC capacity on two saves and record 0 on both.
+ *                     An exempt faction's zero is not even a bound.
+ */
+export const RECORDED_POSITION = Object.freeze({
+  position: 'position',
+  boundOnly: 'bound-only',
+  nothing: 'nothing'
+});
+
+/** The note that travels with each `RECORDED_POSITION`, so a consumer needs no doc. */
+export const RECORDED_POSITION_NOTES = Object.freeze({
+  [RECORDED_POSITION.position]: 'the save records a positive penalty, so the overage is exactly three times it. '
+    + 'This is the game\'s own figure and composes nothing, so it is stated in every visibility mode.',
+  [RECORDED_POSITION.boundOnly]: 'the save records zero, and each slot is max(0, cost - cap) x the multiplier, so '
+    + 'zero is the FLOOR. It bounds this faction at or under cap WITHOUT locating it. Locating it takes the composed '
+    + 'cap; where that cannot be read, the position is unknown rather than roomy.',
+  [RECORDED_POSITION.nothing]: 'this is the alien faction, whose cap is a hard-coded 20000 and whose recorded zero '
+    + 'is an exemption artefact rather than a position -- it reads zero while over its Mission Control capacity.'
+});
+
+/**
+ * Classifies the recording. Returns null when there is no recording to read.
+ *
+ * `recordedOverage` must already be `null` (never 0) when absent: `Number(null)
+ * === 0` would classify an unread faction as bounded at or under cap.
+ */
+export function recordedCapPosition(recordedOverage, { alien = false } = {}) {
+  const value = num(recordedOverage);
+  if (value === null) return null;
+  if (alien) return RECORDED_POSITION.nothing;
+  return value > 0 ? RECORDED_POSITION.position : RECORDED_POSITION.boundOnly;
+}
 
 const detained = (councilor) => String(councilor?.status || '').toLowerCase() === 'detained';
 
@@ -772,13 +866,23 @@ export function overCapMissionExposure(overage) {
  * either of two ways and never a guess:
  *
  *   * `basis: 'recorded'` -- the save records a positive penalty, so the
- *     faction is over cap by exactly three times it. No composed cap involved.
+ *     faction is over cap by exactly three times it. No composed cap involved,
+ *     so this basis needs NONE of the terms player mode masks and is published
+ *     in every visibility mode (owner's intel-model call, 2026-08-22 -- see the
+ *     header).
  *   * `basis: 'composed'` -- every cap term and the whole cost were measured.
  *     `accuracy` states the measured residual, which runs about one point high.
+ *     For a rival in player mode these terms genuinely are unreadable, so this
+ *     basis still refuses there.
  *
  * A composed headroom that comes out negative while the game records zero is a
  * CONTRADICTION -- the recording is floored at zero, so a zero means at or
  * under cap -- and it refuses rather than reporting the composition.
+ *
+ * WHERE IT REFUSES, `overCap` IS NULL AND NEVER FALSE. A recorded zero is the
+ * floor of `max(0, cost - cap)`: it bounds without locating, and for the aliens
+ * it does not even bound. Reading `false` off it would report an unmeasurable
+ * state as a reassuring one -- the Total War veto's defect, in a new place.
  */
 export function buildControlPointCapReport(snapshot, { factionId, mode = 'player' } = {}) {
   const capacity = buildControlPointCap(snapshot, { factionId });
@@ -790,6 +894,10 @@ export function buildControlPointCapReport(snapshot, { factionId, mode = 'player
   const penaltyAveraged = num(faction?.controlPointCapPenaltyAveraged);
   const recordedOverage = num(faction?.recordedControlPointCapOverage);
   const recordedAvailable = recordedOverage !== null;
+  // `position` / `bound-only` / `nothing` / null. Everything below that decides
+  // whether the record can carry a verdict on its own reads THIS, not the bare
+  // number, so the floored zero cannot be mistaken for a measured position.
+  const establishes = recordedCapPosition(recordedOverage, { alien });
 
   const modelledOverage = capacity.cap !== null && maintenance.costComplete
     ? Math.max(0, round(maintenance.cost - capacity.cap, 5))
@@ -819,24 +927,42 @@ export function buildControlPointCapReport(snapshot, { factionId, mode = 'player
         + 'meaningfully constrained by this mechanic',
       accuracy: null
     };
-  } else if (recordedAvailable && recordedOverage > 0) {
+  } else if (establishes === RECORDED_POSITION.position) {
     headroom = {
       available: true,
       value: round(-recordedOverage, 5),
       basis: 'recorded',
       overCap: true,
+      // WORD FOR WORD as it was before the 2026-08-22 unlock, deliberately.
+      // This string is the omniscient `verdictReason`, and rewording it would
+      // have been the ONLY non-additive difference in the omniscient payload --
+      // which would have muddied the claim that omniscient did not move. The
+      // clause it wanted to add ("so it is stated in every visibility mode")
+      // already travels on `recorded.establishesNote`, which is a new field.
       reason: 'the save records a positive control-point cap penalty, so this faction is over cap by exactly three '
         + 'times it; no composed cap is involved in this figure',
       accuracy: null
     };
   } else if (composedHeadroom === null) {
+    // `overCap` IS NULL HERE, NEVER FALSE. Before the 2026-08-22 unlock a rival
+    // in player mode reached this branch with `recordedAvailable` false, so it
+    // read null by accident. Publishing the recording made `recordedAvailable`
+    // true with a floored ZERO, which would have flipped six rivals from an
+    // honest null to a confident "not over cap" as a side effect of the unlock
+    // -- the exact reassuring-unknown shape this repo keeps re-learning.
+    //
+    // What the zero DOES establish travels in `recorded.establishes` and in the
+    // reason below, labelled as a bound rather than a position.
     headroom = {
       available: false,
       value: null,
       basis: null,
-      overCap: recordedAvailable ? false : null,
+      overCap: null,
       reason: capacity.cap === null
-        ? capacity.capReason
+        ? (establishes === RECORDED_POSITION.boundOnly
+          ? `${capacity.capReason}. The save's own recording is zero, which is the FLOOR of max(0, cost - cap): it `
+            + 'bounds this faction at or under cap without locating it, so no headroom figure follows from it'
+          : capacity.capReason)
         : 'some of this faction\'s holdings could not be priced, so the maintenance cost is a floor rather than a '
           + 'total and the headroom would be overstated',
       accuracy: null
@@ -885,6 +1011,15 @@ export function buildControlPointCapReport(snapshot, { factionId, mode = 'player
     maintenance,
     recorded: {
       available: recordedAvailable,
+      // WHAT THIS RECORDING ESTABLISHES -- read this before reading `overage`.
+      // `position` is exact and mode-independent; `bound-only` is a floor that
+      // locates nothing; `nothing` is the alien exemption. A consumer that
+      // reads `overage: 0` as "comfortably within cap" is reading a floor as a
+      // measurement, which is what this field exists to stop.
+      establishes,
+      establishesNote: establishes === null
+        ? 'no recording was read for this faction, so it establishes nothing'
+        : RECORDED_POSITION_NOTES[establishes],
       // The overage: today's stored penalty times three.
       overage: recordedOverage,
       // The stored numbers themselves, so a reader can check the arithmetic.
@@ -898,10 +1033,13 @@ export function buildControlPointCapReport(snapshot, { factionId, mode = 'player
         + 'overage. A recorded 0 means at or under cap for a human faction, and means nothing for the aliens, whose '
         + 'cap is a hard-coded 20000.',
       source: CONTROL_POINT_CAP_SOURCES.recording,
+      // The recording is NO LONGER redacted for a rival in player mode -- the
+      // owner's 2026-08-22 intel-model call, recorded in this file's header.
+      // An absent recording is now an absent FIELD (an older snapshot), not a
+      // visibility decision.
       reason: recordedAvailable
         ? null
-        : 'this snapshot carries no recorded control-point cap penalty for this faction (older snapshot, or '
-          + 'redacted for a rival in player mode)'
+        : 'this snapshot carries no recorded control-point cap penalty for this faction; re-publish after upgrading'
     },
     reconciliation: {
       modelledOverage,
@@ -1038,6 +1176,9 @@ export default {
   ADMINISTRATION_HAB_MODULES,
   CAP_ATTRIBUTES,
   OVER_CAP_EXPOSED_MISSIONS,
+  RECORDED_POSITION,
+  RECORDED_POSITION_NOTES,
+  recordedCapPosition,
   isAlienFaction,
   readBaseControlPointCap,
   readControlPointCostNormalizer,

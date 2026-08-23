@@ -371,21 +371,35 @@ class IntelligenceFilter {
         // effects", which would let a consumer compose a rival bonus that is
         // confidently 1.0 when it is simply unmeasured.
         spaceMiningBonusEffects: isEnhanced || isObserver ? f.spaceMiningBonusEffects : null,
-        // A rival's own recorded cap overage states their cap position directly,
-        // which is exactly what the masked councilor attributes exist to keep
-        // out of player mode. Null, never 0 -- a rival reported at 0 overage
-        // reads as comfortably within a cap nobody measured.
+        // A RIVAL'S RECORDED CAP OVERAGE IS PUBLISHED IN PLAYER MODE.
         //
-        // ALL FOUR, not just the derived one. The overage is today's stored
-        // penalty times three, so publishing the penalty and withholding the
-        // overage would leak the same number under a different name -- the
-        // exact defect shape the redaction notes in CLAUDE.md record.
-        recordedControlPointCapOverage: isEnhanced || isObserver ? f.recordedControlPointCapOverage : null,
-        controlPointCapPenaltyToday: isEnhanced || isObserver ? f.controlPointCapPenaltyToday : null,
-        controlPointCapPenaltyAveraged: isEnhanced || isObserver ? f.controlPointCapPenaltyAveraged : null,
-        recordedControlPointCapOverageSamples: isEnhanced || isObserver
-          ? f.recordedControlPointCapOverageSamples
-          : null
+        // OWNER'S INTEL-MODEL DECISION, 2026-08-22 -- NOT A BUG FIX, AND NOT A
+        // LEAK. `7174764` redacted these four and `4f2f5b1` kept that. The
+        // dashboard's owner decided on 2026-08-22 that the faction control-point
+        // cap does not need to be locked behind omniscient, so the refusal is
+        // now more conservative than the intel model it serves. DO NOT "restore"
+        // the redaction as a leak fix; the four lines below are deliberate.
+        //
+        // The line that still holds is the difference between the two bases in
+        // `shared/controlPointCap.mjs`:
+        //
+        //   * these four are the `recorded` basis. They read the game's own
+        //     `history_CPCapOverageByDay` and COMPOSE NOTHING -- no councilor
+        //     attribute, no hab module, no effect list. Unlocking them unmasks
+        //     no input, only a conclusion the save states outright.
+        //   * `controlPointMaintenanceEffects` below stays REDACTED, so the
+        //     `composed` basis still refuses for a rival, and councilor
+        //     attributes stay masked by the councilor path unchanged.
+        //
+        // Still null and never 0 when the field itself is absent: a rival
+        // reported at 0 overage from an older snapshot would read as measured
+        // at-or-under cap. And a genuine recorded 0 is a FLOOR, not a position
+        // -- `recordedCapPosition` classifies it `bound-only` and the headroom
+        // refuses on it rather than reporting confident room.
+        recordedControlPointCapOverage: f.recordedControlPointCapOverage,
+        controlPointCapPenaltyToday: f.controlPointCapPenaltyToday,
+        controlPointCapPenaltyAveraged: f.controlPointCapPenaltyAveraged,
+        recordedControlPointCapOverageSamples: f.recordedControlPointCapOverageSamples
       };
     });
 
@@ -796,10 +810,18 @@ class IntelligenceFilter {
       if (Array.isArray(faction.obsoletedShipParts)) {
         factionLeaks.push(`${faction.ID}:obsoletedShipParts[${faction.obsoletedShipParts.length}]`);
       }
-      // The two halves of a rival's control-point cap position. The effect list
-      // is their completed cap projects (past the five-project truncation that
-      // `completedProjects` already applies), and the recorded overage states
-      // their cap position outright.
+      // A rival's completed cap projects, which sit past the five-project
+      // truncation `completedProjects` already applies. This is the COMPOSED
+      // basis's project term and it stays redacted.
+      //
+      // RETARGETED 2026-08-22. The four recorded cap fields used to be asserted
+      // beside this one; they are now deliberately published (owner's
+      // intel-model call -- see the faction projection above and the header of
+      // `shared/controlPointCap.mjs`). The assertion was retargeted rather than
+      // deleted, because what it guards did not go away: the composed basis's
+      // inputs must still not reach player mode, and this is the only one of
+      // them that lives on the faction object. The councilor half is asserted
+      // at the top of this method and the hab-module half by the module filter.
       if (Array.isArray(faction.controlPointMaintenanceEffects)) {
         factionLeaks.push(
           `${faction.ID}:controlPointMaintenanceEffects[${faction.controlPointMaintenanceEffects.length}]`
@@ -812,22 +834,13 @@ class IntelligenceFilter {
           `${faction.ID}:spaceMiningBonusEffects[${faction.spaceMiningBonusEffects.length}]`
         );
       }
-      if (this.toFiniteOrNull(faction.recordedControlPointCapOverage) !== null) {
-        factionLeaks.push(`${faction.ID}:recordedControlPointCapOverage`);
-      }
-      // The raw fields the overage is derived FROM, not only the derived one.
-      // `recordedControlPointCapOverage` is `controlPointCapPenaltyToday * 3`,
-      // so nulling the derived field alone would have left the same fact on the
-      // payload under two other names.
-      if (this.toFiniteOrNull(faction.controlPointCapPenaltyToday) !== null) {
-        factionLeaks.push(`${faction.ID}:controlPointCapPenaltyToday`);
-      }
-      if (this.toFiniteOrNull(faction.controlPointCapPenaltyAveraged) !== null) {
-        factionLeaks.push(`${faction.ID}:controlPointCapPenaltyAveraged`);
-      }
-      if (this.toFiniteOrNull(faction.recordedControlPointCapOverageSamples) !== null) {
-        factionLeaks.push(`${faction.ID}:recordedControlPointCapOverageSamples`);
-      }
+      // `recordedControlPointCapOverage`, `controlPointCapPenaltyToday`,
+      // `controlPointCapPenaltyAveraged` and `recordedControlPointCapOverageSamples`
+      // were asserted here until 2026-08-22 and are now DELIBERATELY PUBLISHED.
+      // They are the `recorded` basis, which composes nothing and needs none of
+      // the masked terms. `tests/controlPointCap.test.js` asserts positively
+      // that they survive, so a future silent re-redaction fails a test rather
+      // than quietly narrowing the intel model back.
     }
     if (factionLeaks.length) {
       throw new Error(`Player snapshot contains hidden faction telemetry: ${factionLeaks.join(', ')}`);
