@@ -16,7 +16,7 @@
   height: auto;
   aspect-ratio: 2 / 1;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   background: var(--surface-inset);
 }
 
@@ -31,22 +31,32 @@
   filter: none !important;
 }
 
+.init-sector-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .init-sector-item {
   display: flex;
   min-width: 0;
   gap: 10px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1px;
-  padding: 9px 0 9px 11px;
-  border-left: 2px solid var(--accent);
-  border-bottom: 1px solid var(--line);
   width: 100%;
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line-strong);
+  border-left-width: 2px;
+  border-left-color: var(--accent);
+  border-radius: 0;
   color: var(--text);
   background: transparent;
   font-family: var(--sans);
   text-align: left;
   cursor: pointer;
+  appearance: none;
 }
 
 .init-sector-item:hover,
