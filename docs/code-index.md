@@ -35,7 +35,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/strategic-commentary.js` | BS | Browser (ESM) | 203 | renders the non-LLM four-layer Strategic Commentary Engine output. | — | — |
 | `public/v2/js/components/unlocked-tech.js` | BS | Browser (ESM) | 372 | renders the searchable list of the observer faction's unlocked | — | — |
 | `public/v2/js/components/world-map.js` | BS | Browser (ESM) | 493 | renders the interactive world/space theater map surface. | — | — |
-| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 2026 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 2055 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (ESM) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`

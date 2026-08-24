@@ -178,6 +178,13 @@ const VIEWS = [
       // other turn decisions rather than in RECORDS. RECORDS' Technology Watch
       // answers "what happened"; this answers "what do I do".
       'researchAdvisor',
+      // Both of these render on COMMAND and neither was registered, so nothing
+      // would have failed if a layout pass had left them outside #view-command
+      // -- the mining board's failure mode, which rendered nowhere because it
+      // had a script and no mount. This pass restructured the priority card's
+      // markup and re-measured the operations board, so they get the assertion.
+      'priorityBriefCard',
+      'opLeaderboardList',
       'directiveBoard',
       'sitrepSummary',
       'directivesStreamList',
@@ -1279,7 +1286,12 @@ function renderDashboard() {
 }
 
 function renderTopHUD() {
-  const { campaignDate, observerName, powerScore, sitrep = {} } = state.briefing;
+  // No `powerScore` here. The HUD's STRATEGIC SCORE pill was the second render
+  // of the figure the COMMAND executive strip already shows, and the unguarded
+  // one -- it interpolated `${powerScore}/100` with no null check, so an absent
+  // score would have printed "null/100". `renderExecutiveMetrics` runs the same
+  // figure through `toFiniteNumber` and prints UNAVAILABLE instead.
+  const { campaignDate, observerName, sitrep = {} } = state.briefing;
   const meta = state.rawSnapshot?.metadata || {};
   const identity = state.snapshotIdentity || state.briefing || {};
   const observerFaction = observerFactionRecord();
@@ -1319,7 +1331,6 @@ function renderTopHUD() {
   updateFactionLogoSlot(document.getElementById('hudFactionLogo'), observerFaction, 'faction-logo faction-logo--hud');
   updateFactionLogoSlot(document.getElementById('initObserverSelectLogo'), observerFaction, 'faction-logo faction-logo--select');
 
-  document.getElementById('hudPower').textContent = `${powerScore}/100`;
   if (window.MissionControlHateEconomics?.renderHud) {
     window.MissionControlHateEconomics.renderHud(
       document.getElementById('hudHateMeter'),
@@ -1394,7 +1405,25 @@ function renderHolographicCore() {
   };
 
   document.getElementById('holoPrimaryTitle').textContent = topDirective.title;
-  document.getElementById('holoPrimaryStatement').textContent = topDirective.statement;
+
+  // `primaryDirective()` builds the statement as
+  // `enginePrimary.recommendation || enginePrimary.title`, and the engine does
+  // not currently emit `recommendation` at all -- verified against
+  // /api/v2/briefing on 2026-08-23, where `primary.recommendation` is undefined
+  // in both modes. So the statement was the title again, printed a second time
+  // in body type immediately beneath a 38px serif copy of itself:
+  //
+  //   "Purge the Protectorate hold on ExtractiveSector in China" (omniscient)
+  //   "Advise Government: United States of North America"        (player)
+  //
+  // Compare the strings rather than reading the fallback, so the day the engine
+  // starts emitting a real recommendation this shows it. Whitespace-insensitive
+  // because "identical but for a trailing space" is still the same sentence.
+  const statementNode = document.getElementById('holoPrimaryStatement');
+  const statement = topDirective.statement || '';
+  const restatesTitle = statement.trim() === String(topDirective.title || '').trim();
+  statementNode.hidden = restatesTitle || !statement.trim();
+  statementNode.textContent = restatesTitle ? '' : statement;
 
   const setMeta = (id, value) => {
     const node = document.getElementById(id);
