@@ -21,12 +21,13 @@ const SOURCE_ROOTS = [
   { dir: 'server', runtime: 'Node (CommonJS)' },
   { dir: 'shared', runtime: 'Node + Cloudflare worker (ESM)' },
   { dir: 'site/worker', runtime: 'Cloudflare worker only (ESM)' },
-  { dir: 'public/v2', runtime: 'Browser (ESM)' },
+  { dir: 'src', runtime: 'Browser (React JSX)' },
+  { dir: 'public/v2', runtime: 'Browser (classic, global IIFE)' },
   { dir: 'public/js', runtime: 'Browser (legacy, non-module)' },
   { dir: 'scripts', runtime: 'Node (CommonJS)' }
 ];
 
-const EXTENSIONS = new Set(['.js', '.mjs']);
+const EXTENSIONS = new Set(['.js', '.mjs', '.jsx']);
 
 // v2 stylesheet parts are indexed separately: order is read from the shell's
 // <link> tags (the cascade), not from readdir. Purpose text is parsed from each
@@ -49,7 +50,7 @@ const KNOWN_BARRELS = new Set([
 function walk(dir) {
   const out = [];
   for (const name of fs.readdirSync(dir)) {
-    if (name === 'node_modules') continue;
+    if (name === 'node_modules' || name === 'app' || name === 'dist') continue;
     const full = path.join(dir, name);
     const stat = fs.statSync(full);
     if (stat.isDirectory()) {

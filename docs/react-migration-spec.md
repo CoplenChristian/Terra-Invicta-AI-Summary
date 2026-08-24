@@ -76,13 +76,16 @@ than aspirational.
 Vite + React + MUI added; **nothing migrated**. One throwaway panel rendered by React
 inside the existing page to prove the two can share a document.
 
-Deliverables:
+Deliverables & Settled Decisions:
 
-- Vite build producing into `public/v2/` (or a new served path — decide and justify)
-- `npm run dev` with HMR; `npm start` still serves the built app
-- **The existing 15 unmigrated panels render identically.** Capture computed style for all
-  six views at 375/1440/1600/1920 in both modes before and after Phase 0, and diff.
-- A documented answer to: what does `npm test` run now, and what does `build:site` do?
+- **Vite build produces into `public/v2/app/`**: Fixed entry filename `bundle.js`, loaded via `<script type="module" src="/v2/app/bundle.js">` in `public/v2/index.html`. `type="module"` provides deferred execution after DOM parse and classic scripts. `public/v2/app/` is gitignored to keep build artifacts out of source control.
+- **`npm run dev` vs `npm start`**:
+  - `npm run dev` launches the Vite dev server with Hot Module Replacement (HMR) and proxies `/api/*` and `/v2/data/*` requests to the Express backend (dynamic port resolution with literal fallback, no `config.json` coupling).
+  - `npm start` remains unchanged, running `node server/index.js` and serving the static distribution via `express.static('public')`.
+- **`npm test`**: Unchanged (`node scripts/run_unit_tests.js`). Passes with 1398 tests / 1396 pass / 0 fail / 2 conditional skips (+1 test `tests/reactCoexistence.test.js`).
+- **`build:site`**: Remains `node scripts/build_static_snapshot.js` for Phase 0. *(Forward prerequisite for Phase 2: `npm run build:site` must chain `npm run build` before snapshot generation once the first real React panel is shipped so the worker static bundle includes `public/v2/app/bundle.js`)*.
+- **Computed style verification**: `scripts/verify_computed_style_baseline.js` proved 100% determinism across two identical baseline runs (0 diffs across all 48 states: 6 views × 4 viewports × 2 modes, with custom properties sorted alphabetically and `#hudSnapshot` wall clock masked), and verified **0 computed style or geometry differences** on the 15 unmigrated panels before and after Phase 0.
+- **Bundle size floor & budget**: Measured baseline production floor for React 18 + React-DOM + MUI v6 + Emotion is **302.81 KB raw** (310,082 bytes) / **82.69 KB gzipped** (84,672 bytes). Enforced via `scripts/verify_bundle_size.js` with budget **< 250 KB gzipped / < 1,000 KB raw** providing ~167 KB gzip headroom for the 16 components.
 
 **Check-in gate:** the dashboard is visually byte-identical, the suite is green, and one
 React panel is on screen.
@@ -211,13 +214,13 @@ editing `server/` or `shared/`, something has gone wrong — stop and say so.
 
 ---
 
-## Open questions to answer in Phase 0
+## Questions answered in Phase 0
 
-- **Does the hosted worker serve a bundle now?** `scripts/build_static_snapshot.js` flattens
-  the worker for static hosting. Its relationship to a Vite build must be settled before
-  Phase 2, not discovered at Phase 12.
-- **Do the 24 stylesheets stay?** A hybrid — MUI components, existing CSS — is legitimate
-  and lower-risk, but it means two styling systems for the duration. Decide deliberately.
-- **MUI v6 or v7?** And Emotion or the newer styling engine. Pin it and record why.
-- **Bundle size budget.** The project's value includes being cheap to serve. Set a number
-  in Phase 0 and check it each phase, the way the screen-height budget is checked.
+- **Does the hosted worker serve a bundle now?**
+  **Answer**: For Phase 0, `scripts/build_static_snapshot.js` coexists without requiring `npm run build` because no live React panels have shipped yet. In Phase 2, `npm run build:site` will run `vite build` prior to snapshot flattening so `dist/` embeds `public/v2/app/bundle.js`.
+- **Do the 24 stylesheets stay?**
+  **Answer**: Yes, hybrid approach. The 24 stylesheets stay as the global foundation for unmigrated panels and layouts. In Phase 1, the MUI theme is derived directly from `:root` CSS custom property tokens. Unmigrated panels remain completely untouched and pixel-stable.
+- **MUI v6 or v7?**
+  **Answer**: **MUI v6** (`@mui/material` v6.5.0) with `@emotion/react` and `@emotion/styled`. Pinned because MUI v6 is the production-stable, long-term-supported engine with mature React 18/19 compatibility and predictable token-based styling.
+- **Bundle size budget.**
+  **Answer**: Measured production baseline floor is **302.81 KB raw / 82.69 KB gzipped**. Enforced via `scripts/verify_bundle_size.js` with budget **< 250 KB gzipped / < 1,000 KB raw**, providing ~167 KB gzip headroom for the 16 components.

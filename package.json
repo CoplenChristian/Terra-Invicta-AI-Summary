@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "scripts": {
     "start": "node server/index.js",
+    "dev": "vite",
+    "build": "vite build",
+    "verify:bundle": "node scripts/verify_bundle_size.js",
     "build:site": "node scripts/build_static_snapshot.js",
     "push:supabase": "node scripts/push_latest_to_supabase.js",
     "push:dry-run": "node scripts/push_latest_to_supabase.js --dry-run",
@@ -13,15 +16,22 @@
     "parse": "node scripts/parse_save.js"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^6.5.0",
     "@supabase/supabase-js": "2.49.1",
     "ajv": "^8.20.0",
     "dotenv": "16.4.7",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@modelcontextprotocol/server-sequential-thinking": "^2025.7.1",
+    "@vitejs/plugin-react": "^4.7.0",
     "npx": "^10.2.2",
     "playwright-mcp": "^0.0.13",
-    "puppeteer-mcp-server": "^0.7.2"
+    "puppeteer-mcp-server": "^0.7.2",
+    "vite": "^5.4.21"
   }
 }

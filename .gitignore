@@ -14,6 +14,8 @@ template.config.local
 # Dependency and build directories
 node_modules/
 dist/
+public/v2/app/
+tmp/
 
 # Save files and large binaries
 *.gz

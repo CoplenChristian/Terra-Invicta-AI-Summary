@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**192 JS modules** and **24 stylesheet parts** (216 indexed files).
+**195 JS modules** and **24 stylesheet parts** (219 indexed files).
 
 ## `public/`
 
@@ -20,24 +20,24 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/index.html` | — | Browser (legacy v1) | 535 | legacy v1 dashboard shell -- DO NOT EDIT | — | — |
 | `public/js/api.js` | BS | Browser (legacy, non-module) | 129 | the legacy v1 API client — runtime probe and the fetch wrapper the | — | — |
 | `public/js/app.js` | BS | Browser (legacy, non-module) | 1517 | the legacy v1 dashboard controller — renders the old UI and must not | — | — |
-| `public/v2/js/components/alien-hate-economics.js` | BS | Browser (ESM) | 324 | renders the save-derived Mission Control hate floor without | — | — |
-| `public/v2/js/components/council-orders.js` | BS | Browser (ESM) | 349 | renders the at-a-glance answer to "what should each councilor do | — | — |
-| `public/v2/js/components/detail-panel.js` | BS | Browser (ESM) | 220 | the shared detail surface for clickable Mission Control modules — | — | — |
-| `public/v2/js/components/directive-board.js` | BS | Browser (ESM) | 769 | renders the Directive Engine v2 Cycle Plan. | — | — |
-| `public/v2/js/components/drive-explorer.js` | BS | Browser (ESM) | 1187 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
-| `public/v2/js/components/executive-boards.js` | BS | Browser (ESM) | 416 | renders the executive boards — faction power, resources, and the | — | — |
-| `public/v2/js/components/faction-intel.js` | BS | Browser (ESM) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
-| `public/v2/js/components/fleet-engagement.js` | BS | Browser (ESM) | 261 | renders the per-fleet engagement estimates — what force each alien | — | — |
-| `public/v2/js/components/fleet-procurement.js` | BS | Browser (ESM) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
-| `public/v2/js/components/intelligence-library.js` | BS | Browser (ESM) | 583 | renders the intelligence library — the drillable intelligence | — | — |
-| `public/v2/js/components/mc-budget.js` | BS | Browser (ESM) | 188 | the Mission Control budget planner — MC is the sole input to the | — | — |
-| `public/v2/js/components/mining-expansion.js` | BS | Browser (ESM) | 619 | the mining expansion board — capacity, runways, and need-weighted | — | — |
-| `public/v2/js/components/research-advisor.js` | BS | Browser (ESM) | 1056 | phase 4 of the research advisor, on screen. | — | — |
-| `public/v2/js/components/strategic-commentary.js` | BS | Browser (ESM) | 203 | renders the non-LLM four-layer Strategic Commentary Engine output. | — | — |
-| `public/v2/js/components/unlocked-tech.js` | BS | Browser (ESM) | 372 | renders the searchable list of the observer faction's unlocked | — | — |
-| `public/v2/js/components/world-map.js` | BS | Browser (ESM) | 512 | renders the interactive world/space theater map surface. | — | — |
-| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 2055 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
-| `public/v2/js/shared.js` | BS | Browser (ESM) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
+| `public/v2/js/components/alien-hate-economics.js` | BS | Browser (classic, global IIFE) | 324 | renders the save-derived Mission Control hate floor without | — | — |
+| `public/v2/js/components/council-orders.js` | BS | Browser (classic, global IIFE) | 349 | renders the at-a-glance answer to "what should each councilor do | — | — |
+| `public/v2/js/components/detail-panel.js` | BS | Browser (classic, global IIFE) | 220 | the shared detail surface for clickable Mission Control modules — | — | — |
+| `public/v2/js/components/directive-board.js` | BS | Browser (classic, global IIFE) | 769 | renders the Directive Engine v2 Cycle Plan. | — | — |
+| `public/v2/js/components/drive-explorer.js` | BS | Browser (classic, global IIFE) | 1187 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
+| `public/v2/js/components/executive-boards.js` | BS | Browser (classic, global IIFE) | 416 | renders the executive boards — faction power, resources, and the | — | — |
+| `public/v2/js/components/faction-intel.js` | BS | Browser (classic, global IIFE) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
+| `public/v2/js/components/fleet-engagement.js` | BS | Browser (classic, global IIFE) | 261 | renders the per-fleet engagement estimates — what force each alien | — | — |
+| `public/v2/js/components/fleet-procurement.js` | BS | Browser (classic, global IIFE) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
+| `public/v2/js/components/intelligence-library.js` | BS | Browser (classic, global IIFE) | 583 | renders the intelligence library — the drillable intelligence | — | — |
+| `public/v2/js/components/mc-budget.js` | BS | Browser (classic, global IIFE) | 188 | the Mission Control budget planner — MC is the sole input to the | — | — |
+| `public/v2/js/components/mining-expansion.js` | BS | Browser (classic, global IIFE) | 619 | the mining expansion board — capacity, runways, and need-weighted | — | — |
+| `public/v2/js/components/research-advisor.js` | BS | Browser (classic, global IIFE) | 1056 | phase 4 of the research advisor, on screen. | — | — |
+| `public/v2/js/components/strategic-commentary.js` | BS | Browser (classic, global IIFE) | 203 | renders the non-LLM four-layer Strategic Commentary Engine output. | — | — |
+| `public/v2/js/components/unlocked-tech.js` | BS | Browser (classic, global IIFE) | 372 | renders the searchable list of the observer faction's unlocked | — | — |
+| `public/v2/js/components/world-map.js` | BS | Browser (classic, global IIFE) | 512 | renders the interactive world/space theater map surface. | — | — |
+| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2055 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/shared.js` | BS | Browser (classic, global IIFE) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
 
@@ -48,7 +48,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/derive_intel_fixtures.js` | C | Node (CommonJS) | 91 | derive committed full filtered-snapshot fixtures for the unit test | — | — |
 | `scripts/derive_snapshot_fixtures.js` | C | Node (CommonJS) | 165 | derive the committed filtered-snapshot fixtures the markdown export | — | — |
 | `scripts/export_intel_snapshots.js` | C | Node (CommonJS) | 157 | export full snapshots from Supabase to local gzipped JSON as the | `main` | — |
-| `scripts/generate_code_index.js` | C | Node (CommonJS) | 445 | Generate docs/code-index.md, the required-reading map of what lives | `collect, linkedCssHrefs, readCssPurpose, render, renderIndex` | — |
+| `scripts/generate_code_index.js` | C | Node (CommonJS) | 446 | Generate docs/code-index.md, the required-reading map of what lives | `collect, linkedCssHrefs, readCssPurpose, render, renderIndex` | — |
 | `scripts/parse_save.js` | C | Node (CommonJS) | 202 | the universal save-parser CLI — inspect save state, execute intel | `formatOutput, main, parseArgs, resolveNestedField` | — |
 | `scripts/publish/options.js` | C | Node (CommonJS) | 172 | publish stage 1 — decide what this run was asked to do from CLI | `PUBLISH_POLICY, parseArgs, parsePositiveInteger, retentionFromEnv, usage` | — |
 | `scripts/publish/parseStage.js` | C | Node (CommonJS) | 124 | publish stage 2 — turn a chosen save file into the raw snapshot | `parseTargetSave, resolveTargetSave` | — |
@@ -57,6 +57,8 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/publish/techGraph.js` | C | Node (CommonJS) | 102 | publish stage 3a — apply the shared/inline/omitted tech-tree mode | `applyTechTreeMode, buildSharedTechGraph, splitTechTree, techGraphFingerprint` | `tests/techGraph.test.js` |
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 258 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
 | `scripts/run_unit_tests.js` | C | Node (CommonJS) | 35 | run the deterministic unit test suite — every tests/**/*.test.js file | — | — |
+| `scripts/verify_bundle_size.js` | C | Node (CommonJS) | 115 | measures the raw and gzipped byte sizes of the bundled React + MUI | `BUDGET, measureBundle` | — |
+| `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 298 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates` | — |
 | `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 383 | browser verification that the Drive Explorer renders the measured | — | — |
 | `scripts/verify_drive_path_modal.js` | C | Node (CommonJS) | 305 | browser verification that clicking a drive row actually opens the | — | — |
 | `scripts/verify_mining_registers.js` | C | Node (CommonJS) | 180 | browser verification that the mining board renders the measured | — | — |
@@ -229,6 +231,12 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `site/worker/projections.js` | E | Cloudflare worker only (ESM) | 225 | the hosted adapter over the shared projection registries — what this | `TECH_RESOURCES, buildIntelResource, buildTechIntelResource, intelResource, productionPlanPaths, techIntelResource, validateResourceQuery` | — |
 | `site/worker/runtimeDefaults.js` | E | Cloudflare worker only (ESM) | 69 | what this deployment believes its defaults are, and how a malformed | `HOSTED_MODES, positiveIntegerOr, readRuntimeDefaults` | — |
 | `site/worker/supabaseReader.js` | E | Cloudflare worker only (ESM) | 249 | every Supabase read the hosted runtime makes, plus the consistency | `boundedHistoryLimit, consistencyError, isSupabaseReady, sameTimestamp, strategicHistoryMeta, supabaseReadKey, timestampMs` | — |
+
+## `src/`
+
+| module | B/E/C | runtime | lines | purpose | exports | test |
+| :-- | :--: | :-- | --: | :-- | :-- | :-- |
+| `src/v2/main.jsx` | E | Browser (React JSX) | 143 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, mountCoexistenceProof, mountReactPanel, unmountReactPanel` | — |
 
 ## `public/v2/css/`
 
