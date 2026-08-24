@@ -82,7 +82,7 @@
                   <td style="text-align: right;">
                     ${tier.winnable
                       ? `<em>${escapeHtml(tier.bandLabel)}</em>`
-                      : '<span style="color: var(--danger); font-family: var(--mono); font-size: 9px;">UNWINNABLE</span>'
+                      : '<span style="color: var(--danger); font-family: var(--mono); font-size: var(--fs-tag);">UNWINNABLE</span>'
                     }
                   </td>
                 </tr>
@@ -101,7 +101,7 @@
         <div class="commentary-proj-card">
           <div class="commentary-proj-label">HATE VENT HORIZON</div>
           <div class="commentary-proj-val">${escapeHtml(proj.hateVent.bandLabel)}</div>
-          <small style="color: var(--text-dim); font-size: 9px;">To cross below war threshold</small>
+          <small style="color: var(--text-dim); font-size: var(--fs-tag);">To cross below war threshold</small>
         </div>
       `);
     } else if (proj.hateVent && proj.hateVent.reason) {
@@ -114,7 +114,7 @@
         <div class="commentary-proj-card">
           <div class="commentary-proj-label">HATE VENT HORIZON</div>
           <div class="commentary-proj-val">UNAVAILABLE</div>
-          <small style="color: var(--text-dim); font-size: 9px;">${escapeHtml(proj.hateVent.reason)}</small>
+          <small style="color: var(--text-dim); font-size: var(--fs-tag);">${escapeHtml(proj.hateVent.reason)}</small>
         </div>
       `);
     }
@@ -165,7 +165,7 @@
         <div class="commentary-proj-card">
           <div class="commentary-proj-label">PRODUCTION THROUGHPUT</div>
           <div class="commentary-proj-val">${escapeHtml(headline)}</div>
-          <small style="color: var(--text-dim); font-size: 9px;">${escapeHtml(clock.targetHull)} — ${escapeHtml(rateDetail)} (${escapeHtml(yardDetail)}; ${escapeHtml(nextDetail)}; one hull per yard, measured)</small>
+          <small style="color: var(--text-dim); font-size: var(--fs-tag);">${escapeHtml(clock.targetHull)} — ${escapeHtml(rateDetail)} (${escapeHtml(yardDetail)}; ${escapeHtml(nextDetail)}; one hull per yard, measured)</small>
         </div>
       `);
     } else if (proj.rebuildClock && proj.rebuildClock.reason) {
@@ -175,7 +175,7 @@
         <div class="commentary-proj-card">
           <div class="commentary-proj-label">PRODUCTION THROUGHPUT</div>
           <div class="commentary-proj-val">UNAVAILABLE</div>
-          <small style="color: var(--text-dim); font-size: 9px;">${escapeHtml(proj.rebuildClock.reason)}</small>
+          <small style="color: var(--text-dim); font-size: var(--fs-tag);">${escapeHtml(proj.rebuildClock.reason)}</small>
         </div>
       `);
     }

@@ -1755,7 +1755,7 @@ function renderOperativeLeaderboard() {
         <div class="op-bar-track">
           <div class="op-bar-fill" style="width: ${pct}%;"></div>
         </div>
-        <div style="display: flex; justify-content: space-between; font-size: 9.5px; color: var(--text-dim); margin-top: 1px;">
+        <div style="display: flex; justify-content: space-between; font-size: var(--fs-tag); color: var(--text-dim); margin-top: 1px;">
           <span>Location: ${escapeHtml(op.location)}</span>
           <span>Assignment: ${escapeHtml(op.activeMission)}</span>
         </div>
@@ -1852,9 +1852,9 @@ function renderHoldingsBubbleMatrix() {
     const gdpTrill = ((n.GDP || 0) / 1e12).toFixed(1);
     const size = 42 + i * 4;
     return `
-      <div class="holding-bubble" role="img" aria-label="${escapeHtml(n.displayName)}: $${escapeHtml(gdpTrill)}T GDP; executive ${escapeHtml(n.executiveFactionName || 'Independent')}" style="--bubble-accent: ${colors[i % colors.length]}; width: ${size}px; height: ${size}px; font-size: ${size < 48 ? '8.5px' : '9.5px'};" title="${escapeHtml(n.displayName)}: $${escapeHtml(gdpTrill)}T (${escapeHtml(n.executiveFactionName || 'Independent')})">
+      <div class="holding-bubble" role="img" aria-label="${escapeHtml(n.displayName)}: $${escapeHtml(gdpTrill)}T GDP; executive ${escapeHtml(n.executiveFactionName || 'Independent')}" style="--bubble-accent: ${colors[i % colors.length]}; width: ${size}px; height: ${size}px; font-size: var(--fs-tag);" title="${escapeHtml(n.displayName)}: $${escapeHtml(gdpTrill)}T (${escapeHtml(n.executiveFactionName || 'Independent')})">
         <div style="font-weight: 900; line-height: 1;">${escapeHtml(n.displayName.slice(0, 5))}</div>
-        <div style="font-size: 8px; opacity: 0.85;">$${escapeHtml(gdpTrill)}T</div>
+        <div style="font-size: var(--fs-tag); opacity: 0.85;">$${escapeHtml(gdpTrill)}T</div>
       </div>
     `;
   }).join('');

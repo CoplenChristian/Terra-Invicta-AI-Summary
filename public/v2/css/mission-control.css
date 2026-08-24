@@ -26,37 +26,67 @@
   --purple: #b39dbd;
   --gold: #d4a35e;
   --display: Georgia, 'Times New Roman', serif;
-  --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Inter used to lead this stack and was never loaded -- no @font-face, no
+     <link>, and this is the only stylesheet the v2 shell pulls in. So the face
+     that actually rendered was the next entry, and a reader who happened to
+     have Inter installed locally got a measurably different dashboard from
+     everyone else. The scale below was tuned against what renders, so the
+     phantom is removed rather than shipped: adding a webfont now would change
+     every measured width and height in the same commit that changes the sizes,
+     and there would be no way to attribute a regression to either. */
+  --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --mono: 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 
   /* Typography size scale.
    *
-   * Four steps, and every adjacent pair separated by at least 1px / ~10%.
-   * The first cut landed at 11 / 10 / 9.5 / 9, which put three of the four
-   * steps inside a single pixel -- docs/research-tab-layout-spec.md had said in
-   * as many words that "adjacent steps that differ by 0.5px do not read as
-   * hierarchy", and then the scale shipped with exactly that. Ratios are now
-   * 1.14 / 1.10 / 1.11, so each step is a visible one.
+   * Seven steps: four dense tiers for data, three display tiers above them.
+   * Every adjacent pair is separated by at least 1px / ~10%, and every
+   * font-size in this file is one of them -- measured 2026-08-23, 393
+   * declarations, 310 of them raw literals rendering 24 distinct sizes, and
+   * COMMAND alone rendered 16.
    *
-   * 9px is the floor the spec set and is deliberately the tag size: nothing in
-   * .research-advisor renders below it. --fs-tag also reaches .ra-tag--chain
-   * and .ra-tag--newcap, which set colour only and inherit their size from
-   * .ra-tag, so they move with the scale rather than pinning a literal.
+   * The dense four came first and are unchanged. DRIVES was already built on
+   * them alone: 2,010 text-bearing elements, exactly four rendered sizes, and
+   * it is the proof the tiers are sufficient rather than merely tidy.
    *
-   * The ceiling is the COMMAND height budget (< 3.00 screens at 1920x1080).
-   * Measured on the live save via scripts/verify_research_tab_layout.js, which
-   * reads computed styles off the rendered DOM rather than this file:
+   * 9px is the floor the spec set and is deliberately the tag size: nothing
+   * renders below it. Five declarations sat at 7px and three at 8.5px, i.e.
+   * beneath a floor the file documented; they are raised, not re-pinned.
    *
-   *            player 1920      omniscient 1920
-   *   11/10/9.5/9   3052px 2.826    3113px 2.882
-   *   12.5/11/10/9  3087px 2.858    3148px 2.915   <- these values
+   * The display three replace fourteen values between 14px and 30px -- 14, 15,
+   * 16, 17, 18, 19, 21, 22, 24, 25, 26, 27 and two viewport clamps. Those were
+   * four-percent apart in places (24/25/26/27 for four different titles), which
+   * is not hierarchy, it is drift. They are fixed rather than fluid on purpose:
+   * a vw clamp makes the rendered size viewport-dependent, which is how 21.6px
+   * and 30.24px reached the page without either being written down, and this is
+   * an Operate surface where density should be spatially predictable.
    *
-   * so the widening costs 35px and the worst case keeps 92px of headroom.
-   * Leaf overflow stayed at 0 at 1920, 1280 and 747 in both modes. */
-  --fs-row: 12.5px;
-  --fs-metric: 11px;
-  --fs-meta: 10px;
-  --fs-tag: 9px;
+   * Ratios: 1.111 / 1.100 / 1.136 / 1.200 / 1.267 / 1.368. The steps widen as
+   * they climb, so the display tiers read as a different register rather than
+   * as three more rows of data.
+   *
+   * The ceiling is the COMMAND height budget (< 3.00 screens at 1920x1080),
+   * measured on the live save by scripts/verify_research_tab_layout.js, which
+   * reads computed styles off the rendered DOM rather than this file. It was at
+   * 2.858 player / 2.915 omniscient before this change. */
+  --fs-title: 26px;    /* page and modal titles; COMMAND's hero numerals */
+  --fs-kpi: 19px;      /* the numeral a panel exists to show */
+  --fs-section: 15px;  /* entity names and panel titles */
+  --fs-row: 12.5px;    /* row content and readable prose */
+  --fs-metric: 11px;   /* metric values and dense table bodies */
+  --fs-meta: 10px;     /* metadata and secondary values */
+  --fs-tag: 9px;       /* tags, chips, eyebrows, table headers */
+
+  /* The world map is NOT on the scale above, and must not be put on it. Its
+     <svg> carries `viewBox="0 0 720 360"` with `width: 100%`, so every size
+     inside it is a user unit that the browser then scales by the container
+     width -- an "8px" label renders at roughly 7px in a 640px card and at
+     roughly 10px in a 900px one. Mapping those onto page-pixel tokens would
+     assert an equivalence that does not exist. What the map did need was to
+     stop running five values (8, 8.25, 8.5, 10 and 10.5) where it has two
+     roles, so it gets its own named two-step ladder. See world-map.js. */
+  --fs-map-name: 10.5px;
+  --fs-map-note: 8px;
 
   /* Spacing scale.
    *
@@ -134,8 +164,21 @@ body {
   background: var(--canvas);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: var(--fs-row);
   line-height: 1.5;
+}
+
+/* <small> must not invent a size. The UA sheet gives it `font-size: smaller`,
+   which multiplies whatever it inherits by 5/6, and that is the entire origin
+   of 8.25px, 8.33px, 9.17px, 9.58px and 10.83px on this page -- five rendered
+   sizes, none of them written down anywhere, each one an accident of which
+   element the markup happened to nest inside. Every deliberate step down from
+   the host context is declared below with a token, so the multiplier has no
+   remaining job. Measured 2026-08-23: every <small> that already rendered at a
+   token value did so because it had an explicit rule, so this resets only the
+   fractional ones. */
+small {
+  font-size: inherit;
 }
 
 .visually-hidden {
@@ -374,7 +417,7 @@ img.faction-logo {
   gap: 9px;
   color: var(--text);
   font-family: var(--display);
-  font-size: 17px;
+  font-size: var(--fs-section);
   font-weight: 700;
   letter-spacing: 0.02em;
   overflow-wrap: anywhere;
@@ -383,7 +426,7 @@ img.faction-logo {
 .init-brand-tag {
   color: var(--accent);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -394,7 +437,7 @@ img.faction-logo {
   overflow: hidden;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.09em;
   text-overflow: ellipsis;
   text-transform: uppercase;
@@ -422,7 +465,7 @@ img.faction-logo {
   align-items: baseline;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   white-space: nowrap;
 }
 
@@ -523,7 +566,7 @@ img.faction-logo {
   flex: 0 0 auto;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.08em;
   white-space: nowrap;
 }
@@ -597,7 +640,7 @@ img.faction-logo {
 .init-hud-hate__reading strong {
   color: var(--text);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -605,7 +648,7 @@ img.faction-logo {
 .init-hud-hate__reading em {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-style: normal;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -663,7 +706,7 @@ img.faction-logo {
   background: transparent !important;
   color: var(--text-muted) !important;
   font-family: var(--mono) !important;
-  font-size: 10px !important;
+  font-size: var(--fs-meta) !important;
   font-weight: 600 !important;
   letter-spacing: 0.06em !important;
   padding: 0 11px !important;
@@ -708,7 +751,7 @@ img.faction-logo {
   max-width: 320px;
   color: var(--text-dim);
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   letter-spacing: 0;
   line-height: 1.35;
   text-align: right;
@@ -756,7 +799,7 @@ img.faction-logo {
   color: var(--text-soft);
   background: var(--surface-inset);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.04em;
 }
 
@@ -829,7 +872,7 @@ img.faction-logo {
 .init-new-save-banner__kicker {
   color: var(--accent);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.08em;
   white-space: nowrap;
@@ -840,7 +883,7 @@ img.faction-logo {
   max-width: 200px;
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -853,7 +896,7 @@ img.faction-logo {
   padding: 2px 0;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   cursor: pointer;
 }
 
@@ -884,7 +927,7 @@ img.faction-logo {
 
 .init-api-access__eyebrow {
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.12em;
 }
 
@@ -892,7 +935,7 @@ img.faction-logo {
   margin: 3px 0 0;
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   letter-spacing: 0.08em;
 }
 
@@ -900,7 +943,7 @@ img.faction-logo {
 .init-api-access__links a {
   color: var(--accent);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   text-decoration: none;
 }
 
@@ -946,7 +989,7 @@ img.faction-logo {
   color: var(--danger);
   background: var(--surface-raised);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   line-height: 1.45;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1005,7 +1048,7 @@ img.faction-logo {
   align-items: center;
   color: var(--text-soft);
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   font-weight: 700;
   letter-spacing: 0.08em;
   line-height: 1.25;
@@ -1035,7 +1078,7 @@ img.faction-logo {
   flex: 0 0 auto;
   color: var(--text-dim) !important;
   font-family: var(--mono) !important;
-  font-size: 10px !important;
+  font-size: var(--fs-meta) !important;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -1089,7 +1132,7 @@ img.faction-logo {
   overflow: hidden;
   color: var(--text-dim) !important;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-overflow: ellipsis;
@@ -1106,7 +1149,7 @@ img.faction-logo {
   overflow: hidden;
   color: var(--text) !important;
   font-family: var(--display);
-  font-size: clamp(21px, 2.1vw, 30px);
+  font-size: var(--fs-title);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.05;
@@ -1119,7 +1162,7 @@ img.faction-logo {
   overflow: hidden;
   color: var(--text-muted);
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: var(--fs-row);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1155,7 +1198,7 @@ img.faction-logo {
   border-bottom: 1px solid var(--accent);
   color: var(--accent-strong);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1178,7 +1221,7 @@ img.faction-logo {
   max-width: 620px;
   color: var(--text);
   font-family: var(--display);
-  font-size: clamp(18px, 1.5vw, 22px);
+  font-size: var(--fs-kpi);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.18;
@@ -1190,7 +1233,7 @@ img.faction-logo {
   margin-top: 13px;
   color: var(--text-soft);
   font-family: var(--sans);
-  font-size: 15px;
+  font-size: var(--fs-section);
   line-height: 1.55;
 }
 
@@ -1199,7 +1242,7 @@ img.faction-logo {
   margin: 12px 0 0;
   color: var(--warning);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: var(--fs-row);
   line-height: 1.45;
 }
 
@@ -1209,7 +1252,7 @@ img.faction-logo {
   margin: 10px 0 0;
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -1239,7 +1282,7 @@ img.faction-logo {
 .priority-ops-meta dt {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1248,7 +1291,7 @@ img.faction-logo {
   margin-top: 4px;
   color: var(--text);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: var(--fs-row);
 }
 
 .priority-ops-meta dd.is-unavailable,
@@ -1280,7 +1323,7 @@ img.faction-logo {
 .priority-op strong {
   display: block;
   font-family: var(--display);
-  font-size: 16px;
+  font-size: var(--fs-section);
   font-weight: 700;
 }
 
@@ -1288,12 +1331,12 @@ img.faction-logo {
   display: block;
   color: var(--text-muted);
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: var(--fs-row);
 }
 
 .priority-op em {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-style: normal;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1332,7 +1375,7 @@ img.faction-logo {
 
 .threat-card__kicker {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1340,7 +1383,7 @@ img.faction-logo {
 .threat-card__title {
   color: var(--text);
   font-family: var(--display);
-  font-size: 18px;
+  font-size: var(--fs-section);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -1348,7 +1391,7 @@ img.faction-logo {
 .threat-card__statement {
   color: var(--text-soft);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: var(--fs-row);
   line-height: 1.5;
 }
 
@@ -1530,7 +1573,7 @@ img.faction-logo {
    as a clipped one. A second line is cheaper than a wrong figure. */
 .holo-node-label {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -1539,7 +1582,7 @@ img.faction-logo {
   margin-top: 3px;
   color: var(--text);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -1598,24 +1641,33 @@ img.faction-logo {
 
 .init-sector-name {
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--fs-row);
   font-weight: 650;
 }
 
 .init-sector-item > div > div:last-child {
   color: var(--text-dim) !important;
   font-family: var(--mono);
-  font-size: 9px !important;
+  font-size: var(--fs-tag) !important;
 }
 
+/* `flex: 0 0 auto` sized this to max-content, which was survivable only while
+   the badge was 8px. The label is not always "STABLE": it is also "CONTESTED
+   (1 Hostile the Servants Executives)", 44 characters, and at 375px that ran
+   386px against a 375px viewport with no scrollable ancestor -- unreachable
+   text, the defect scripts/verify_mobile_overflow.js exists to catch. Shrinking
+   is allowed instead, and the text wraps inside the border rather than being
+   clipped or ellipsised, because the string names which faction holds the
+   sector and dropping half of it would be worse than two lines. */
 .init-sector-badge {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   padding: 3px 6px;
   border: 1px solid currentColor;
   border-radius: 2px;
   background: transparent !important;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -1675,7 +1727,7 @@ img.faction-logo {
   justify-content: space-between;
   min-width: 0;
   color: var(--text-soft);
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .donut-legend-item > span {
@@ -1726,7 +1778,7 @@ img.faction-logo {
   padding: 20px;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   text-align: center;
 }
 
@@ -1750,7 +1802,7 @@ img.faction-logo {
   display: block;
   color: var(--text);
   font-family: var(--display);
-  font-size: 25px;
+  font-size: var(--fs-kpi);
   line-height: 1;
 }
 
@@ -1759,7 +1811,7 @@ img.faction-logo {
   margin-top: 7px;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1774,20 +1826,19 @@ img.faction-logo {
   border-top: 1px solid var(--line-strong);
   color: var(--danger);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.07em;
 }
 
 .threat-posture-heading small {
   color: var(--text-dim);
-  font-size: 7px;
+  font-size: var(--fs-tag);
   letter-spacing: 0;
   text-align: right;
 }
 
 .threat-posture-grid .asset-posture-metric strong {
   color: var(--danger);
-  font-size: 21px;
 }
 
 /* Alien hate economics --------------------------------------------------- */
@@ -1813,7 +1864,7 @@ img.faction-logo {
   display: block;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1823,7 +1874,7 @@ img.faction-logo {
   margin-top: 5px;
   color: var(--success);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.04em;
 }
 
@@ -1846,7 +1897,7 @@ img.faction-logo {
 .alien-hate-econ-note {
   margin: 9px 0 0;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.5;
 }
 
@@ -1870,14 +1921,14 @@ img.faction-logo {
 
 .mc-budget-hull-name {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   letter-spacing: 0.03em;
 }
 
 .mc-budget-hull-cost {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   white-space: nowrap;
 }
 
@@ -1896,7 +1947,7 @@ img.faction-logo {
   background: transparent;
   color: var(--text);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--fs-row);
   line-height: 1;
   cursor: pointer;
 }
@@ -1914,7 +1965,7 @@ img.faction-logo {
 .mc-budget-hull-controls output {
   min-width: 20px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-row);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -1927,7 +1978,7 @@ img.faction-logo {
   background: transparent;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.06em;
   cursor: pointer;
 }
@@ -1947,7 +1998,7 @@ img.faction-logo {
 .alien-hate-econ-war-status strong {
   color: var(--accent-strong);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.04em;
 }
 
@@ -1975,7 +2026,7 @@ img.faction-logo {
   overflow: hidden;
   color: var(--text);
   font-family: var(--display);
-  font-size: 19px;
+  font-size: var(--fs-kpi);
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1987,7 +2038,7 @@ img.faction-logo {
   margin-top: 6px;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 7px;
+  font-size: var(--fs-tag);
   line-height: 1.35;
 }
 
@@ -2000,6 +2051,12 @@ img.faction-logo {
   gap: 7px;
 }
 
+/* The section's own footnotes -- provenance lines, not part of any metric. */
+.alien-hate-econ-section > small {
+  font-size: var(--fs-meta);
+  color: var(--text-dim);
+}
+
 .alien-hate-econ-section-heading {
   display: flex;
   gap: 8px;
@@ -2008,10 +2065,19 @@ img.faction-logo {
 }
 
 .alien-hate-econ-section-heading small {
-  color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 7px;
+  font-size: var(--fs-tag);
   letter-spacing: 0;
+}
+
+/* COMPENSATION for the 8px/7px pair this heading used to run. Both halves are
+   now on the tag tier, and letter-spacing alone was all that still told them
+   apart -- because this selector (0,1,1) out-specified .alien-hate-econ-status
+   (0,1,0) and painted BOTH GATES CLOSED the same grey as an ordinary footnote.
+   The state colour the status was always meant to carry is what separates them
+   now; the plain qualifier keeps the dim it had. */
+.alien-hate-econ-section-heading small:not(.alien-hate-econ-status) {
+  color: var(--text-dim);
 }
 
 .alien-hate-econ-projects {
@@ -2029,13 +2095,12 @@ img.faction-logo {
   background: var(--surface-inset);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
 }
 
 .alien-hate-econ-project strong {
   flex: 0 0 auto;
   color: var(--danger);
-  font-size: 8px;
   letter-spacing: 0.05em;
 }
 
@@ -2052,7 +2117,7 @@ img.faction-logo {
   color: var(--accent-strong);
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.07em;
   list-style-position: inside;
   text-transform: uppercase;
@@ -2066,13 +2131,13 @@ img.faction-logo {
   background: var(--surface-raised);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   line-height: 1.45;
 }
 
 .alien-hate-econ-formula-body code {
   color: var(--text);
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .alien-hate-econ-formula-body p {
@@ -2089,7 +2154,7 @@ img.faction-logo {
   padding: 12px 0;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   line-height: 1.45;
 }
 
@@ -2109,18 +2174,18 @@ img.faction-logo {
 
 .largest-hostile-fleet span {
   color: var(--danger);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.07em;
 }
 
 .largest-hostile-fleet strong {
   color: var(--text);
-  font-size: 10px;
+  font-size: var(--fs-metric);
 }
 
 .largest-hostile-fleet small {
   color: var(--text-muted);
-  font-size: 8px;
+  font-size: var(--fs-tag);
 }
 
 .chart-container-box svg {
@@ -2138,7 +2203,7 @@ img.faction-logo {
   padding: 0 0 9px;
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   line-height: 1.4;
 }
 
@@ -2158,7 +2223,7 @@ img.faction-logo {
   border-collapse: collapse;
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
 }
 
 .resource-position-table th,
@@ -2171,7 +2236,7 @@ img.faction-logo {
 
 .resource-position-table thead th {
   color: var(--text-dim);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2188,7 +2253,7 @@ img.faction-logo {
   margin-bottom: 8px;
   color: var(--accent-strong);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.05em;
 }
 
@@ -2217,7 +2282,7 @@ img.faction-logo {
   align-items: baseline;
   margin-bottom: 4px;
   color: var(--text-soft);
-  font-size: 10px;
+  font-size: var(--fs-metric);
   font-weight: 650;
 }
 
@@ -2228,7 +2293,7 @@ img.faction-logo {
 .power-profile-name small {
   color: var(--warning);
   font-family: var(--mono);
-  font-size: 7px;
+  font-size: var(--fs-tag);
   font-weight: 500;
   letter-spacing: 0.05em;
 }
@@ -2245,7 +2310,7 @@ img.faction-logo {
   align-items: center;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 7px;
+  font-size: var(--fs-tag);
 }
 
 .power-profile-bar i {
@@ -2293,7 +2358,7 @@ img.faction-logo {
   margin: 2px 0 5px;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -2313,7 +2378,7 @@ img.faction-logo {
   border-top: 1px solid var(--line);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
 }
 
 .council-capability-row strong {
@@ -2335,7 +2400,7 @@ img.faction-logo {
   margin-top: 7px;
   color: var(--warning);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
 }
 
 .op-bar-row:hover {
@@ -2353,7 +2418,7 @@ img.faction-logo {
 .op-bar-name {
   overflow: hidden;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2363,7 +2428,7 @@ img.faction-logo {
   flex: 0 0 auto;
   color: var(--accent-strong);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-weight: 600;
 }
 
@@ -2382,7 +2447,7 @@ img.faction-logo {
 .op-bar-row > div:last-child {
   color: var(--text-dim) !important;
   font-family: var(--mono);
-  font-size: 9px !important;
+  font-size: var(--fs-tag) !important;
 }
 
 .op-bar-row > div:last-child span:last-child {
@@ -2446,7 +2511,7 @@ img.faction-logo {
 .directive-title-row strong {
   overflow: hidden;
   color: var(--text) !important;
-  font-size: 13px !important;
+  font-size: var(--fs-row) !important;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2455,7 +2520,7 @@ img.faction-logo {
   flex: 0 0 auto;
   color: var(--text-dim) !important;
   font-family: var(--mono);
-  font-size: 9px !important;
+  font-size: var(--fs-tag) !important;
 }
 
 .directive-badge {
@@ -2465,7 +2530,7 @@ img.faction-logo {
   border-radius: 2px;
   background: transparent !important;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -2485,7 +2550,7 @@ img.faction-logo {
 .directive-left > div:last-child {
   margin-top: 7px;
   color: var(--text-soft) !important;
-  font-size: 12px !important;
+  font-size: var(--fs-row) !important;
   line-height: 1.5 !important;
 }
 
@@ -2495,7 +2560,7 @@ img.faction-logo {
   border-left: 2px solid var(--accent);
   background: var(--surface-inset);
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.45;
 }
 
@@ -2503,7 +2568,7 @@ img.faction-logo {
   margin-bottom: 3px;
   color: var(--accent-strong) !important;
   font-family: var(--mono);
-  font-size: 8px !important;
+  font-size: var(--fs-tag) !important;
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -2551,7 +2616,7 @@ img.faction-logo {
   margin-bottom: 7px;
   color: var(--accent-strong) !important;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -2562,14 +2627,14 @@ img.faction-logo {
   gap: 8px;
   padding: 3px 0;
   border-bottom: 1px dotted var(--line);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.4;
 }
 
 .hold-ground-axis__label {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -2582,7 +2647,7 @@ img.faction-logo {
 .hold-ground-axis__verdict {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: var(--fs-tag);
   text-align: right;
 }
 
@@ -2598,7 +2663,7 @@ img.faction-logo {
 .hold-ground-note {
   margin-top: 6px;
   color: var(--text-dim);
-  font-size: 10.5px;
+  font-size: var(--fs-meta);
   line-height: 1.45;
 }
 
@@ -2610,7 +2675,7 @@ img.faction-logo {
   margin: 0;
   padding-left: 16px;
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.45;
 }
 
@@ -2621,18 +2686,17 @@ img.faction-logo {
 .hold-ground-list strong {
   display: block;
   color: var(--text) !important;
-  font-size: 11px !important;
+  font-size: var(--fs-metric) !important;
 }
 
 .hold-ground-list span {
   color: var(--text-dim) !important;
-  font-size: 10.5px;
 }
 
 .hold-ground-deferred {
   padding: 4px 0;
   border-bottom: 1px dotted var(--line);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.4;
 }
 
@@ -2645,13 +2709,13 @@ img.faction-logo {
 .hold-ground-deferred__hate {
   color: var(--warning) !important;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .hold-ground-deferred__effect {
   display: block;
   color: var(--text-dim) !important;
-  font-size: 10.5px;
+  font-size: var(--fs-meta);
 }
 
 .mc-toast {
@@ -2666,7 +2730,7 @@ img.faction-logo {
   background: var(--surface-raised);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .mc-space-force-summary {
@@ -2693,7 +2757,7 @@ img.faction-logo {
   overflow: hidden;
   color: var(--text);
   font-family: var(--display);
-  font-size: 17px;
+  font-size: var(--fs-kpi);
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2703,7 +2767,7 @@ img.faction-logo {
   margin-top: 5px;
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.07em;
   line-height: 1.3;
 }
@@ -2723,7 +2787,7 @@ img.faction-logo {
   border-top: 1px solid var(--line);
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .mc-space-body-row strong {
@@ -2762,7 +2826,7 @@ img.faction-logo {
   color: var(--text-soft);
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   list-style-position: inside;
 }
 
@@ -2791,7 +2855,7 @@ img.faction-logo {
   border-top: 1px solid var(--line);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   line-height: 1.35;
 }
 
@@ -2815,7 +2879,7 @@ img.faction-logo {
   grid-template-columns: 28px minmax(0, 1fr);
   gap: 10px;
   color: var(--text-soft);
-  font-size: 12px;
+  font-size: var(--fs-row);
   line-height: 1.6;
 }
 
@@ -2823,7 +2887,7 @@ img.faction-logo {
   color: var(--accent);
   content: attr(data-index);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -2877,7 +2941,7 @@ img.faction-logo {
 .intelligence-library-screen__eyebrow {
   color: var(--accent);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -2889,7 +2953,7 @@ img.faction-logo {
   margin-top: 4px;
   color: var(--text);
   font-family: var(--display);
-  font-size: 25px;
+  font-size: var(--fs-title);
   font-weight: 700;
 }
 
@@ -2907,7 +2971,7 @@ img.faction-logo {
 .detail-panel__summary {
   margin-bottom: 18px;
   color: var(--text-soft);
-  font-size: 13px;
+  font-size: var(--fs-row);
   line-height: 1.6;
 }
 
@@ -2927,14 +2991,14 @@ img.faction-logo {
 .detail-panel__fact dt {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
 .detail-panel__fact dd {
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--fs-row);
 }
 
 /* Grouped list sections inside the one shared modal.
@@ -3156,7 +3220,7 @@ body.intelligence-library-open {
 .intel-library-kicker {
   color: var(--accent);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -3168,7 +3232,7 @@ body.intelligence-library-open {
   margin-top: 4px;
   color: var(--text);
   font-family: var(--display);
-  font-size: 26px;
+  font-size: var(--fs-title);
   line-height: 1.1;
 }
 
@@ -3178,7 +3242,7 @@ body.intelligence-library-open {
   max-width: 720px;
   margin-top: 7px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-row);
   line-height: 1.5;
 }
 
@@ -3189,7 +3253,7 @@ body.intelligence-library-open {
   justify-items: end;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.07em;
   text-align: right;
   text-transform: uppercase;
@@ -3229,7 +3293,7 @@ body.intelligence-library-open {
   color: var(--text-muted);
   background: transparent;
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   text-align: left;
   text-decoration: none;
   cursor: pointer;
@@ -3252,7 +3316,7 @@ body.intelligence-library-open {
 .intel-library-nav-link {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -3293,7 +3357,7 @@ body.intelligence-library-open {
   border-left: 1px solid var(--line);
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3332,7 +3396,7 @@ body.intelligence-library-open {
 .intel-library-count {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3340,7 +3404,7 @@ body.intelligence-library-open {
 .intel-library-stat strong {
   color: var(--text);
   font-family: var(--display);
-  font-size: 16px;
+  font-size: var(--fs-kpi);
   line-height: 1.15;
 }
 
@@ -3371,7 +3435,7 @@ body.intelligence-library-open {
 
 .intel-library-block-heading small {
   color: var(--text-dim);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   font-weight: 500;
 }
 
@@ -3395,7 +3459,7 @@ body.intelligence-library-open {
 .intel-library-definition-list dt {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   text-transform: uppercase;
 }
 
@@ -3403,7 +3467,7 @@ body.intelligence-library-open {
   overflow: hidden;
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3434,7 +3498,7 @@ body.intelligence-library-open {
 
 .intel-library-quick strong {
   overflow: hidden;
-  font-size: 10px;
+  font-size: var(--fs-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3442,7 +3506,7 @@ body.intelligence-library-open {
 .intel-library-quick span {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   text-transform: uppercase;
 }
 
@@ -3452,7 +3516,7 @@ body.intelligence-library-open {
   border-left: 2px solid var(--accent);
   background: var(--surface-raised);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.5;
 }
 
@@ -3489,7 +3553,7 @@ body.intelligence-library-open {
   color: var(--text-soft);
   background: var(--surface-raised);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -3502,7 +3566,7 @@ body.intelligence-library-open {
   width: 100%;
   min-width: 840px;
   border-collapse: collapse;
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .intel-library-table th {
@@ -3510,7 +3574,7 @@ body.intelligence-library-open {
   border-bottom: 1px solid var(--line-strong);
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-align: left;
@@ -3525,7 +3589,7 @@ body.intelligence-library-open {
   border-bottom: 1px solid var(--line);
   color: var(--text-soft);
   font-family: var(--sans);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-weight: 400;
   text-align: left;
   vertical-align: top;
@@ -3549,7 +3613,7 @@ body.intelligence-library-open {
   background: var(--surface-inset);
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.08em;
   text-align: center;
 }
@@ -3557,7 +3621,7 @@ body.intelligence-library-open {
 .intel-library-table td:nth-child(n + 3),
 .intel-library-table tbody th:nth-child(n + 3) {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
 }
 
 .intel-library-filter-bar {
@@ -3587,7 +3651,7 @@ body.intelligence-library-open {
 .intel-library-filter-result {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3601,7 +3665,7 @@ body.intelligence-library-open {
   color: var(--text-soft);
   background: var(--surface-inset);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .intel-library-filter-control:focus {
@@ -3652,7 +3716,7 @@ body.intelligence-library-open {
   color: var(--accent-strong);
   background: transparent;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   cursor: pointer;
 }
 
@@ -3667,7 +3731,7 @@ body.intelligence-library-open {
   padding: 2px 5px;
   border: 1px solid currentColor;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -3704,7 +3768,7 @@ body.intelligence-library-open {
   color: var(--text-muted);
   background: var(--surface-inset);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   cursor: pointer;
 }
 
@@ -3722,7 +3786,7 @@ body.intelligence-library-open {
   padding: 20px 12px;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .intel-library-tech-list {
@@ -3737,7 +3801,7 @@ body.intelligence-library-open {
   border: 1px solid var(--line);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
 }
 
 .intel-library-targets {
@@ -3761,14 +3825,14 @@ body.intelligence-library-open {
 .intel-library-target strong {
   color: var(--text);
   font-family: var(--display);
-  font-size: 15px;
+  font-size: var(--fs-section);
 }
 
 .intel-library-target span,
 .intel-library-target small {
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   line-height: 1.4;
 }
 
@@ -3791,7 +3855,7 @@ body.intelligence-library-open {
   padding: 0 12px 14px;
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
 }
 
 .since-save-grid {
@@ -3810,13 +3874,13 @@ body.intelligence-library-open {
   background: var(--surface);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
 }
 
 .since-save-meta strong,
 .since-save-empty strong {
   color: var(--accent-strong);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.08em;
 }
 
@@ -3838,13 +3902,13 @@ body.intelligence-library-open {
   margin-bottom: 7px;
   color: var(--text);
   font-family: var(--display);
-  font-size: 14px;
+  font-size: var(--fs-section);
 }
 
 .since-save-card-heading small {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.07em;
   text-align: right;
 }
@@ -3859,7 +3923,7 @@ body.intelligence-library-open {
   border-top: 1px solid var(--line);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
 }
 
 .since-save-change strong,
@@ -3902,14 +3966,13 @@ body.intelligence-library-open {
   padding: 0 0 10px;
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   line-height: 1.45;
 }
 
 .mc-board-note strong,
 .mc-board-subheading strong {
   color: var(--accent-strong);
-  font-size: 9px;
   letter-spacing: 0.08em;
 }
 
@@ -3931,12 +3994,12 @@ body.intelligence-library-open {
   padding: 9px 10px;
   background: var(--surface-inset);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
 }
 
 .mc-space-scope strong {
   color: var(--accent-strong);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
 }
 
@@ -3949,7 +4012,7 @@ body.intelligence-library-open {
   margin: -1px 0 10px;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
 }
 
 .mc-board-table-wrap {
@@ -3972,7 +4035,7 @@ body.intelligence-library-open {
   padding: var(--space-sm) 0 0;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.06em;
   text-align: right;
 }
@@ -4001,7 +4064,7 @@ body.intelligence-library-open {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
 }
 
 .mc-board-table--ledger {
@@ -4085,7 +4148,7 @@ body.intelligence-library-open {
 .mc-board-table thead th {
   color: var(--text-dim);
   background: var(--surface);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -4118,11 +4181,19 @@ body.intelligence-library-open {
   color: var(--warning);
 }
 
+/* COMPENSATION. This was 8px under a 9px cell, and 8px is below the floor the
+   scale documents, so it joins the tag tier and the size difference is gone.
+   What is left holding the two lines apart is --text-dim against the cell's
+   --text-muted, which is a real delta but was doing half the job before. The
+   gap between them widens one step to carry the other half; that is the whole
+   compensation, because the alternative -- growing the cell to --fs-meta -- is
+   an 11% widening of the densest tables in the app, and the scroll hints these
+   boards use are measured against their natural widths. */
 .mc-board-secondary {
   display: block;
-  margin-top: 4px;
+  margin-top: var(--space-sm);
   color: var(--text-dim);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   font-weight: 400;
   white-space: normal;
 }
@@ -4132,7 +4203,7 @@ body.intelligence-library-open {
   padding: 3px 5px;
   border: 1px solid var(--accent);
   color: var(--accent-strong);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.06em;
   line-height: 1;
   text-transform: uppercase;
@@ -4185,7 +4256,7 @@ body.intelligence-library-open {
   border-top: 1px solid var(--line-strong);
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -4201,7 +4272,7 @@ body.intelligence-library-open {
   border-top: 1px solid var(--line-strong);
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
 }
 
 .intel-library-table-caption {
@@ -4229,7 +4300,7 @@ body.intelligence-library-open {
   background: var(--surface-inset);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
 }
 
 .mc-coverage-row strong {
@@ -4242,7 +4313,7 @@ body.intelligence-library-open {
 
 .mc-coverage-row em {
   color: var(--accent-strong);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   font-style: normal;
 }
 
@@ -4420,13 +4491,13 @@ body.intelligence-library-open {
 .faction-intel-title {
   color: var(--text);
   font-family: var(--display);
-  font-size: 27px;
+  font-size: var(--fs-title);
 }
 
 .faction-intel-description {
   margin-top: 5px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-row);
 }
 
 .faction-intel-header-meta {
@@ -4448,7 +4519,7 @@ body.intelligence-library-open {
 .faction-intel-plan-label {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -4457,7 +4528,7 @@ body.intelligence-library-open {
   overflow: hidden;
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4491,7 +4562,7 @@ body.intelligence-library-open {
 .faction-intel-metric-title,
 .faction-intel-plan-title {
   color: var(--text-soft);
-  font-size: 10px;
+  font-size: var(--fs-metric);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -4501,7 +4572,7 @@ body.intelligence-library-open {
 .faction-intel-plan-label {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
 }
 
 .faction-intel-roster-list {
@@ -4565,7 +4636,7 @@ body.intelligence-library-open {
 .faction-intel-faction-name {
   overflow: hidden;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4574,7 +4645,7 @@ body.intelligence-library-open {
 .faction-intel-faction-power {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   white-space: nowrap;
 }
 
@@ -4601,13 +4672,13 @@ body.intelligence-library-open {
 .faction-intel-identity-name {
   color: var(--text);
   font-family: var(--display);
-  font-size: 24px;
+  font-size: var(--fs-title);
 }
 
 .faction-intel-identity-relation {
   margin-top: 2px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-metric);
 }
 
 .faction-intel-visibility {
@@ -4625,7 +4696,7 @@ body.intelligence-library-open {
   border: 1px solid var(--line);
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
 }
 
 .faction-intel-visibility-value {
@@ -4667,7 +4738,7 @@ body.intelligence-library-open {
   overflow: hidden;
   color: var(--text);
   font-family: var(--display);
-  font-size: 18px;
+  font-size: var(--fs-kpi);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4675,7 +4746,7 @@ body.intelligence-library-open {
 .faction-intel-metric-value--text {
   overflow: visible;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   letter-spacing: 0.03em;
   line-height: 1.3;
   overflow-wrap: anywhere;
@@ -4685,7 +4756,7 @@ body.intelligence-library-open {
 .faction-intel-metric-note {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
 }
 
 .faction-intel-council {
@@ -4708,7 +4779,7 @@ body.intelligence-library-open {
 .faction-intel-council-visibility {
   color: var(--accent-strong);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -4747,7 +4818,7 @@ body.intelligence-library-open {
   overflow: hidden;
   color: var(--text);
   font-family: var(--display);
-  font-size: 16px;
+  font-size: var(--fs-section);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4760,7 +4831,7 @@ body.intelligence-library-open {
   overflow: hidden;
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4784,7 +4855,7 @@ body.intelligence-library-open {
 
 .faction-intel-note {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.45;
 }
 
@@ -4808,7 +4879,7 @@ body.intelligence-library-open {
   padding: 9px 0;
   border-bottom: 1px solid var(--line);
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.45;
 }
 
@@ -4915,7 +4986,7 @@ body.intelligence-library-open {
 .world-map-error {
   fill: var(--text-soft, #b7c5bf);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -4924,7 +4995,7 @@ body.intelligence-library-open {
   pointer-events: none;
   fill: var(--text-soft);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-map-note);
   font-weight: 700;
   letter-spacing: 0.08em;
   opacity: 0.92;
@@ -4933,7 +5004,7 @@ body.intelligence-library-open {
 .world-map-data-note {
   fill: var(--text-soft);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-map-note);
   letter-spacing: 0.05em;
 }
 
@@ -5295,7 +5366,6 @@ body.intelligence-library-open {
   }
 
   .alien-hate-econ-metric strong {
-    font-size: 17px;
   }
 
   .mc-space-force-summary {
@@ -5327,7 +5397,6 @@ body.intelligence-library-open {
   }
 
   .init-brand-name {
-    font-size: 15px;
   }
 
   .init-logo-icon.has-faction-logo {
@@ -5352,11 +5421,10 @@ body.intelligence-library-open {
   }
 
   .init-brand-sub {
-    font-size: 8px;
   }
 
   .init-hud-pill {
-    font-size: 9px;
+    font-size: var(--fs-tag);
   }
 
   .init-hud-pill strong {
@@ -5377,17 +5445,16 @@ body.intelligence-library-open {
   }
 
   .init-kpi-val {
-    font-size: 22px;
+    font-size: var(--fs-kpi);
   }
 
   /* No `.init-hologram-stage` padding override: the stage carries no padding of
      its own at any width now, and `.tech-card-body` owns the inset. */
   .holo-core-title {
-    font-size: 19px;
   }
 
   .holo-core-statement {
-    font-size: 12px;
+    font-size: var(--fs-row);
   }
 
   .holo-node-grid {
@@ -5425,7 +5492,7 @@ body.intelligence-library-open {
   margin-left: 4px;
   color: var(--success);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   vertical-align: super;
 }
 
@@ -5445,7 +5512,7 @@ body.intelligence-library-open {
 
 .directive-board-primary-title {
   font-family: var(--sans);
-  font-size: 17px;
+  font-size: var(--fs-section);
   line-height: 1.35;
   color: var(--text);
   margin: 6px 0 10px;
@@ -5459,7 +5526,7 @@ body.intelligence-library-open {
 
 .directive-board-chip {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 3px 7px;
@@ -5480,7 +5547,7 @@ body.intelligence-library-open {
   margin-top: 8px;
   color: var(--text-muted);
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: var(--fs-row);
   line-height: 1.5;
 }
 
@@ -5494,7 +5561,7 @@ body.intelligence-library-open {
 .directive-board-reasoning-label {
   color: var(--accent-strong);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
 }
 
@@ -5502,7 +5569,7 @@ body.intelligence-library-open {
   margin-top: 10px;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   line-height: 1.45;
 }
 
@@ -5510,7 +5577,7 @@ body.intelligence-library-open {
   margin-top: 10px;
   color: var(--text-muted);
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.45;
 }
 
@@ -5533,7 +5600,7 @@ body.intelligence-library-open {
 
 .directive-board-score {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-row);
   color: var(--accent);
   min-width: 44px;
   text-align: right;
@@ -5541,14 +5608,14 @@ body.intelligence-library-open {
 
 .directive-board-row-title {
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: var(--fs-row);
   color: var(--text);
   line-height: 1.4;
 }
 
 .directive-board-row-meta {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -5564,7 +5631,7 @@ body.intelligence-library-open {
   margin: 6px 0 0 54px;
   padding: 0;
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: var(--fs-row);
   line-height: 1.5;
   color: var(--text-muted);
 }
@@ -5584,7 +5651,7 @@ body.intelligence-library-open {
 
 .directive-board-rule {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--accent);
   margin-right: 6px;
 }
@@ -5618,7 +5685,7 @@ body.intelligence-library-open {
 
 .directive-header-eyebrow {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--accent);
@@ -5626,7 +5693,7 @@ body.intelligence-library-open {
 
 .directive-header-title {
   font-family: var(--sans);
-  font-size: 15px;
+  font-size: var(--fs-section);
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.01em;
@@ -5640,7 +5707,7 @@ body.intelligence-library-open {
 
 .directive-status-badge {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.08em;
   padding: 3px 8px;
@@ -5698,7 +5765,7 @@ body.intelligence-library-open {
 
 .directive-risk-floor__status {
   display: block;
-  font-size: 12px;
+  font-size: var(--fs-row);
   color: var(--text-soft);
 }
 
@@ -5707,7 +5774,7 @@ body.intelligence-library-open {
   align-items: center;
   gap: 8px;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5716,7 +5783,7 @@ body.intelligence-library-open {
 
 .directive-risk-floor__control select {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   padding: 4px 8px;
   color: var(--text);
   background: var(--canvas);
@@ -5730,7 +5797,7 @@ body.intelligence-library-open {
   margin-top: 10px;
   padding: 8px 10px;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: var(--fs-row);
   line-height: 1.45;
   color: var(--text-soft);
 }
@@ -5749,7 +5816,7 @@ body.intelligence-library-open {
   display: inline-block;
   margin-right: 8px;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--gold);
@@ -5787,20 +5854,25 @@ body.intelligence-library-open {
   gap: 10px;
 }
 
+/* COMPENSATION: the title was 13px over a 12px reason, i.e. eight percent, and
+   both are now the row tier. Weight takes over what the eight percent was
+   nominally doing; --text over --text-soft and the reason's own 4px offset
+   already did most of it. */
 .directive-risk-held-title {
-  font-size: 13px;
+  font-size: var(--fs-row);
+  font-weight: 600;
   color: var(--text);
 }
 
 .directive-risk-held-who {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-muted);
 }
 
 .directive-risk-held-reason {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: var(--fs-row);
   line-height: 1.45;
   color: var(--text-soft);
 }
@@ -5809,7 +5881,7 @@ body.intelligence-library-open {
    defect class as fabricating the number. */
 .directive-risk-held-omitted {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-muted);
 }
 
@@ -5835,14 +5907,14 @@ body.intelligence-library-open {
   justify-content: space-between;
   align-items: baseline;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   color: var(--text-dim);
   letter-spacing: 0.05em;
 }
 
 .directive-budget-label strong {
   color: var(--text);
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .directive-budget-track {
@@ -5874,7 +5946,7 @@ body.intelligence-library-open {
 /* Subheadings */
 .directive-subheading {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5909,14 +5981,14 @@ body.intelligence-library-open {
 }
 
 .directive-clock-title {
-  font-size: 11px;
+  font-size: var(--fs-metric);
   font-weight: 600;
   color: var(--text);
 }
 
 .directive-clock-badge {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   padding: 1px 5px;
   border-radius: 2px;
@@ -5940,7 +6012,7 @@ body.intelligence-library-open {
 }
 
 .directive-clock-detail {
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-soft);
   line-height: 1.4;
   margin-top: 4px;
@@ -5988,7 +6060,7 @@ body.intelligence-library-open {
   background: var(--accent-soft);
   color: var(--accent);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-weight: 700;
   display: grid;
   place-items: center;
@@ -6001,13 +6073,13 @@ body.intelligence-library-open {
 }
 
 .directive-actor-name {
-  font-size: 13px;
+  font-size: var(--fs-row);
   font-weight: 600;
   color: var(--text);
 }
 
 .directive-actor-meta {
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-muted);
 }
 
@@ -6024,7 +6096,7 @@ body.intelligence-library-open {
 
 .directive-chip {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   padding: 2px 6px;
@@ -6053,7 +6125,7 @@ body.intelligence-library-open {
 }
 
 .directive-mission-title {
-  font-size: 13px;
+  font-size: var(--fs-row);
   font-weight: 600;
   color: var(--text);
   line-height: 1.35;
@@ -6061,7 +6133,7 @@ body.intelligence-library-open {
 
 .directive-mission-target {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-soft);
   margin-top: 2px;
 }
@@ -6088,7 +6160,7 @@ body.intelligence-library-open {
 
 .directive-stat-name {
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.06em;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -6116,17 +6188,17 @@ body.intelligence-library-open {
 
 .directive-odds-label {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
 }
 
 .directive-odds-label small {
-  font-size: 9px;
+  font-size: var(--fs-tag);
   color: var(--text-dim);
 }
 
 .directive-odds-tag {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 2px;
@@ -6169,7 +6241,7 @@ body.intelligence-library-open {
 
 .directive-metric-val {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   font-weight: 700;
   color: var(--accent-strong);
 }
@@ -6180,7 +6252,7 @@ body.intelligence-library-open {
 
 .directive-metric-hate {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-muted);
 }
 
@@ -6202,7 +6274,7 @@ body.intelligence-library-open {
 }
 
 .directive-why-list li {
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.45;
   color: var(--text-soft);
 }
@@ -6218,7 +6290,7 @@ body.intelligence-library-open {
   padding-top: 6px;
   border-top: 1px dashed var(--line);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-muted);
 }
 
@@ -6249,17 +6321,17 @@ body.intelligence-library-open {
 }
 
 .directive-unassigned-head strong {
-  font-size: 12px;
+  font-size: var(--fs-row);
   color: var(--text);
 }
 
 .directive-unassigned-head span {
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
 }
 
 .directive-unassigned-reason {
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-muted);
   line-height: 1.4;
 }
@@ -6267,7 +6339,7 @@ body.intelligence-library-open {
 .directive-unassigned-free {
   margin-top: 4px;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
 }
 
@@ -6290,7 +6362,7 @@ body.intelligence-library-open {
 
 .directive-horizon-cycle {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-weight: 700;
   color: var(--accent);
   padding: 2px 6px;
@@ -6306,19 +6378,19 @@ body.intelligence-library-open {
 }
 
 .directive-horizon-title {
-  font-size: 12px;
+  font-size: var(--fs-row);
   font-weight: 600;
   color: var(--text);
 }
 
 .directive-horizon-enabler {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--blue);
 }
 
 .directive-horizon-payoff {
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-soft);
   margin-top: 2px;
 }
@@ -6347,24 +6419,24 @@ body.intelligence-library-open {
 }
 
 .directive-benched-title {
-  font-size: 12px;
+  font-size: var(--fs-row);
   color: var(--text);
 }
 
 .directive-benched-score {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
 }
 
 .directive-benched-displaced {
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-muted);
 }
 
 .directive-displaced-label {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   color: var(--gold);
   text-transform: uppercase;
 }
@@ -6373,7 +6445,7 @@ body.intelligence-library-open {
    target) group, which the engine folded into this one row. Set below the
    title rather than beside the score so a long note wraps on its own line. */
 .directive-benched-group {
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-dim);
 }
 
@@ -6381,7 +6453,7 @@ body.intelligence-library-open {
    reason does not describe all of them. Styled as a warning rather than as
    detail: it is a correction to the line directly above it. */
 .directive-benched-group-caveat {
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--warning);
 }
 
@@ -6394,7 +6466,7 @@ body.intelligence-library-open {
   background: var(--surface-inset);
   border-left: 3px solid var(--gold);
   border-radius: 0 4px 4px 0;
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-muted);
   line-height: 1.45;
 }
@@ -6413,7 +6485,7 @@ body.intelligence-library-open {
    note that announces the cap is styled like its risk-floor counterpart. */
 .directive-benched-omitted {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-muted);
 }
 
@@ -6429,20 +6501,20 @@ body.intelligence-library-open {
 }
 
 .directive-reasoning-summary {
-  font-size: 12px;
+  font-size: var(--fs-row);
   color: var(--text);
   line-height: 1.45;
 }
 
 .directive-reasoning-method {
-  font-size: 11px;
+  font-size: var(--fs-metric);
   color: var(--text-soft);
   line-height: 1.4;
 }
 
 .directive-reasoning-meta {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
   margin-top: 4px;
 }
@@ -6457,7 +6529,7 @@ body.intelligence-library-open {
 
 .directive-sources-label {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   color: var(--text-dim);
   letter-spacing: 0.05em;
 }
@@ -6472,7 +6544,7 @@ body.intelligence-library-open {
 }
 
 .directive-sources-list li {
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-family: var(--mono);
   color: var(--text-muted);
 }
@@ -6499,7 +6571,7 @@ body.intelligence-library-open {
   color: var(--text-muted);
   background: var(--surface-inset);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   line-height: 1.55;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -6516,7 +6588,7 @@ body.intelligence-library-open {
 .council-orders__count {
   color: var(--accent);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-weight: 700;
   letter-spacing: 0.07em;
 }
@@ -6524,7 +6596,7 @@ body.intelligence-library-open {
 .council-orders__tally {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.04em;
 }
 
@@ -6541,7 +6613,7 @@ body.intelligence-library-open {
   border-bottom: 1px solid var(--line-strong);
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -6596,7 +6668,7 @@ button.council-orders__row:focus-visible {
 
 .council-orders__name {
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--fs-row);
   font-weight: 600;
   line-height: 1.25;
 }
@@ -6604,7 +6676,7 @@ button.council-orders__row:focus-visible {
 .council-orders__meta {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.03em;
 }
 
@@ -6621,7 +6693,7 @@ button.council-orders__row:focus-visible {
   gap: 6px;
   align-items: baseline;
   color: var(--accent-strong);
-  font-size: 12px;
+  font-size: var(--fs-row);
   font-weight: 600;
   line-height: 1.25;
 }
@@ -6636,7 +6708,7 @@ button.council-orders__row:focus-visible {
   border: 1px solid var(--line-strong);
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 8.5px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.07em;
 }
@@ -6667,13 +6739,12 @@ button.council-orders__row:focus-visible {
 .council-orders__reason,
 .council-orders__free {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-metric);
   line-height: 1.4;
 }
 
 .council-orders__target {
   font-family: var(--mono);
-  font-size: 10.5px;
   letter-spacing: 0.02em;
 }
 
@@ -6683,7 +6754,7 @@ button.council-orders__row:focus-visible {
 
 .council-orders__free small {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .council-orders__cell {
@@ -6699,12 +6770,12 @@ button.council-orders__row:focus-visible {
   gap: 5px;
   align-items: baseline;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-row);
 }
 
 .council-orders__pct small {
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: var(--fs-tag);
 }
 
 .council-orders__pct--good strong {
@@ -6724,7 +6795,7 @@ button.council-orders__row:focus-visible {
   padding: 2px 6px;
   border-radius: 2px;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   font-weight: 700;
   letter-spacing: 0.05em;
 }
@@ -6758,7 +6829,7 @@ button.council-orders__row:focus-visible {
 .council-orders__hate {
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-metric);
 }
 
 .council-orders__hate--warn {
@@ -6773,7 +6844,7 @@ button.council-orders__row:focus-visible {
 
 .council-orders__foot {
   color: var(--text-dim);
-  font-size: 10.5px;
+  font-size: var(--fs-meta);
   line-height: 1.5;
 }
 
@@ -6833,13 +6904,13 @@ button.council-orders__row:focus-visible {
   background: var(--surface-subtle);
   border: 1px solid var(--line);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--fs-metric);
 }
 
 .mining-runways-label {
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
   letter-spacing: 0.05em;
 }
@@ -6879,7 +6950,7 @@ button.council-orders__row:focus-visible {
 .mining-war-floor-pill {
   margin-left: auto;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
 }
 
@@ -6896,7 +6967,7 @@ button.council-orders__row:focus-visible {
   background: rgba(255, 170, 0, 0.08);
   color: var(--warning);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.04em;
 }
 
@@ -6910,7 +6981,7 @@ button.council-orders__row:focus-visible {
   border-left: 2px solid var(--line);
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   line-height: 1.45;
   letter-spacing: 0.02em;
 }
@@ -6922,14 +6993,14 @@ button.council-orders__row:focus-visible {
   padding: 4px 0 2px;
   border-bottom: 1px solid var(--line);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-metric);
   font-weight: 700;
   color: var(--accent);
   letter-spacing: 0.08em;
 }
 
 .mining-section-title small {
-  font-size: 9px;
+  font-size: var(--fs-tag);
   color: var(--text-dim);
   font-weight: normal;
   letter-spacing: normal;
@@ -6947,14 +7018,14 @@ button.council-orders__row:focus-visible {
 .mining-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11.5px;
+  font-size: var(--fs-metric);
 }
 
 .mining-table th {
   text-align: left;
   padding: 6px 8px;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--fs-tag);
   color: var(--text-dim);
   border-bottom: 1px solid var(--line-strong);
   letter-spacing: 0.05em;
@@ -6978,18 +7049,18 @@ button.council-orders__row:focus-visible {
 .mining-site-cell strong {
   display: block;
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--fs-row);
 }
 
 .mining-site-cell small {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--fs-meta);
 }
 
 .mining-yields-text {
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: var(--fs-metric);
 }
 
 .mining-yields-text.is-partial {
@@ -6999,7 +7070,7 @@ button.council-orders__row:focus-visible {
 
 .mining-density {
   color: var(--text-dim);
-  font-size: 9.5px;
+  font-size: var(--fs-tag);
 }
 
 /* An assumed density is not a measured one; it reads as an assumption. */
@@ -7014,7 +7085,7 @@ button.council-orders__row:focus-visible {
   border: 1px dotted var(--warning);
   border-radius: 2px;
   color: var(--warning);
-  font-size: 8.5px;
+  font-size: var(--fs-tag);
   text-transform: uppercase;
 }
 
@@ -7022,7 +7093,7 @@ button.council-orders__row:focus-visible {
   display: block;
   color: var(--accent);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--fs-row);
   font-weight: 700;
 }
 
@@ -7033,7 +7104,7 @@ button.council-orders__row:focus-visible {
 
 .mining-value-label {
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   text-transform: uppercase;
 }
 
@@ -7060,9 +7131,16 @@ button.council-orders__row:focus-visible {
   color: var(--text);
 }
 
+/* The ESTIMATE register. It is rendered as a <small>, so it used to take
+   whatever 5/6 of its host cell happened to be -- 9.58px inside an 11.5px row.
+   Declared at the tag tier instead, which puts it two steps below the measured
+   value beside it rather than one accidental multiplier below. The register
+   itself has never been carried by size: family, style, weight and colour do
+   that, and they are untouched. */
 .mining-est {
   font-family: var(--sans);
   font-style: italic;
+  font-size: var(--fs-tag);
   color: var(--text-dim);
 }
 
@@ -7100,7 +7178,7 @@ button.council-orders__row:focus-visible {
   border-left: 2px solid var(--line-strong);
   color: var(--text-soft);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   line-height: 1.45;
 }
 
@@ -7109,7 +7187,7 @@ button.council-orders__row:focus-visible {
   margin-top: 3px;
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
 }
 
 .mining-upgrade-step {
@@ -7121,7 +7199,7 @@ button.council-orders__row:focus-visible {
   padding: 1px 5px;
   border-radius: 3px;
   font-family: var(--mono);
-  font-size: 9.5px;
+  font-size: var(--fs-tag);
   font-weight: 700;
 }
 
@@ -7147,7 +7225,7 @@ button.council-orders__row:focus-visible {
 .mining-mc-cost {
   display: block;
   color: var(--text-dim);
-  font-size: 9.5px;
+  font-size: var(--fs-tag);
   margin-top: 2px;
 }
 
@@ -7172,13 +7250,13 @@ button.council-orders__row:focus-visible {
 }
 
 .mining-gated-tech {
-  font-size: 11.5px;
+  font-size: var(--fs-metric);
   color: var(--text);
 }
 
 .mining-gated-count {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-dim);
   background: var(--surface);
   padding: 1px 5px;
@@ -7188,12 +7266,13 @@ button.council-orders__row:focus-visible {
 .mining-gated-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
+  font-size: var(--fs-meta);
   color: var(--text-soft);
 }
 
 .mining-gated-sub {
   color: var(--text-dim);
+  font-size: var(--fs-tag);
   font-style: italic;
 }
 
@@ -7201,8 +7280,12 @@ button.council-orders__row:focus-visible {
   padding: 6px 8px;
   border-left: 2px solid var(--line);
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   font-style: italic;
+}
+
+.mining-unreachable-summary small {
+  font-size: var(--fs-tag);
 }
 
 /* Wide Cards Internal Multi-Column & Runaway Capping --------------------- */
@@ -7292,7 +7375,7 @@ button.council-orders__row:focus-visible {
 
 .commentary-mode-tag {
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.08em;
   color: var(--accent-strong);
 }
@@ -7304,14 +7387,14 @@ button.council-orders__row:focus-visible {
 }
 
 .commentary-headline {
-  font-size: 13px;
+  font-size: var(--fs-section);
   font-weight: 700;
   color: var(--text);
   line-height: 1.4;
 }
 
 .commentary-prose {
-  font-size: 12px;
+  font-size: var(--fs-row);
   line-height: 1.6;
   color: var(--text-soft);
   margin: 0;
@@ -7340,7 +7423,7 @@ button.council-orders__row:focus-visible {
   background: var(--surface-raised);
   border: 1px solid var(--line);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -7378,7 +7461,7 @@ button.council-orders__row:focus-visible {
   justify-content: space-between;
   align-items: center;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--fs-tag);
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -7391,14 +7474,14 @@ button.council-orders__row:focus-visible {
   border: 1px dashed var(--accent);
   color: var(--accent-strong);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   letter-spacing: 0.05em;
 }
 
 .commentary-sim-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: var(--fs-metric);
 }
 
 .commentary-sim-table th,
@@ -7410,10 +7493,14 @@ button.council-orders__row:focus-visible {
 
 .commentary-sim-table th {
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.commentary-sim-table td small {
+  font-size: var(--fs-tag);
 }
 
 .commentary-sim-table td strong {
@@ -7441,14 +7528,14 @@ button.council-orders__row:focus-visible {
 
 .commentary-proj-label {
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: var(--fs-tag);
   color: var(--text-dim);
   text-transform: uppercase;
   margin-bottom: 4px;
 }
 
 .commentary-proj-val {
-  font-size: 12px;
+  font-size: var(--fs-row);
   font-weight: 600;
   color: var(--text);
 }
@@ -7456,7 +7543,7 @@ button.council-orders__row:focus-visible {
 .commentary-empty {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--fs-meta);
   letter-spacing: 0.05em;
   padding: 12px 0;
 }
@@ -7474,7 +7561,6 @@ button.council-orders__row:focus-visible {
 }
 
 .research-advisor small {
-  font-size: inherit;
 }
 
 .research-advisor__empty {
@@ -7894,12 +7980,17 @@ button.council-orders__row:focus-visible {
   padding: 8px 12px;
 }
 
+/* This element carries `.ra-procurement__head fp-procurement__head`, which is
+   the markup saying it IS the research advisor's procurement head. It used to
+   read `font-size: var(--fs-label)`, and --fs-label was never defined anywhere
+   -- which does not fall back to the .ra- rule beside it. An undefined custom
+   property is valid at parse time and invalid at computed-value time, so the
+   declaration still wins the cascade and then resolves to `inherit`: the head
+   took 13px off the body while out-specifying the 10px it was asking for, and
+   a matching override existed on its <small> to put the qualifier back
+   underneath. Both are gone; the two components render identically again. */
 .fp-procurement__head {
   padding-bottom: 4px;
-  font-size: var(--fs-label);
-}
-
-.fp-procurement__head small {
   font-size: var(--fs-meta);
 }
 
@@ -7974,7 +8065,7 @@ button.council-orders__row:focus-visible {
 }
 
 .fp-refit-card__title strong {
-  font-size: var(--fs-label);
+  font-size: var(--fs-row);
   color: var(--text);
 }
 
@@ -8907,6 +8998,15 @@ button.council-orders__row:focus-visible {
   font-style: normal;
   font-weight: 600;
   color: var(--text);
+}
+
+/* The same class is a <strong> in the summary strip and a <small> in the
+   estimate cell, so it deliberately takes its size from its host -- the
+   register is family, weight, style and colour, never size. Only the <small>
+   form needs saying, because it must sit level with the .fe-est__text line it
+   is read against rather than at 5/6 of the cell it happens to be inside. */
+small.fe-meas__value {
+  font-size: var(--fs-tag);
 }
 
 .fe-est__value {
