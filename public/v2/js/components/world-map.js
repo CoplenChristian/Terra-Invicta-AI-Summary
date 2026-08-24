@@ -35,7 +35,8 @@
   // theater's fleet count from the status line directly above it. Those two are
   // told apart by colour and by which line they sit on; three percent of a
   // sub-pixel was never doing the work. Two steps, matched by --fs-map-name and
-  // --fs-map-note in mission-control.css so the CSS-driven labels agree.
+  // Two steps, matched by --fs-map-name and --fs-map-note in 01-tokens-and-base.css
+  // so the CSS-driven labels agree.
   var TYPE = {
     name: 10.5,
     note: 8

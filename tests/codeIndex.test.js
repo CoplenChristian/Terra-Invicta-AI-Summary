@@ -19,7 +19,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { collect, render } = require('../scripts/generate_code_index.js');
+const { collect, renderIndex } = require('../scripts/generate_code_index.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const INDEX_PATH = path.join(ROOT, 'docs', 'code-index.md');
@@ -47,7 +47,7 @@ const KNOWN_IMPLEMENTATIONS = [
 ];
 
 test('the checked-in index matches a fresh generation', () => {
-  const fresh = render(collect());
+  const fresh = renderIndex(collect());
   const checkedIn = fs.readFileSync(INDEX_PATH, 'utf8');
   assert.strictEqual(
     fresh,
@@ -57,7 +57,8 @@ test('the checked-in index matches a fresh generation', () => {
 });
 
 test('every source module has a hand-written Purpose line', () => {
-  const missing = collect().filter(m => !m.purpose).map(m => m.rel);
+  const { modules } = collect();
+  const missing = modules.filter(m => !m.purpose).map(m => m.rel);
   assert.deepStrictEqual(
     missing,
     [],
@@ -65,8 +66,29 @@ test('every source module has a hand-written Purpose line', () => {
   );
 });
 
+test('every v2 stylesheet part has a parseable purpose from its header', () => {
+  const { cssParts } = collect();
+  assert.ok(cssParts.length === 24, `expected 24 linked stylesheet parts, found ${cssParts.length}`);
+  const missing = cssParts.filter(m => !m.purpose).map(m => m.rel);
+  assert.deepStrictEqual(
+    missing,
+    [],
+    `stylesheet part(s) have no parseable header purpose:\n  ${missing.join('\n  ')}`
+  );
+});
+
+test('stylesheet parts are listed in shell link (cascade) order', () => {
+  const { cssParts } = collect();
+  const orders = cssParts.map(p => p.order);
+  assert.deepStrictEqual(orders, [...orders].sort((a, b) => a - b));
+  assert.strictEqual(orders[0], 1);
+  assert.strictEqual(orders[orders.length - 1], cssParts.length);
+  assert.match(cssParts[0].rel, /public\/v2\/css\/01-tokens-and-base\.css$/);
+  assert.match(cssParts[cssParts.length - 1].rel, /public\/v2\/css\/24-fleet-engagement\.css$/);
+});
+
 test('the four known barrels are classified as barrels', () => {
-  const modules = collect();
+  const { modules } = collect();
   for (const rel of KNOWN_BARRELS) {
     const m = modules.find(x => x.rel === rel);
     assert.ok(m, `index did not list ${rel}`);
@@ -75,7 +97,7 @@ test('the four known barrels are classified as barrels', () => {
 });
 
 test('a spot-check of implementations is not classified as a barrel', () => {
-  const modules = collect();
+  const { modules } = collect();
   for (const rel of KNOWN_IMPLEMENTATIONS) {
     const m = modules.find(x => x.rel === rel);
     assert.ok(m, `index did not list ${rel}`);
@@ -84,7 +106,7 @@ test('a spot-check of implementations is not classified as a barrel', () => {
 });
 
 test('runtime claims are correct: shared claims both runtimes, server does not', () => {
-  const modules = collect();
+  const { modules } = collect();
   for (const m of modules) {
     if (m.rel.startsWith('shared/')) {
       assert.match(
@@ -108,15 +130,16 @@ test('runtime claims are correct: shared claims both runtimes, server does not',
 });
 
 test('the legacy v1 dashboard shell is marked do-not-edit', () => {
-  const m = collect().find(x => x.rel === 'public/index.html');
+  const { modules } = collect();
+  const m = modules.find(x => x.rel === 'public/index.html');
   assert.ok(m, 'public/index.html must be listed in the index');
   assert.match(m.purpose, /DO NOT EDIT/i, 'public/index.html must be marked do-not-edit');
 });
 
-test('the index stays under 400 lines', () => {
-  const lines = render(collect()).split('\n').length;
+test('the index stays under 500 lines', () => {
+  const lines = renderIndex(collect()).split('\n').length;
   assert.ok(
-    lines < 400,
-    `code-index.md is ${lines} lines; the 400-line ceiling exists so agents actually read it`
+    lines < 500,
+    `code-index.md is ${lines} lines; the ceiling exists so agents actually read it`
   );
 });

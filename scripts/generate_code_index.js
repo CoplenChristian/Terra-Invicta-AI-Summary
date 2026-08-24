@@ -28,6 +28,14 @@ const SOURCE_ROOTS = [
 
 const EXTENSIONS = new Set(['.js', '.mjs']);
 
+// v2 stylesheet parts are indexed separately: order is read from the shell's
+// <link> tags (the cascade), not from readdir. Purpose text is parsed from each
+// part's header comment rather than a duplicate Purpose: line — every part
+// already opens with what it styles and its source range; coupling the parser
+// to that one format is cheaper than maintaining 24 parallel purpose strings.
+const CSS_SHELL = path.join(ROOT, 'public', 'v2', 'index.html');
+const CSS_HREF_PREFIX = '/v2/css/';
+
 // The four barrels the spec names. Classified by heuristic; these are pinned so
 // the heuristic cannot silently regress (tests/codeIndex.test.js asserts all
 // four are barrels and a spot-check of implementations is not).
@@ -257,6 +265,61 @@ function lineCount(abs) {
   return fs.readFileSync(abs, 'utf8').split(/\r?\n/).length;
 }
 
+/** Stylesheet hrefs from the v2 shell, in document (cascade) order. */
+function linkedCssHrefs() {
+  const html = fs.readFileSync(CSS_SHELL, 'utf8');
+  const hrefs = [];
+  for (const m of html.matchAll(/<link\b[^>]*>/gi)) {
+    const tag = m[0];
+    if (!/rel\s*=\s*["']stylesheet["']/i.test(tag)) continue;
+    const href = /href\s*=\s*["']([^"']+)["']/i.exec(tag);
+    if (href) hrefs.push(href[1]);
+  }
+  return hrefs.filter(href => href.startsWith(CSS_HREF_PREFIX));
+}
+
+/**
+ * First descriptive paragraph in a v2 CSS part header — the text between the
+ * filename line and the provenance `Source:` line.
+ */
+function readCssPurpose(src) {
+  const header = src.match(/^\/\*\s*=+\s*\n([\s\S]*?)\*\//);
+  if (!header) return null;
+  const lines = header[1].split(/\r?\n/).map(line => line.replace(/^\s*\*?\s?/, '').trim());
+  let i = 0;
+  while (i < lines.length && !/\.css$/i.test(lines[i])) i += 1;
+  if (i >= lines.length) return null;
+  i += 1;
+  while (i < lines.length && lines[i] === '') i += 1;
+  const parts = [];
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line === '' || /^Source:/i.test(line)) break;
+    parts.push(line);
+    i += 1;
+  }
+  if (!parts.length) return null;
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function collectCssParts() {
+  const parts = [];
+  let order = 0;
+  for (const href of linkedCssHrefs()) {
+    order += 1;
+    const rel = ('public' + href).split(path.sep).join('/');
+    const abs = path.join(ROOT, 'public', href.slice(1));
+    const src = fs.readFileSync(abs, 'utf8');
+    parts.push({
+      rel,
+      order,
+      lines: lineCount(abs),
+      purpose: readCssPurpose(src)
+    });
+  }
+  return parts;
+}
+
 function collect() {
   const modules = [];
   for (const { dir, runtime } of SOURCE_ROOTS) {
@@ -297,10 +360,10 @@ function collect() {
     });
   }
   modules.sort((a, b) => a.rel.localeCompare(b.rel));
-  return modules;
+  return { modules, cssParts: collectCssParts() };
 }
 
-function render(modules) {
+function renderIndex({ modules, cssParts }) {
   const lines = [];
   lines.push('# Code Index');
   lines.push('');
@@ -310,11 +373,12 @@ function render(modules) {
   lines.push('> here is derived from the source tree except each module\'s `Purpose:` line, which');
   lines.push('> is hand-written and enforced by `tests/codeIndex.test.js` -- a source module with');
   lines.push('> no purpose line fails the suite, and the checked-in index failing to match a');
-  lines.push('> fresh generation fails it too.');
+  lines.push('> fresh generation fails it too. Stylesheet parts carry a parsed purpose from');
+  lines.push('> their header comment; the shell\'s `<link>` order is load-bearing cascade order.');
   lines.push('');
   lines.push('Legend: **B** = barrel (re-exports another module\'s surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).');
   lines.push('');
-  lines.push(`**${modules.length} modules.**`);
+  lines.push(`**${modules.length} JS modules** and **${cssParts.length} stylesheet parts** (${modules.length + cssParts.length} indexed files).`);
   lines.push('');
 
   let currentDir = null;
@@ -337,20 +401,44 @@ function render(modules) {
       : '—';
     lines.push(`| \`${m.rel}\` | ${barrel}${sys} | ${m.runtime} | ${m.lines} | ${purpose} | ${exportsCell} | ${test} |`);
   }
+
+  lines.push('');
+  lines.push('## `public/v2/css/`');
+  lines.push('');
+  lines.push('The v2 stylesheet in **cascade order** — the numeric prefix and the shell\'s');
+  lines.push('`<link>` tags agree, and **reordering these parts changes what the reader sees**');
+  lines.push('(for example `05-view-grid.css` must load before `15-responsive.css`).');
+  lines.push('');
+  lines.push('| order | module | lines | purpose |');
+  lines.push('| --: | :-- | --: | :-- |');
+  for (const part of cssParts) {
+    const purpose = part.purpose ? part.purpose.replace(/\|/g, '\\|') : '**MISSING**';
+    lines.push(`| ${part.order} | \`${part.rel}\` | ${part.lines} | ${purpose} |`);
+  }
   lines.push('');
   return lines.join('\n') + '\n';
 }
 
+/** @deprecated alias — prefer renderIndex */
+function render(payload) {
+  if (Array.isArray(payload)) {
+    return renderIndex({ modules: payload, cssParts: collectCssParts() });
+  }
+  return renderIndex(payload);
+}
+
 if (require.main === module) {
-  const modules = collect();
-  const missing = modules.filter(m => !m.purpose).map(m => m.rel);
-  const content = render(modules);
+  const { modules, cssParts } = collect();
+  const missingJs = modules.filter(m => !m.purpose).map(m => m.rel);
+  const missingCss = cssParts.filter(m => !m.purpose).map(m => m.rel);
+  const content = renderIndex({ modules, cssParts });
   fs.writeFileSync(OUT_PATH, content);
-  console.log(`Wrote ${OUT_PATH} (${modules.length} modules).`);
+  console.log(`Wrote ${OUT_PATH} (${modules.length} JS modules, ${cssParts.length} CSS parts).`);
+  const missing = [...missingJs, ...missingCss];
   if (missing.length) {
-    console.warn(`\nWarning: ${missing.length} module(s) have no Purpose: line:\n  ${missing.join('\n  ')}`);
+    console.warn(`\nWarning: ${missing.length} file(s) have no purpose line:\n  ${missing.join('\n  ')}`);
   }
   process.exit(missing.length ? 2 : 0);
 }
 
-module.exports = { collect, render };
+module.exports = { collect, render, renderIndex, readCssPurpose, linkedCssHrefs };
