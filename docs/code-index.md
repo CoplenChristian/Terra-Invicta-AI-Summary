@@ -60,9 +60,9 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 383 | browser verification that the Drive Explorer renders the measured | — | — |
 | `scripts/verify_drive_path_modal.js` | C | Node (CommonJS) | 305 | browser verification that clicking a drive row actually opens the | — | — |
 | `scripts/verify_mining_registers.js` | C | Node (CommonJS) | 180 | browser verification that the mining board renders the measured | — | — |
-| `scripts/verify_mobile_overflow.js` | C | Node (CommonJS) | 244 | browser verification that no view clips content off-screen on narrow | — | — |
+| `scripts/verify_mobile_overflow.js` | C | Node (CommonJS) | 258 | browser verification that no view clips content off-screen on narrow | — | — |
 | `scripts/verify_research_actionability.js` | C | Node (CommonJS) | 196 | browser verification of research-advisor actionability against a | — | — |
-| `scripts/verify_research_tab_layout.js` | C | Node (CommonJS) | 243 | browser verification of the Research Advisor layout and legibility | — | — |
+| `scripts/verify_research_tab_layout.js` | C | Node (CommonJS) | 248 | browser verification of the Research Advisor layout and legibility | — | — |
 | `scripts/verify_research_vs_procurement.js` | C | Node (CommonJS) | 384 | browser verification of separating procurement from research and of | — | — |
 | `scripts/verify_supabase_rls.js` | C | Node (CommonJS) | 196 | verify Supabase RLS policies and hosted endpoints behave as | `main` | — |
 | `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 314 | browser verification of the v2 navigation acceptance checks against a | — | — |
