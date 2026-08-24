@@ -1,0 +1,495 @@
+/* ========================================================================
+   18-mining-expansion.css
+
+   The mining expansion board and the wide-card capping.
+
+   EXPANSION's board, including its measured/estimate register pair. The
+   register rules must stay AFTER .mining-yields-text and .mining-yield-basis,
+   which they beat -- tests/mineModuleOutput.test.js asserts that ordering over
+   the concatenated stylesheet.
+
+   Source: mission-control.css lines 6888-7368 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* ==========================================================================
+   Mining Expansion Board Component
+   ========================================================================== */
+
+.mining-expansion-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mining-runways-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 8px 10px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: var(--fs-metric);
+}
+
+.mining-runways-label {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: var(--fs-meta);
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+
+.mining-runway-pill {
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text-soft);
+}
+
+.mining-runway-pill.is-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(255, 68, 68, 0.1);
+}
+
+.mining-runway-pill.is-warning {
+  border-color: var(--warning);
+  color: var(--warning);
+  background: rgba(255, 170, 0, 0.1);
+}
+
+.mining-runway-pill.is-safe {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(0, 229, 255, 0.05);
+}
+
+/* Unmeasured is its own state -- it must not borrow the "safe" colour. */
+.mining-runway-pill.is-neutral {
+  border-style: dashed;
+  color: var(--text-dim);
+}
+
+.mining-war-floor-pill {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text-dim);
+}
+
+.mining-war-floor-pill.is-unknown strong {
+  font-style: italic;
+  color: var(--text-dim);
+}
+
+.mining-unavailable-banner {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px dashed var(--warning);
+  border-radius: 4px;
+  background: rgba(255, 170, 0, 0.08);
+  color: var(--warning);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.04em;
+}
+
+/* What basis the projected yields are on: raw deposit rate, tech-adjusted, or
+   unresolved. Deliberately quiet rather than a warning banner -- in the normal
+   case it is provenance, not an alert -- but always present, because a reader
+   must be able to tell an adjusted figure from a raw one. */
+.mining-yield-basis {
+  margin: 6px 0 2px;
+  padding: 4px 6px;
+  border-left: 2px solid var(--line);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+}
+
+.mining-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0 2px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+
+.mining-section-title small {
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  font-weight: normal;
+  letter-spacing: normal;
+}
+
+.mining-section-title--gated {
+  margin-top: 6px;
+  color: var(--text-soft);
+}
+
+.mining-table-wrap {
+  overflow-x: auto;
+}
+
+.mining-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-metric);
+}
+
+.mining-table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--line-strong);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mining-candidate-row {
+  border-bottom: 1px solid var(--line);
+  transition: background 0.15s ease;
+}
+
+.mining-candidate-row:hover {
+  background: var(--surface-hover);
+}
+
+.mining-candidate-row td {
+  padding: 8px 8px;
+  vertical-align: top;
+}
+
+.mining-site-cell strong {
+  display: block;
+  color: var(--text);
+  font-size: var(--fs-row);
+}
+
+.mining-site-cell small {
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+}
+
+.mining-yields-text {
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+}
+
+.mining-yields-text.is-partial {
+  color: var(--text-dim);
+  border-bottom: 1px dotted var(--line);
+}
+
+.mining-density {
+  color: var(--text-dim);
+  font-size: var(--fs-tag);
+}
+
+/* An assumed density is not a measured one; it reads as an assumption. */
+.mining-density.is-assumed {
+  font-style: italic;
+  color: var(--warning);
+}
+
+.mining-assumed-flag {
+  margin-left: 4px;
+  padding: 0 3px;
+  border: 1px dotted var(--warning);
+  border-radius: 2px;
+  color: var(--warning);
+  font-size: var(--fs-tag);
+  text-transform: uppercase;
+}
+
+.mining-value-score {
+  display: block;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: var(--fs-row);
+  font-weight: 700;
+}
+
+.mining-value-score.is-unmeasured {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.mining-value-label {
+  color: var(--text-dim);
+  font-size: var(--fs-tag);
+  text-transform: uppercase;
+}
+
+/* --- the two registers on the mining board -------------------------------
+   Deliberately the same shapes as .de-measured / .de-estimate on the Drive
+   Explorer and .fe-meas / .fe-est on the fleet board: one page, one convention
+   for "this was read off the save" versus "this was modelled".
+
+   It matters more here than anywhere else on this board. The mine module's own
+   output multiplier is a MEASUREMENT on a site the observer already holds and a
+   DECISION on one it does not, and the two sit two rows apart. Rendering them
+   at the same weight would launder the projection into a reading, which is
+   exactly why the projection is kept out of the utility score.
+
+   Asserted off the live DOM with getComputedStyle by
+   scripts/verify_mining_registers.js -- source inspection is not evidence,
+   because --text-muted was once defined self-referentially and 164 rules
+   silently fell back to `inherit`. */
+
+.mining-meas__value {
+  font-family: var(--mono);
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The ESTIMATE register. It is rendered as a <small>, so it used to take
+   whatever 5/6 of its host cell happened to be -- 9.58px inside an 11.5px row.
+   Declared at the tag tier instead, which puts it two steps below the measured
+   value beside it rather than one accidental multiplier below. The register
+   itself has never been carried by size: family, style, weight and colour do
+   that, and they are untouched. */
+.mining-est {
+  font-family: var(--sans);
+  font-style: italic;
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.mining-est__value {
+  font-family: var(--sans);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.mining-est__tag {
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  padding: 0 3px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 2px;
+  color: var(--text-dim);
+}
+
+.mining-module-band {
+  display: block;
+  margin-top: 2px;
+}
+
+/* --- mine upgrades: the measured half of the module multiplier ----------- */
+
+.mining-upgrades {
+  margin: 8px 0 10px;
+}
+
+.mining-upgrades-note {
+  padding: 4px 6px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.45;
+}
+
+.mining-upgrades-blocked {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.mining-upgrade-step {
+  white-space: nowrap;
+}
+
+.mining-tag {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  font-weight: 700;
+}
+
+.mining-tag--free {
+  background: rgba(0, 229, 255, 0.15);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.mining-tag--hate {
+  background: rgba(255, 68, 68, 0.15);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+/* Unknown cost is not free cost -- it never uses the FREE styling. */
+.mining-tag--unknown {
+  background: rgba(255, 170, 0, 0.12);
+  color: var(--warning);
+  border: 1px dashed var(--warning);
+}
+
+.mining-mc-cost {
+  display: block;
+  color: var(--text-dim);
+  font-size: var(--fs-tag);
+  margin-top: 2px;
+}
+
+.mining-gated-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.mining-gated-item {
+  padding: 8px 10px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.mining-gated-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.mining-gated-tech {
+  font-size: var(--fs-metric);
+  color: var(--text);
+}
+
+.mining-gated-count {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text-dim);
+  background: var(--surface);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+
+.mining-gated-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-meta);
+  color: var(--text-soft);
+}
+
+.mining-gated-sub {
+  color: var(--text-dim);
+  font-size: var(--fs-tag);
+  font-style: italic;
+}
+
+.mining-unreachable-summary {
+  padding: 6px 8px;
+  border-left: 2px solid var(--line);
+  color: var(--text-dim);
+  font-size: var(--fs-meta);
+  font-style: italic;
+}
+
+.mining-unreachable-summary small {
+  font-size: var(--fs-tag);
+}
+
+/* Wide Cards Internal Multi-Column & Runaway Capping --------------------- */
+
+#directiveBoard {
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 6px;
+  overscroll-behavior-y: contain;
+}
+
+#sitrepSummary {
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 6px;
+  overscroll-behavior-y: contain;
+}
+
+#directivesStreamList {
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 6px;
+  overscroll-behavior-y: contain;
+}
+
+/* NO `.operative-leaderboard` RULE HERE. It used to carry
+   `grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))`, and because
+   the OPERATIONS BOARD panel is only 655px wide inside COMMAND's right column,
+   `auto-fill` fitted TWO 280px tracks and split the panel again. Its 780px
+   12-column councilor table then got a 322.5px window. Measured in the live DOM:
+
+     1399px viewport -> table window 639px, 81.9% visible, 141px hidden
+     1440px viewport -> table window 323px, 41.4% visible, 457px hidden
+     computed grid-template-columns at 1440: "322.5px 322.5px"
+
+   Widening the browser by 41px cost the table 316px, and the MISSION COVERAGE
+   rows beneath it wrapped to one word per line. `auto-fill` on a container whose
+   own width is set by an outer two-column grid is the trap: it does not know it
+   is already inside a half-width column.
+
+   Wide tables belong on `.init-view__span` / `.init-view__full-card`
+   (`grid-column: 1 / -1`) instead -- that is what the mining boards and
+   `.fe-table` use, and they measure 0px of unreachable overflow. Moving the
+   OPERATIONS BOARD card there was measured and rejected on a different budget:
+   it takes COMMAND at 1920 from 2.80 to ~3.29 screens, and
+   `scripts/verify_mobile_overflow.js` caps that at 3.00. At the panel's honest
+   659px window the table overflows by 121px (84.5% visible) and
+   `syncScrollHints` announces it, which is a better deal than the 1399px
+   viewport has always had. */
+@media (min-width: 1400px) {
+  .op-bar-row {
+    border-bottom: 0;
+    padding: 10px 12px;
+    background: var(--surface-inset);
+    border-left: 2px solid var(--line);
+  }
+
+  #directivesStreamList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .directive-pill-card--hold {
+    grid-column: 1 / -1;
+  }
+
+  .directive-matrix-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+
+  .directive-decisions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+}
+

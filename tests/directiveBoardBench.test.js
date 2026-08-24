@@ -26,7 +26,10 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'directive-board.js');
-const stylesheetPath = path.join(repoRoot, 'public', 'v2', 'css', 'mission-control.css');
+
+// The v2 stylesheet is an ordered set of parts; this reads all of them in
+// cascade order, so "the rule exists" keeps meaning "the browser will find it".
+const { readMissionControlCss } = require('./fixtures/missionControlCss');
 
 const { visibleText, runComponent } = require('./fixtures/renderHarness');
 
@@ -191,7 +194,7 @@ test('the footer says how many CANDIDATES the rows stand for, so eight rows are 
 });
 
 test('the group line has a stylesheet rule, so it is not invisible text', () => {
-  const css = fs.readFileSync(stylesheetPath, 'utf8');
+  const css = readMissionControlCss();
   assert.ok(/\.directive-benched-group\s*\{/.test(css),
     '.directive-benched-group must be styled, or the note renders unstyled');
 });
@@ -367,7 +370,7 @@ test('a MIXED group does not present the representative\'s reason as the whole g
 });
 
 test('the new bench-budget elements have stylesheet rules, so they are not invisible text', () => {
-  const css = fs.readFileSync(stylesheetPath, 'utf8');
+  const css = readMissionControlCss();
   for (const rule of [
     'directive-bench-budget',
     'directive-bench-budget-unknown',

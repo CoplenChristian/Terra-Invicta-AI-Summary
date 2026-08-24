@@ -1,0 +1,204 @@
+/* ========================================================================
+   21-fleet-procurement.css
+
+   FLEET view and the procurement / refit cards.
+
+   The .init-fleet-layout frame, the .fp-* procurement rows and the refit cards.
+
+   Source: mission-control.css lines 7959-8151 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* --- FLEET VIEW & PROCUREMENT --- */
+.init-fleet-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.fleet-procurement {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fp-procurement {
+  margin-bottom: 0;
+  padding: 8px 12px;
+}
+
+/* This element carries `.ra-procurement__head fp-procurement__head`, which is
+   the markup saying it IS the research advisor's procurement head. It used to
+   read `font-size: var(--fs-label)`, and --fs-label was never defined anywhere
+   -- which does not fall back to the .ra- rule beside it. An undefined custom
+   property is valid at parse time and invalid at computed-value time, so the
+   declaration still wins the cascade and then resolves to `inherit`: the head
+   took 13px off the body while out-specifying the 10px it was asking for, and
+   a matching override existed on its <small> to put the qualifier back
+   underneath. Both are gone; the two components render identically again. */
+.fp-procurement__head {
+  padding-bottom: 4px;
+  font-size: var(--fs-meta);
+}
+
+.fp-group__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fp-row {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.fp-row:last-child {
+  border-bottom: none;
+}
+
+.fp-foot {
+  padding-top: 6px;
+}
+
+.fleet-dashboard-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fp-refit-section {
+  margin-top: 4px;
+}
+
+.fp-refit-notice {
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  background: var(--surface-inset);
+  border-left: 2px solid var(--accent);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.fp-refit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.fp-refit-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.fp-refit-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+
+.fp-refit-card__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fp-refit-card__title strong {
+  font-size: var(--fs-row);
+  color: var(--text);
+}
+
+.fp-refit-card__title small {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.fp-refit-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-meta);
+  flex-grow: 1;
+}
+
+.fp-refit__drive,
+.fp-refit__weapon,
+.fp-refit__armor {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fp-refit__label {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fp-refit__perf {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--accent);
+}
+
+.fp-refit__caveat,
+.fp-refit__impact,
+.fp-refit__threat {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.fp-refit__rejected {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.fp-refit__rejected-name {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fp-refit__rejected-reason {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.fp-refit__power--scaled {
+  padding-top: 4px;
+}
+
+.fp-refit-card__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+}
+
+.fp-refit-card__btn {
+  font-size: var(--fs-meta);
+  padding: 2px 8px;
+}
+

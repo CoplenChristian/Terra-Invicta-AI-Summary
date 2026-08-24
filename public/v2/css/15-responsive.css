@@ -1,0 +1,443 @@
+/* ========================================================================
+   15-responsive.css
+
+   The responsive passes over everything declared above.
+
+   THIS FILE'S POSITION IS LOAD-BEARING. Its @media blocks override the shell,
+   the view grid, the boards, the library and the detail panel -- all declared
+   in files 01-14. Moving it earlier makes those overrides lose; moving it later
+   makes it beat the component files 16-24, which today it does not.
+
+   Source: mission-control.css lines 5055-5483 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Responsive layout ------------------------------------------------------ */
+
+/* Two of the three blocks that used to sit here -- 1500px and 1320px, each
+   restating a `.init-topbar` track list and pushing `.init-topbar-controls` to
+   `grid-column: 1 / -1` -- were hand-approximating "wrap the controls when they
+   stop fitting". `.init-topbar` now asks the browser that question directly, so
+   they are gone. `.init-grid-layout` is a different element and keeps its own
+   breakpoint. */
+@media (max-width: 1320px) {
+  .init-grid-layout {
+    grid-template-columns: minmax(230px, 0.78fr) minmax(420px, 1.22fr);
+  }
+}
+
+/* The third block was not an approximation and is kept, restated in flex terms.
+   Narrow enough and the HUD cannot show its own labels while sharing a row with
+   the brand. Its four-column grid (see the 1320px block above) needs 858px
+   before "STRATEGIC SCORE (EST.):" stops ellipsing at its 145px, and the brand
+   plus the gap takes 313px off the line -- so sharing works down to a 1223px
+   viewport and not below. Measured 2026-08-23 sharing the row: 835px of HUD at
+   1200px and 659px at 1024px, at which point OBSERVER, the faction name, the
+   strategic score label and its value all truncate. Four readings quietly lost,
+   with nothing overlapping to show for it.
+   1240px rather than 1223px because a round number one step above the crossover
+   costs an 18px-wide band a slightly taller header and nothing else. Above it
+   the wrap layout is strictly better than what it replaced: the old 1320px grid
+   handed the HUD 614-656px and clipped the same four readings, where the wrap
+   gives it 875-955px and clips none.
+   This has to stay a media query. `min-width` would clamp the hypothetical main
+   size and wrap the HUD without one, but that same clamp also decides when the
+   controls wrap, and 858px there would push the controls off the top row until
+   2234px. One number cannot serve both. */
+@media (max-width: 1240px) and (min-width: 901px) {
+  .init-topbar-hud {
+    flex-basis: 100%;
+  }
+
+  /* Carried over from the same block: three stacked rows want a tighter gutter
+     than two do. Without it the header measured 24px taller than the layout it
+     replaced -- two extra row gaps at 22px instead of 10px, and nothing else. */
+  .init-topbar {
+    row-gap: 10px;
+  }
+}
+
+/* Sticky is only worth it while the header stays a minority of the screen.
+   Re-measured 2026-08-23 after the header became a wrap layout, at a 900px-tall
+   viewport: 131px at >=1800px wide, 188px from 1366 to 1700, 211px at 1280,
+   250px from 1100 to 1240, and 287px from 910 to 1000 where the controls need a
+   second row of their own. Every one of those is unchanged from the grid layout
+   this replaced except three: 1240px went 211 -> 250 (the HUD taking its own row
+   there buys back four readings it was ellipsing), and 1600/1700px went 171/151
+   -> 188, which is what not overlapping the brand costs.
+   287px is a third of a 720px viewport and 46% of a 620px one, so in this band
+   the header goes back into the flow rather than parking on top of the content.
+   Below 901px it is already static. */
+@media (min-width: 901px) and (max-width: 1200px) and (max-height: 820px),
+       (min-width: 901px) and (max-height: 600px) {
+  .init-topbar {
+    position: static;
+  }
+}
+
+@media (max-width: 900px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .init-grid-layout,
+  .init-col,
+  .tech-card,
+  .tech-card-body,
+  .init-directives-banner,
+  .mc-watch-grid,
+  .intelligence-library-screen__dialog,
+  .intel-library-content {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* THE mobile overflow fix. Measured 2026-08-21 at 375x812: DRIVES put 64
+     elements past the right edge with no scrollable ancestor, worst edge 937px
+     on a 375px viewport, and `html, body { overflow-x: hidden }` above clipped
+     them -- so the content was unreachable, not merely off-screen.
+     `.de-table-wrap` reported clientWidth 890 / scrollWidth 890, i.e. its own
+     `overflow-x: auto` never engaged because nothing had constrained it.
+     The cause is one line: this block turns .init-view__grid from a grid into a
+     column flex container, and the base rule's `align-items: start` carries
+     over. On the flex cross axis that means shrink-to-fit, so .init-view__span
+     sized to the table's 937px max-content instead of the 375px container.
+     Stretching the items back constrains the chain, and the table wrapper then
+     scrolls as it was always meant to (clientWidth 313 / scrollWidth 890).
+     `min-width: 0` is belt-and-braces for the >900px grid case, where a
+     `grid-column: 1 / -1` item's default `min-width: auto` can do the same
+     thing. Verified on the live DOM by scripts/verify_mobile_overflow.js. */
+  .init-view__grid,
+  .init-grid-layout {
+    align-items: stretch;
+  }
+
+  .init-view__grid > *,
+  .init-grid-layout > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .mc-board-table-wrap,
+  .intel-library-table-wrap,
+  .de-table-wrap {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+  }
+
+  /* Generalise the pattern that makes FLEET the only view measuring zero
+     overflow: `.mc-board-table--fleet` and `--ledger` both pin `min-width: 100%;
+     table-layout: fixed` and let cells wrap. Applied here to the base table at
+     narrow widths only, so a phone reflows the columns instead of panning them.
+     Measured at 375px: expansion 164 -> 12 overflowing elements, records 45 -> 0.
+
+     Deliberately NOT applied above 900px. Those two modifiers pair fixed layout
+     with explicit per-column widths; the base table has none, so a global switch
+     would redistribute every desktop table to equal columns -- a visible change
+     to a surface that is not what this fix is for. Desktop keeps `white-space:
+     nowrap`, which is what holds the columns apart there. (It also used to carry
+     `min-width: 780px`; that was removed 2026-08-23 as slack above the content --
+     see the base rule.) */
+  .mc-board-table,
+  /* Same rule, restated at the specificity of the override it has to beat:
+     `.mc-watch-grid .mc-board-table` raises the floor to 600px below 1000px,
+     which is sound where that grid is one full-width column but forces RECORDS
+     to pan on a phone. Selector specificity, not source order, decides here --
+     (0,2,0) beats (0,1,0) wherever it sits in the file. */
+  .mc-watch-grid .mc-board-table {
+    min-width: 100%;
+    table-layout: fixed;
+  }
+
+  /* `anywhere`, not `break-word`, and the difference was measured rather than
+     assumed. Both break a word too long for its column -- unavoidable at ~60px
+     columns, "the Protectorate" does not fit whole either way -- but `anywhere`
+     also feeds intrinsic sizing, which is what lets the cells settle inside the
+     wrapper completely. Swapping to `break-word` left residual overflow of 5
+     elements on COMMAND and 12 on EXPANSION at 375px: still reachable, since the
+     wrapper scrolls, but scrolling you do not need beats scrolling that works. */
+  .mc-board-table th,
+  .mc-board-table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+
+  .mc-space-force-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .init-grid-layout > .init-col--command {
+    order: -2;
+  }
+
+  .init-grid-layout > .init-col--theaters {
+    order: 0;
+  }
+
+  .init-topbar {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px 16px;
+  }
+
+  /* `flex: 1 1 340px` on the base rule is a *row* declaration: it decides when
+     the controls wrap. Here the topbar is `flex-direction: column`, so the main
+     axis is vertical and that same 340px would be a 340px-tall HUD. Measured at
+     375px before this reset: the seven pills spread down a 340px box, pushing
+     the ALIEN HATE meter from y=137 to y=249 and the header from 397px to 553px
+     tall. The basis has to be neutralised wherever the direction flips. */
+  .init-topbar-hud {
+    flex: 0 0 auto;
+    gap: 7px 13px;
+  }
+
+  /* The one declaration that differs from the base rule. The other five
+     restated it verbatim. */
+  .init-hud-hate {
+    padding-top: 8px;
+  }
+
+  .init-topbar-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    justify-content: stretch;
+  }
+
+  .init-topbar-controls > .init-mode-cluster,
+  .init-topbar-controls .init-btn,
+  .init-topbar-controls .init-select {
+    width: 100%;
+  }
+
+  .init-topbar-controls > .init-mode-cluster {
+    grid-column: 1 / -1;
+    align-items: stretch;
+  }
+
+  .init-topbar-controls > .init-view-nav {
+    grid-column: 1 / -1;
+    display: flex;
+    width: 100%;
+  }
+
+  .init-topbar-controls > .init-view-nav .init-nav-btn {
+    flex: 1;
+    text-align: center;
+    padding: 0 4px !important;
+  }
+
+  .init-mode-caption {
+    max-width: none;
+    text-align: left;
+  }
+
+  .init-topbar-controls > .init-mode-cluster .init-btn {
+    flex: 1;
+  }
+
+  .init-select {
+    max-width: none;
+  }
+
+  .init-grid-layout,
+  .init-view__grid {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 20px 15px 40px;
+  }
+
+  .init-col:nth-child(3) {
+    display: flex;
+    align-items: stretch;
+  }
+
+  .init-kpi-banner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Two columns puts each cell back to ~187px, where the desktop strip's
+     `white-space: nowrap` starts eating figures again -- measured at 375:
+     "STRATEGIC SCORE (ES..." and "Composite estimate · Ra...". Wrap instead;
+     the value keeps its single line because it is the short string. */
+  .init-kpi-label,
+  .init-kpi-sub {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .init-kpi-item:nth-child(2)::after {
+    display: none;
+  }
+
+  .init-kpi-item:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .holo-node-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 0;
+  }
+
+  .priority-ops-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 0;
+  }
+
+  .priority-ops-meta > div:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  /* `:nth-child(3)` here, which missed the fifth node. Five nodes in two
+     columns start rows at 1, 3 and 5; `:first-child` covered 1 and this rule
+     covered 3, so "Xenoforming sites" sat 12px in from the four above it with
+     a divider on its left edge and nothing to its left. */
+  .holo-node:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .directive-pill-card {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .alien-hate-econ-statusbar {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .alien-hate-econ-war-status {
+    max-width: none;
+    text-align: left;
+  }
+
+  .alien-hate-econ-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .alien-hate-econ-metric strong {
+  }
+
+  .mc-space-force-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mc-space-body-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mc-space-body-row span {
+    text-align: left;
+  }
+
+  .mc-fleet-roster-item summary {
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mc-fleet-roster-item summary span {
+    text-align: left;
+  }
+
+  .mc-fleet-ship-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .init-brand-name {
+  }
+
+  .init-logo-icon.has-faction-logo {
+    flex-basis: 30px;
+    width: 30px;
+    height: 30px;
+  }
+
+  .faction-logo--title {
+    width: 30px;
+    height: 30px;
+  }
+
+  .faction-logo--hud,
+  .faction-logo--select {
+    width: 18px;
+    height: 18px;
+  }
+
+  .init-brand-tag {
+    display: none;
+  }
+
+  .init-brand-sub {
+  }
+
+  .init-hud-pill {
+    font-size: var(--fs-tag);
+  }
+
+  .init-hud-pill strong {
+    max-width: 115px;
+  }
+
+  .init-hud-pill:last-child {
+    flex-basis: 100%;
+  }
+
+  .init-hud-pill:last-child strong {
+    max-width: none;
+    white-space: normal;
+  }
+
+  .init-kpi-item {
+    padding: 12px;
+  }
+
+  .init-kpi-val {
+    font-size: var(--fs-kpi);
+  }
+
+  /* No `.init-hologram-stage` padding override: the stage carries no padding of
+     its own at any width now, and `.tech-card-body` owns the inset. */
+  .holo-core-title {
+  }
+
+  .holo-core-statement {
+    font-size: var(--fs-row);
+  }
+
+  .holo-node-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tech-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .tech-card-header > span {
+    padding-left: 14px;
+  }
+
+  .donut-wrapper {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .donut-svg-box {
+    align-self: center;
+  }
+}
+

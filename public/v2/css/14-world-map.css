@@ -1,0 +1,167 @@
+/* ========================================================================
+   14-world-map.css
+
+   The modular world map component.
+
+   The .world-map-* SVG chrome. Its label sizes are SVG user units, not page
+   pixels -- see the --fs-map-* note in 01-tokens-and-base.css.
+
+   Source: mission-control.css lines 4900-5054 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Modular world map ------------------------------------------------------ */
+
+.world-map-instance {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.world-map-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.world-map-ocean {
+  fill: var(--surface-inset);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.world-map-graticule {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 0.65;
+  stroke-dasharray: 2 6;
+  opacity: 0.52;
+}
+
+.world-map-country {
+  fill: rgba(105, 197, 184, 0.14);
+  stroke: var(--line-strong);
+  stroke-width: 0.7;
+  vector-effect: non-scaling-stroke;
+  transition: fill 160ms ease, stroke 160ms ease, opacity 160ms ease;
+}
+
+.world-map-rule,
+.world-map-footer-rule {
+  stroke: var(--line);
+}
+
+.world-map-heading,
+.world-map-title {
+  fill: var(--text-soft);
+  font-family: var(--sans);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.world-map-heading-meta,
+.world-map-description,
+.world-map-legend-label,
+.world-map-summary {
+  fill: var(--text-soft, #b7c5bf);
+}
+
+.world-map-region {
+  cursor: pointer;
+  outline: none;
+}
+
+.world-map-region:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.world-map-region-shape {
+  fill: none;
+  stroke: none;
+  pointer-events: none;
+}
+
+.world-map-region:hover .world-map-country,
+.world-map-region:focus .world-map-country,
+.world-map-region[aria-pressed='true'] .world-map-country {
+  stroke: var(--accent-strong);
+  stroke-width: 1.15;
+  filter: brightness(1.22);
+}
+
+.world-map-country--unassigned {
+  fill: rgba(183, 197, 191, 0.04);
+  stroke: var(--line);
+}
+
+.world-map-loading,
+.world-map-error {
+  fill: var(--text-soft, #b7c5bf);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.world-map-country-label {
+  pointer-events: none;
+  fill: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-map-note);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.92;
+}
+
+.world-map-data-note {
+  fill: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-map-note);
+  letter-spacing: 0.05em;
+}
+
+.world-map-region-status,
+.world-map-region-label {
+  pointer-events: none;
+}
+
+.world-map-region-marker,
+.world-map-region-marker-halo {
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .faction-intel-header,
+  .faction-intel-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .faction-intel-header-meta {
+    justify-content: flex-start;
+  }
+
+  .faction-intel-roster,
+  .faction-intel-detail {
+    width: 100%;
+  }
+
+  .faction-intel-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .faction-intel-councilor {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

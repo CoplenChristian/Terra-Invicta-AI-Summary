@@ -1,0 +1,245 @@
+/* ========================================================================
+   01-tokens-and-base.css
+
+   The token vocabulary and the document itself.
+
+   Every --colour, --space and --fs-* token the rest of the sheet names, plus the
+   reset, the base element rules, the focus ring and the scrollbar. Nothing here
+   styles a component; everything after it depends on this file being first.
+
+   Source: mission-control.css lines 1-232 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/*
+   The Initiative // Mission Control v2
+   A quiet operations brief: clear hierarchy, measured color, and useful density.
+*/
+
+:root {
+  --canvas: #081011;
+  --surface: #101b1d;
+  --surface-raised: #142224;
+  --surface-inset: #0b1517;
+  --line: #263837;
+  --line-strong: #3b504d;
+  --text: #e6eeea;
+  --text-soft: #b7c5bf;
+  --text-muted: #91a29b;
+  /* WCAG AA constraint: --text-dim must maintain >= 4.5:1 contrast against --surface (#101b1d),
+     which is the tightest pairing where dim metadata text is placed (4.77:1 at #758a81). */
+  --text-dim: #758a81;
+  --accent: #69c5b8;
+  --accent-strong: #a3e0d4;
+  --accent-soft: rgba(105, 197, 184, 0.14);
+  --success: #91bd9b;
+  --warning: #d4a35e;
+  --danger: #d47d76;
+  --blue: #8fb2bd;
+  --purple: #b39dbd;
+  --gold: #d4a35e;
+  --display: Georgia, 'Times New Roman', serif;
+  /* Inter used to lead this stack and was never loaded -- no @font-face, no
+     <link>, and this is the only stylesheet the v2 shell pulls in. So the face
+     that actually rendered was the next entry, and a reader who happened to
+     have Inter installed locally got a measurably different dashboard from
+     everyone else. The scale below was tuned against what renders, so the
+     phantom is removed rather than shipped: adding a webfont now would change
+     every measured width and height in the same commit that changes the sizes,
+     and there would be no way to attribute a regression to either. */
+  --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  /* Typography size scale.
+   *
+   * Seven steps: four dense tiers for data, three display tiers above them.
+   * Every adjacent pair is separated by at least 1px / ~10%, and every
+   * font-size in this file is one of them -- measured 2026-08-23, 393
+   * declarations, 310 of them raw literals rendering 24 distinct sizes, and
+   * COMMAND alone rendered 16.
+   *
+   * The dense four came first and are unchanged. DRIVES was already built on
+   * them alone: 2,010 text-bearing elements, exactly four rendered sizes, and
+   * it is the proof the tiers are sufficient rather than merely tidy.
+   *
+   * 9px is the floor the spec set and is deliberately the tag size: nothing
+   * renders below it. Five declarations sat at 7px and three at 8.5px, i.e.
+   * beneath a floor the file documented; they are raised, not re-pinned.
+   *
+   * The display three replace fourteen values between 14px and 30px -- 14, 15,
+   * 16, 17, 18, 19, 21, 22, 24, 25, 26, 27 and two viewport clamps. Those were
+   * four-percent apart in places (24/25/26/27 for four different titles), which
+   * is not hierarchy, it is drift. They are fixed rather than fluid on purpose:
+   * a vw clamp makes the rendered size viewport-dependent, which is how 21.6px
+   * and 30.24px reached the page without either being written down, and this is
+   * an Operate surface where density should be spatially predictable.
+   *
+   * Ratios: 1.111 / 1.100 / 1.136 / 1.200 / 1.267 / 1.368. The steps widen as
+   * they climb, so the display tiers read as a different register rather than
+   * as three more rows of data.
+   *
+   * The ceiling is the COMMAND height budget (< 3.00 screens at 1920x1080),
+   * measured on the live save by scripts/verify_research_tab_layout.js, which
+   * reads computed styles off the rendered DOM rather than this file. It was at
+   * 2.858 player / 2.915 omniscient before this change. */
+  --fs-title: 26px;    /* page and modal titles; COMMAND's hero numerals */
+  --fs-kpi: 19px;      /* the numeral a panel exists to show */
+  --fs-section: 15px;  /* entity names and panel titles */
+  --fs-row: 12.5px;    /* row content and readable prose */
+  --fs-metric: 11px;   /* metric values and dense table bodies */
+  --fs-meta: 10px;     /* metadata and secondary values */
+  --fs-tag: 9px;       /* tags, chips, eyebrows, table headers */
+
+  /* The world map is NOT on the scale above, and must not be put on it. Its
+     <svg> carries `viewBox="0 0 720 360"` with `width: 100%`, so every size
+     inside it is a user unit that the browser then scales by the container
+     width -- an "8px" label renders at roughly 7px in a 640px card and at
+     roughly 10px in a 900px one. Mapping those onto page-pixel tokens would
+     assert an equivalence that does not exist. What the map did need was to
+     stop running five values (8, 8.25, 8.5, 10 and 10.5) where it has two
+     roles, so it gets its own named two-step ladder. See world-map.js. */
+  --fs-map-name: 10.5px;
+  --fs-map-note: 8px;
+
+  /* Spacing scale.
+   *
+   * Measured 2026-08-21 before this scale existed: 20 distinct `gap` values
+   * between 1px and 24px, including 7, 9, 11, 13, 15, 18 and 22 -- values that
+   * read as accidental rather than chosen, because there was nothing to choose
+   * from. The dominant values were already 2 / 4 / 6 / 8 / 10 / 12, so the scale
+   * below is the one the stylesheet was reaching for; it is named, not invented.
+   *
+   * The step is 2px through the dense range rather than the usual 4px base,
+   * because the type scale bottoms out at 9px: at this density a 4px jump is a
+   * whole line of leading, so 4/8/12 alone cannot express "tight group" versus
+   * "separated group" and the missing middles are exactly where the odd values
+   * appeared. Above 12px the steps widen to 4px, where that resolution is real.
+   *
+   * Applied to container rhythm and to new components. It is NOT a description
+   * of the file as it stands, and reading it as one would mislead: re-measured
+   * 2026-08-21 across every literal px value in gap/padding/margin, 384 land on
+   * the scale and 203 do not, spread over 22 distinct off-scale values (1, 3, 5,
+   * 7, 9, 11, 13, 14, 15, 18, 22 and up). `padding: 7px 10px`, `padding: 8px
+   * 9px`, `gap: 18px`, `padding: 14px 16px` and `gap: 7px 13px` are live
+   * examples. Those older ad-hoc values were left alone deliberately: replacing
+   * them moves pixels, which is a visual change rather than a rename, and is a
+   * separate piece of work. Read this block as the vocabulary to reach for from
+   * here, not as a claim about what already survives beside it. */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-md: 8px;
+  --space-lg: 10px;
+  --space-xl: 12px;
+  --space-2xl: 16px;
+  --space-3xl: 20px;
+  --space-4xl: 24px;
+
+  /* Compatibility aliases for the existing render functions and inline SVG. */
+  --bg-deep: var(--canvas);
+  --bg-dark: var(--surface-inset);
+  --bg-card: var(--surface);
+  --bg-card-hover: var(--surface-raised);
+  --bg-card-border: var(--line);
+  --bg-card-border-glow: var(--line-strong);
+  --text-main: var(--text);
+  --font-mono: var(--mono);
+  --font-sans: var(--sans);
+  --init-cyan: var(--accent);
+  --init-cyan-glow: var(--accent-soft);
+  --init-blue: var(--blue);
+  --init-blue-glow: rgba(143, 178, 189, 0.16);
+  --init-pink: #c790a8;
+  --init-pink-glow: rgba(199, 144, 168, 0.16);
+  --init-gold: var(--gold);
+  --init-gold-glow: rgba(212, 163, 94, 0.16);
+  --init-emerald: var(--success);
+  --init-emerald-glow: rgba(145, 189, 155, 0.16);
+  --init-crimson: var(--danger);
+  --init-crimson-glow: rgba(212, 125, 118, 0.16);
+  --init-purple: var(--purple);
+  --init-purple-glow: rgba(179, 157, 189, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--canvas);
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: var(--fs-row);
+  line-height: 1.5;
+}
+
+/* <small> must not invent a size. The UA sheet gives it `font-size: smaller`,
+   which multiplies whatever it inherits by 5/6, and that is the entire origin
+   of 8.25px, 8.33px, 9.17px, 9.58px and 10.83px on this page -- five rendered
+   sizes, none of them written down anywhere, each one an accident of which
+   element the markup happened to nest inside. Every deliberate step down from
+   the host context is declared below with a token, so the multiplier has no
+   remaining job. Measured 2026-08-23: every <small> that already rendered at a
+   token value did so because it had an explicit rule, so this resets only the
+   fractional ones. */
+small {
+  font-size: inherit;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--canvas);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--canvas);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+

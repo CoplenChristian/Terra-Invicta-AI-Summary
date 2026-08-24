@@ -487,10 +487,14 @@ test('the mining rows publish the measured module multiplier without folding it 
 // ---------------------------------------------------------------------------
 
 test('the measured and estimate registers on the mining board differ on font, style and colour', () => {
-  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'v2', 'css', 'mission-control.css'), 'utf8');
+  // Every part the shell links, concatenated in cascade order. The two indexOf
+  // assertions at the end of this test depend on that order being the browser's
+  // order across FILE boundaries as well as within one -- reading a single part
+  // would make them compare positions inside an arbitrary slice.
+  const css = require('./fixtures/missionControlCss').readMissionControlCss();
   const ruleFor = (selector) => {
     const match = css.match(new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`));
-    assert.ok(match, `${selector} must exist in mission-control.css`);
+    assert.ok(match, `${selector} must exist in the v2 stylesheet`);
     return Object.fromEntries(match[1].split(';')
       .map(line => line.trim())
       .filter(Boolean)

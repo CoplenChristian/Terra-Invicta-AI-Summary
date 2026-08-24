@@ -1,0 +1,335 @@
+/* ========================================================================
+   09-detail-panel.css
+
+   The dynamic briefing and the on-demand detail surfaces.
+
+   The sitrep summary, the faction-intel teaser card on COMMAND, and the whole
+   .detail-panel modal with its own narrow-viewport pass.
+
+   Source: mission-control.css lines 2866-3188 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Dynamic briefing and on-demand detail surfaces ------------------------ */
+
+.sitrep-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+  margin-bottom: 22px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.sitrep-summary p {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  color: var(--text-soft);
+  font-size: var(--fs-row);
+  line-height: 1.6;
+}
+
+.sitrep-summary p::before {
+  color: var(--accent);
+  content: attr(data-index);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.faction-intel-screen,
+.detail-panel,
+.intelligence-library-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.faction-intel-screen__backdrop,
+.detail-panel__backdrop,
+.intelligence-library-screen__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 10, 10, 0.86);
+}
+
+.faction-intel-screen__dialog,
+.detail-panel__dialog,
+.intelligence-library-screen__dialog {
+  position: relative;
+  display: flex;
+  width: min(1180px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  margin: 16px auto;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-top: 2px solid var(--accent);
+  background: var(--surface);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+}
+
+.faction-intel-screen__header,
+.detail-panel__header,
+.intelligence-library-screen__header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.faction-intel-screen__eyebrow,
+.detail-panel__eyebrow,
+.faction-intel-eyebrow,
+.intelligence-library-screen__eyebrow {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.faction-intel-screen h2,
+.detail-panel h2,
+.intelligence-library-screen h2 {
+  margin-top: 4px;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: var(--fs-title);
+  font-weight: 700;
+}
+
+.faction-intel-screen__body,
+.detail-panel__body,
+.intelligence-library-screen__body {
+  overflow: auto;
+  padding: 20px;
+}
+
+.detail-panel__dialog {
+  width: min(620px, calc(100vw - 32px));
+}
+
+.detail-panel__summary {
+  margin-bottom: 18px;
+  color: var(--text-soft);
+  font-size: var(--fs-row);
+  line-height: 1.6;
+}
+
+.detail-panel__facts {
+  display: grid;
+  gap: 0;
+}
+
+.detail-panel__fact {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.65fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.detail-panel__fact dt {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.detail-panel__fact dd {
+  color: var(--text);
+  font-size: var(--fs-row);
+}
+
+/* Grouped list sections inside the one shared modal.
+ *
+ * Built for a research path -- faction projects, global techs, what is already
+ * done -- but nothing here knows that: a section is a title, a caption and rows.
+ * Every row wraps rather than overflowing, because the dialog is 620px on
+ * desktop and calc(100vw - 18px) at 375, and a modal that pans sideways is the
+ * mobile defect this repo just spent a commit removing. */
+.detail-panel__sections {
+  margin-top: var(--space-lg);
+}
+
+.detail-panel__section + .detail-panel__section {
+  margin-top: var(--space-lg);
+}
+
+.detail-panel__section-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.detail-panel__section-title {
+  margin: 0;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.detail-panel__section-caption {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.04em;
+  /* The caption carries the counts and the cost split. It must be able to wrap
+     onto its own line rather than push the section wider than the dialog. */
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.detail-panel__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detail-panel__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-panel__row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.detail-panel__row-label {
+  color: var(--text);
+  font-size: var(--fs-row);
+  overflow-wrap: anywhere;
+}
+
+.detail-panel__row-sub {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.detail-panel__row-side {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  align-items: baseline;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.detail-panel__row-meta {
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  overflow-wrap: anywhere;
+}
+
+.detail-panel__status {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.detail-panel__status--ok {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.detail-panel__status--warn {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.detail-panel__status--block {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.detail-panel__status--unknown {
+  color: var(--text-dim);
+  border-color: var(--line-strong);
+}
+
+/* An empty section still renders and says so. A section that vanished would
+   read as "not applicable" when it means "none". */
+.detail-panel__empty {
+  padding: var(--space-sm) 0;
+  color: var(--text-dim);
+  font-size: var(--fs-metric);
+}
+
+.detail-panel__notes {
+  margin-top: var(--space-lg);
+}
+
+/* The things a figure cannot say about itself -- the rolled-availability
+   caveat, an announced truncation, an uncostable node. Warning-toned because
+   ignoring one makes the numbers above mean something they do not. */
+.detail-panel__note {
+  margin: 0 0 var(--space-sm);
+  padding-left: var(--space-sm);
+  border-left: 2px solid var(--warning);
+  color: var(--text-soft);
+  font-size: var(--fs-metric);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+body.detail-panel-open,
+body.faction-intel-open,
+body.intelligence-library-open {
+  overflow: hidden;
+}
+
+@media (max-width: 760px) {
+  .sitrep-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .faction-intel-screen__dialog,
+  .detail-panel__dialog,
+  .intelligence-library-screen__dialog {
+    width: calc(100vw - 18px);
+    max-height: calc(100vh - 18px);
+    margin: 9px auto;
+  }
+
+  .faction-intel-screen__body,
+  .detail-panel__body,
+  .intelligence-library-screen__body {
+    padding: 14px;
+  }
+}
+
