@@ -199,8 +199,26 @@ a:focus-visible {
   position: sticky;
   top: 0;
   z-index: 20;
-  display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(320px, 1.15fr) auto;
+  /* Wrap, do not breakpoint. This was a grid whose three tracks were declared
+     by viewport width -- `minmax(220px, 0.8fr) minmax(320px, 1.15fr) auto` above
+     1500px, two tracks below. The third track is `auto`, i.e. the controls'
+     max-content width, measured 2026-08-23 at 989.4px. So the three-up layout's
+     own minimum is 220 + 320 + 989.4 + 44 gap + 52 padding = 1625px, and it was
+     being switched on at 1501px. Between those two numbers the grid is
+     over-constrained: both fr tracks clamp to their minmax floors, the brand's
+     291px of content overflows its 220px track, and "CAMPAIGN INTELLIGENCE /
+     EXECUTIVE BRIEFING" lands on top of the ALIEN HATE meter. Measured before
+     the fix: collision at every width from 1501px to ~1690px, worst 27.8px
+     horizontal x 6px vertical, clean again only at 1700px.
+     A breakpoint could not fix this honestly, because the number it would have
+     to encode is the controls' current max-content width -- add one nav button
+     and the band reopens somewhere else. Flex wrap asks the browser instead:
+     the controls drop to their own row exactly when brand + HUD + controls stop
+     fitting, which is the behaviour the 1500/1320/1200px blocks were hand-
+     approximating. Those blocks are gone; the only number left is the HUD's own
+     340px useful minimum. */
+  display: flex;
+  flex-wrap: wrap;
   gap: 22px;
   align-items: center;
   padding: 15px 26px 14px;
@@ -211,8 +229,24 @@ a:focus-visible {
 .init-brand {
   display: flex;
   min-width: 0;
+  flex: 0 1 auto;
   align-items: center;
   gap: 11px;
+}
+
+/* Defensive, NOT the fix -- the same standing as `.init-view__span`'s
+   `min-width: 0`. The copy wrapper was an unnamed `<div>` defaulting to
+   `min-width: auto`, which is why `.init-brand-sub`'s `text-overflow: ellipsis`
+   could never fire: measured before the header fix, its right edge was a
+   constant 316.9px at all 41 sampled widths from 1240 to 2040 -- the text
+   escaped sideways rather than ellipsing. The wrap on `.init-brand-name` below
+   is what actually contains a long faction name; removing this line was
+   measured 2026-08-23 to change nothing at 320, 360, 375, 414, 768 or 880px,
+   because `overflow-wrap: anywhere` already collapses the min-content width.
+   Kept because it is correct and free, and because naming the wrapper is worth
+   more than the declaration it carries. */
+.init-brand-copy {
+  min-width: 0;
 }
 
 .init-logo-icon {
@@ -320,9 +354,22 @@ img.faction-logo {
   align-items: center;
 }
 
+/* `white-space: nowrap` used to be here, and with the faction name coming from
+   the save it was a reachability bug waiting on a longer name. Measured at
+   375px: the name and its tag sit in a 294px copy box, and a 68-character
+   executive name ran 411px past the right edge of the header with no scrollable
+   ancestor -- unreachable, not merely ugly, which is the same class the mobile
+   table fix exists for. `overflow: hidden` would have hidden the measurement
+   without fixing it; the text would still have been unreadable.
+   So the name wraps instead, and `anywhere` (not `break-word`) because only
+   `anywhere` feeds intrinsic sizing, which is what lets the block settle inside
+   its container rather than merely breaking a line inside an oversized one --
+   the same distinction measured for `.mc-board-table` cells at 375px. THE
+   INITIATIVE is 250px wide and still renders on one line at every viewport. */
 .init-brand-name {
   display: flex;
   min-width: 0;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 9px;
   color: var(--text);
@@ -330,7 +377,7 @@ img.faction-logo {
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .init-brand-tag {
@@ -354,9 +401,15 @@ img.faction-logo {
   white-space: nowrap;
 }
 
+/* `340px` is the only width constant left in the header, and it is the HUD's
+   own useful minimum -- the ALIEN HATE meter alone declares `min-width: 280px`
+   and sits inside this box. It is deliberately NOT a measurement of a sibling:
+   it decides when the controls wrap, and it keeps deciding correctly if the
+   controls get wider. */
 .init-topbar-hud {
   display: flex;
   min-width: 0;
+  flex: 1 1 340px;
   flex-wrap: wrap;
   gap: 5px 16px;
   align-items: center;
@@ -414,12 +467,10 @@ img.faction-logo {
     grid-column: 1 / span 3;
   }
 
+  /* Only the two declarations that differ from the base rule. `max-width`,
+     `padding-left`, `border-left` and `border-top` restated it verbatim. */
   .init-hud-hate {
     grid-column: 1 / -1;
-    max-width: none;
-    padding-left: 0;
-    border-left: 0;
-    border-top: 1px solid var(--line);
     padding-top: 7px;
   }
 
@@ -446,6 +497,12 @@ img.faction-logo {
   color: var(--danger);
 }
 
+/* `flex: 1 1 100%` puts the meter on a row of its own at every viewport, and
+   that is deliberate rather than a leftover: it is what gives the bar a full
+   track and turns its `border-top` into the rule that separates the reading
+   from the text pills above it. The declaration used to appear three times --
+   here, and restated verbatim in the <=900px block -- which made it read like
+   an accident. It is stated once now. */
 .init-hud-hate {
   display: flex;
   min-width: 280px;
@@ -471,9 +528,17 @@ img.faction-logo {
   white-space: nowrap;
 }
 
+/* The cap is the header reflow's consequence, not a taste edit. With the
+   controls on their own row the HUD gets the whole width of the one above, so
+   an uncapped `flex: 1 1 160px` track measured 1140px at 1600px and 1240px at
+   1440px: a 12px-tall strip long enough to read as a rule rather than a meter,
+   with its own reading stranded a screen-width from its label. 460px is a touch
+   above what the widest one-row layout already produced (395px at 1920px), so
+   the wide case is unchanged and only the stretched case is pulled back. */
 .init-hud-hate__track {
   position: relative;
   flex: 1 1 160px;
+  max-width: 460px;
   height: 12px;
   overflow: hidden;
   border: 1px solid var(--line-strong);
@@ -568,10 +633,17 @@ img.faction-logo {
   border-color: var(--accent);
 }
 
+/* `flex: 0 1 auto` so the box hugs its own content on a shared row and shrinks
+   (wrapping internally) only when it is alone on a row narrower than it wants.
+   `flex-start` replaces the previous `flex-end`: the old value was invisible,
+   because in the `auto` grid track the box was always exactly max-content, and
+   every media block that gave the controls a row of their own overrode it to
+   `flex-start` anyway. One value now, matching what was always rendered. */
 .init-topbar-controls {
   display: flex;
+  flex: 0 1 auto;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 7px;
   align-items: center;
 }
@@ -1321,18 +1393,32 @@ img.faction-logo {
    bottom is 2x the top by intent rather than the previous 2.07x by accident. */
 .init-view__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* The track count follows what a card can hold, not the viewport number.
+     `repeat(3, minmax(0, 1fr))` above 1600px used to sit here, and it was
+     asserting capacity that never existed: measured 2026-08-23, not one of the
+     six views has three cards that are not `.init-view__span`. EXPANSION,
+     THREAT and RECORDS each have exactly two, FLEET and DRIVES have one. So the
+     third track was always dead, and the price was paid by the two real cards,
+     which went from 764px to 501px at 1600px -- a 34% cut so that an empty
+     column could exist.
+     `minmax(0, 1fr)` is what let that happen: a zero minimum means the grid will
+     make a track of any width, including one nothing fits in. The 560px floor
+     is measured from the cards. The narrowest thing this grid holds is the
+     RECORDS ledger table at 483px natural plus 32px of card padding = 515px,
+     and a TECHNOLOGY WATCH section at its 460px floor plus padding = 492px; the
+     widest half-track card, WARTIME LOGISTICS, wants 621 + 32 = 653px. 560px
+     clears the small end with room and keeps two tracks down to 1200px, exactly
+     where they are today.
+     The dead track is now structurally impossible rather than merely absent:
+     three tracks need 3 x 560 + 2 x 24 = 1728px, and `max-width: 1660px` minus
+     48px of padding caps the content box at 1612px. If the cards ever get
+     narrower, lower the floor and the third track comes back on its own. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
   gap: var(--space-4xl);
   max-width: 1660px;
   margin: 0 auto;
   padding: var(--space-4xl) var(--space-4xl) calc(var(--space-4xl) * 2);
   align-items: start;
-}
-
-@media (min-width: 1600px) {
-  .init-view__grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 /* Shares the 24px horizontal inset with .init-view__grid so COMMAND and the
@@ -3902,9 +3988,23 @@ body.intelligence-library-open {
   display: block;
 }
 
+/* `min-width: 780px` used to sit here, and it was redundant with the rule that
+   actually holds these columns apart. Every table that keeps this base rule also
+   keeps `white-space: nowrap` on its cells (below), so its min-content width is
+   already its natural width -- the browser will not squash it whatever the
+   min-width says. The two modifiers that turn wrapping on, `--ledger` and
+   `--fleet`, both replace this floor with `min-width: 100%` for that reason, and
+   the <=900px block does the same thing globally.
+   So the 780px was never a legibility floor; it was slack above the content.
+   Measured 2026-08-23, the natural widths under it are 621, 742, 749, 775 and
+   784px -- four of the five below 780 -- and the cost was scroll that nothing
+   needed: at 1600px, WARTIME LOGISTICS, and two of the three ALIEN FORCE POSTURE
+   tables each reported "SWIPE HORIZONTALLY TO VIEW ALL COLUMNS" for a shortfall
+   of exactly 780 minus the container, with their own content comfortably inside
+   it. CAPABILITY MATRIX at 784px is the one table that genuinely overruns a
+   half-track card, and it still says so. */
 .mc-board-table {
   width: 100%;
-  min-width: 780px;
   border-collapse: collapse;
   font-family: var(--mono);
   font-size: 9px;
@@ -4152,9 +4252,22 @@ body.intelligence-library-open {
   font-style: normal;
 }
 
+/* The same fault as `.init-view__grid`, one level down and much worse. This was
+   a hard `repeat(3, minmax(0, 1fr))` holding three tables with a 460px floor, so
+   it demands 3 x 460 + 2 x 18 + 32 = 1448px -- and it lives inside a card that
+   gets a *half* track. Measured 2026-08-23 at 1600px: each section resolved to
+   144px against a 439px / 425px natural table width, and the two visible tables
+   truthfully reported "SWIPE HORIZONTALLY TO VIEW ALL COLUMNS" while clipping
+   316px each. At 1440px it was 205px per section. There was no desktop width at
+   which this fitted; the three-across was never achievable, only asserted.
+   `auto-fit` asks the card how much room it actually has instead. At the 732px
+   body a half track now gives it, that is one column of 732px and both tables
+   fit whole. It goes back to three across the moment something hands it 1448px
+   -- a full-width span would. `min(100%, 460px)` keeps the floor from becoming
+   an overflow on a container narrower than 460px. */
 .mc-watch-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
   gap: 18px;
 }
 
@@ -4167,8 +4280,11 @@ body.intelligence-library-open {
 }
 
 @media (max-width: 1000px) {
+  /* `grid-template-columns: 1fr` used to be restated here. The auto-fit floor
+     above already resolves to one column at every container width this band
+     produces, so the only thing this block still owns is the tighter gap and
+     the taller table floor a full-width single column can afford. */
   .mc-watch-grid {
-    grid-template-columns: 1fr;
     gap: 8px;
   }
 
@@ -4873,54 +4989,60 @@ body.intelligence-library-open {
 
 /* Responsive layout ------------------------------------------------------ */
 
-@media (max-width: 1500px) and (min-width: 901px) {
-  .init-topbar {
-    grid-template-columns: minmax(240px, 0.78fr) minmax(360px, 1.22fr);
-  }
-
-  .init-topbar-controls {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-}
-
+/* Two of the three blocks that used to sit here -- 1500px and 1320px, each
+   restating a `.init-topbar` track list and pushing `.init-topbar-controls` to
+   `grid-column: 1 / -1` -- were hand-approximating "wrap the controls when they
+   stop fitting". `.init-topbar` now asks the browser that question directly, so
+   they are gone. `.init-grid-layout` is a different element and keeps its own
+   breakpoint. */
 @media (max-width: 1320px) {
-  .init-topbar {
-    grid-template-columns: minmax(220px, 0.9fr) 1fr;
-  }
-
-  .init-topbar-controls {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-
   .init-grid-layout {
     grid-template-columns: minmax(230px, 0.78fr) minmax(420px, 1.22fr);
   }
 }
 
-@media (max-width: 1200px) and (min-width: 901px) {
+/* The third block was not an approximation and is kept, restated in flex terms.
+   Narrow enough and the HUD cannot show its own labels while sharing a row with
+   the brand. Its four-column grid (see the 1320px block above) needs 858px
+   before "STRATEGIC SCORE (EST.):" stops ellipsing at its 145px, and the brand
+   plus the gap takes 313px off the line -- so sharing works down to a 1223px
+   viewport and not below. Measured 2026-08-23 sharing the row: 835px of HUD at
+   1200px and 659px at 1024px, at which point OBSERVER, the faction name, the
+   strategic score label and its value all truncate. Four readings quietly lost,
+   with nothing overlapping to show for it.
+   1240px rather than 1223px because a round number one step above the crossover
+   costs an 18px-wide band a slightly taller header and nothing else. Above it
+   the wrap layout is strictly better than what it replaced: the old 1320px grid
+   handed the HUD 614-656px and clipped the same four readings, where the wrap
+   gives it 875-955px and clips none.
+   This has to stay a media query. `min-width` would clamp the hypothetical main
+   size and wrap the HUD without one, but that same clamp also decides when the
+   controls wrap, and 858px there would push the controls off the top row until
+   2234px. One number cannot serve both. */
+@media (max-width: 1240px) and (min-width: 901px) {
+  .init-topbar-hud {
+    flex-basis: 100%;
+  }
+
+  /* Carried over from the same block: three stacked rows want a tighter gutter
+     than two do. Without it the header measured 24px taller than the layout it
+     replaced -- two extra row gaps at 22px instead of 10px, and nothing else. */
   .init-topbar {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .init-topbar-hud,
-  .init-topbar-controls {
-    grid-column: 1;
-  }
-
-  .init-topbar-controls {
-    justify-content: flex-start;
+    row-gap: 10px;
   }
 }
 
 /* Sticky is only worth it while the header stays a minority of the screen.
-   Measured: 158px tall at >=1500px wide, 188px at 1366px, and 229px in the
-   901-1200px band where brand, HUD and controls each take their own row. That
-   229px is a third of a 720px viewport and 37% of a 620px one, so the header
-   goes back into the flow rather than parking on top of the content. Below
-   901px it is already static. */
+   Re-measured 2026-08-23 after the header became a wrap layout, at a 900px-tall
+   viewport: 131px at >=1800px wide, 188px from 1366 to 1700, 211px at 1280,
+   250px from 1100 to 1240, and 287px from 910 to 1000 where the controls need a
+   second row of their own. Every one of those is unchanged from the grid layout
+   this replaced except three: 1240px went 211 -> 250 (the HUD taking its own row
+   there buys back four readings it was ellipsing), and 1600/1700px went 171/151
+   -> 188, which is what not overlapping the brand costs.
+   287px is a third of a 720px viewport and 46% of a 620px one, so in this band
+   the header goes back into the flow rather than parking on top of the content.
+   Below 901px it is already static. */
 @media (min-width: 901px) and (max-width: 1200px) and (max-height: 820px),
        (min-width: 901px) and (max-height: 600px) {
   .init-topbar {
@@ -4981,17 +5103,18 @@ body.intelligence-library-open {
   }
 
   /* Generalise the pattern that makes FLEET the only view measuring zero
-     overflow: `.mc-board-table--fleet` and `--ledger` both drop the 780px floor
-     for `min-width: 100%; table-layout: fixed` and let cells wrap. Applied here
-     to the base table at narrow widths only, so a phone reflows the columns
-     instead of panning them. Measured at 375px: expansion 164 -> 12 overflowing
-     elements, records 45 -> 0.
+     overflow: `.mc-board-table--fleet` and `--ledger` both pin `min-width: 100%;
+     table-layout: fixed` and let cells wrap. Applied here to the base table at
+     narrow widths only, so a phone reflows the columns instead of panning them.
+     Measured at 375px: expansion 164 -> 12 overflowing elements, records 45 -> 0.
 
      Deliberately NOT applied above 900px. Those two modifiers pair fixed layout
      with explicit per-column widths; the base table has none, so a global switch
      would redistribute every desktop table to equal columns -- a visible change
-     to a surface that measures clean today, which is not what this fix is for.
-     Desktop keeps `min-width: 780px` and `white-space: nowrap` exactly as before. */
+     to a surface that is not what this fix is for. Desktop keeps `white-space:
+     nowrap`, which is what holds the columns apart there. (It also used to carry
+     `min-width: 780px`; that was removed 2026-08-23 as slack above the content --
+     see the base rule.) */
   .mc-board-table,
   /* Same rule, restated at the specificity of the override it has to beat:
      `.mc-watch-grid .mc-board-table` raises the floor to 600px below 1000px,
@@ -5037,16 +5160,20 @@ body.intelligence-library-open {
     padding: 14px 16px;
   }
 
+  /* `flex: 1 1 340px` on the base rule is a *row* declaration: it decides when
+     the controls wrap. Here the topbar is `flex-direction: column`, so the main
+     axis is vertical and that same 340px would be a 340px-tall HUD. Measured at
+     375px before this reset: the seven pills spread down a 340px box, pushing
+     the ALIEN HATE meter from y=137 to y=249 and the header from 397px to 553px
+     tall. The basis has to be neutralised wherever the direction flips. */
   .init-topbar-hud {
+    flex: 0 0 auto;
     gap: 7px 13px;
   }
 
+  /* The one declaration that differs from the base rule. The other five
+     restated it verbatim. */
   .init-hud-hate {
-    flex: 1 1 100%;
-    max-width: none;
-    padding-left: 0;
-    border-left: 0;
-    border-top: 1px solid var(--line);
     padding-top: 8px;
   }
 
