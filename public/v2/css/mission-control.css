@@ -985,6 +985,10 @@ img.faction-logo {
 
 /* Executive metrics ----------------------------------------------------- */
 
+/* A full-width band at the top of COMMAND, not a block inside the PRIORITY
+   BRIEF card -- see the note in index.html. At 1440 each cell went from 165px
+   to 347px, which is what stopped `.init-kpi-label` and `.init-kpi-sub` losing
+   their tails to `text-overflow: ellipsis`. */
 .init-kpi-banner {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -996,7 +1000,7 @@ img.faction-logo {
 .init-kpi-item {
   position: relative;
   min-width: 0;
-  padding: 15px 16px 14px;
+  padding: 13px 16px 12px;
 }
 
 .init-kpi-item:not(:last-child)::after {
@@ -1050,28 +1054,20 @@ img.faction-logo {
 
 /* Primary directive ------------------------------------------------------ */
 
+/* Flat. This used to be a bordered, raised box sitting inside `.tech-card-body`
+   -- a card inside a card, with 24px of its own padding on top of the body's
+   16px. THREAT has no nested containers anywhere and reads cleanly for it, so
+   the stage is now just the region the body already frames.
+
+   Two decorations went with it:
+     - a `::before` 1px accent rule 42% across the top edge, which connected to
+       nothing and terminated in the middle of the panel;
+     - `cursor: pointer` and a `:focus-visible` ring, on a div with no click
+       handler, no tabindex and no role. It advertised an interaction that did
+       not exist. The two real controls are the buttons inside it. */
 .init-hologram-stage {
   position: relative;
   min-height: 0;
-  overflow: hidden;
-  padding: 25px 24px 19px;
-  border: 1px solid var(--line);
-  background: var(--surface-raised);
-}
-
-.init-hologram-stage::before {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 42%;
-  height: 1px;
-  background: var(--accent);
-  content: '';
-}
-
-.holo-orbit-ring-outer,
-.holo-orbit-ring-inner {
-  display: none;
 }
 
 .holo-core-content {
@@ -1082,7 +1078,7 @@ img.faction-logo {
 
 .holo-core-badge {
   display: inline-block;
-  margin-bottom: 17px;
+  margin-bottom: 13px;
   padding-bottom: 5px;
   border-bottom: 1px solid var(--accent);
   color: var(--accent-strong);
@@ -1093,18 +1089,27 @@ img.faction-logo {
   text-transform: uppercase;
 }
 
+/* Was 'PRIMARY DIRECTIVE / ', with the markup supplying a hardcoded '01' after
+   the slash. The numeral is gone, so the trailing separator goes with it. */
 .holo-core-badge::before {
-  content: 'PRIMARY DIRECTIVE / ';
+  content: 'PRIMARY DIRECTIVE';
 }
 
+/* 38px made this the largest element on the dashboard, and it is a LABEL -- the
+   name of a recommended action -- not a measurement. THREAT's metric values,
+   the biggest real figures in the product, are 19px display serif
+   (`.alien-hate-econ-metric strong`), and the executive strip's values are
+   `clamp(21px, 2.1vw, 30px)`. A directive title outranking both inverted the
+   hierarchy: the reader's eye landed on the name of the number rather than any
+   number. It now sits just under the strip values and just over THREAT's. */
 .holo-core-title {
   max-width: 620px;
   color: var(--text);
   font-family: var(--display);
-  font-size: clamp(24px, 3vw, 38px);
+  font-size: clamp(18px, 1.5vw, 22px);
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.06;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
   text-transform: none;
 }
 
@@ -1428,31 +1433,29 @@ img.faction-logo {
   transform: none;
 }
 
-.holo-node-num {
-  color: var(--accent);
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 700;
-}
+/* No `.holo-node-num` rule: the "01".."05" numerals it styled are gone from the
+   markup. The label is the first line of each node now, so it no longer needs
+   the 5px that separated it from the numeral above.
 
+   These two wrap rather than truncate. Five nodes across a half-width column is
+   ~123px per cell, and `white-space: nowrap` + `text-overflow: ellipsis` was
+   rendering the research position as "the Servants / 83..." -- a measured
+   figure with its decimals cut off, which reads as a shorter number rather than
+   as a clipped one. A second line is cheaper than a wrong figure. */
 .holo-node-label {
-  margin-top: 5px;
-  overflow: hidden;
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .holo-node-status {
   margin-top: 3px;
-  overflow: hidden;
   color: var(--text);
   font-family: var(--mono);
   font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 /* Map and faction balance ------------------------------------------------ */
@@ -2737,15 +2740,6 @@ img.faction-logo {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.08em;
-}
-
-.init-hologram-stage {
-  cursor: pointer;
-}
-
-.init-hologram-stage:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
 }
 
 .faction-intel-screen,
@@ -5109,6 +5103,17 @@ body.intelligence-library-open {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* Two columns puts each cell back to ~187px, where the desktop strip's
+     `white-space: nowrap` starts eating figures again -- measured at 375:
+     "STRATEGIC SCORE (ES..." and "Composite estimate · Ra...". Wrap instead;
+     the value keeps its single line because it is the short string. */
+  .init-kpi-label,
+  .init-kpi-sub {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
   .init-kpi-item:nth-child(2)::after {
     display: none;
   }
@@ -5132,7 +5137,11 @@ body.intelligence-library-open {
     border-left: 0;
   }
 
-  .holo-node:nth-child(3) {
+  /* `:nth-child(3)` here, which missed the fifth node. Five nodes in two
+     columns start rows at 1, 3 and 5; `:first-child` covered 1 and this rule
+     covered 3, so "Xenoforming sites" sat 12px in from the four above it with
+     a divider on its left edge and nothing to its left. */
+  .holo-node:nth-child(odd) {
     padding-left: 0;
     border-left: 0;
   }
@@ -5237,20 +5246,17 @@ body.intelligence-library-open {
   }
 
   .init-kpi-item {
-    padding: 13px 12px;
+    padding: 12px;
   }
 
   .init-kpi-val {
     font-size: 22px;
   }
 
-  .init-hologram-stage {
-    min-height: 0;
-    padding: 20px 16px 16px;
-  }
-
+  /* No `.init-hologram-stage` padding override: the stage carries no padding of
+     its own at any width now, and `.tech-card-body` owns the inset. */
   .holo-core-title {
-    font-size: 27px;
+    font-size: 19px;
   }
 
   .holo-core-statement {
@@ -7095,13 +7101,31 @@ button.council-orders__row:focus-visible {
   overscroll-behavior-y: contain;
 }
 
-@media (min-width: 1400px) {
-  .operative-leaderboard {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 14px;
-  }
+/* NO `.operative-leaderboard` RULE HERE. It used to carry
+   `grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))`, and because
+   the OPERATIONS BOARD panel is only 655px wide inside COMMAND's right column,
+   `auto-fill` fitted TWO 280px tracks and split the panel again. Its 780px
+   12-column councilor table then got a 322.5px window. Measured in the live DOM:
 
+     1399px viewport -> table window 639px, 81.9% visible, 141px hidden
+     1440px viewport -> table window 323px, 41.4% visible, 457px hidden
+     computed grid-template-columns at 1440: "322.5px 322.5px"
+
+   Widening the browser by 41px cost the table 316px, and the MISSION COVERAGE
+   rows beneath it wrapped to one word per line. `auto-fill` on a container whose
+   own width is set by an outer two-column grid is the trap: it does not know it
+   is already inside a half-width column.
+
+   Wide tables belong on `.init-view__span` / `.init-view__full-card`
+   (`grid-column: 1 / -1`) instead -- that is what the mining boards and
+   `.fe-table` use, and they measure 0px of unreachable overflow. Moving the
+   OPERATIONS BOARD card there was measured and rejected on a different budget:
+   it takes COMMAND at 1920 from 2.80 to ~3.29 screens, and
+   `scripts/verify_mobile_overflow.js` caps that at 3.00. At the panel's honest
+   659px window the table overflows by 121px (84.5% visible) and
+   `syncScrollHints` announces it, which is a better deal than the 1399px
+   viewport has always had. */
+@media (min-width: 1400px) {
   .op-bar-row {
     border-bottom: 0;
     padding: 10px 12px;
