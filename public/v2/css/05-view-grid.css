@@ -1,0 +1,175 @@
+/* ========================================================================
+   05-view-grid.css
+
+   The grid the six views lay their cards out on.
+
+   .init-view, .init-view__grid, the full-width span helpers and the holo-node
+   row. Shared by all six views; the responsive pass in 15-responsive.css
+   overrides these tracks and must stay after this file.
+
+   Source: mission-control.css lines 1428-1589 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Grouped View Layout --------------------------------------------------- */
+
+.init-view {
+  display: block;
+}
+
+.init-view[hidden] {
+  display: none !important;
+}
+
+/* Was `gap: 22px; padding: 27px 26px 54px` -- four values, none of them equal,
+   none of them related. The gutter and the horizontal inset are now the same
+   step, so cards align with the frame instead of sitting 4px inside it, and the
+   bottom is 2x the top by intent rather than the previous 2.07x by accident. */
+.init-view__grid {
+  display: grid;
+  /* The track count follows what a card can hold, not the viewport number.
+     `repeat(3, minmax(0, 1fr))` above 1600px used to sit here, and it was
+     asserting capacity that never existed: measured 2026-08-23, not one of the
+     six views has three cards that are not `.init-view__span`. EXPANSION,
+     THREAT and RECORDS each have exactly two, FLEET and DRIVES have one. So the
+     third track was always dead, and the price was paid by the two real cards,
+     which went from 764px to 501px at 1600px -- a 34% cut so that an empty
+     column could exist.
+     `minmax(0, 1fr)` is what let that happen: a zero minimum means the grid will
+     make a track of any width, including one nothing fits in. The 560px floor
+     is measured from the cards. The narrowest thing this grid holds is the
+     RECORDS ledger table at 483px natural plus 32px of card padding = 515px,
+     and a TECHNOLOGY WATCH section at its 460px floor plus padding = 492px; the
+     widest half-track card, WARTIME LOGISTICS, wants 621 + 32 = 653px. 560px
+     clears the small end with room and keeps two tracks down to 1200px, exactly
+     where they are today.
+     The dead track is now structurally impossible rather than merely absent:
+     three tracks need 3 x 560 + 2 x 24 = 1728px, and `max-width: 1660px` minus
+     48px of padding caps the content box at 1612px. If the cards ever get
+     narrower, lower the floor and the third track comes back on its own. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
+  gap: var(--space-4xl);
+  max-width: 1660px;
+  margin: 0 auto;
+  padding: var(--space-4xl) var(--space-4xl) calc(var(--space-4xl) * 2);
+  align-items: start;
+}
+
+/* Shares the 24px horizontal inset with .init-view__grid so COMMAND and the
+   other views frame their content on the same edge. The 18px bottom was the odd
+   value out; the bottom is now 2x the top, matching the grid's intent. */
+.init-command-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  max-width: 1660px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-4xl) var(--space-4xl);
+}
+
+.init-command-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.init-command-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.init-command-wide-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .init-command-top,
+  .init-command-wide-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Defensive, NOT the fix. A grid item's `min-width` defaults to `auto` -- "never
+   shrink below my content" -- which is the shape of the bug the max-width: 900px
+   block addresses. Above 900px it does not currently bite: measured with this
+   declaration removed, the drive table wrapper still resolved to 830/890 at
+   910px and 860/890 at 940px, because the `minmax(0, 1fr)` tracks absorb the
+   span. Kept because it is correct and free, not because it holds DRIVES
+   together -- the media block does that. */
+.init-view__span {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.init-view__full-card {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.detail-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.holo-node-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.holo-node {
+  min-width: 0;
+  padding: 0 11px;
+  border-left: 1px solid var(--line);
+}
+
+.holo-node:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.holo-node:hover {
+  background: transparent;
+  transform: none;
+}
+
+/* No `.holo-node-num` rule: the "01".."05" numerals it styled are gone from the
+   markup. The label is the first line of each node now, so it no longer needs
+   the 5px that separated it from the numeral above.
+
+   These two wrap rather than truncate. Five nodes across a half-width column is
+   ~123px per cell, and `white-space: nowrap` + `text-overflow: ellipsis` was
+   rendering the research position as "the Servants / 83..." -- a measured
+   figure with its decimals cut off, which reads as a shorter number rather than
+   as a clipped one. A second line is cheaper than a wrong figure. */
+.holo-node-label {
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.holo-node-status {
+  margin-top: 3px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+

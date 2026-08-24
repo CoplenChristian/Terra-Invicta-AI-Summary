@@ -1,0 +1,266 @@
+/* ========================================================================
+   06-map-and-charts.css
+
+   The sector map, the donut and the chart primitives.
+
+   Map and faction-balance blocks, the donut chart and its legend, the generic
+   chart container, and the asset/threat posture strips.
+
+   Source: mission-control.css lines 1590-1843 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Map and faction balance ------------------------------------------------ */
+
+.init-map-container {
+  height: auto;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface-inset);
+}
+
+.init-map-svg {
+  width: 100%;
+  height: 100%;
+  opacity: 0.8;
+}
+
+.init-map-svg path,
+.init-map-svg circle {
+  filter: none !important;
+}
+
+.init-sector-item {
+  display: flex;
+  min-width: 0;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1px;
+  padding: 9px 0 9px 11px;
+  border-left: 2px solid var(--accent);
+  border-bottom: 1px solid var(--line);
+  width: 100%;
+  color: var(--text);
+  background: transparent;
+  font-family: var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.init-sector-item:hover,
+.init-sector-item:focus-visible {
+  background: var(--surface-raised);
+}
+
+.init-sector-item.sector-danger {
+  border-left-color: var(--danger);
+}
+
+.init-sector-item.sector-success {
+  border-left-color: var(--success);
+}
+
+.init-sector-name {
+  color: var(--text);
+  font-size: var(--fs-row);
+  font-weight: 650;
+}
+
+.init-sector-item > div > div:last-child {
+  color: var(--text-dim) !important;
+  font-family: var(--mono);
+  font-size: var(--fs-tag) !important;
+}
+
+/* `flex: 0 0 auto` sized this to max-content, which was survivable only while
+   the badge was 8px. The label is not always "STABLE": it is also "CONTESTED
+   (1 Hostile the Servants Executives)", 44 characters, and at 375px that ran
+   386px against a 375px viewport with no scrollable ancestor -- unreachable
+   text, the defect scripts/verify_mobile_overflow.js exists to catch. Shrinking
+   is allowed instead, and the text wraps inside the border rather than being
+   clipped or ellipsised, because the string names which faction holds the
+   sector and dropping half of it would be worse than two lines. */
+.init-sector-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  background: transparent !important;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.sector-danger .init-sector-badge {
+  color: var(--danger) !important;
+}
+
+.sector-success .init-sector-badge {
+  color: var(--success) !important;
+}
+
+.sector-neutral .init-sector-badge {
+  color: var(--accent) !important;
+}
+
+.donut-wrapper {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.donut-svg-box {
+  position: relative;
+  flex: 0 0 118px;
+  width: 118px;
+  height: 118px;
+}
+
+.donut-svg-box svg {
+  width: 100%;
+  height: 100%;
+}
+
+.donut-svg-box svg path {
+  stroke: var(--surface) !important;
+  stroke-width: 2px !important;
+}
+
+.donut-svg-box svg circle {
+  fill: var(--surface) !important;
+}
+
+.donut-legend {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.donut-legend-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: var(--fs-meta);
+}
+
+.donut-legend-item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.donut-legend-item strong {
+  color: var(--text) !important;
+  font-family: var(--mono) !important;
+  font-weight: 600;
+}
+
+.donut-legend-color {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+}
+
+/* Charts ----------------------------------------------------------------- */
+
+.chart-container-box {
+  position: relative;
+  width: 100%;
+  height: 180px;
+}
+
+/* The logistics panel now contains a data table rather than a fixed-height
+   chart. Let the card grow with its rows so the mobile scroll hint and the
+   following capability panel remain in normal document flow. */
+#resourceFlowChart.chart-container-box {
+  height: auto;
+  min-height: 0;
+}
+
+.power-profile-container {
+  height: auto;
+  min-height: 180px;
+}
+
+.chart-empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  padding: 20px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  text-align: center;
+}
+
+.asset-posture-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+}
+
+.asset-posture-metric {
+  padding: 10px 12px 12px;
+  border-left: 1px solid var(--line);
+}
+
+.asset-posture-metric:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.asset-posture-metric strong {
+  display: block;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: var(--fs-kpi);
+  line-height: 1;
+}
+
+.asset-posture-metric span {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.threat-posture-heading {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 15px;
+  padding: 8px 0 6px;
+  border-top: 1px solid var(--line-strong);
+  color: var(--danger);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.07em;
+}
+
+.threat-posture-heading small {
+  color: var(--text-dim);
+  font-size: var(--fs-tag);
+  letter-spacing: 0;
+  text-align: right;
+}
+
+.threat-posture-grid .asset-posture-metric strong {
+  color: var(--danger);
+}
+

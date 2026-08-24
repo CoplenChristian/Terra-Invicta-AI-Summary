@@ -1,0 +1,436 @@
+/* ========================================================================
+   13-faction-intel.css
+
+   The faction dossier overlay.
+
+   The .faction-intel-screen modal and everything inside it.
+
+   Source: mission-control.css lines 4475-4899 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Modular faction dossier ------------------------------------------------ */
+
+.faction-intel-shell {
+  color: var(--text);
+}
+
+.faction-intel-header {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.faction-intel-title {
+  color: var(--text);
+  font-family: var(--display);
+  font-size: var(--fs-title);
+}
+
+.faction-intel-description {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: var(--fs-row);
+}
+
+.faction-intel-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  justify-content: flex-end;
+}
+
+.faction-intel-meta-item {
+  display: grid;
+  gap: 2px;
+  min-width: 82px;
+}
+
+.faction-intel-meta-label,
+.faction-intel-metric-label,
+.faction-intel-visibility-label,
+.faction-intel-plan-label {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.faction-intel-meta-value {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faction-intel-layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.33fr) minmax(0, 0.67fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.faction-intel-roster,
+.faction-intel-detail {
+  min-width: 0;
+  border-top: 1px solid var(--line-strong);
+  background: var(--surface-inset);
+}
+
+.faction-intel-roster-heading,
+.faction-intel-metric-heading,
+.faction-intel-plan-heading {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.faction-intel-section-title,
+.faction-intel-metric-title,
+.faction-intel-plan-title {
+  color: var(--text-soft);
+  font-size: var(--fs-metric);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.faction-intel-roster-count,
+.faction-intel-plan-label {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.faction-intel-roster-list {
+  display: grid;
+}
+
+.faction-intel-faction {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-soft);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.faction-intel-faction:hover,
+.faction-intel-faction:focus-visible,
+.faction-intel-faction--selected {
+  background: var(--surface-raised);
+}
+
+.faction-intel-faction--selected {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.faction-intel-faction-swatch,
+.faction-intel-identity-mark {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--faction-intel-accent, var(--accent));
+  border-radius: 2px;
+  background: transparent;
+}
+
+.faction-intel-faction-swatch {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+}
+
+.faction-intel-identity-mark {
+  width: 44px;
+  height: 44px;
+}
+
+.faction-intel-faction-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.faction-intel-faction-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-metric);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faction-intel-faction-relation,
+.faction-intel-faction-power {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  white-space: nowrap;
+}
+
+.faction-intel-faction-power {
+  color: var(--text-soft);
+}
+
+.faction-intel-detail {
+  padding-bottom: 16px;
+}
+
+.faction-intel-detail-content {
+  display: grid;
+  gap: 15px;
+}
+
+.faction-intel-identity {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  padding: 15px 16px 5px;
+}
+
+.faction-intel-identity-name {
+  color: var(--text);
+  font-family: var(--display);
+  font-size: var(--fs-title);
+}
+
+.faction-intel-identity-relation {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--fs-metric);
+}
+
+.faction-intel-visibility {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 0 16px;
+}
+
+.faction-intel-visibility-tag {
+  display: inline-flex;
+  gap: 5px;
+  align-items: baseline;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.faction-intel-visibility-value {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.faction-intel-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 16px;
+}
+
+.faction-intel-metric-group {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.faction-intel-metric-heading {
+  padding: 9px 11px;
+}
+
+.faction-intel-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.faction-intel-metric {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 11px;
+  border-top: 1px solid var(--line);
+}
+
+.faction-intel-metric-value {
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: var(--fs-kpi);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faction-intel-metric-value--text {
+  overflow: visible;
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+  letter-spacing: 0.03em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.faction-intel-metric-note {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.faction-intel-council {
+  margin: 0 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.faction-intel-council-heading,
+.faction-intel-council-subhead {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--line);
+}
+
+.faction-intel-council-count,
+.faction-intel-council-visibility {
+  color: var(--accent-strong);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.faction-intel-council-subhead {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  background: var(--surface-inset);
+}
+
+.faction-intel-council-list {
+  display: grid;
+}
+
+.faction-intel-councilor {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(180px, 1.1fr);
+  gap: 15px;
+  padding: 11px;
+  border-bottom: 1px solid var(--line);
+}
+
+.faction-intel-councilor:last-child {
+  border-bottom: 0;
+}
+
+.faction-intel-councilor-main,
+.faction-intel-councilor-side {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  align-content: start;
+}
+
+.faction-intel-councilor-name {
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: var(--fs-section);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faction-intel-councilor-profession,
+.faction-intel-councilor-location,
+.faction-intel-councilor-mission,
+.faction-intel-councilor-status,
+.faction-intel-councilor-skill {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faction-intel-councilor-skill {
+  color: var(--accent-strong);
+}
+
+.faction-intel-councilor-status {
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.faction-intel-notes {
+  display: grid;
+  gap: 7px;
+  padding: 0 16px;
+}
+
+.faction-intel-note {
+  color: var(--text-muted);
+  font-size: var(--fs-metric);
+  line-height: 1.45;
+}
+
+.faction-intel-note-label {
+  color: var(--text-soft);
+}
+
+.faction-intel-plan {
+  margin: 0 16px;
+  border-top: 1px solid var(--accent);
+  background: var(--surface-raised);
+}
+
+.faction-intel-plan-list {
+  display: grid;
+  gap: 0;
+  padding: 0 14px 7px 34px;
+}
+
+.faction-intel-plan-item {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-soft);
+  font-size: var(--fs-metric);
+  line-height: 1.45;
+}
+
+.faction-intel-empty {
+  padding: 24px 16px;
+  color: var(--text-muted);
+}
+
+.faction-intel-empty-title {
+  display: block;
+  color: var(--text);
+}
+
+.faction-intel-empty-text {
+  margin-top: 5px;
+}
+

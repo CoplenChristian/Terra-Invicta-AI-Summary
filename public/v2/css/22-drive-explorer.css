@@ -1,0 +1,578 @@
+/* ========================================================================
+   22-drive-explorer.css
+
+   DRIVES: the drive catalogue and its two registers.
+
+   The controls, the summary strip, the table and the .de-measured /
+   .de-estimate register pair whose separation is read back off the live DOM by
+   scripts/verify_drive_explorer.js.
+
+   Source: mission-control.css lines 8152-8716 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* =========================================================================
+   DRIVE EXPLORER  (public/v2/js/components/drive-explorer.js)
+
+   TWO REGISTERS, AND THE SEPARATION IS THE FEATURE.
+
+   `.de-measured` is a measurement: mono, full-contrast --text, upright.
+   `.de-estimate` is a heuristic: sans, italic, --text-dim, with a dashed rule
+   marking where the measured columns end and a literal "ESTIMATE" caption
+   above the column.
+
+   Rendering the two at the same visual weight would launder the estimate into
+   a measurement, which is the failure this whole view exists to avoid. Both
+   rule sets are asserted in tests/driveExplorer.test.js and read back off the
+   live DOM with getComputedStyle by scripts/verify_drive_explorer.js -- source
+   inspection is not evidence, because --text-muted was once defined
+   self-referentially and 164 rules silently fell back to `inherit`.
+   ========================================================================= */
+
+.de-picker {
+  margin-bottom: 10px;
+}
+
+.de-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.de-control {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.de-control--count {
+  margin-left: auto;
+  align-items: flex-end;
+}
+
+/* Capped so the unit-bearing label wraps inside the control rather than setting
+   the control's width from its own max-content. Without this "MIN COMBAT ACCEL
+   (m/s2)" would make a 108px input sit in a 190px column. */
+.de-control--threshold {
+  max-width: 160px;
+}
+
+.de-control__label {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.de-select,
+.de-input {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text);
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 3px 6px;
+  min-width: 150px;
+}
+
+/* A threshold is a short number, not a search term. Narrower so three of them
+   plus the five existing controls still wrap into rows rather than one per row
+   at 375px -- and narrower is all that changes: the type scale is untouched,
+   because its steps are 1px apart and were only just repaired. */
+.de-input--number {
+  min-width: 108px;
+  max-width: 160px;
+}
+
+.de-select:focus-visible,
+.de-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.de-count {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text-soft);
+}
+
+/* --- design summary strip ------------------------------------------------ */
+
+.de-summary {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-inset);
+  padding: 8px 10px;
+}
+
+.de-summary__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.de-summary__cell {
+  min-width: 110px;
+}
+
+.de-summary__label {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.de-summary__value {
+  font-family: var(--mono);
+  font-size: var(--fs-row);
+  color: var(--text);
+}
+
+.de-summary__sub {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.de-unit {
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+/* --- the two registers --------------------------------------------------- */
+
+.de-measured {
+  font-family: var(--mono);
+  font-style: normal;
+  color: var(--text);
+}
+
+.de-measured__value {
+  font-family: var(--mono);
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.de-estimate {
+  font-family: var(--sans);
+  font-style: italic;
+  color: var(--text-dim);
+}
+
+.de-estimate__value {
+  font-family: var(--sans);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.de-estimate__text {
+  font-family: var(--sans);
+  font-style: italic;
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.de-tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  padding: 0 4px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.de-tag--measured {
+  font-style: normal;
+  color: var(--canvas);
+  background: var(--accent);
+}
+
+.de-tag--estimate {
+  font-style: italic;
+  color: var(--warning);
+  background: transparent;
+  border: 1px dashed var(--warning);
+}
+
+.de-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 8px 0 2px;
+}
+
+.de-legend__item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1 1 280px;
+}
+
+.de-legend__text {
+  font-size: var(--fs-meta);
+  line-height: 1.4;
+}
+
+/* --- table --------------------------------------------------------------- */
+
+.de-table-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  margin-top: var(--space-md);
+  max-height: 620px;
+}
+
+/* DRIVES' own narrow-viewport pass.
+ *
+ * The catalogue is 7 columns of measurements the reader compares ACROSS rows --
+ * that is the task. Stacking each row into a card (the usual mobile table
+ * answer) would make the table fit and destroy the comparison, and hiding
+ * columns would drop measured data, so the table keeps its shape and pans.
+ * What panning costs you is knowing which drive a number belongs to, so the
+ * drive name is pinned to the left edge and the numbers move under it.
+ *
+ * The header is already `position: sticky; top: 0`; the corner cell needs both
+ * axes and a higher stacking order than either single-axis neighbour. */
+.de-table-wrap .de-th:first-child,
+.de-table-wrap .de-cell--name {
+  position: sticky;
+  left: 0;
+  /* Opaque: rows scroll underneath this cell, so a transparent background would
+     let drive names pile up on top of each other while panning. */
+  background: var(--surface);
+  z-index: 2;
+}
+
+.de-table-wrap .de-th:first-child {
+  z-index: 3;
+}
+
+.de-table-wrap .de-row:hover .de-cell--name,
+.de-table-wrap .de-row:focus-within .de-cell--name {
+  background: var(--surface-raised);
+}
+
+/* The pinned column needs an edge, otherwise the numbers slide under it with
+   nothing to say they passed behind something. */
+.de-table-wrap .de-th:first-child::after,
+.de-table-wrap .de-cell--name::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line-strong);
+}
+
+/* Class-driven like .mc-board-scroll-hint: the drive catalogue is 7 columns and
+   normally does overflow, but "normally" is not "measured". */
+.de-scroll-hint {
+  display: none;
+  padding: var(--space-sm) 0 0;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+
+/* Browser surfaces carry the design too. These wrappers only started showing a
+   horizontal scrollbar once the overflow fix let them scroll, and the default
+   one belongs to no design system on this page. */
+.de-table-wrap,
+.mc-board-table-wrap,
+.intel-library-table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) var(--surface-inset);
+}
+
+.de-table-wrap::-webkit-scrollbar,
+.mc-board-table-wrap::-webkit-scrollbar,
+.intel-library-table-wrap::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.de-table-wrap::-webkit-scrollbar-track,
+.mc-board-table-wrap::-webkit-scrollbar-track,
+.intel-library-table-wrap::-webkit-scrollbar-track {
+  background: var(--surface-inset);
+}
+
+.de-table-wrap::-webkit-scrollbar-thumb,
+.mc-board-table-wrap::-webkit-scrollbar-thumb,
+.intel-library-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 5px;
+}
+
+.de-table-wrap::-webkit-scrollbar-thumb:hover,
+.mc-board-table-wrap::-webkit-scrollbar-thumb:hover,
+.intel-library-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+/* Touch input, not screen width: a small phone and a touchscreen laptop need the
+   same target size, and neither is implied by a media width. */
+@media (pointer: coarse) {
+  .de-select,
+  .de-input {
+    min-height: 44px;
+  }
+}
+
+.de-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.de-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-strong);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.de-th__caption {
+  display: block;
+  font-size: var(--fs-tag);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.de-th--estimate {
+  border-left: 1px dashed var(--line-strong);
+}
+
+.de-th__caption--estimate {
+  font-family: var(--sans);
+  font-style: italic;
+  letter-spacing: 0;
+  color: var(--warning);
+}
+
+.de-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.de-row--fitted {
+  background: var(--accent-soft);
+}
+
+.de-row--uncomputable .de-measured__value {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.de-cell {
+  padding: 4px 8px;
+  vertical-align: top;
+  font-size: var(--fs-metric);
+}
+
+.de-cell--number {
+  text-align: right;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+.de-cell--estimate {
+  border-left: 1px dashed var(--line-strong);
+  min-width: 170px;
+}
+
+.de-cell__sub {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.de-name {
+  font-family: var(--mono);
+  font-size: var(--fs-row);
+  color: var(--text);
+}
+
+/* The drive name is the control that opens the research-path modal. It has to
+   LOOK like one -- a row that responds to a click with no affordance for it is
+   the defect this replaced. The whole row is clickable for the mouse, so the
+   pointer cursor sits on the row and the underline sits on the name. */
+.de-row {
+  cursor: pointer;
+}
+
+.de-name-btn {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  /* The button inherits the name's own type; it is an affordance, not a chrome
+     button, and must not change the row's rhythm. */
+  font: inherit;
+  color: inherit;
+}
+
+.de-name-btn .de-name {
+  border-bottom: 1px dotted var(--line-strong);
+}
+
+.de-row:hover .de-name-btn .de-name,
+.de-name-btn:hover .de-name,
+.de-name-btn:focus-visible .de-name {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.de-name-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.de-name-btn[aria-busy='true'] .de-name {
+  color: var(--text-dim);
+  border-bottom-style: dashed;
+}
+
+.de-chip {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.05em;
+  padding: 0 4px;
+  border-radius: 2px;
+  border: 1px solid var(--line-strong);
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.de-chip--ok {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.de-chip--warn {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.de-chip--block {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.de-chip--unknown {
+  color: var(--text-dim);
+  border-color: var(--line-strong);
+}
+
+.de-caveat {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--warning);
+  border-bottom: 1px dotted var(--warning);
+  cursor: help;
+}
+
+.de-caveat--muted {
+  color: var(--text-dim);
+  border-bottom-color: var(--text-dim);
+}
+
+.de-caveat--fitted {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* --- footer -------------------------------------------------------------- */
+
+.de-destination-table {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 3px;
+  background: var(--surface-inset);
+}
+
+.de-destination-table__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.de-destination-table__rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.de-destination {
+  font-family: var(--sans);
+  font-style: italic;
+  font-size: var(--fs-meta);
+  color: var(--text-soft);
+}
+
+.de-destination__dv {
+  color: var(--text-dim);
+}
+
+.de-notice {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: var(--fs-meta);
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.de-notice--warn {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+/* The active-minimums summary. Accented rather than warning-coloured: an active
+   filter is a state the reader chose, not a problem. It still has to be visible,
+   because it is the reason the list is shorter than the catalogue. */
+.de-notice--filters {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.de-unresolved {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.de-reconcile {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+

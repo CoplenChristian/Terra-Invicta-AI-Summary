@@ -1,0 +1,530 @@
+/* ========================================================================
+   12-executive-boards.css
+
+   The executive intelligence board tables.
+
+   The .mc-board-* table system used by executive-boards.js, plus the status,
+   coverage and watch strips. See also 16-board-skill-cells.css, which the
+   source declares after the responsive pass and which therefore cannot be
+   merged into this file without moving it across those overrides.
+
+   Source: mission-control.css lines 3959-4474 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Executive intelligence boards ----------------------------------------- */
+
+.mc-board-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: baseline;
+  padding: 0 0 10px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.45;
+}
+
+.mc-board-note strong,
+.mc-board-subheading strong {
+  color: var(--accent-strong);
+  letter-spacing: 0.08em;
+}
+
+.mc-board-note span {
+  color: var(--text-dim);
+}
+
+.mc-space-scope {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0 0 8px;
+  background: var(--line);
+}
+
+.mc-space-scope span {
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+  background: var(--surface-inset);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.mc-space-scope strong {
+  color: var(--accent-strong);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+}
+
+.mc-space-scope b {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.mc-board-scope-note {
+  margin: -1px 0 10px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.mc-board-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-inset);
+}
+
+/* Shown only when its table actually overflows -- see syncScrollHints() in
+   mission-control.js. It used to be revealed by width alone, which meant that at
+   375px it read "SWIPE HORIZONTALLY TO VIEW ALL COLUMNS" above tables measuring
+   698/698 and 838/838, i.e. with nothing to swipe to, while a table that did
+   overflow at 1000px got no hint at all because the rule stopped at 900px.
+   An affordance that lies about the data surface is the same defect class as
+   rendering an unmeasured value as a confident zero. */
+.mc-board-scroll-hint {
+  display: none;
+  padding: var(--space-sm) 0 0;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+
+.mc-board-scroll-hint.is-scrollable,
+.de-scroll-hint.is-scrollable {
+  display: block;
+}
+
+/* `min-width: 780px` used to sit here, and it was redundant with the rule that
+   actually holds these columns apart. Every table that keeps this base rule also
+   keeps `white-space: nowrap` on its cells (below), so its min-content width is
+   already its natural width -- the browser will not squash it whatever the
+   min-width says. The two modifiers that turn wrapping on, `--ledger` and
+   `--fleet`, both replace this floor with `min-width: 100%` for that reason, and
+   the <=900px block does the same thing globally.
+   So the 780px was never a legibility floor; it was slack above the content.
+   Measured 2026-08-23, the natural widths under it are 621, 742, 749, 775 and
+   784px -- four of the five below 780 -- and the cost was scroll that nothing
+   needed: at 1600px, WARTIME LOGISTICS, and two of the three ALIEN FORCE POSTURE
+   tables each reported "SWIPE HORIZONTALLY TO VIEW ALL COLUMNS" for a shortfall
+   of exactly 780 minus the container, with their own content comfortably inside
+   it. CAPABILITY MATRIX at 784px is the one table that genuinely overruns a
+   half-track card, and it still says so. */
+.mc-board-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.mc-board-table--ledger {
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.mc-board-table--ledger th,
+.mc-board-table--ledger td {
+  white-space: normal;
+}
+
+.mc-board-table--ledger th:first-child {
+  width: 32%;
+}
+
+.mc-board-table--ledger th:nth-child(2) {
+  width: 10%;
+}
+
+.mc-board-table--ledger th:nth-child(3) {
+  width: 18%;
+}
+
+.mc-board-table--ledger th:nth-child(4) {
+  width: 18%;
+}
+
+.mc-board-table--ledger th:nth-child(5) {
+  width: 22%;
+}
+
+.mc-board-table--ledger .mc-status-chip {
+  max-width: 100%;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.mc-board-table--fleet {
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.mc-board-table--fleet th,
+.mc-board-table--fleet td {
+  white-space: normal;
+}
+
+.mc-board-table--fleet th:first-child {
+  width: 28%;
+}
+
+.mc-board-table--fleet th:nth-child(2) {
+  width: 15%;
+}
+
+.mc-board-table--fleet th:nth-child(3) {
+  width: 10%;
+}
+
+.mc-board-table--fleet th:nth-child(4) {
+  width: 14%;
+}
+
+.mc-board-table--fleet th:nth-child(5) {
+  width: 33%;
+}
+
+.mc-board-table th,
+.mc-board-table td {
+  padding: 8px 9px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-muted);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.mc-board-table thead th {
+  color: var(--text-dim);
+  background: var(--surface);
+  font-size: var(--fs-tag);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mc-board-table tbody tr:last-child th,
+.mc-board-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.mc-board-table tbody tr:hover,
+.mc-board-table tbody tr:focus-within {
+  background: var(--accent-soft);
+}
+
+.mc-board-table th[scope="row"] {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.mc-board-table tr.is-observer th[scope="row"] {
+  color: var(--accent-strong);
+}
+
+.mc-board-table td.is-positive {
+  color: var(--success);
+}
+
+.mc-board-table td.is-negative {
+  color: var(--warning);
+}
+
+/* COMPENSATION. This was 8px under a 9px cell, and 8px is below the floor the
+   scale documents, so it joins the tag tier and the size difference is gone.
+   What is left holding the two lines apart is --text-dim against the cell's
+   --text-muted, which is a real delta but was doing half the job before. The
+   gap between them widens one step to carry the other half; that is the whole
+   compensation, because the alternative -- growing the cell to --fs-meta -- is
+   an 11% widening of the densest tables in the app, and the scroll hints these
+   boards use are measured against their natural widths. */
+.mc-board-secondary {
+  display: block;
+  margin-top: var(--space-sm);
+  color: var(--text-dim);
+  font-size: var(--fs-tag);
+  font-weight: 400;
+  white-space: normal;
+}
+
+.mc-status-chip {
+  display: inline-block;
+  padding: 3px 5px;
+  border: 1px solid var(--accent);
+  color: var(--accent-strong);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.mc-status-chip.is-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* A project capped below 100% availability can never be scheduled, only
+   waited on -- distinct from both "unlocked" and "locked". */
+.mc-status-chip.is-warning {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.mc-status-chip.is-safe {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.mc-board-row-link {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.mc-board-row-link:hover,
+.mc-board-row-link:focus-visible {
+  color: var(--accent-strong);
+  text-decoration-color: var(--accent);
+}
+
+.mc-board-subheading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 9px 0 8px;
+  border-top: 1px solid var(--line-strong);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mc-board-subheading span {
+  color: var(--text-dim);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.mc-board-empty {
+  padding: 18px 12px;
+  border-top: 1px solid var(--line-strong);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.intel-library-table-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.mc-coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+
+.mc-coverage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(90px, auto) auto;
+  gap: 9px;
+  align-items: baseline;
+  padding: 9px 10px;
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.mc-coverage-row strong {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-coverage-row em {
+  color: var(--accent-strong);
+  font-size: var(--fs-tag);
+  font-style: normal;
+}
+
+/* The same fault as `.init-view__grid`, one level down and much worse. This was
+   a hard `repeat(3, minmax(0, 1fr))` holding three tables with a 460px floor, so
+   it demands 3 x 460 + 2 x 18 + 32 = 1448px -- and it lives inside a card that
+   gets a *half* track. Measured 2026-08-23 at 1600px: each section resolved to
+   144px against a 439px / 425px natural table width, and the two visible tables
+   truthfully reported "SWIPE HORIZONTALLY TO VIEW ALL COLUMNS" while clipping
+   316px each. At 1440px it was 205px per section. There was no desktop width at
+   which this fitted; the three-across was never achievable, only asserted.
+   `auto-fit` asks the card how much room it actually has instead. At the 732px
+   body a half track now gives it, that is one column of 732px and both tables
+   fit whole. It goes back to three across the moment something hands it 1448px
+   -- a full-width span would. `min(100%, 460px)` keeps the floor from becoming
+   an overflow on a container narrower than 460px. */
+.mc-watch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+  gap: 18px;
+}
+
+.mc-watch-grid > section {
+  min-width: 0;
+}
+
+.mc-watch-grid .mc-board-table {
+  min-width: 460px;
+}
+
+@media (max-width: 1000px) {
+  /* `grid-template-columns: 1fr` used to be restated here. The auto-fit floor
+     above already resolves to one column at every container width this band
+     produces, so the only thing this block still owns is the tighter gap and
+     the taller table floor a full-width single column can afford. */
+  .mc-watch-grid {
+    gap: 8px;
+  }
+
+  .mc-watch-grid .mc-board-table {
+    min-width: 600px;
+  }
+}
+
+@media (max-width: 760px) {
+  .intel-library-header,
+  .intel-library-intro,
+  .intel-library-section-intro {
+    flex-direction: column;
+  }
+
+  .intel-library-header-meta,
+  .intel-library-intro-meta {
+    width: 100%;
+    justify-items: start;
+    padding-top: 10px;
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+    text-align: left;
+  }
+
+  .intel-library-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .intel-library-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .intel-library-nav-btn,
+  .intel-library-nav-link {
+    min-height: 40px;
+  }
+
+  .intel-library-nav-link {
+    grid-column: 1 / -1;
+    margin-top: 0;
+  }
+
+  .intel-library-content {
+    padding: 15px;
+  }
+
+  .intel-library-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .intel-library-stat:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .intel-library-stat:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+
+  .intel-library-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .intel-library-quick-grid,
+  .intel-library-target-list {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .intel-library-table {
+    min-width: 720px;
+  }
+
+  .intel-library-table thead th:first-child,
+  .intel-library-table tbody th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--surface);
+    box-shadow: 1px 0 0 var(--line-strong);
+  }
+
+  .intel-library-table thead th:first-child {
+    z-index: 2;
+    background: var(--surface-raised);
+  }
+
+  .since-save-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .since-save-meta,
+  .since-save-empty {
+    grid-column: auto;
+  }
+
+  .mc-board-note {
+    display: grid;
+  }
+
+  .mc-space-scope {
+    grid-template-columns: 1fr;
+  }
+
+  .mc-coverage-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mc-coverage-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .mc-coverage-row em {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+

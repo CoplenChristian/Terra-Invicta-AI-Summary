@@ -1,0 +1,322 @@
+/* ========================================================================
+   24-fleet-engagement.css
+
+   THREAT: the per-fleet engagement estimates.
+
+   The .fe-* board, including the third measured/estimate register pair, which
+   uses the same dashed rule the DRIVES table does.
+
+   Source: mission-control.css lines 8959-9268 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* =========================================================================
+   PER-FLEET ENGAGEMENT ESTIMATES (THREAT view)
+   =========================================================================
+
+   The whole point of this panel is that half of it is a MODEL. The measured
+   half (`.fe-meas`) is upright mono, the modelled half (`.fe-est`) is italic
+   sans in the dimmer colour, and the estimate columns carry the same dashed
+   left rule the DRIVES table uses. scripts/verify_drive_explorer.js asserts
+   that split by computed font-style on DRIVES; the same rule holds here so a
+   reader can tell a reading from a model without reading the caption. */
+
+.fe-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.fe-empty,
+.fe-empty-cell {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  padding: var(--space-md) 0;
+}
+
+/* --- the two registers ---------------------------------------------------
+   Deliberately the same shapes as .de-measured / .de-estimate: one page, one
+   convention for "this was read" versus "this was modelled". */
+
+.fe-meas {
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.fe-meas__value {
+  font-family: var(--mono);
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The same class is a <strong> in the summary strip and a <small> in the
+   estimate cell, so it deliberately takes its size from its host -- the
+   register is family, weight, style and colour, never size. Only the <small>
+   form needs saying, because it must sit level with the .fe-est__text line it
+   is read against rather than at 5/6 of the cell it happens to be inside. */
+small.fe-meas__value {
+  font-size: var(--fs-tag);
+}
+
+.fe-est__value {
+  font-family: var(--sans);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-soft);
+}
+
+.fe-est__text {
+  font-family: var(--sans);
+  font-style: italic;
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+/* --- the estimate banner ------------------------------------------------- */
+
+.fe-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  border: 1px dashed var(--line-strong);
+  border-radius: 3px;
+  background: var(--surface-inset);
+  padding: var(--space-md) var(--space-lg);
+  line-height: 1.45;
+}
+
+.fe-banner__tag {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--canvas);
+  background: var(--warning);
+}
+
+/* --- summary strip ------------------------------------------------------- */
+
+.fe-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg) var(--space-3xl);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-inset);
+  padding: var(--space-md) var(--space-lg);
+}
+
+.fe-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 150px;
+}
+
+.fe-summary__item > small:first-child {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.fe-summary__item > strong {
+  font-size: var(--fs-row);
+}
+
+.fe-ordered {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  cursor: help;
+}
+
+/* --- table --------------------------------------------------------------- */
+
+.fe-table-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 560px;
+}
+
+.fe-table {
+  width: 100%;
+  min-width: 660px;
+  border-collapse: collapse;
+}
+
+.fe-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-strong);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+/* The modelled columns are marked at the header, not only in the cells, so the
+   boundary between what was read and what was inferred is visible at a glance. */
+.fe-th--estimate {
+  border-left: 1px dashed var(--line-strong);
+  font-family: var(--sans);
+  font-style: italic;
+  letter-spacing: 0;
+  color: var(--warning);
+}
+
+.fe-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.fe-row:hover {
+  background: var(--surface-raised);
+}
+
+/* A fleet closing on something the observer owns is the actionable case. */
+.fe-row--threat .fe-cell--fleet {
+  box-shadow: inset 2px 0 0 var(--warning);
+}
+
+.fe-cell {
+  padding: 5px 8px;
+  vertical-align: top;
+  font-size: var(--fs-metric);
+}
+
+.fe-cell--estimate {
+  border-left: 1px dashed var(--line-strong);
+  min-width: 150px;
+}
+
+.fe-cell--fleet {
+  min-width: 170px;
+}
+
+.fe-cell--mass {
+  white-space: nowrap;
+}
+
+.fe-cell strong,
+.fe-cell small,
+.fe-cell span {
+  display: block;
+}
+
+.fe-cell small {
+  margin-top: 1px;
+}
+
+/* Reachability and fieldability are verdicts, so they are coloured by verdict
+   rather than left to be read out of the words alone. Unknown is deliberately
+   NOT the safe colour: an unevaluated check is not a passed one. */
+.fe-reach--co-located .fe-meas__value {
+  color: var(--accent-strong);
+}
+
+.fe-reach--beyond-delta-v .fe-est__text:first-child {
+  color: var(--danger);
+}
+
+.fe-reach--unknown .fe-est__text:first-child,
+.fe-field--unknown .fe-est__value {
+  color: var(--warning);
+}
+
+.fe-field--sufficient .fe-est__value {
+  color: var(--accent);
+}
+
+.fe-field--insufficient .fe-est__value {
+  color: var(--danger);
+}
+
+.fe-need--none .fe-est__text {
+  color: var(--text-dim);
+}
+
+/* Class-driven like .de-scroll-hint: five columns usually overflow at 375px,
+   but "usually" is not "measured". syncScrollHints toggles .is-scrollable off
+   scrollWidth, and the panel is re-measured when THREAT is revealed because a
+   table rendered inside a hidden section measures 0. */
+.fe-scroll-hint {
+  display: none;
+  padding: var(--space-sm) 0 0;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+
+.fe-scroll-hint.is-scrollable {
+  display: block;
+}
+
+.fe-table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) var(--surface-inset);
+}
+
+.fe-footnote {
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--line);
+  line-height: 1.45;
+}
+
+/* Narrow viewports: the fleet name pins to the left edge so panning the
+   modelled columns never loses which fleet a band belongs to. The type scale is
+   untouched -- its steps are 1px apart and shrinking it to make room is how
+   this stylesheet lost legibility before. */
+.fe-table-wrap .fe-th:first-child,
+.fe-table-wrap .fe-cell--fleet {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 2;
+}
+
+.fe-table-wrap .fe-th:first-child {
+  z-index: 3;
+}
+
+.fe-table-wrap .fe-row:hover .fe-cell--fleet {
+  background: var(--surface-raised);
+}
+
+.fe-table-wrap .fe-th:first-child::after,
+.fe-table-wrap .fe-cell--fleet::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line-strong);
+}
+
+.fe-cell--fleet {
+  position: relative;
+}
+
+.fe-footnote p {
+  margin: 0 0 var(--space-xs);
+}
+
+.fe-footnote p:last-child {
+  margin-bottom: 0;
+}

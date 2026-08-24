@@ -4,7 +4,54 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Initiative // Executive Situation Report</title>
-  <link rel="stylesheet" href="/v2/css/mission-control.css">
+  <!--
+    THE v2 STYLESHEET, IN 24 PARTS. THE ORDER IS THE CASCADE.
+
+    This was one 9,268-line mission-control.css until 2026-08-23. Every part is
+    a contiguous slice of that file in its original order; nothing was moved,
+    merged or reformatted. Reordering these lines therefore changes what the
+    reader sees: 15-responsive.css only beats the view grid because it is linked
+    after it, .mining-meas__value only beats .mining-yields-text because
+    18-mining-expansion.css declares it later, and 16-board-skill-cells.css is a
+    separate 19-line part precisely because the source declares it AFTER the
+    responsive pass, where 12-executive-boards.css sits before.
+
+    Separate <link> tags rather than an @import chain, deliberately. Links are
+    discovered while the HTML is parsed and fetched in parallel; an @import is
+    only discovered after its parent has been downloaded and parsed, so a chain
+    of 24 serialises 24 round trips in front of first paint. public/index.html
+    links its two stylesheets the same way. Nothing in these files uses url(),
+    so no part's relative-URL base changes by becoming its own file.
+
+    tests/fixtures/missionControlCss.js reads THIS list as its order, and its
+    manifest check fails if a file in /v2/css/ has no <link> here or a <link>
+    here has no file -- so a part added later is covered by every stylesheet
+    test without any of them being edited.
+  -->
+  <link rel="stylesheet" href="/v2/css/01-tokens-and-base.css">
+  <link rel="stylesheet" href="/v2/css/02-shell-header.css">
+  <link rel="stylesheet" href="/v2/css/03-page-structure.css">
+  <link rel="stylesheet" href="/v2/css/04-command-panels.css">
+  <link rel="stylesheet" href="/v2/css/05-view-grid.css">
+  <link rel="stylesheet" href="/v2/css/06-map-and-charts.css">
+  <link rel="stylesheet" href="/v2/css/07-hate-economics.css">
+  <link rel="stylesheet" href="/v2/css/08-directive-cards.css">
+  <link rel="stylesheet" href="/v2/css/09-detail-panel.css">
+  <link rel="stylesheet" href="/v2/css/10-intel-library.css">
+  <link rel="stylesheet" href="/v2/css/11-since-save.css">
+  <link rel="stylesheet" href="/v2/css/12-executive-boards.css">
+  <link rel="stylesheet" href="/v2/css/13-faction-intel.css">
+  <link rel="stylesheet" href="/v2/css/14-world-map.css">
+  <link rel="stylesheet" href="/v2/css/15-responsive.css">
+  <link rel="stylesheet" href="/v2/css/16-board-skill-cells.css">
+  <link rel="stylesheet" href="/v2/css/17-directive-board.css">
+  <link rel="stylesheet" href="/v2/css/18-mining-expansion.css">
+  <link rel="stylesheet" href="/v2/css/19-strategic-commentary.css">
+  <link rel="stylesheet" href="/v2/css/20-research-advisor.css">
+  <link rel="stylesheet" href="/v2/css/21-fleet-procurement.css">
+  <link rel="stylesheet" href="/v2/css/22-drive-explorer.css">
+  <link rel="stylesheet" href="/v2/css/23-unlocked-tech.css">
+  <link rel="stylesheet" href="/v2/css/24-fleet-engagement.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⬢</text></svg>">
 </head>
 <body>

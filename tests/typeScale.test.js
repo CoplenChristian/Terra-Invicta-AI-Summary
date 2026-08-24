@@ -10,7 +10,7 @@
  *
  * Three checks, and the middle one is the one with a scar behind it:
  *
- * 1. Every `font-size` in mission-control.css names a token, not a literal.
+ * 1. Every `font-size` in the v2 stylesheet names a token, not a literal.
  * 2. Every `--fs-*` token a declaration names is DEFINED in :root. `--fs-label`
  *    was referenced twice and defined nowhere, and CSS does not fall back to
  *    the cascade for that: an undefined custom property is valid at parse time
@@ -25,6 +25,12 @@
  * SVG font sizes inside a viewBox are user units, not page pixels, and are
  * deliberately exempt -- see the --fs-map-* note in :root and TYPE in
  * world-map.js.
+ *
+ * The stylesheet became an ordered set of parts on 2026-08-23. All three checks
+ * read the whole set through tests/fixtures/missionControlCss.js, which takes
+ * the order from the shell's <link> tags; a fourth check below asserts that set
+ * is the same set as the directory, so a part added later cannot slip past
+ * every guard here at once.
  */
 
 const { test } = require('node:test');
@@ -32,7 +38,12 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const CSS_PATH = path.join(__dirname, '..', 'public', 'v2', 'css', 'mission-control.css');
+const {
+  readMissionControlCss,
+  stylesheetSources,
+  assertStylesheetManifest
+} = require('./fixtures/missionControlCss');
+
 const COMPONENT_DIR = path.join(__dirname, '..', 'public', 'v2', 'js');
 
 /** Declarations that are deliberately not a size on the scale. */
@@ -48,16 +59,27 @@ const SCALE_TOKENS = ['--fs-tag', '--fs-meta', '--fs-metric', '--fs-row', '--fs-
 const MAP_TOKENS = ['--fs-map-name', '--fs-map-note'];
 
 function readCss() {
-  return fs.readFileSync(CSS_PATH, 'utf8');
+  return readMissionControlCss();
 }
 
-/** Every `font-size: <value>;` in source order, with its line number. */
-function fontSizeDeclarations(css) {
+/**
+ * Every `font-size: <value>;` across every part the shell links, in cascade
+ * order, with the part and line it sits on.
+ *
+ * It walks the parts rather than the concatenation for one reason: a line
+ * number into 217KB of joined text names nothing a reader can open, and the
+ * whole value of this guard is that its failure message points at the
+ * declaration. The SET it walks still comes from the shell's link list, so a
+ * part added later is covered without this file being touched.
+ */
+function fontSizeDeclarations() {
   const out = [];
-  const lines = css.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i += 1) {
-    const m = lines[i].trim().match(/^font-size:\s*([^;]+);/);
-    if (m) out.push({ line: i + 1, value: m[1].trim() });
+  for (const source of stylesheetSources()) {
+    const lines = source.text.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      const m = lines[i].trim().match(/^font-size:\s*([^;]+);/);
+      if (m) out.push({ where: `${source.relativePath}:${i + 1}`, value: m[1].trim() });
+    }
   }
   return out;
 }
@@ -69,8 +91,23 @@ function definedCustomProperties(css) {
   return defined;
 }
 
+/**
+ * The completeness check the split depends on.
+ *
+ * Every guard in this file, and in the five other test files that read the v2
+ * stylesheet, scans the set of parts `public/v2/index.html` links. A part that
+ * exists on disk with no `<link>` would render nowhere in the browser AND be
+ * invisible to all six of them at once -- a scan that finds nothing wrong
+ * because it never looked. This is the assertion that makes "add a file and it
+ * is covered" true instead of hopeful.
+ */
+test('every stylesheet part on disk is linked by the shell, and every link exists', () => {
+  const linked = assertStylesheetManifest();
+  assert.ok(linked.length > 0, 'the shell must link at least one v2 stylesheet part');
+});
+
 test('every font-size in the v2 stylesheet names a token rather than a literal', () => {
-  const decls = fontSizeDeclarations(readCss());
+  const decls = fontSizeDeclarations();
   assert.ok(decls.length > 300, `expected the full stylesheet, found only ${decls.length} declarations`);
 
   const literals = decls.filter(d => {
@@ -80,7 +117,7 @@ test('every font-size in the v2 stylesheet names a token rather than a literal',
   });
 
   assert.deepStrictEqual(
-    literals.map(d => `${d.line}: ${d.value}`),
+    literals.map(d => `${d.where}: ${d.value}`),
     [],
     'font-size must name a --fs-* token; a literal here is how the file reached 24 rendered sizes'
   );
@@ -90,7 +127,7 @@ test('every --fs-* token a declaration names is defined in :root', () => {
   const css = readCss();
   const defined = definedCustomProperties(css);
   const referenced = new Set();
-  for (const d of fontSizeDeclarations(css)) {
+  for (const d of fontSizeDeclarations()) {
     for (const m of d.value.matchAll(/var\((--fs-[a-z-]+)\)/g)) referenced.add(m[1]);
   }
 

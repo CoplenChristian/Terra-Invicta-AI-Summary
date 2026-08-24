@@ -1928,7 +1928,9 @@ test('the two chain badges have CSS of their own, resolving to real colours', ()
   // through :root the way the browser does, because `--text-muted` was once
   // defined self-referentially and 164 rules silently fell back to `inherit`.
   // The computed-style check against a running page is in the verification run.
-  const css = fs.readFileSync(path.join(repoRoot, 'public', 'v2', 'css', 'mission-control.css'), 'utf8');
+  // Every part the shell links, concatenated in cascade order, so :root and the
+  // tag rules resolve against each other exactly as the browser resolves them.
+  const css = require('./fixtures/missionControlCss').readMissionControlCss();
   const rootBlock = css.match(/:root\s*\{([\s\S]*?)\}/);
   assert.ok(rootBlock, ':root must define the palette');
   const tokens = new Map();
