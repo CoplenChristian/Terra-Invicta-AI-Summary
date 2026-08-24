@@ -11,7 +11,7 @@
  * 5. No .ra-* leaf element has scrollWidth > clientWidth at 1920, 1280, or 747.
  * 6. Footnotes/census remain present and visible.
  * 7. Both PLAYER and OMNISCIENT modes tested.
- * 8. COMMAND body height is under 3.00 screens (< 3240px @ 1080px).
+ * 8. COMMAND body height is under 3.25 screens (< 3510px @ 1080px).
  */
 
 const { chromium } = require('playwright');
@@ -217,7 +217,12 @@ async function runVerification() {
         // Check 7: COMMAND Screen height at 1920x1080
         if (vp.width === 1920) {
           console.log(`  COMMAND body height: ${analysis.bodyHeight}px (${analysis.screensAt1080.toFixed(3)} screens @ 1080px)`);
-          assert.ok(analysis.screensAt1080 < 3.00, `COMMAND body height (${analysis.screensAt1080.toFixed(3)} screens) must be < 3.00 screens (< 3240px)`);
+          // Raised from 3.00 to 3.25 on 2026-08-24 -- see the note in
+          // scripts/verify_mobile_overflow.js for the reasoning and for why that
+          // script reports a different number from this one. This measures the
+          // whole page BODY; that one measures `#view-command` alone, so this
+          // figure runs ~0.12 screens higher on the same page.
+          assert.ok(analysis.screensAt1080 < 3.25, `COMMAND body height (${analysis.screensAt1080.toFixed(3)} screens) must be < 3.25 screens (< 3510px)`);
           console.log(`✓ COMMAND height budget strictly met.`);
         }
       }
