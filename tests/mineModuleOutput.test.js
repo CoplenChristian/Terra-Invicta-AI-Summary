@@ -43,7 +43,8 @@ const {
 const { applyMiningTechBonus, buildMiningTechBonuses, UNMODELLED_FACTORS } = require('../shared/miningTechBonus.mjs');
 const { MINING_RESOURCES } = require('../shared/intelResources.mjs');
 const readers = require('../server/briefing/readers');
-const { loadFilteredSnapshot, queryIntel } = require('../server/snapshotLoader');
+const { queryIntel } = require('../server/snapshotLoader');
+const { loadFixtureFilteredSnapshot, queryFixtureIntel } = require('./fixtures/frozenSnapshots');
 
 const OBSERVER = 4712;
 const OUTPOST = MINE_MODULE_TEMPLATES.find(m => m.template === 'OutpostMiningComplex');
@@ -308,7 +309,7 @@ test('the observer\'s advisable-hab output reconciles against the game\'s own mo
   // THE POINT OF THE WHOLE CHANGE. Before the module multiplier was applied
   // this ratio was the fleet-wide module factor -- 1.05 on water, 1.44 on
   // fissiles on the measured save -- and could not be 1.0 on all five at once.
-  const snapshot = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
   const observer = snapshot.factions.find(f => Number(f.ID) === OBSERVER);
   const bonuses = buildMiningTechBonuses(observer, { projectListComplete: true });
   const habs = readers.buildAdvisableHabs(snapshot.habs, snapshot.habSites, OBSERVER, bonuses);
@@ -329,8 +330,8 @@ test('the observer\'s advisable-hab output reconciles against the game\'s own mo
 });
 
 test('every mine-module figure is identical in both modes, because they are the observer\'s own', () => {
-  const player = queryIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
-  const omni = queryIntel({ endpoint: 'mining-expansion', mode: 'omniscient', observer: OBSERVER });
+  const player = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
+  const omni = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'omniscient', observer: OBSERVER });
   assert.deepStrictEqual(player.mineModuleCapability, omni.mineModuleCapability);
   assert.deepStrictEqual(player.mineUpgrades, omni.mineUpgrades);
 });
@@ -342,7 +343,7 @@ test('the player-mode payload never presents a mine-complex project the observer
   // which is a template fact plus the observer's own list and tells a reader
   // nothing about any rival. What must never appear is the project presented as
   // something someone HAS.
-  const omniSnapshot = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
+  const omniSnapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
   const observerProjects = new Set(
     (omniSnapshot.factions.find(f => Number(f.ID) === OBSERVER)?.completedProjects) || []
   );
@@ -352,7 +353,7 @@ test('the player-mode payload never presents a mine-complex project the observer
       && omniSnapshot.factions.some(f => Number(f.ID) !== OBSERVER && (f.completedProjects || []).includes(project)));
   assert.ok(rivalOnly.length > 0, 'this save has at least one mine-complex project only a rival holds');
 
-  const payload = queryIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
+  const payload = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
 
   // 1. The band never over-claims: every buildable tier is one the observer
   //    genuinely holds in the unredacted save.
@@ -397,7 +398,7 @@ test('the upgrade board only ever lists the OBSERVER\'s own sites', () => {
   // `habSites[].mineModuleTemplate` is published unredacted for every faction,
   // so an upgrade board pointed at a rival would render identically in both
   // modes and still be a rival's mine inventory and upgrade economics.
-  const snapshot = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER });
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'player', observer: OBSERVER });
   const observerSiteIds = new Set(snapshot.habSites
     .filter(site => Number(site.factionId) === OBSERVER)
     .map(site => String(site.ID)));
@@ -407,7 +408,7 @@ test('the upgrade board only ever lists the OBSERVER\'s own sites', () => {
     .filter(Boolean));
   assert.ok(rivalSiteNames.size > 0, 'this save has rival-owned mining sites to leak');
 
-  const payload = queryIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
+  const payload = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
   assert.ok(payload.mineUpgrades.opportunityTotalCount > 0, 'the observer has mines to report on');
   for (const opportunity of payload.mineUpgrades.opportunities) {
     assert.ok(observerSiteIds.has(String(opportunity.siteId)),
@@ -421,7 +422,7 @@ test('the per-site module multiplier on /mining publishes nothing the payload di
   // `mineModuleMultiplier` is a pure template lookup on `mineModule`, which
   // player mode has always published for every faction's site. If that ever
   // stops being true the multiplier becomes a new disclosure and this fails.
-  const player = queryIntel({ endpoint: 'mining', mode: 'player', observer: OBSERVER });
+  const player = queryFixtureIntel({ endpoint: 'mining', mode: 'player', observer: OBSERVER });
   const rivalRows = player.items.filter(row => row.owner && row.owner !== 'Unclaimed' && row.owner !== 'the Initiative');
   assert.ok(rivalRows.length > 0, 'player mode carries rival mining rows at all');
   for (const row of rivalRows) {
@@ -432,7 +433,7 @@ test('the per-site module multiplier on /mining publishes nothing the payload di
 });
 
 test('the expansion score is UNCHANGED by the module multiplier — the ranking is not built on a projection', () => {
-  const payload = queryIntel({ endpoint: 'mining-expansion', mode: 'omniscient', observer: OBSERVER });
+  const payload = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'omniscient', observer: OBSERVER });
   assert.ok(payload.available.length > 0);
   for (const candidate of payload.available) {
     assert.strictEqual(candidate.moduleMultiplier.excludedFromScore, true);
@@ -451,7 +452,7 @@ test('the expansion score is UNCHANGED by the module multiplier — the ranking 
 
   // The score must be reproducible WITHOUT any module term at all.
   const { scoreMiningSiteCandidate } = require('../shared/intelResources.mjs');
-  const snapshot = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
   const top = payload.available[0];
   const site = snapshot.habSites.find(s => String(s.ID) === String(top.siteId));
   const rescored = scoreMiningSiteCandidate(site, payload.resourceRunways, payload.capacity, {
@@ -462,7 +463,7 @@ test('the expansion score is UNCHANGED by the module multiplier — the ranking 
 });
 
 test('the mining rows publish the measured module multiplier without folding it into the rate', () => {
-  const mining = queryIntel({ endpoint: 'mining', mode: 'omniscient', observer: OBSERVER });
+  const mining = queryFixtureIntel({ endpoint: 'mining', mode: 'omniscient', observer: OBSERVER });
   const withModule = mining.items.filter(row => row.mineModule);
   assert.ok(withModule.length > 0);
   for (const row of withModule.slice(0, 40)) {
@@ -538,7 +539,7 @@ function renderBoard(payload) {
 }
 
 test('the board renders the measured upgrade block and the projected band in their own registers', () => {
-  const payload = queryIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
+  const payload = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
   const html = renderBoard(payload);
   assert.match(html, /mining-meas__value/, 'measured figures carry the measured register class');
   assert.match(html, /mining-est__value/, 'the projected band carries the estimate register class');
@@ -551,7 +552,7 @@ test('the board renders the measured upgrade block and the projected band in the
 });
 
 test('an unresolved capability renders as UNKNOWN rather than as "no bonus"', () => {
-  const payload = queryIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
+  const payload = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
   const blinded = {
     ...payload,
     mineModuleCapability: {
@@ -581,7 +582,7 @@ test('an unresolved capability renders as UNKNOWN rather than as "no bonus"', ()
 // ---------------------------------------------------------------------------
 
 test('the briefing mined-rate sentence is module-adjusted, and rises against the raw deposit sum', () => {
-  const snapshot = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER });
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'player', observer: OBSERVER });
   const observer = snapshot.factions.find(f => Number(f.ID) === OBSERVER);
   const bonuses = buildMiningTechBonuses(observer, { projectListComplete: true });
   const ownHabs = snapshot.habs.filter(h => Number(h.factionId) === OBSERVER);
@@ -607,7 +608,7 @@ test('the briefing mined-rate sentence is module-adjusted, and rises against the
 });
 
 test('each advisable hab names the mine module behind its numbers', () => {
-  const snapshot = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER });
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'player', observer: OBSERVER });
   const observer = snapshot.factions.find(f => Number(f.ID) === OBSERVER);
   const bonuses = buildMiningTechBonuses(observer, { projectListComplete: true });
   const habs = readers.buildAdvisableHabs(snapshot.habs, snapshot.habSites, OBSERVER, bonuses);

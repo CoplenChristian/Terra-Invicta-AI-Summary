@@ -25,7 +25,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const snapshotLoader = require('../server/snapshotLoader');
+const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
 const { buildResourceProjection, INTEL_ENDPOINT_INDEX, SUPPORTED_RESOURCES } =
   require('../shared/intel/registry.mjs');
 const {
@@ -55,7 +55,7 @@ const ALIEN = 4717;
 const liveCache = new Map();
 function live(mode) {
   if (!liveCache.has(mode)) {
-    liveCache.set(mode, snapshotLoader.loadFilteredSnapshot({ latest: true, mode, observer: OBSERVER }));
+    liveCache.set(mode, loadFixtureFilteredSnapshot({ mode, observer: OBSERVER }));
   }
   return liveCache.get(mode);
 }

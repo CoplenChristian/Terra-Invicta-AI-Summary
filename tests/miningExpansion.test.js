@@ -16,7 +16,8 @@ const {
   habSiteResourceRow,
   alienThreatResource
 } = sharedIntel;
-const { loadSnapshot, loadFilteredSnapshot, queryIntel } = require('../server/snapshotLoader');
+const { queryIntel } = require('../server/snapshotLoader');
+const { loadFixtureFilteredSnapshot, queryFixtureIntel } = require('./fixtures/frozenSnapshots');
 
 test('Mining Capacity model computes headroom and quadratic MC penalties correctly', () => {
   const observer = {
@@ -216,52 +217,23 @@ test('Saturating utility scoring: balanced basket beats single-resource spike wh
   assert(scoreB.siteValue > scoreA.siteValue, `Balanced site (${scoreB.siteValue}) must outscore single-resource spike (${scoreA.siteValue})`);
 });
 
-test('Live save integration: mining-expansion endpoint works in both Player and Omniscient modes', (t) => {
-  try {
-    const raw = loadSnapshot();
-    if (!raw) {
-      t.skip('Skipping live save test: No raw snapshot available');
-      return;
-    }
+test('mining-expansion endpoint works in both Player and Omniscient modes', () => {
+  const playerSnap = loadFixtureFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const expansionPlayer = miningExpansionResource(playerSnap, { observerId: 4712 });
 
-    // Test player mode
-    const playerSnap = loadFilteredSnapshot({ mode: 'player', observer: 4712 });
-    const expansionPlayer = miningExpansionResource(playerSnap, { observerId: 4712 });
+  assert(expansionPlayer.capacity, 'Capacity section present');
+  assert(Number.isFinite(expansionPlayer.capacity.minesBuilt), 'minesBuilt is a valid number');
+  assert(Number.isFinite(expansionPlayer.capacity.mineLimit), 'mineLimit is a valid number');
+  assert(Array.isArray(expansionPlayer.available), 'available is an array');
+  assert(Array.isArray(expansionPlayer.techGated), 'techGated is an array');
+  assert(expansionPlayer.unreachable, 'unreachable summary is present');
 
-    assert(expansionPlayer.capacity, 'Capacity section present');
-    assert(Number.isFinite(expansionPlayer.capacity.minesBuilt), 'minesBuilt is a valid number');
-    assert(Number.isFinite(expansionPlayer.capacity.mineLimit), 'mineLimit is a valid number');
-    assert(Array.isArray(expansionPlayer.available), 'available is an array');
-    assert(Array.isArray(expansionPlayer.techGated), 'techGated is an array');
-    assert(expansionPlayer.unreachable, 'unreachable summary is present');
+  const projected = queryIntel({ snapshot: playerSnap, endpoint: 'mining-expansion', mode: 'player' });
+  assert(projected.success, 'queryIntel mining-expansion should succeed');
+  assert.strictEqual(projected.resource, 'mining-expansion');
 
-    // Test queryIntel dispatch
-    const projected = queryIntel({ snapshot: playerSnap, endpoint: 'mining-expansion', mode: 'player' });
-    assert(projected.success, 'queryIntel mining-expansion should succeed');
-    assert.strictEqual(projected.resource, 'mining-expansion');
-
-    // Test omniscient mode
-    const omniSnap = loadFilteredSnapshot({ mode: 'omniscient', observer: 4712 });
-    const expansionOmni = miningExpansionResource(omniSnap, { observerId: 4712 });
-assert(expansionOmni.capacity, 'Omniscient capacity present');
-    assert.strictEqual(expansionOmni.available.length, expansionPlayer.available.length);
-  } catch (err) {
-    if (
-      err.code === 'EBUSY' ||
-      err.code === 'ENOENT' ||
-      err.code === 'EPERM' ||
-      err.message.includes('EBUSY') ||
-      err.message.includes('locked') ||
-      err.message.includes('busy') ||
-      err.message.includes('No save path configured') ||
-      err.message.includes('Save folder not found') ||
-      err.message.includes('Save file not found') ||
-      err.message.includes('No .gz or .json save files found') ||
-      err.message.includes('No save files found')
-    ) {
-      t.skip('Skipping live save test: Live save unavailable or busy: ' + err.message);
-    } else {
-      throw err;
-    }
-  }
+  const omniSnap = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: 4712 });
+  const expansionOmni = miningExpansionResource(omniSnap, { observerId: 4712 });
+  assert(expansionOmni.capacity, 'Omniscient capacity present');
+  assert.strictEqual(expansionOmni.available.length, expansionPlayer.available.length);
 });

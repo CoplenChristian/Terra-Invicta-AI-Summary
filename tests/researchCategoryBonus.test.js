@@ -29,6 +29,7 @@ const path = require('node:path');
 const snapshotBuilder = require('../server/snapshotBuilder');
 const snapshotIdentity = require('../server/snapshotIdentity');
 const intelligenceFilter = require('../server/intelligenceFilter');
+const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
 const { makeSaveData } = require('./fixtures/syntheticSave');
 const { buildTechBonusCatalogue } = require('../server/snapshot/templates');
 const { monthsAtIncome } = require('../shared/researchAvailability.mjs');
@@ -982,18 +983,11 @@ test('the serialisable summary carries the figures and drops the accessor', () =
 });
 
 // ---------------------------------------------------------------------------
-// 8. THE LIVE SAVE
+// 8. THE COMMITTED FIXTURE
 // ---------------------------------------------------------------------------
 
-test('on the live save every boosted category is reproducible from its own sources', (t) => {
-  let snapshot;
-  try {
-    const { loadFilteredSnapshot } = require('../server/snapshotLoader');
-    snapshot = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
-  } catch (err) {
-    t.skip(`Skipping live save test: ${err.message}`);
-    return;
-  }
+test('on the fixture save every boosted category is reproducible from its own sources', () => {
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
   const model = buildResearchCategoryBonuses(snapshot, { observerId: OBSERVER });
   assert.equal(model.available, true, model.reason);
   assert.ok(model.boostedCategories.length > 0, 'the observer holds bonus-granting orgs or habs');
@@ -1035,19 +1029,12 @@ test('on the live save every boosted category is reproducible from its own sourc
   // The investigation count must reach the model from the live save, or the
   // whole Xenology figure silently reverts to the template-only sweep.
   assert.equal(model.alienInvestigationsState, 'measured',
-    'the live save carries alienInvestigations; an unresolved state here means it is not reaching the snapshot');
+    'the fixture carries alienInvestigations; an unresolved state here means it is not reaching the snapshot');
   assert.equal(typeof model.alienInvestigations, 'number');
 });
 
-test('on the live save the investigation source is inside the Xenology figure, not beside it', (t) => {
-  let snapshot;
-  try {
-    const { loadFilteredSnapshot } = require('../server/snapshotLoader');
-    snapshot = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
-  } catch (err) {
-    t.skip(`Skipping live save test: ${err.message}`);
-    return;
-  }
+test('on the fixture save the investigation source is inside the Xenology figure, not beside it', (t) => {
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
   const model = buildResearchCategoryBonuses(snapshot, { observerId: OBSERVER });
   const category = CATEGORY_BONUS_RULES.investigationCategory;
   const row = model.categories[category];

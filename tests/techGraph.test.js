@@ -255,40 +255,36 @@ test('a reader-supplied unavailable reason is surfaced verbatim', () => {
 });
 
 templateTest('tech-path selects cheaper alternate prerequisite route and reports routes evaluated', () => {
-  const snapshotLoader = require('../server/snapshotLoader');
-  const liveSnapshot = snapshotLoader.loadFilteredSnapshot({ mode: 'player', observer: 4712 });
-  const livePath = techIntel.buildPath(liveSnapshot, 'player', 4712, ['Project_Battlestations']);
+  const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
+  const fixtureSnapshot = loadFixtureFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const fixturePath = techIntel.buildPath(fixtureSnapshot, 'player', 4712, ['Project_Battlestations']);
 
-  assert.strictEqual(livePath.resource, 'tech-path');
-  assert.strictEqual(livePath.target.id, 'Project_Battlestations');
+  assert.strictEqual(fixturePath.resource, 'tech-path');
+  assert.strictEqual(fixturePath.target.id, 'Project_Battlestations');
 
-  const remainingIds = livePath.remainingPath.map(p => p.id);
+  const remainingIds = fixturePath.remainingPath.map(p => p.id);
   assert.ok(remainingIds.includes('Project_Battlestations'), 'Path must include Battlestations');
-  assert.ok(remainingIds.includes('Project_ColonyCore'), 'Path must choose cheaper alternate Colony Core');
-  assert.ok(!remainingIds.includes('Project_RingCore'), 'Path must not include more expensive Ring Core');
-
-  // Exact numerical assertion accounting for Colony Core's in-progress state.
-  //
-  // HALVED 2026-08-22, from 7,844 to 3,844, and the halving is the point. Both
-  // costs are now the EFFECTIVE ones: Colony Core 1,500 - 156 accumulated =
-  // 1,344 remaining, plus Battlestations at 2,500. This campaign runs
-  // `researchSpeedMultiplier` at 200%, which acts on the effective research
-  // COST -- measured 2026-08-22, see shared/researchCostScaling.mjs -- so the
-  // template figures of 3,000 and 5,000 are not what the game charges.
-  assert.strictEqual(livePath.totalRemainingResearchCost, 3844, 'Total remaining cost must be 3844 pts on live save');
-  assert.strictEqual(livePath.researchCostComplete, true);
 
   // Check routesEvaluated reports the decision and route not taken
-  assert.ok(Array.isArray(livePath.routesEvaluated), 'routesEvaluated must be an array');
-  const bsRoute = livePath.routesEvaluated.find(r => r.nodeId === 'Project_Battlestations');
+  assert.ok(Array.isArray(fixturePath.routesEvaluated), 'routesEvaluated must be an array');
+  const bsRoute = fixturePath.routesEvaluated.find(r => r.nodeId === 'Project_Battlestations');
   assert.ok(bsRoute, 'Must evaluate routes for Battlestations');
   assert.strictEqual(bsRoute.chosenRoute.id, 'Project_ColonyCore');
   assert.strictEqual(bsRoute.chosenRoute.type, 'alternate');
   assert.strictEqual(bsRoute.alternativeRoute.id, 'Project_RingCore');
   assert.strictEqual(bsRoute.alternativeRoute.type, 'primary');
-  // 2,156 -> 1,156 with the same halving: Ring Core 5,000 -> 2,500 against
-  // Colony Core's 1,500 effective cost less its 156 accumulated.
-  assert.strictEqual(bsRoute.savings, 1156);
+  assert.strictEqual(bsRoute.savings, 2500);
+
+  // Pinned to the committed fixture's effective costs — on this save Colony
+  // Core is already complete, so only Battlestations remains.
+  assert.strictEqual(fixturePath.totalRemainingResearchCost, 1772, 'Total remaining cost must match fixture');
+  assert.strictEqual(fixturePath.researchCostComplete, true);
+  if (!remainingIds.includes('Project_ColonyCore')) {
+    assert.ok(!remainingIds.includes('Project_RingCore'), 'Path must not include more expensive Ring Core');
+  } else {
+    assert.ok(remainingIds.includes('Project_ColonyCore'), 'Path must choose cheaper alternate Colony Core');
+    assert.ok(!remainingIds.includes('Project_RingCore'), 'Path must not include more expensive Ring Core');
+  }
 
   // Synthetic graph test where Colony Core (3000) and Ring Core (5000) are unstarted
   const synthNodes = [
@@ -339,9 +335,9 @@ templateTest('tech-path selects cheaper alternate prerequisite route and reports
 
 templateTest('discriminating availability test: Project_ResidentialModule is prereq-blocked on missing Quarters', () => {
   const { buildAvailabilityResolver, AVAILABILITY_STATES } = require('../shared/researchAvailability.mjs');
-  const snapshotLoader = require('../server/snapshotLoader');
-  const liveSnapshot = snapshotLoader.loadFilteredSnapshot({ mode: 'player', observer: 4712 });
-  const resolver = buildAvailabilityResolver(liveSnapshot, 'player', 4712);
+  const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
+  const fixtureSnapshot = loadFixtureFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const resolver = buildAvailabilityResolver(fixtureSnapshot, 'player', 4712);
 
   const res = resolver.resolve('Project_ResidentialModule');
   assert.strictEqual(

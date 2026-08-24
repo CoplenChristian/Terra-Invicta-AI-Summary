@@ -1613,8 +1613,8 @@ test('alsoUnlocks > 1 is rendered as a visible badge, and <= 1 is not badged', (
 });
 
 test('research-ranking generates drive chains ranked by whole-chain payoff per point', () => {
-  const snapshotLoader = require('../server/snapshotLoader');
-  const liveSnapshot = snapshotLoader.loadFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
+  const liveSnapshot = loadFixtureFilteredSnapshot({ mode: 'player', observer: 4712 });
   const result = project(liveSnapshot, { mode: 'player', observerId: 4712, detail: 'full' });
 
   assert.ok(result.military.driveChainsCount > 0, 'Must produce drive chain candidates');
@@ -1629,8 +1629,8 @@ test('research-ranking generates drive chains ranked by whole-chain payoff per p
 });
 
 test('research-ranking produces capability verdicts for uncompared candidates', () => {
-  const snapshotLoader = require('../server/snapshotLoader');
-  const liveSnapshot = snapshotLoader.loadFilteredSnapshot({ mode: 'player', observer: 4712 });
+  const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
+  const liveSnapshot = loadFixtureFilteredSnapshot({ mode: 'player', observer: 4712 });
   const result = project(liveSnapshot, { mode: 'player', observerId: 4712, detail: 'full' });
 
   assert.ok(result.military.capabilitiesCount > 0, 'Must produce capabilities');
@@ -1717,8 +1717,8 @@ const {
 
 /** The live save, projected for one mode. */
 function liveResult(mode, options = {}) {
-  const snapshotLoader = require('../server/snapshotLoader');
-  const snapshot = snapshotLoader.loadFilteredSnapshot({ mode, observer: OBSERVER });
+  const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
+  const snapshot = loadFixtureFilteredSnapshot({ mode, observer: OBSERVER });
   return project(snapshot, { mode, observerId: OBSERVER, ...options });
 }
 

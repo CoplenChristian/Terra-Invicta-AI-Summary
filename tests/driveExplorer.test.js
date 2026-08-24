@@ -25,7 +25,7 @@ const snapshotBuilder = require('../server/snapshotBuilder');
 const snapshotIdentity = require('../server/snapshotIdentity');
 const intelligenceFilter = require('../server/intelligenceFilter');
 const { makeSaveData } = require('./fixtures/syntheticSave');
-const snapshotLoader = require('../server/snapshotLoader');
+const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
 const { MISSION_CONTROL_SHARED } = require('./fixtures/renderHarness');
 const { buildResourceProjection, INTEL_ENDPOINT_INDEX, INTEL_ENDPOINT_EXAMPLES, SUPPORTED_RESOURCES } =
   require('../shared/intel/registry.mjs');
@@ -39,7 +39,7 @@ const OBSERVER = 4712;
 const liveCache = new Map();
 function live(mode) {
   if (!liveCache.has(mode)) {
-    liveCache.set(mode, snapshotLoader.loadFilteredSnapshot({ latest: true, mode, observer: OBSERVER }));
+    liveCache.set(mode, loadFixtureFilteredSnapshot({ mode, observer: OBSERVER }));
   }
   return liveCache.get(mode);
 }

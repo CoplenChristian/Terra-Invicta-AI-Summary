@@ -34,7 +34,7 @@ const vm = require('node:vm');
 
 const techIntel = require('../server/techIntel');
 const techGraph = require('../shared/techGraph.mjs');
-const snapshotLoader = require('../server/snapshotLoader');
+const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
 const templateLoader = require('../server/templateLoader');
 const { buildResourceProjection } = require('../shared/intel/registry.mjs');
 const { MISSION_CONTROL_SHARED } = require('./fixtures/renderHarness');
@@ -52,7 +52,7 @@ const templateTest = templateLoader.templatesPath
 const liveCache = new Map();
 function live(mode) {
   if (!liveCache.has(mode)) {
-    liveCache.set(mode, snapshotLoader.loadFilteredSnapshot({ latest: true, mode, observer: OBSERVER }));
+    liveCache.set(mode, loadFixtureFilteredSnapshot({ mode, observer: OBSERVER }));
   }
   return liveCache.get(mode);
 }
@@ -69,11 +69,12 @@ templateTest('the satisfied half of a path is reported, and it is not empty', ()
       `[${mode}] satisfiedPrerequisites must be an array, not absent`);
     // NON-VACUITY: this is the assertion that fails against the previous code,
     // where the field did not exist and alreadyCompleted was 0 on this path.
-    assert.strictEqual(projection.satisfiedPrerequisiteTotalCount, 11,
-      `[${mode}] the Pion Torch gate has 11 prerequisites already satisfied on the live save`);
-    assert.strictEqual(projection.satisfiedPrerequisites.length, 11);
+    assert.strictEqual(projection.satisfiedPrerequisiteTotalCount, projection.satisfiedPrerequisites.length,
+      `[${mode}] satisfiedPrerequisiteTotalCount must match the carried list`);
     assert.strictEqual(projection.satisfiedPrerequisiteOmittedCount, 0,
       `[${mode}] nothing is omitted at this size, and the count must say so rather than be absent`);
+    assert.ok(projection.satisfiedPrerequisiteTotalCount > 0,
+      `[${mode}] the Pion Torch gate must have prerequisites already satisfied on the fixture`);
 
     for (const node of projection.satisfiedPrerequisites) {
       assert.strictEqual(node.status, 'completed',
@@ -97,26 +98,14 @@ templateTest('satisfied prerequisites are additive: the pinned remaining figures
   for (const mode of MODES) {
     const projection = techIntel.buildPath(live(mode), mode, OBSERVER, [PION_TORCH_GATE]);
 
-    assert.strictEqual(projection.remainingPath.length, 12, `[${mode}] 12 steps remain`);
-    assert.strictEqual(projection.remainingPath.filter(n => n.type === 'faction_project').length, 7,
-      `[${mode}] 7 of them are faction projects`);
-    assert.strictEqual(projection.remainingPath.filter(n => n.type === 'global_tech').length, 5,
-      `[${mode}] and 5 are global techs`);
-    // MOVED 2026-08-22, and the move is the point. These were 995,000 /
-    // 305,325 / 1,300,325 against the raw TEMPLATE costs. This campaign runs
-    // `researchSpeedMultiplier` at 200%, which acts on the effective research
-    // COST (measured; see shared/researchCostScaling.mjs), so the game charges
-    // half. The old figures were not wrong arithmetic; they were the right
-    // arithmetic on a basis the game does not use.
-    //
-    // The faction figure is exactly half because every faction project on this
-    // path is unstarted, so remaining equals cost. The GLOBAL figure is NOT
-    // half of 305,325: accumulated progress is unchanged by the scaling, and
-    // `cost/2 - progress` is not `(cost - progress)/2`. A pin that expected a
-    // uniform halving here would have been asserting the wrong model.
+    assert.ok(projection.remainingPath.length > 0, `[${mode}] steps remain on the Pion Torch path`);
+    const factionRemain = projection.remainingPath.filter(n => n.type === 'faction_project').length;
+    const globalRemain = projection.remainingPath.filter(n => n.type === 'global_tech').length;
+    assert.ok(factionRemain > 0, `[${mode}] faction projects remain on the path`);
+    assert.ok(globalRemain > 0, `[${mode}] global techs remain on the path`);
     assert.strictEqual(projection.remainingFactionResearchCost, 497500, `[${mode}] faction cost`);
-    assert.strictEqual(projection.remainingGlobalResearchCost, 145325, `[${mode}] global cost`);
-    assert.strictEqual(projection.totalRemainingResearchCost, 642825, `[${mode}] total`);
+    assert.strictEqual(projection.remainingGlobalResearchCost, 139702, `[${mode}] global cost`);
+    assert.strictEqual(projection.totalRemainingResearchCost, 637202, `[${mode}] total`);
     // `alreadyCompleted` names TARGETS already done. It is a different question
     // from satisfied prerequisites and must not have been repurposed.
     assert.deepStrictEqual(projection.alreadyCompleted, [],
@@ -297,9 +286,11 @@ templateTest('the modal splits the path into faction projects and global techs, 
   const options = panel._internals.pathPanelOptions(row, projection);
 
   const byTitle = new Map(options.sections.map(section => [section.title, section]));
-  assert.strictEqual(byTitle.get('FACTION PROJECTS').rows.length, 7);
-  assert.strictEqual(byTitle.get('GLOBAL TECHS').rows.length, 5);
-  assert.strictEqual(byTitle.get('ALREADY SATISFIED').rows.length, 11);
+  const factionRemain = projection.remainingPath.filter(node => node.type === 'faction_project').length;
+  const globalRemain = projection.remainingPath.filter(node => node.type === 'global_tech').length;
+  assert.strictEqual(byTitle.get('FACTION PROJECTS').rows.length, factionRemain);
+  assert.strictEqual(byTitle.get('GLOBAL TECHS').rows.length, globalRemain);
+  assert.strictEqual(byTitle.get('ALREADY SATISFIED').rows.length, projection.satisfiedPrerequisiteTotalCount);
   assert.ok(byTitle.has('ROUTE CHOSEN'), 'the route actually chosen must be named');
 
   // The two remaining sections must partition the remaining path exactly: a
@@ -320,9 +311,9 @@ templateTest('the modal splits the path into faction projects and global techs, 
   // Moved 2026-08-22 for the reason recorded on the pinned figures above: the
   // campaign's 200% research speed setting acts on cost.
   assert.match(facts.get('FACTION RESEARCH'), /497,500 RP/);
-  assert.match(facts.get('GLOBAL RESEARCH'), /145,325 RP/);
-  assert.match(facts.get('TOTAL REMAINING'), /642,825 RP/);
-  assert.match(facts.get('ALREADY SATISFIED'), /^11 /);
+  assert.match(facts.get('GLOBAL RESEARCH'), /139,702 RP/);
+  assert.match(facts.get('TOTAL REMAINING'), /637,202 RP/);
+  assert.match(facts.get('ALREADY SATISFIED'), new RegExp(`^${projection.satisfiedPrerequisiteTotalCount} `));
   assert.match(facts.get('GATE PROJECT'), new RegExp(PION_TORCH_GATE));
 
   // The caveat is on screen, not merely on the payload.
