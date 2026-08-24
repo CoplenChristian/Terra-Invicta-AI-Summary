@@ -1,0 +1,650 @@
+/* ========================================================================
+   07-hate-economics.css
+
+   Alien hate economics and the resource/power readouts.
+
+   The hate economics panel, the Mission Control budget planner, the resource
+   position table, the power profile, the operative leaderboard, the council
+   capability bars and the holding bubble matrix.
+
+   Source: mission-control.css lines 1844-2480 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Alien hate economics --------------------------------------------------- */
+
+.alien-hate-econ {
+  display: grid;
+  gap: 13px;
+}
+
+.alien-hate-econ-statusbar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 2px 0 11px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.alien-hate-econ-eyebrow,
+.alien-hate-econ-war-status span,
+.alien-hate-econ-section-heading,
+.alien-hate-econ-metric > span {
+  display: block;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.alien-hate-econ-status {
+  display: block;
+  margin-top: 5px;
+  color: var(--success);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.04em;
+}
+
+.alien-hate-econ-status.is-danger,
+.alien-hate-econ-war-status.is-danger strong {
+  color: var(--danger);
+}
+
+/* Total war proximity: an intermediate state between safe and declared.
+   "Armed" (year gate passed) and "pending" (hate gate passed) are both one
+   condition away from a permanent war, so they need their own tone. */
+.alien-hate-econ-status.is-warning {
+  color: var(--warning, #d9a441);
+}
+
+.alien-hate-econ-metric.is-danger strong {
+  color: var(--danger);
+}
+
+.alien-hate-econ-note {
+  margin: 9px 0 0;
+  color: var(--text-dim);
+  font-size: var(--fs-metric);
+  line-height: 1.5;
+}
+
+/* Mission Control budget planner: stage a build and see what it does to the
+   alien hate floor before committing shipyard time to it. */
+.mc-budget-hulls {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.mc-budget-hull {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 10px;
+  background: var(--panel);
+}
+
+.mc-budget-hull-name {
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+  letter-spacing: 0.03em;
+}
+
+.mc-budget-hull-cost {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+}
+
+.mc-budget-hull-controls {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.mc-budget-hull-controls button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--fs-row);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mc-budget-hull-controls button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mc-budget-hull-controls button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mc-budget-hull-controls output {
+  min-width: 20px;
+  font-family: var(--mono);
+  font-size: var(--fs-row);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.mc-budget-reset {
+  margin-top: 9px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.mc-budget-reset:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.alien-hate-econ-war-status {
+  display: grid;
+  gap: 5px;
+  max-width: 48%;
+  text-align: right;
+}
+
+.alien-hate-econ-war-status strong {
+  color: var(--accent-strong);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.04em;
+}
+
+.alien-hate-econ-grid,
+.alien-hate-econ-mc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+
+.alien-hate-econ-mc-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.alien-hate-econ-metric {
+  min-width: 0;
+  padding: 9px 8px 8px;
+  background: var(--surface-inset);
+}
+
+.alien-hate-econ-metric strong {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: var(--fs-kpi);
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alien-hate-econ-metric small {
+  display: block;
+  min-height: 18px;
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.35;
+}
+
+.alien-hate-econ-metric.is-emphasis strong {
+  color: var(--warning);
+}
+
+.alien-hate-econ-section {
+  display: grid;
+  gap: 7px;
+}
+
+/* The section's own footnotes -- provenance lines, not part of any metric. */
+.alien-hate-econ-section > small {
+  font-size: var(--fs-meta);
+  color: var(--text-dim);
+}
+
+.alien-hate-econ-section-heading {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.alien-hate-econ-section-heading small {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0;
+}
+
+/* COMPENSATION for the 8px/7px pair this heading used to run. Both halves are
+   now on the tag tier, and letter-spacing alone was all that still told them
+   apart -- because this selector (0,1,1) out-specified .alien-hate-econ-status
+   (0,1,0) and painted BOTH GATES CLOSED the same grey as an ordinary footnote.
+   The state colour the status was always meant to carry is what separates them
+   now; the plain qualifier keeps the dim it had. */
+.alien-hate-econ-section-heading small:not(.alien-hate-econ-status) {
+  color: var(--text-dim);
+}
+
+.alien-hate-econ-projects {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+
+.alien-hate-econ-project {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 8px;
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.alien-hate-econ-project strong {
+  flex: 0 0 auto;
+  color: var(--danger);
+  letter-spacing: 0.05em;
+}
+
+.alien-hate-econ-project strong.is-complete {
+  color: var(--success);
+}
+
+.alien-hate-econ-formula {
+  border-top: 1px solid var(--line-strong);
+}
+
+.alien-hate-econ-formula summary {
+  padding: 8px 0 0;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.07em;
+  list-style-position: inside;
+  text-transform: uppercase;
+}
+
+.alien-hate-econ-formula-body {
+  display: grid;
+  gap: 7px;
+  padding: 9px 10px;
+  border-left: 2px solid var(--accent);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.45;
+}
+
+.alien-hate-econ-formula-body code {
+  color: var(--text);
+  font-size: var(--fs-meta);
+}
+
+.alien-hate-econ-formula-body p {
+  margin: 0;
+}
+
+.alien-hate-econ-formula-body strong {
+  color: var(--accent-strong);
+}
+
+.alien-hate-econ-empty {
+  display: grid;
+  gap: 6px;
+  padding: 12px 0;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.45;
+}
+
+.alien-hate-econ-empty strong {
+  color: var(--text-soft);
+}
+
+.largest-hostile-fleet {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 8px 9px;
+  border-left: 2px solid var(--danger);
+  background: var(--surface-raised);
+  font-family: var(--mono);
+}
+
+.largest-hostile-fleet span {
+  color: var(--danger);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.07em;
+}
+
+.largest-hostile-fleet strong {
+  color: var(--text);
+  font-size: var(--fs-metric);
+}
+
+.largest-hostile-fleet small {
+  color: var(--text-muted);
+  font-size: var(--fs-tag);
+}
+
+.chart-container-box svg {
+  overflow: visible;
+}
+
+.chart-container-box svg [filter] {
+  filter: none !important;
+}
+
+.resource-position-note {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 0 0 9px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.4;
+}
+
+.resource-position-note strong {
+  flex: 0 0 auto;
+  color: var(--accent-strong);
+  letter-spacing: 0.08em;
+}
+
+.resource-position-table-wrap {
+  overflow-x: auto;
+}
+
+.resource-position-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.resource-position-table th,
+.resource-position-table td {
+  padding: 7px 6px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.resource-position-table thead th {
+  color: var(--text-dim);
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.resource-position-table tbody th {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.power-profile-note {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 8px;
+  color: var(--accent-strong);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.05em;
+}
+
+.power-profile-note span {
+  color: var(--text-dim);
+  letter-spacing: 0;
+}
+
+.power-profile-list {
+  display: grid;
+  gap: 8px;
+}
+
+.power-profile-row {
+  padding: 7px 0 8px;
+  border-top: 1px solid var(--line);
+}
+
+.power-profile-row.is-observer {
+  border-top-color: var(--accent);
+}
+
+.power-profile-name {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 4px;
+  color: var(--text-soft);
+  font-size: var(--fs-metric);
+  font-weight: 650;
+}
+
+.power-profile-row.is-observer .power-profile-name {
+  color: var(--accent-strong);
+}
+
+.power-profile-name small {
+  color: var(--warning);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.power-profile-bars {
+  display: grid;
+  gap: 3px;
+}
+
+.power-profile-bar {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 24px;
+  gap: 6px;
+  align-items: center;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.power-profile-bar i {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.power-profile-bar b {
+  display: block;
+  height: 100%;
+  background: var(--line-strong);
+}
+
+.power-profile-row.is-observer .power-profile-bar b {
+  background: var(--accent);
+}
+
+.power-profile-bar em {
+  color: var(--text-soft);
+  font-style: normal;
+  text-align: right;
+}
+
+.operative-leaderboard {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.op-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.op-bar-row:first-child {
+  padding-top: 0;
+}
+
+.operative-leaderboard-label {
+  margin: 2px 0 5px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.council-capability-block {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-strong);
+}
+
+.council-capability-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) auto;
+  gap: 6px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.council-capability-row strong {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.council-capability-row em {
+  color: var(--accent-strong);
+  font-style: normal;
+}
+
+.council-capability-gaps {
+  display: grid;
+  gap: 4px;
+  margin-top: 7px;
+  color: var(--warning);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.op-bar-row:hover {
+  background: transparent;
+}
+
+.op-bar-header {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.op-bar-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-metric);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-bar-score {
+  flex: 0 0 auto;
+  color: var(--accent-strong);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.op-bar-track {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.op-bar-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.op-bar-row > div:last-child {
+  color: var(--text-dim) !important;
+  font-family: var(--mono);
+  font-size: var(--fs-tag) !important;
+}
+
+.op-bar-row > div:last-child span:last-child {
+  color: var(--warning) !important;
+}
+
+.bubble-matrix-container {
+  display: flex;
+  min-height: 150px;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: var(--surface-inset);
+}
+
+.holding-bubble {
+  border: 1px solid var(--line-strong) !important;
+  background: var(--surface-raised) !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+  transition: transform 160ms ease, border-color 160ms ease;
+}
+
+.holding-bubble:hover {
+  border-color: var(--accent) !important;
+  transform: scale(1.05);
+}
+

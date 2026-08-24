@@ -1,0 +1,420 @@
+/* ========================================================================
+   20-research-advisor.css
+
+   The research advisor panel on COMMAND.
+
+   The deficit strip, the research queue, the track groups, the rows and the
+   chain / new-capability tags whose colours tests/researchRanking.test.js
+   resolves through :root.
+
+   Source: mission-control.css lines 7552-7958 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* ---------------------------------------------------------------------------
+   RESEARCH ADVISOR  (COMMAND view)
+   --------------------------------------------------------------------------- */
+
+.research-advisor {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-meta);
+}
+
+.research-advisor small {
+}
+
+.research-advisor__empty {
+  padding: 8px;
+  border: 1px dashed var(--line-strong);
+  color: var(--text-muted);
+  background: var(--surface-inset);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ra-deficit {
+  display: grid;
+  gap: 1px;
+  padding: 2px 6px;
+  background: var(--surface-inset);
+  border-left: 2px solid var(--line-strong);
+}
+
+.ra-deficit.is-gap { border-left-color: var(--danger); }
+.ra-deficit.is-unknown { border-left-color: var(--warning); }
+.ra-deficit.is-flat { border-left-color: var(--line-strong); }
+
+.ra-deficit__label {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.ra-deficit strong {
+  font-size: var(--fs-row);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ra-deficit__detail {
+  font-size: var(--fs-meta);
+  line-height: 1.25;
+  color: var(--text-muted);
+}
+
+/* Judgement calls are visually distinct from template-derived facts --
+   spec section 7. This line is the only place the panel asserts an opinion. */
+.ra-deficit__judgement {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  font-style: italic;
+  display: inline;
+}
+
+/* Current research queue & capacity strip */
+.ra-queue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 6px;
+  padding: 2px 6px;
+  background: var(--surface-inset);
+  border-left: 2px solid var(--accent);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.ra-queue__capacity {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: var(--fs-row);
+  color: var(--text);
+}
+
+.ra-queue__capacity.is-free {
+  color: var(--accent-strong);
+}
+
+.ra-queue__capacity.is-full {
+  color: var(--text-soft);
+}
+
+.ra-queue__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--text-dim);
+}
+
+.ra-queue__item {
+  white-space: nowrap;
+}
+
+.ra-queue__item-val {
+  color: var(--text);
+}
+
+.ra-tracks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+  align-items: stretch;
+}
+
+@media (max-width: 720px) {
+  .ra-tracks { grid-template-columns: 1fr; }
+}
+
+.ra-procurement {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 2px;
+  padding: 1px 4px;
+  background: var(--surface-inset);
+  border-left: 2px solid var(--line-strong);
+}
+
+.ra-procurement__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  color: var(--accent-strong);
+  text-transform: uppercase;
+  padding-bottom: 0.5px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ra-procurement__head small {
+  font-family: var(--mono);
+  color: var(--text-dim);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ra-track {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  height: 100%;
+}
+
+.ra-track__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.ra-track__head h4 {
+  font-family: var(--mono);
+  font-size: var(--fs-row);
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.ra-track__head small {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.ra-unit__label {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  padding-bottom: 1px;
+}
+
+.ra-group + .ra-group { margin-top: 2px; }
+
+.ra-group__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.ra-group__label small {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.ra-group.is-actionable .ra-group__label { color: var(--accent-strong); }
+.ra-group.is-aspirational .ra-group__label { color: var(--text-soft); }
+
+.ra-group__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ra-row {
+  padding: 0.5px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ra-row:last-child { border-bottom: 0; }
+
+.ra-row__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ra-row__name {
+  font-size: var(--fs-row);
+  color: var(--text);
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.25;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ra-row__sub {
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.ra-row__metric {
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+  color: var(--accent-strong);
+  white-space: nowrap;
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.ra-row__meta {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.ra-tag {
+  padding: 0 4px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.ra-tag--fittable {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+}
+
+.ra-tag--free {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ra-tag--deficit {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(212, 125, 118, 0.14);
+}
+
+.ra-tag--warn {
+  border-color: var(--warning);
+  color: var(--warning);
+  background: rgba(212, 163, 94, 0.14);
+}
+
+/* A multiple whose axis carries no unit. Deliberately the quietest of the
+   three tags: it marks a row as less comparable, not as a warning. */
+.ra-tag--unitless {
+  border-style: dashed;
+  color: var(--text-dim);
+}
+
+/* "N steps": the payoff is more than one project away, so the row's lead name
+   is the step you start and not the thing you get. Informational, not a
+   warning, so it takes --blue rather than --warning or --danger. Both of these
+   were emitted by research-advisor.js with no rule at all and rendered as a
+   bare .ra-tag, indistinguishable from the neutral badges beside them. Neither
+   sets a font-size: .ra-tag already carries var(--fs-tag), and a second size
+   here would be a hardcoded value competing with the scale. */
+.ra-tag--chain {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: rgba(143, 178, 189, 0.14);
+}
+
+/* "new": a capability with no fielded baseline, so it carries no multiple. Set
+   apart from every ranked row because it is not ranked at all -- the metric
+   column reads "First of kind" rather than a number. */
+.ra-tag--newcap {
+  border-color: var(--purple);
+  color: var(--purple);
+  background: rgba(179, 157, 189, 0.14);
+}
+
+.ra-track__foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 2px;
+  border-top: 1px dashed var(--line);
+}
+
+.ra-census,
+.ra-empty-group {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.ra-empty-group {
+  padding: 4px 6px;
+  border: 1px dashed var(--line);
+  background: var(--surface-inset);
+  text-transform: none;
+}
+
+.ra-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.ra-foot__btn {
+  padding: 1px 6px;
+  font-size: var(--fs-meta);
+}
+
+/* The label and the headline value share a line: two stacked lines said the
+   same thing and this card is on a measured page-height budget. */
+.ra-deficit__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 6px;
+}
+
+/* Scoped density for a card that has to fit the slack left in the COMMAND
+   left column. Applied by class rather than :has() so the selector is
+   explicit at the mount point. */
+.tech-card--dense .tech-card-header {
+  padding: 6px 10px;
+}
+
+.tech-card--dense .tech-card-body {
+  padding: 6px 10px 8px;
+}
+

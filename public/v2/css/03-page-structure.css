@@ -1,0 +1,146 @@
+/* ========================================================================
+   03-page-structure.css
+
+   The page frame and the card system every panel is built from.
+
+   .init-grid-layout, .init-col and the .tech-card chrome. Sits before every
+   component file because each of them styles content INSIDE a .tech-card.
+
+   Source: mission-control.css lines 968-1100 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Page structure --------------------------------------------------------- */
+
+.init-grid-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(520px, 1.4fr);
+  gap: 22px;
+  max-width: 1660px;
+  margin: 0 auto;
+  padding: 27px 26px 54px;
+  align-items: start;
+}
+
+.init-directives-banner,
+.init-view__full-card {
+  grid-column: 1 / -1;
+}
+
+.init-telemetry-banner {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  background: var(--surface-raised);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.init-col {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.tech-card {
+  min-width: 0;
+  /* --line is only ~1.56:1 on --canvas and reads as no edge at all; --line-strong
+     is ~2.23:1 and is what --featured already uses on its top rule. */
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.tech-card--priority {
+  border-top: 2px solid var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.tech-card--alert {
+  border-top: 2px solid var(--danger);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.tech-card--featured {
+  border-top: 2px solid var(--line-strong);
+}
+
+.tech-card--quiet {
+  background: transparent;
+}
+
+/* The horizontal inset matches .tech-card-body so the header title and the body
+   content sit on one left edge. They were 14px and 16px, which read as a 2px
+   misalignment down the length of every panel. Verticals were 11px/9px; they are
+   now symmetric and sum to the same 20px, so no panel changes height. */
+.tech-card-header {
+  display: flex;
+  min-height: 44px;
+  gap: var(--space-xl);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg) var(--space-2xl);
+  border-bottom: 1px solid var(--line);
+}
+
+.tech-card-title {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  align-items: center;
+  color: var(--text-soft);
+  font-family: var(--sans);
+  font-size: var(--fs-metric);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.tech-card--priority .tech-card-title::before,
+.tech-card--alert .tech-card-title::before,
+.tech-card--featured .tech-card-title::before {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  content: '';
+}
+
+.tech-card--priority .tech-card-title::before,
+.tech-card--featured .tech-card-title::before {
+  background: var(--accent);
+}
+
+.tech-card--alert .tech-card-title::before {
+  background: var(--danger);
+}
+
+.tech-card-header > span {
+  flex: 0 0 auto;
+  color: var(--text-dim) !important;
+  font-family: var(--mono) !important;
+  font-size: var(--fs-meta) !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tech-card-body {
+  padding: var(--space-2xl);
+}
+
+/* Panels ended with dead space: the last block inside a card body kept its own
+   bottom margin on top of the body's 16px padding, so cards closed on 24-28px of
+   nothing while opening on 16px. The body padding owns the bottom edge. */
+.tech-card-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.init-directives-banner {
+  grid-column: 1 / -1;
+}
+

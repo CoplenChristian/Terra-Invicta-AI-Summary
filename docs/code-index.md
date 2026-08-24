@@ -6,11 +6,12 @@ A required-reading map of what lives where, so an agent stops guessing.
 > here is derived from the source tree except each module's `Purpose:` line, which
 > is hand-written and enforced by `tests/codeIndex.test.js` -- a source module with
 > no purpose line fails the suite, and the checked-in index failing to match a
-> fresh generation fails it too.
+> fresh generation fails it too. Stylesheet parts carry a parsed purpose from
+> their header comment; the shell's `<link>` order is load-bearing cascade order.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**190 modules.**
+**192 JS modules** and **24 stylesheet parts** (216 indexed files).
 
 ## `public/`
 
@@ -34,8 +35,8 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/research-advisor.js` | BS | Browser (ESM) | 1056 | phase 4 of the research advisor, on screen. | — | — |
 | `public/v2/js/components/strategic-commentary.js` | BS | Browser (ESM) | 203 | renders the non-LLM four-layer Strategic Commentary Engine output. | — | — |
 | `public/v2/js/components/unlocked-tech.js` | BS | Browser (ESM) | 372 | renders the searchable list of the observer faction's unlocked | — | — |
-| `public/v2/js/components/world-map.js` | BS | Browser (ESM) | 493 | renders the interactive world/space theater map surface. | — | — |
-| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 2026 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/components/world-map.js` | BS | Browser (ESM) | 512 | renders the interactive world/space theater map surface. | — | — |
+| `public/v2/js/mission-control.js` | BS | Browser (ESM) | 2055 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (ESM) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
@@ -44,9 +45,10 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
 | `scripts/backfill_strategic_history.js` | C | Node (CommonJS) | 196 | backfill the strategic-history table from full snapshots already | `main` | — |
 | `scripts/build_static_snapshot.js` | C | Node (CommonJS) | 253 | build the static snapshot bundle — flatten the worker entry point, | — | — |
+| `scripts/derive_intel_fixtures.js` | C | Node (CommonJS) | 91 | derive committed full filtered-snapshot fixtures for the unit test | — | — |
 | `scripts/derive_snapshot_fixtures.js` | C | Node (CommonJS) | 165 | derive the committed filtered-snapshot fixtures the markdown export | — | — |
 | `scripts/export_intel_snapshots.js` | C | Node (CommonJS) | 157 | export full snapshots from Supabase to local gzipped JSON as the | `main` | — |
-| `scripts/generate_code_index.js` | C | Node (CommonJS) | 357 | Generate docs/code-index.md, the required-reading map of what lives | `collect, render` | — |
+| `scripts/generate_code_index.js` | C | Node (CommonJS) | 445 | Generate docs/code-index.md, the required-reading map of what lives | `collect, linkedCssHrefs, readCssPurpose, render, renderIndex` | — |
 | `scripts/parse_save.js` | C | Node (CommonJS) | 202 | the universal save-parser CLI — inspect save state, execute intel | `formatOutput, main, parseArgs, resolveNestedField` | — |
 | `scripts/publish/options.js` | C | Node (CommonJS) | 172 | publish stage 1 — decide what this run was asked to do from CLI | `PUBLISH_POLICY, parseArgs, parsePositiveInteger, retentionFromEnv, usage` | — |
 | `scripts/publish/parseStage.js` | C | Node (CommonJS) | 124 | publish stage 2 — turn a chosen save file into the raw snapshot | `parseTargetSave, resolveTargetSave` | — |
@@ -54,12 +56,13 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/publish/supabaseWriter.js` | C | Node (CommonJS) | 342 | publish stage 4 — every network write the publish makes, ordered to | `MAX_COMPACT_HISTORY_BYTES, MAX_UPSERT_BATCH_BYTES, MAX_UPSERT_BATCH_ROWS, batchSnapshotRows, buildCampaignPayload, commitCampaignPointer, createServiceClient, readExistingCampaign, shouldAdvancePointer, sleep, storeStrategicHistoryAndPrune, upsertSnapshotRows, …(+1)` | — |
 | `scripts/publish/techGraph.js` | C | Node (CommonJS) | 102 | publish stage 3a — apply the shared/inline/omitted tech-tree mode | `applyTechTreeMode, buildSharedTechGraph, splitTechTree, techGraphFingerprint` | `tests/techGraph.test.js` |
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 258 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
+| `scripts/run_unit_tests.js` | C | Node (CommonJS) | 35 | run the deterministic unit test suite — every tests/**/*.test.js file | — | — |
 | `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 383 | browser verification that the Drive Explorer renders the measured | — | — |
 | `scripts/verify_drive_path_modal.js` | C | Node (CommonJS) | 305 | browser verification that clicking a drive row actually opens the | — | — |
 | `scripts/verify_mining_registers.js` | C | Node (CommonJS) | 180 | browser verification that the mining board renders the measured | — | — |
-| `scripts/verify_mobile_overflow.js` | C | Node (CommonJS) | 244 | browser verification that no view clips content off-screen on narrow | — | — |
+| `scripts/verify_mobile_overflow.js` | C | Node (CommonJS) | 258 | browser verification that no view clips content off-screen on narrow | — | — |
 | `scripts/verify_research_actionability.js` | C | Node (CommonJS) | 196 | browser verification of research-advisor actionability against a | — | — |
-| `scripts/verify_research_tab_layout.js` | C | Node (CommonJS) | 243 | browser verification of the Research Advisor layout and legibility | — | — |
+| `scripts/verify_research_tab_layout.js` | C | Node (CommonJS) | 248 | browser verification of the Research Advisor layout and legibility | — | — |
 | `scripts/verify_research_vs_procurement.js` | C | Node (CommonJS) | 384 | browser verification of separating procurement from research and of | — | — |
 | `scripts/verify_supabase_rls.js` | C | Node (CommonJS) | 196 | verify Supabase RLS policies and hosted endpoints behave as | `main` | — |
 | `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 314 | browser verification of the v2 navigation acceptance checks against a | — | — |
@@ -226,4 +229,37 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `site/worker/projections.js` | E | Cloudflare worker only (ESM) | 225 | the hosted adapter over the shared projection registries — what this | `TECH_RESOURCES, buildIntelResource, buildTechIntelResource, intelResource, productionPlanPaths, techIntelResource, validateResourceQuery` | — |
 | `site/worker/runtimeDefaults.js` | E | Cloudflare worker only (ESM) | 69 | what this deployment believes its defaults are, and how a malformed | `HOSTED_MODES, positiveIntegerOr, readRuntimeDefaults` | — |
 | `site/worker/supabaseReader.js` | E | Cloudflare worker only (ESM) | 249 | every Supabase read the hosted runtime makes, plus the consistency | `boundedHistoryLimit, consistencyError, isSupabaseReady, sameTimestamp, strategicHistoryMeta, supabaseReadKey, timestampMs` | — |
+
+## `public/v2/css/`
+
+The v2 stylesheet in **cascade order** — the numeric prefix and the shell's
+`<link>` tags agree, and **reordering these parts changes what the reader sees**
+(for example `05-view-grid.css` must load before `15-responsive.css`).
+
+| order | module | lines | purpose |
+| --: | :-- | --: | :-- |
+| 1 | `public/v2/css/01-tokens-and-base.css` | 246 | The token vocabulary and the document itself. |
+| 2 | `public/v2/css/02-shell-header.css` | 749 | The persistent shell above every view. |
+| 3 | `public/v2/css/03-page-structure.css` | 147 | The page frame and the card system every panel is built from. |
+| 4 | `public/v2/css/04-command-panels.css` | 340 | COMMAND's own headline panels. |
+| 5 | `public/v2/css/05-view-grid.css` | 176 | The grid the six views lay their cards out on. |
+| 6 | `public/v2/css/06-map-and-charts.css` | 277 | The sector map, the donut and the chart primitives. |
+| 7 | `public/v2/css/07-hate-economics.css` | 651 | Alien hate economics and the resource/power readouts. |
+| 8 | `public/v2/css/08-directive-cards.css` | 398 | Directive cards, Hold Ground, toasts and the space/fleet summaries. |
+| 9 | `public/v2/css/09-detail-panel.css` | 336 | The dynamic briefing and the on-demand detail surfaces. |
+| 10 | `public/v2/css/10-intel-library.css` | 685 | The intelligence library overlay (operations data room). |
+| 11 | `public/v2/css/11-since-save.css` | 111 | The since-last-save change banner. |
+| 12 | `public/v2/css/12-executive-boards.css` | 531 | The executive intelligence board tables. |
+| 13 | `public/v2/css/13-faction-intel.css` | 437 | The faction dossier overlay. |
+| 14 | `public/v2/css/14-world-map.css` | 168 | The modular world map component. |
+| 15 | `public/v2/css/15-responsive.css` | 444 | The responsive passes over everything declared above. |
+| 16 | `public/v2/css/16-board-skill-cells.css` | 35 | Councilor skill cells in the executive board tables. |
+| 17 | `public/v2/css/17-directive-board.css` | 1399 | The directive engine board and the council orders panel. |
+| 18 | `public/v2/css/18-mining-expansion.css` | 496 | The mining expansion board and the wide-card capping. |
+| 19 | `public/v2/css/19-strategic-commentary.css` | 196 | The strategic commentary panel. |
+| 20 | `public/v2/css/20-research-advisor.css` | 421 | The research advisor panel on COMMAND. |
+| 21 | `public/v2/css/21-fleet-procurement.css` | 205 | FLEET view and the procurement / refit cards. |
+| 22 | `public/v2/css/22-drive-explorer.css` | 579 | DRIVES: the drive catalogue and its two registers. |
+| 23 | `public/v2/css/23-unlocked-tech.css` | 254 | The unlocked-technology panel on RECORDS. |
+| 24 | `public/v2/css/24-fleet-engagement.css` | 323 | THREAT: the per-fleet engagement estimates. |
 

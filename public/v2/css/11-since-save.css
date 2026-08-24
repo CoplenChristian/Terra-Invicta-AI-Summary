@@ -1,0 +1,110 @@
+/* ========================================================================
+   11-since-save.css
+
+   The since-last-save change banner.
+
+   Rendered by mission-control.js onto COMMAND, not by the library component,
+   even though the source declares it inside the data-room section.
+
+   Source: mission-control.css lines 3861-3958 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+.since-save-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+
+.since-save-meta,
+.since-save-empty {
+  display: grid;
+  gap: 5px;
+  grid-column: 1 / -1;
+  padding: 13px 12px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.since-save-meta strong,
+.since-save-empty strong {
+  color: var(--accent-strong);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.08em;
+}
+
+.since-save-card {
+  min-width: 0;
+  padding: 11px 12px 9px;
+  background: var(--surface);
+}
+
+.since-save-card--threat {
+  border-top: 2px solid var(--danger);
+}
+
+.since-save-card-heading {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: var(--fs-section);
+}
+
+.since-save-card-heading small {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.07em;
+  text-align: right;
+}
+
+.since-save-change,
+.since-save-politics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+}
+
+.since-save-change strong,
+.since-save-politics strong {
+  color: var(--text-soft);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.since-save-change em {
+  color: var(--text-muted);
+  font-style: normal;
+  text-align: right;
+}
+
+.since-save-change em.is-positive {
+  color: var(--success);
+}
+
+.since-save-change em.is-negative {
+  color: var(--warning);
+}
+
+.since-save-politics {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+}
+
+.since-save-politics span {
+  color: var(--text-muted);
+}
+

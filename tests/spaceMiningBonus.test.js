@@ -34,7 +34,8 @@ const {
 const { UNMODELLED_FACTORS, MINING_BONUS_RULES } = require('../shared/miningTechBonus.mjs');
 const { resolveMineModuleMultiplier, MINE_MODULE_STATES } = require('../shared/mineModuleOutput.mjs');
 const { MINING_RESOURCES } = require('../shared/intel/common.mjs');
-const { loadFilteredSnapshot, queryIntel } = require('../server/snapshotLoader');
+const { queryIntel } = require('../server/snapshotLoader');
+const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
 
 const OBSERVER = 4712;
 
@@ -261,7 +262,7 @@ function modelMonthlyMined(snapshot, factionRecord, { applyBonus }) {
 }
 
 test('with the space-mining bonus applied, every faction\'s mined output reconciles against the game\'s own revenue', () => {
-  const snapshot = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
 
   // Two things the mine model does not cover, excluded by MEASUREMENT rather
   // than by name: a faction that RECEIVES a resource transfer, and one that
@@ -314,7 +315,7 @@ test('with the space-mining bonus applied, every faction\'s mined output reconci
 test('WITHOUT the space-mining bonus the same model does NOT reconcile, which is what makes the term load-bearing', () => {
   // The mirror of the test above. If this ever passes, the term has stopped
   // mattering on this save and the test above has become decorative.
-  const snapshot = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
   const receivesTransfer = new Set((snapshot.resourceTransfers || [])
     .map(t => Number(t.targetFactionId)).filter(Number.isFinite));
   const ownsFlatIncome = new Set((snapshot.habModules || [])
@@ -347,7 +348,7 @@ test('WITHOUT the space-mining bonus the same model does NOT reconcile, which is
 
 test('the observer resolves its own bonus in player mode as well as omniscient', () => {
   for (const mode of ['player', 'omniscient']) {
-    const snapshot = loadFilteredSnapshot({ mode, observer: OBSERVER });
+    const snapshot = loadFixtureFilteredSnapshot({ mode, observer: OBSERVER });
     const observerFaction = snapshot.factions.find(f => Number(f.ID) === OBSERVER);
     const expected = buildSpaceMiningBonus(observerFaction, {
       councilors: snapshot.councilors.filter(c => Number(c.factionId) === OBSERVER),
@@ -367,7 +368,7 @@ test('the observer resolves its own bonus in player mode as well as omniscient',
 });
 
 test('a rival\'s effect list is redacted in player mode, and the whole payload is scanned for it', () => {
-  const omniscient = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
+  const omniscient = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
   const rivalEffects = new Set();
   for (const f of omniscient.factions) {
     if (Number(f.ID) === OBSERVER) continue;
@@ -376,7 +377,7 @@ test('a rival\'s effect list is redacted in player mode, and the whole payload i
   assert.ok(rivalEffects.size > 0,
     'this save gives at least one rival a SpaceMiningBonus effect, or this test covers nothing');
 
-  const player = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER });
+  const player = loadFixtureFilteredSnapshot({ mode: 'player', observer: OBSERVER });
   for (const f of player.factions) {
     if (Number(f.ID) === OBSERVER) continue;
     assert.strictEqual(f.spaceMiningBonusEffects, null,
@@ -403,7 +404,7 @@ test('a rival\'s effect list is redacted in player mode, and the whole payload i
 });
 
 test('a rival\'s org mining bonus cannot be composed in player mode, and refuses rather than under-reporting', () => {
-  const player = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER });
+  const player = loadFixtureFilteredSnapshot({ mode: 'player', observer: OBSERVER });
   for (const f of player.factions) {
     const factionId = Number(f.ID);
     if (factionId === OBSERVER) continue;

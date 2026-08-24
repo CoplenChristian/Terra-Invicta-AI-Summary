@@ -15,13 +15,19 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const repoRoot = path.join(__dirname, '..');
-const cssPath = path.join(repoRoot, 'public/v2/css/mission-control.css');
 const htmlPath = path.join(repoRoot, 'public/v2/index.html');
 const missionControlJsPath = path.join(repoRoot, 'public/v2/js/mission-control.js');
 const panelJsPath = path.join(repoRoot, 'public/v2/js/components/unlocked-tech.js');
 
+// The v2 stylesheet is an ordered set of parts. Both the text scans below and
+// the live-DOM test have to see ALL of them: the scroll-hint check derives the
+// set of styled *scroll-hint classes from the stylesheet and requires every one
+// to be registered in syncScrollHints, so reading one part would silently
+// shrink the set it checks -- a guard that passes because it stopped looking.
+const { readMissionControlCss, stylesheetPaths } = require('./fixtures/missionControlCss');
+
 function readCss() {
-  return fs.readFileSync(cssPath, 'utf8');
+  return readMissionControlCss();
 }
 
 /** Pull the body of the first `@media (max-width: 900px)` block. */
@@ -192,7 +198,9 @@ test('the intelligence-library scroll hint is revealed by measurement, not by vi
     const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
     const page = await context.newPage();
     await page.setContent(fixture, { waitUntil: 'domcontentloaded' });
-    await page.addStyleTag({ path: cssPath });
+    // One <style> per part, in link order, so the page cascades them the way
+    // the shell does. A single addStyleTag would silently drop 23 of the 24.
+    for (const part of stylesheetPaths()) await page.addStyleTag({ path: part });
     await page.addScriptTag({ path: missionControlJsPath });
 
     const displayOf = id => page.evaluate(

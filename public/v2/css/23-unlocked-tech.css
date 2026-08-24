@@ -1,0 +1,253 @@
+/* ========================================================================
+   23-unlocked-tech.css
+
+   The unlocked-technology panel on RECORDS.
+
+   Search controls, scope switch, result rows and the unavailable states.
+
+   Source: mission-control.css lines 8717-8958 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* =========================================================================
+   UNLOCKED TECHNOLOGY (RECORDS)
+   =========================================================================
+   Uses the existing palette and the four-step type scale unchanged. Spacing
+   comes from the --space-* scale so the panel's rhythm is stated rather than
+   guessed at, which is what the rest of the file was missing.
+
+   The project name leads each row at --fs-row and the item list sits under it
+   at --fs-meta: the project is what the player searches for in game, the items
+   are what it yields. See docs/research-row-naming-spec.md.
+   ========================================================================= */
+
+.ut-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-lg);
+  padding-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--line);
+}
+
+.ut-search {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.ut-search__label,
+.ut-scope-btn {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+}
+
+.ut-search__label {
+  color: var(--text-dim);
+}
+
+.ut-input {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-sm) var(--space-md);
+  color: var(--text);
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+}
+
+.ut-input::placeholder {
+  color: var(--text-dim);
+}
+
+.ut-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.ut-scope {
+  display: flex;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-inset);
+}
+
+.ut-scope-btn {
+  padding: var(--space-xs) var(--space-lg);
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.ut-scope-btn:hover {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.ut-scope-btn.is-active {
+  color: var(--canvas);
+  background: var(--accent);
+  font-weight: 700;
+}
+
+.ut-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Rows separate with a rule rather than becoming cards: a card per row inside a
+   card body is the nested-container habit, and 60 of them would read as 60
+   objects rather than as one list. */
+.ut-row {
+  padding: var(--space-lg) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ut-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.ut-row__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.ut-row__project {
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: var(--fs-row);
+  font-weight: 600;
+}
+
+.ut-row--unlocked .ut-row__project {
+  color: var(--accent-strong);
+}
+
+.ut-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-lg);
+  margin-top: var(--space-xs);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text-dim);
+}
+
+.ut-id {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+.ut-meta-item {
+  white-space: nowrap;
+}
+
+.ut-unavailable {
+  color: var(--warning);
+}
+
+.ut-status {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.ut-status--completed { color: var(--success); }
+.ut-status--researching { color: var(--accent); }
+.ut-status--available { color: var(--text-soft); }
+.ut-status--locked { color: var(--text-dim); }
+
+.ut-unlocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ut-unlock {
+  padding: 1px var(--space-sm);
+  color: var(--text-muted);
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+}
+
+/* Why this row is in the results at all when the query matched none of its own
+   names. Without it, searching "Copperhead" and being shown "Hydrolox High
+   Explosive Missiles" looks like a bug rather than the feature. */
+.ut-unlock--matched {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.ut-unlock__why {
+  margin-left: var(--space-sm);
+  color: var(--accent);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+}
+
+.ut-unlock--more {
+  color: var(--text-dim);
+  background: transparent;
+  border-style: dashed;
+}
+
+.ut-notice {
+  padding: var(--space-xl) 0;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+  line-height: 1.5;
+}
+
+.ut-notice--error {
+  color: var(--warning);
+}
+
+.ut-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-xs) var(--space-lg);
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.04em;
+}
+
+@media (pointer: coarse) {
+  .ut-input,
+  .ut-scope-btn {
+    min-height: 44px;
+  }
+}
+
+

@@ -4,7 +4,54 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Initiative // Executive Situation Report</title>
-  <link rel="stylesheet" href="/v2/css/mission-control.css">
+  <!--
+    THE v2 STYLESHEET, IN 24 PARTS. THE ORDER IS THE CASCADE.
+
+    This was one 9,268-line mission-control.css until 2026-08-23. Every part is
+    a contiguous slice of that file in its original order; nothing was moved,
+    merged or reformatted. Reordering these lines therefore changes what the
+    reader sees: 15-responsive.css only beats the view grid because it is linked
+    after it, .mining-meas__value only beats .mining-yields-text because
+    18-mining-expansion.css declares it later, and 16-board-skill-cells.css is a
+    separate 19-line part precisely because the source declares it AFTER the
+    responsive pass, where 12-executive-boards.css sits before.
+
+    Separate <link> tags rather than an @import chain, deliberately. Links are
+    discovered while the HTML is parsed and fetched in parallel; an @import is
+    only discovered after its parent has been downloaded and parsed, so a chain
+    of 24 serialises 24 round trips in front of first paint. public/index.html
+    links its two stylesheets the same way. Nothing in these files uses url(),
+    so no part's relative-URL base changes by becoming its own file.
+
+    tests/fixtures/missionControlCss.js reads THIS list as its order, and its
+    manifest check fails if a file in /v2/css/ has no <link> here or a <link>
+    here has no file -- so a part added later is covered by every stylesheet
+    test without any of them being edited.
+  -->
+  <link rel="stylesheet" href="/v2/css/01-tokens-and-base.css">
+  <link rel="stylesheet" href="/v2/css/02-shell-header.css">
+  <link rel="stylesheet" href="/v2/css/03-page-structure.css">
+  <link rel="stylesheet" href="/v2/css/04-command-panels.css">
+  <link rel="stylesheet" href="/v2/css/05-view-grid.css">
+  <link rel="stylesheet" href="/v2/css/06-map-and-charts.css">
+  <link rel="stylesheet" href="/v2/css/07-hate-economics.css">
+  <link rel="stylesheet" href="/v2/css/08-directive-cards.css">
+  <link rel="stylesheet" href="/v2/css/09-detail-panel.css">
+  <link rel="stylesheet" href="/v2/css/10-intel-library.css">
+  <link rel="stylesheet" href="/v2/css/11-since-save.css">
+  <link rel="stylesheet" href="/v2/css/12-executive-boards.css">
+  <link rel="stylesheet" href="/v2/css/13-faction-intel.css">
+  <link rel="stylesheet" href="/v2/css/14-world-map.css">
+  <link rel="stylesheet" href="/v2/css/15-responsive.css">
+  <link rel="stylesheet" href="/v2/css/16-board-skill-cells.css">
+  <link rel="stylesheet" href="/v2/css/17-directive-board.css">
+  <link rel="stylesheet" href="/v2/css/18-mining-expansion.css">
+  <link rel="stylesheet" href="/v2/css/19-strategic-commentary.css">
+  <link rel="stylesheet" href="/v2/css/20-research-advisor.css">
+  <link rel="stylesheet" href="/v2/css/21-fleet-procurement.css">
+  <link rel="stylesheet" href="/v2/css/22-drive-explorer.css">
+  <link rel="stylesheet" href="/v2/css/23-unlocked-tech.css">
+  <link rel="stylesheet" href="/v2/css/24-fleet-engagement.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⬢</text></svg>">
 </head>
 <body>
@@ -13,7 +60,7 @@
   <header class="init-topbar">
     <div class="init-brand">
       <div class="init-logo-icon" id="initFactionLogo">⬢</div>
-      <div>
+      <div class="init-brand-copy">
         <div class="init-brand-name">
           <span id="initBrandFactionName">THE INITIATIVE</span> <span class="init-brand-tag">EXECUTIVE COMMAND</span>
         </div>
@@ -38,9 +85,13 @@
       <div class="init-hud-pill init-hud-pill-observer">
         <span>OBSERVER:</span> <strong id="hudFaction" class="init-hud-faction-value"><span id="hudFactionLogo" class="init-hud-faction-logo" aria-hidden="true"></span><span id="hudFactionName">the Initiative</span></strong>
       </div>
-      <div class="init-hud-pill init-hud-pill-score">
-        <span>STRATEGIC SCORE (EST.):</span> <strong id="hudPower">-</strong>
-      </div>
+      <!-- No STRATEGIC SCORE pill here. It rendered the identical "66/100" that
+           the COMMAND executive strip already carries, one screen apart. The
+           strip keeps it: that instance sits beside the three quantities the
+           composite is built from, carries the "Composite estimate · Rank #n"
+           qualifier this pill never showed, and formats an absent score as
+           UNAVAILABLE. This pill interpolated `${powerScore}/100` unguarded,
+           so a missing score would have read as a confident "null/100". -->
       <button type="button" class="init-hud-hate" id="hudHateMeter" aria-label="Alien hate. Open full economics.">
         <span class="init-hud-hate__label">ALIEN HATE</span>
         <span class="init-hud-hate__track" aria-hidden="true">
@@ -139,6 +190,48 @@
     <!-- View 1: COMMAND (default) -->
     <section class="init-view" id="view-command" aria-label="Command view">
       <div class="init-command-layout">
+        <!--
+          The executive strip is its own full-width band, not a block inside the
+          PRIORITY BRIEF card. Two reasons it moved out:
+
+          1. It is not priority-brief content. Sitting inside that card put an
+             untitled block ABOVE the card's own header, so the one card on the
+             page read body -> header -> body while the other twenty-odd read
+             header -> body. Lifting it out restores the invariant without a
+             special case.
+          2. At half-column width each cell was 165px, and `.init-kpi-label` /
+             `.init-kpi-sub` are `white-space: nowrap; text-overflow: ellipsis`.
+             Measured at 1440: "STRATEGIC SCORE (EST.)" rendered as "STRATEGIC
+             SCORE (EST..." and "Composite estimate · Rank #2" as "Composite
+             estimate · Ra...". The figures were on screen and unreadable.
+
+          Full-width metric strips are THREAT's pattern (`.alien-hate-econ-grid`)
+          and this is the same shape: mono label, display-serif value, mono
+          sublabel, hairline dividers.
+        -->
+        <div class="init-kpi-banner">
+          <div class="init-kpi-item">
+            <div class="init-kpi-label">TREASURY</div>
+            <div id="kpiMoney" class="init-kpi-val">$0</div>
+            <div id="kpiMoneySub" class="init-kpi-sub">+0/mo Flow</div>
+          </div>
+          <div class="init-kpi-item">
+            <div class="init-kpi-label">TERRESTRIAL GDP</div>
+            <div id="kpiGdp" class="init-kpi-val">$0T</div>
+            <div id="kpiGdpSub" class="init-kpi-sub">0 Control Points</div>
+          </div>
+          <div class="init-kpi-item">
+            <div class="init-kpi-label">RESEARCH OUTPUT</div>
+            <div id="kpiResearch" class="init-kpi-val">0 pts</div>
+            <div id="kpiResearchSub" class="init-kpi-sub">R&amp;D Leadership</div>
+          </div>
+          <div class="init-kpi-item">
+            <div class="init-kpi-label">STRATEGIC SCORE (EST.)</div>
+            <div id="kpiPower" class="init-kpi-val">0/100</div>
+            <div id="kpiPowerSub" class="init-kpi-sub">Global Rank #1</div>
+          </div>
+        </div>
+
         <div class="init-command-top">
           <!-- Left Column -->
           <div class="init-command-col">
@@ -151,7 +244,7 @@
                 <div class="init-map-container">
                   <div class="world-map-fallback" role="status">REAL WORLD MAP INITIALIZING…</div>
                 </div>
-                <div id="mapSectorsList" style="margin-top: 10px;"></div>
+                <div id="mapSectorsList" class="init-sector-list"></div>
               </div>
             </div>
 
@@ -200,39 +293,19 @@
           <!-- Right Column -->
           <div class="init-command-col">
             <div class="tech-card tech-card--priority">
-              <div class="init-kpi-banner">
-                <div class="init-kpi-item">
-                  <div class="init-kpi-label">TREASURY</div>
-                  <div id="kpiMoney" class="init-kpi-val">$0</div>
-                  <div id="kpiMoneySub" class="init-kpi-sub">+0/mo Flow</div>
-                </div>
-                <div class="init-kpi-item">
-                  <div class="init-kpi-label">TERRESTRIAL GDP</div>
-                  <div id="kpiGdp" class="init-kpi-val">$0T</div>
-                  <div id="kpiGdpSub" class="init-kpi-sub">0 Control Points</div>
-                </div>
-                <div class="init-kpi-item">
-                  <div class="init-kpi-label">RESEARCH OUTPUT</div>
-                  <div id="kpiResearch" class="init-kpi-val">0 pts</div>
-                  <div id="kpiResearchSub" class="init-kpi-sub">R&amp;D Leadership</div>
-                </div>
-                <div class="init-kpi-item">
-                  <div class="init-kpi-label">STRATEGIC SCORE (EST.)</div>
-                  <div id="kpiPower" class="init-kpi-val">0/100</div>
-                  <div id="kpiPowerSub" class="init-kpi-sub">Global Rank #1</div>
-                </div>
-              </div>
-
-              <div class="tech-card-header" style="margin-top: 14px; border-top: 1px solid var(--line);">
+              <div class="tech-card-header">
                 <div class="tech-card-title">PRIORITY BRIEF</div>
                 <span>ONE ACTION FIRST</span>
               </div>
               <div class="tech-card-body">
                 <div id="priorityBriefCard" class="init-hologram-stage">
-                  <div class="holo-orbit-ring-outer"></div>
-                  <div class="holo-orbit-ring-inner"></div>
                   <div class="holo-core-content">
-                    <div class="holo-core-badge">01</div>
+                    <!-- The "01" that used to sit here was hardcoded: no id, no
+                         JS ever wrote it, so it read "01" whatever the engine
+                         ranked. A constant styled to look derived is worse than
+                         no numeral, and it was the last of the six decorative
+                         numerals on this card. -->
+                    <div class="holo-core-badge"></div>
                     <div id="holoPrimaryTitle" class="holo-core-title">Awaiting priority brief</div>
                     <div id="holoPrimaryStatement" class="holo-core-statement">
                       Maintain network surveillance until a higher-priority order is available.
@@ -251,29 +324,28 @@
                     <button id="openPriorityDetailsBtn" class="init-btn init-btn-cyan" type="button">Open details</button>
                     <button id="openCouncilorRosterBtn" class="init-btn" type="button">Open councilor roster</button>
                   </div>
+                  <!-- No "01".."05" numerals on these five. They numbered a set
+                       that is not a sequence: nothing reads them in order and
+                       nothing refers back to "node 03". They were decoration
+                       carrying the visual weight of a figure. -->
                   <div class="holo-node-grid">
                     <div class="holo-node">
-                      <div class="holo-node-num">01</div>
                       <div class="holo-node-label">GDP under command</div>
                       <div id="node1Val" class="holo-node-status">$39.4T GDP</div>
                     </div>
                     <div class="holo-node">
-                      <div class="holo-node-num">02</div>
                       <div class="holo-node-label">Councilors</div>
                       <div id="node2Val" class="holo-node-status">5 Active</div>
                     </div>
                     <div class="holo-node">
-                      <div class="holo-node-num">03</div>
                       <div class="holo-node-label">Orbital sites</div>
                       <div id="node3Val" class="holo-node-status">18 Habs</div>
                     </div>
                     <div class="holo-node">
-                      <div class="holo-node-num">04</div>
                       <div class="holo-node-label">Research position</div>
                       <div id="node4Val" class="holo-node-status">Leading</div>
                     </div>
                     <div class="holo-node">
-                      <div class="holo-node-num">05</div>
                       <div class="holo-node-label">Xenoforming sites</div>
                       <div id="node5Val" class="holo-node-status">DEFCON 2</div>
                     </div>

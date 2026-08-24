@@ -1,0 +1,339 @@
+/* ========================================================================
+   04-command-panels.css
+
+   COMMAND's own headline panels.
+
+   The executive metric band, the primary directive block, the priority-ops list
+   and the threat cards with their severity classes.
+
+   Source: mission-control.css lines 1101-1427 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Executive metrics ----------------------------------------------------- */
+
+/* A full-width band at the top of COMMAND, not a block inside the PRIORITY
+   BRIEF card -- see the note in index.html. At 1440 each cell went from 165px
+   to 347px, which is what stopped `.init-kpi-label` and `.init-kpi-sub` losing
+   their tails to `text-overflow: ellipsis`. */
+.init-kpi-banner {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.init-kpi-item {
+  position: relative;
+  min-width: 0;
+  padding: 13px 16px 12px;
+}
+
+.init-kpi-item:not(:last-child)::after {
+  position: absolute;
+  top: 16px;
+  right: 0;
+  bottom: 16px;
+  width: 1px;
+  background: var(--line);
+  content: '';
+}
+
+.init-kpi-label {
+  overflow: hidden;
+  color: var(--text-dim) !important;
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.init-kpi-label span {
+  display: none;
+}
+
+.init-kpi-val {
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--text) !important;
+  font-family: var(--display);
+  font-size: var(--fs-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.init-kpi-sub {
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--sans);
+  font-size: var(--fs-row);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Primary directive ------------------------------------------------------ */
+
+/* Flat. This used to be a bordered, raised box sitting inside `.tech-card-body`
+   -- a card inside a card, with 24px of its own padding on top of the body's
+   16px. THREAT has no nested containers anywhere and reads cleanly for it, so
+   the stage is now just the region the body already frames.
+
+   Two decorations went with it:
+     - a `::before` 1px accent rule 42% across the top edge, which connected to
+       nothing and terminated in the middle of the panel;
+     - `cursor: pointer` and a `:focus-visible` ring, on a div with no click
+       handler, no tabindex and no role. It advertised an interaction that did
+       not exist. The two real controls are the buttons inside it. */
+.init-hologram-stage {
+  position: relative;
+  min-height: 0;
+}
+
+.holo-core-content {
+  position: relative;
+  z-index: 1;
+  max-width: 620px;
+}
+
+.holo-core-badge {
+  display: inline-block;
+  margin-bottom: 13px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--accent);
+  color: var(--accent-strong);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Was 'PRIMARY DIRECTIVE / ', with the markup supplying a hardcoded '01' after
+   the slash. The numeral is gone, so the trailing separator goes with it. */
+.holo-core-badge::before {
+  content: 'PRIMARY DIRECTIVE';
+}
+
+/* 38px made this the largest element on the dashboard, and it is a LABEL -- the
+   name of a recommended action -- not a measurement. THREAT's metric values,
+   the biggest real figures in the product, are 19px display serif
+   (`.alien-hate-econ-metric strong`), and the executive strip's values are
+   `clamp(21px, 2.1vw, 30px)`. A directive title outranking both inverted the
+   hierarchy: the reader's eye landed on the name of the number rather than any
+   number. It now sits just under the strip values and just over THREAT's. */
+.holo-core-title {
+  max-width: 620px;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: var(--fs-kpi);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+  text-transform: none;
+}
+
+.holo-core-statement {
+  max-width: 560px;
+  margin-top: 13px;
+  color: var(--text-soft);
+  font-family: var(--sans);
+  font-size: var(--fs-section);
+  line-height: 1.55;
+}
+
+.priority-policy-note {
+  max-width: 560px;
+  margin: 12px 0 0;
+  color: var(--warning);
+  font-family: var(--sans);
+  font-size: var(--fs-row);
+  line-height: 1.45;
+}
+
+.priority-hate-band {
+  position: relative;
+  z-index: 1;
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-metric);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.priority-ops-meta {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.priority-ops-meta > div {
+  min-width: 0;
+  padding: 0 12px;
+  border-left: 1px solid var(--line);
+}
+
+.priority-ops-meta > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.priority-ops-meta dt {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.priority-ops-meta dd {
+  margin-top: 4px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: var(--fs-row);
+}
+
+.priority-ops-meta dd.is-unavailable,
+.is-unavailable {
+  color: var(--warning);
+}
+
+.priority-ops-roster {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.priority-op {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-inset);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.priority-op strong {
+  display: block;
+  font-family: var(--display);
+  font-size: var(--fs-section);
+  font-weight: 700;
+}
+
+.priority-op span {
+  display: block;
+  color: var(--text-muted);
+  font-family: var(--sans);
+  font-size: var(--fs-row);
+}
+
+.priority-op em {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  font-style: normal;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--warning);
+}
+
+.priority-op.is-ready em {
+  color: var(--success);
+}
+
+.priority-ops-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.threat-board {
+  display: grid;
+  gap: 0;
+}
+
+.threat-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 0 13px;
+  border-top: 1px solid var(--line);
+}
+
+.threat-card:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.threat-card__kicker {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.threat-card__title {
+  color: var(--text);
+  font-family: var(--display);
+  font-size: var(--fs-section);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.threat-card__statement {
+  color: var(--text-soft);
+  font-family: var(--sans);
+  font-size: var(--fs-row);
+  line-height: 1.5;
+}
+
+.severity-CRITICAL {
+  color: var(--danger);
+}
+
+.severity-HIGH {
+  color: var(--warning);
+}
+
+.severity-READY {
+  color: var(--success);
+}
+
+.severity-WATCH {
+  color: var(--accent);
+}
+
+.severity-HOLD {
+  color: var(--warning);
+}
+
+.severity-UNKNOWN,
+.severity-STANDARD {
+  color: var(--warning);
+}
+
+.since-save-grid--compact {
+  max-height: 260px;
+  overflow: auto;
+}
+

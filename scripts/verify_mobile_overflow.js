@@ -12,7 +12,8 @@
  *    scrolling that container. `hidden` does not count: it clips, so the content
  *    is unreachable, which is the defect this script exists to catch.
  * 3. The six-button view nav fits without wrapping into content.
- * 4. Desktop is unchanged: COMMAND stays under 3.00 screens at 1920x1080.
+ * 4. Desktop guard: COMMAND stays under 3.25 screens at 1920x1080 (raised from
+ *    3.00 on 2026-08-24 -- see the note at the assertion).
  * 5. Both player and omniscient modes.
  *
  * Run: node scripts/verify_mobile_overflow.js
@@ -199,7 +200,20 @@ async function runVerification() {
         }
       }
 
-      // Desktop regression guard: COMMAND must stay under 3.00 screens at 1920.
+      // Desktop regression guard: COMMAND must stay under 3.25 screens at 1920.
+      //
+      // RAISED FROM 3.00 ON 2026-08-24, deliberately and by the owner's call, after
+      // the card-border and theater-row spacing work. The cards had no left, right
+      // or bottom border at all -- three of four edges were carried by a 1.095:1
+      // background contrast, which is effectively invisible -- and giving them a
+      // real boundary costs vertical space. That was judged worth it on the render.
+      //
+      // NOTE THIS SCRIPT AND verify_research_tab_layout.js MEASURE DIFFERENT THINGS
+      // and will not agree. This one measures `#view-command` alone; that one
+      // measures the whole page body, which includes ~130px of header and HUD
+      // chrome -- about 0.12 screens at 1080. Measured the day the budget was
+      // raised: 2.98 here, 3.104 there, from the same page. Neither is wrong;
+      // compare each against its own history, never against the other.
       await page.setViewportSize({ width: 1920, height: 1080 });
       await page.goto(`http://localhost:${TEST_PORT}${SHELL_PATH}#/command`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1400);
@@ -212,8 +226,8 @@ async function runVerification() {
       if (screens === null) {
         failures.push(`[${mode}] #view-command not found at 1920x1080`);
       } else {
-        console.log(`\n[${mode}] COMMAND at 1920x1080: ${screens.toFixed(2)} screens (budget < 3.00)`);
-        if (screens >= 3.0) {
+        console.log(`\n[${mode}] COMMAND at 1920x1080: ${screens.toFixed(2)} screens (budget < 3.25)`);
+        if (screens >= 3.25) {
           failures.push(`[${mode}] COMMAND is ${screens.toFixed(2)} screens at 1920, budget is < 3.00`);
         }
       }

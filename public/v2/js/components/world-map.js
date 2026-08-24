@@ -23,6 +23,25 @@
     danger: 'var(--danger, #d47d76)'
   };
 
+  // The map's own type ladder, in SVG user units -- NOT the page's --fs-* scale.
+  // The <svg> is `viewBox="0 0 720 360"` at `width: 100%`, so a size here is
+  // multiplied by (container width / 720) before it reaches a pixel: 8 units
+  // renders near 7px in a 640px card and near 10px in a 900px one. Mapping
+  // these onto page-pixel tokens would assert an equivalence that does not hold
+  // at any width but 720.
+  //
+  // What was wrong was the count, not the units. This drew five sizes -- 8,
+  // 8.25, 8.5, 10 and 10.5 -- for two roles, with 8 vs 8.25 (3%) separating a
+  // theater's fleet count from the status line directly above it. Those two are
+  // told apart by colour and by which line they sit on; three percent of a
+  // sub-pixel was never doing the work. Two steps, matched by --fs-map-name and
+  // Two steps, matched by --fs-map-name and --fs-map-note in 01-tokens-and-base.css
+  // so the CSS-driven labels agree.
+  var TYPE = {
+    name: 10.5,
+    note: 8
+  };
+
   // The save's six operational theaters remain the interaction model. The
   // geometry is real country geometry; country membership only tints/selects
   // a theater and never replaces save-derived metrics.
@@ -323,8 +342,8 @@
     description.textContent = 'World map with country geometry grouped into six clickable operational theaters.';
     svg.appendChild(description);
     setAttributes(createSvgElement(doc, 'rect', 'world-map-ocean'), { x: 0, y: 0, width: 720, height: 360, fill: COLORS.surfaceInset });
-    appendText(doc, svg, 'world-map-heading', settings.title || 'GLOBAL THEATER STATUS', { x: 24, y: 24, fill: COLORS.textSoft, 'font-family': 'var(--sans,system-ui,sans-serif)', 'font-size': 10, 'font-weight': 700, 'letter-spacing': 2 });
-    appendText(doc, svg, 'world-map-heading-meta', 'ACTUAL COUNTRY GEOMETRY / SELECT THEATER', { x: 696, y: 24, fill: COLORS.textSoft, 'font-family': 'var(--mono,monospace)', 'font-size': 8.5, 'text-anchor': 'end', 'letter-spacing': 1 });
+    appendText(doc, svg, 'world-map-heading', settings.title || 'GLOBAL THEATER STATUS', { x: 24, y: 24, fill: COLORS.textSoft, 'font-family': 'var(--sans,system-ui,sans-serif)', 'font-size': TYPE.name, 'font-weight': 700, 'letter-spacing': 2 });
+    appendText(doc, svg, 'world-map-heading-meta', 'ACTUAL COUNTRY GEOMETRY / SELECT THEATER', { x: 696, y: 24, fill: COLORS.textSoft, 'font-family': 'var(--mono,monospace)', 'font-size': TYPE.note, 'text-anchor': 'end', 'letter-spacing': 1 });
     var mapRule = createSvgElement(doc, 'path', 'world-map-rule');
     setAttributes(mapRule, { d: 'M 24 34 H 696', fill: 'none', stroke: COLORS.line, 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' });
     svg.appendChild(mapRule);
@@ -347,7 +366,7 @@
       var dot = createSvgElement(doc, 'circle', 'world-map-legend-dot');
       setAttributes(dot, { cx: item.x, cy: 332, r: 3, fill: palette.stroke, 'aria-hidden': 'true' });
       legend.appendChild(dot);
-      appendText(doc, legend, 'world-map-legend-label', item.label, { x: item.x + 9, y: 335, fill: COLORS.textSoft, 'font-family': 'var(--mono,monospace)', 'font-size': 8, 'letter-spacing': 0.55 });
+      appendText(doc, legend, 'world-map-legend-label', item.label, { x: item.x + 9, y: 335, fill: COLORS.textSoft, 'font-family': 'var(--mono,monospace)', 'font-size': TYPE.note, 'letter-spacing': 0.55 });
     });
     svg.appendChild(legend);
     root.appendChild(svg);
@@ -400,13 +419,13 @@
         var marker = createSvgElement(doc, 'circle', 'world-map-region-marker');
         setAttributes(marker, { cx: theater.markerX, cy: theater.markerY, r: 2.5, 'pointer-events': 'none' });
         var label = createSvgElement(doc, 'text', 'world-map-region-label');
-        setAttributes(label, { x: theater.labelX, y: theater.labelY, fill: COLORS.text, 'font-family': 'var(--sans,system-ui,sans-serif)', 'font-size': 10.5, 'font-weight': 800, 'letter-spacing': 0.6, 'pointer-events': 'none', 'text-anchor': 'middle' });
+        setAttributes(label, { x: theater.labelX, y: theater.labelY, fill: COLORS.text, 'font-family': 'var(--sans,system-ui,sans-serif)', 'font-size': TYPE.name, 'font-weight': 800, 'letter-spacing': 0.6, 'pointer-events': 'none', 'text-anchor': 'middle' });
         label.textContent = name.length > 19 ? theater.shortLabel : name.toUpperCase();
         var statusText = createSvgElement(doc, 'text', 'world-map-region-status');
-        setAttributes(statusText, { x: theater.labelX, y: theater.labelY + 13, 'font-family': 'var(--mono,monospace)', 'font-size': 8.5, 'font-weight': 800, 'letter-spacing': 0.55, 'pointer-events': 'none', 'text-anchor': 'middle' });
+        setAttributes(statusText, { x: theater.labelX, y: theater.labelY + 13, 'font-family': 'var(--mono,monospace)', 'font-size': TYPE.note, 'font-weight': 800, 'letter-spacing': 0.55, 'pointer-events': 'none', 'text-anchor': 'middle' });
         statusText.textContent = visualStatus;
         var countText = createSvgElement(doc, 'text', 'world-map-region-counts');
-        setAttributes(countText, { x: theater.labelX, y: theater.labelY + 25, fill: COLORS.textSoft, 'font-family': 'var(--mono,monospace)', 'font-size': 8.25, 'letter-spacing': 0.35, 'pointer-events': 'none', 'text-anchor': 'middle' });
+        setAttributes(countText, { x: theater.labelX, y: theater.labelY + 25, fill: COLORS.textSoft, 'font-family': 'var(--mono,monospace)', 'font-size': TYPE.note, 'letter-spacing': 0.35, 'pointer-events': 'none', 'text-anchor': 'middle' });
         countText.textContent = 'H ' + countLabel(hostileCount) + ' / OWN ' + countLabel(ownCount);
         view.group.appendChild(markerHalo);
         view.group.appendChild(marker);
@@ -480,7 +499,7 @@
         totalHostile += view.record ? (readCount(view.record, ['hostileCount', 'hostile', 'hostiles', 'hostileNations']) || 0) : 0;
         totalOwn += view.record ? (readCount(view.record, ['ownCount', 'own', 'ownedCount', 'securedCount', 'friendlyCount']) || 0) : 0;
       });
-      appendText(doc, svg, 'world-map-summary', 'CURRENT / HOSTILE ' + totalHostile + ' · OWN ' + totalOwn, { x: 696, y: 335, fill: COLORS.textSoft, 'font-family': 'var(--mono,monospace)', 'font-size': 8, 'font-weight': 700, 'text-anchor': 'end', 'letter-spacing': 0.6 });
+      appendText(doc, svg, 'world-map-summary', 'CURRENT / HOSTILE ' + totalHostile + ' · OWN ' + totalOwn, { x: 696, y: 335, fill: COLORS.textSoft, 'font-family': 'var(--mono,monospace)', 'font-size': TYPE.note, 'font-weight': 700, 'text-anchor': 'end', 'letter-spacing': 0.6 });
       appendText(doc, svg, 'world-map-data-note', 'COUNTRY GEOMETRY: BUNDLED GEOJSON', { x: 360, y: 300, 'text-anchor': 'middle' });
     }
 

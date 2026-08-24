@@ -25,7 +25,7 @@ const snapshotBuilder = require('../server/snapshotBuilder');
 const snapshotIdentity = require('../server/snapshotIdentity');
 const intelligenceFilter = require('../server/intelligenceFilter');
 const { makeSaveData } = require('./fixtures/syntheticSave');
-const snapshotLoader = require('../server/snapshotLoader');
+const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
 const { MISSION_CONTROL_SHARED } = require('./fixtures/renderHarness');
 const { buildResourceProjection, INTEL_ENDPOINT_INDEX, INTEL_ENDPOINT_EXAMPLES, SUPPORTED_RESOURCES } =
   require('../shared/intel/registry.mjs');
@@ -39,7 +39,7 @@ const OBSERVER = 4712;
 const liveCache = new Map();
 function live(mode) {
   if (!liveCache.has(mode)) {
-    liveCache.set(mode, snapshotLoader.loadFilteredSnapshot({ latest: true, mode, observer: OBSERVER }));
+    liveCache.set(mode, loadFixtureFilteredSnapshot({ mode, observer: OBSERVER }));
   }
   return liveCache.get(mode);
 }
@@ -1219,10 +1219,12 @@ test('the panel says so honestly when there is nothing to render', () => {
 // ---------------------------------------------------------------------------
 
 test('the measured and estimate CSS registers differ on font, style and colour', () => {
-  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'v2', 'css', 'mission-control.css'), 'utf8');
+  // Every part the shell links, concatenated in cascade order: the rule has to
+  // be reachable by the browser, not merely present in one file of the set.
+  const css = require('./fixtures/missionControlCss').readMissionControlCss();
   const ruleFor = (selector) => {
     const match = css.match(new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`));
-    assert.ok(match, `${selector} must exist in mission-control.css`);
+    assert.ok(match, `${selector} must exist in the v2 stylesheet`);
     return Object.fromEntries(match[1].split(';')
       .map(line => line.trim())
       .filter(Boolean)

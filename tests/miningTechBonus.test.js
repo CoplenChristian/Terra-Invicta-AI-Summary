@@ -36,7 +36,8 @@ const readers = require('../server/briefing/readers');
 const { scoreMiningSiteCandidate } = require('../shared/intelResources.mjs');
 const { renderWarRoomMarkdown, WAR_ROOM_BYTE_BUDGET } = require('../shared/markdownExports.mjs');
 const { makeMarkdownSnapshot } = require('./fixtures/syntheticMarkdownSnapshot');
-const { loadFilteredSnapshot, queryIntel } = require('../server/snapshotLoader');
+const { queryIntel } = require('../server/snapshotLoader');
+const { loadFixtureFilteredSnapshot, queryFixtureIntel } = require('./fixtures/frozenSnapshots');
 
 const OBSERVER = 4712;
 const WATER_RULE = MINING_BONUS_RULES.find(rule => rule.key === 'water');
@@ -268,7 +269,7 @@ test('an unmeasured site rate stays null after adjustment, in both directions', 
 
 test('the observer resolves a real mine bonus in player mode as well as omniscient', () => {
   for (const mode of ['player', 'omniscient']) {
-    const snapshot = loadFilteredSnapshot({ mode, observer: OBSERVER });
+    const snapshot = loadFixtureFilteredSnapshot({ mode, observer: OBSERVER });
     const observerFaction = snapshot.factions.find(f => Number(f.ID) === OBSERVER);
     const expected = buildMiningTechBonuses(observerFaction, { projectListComplete: true });
     const payload = queryIntel({ snapshot, endpoint: 'mining-expansion', mode, observer: OBSERVER });
@@ -298,13 +299,13 @@ test('the observer resolves a real mine bonus in player mode as well as omniscie
 });
 
 test('player mode and omniscient mode agree, because the bonus is the observer\'s own knowledge', () => {
-  const player = queryIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER }).miningTechBonus;
-  const omni = queryIntel({ endpoint: 'mining-expansion', mode: 'omniscient', observer: OBSERVER }).miningTechBonus;
+  const player = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER }).miningTechBonus;
+  const omni = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'omniscient', observer: OBSERVER }).miningTechBonus;
   assert.deepStrictEqual(player.byResource, omni.byResource);
 });
 
 test('no OTHER faction\'s mining projects leak into the player-mode payload', () => {
-  const omniSnapshot = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
+  const omniSnapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
   const observerProjects = new Set(
     (omniSnapshot.factions.find(f => Number(f.ID) === OBSERVER)?.completedProjects) || []
   );
@@ -317,7 +318,7 @@ test('no OTHER faction\'s mining projects leak into the player-mode payload', ()
   );
   assert.ok(rivalOnly.length > 0, 'this save has at least one grant only a rival holds');
 
-  const playerPayload = JSON.stringify(queryIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER }));
+  const playerPayload = JSON.stringify(queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER }));
   for (const project of rivalOnly) {
     assert.ok(!playerPayload.includes(project),
       `player mode must not name ${project}, which only a rival holds`);
@@ -328,7 +329,7 @@ test('the observer\'s own income reconciles at exactly 1.15^n, which is what pro
   // `cachedYearlyRevenue` is the game's own annualised income. If the save's
   // site rates were already bonus-adjusted, the bonused resource would
   // reconcile at the SAME factor as the unbonused ones, and this fails.
-  const snapshot = loadFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: OBSERVER });
   const observer = snapshot.factions.find(f => Number(f.ID) === OBSERVER);
   const bonuses = buildMiningTechBonuses(observer, { projectListComplete: true });
   assert.strictEqual(bonuses.available, true);
@@ -509,7 +510,7 @@ test('the war-room mine-output block is identical in both modes on the live save
   // player mode intact and this block must not degrade there. A feature
   // verified only in omniscient mode is not verified.
   const blockOf = (mode) => {
-    const snapshot = loadFilteredSnapshot({ mode, observer: OBSERVER });
+    const snapshot = loadFixtureFilteredSnapshot({ mode, observer: OBSERVER });
     const lines = renderWarRoomMarkdown(snapshot).split('\n');
     const start = lines.findIndex(line => line.includes('Mine output multipliers'));
     assert.ok(start >= 0, `${mode}: the war room carries the mine-output block`);
@@ -524,7 +525,7 @@ test('the war-room mine-output block is identical in both modes on the live save
     'the observer\'s own list IS readable in player mode, so this must not fall through to unknown');
 
   // And whatever multiplier is in force is attributed, on the live save too.
-  const observer = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER })
+  const observer = loadFixtureFilteredSnapshot({ mode: 'player', observer: OBSERVER })
     .factions.find(f => Number(f.ID) === OBSERVER);
   const bonuses = buildMiningTechBonuses(observer, { projectListComplete: true });
   for (const key of bonuses.boostedResources) {
@@ -536,7 +537,7 @@ test('the war-room mine-output block is identical in both modes on the live save
 
 test('the mine-output block leaves the war room inside its byte budget in both modes', () => {
   for (const mode of ['player', 'omniscient']) {
-    const markdown = renderWarRoomMarkdown(loadFilteredSnapshot({ mode, observer: OBSERVER }));
+    const markdown = renderWarRoomMarkdown(loadFixtureFilteredSnapshot({ mode, observer: OBSERVER }));
     const bytes = Buffer.byteLength(markdown, 'utf8');
     assert.ok(bytes < WAR_ROOM_BYTE_BUDGET,
       `${mode}: ${bytes} bytes against the ${WAR_ROOM_BYTE_BUDGET} ceiling`);

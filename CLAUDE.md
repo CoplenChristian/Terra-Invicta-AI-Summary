@@ -63,7 +63,7 @@ Check the real object shape before choosing a field name, and never let an unres
 
 Passing tests are **not** sufficient evidence for a refactor. Capture every affected surface before and after — snapshots, briefings, all intel endpoints, both modes — and `diff -rq` to zero. Strip `generatedAt` first.
 
-**Capture against frozen saves copied to disk, MD5-verified.** The game is usually running; the live save folder gained new autosaves mid-run four times in one session. A live-save comparison shows phantom diffs and hides real ones. Prove the harness is deterministic with two identical baseline runs before trusting a single diff.
+**For refactor before/after captures, use frozen saves copied to disk, MD5-verified** — not the live save folder while the game is running. The unit suite (`npm test`) reads committed fixtures in `tests/fixtures/snapshot-*-intel.json` via `tests/fixtures/frozenSnapshots.js` and must stay deterministic. Live-save contact tests live under `tests/live/` and run via `npm run test:live`; a failure there means the current campaign moved, not that the build broke.
 
 Corroborate with token counts over code lines only: `?? 0`, `|| 0`, `=== null`, `sameId(`, `*Measured`, `*Available`. Any change must be individually explainable — that check catches a re-introduced `?? 0` even when every test passes and every endpoint matches.
 
@@ -194,6 +194,12 @@ const miningIntel = queryIntel({ endpoint: 'mining', mode: 'player' });
 When searching, summarizing, or assessing save data, always use the most recently modified save in the configured save folder (`--latest` / `-Latest`). Do not hard-code `initiative.gz`, `Again.gz`, or another filename unless the user explicitly requests that save.
 
 If the newest save is locked or incomplete because the game is writing it, the loader detects the fingerprint mismatch and reports a 503 error. Retry after the save finishes rather than falling back to stale data.
+
+### Test suite
+
+- **`npm test`** — unit suite only (`scripts/run_unit_tests.js`). Reads committed fixtures, not the live save folder. Must pass identically with the game running.
+- **`npm run test:live`** — integration tests in `tests/live/` that contact the current campaign. Skips cleanly when no save is configured. A failure here usually means the game state moved somewhere the model does not cover yet — information, not a broken build.
+- Regenerate intel fixtures deliberately: `node scripts/derive_intel_fixtures.js [--save Autosave.gz]`
 
 ### Legacy PowerShell parsers
 The legacy scripts (`parse_alien_councilor_locations.ps1`, `parse_alien_hate.ps1`, `parse_faction_councilors.ps1`, `parse_faction_nations.ps1`, `parse_faction_space_assets.ps1`) remain functional for backward compatibility, but new agent work and automation should use `scripts/parse_save.js` / `server/snapshotLoader.js`.

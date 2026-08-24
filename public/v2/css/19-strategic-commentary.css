@@ -1,0 +1,195 @@
+/* ========================================================================
+   19-strategic-commentary.css
+
+   The strategic commentary panel.
+
+   COMMAND's prose commentary, its beats, its simulation block and its
+   projections.
+
+   Source: mission-control.css lines 7369-7551 before the 2026-08-23 split.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+/* Strategic Commentary --------------------------------------------------- */
+
+.tech-card--commentary {
+  border-top: 2px solid var(--accent);
+  background: var(--surface);
+}
+
+.commentary-mode-tag {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.08em;
+  color: var(--accent-strong);
+}
+
+.commentary-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.commentary-headline {
+  font-size: var(--fs-section);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.commentary-prose {
+  font-size: var(--fs-row);
+  line-height: 1.6;
+  color: var(--text-soft);
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--surface-inset);
+  border-left: 3px solid var(--accent);
+}
+
+.commentary-prose em {
+  font-style: normal;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.commentary-beats-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.commentary-beat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.commentary-beat-chip--pivotal {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.commentary-beat-chip--high {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.commentary-beat-chip--standard {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.commentary-beat-chip--watch {
+  border-color: var(--text-muted);
+  color: var(--text-dim);
+}
+
+.commentary-sim-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.commentary-sim-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.commentary-sim-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  background: var(--surface-raised);
+  border: 1px dashed var(--accent);
+  color: var(--accent-strong);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.05em;
+}
+
+.commentary-sim-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-metric);
+}
+
+.commentary-sim-table th,
+.commentary-sim-table td {
+  padding: 5px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.commentary-sim-table th {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.commentary-sim-table td small {
+  font-size: var(--fs-tag);
+}
+
+.commentary-sim-table td strong {
+  color: var(--text);
+}
+
+.commentary-sim-table td em {
+  font-style: normal;
+  color: var(--accent-strong);
+  font-family: var(--mono);
+}
+
+.commentary-projections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.commentary-proj-card {
+  padding: 8px 10px;
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+}
+
+.commentary-proj-label {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.commentary-proj-val {
+  font-size: var(--fs-row);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.commentary-empty {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.05em;
+  padding: 12px 0;
+}
+
+

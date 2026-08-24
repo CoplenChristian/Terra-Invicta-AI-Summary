@@ -25,7 +25,7 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 
-const { loadFilteredSnapshot } = require('../server/snapshotLoader');
+const { loadFixtureFilteredSnapshot, PLAYER_PATH, OMNI_PATH } = require('./fixtures/frozenSnapshots');
 const exportGenerator = require('../server/exportGenerator');
 const app = require('../server');
 const { makeMarkdownSnapshot, OBSERVER_ID } = require('./fixtures/syntheticMarkdownSnapshot');
@@ -488,12 +488,7 @@ test('compact snapshot output is byte-identical to frozen baseline captured from
 // 9. HTTP ENDPOINTS ON EPHEMERAL PORT (smoke -- skips cleanly without a save)
 // ---------------------------------------------------------------------------
 function hasLiveSave() {
-  try {
-    const raw = loadFilteredSnapshot({ mode: 'player', observer: OBSERVER_ID });
-    return !!(raw && raw.metadata);
-  } catch {
-    return false;
-  }
+  return fs.existsSync(PLAYER_PATH) && fs.existsSync(OMNI_PATH);
 }
 
 test('Express server serves /latest-threats.md and /latest-war-room.md on ephemeral port', async (t) => {
@@ -971,7 +966,7 @@ for (const exportMode of EXPORT_MODES) {
       t.skip('Skipping: no live save available');
       return;
     }
-    const snapshot = loadFilteredSnapshot({ mode: exportMode, observer: OBSERVER_ID });
+    const snapshot = loadFixtureFilteredSnapshot({ mode: exportMode, observer: OBSERVER_ID });
     const section = sectionNine(renderWarRoomMarkdown(snapshot));
     if (section.includes('Drive Explorer unavailable')) {
       t.skip('Skipping: this save carries no drive catalogue');
@@ -995,7 +990,7 @@ for (const exportMode of EXPORT_MODES) {
       t.skip('Skipping: no live save available');
       return;
     }
-    const snapshot = loadFilteredSnapshot({ mode: exportMode, observer: OBSERVER_ID });
+    const snapshot = loadFixtureFilteredSnapshot({ mode: exportMode, observer: OBSERVER_ID });
     const block = chainBlock(renderWarRoomMarkdown(snapshot));
     const counts = block.match(/\*([\d,]+) chain\(s\) promoted \((\d+) carried here, ([\d,]+) omitted/);
     assert.ok(counts, 'the block must state promoted, carried and omitted counts');
