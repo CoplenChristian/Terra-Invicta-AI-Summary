@@ -50,8 +50,10 @@ const KNOWN_BARRELS = new Set([
 function walk(dir) {
   const out = [];
   for (const name of fs.readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'app' || name === 'dist') continue;
+    if (name === 'node_modules') continue;
     const full = path.join(dir, name);
+    const rel = normalizePath(full);
+    if (rel === 'public/v2/app' || rel === 'dist' || rel.startsWith('dist/')) continue;
     const stat = fs.statSync(full);
     if (stat.isDirectory()) {
       out.push(...walk(full));

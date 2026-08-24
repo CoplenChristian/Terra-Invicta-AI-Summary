@@ -48,7 +48,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/derive_intel_fixtures.js` | C | Node (CommonJS) | 91 | derive committed full filtered-snapshot fixtures for the unit test | — | — |
 | `scripts/derive_snapshot_fixtures.js` | C | Node (CommonJS) | 165 | derive the committed filtered-snapshot fixtures the markdown export | — | — |
 | `scripts/export_intel_snapshots.js` | C | Node (CommonJS) | 157 | export full snapshots from Supabase to local gzipped JSON as the | `main` | — |
-| `scripts/generate_code_index.js` | C | Node (CommonJS) | 446 | Generate docs/code-index.md, the required-reading map of what lives | `collect, linkedCssHrefs, readCssPurpose, render, renderIndex` | — |
+| `scripts/generate_code_index.js` | C | Node (CommonJS) | 448 | Generate docs/code-index.md, the required-reading map of what lives | `collect, linkedCssHrefs, readCssPurpose, render, renderIndex` | — |
 | `scripts/parse_save.js` | C | Node (CommonJS) | 202 | the universal save-parser CLI — inspect save state, execute intel | `formatOutput, main, parseArgs, resolveNestedField` | — |
 | `scripts/publish/options.js` | C | Node (CommonJS) | 172 | publish stage 1 — decide what this run was asked to do from CLI | `PUBLISH_POLICY, parseArgs, parsePositiveInteger, retentionFromEnv, usage` | — |
 | `scripts/publish/parseStage.js` | C | Node (CommonJS) | 124 | publish stage 2 — turn a chosen save file into the raw snapshot | `parseTargetSave, resolveTargetSave` | — |
@@ -57,17 +57,17 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/publish/techGraph.js` | C | Node (CommonJS) | 102 | publish stage 3a — apply the shared/inline/omitted tech-tree mode | `applyTechTreeMode, buildSharedTechGraph, splitTechTree, techGraphFingerprint` | `tests/techGraph.test.js` |
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 258 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
 | `scripts/run_unit_tests.js` | C | Node (CommonJS) | 35 | run the deterministic unit test suite — every tests/**/*.test.js file | — | — |
-| `scripts/verify_bundle_size.js` | C | Node (CommonJS) | 115 | measures the raw and gzipped byte sizes of the bundled React + MUI | `BUDGET, measureBundle` | — |
-| `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 298 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates` | — |
-| `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 383 | browser verification that the Drive Explorer renders the measured | — | — |
+| `scripts/verify_bundle_size.js` | C | Node (CommonJS) | 144 | measures the raw and gzipped byte sizes of the bundled React + MUI | `BUDGET, isBuildArtifact, measureBundle` | — |
+| `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 398 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates, getActiveSaveFingerprint` | — |
+| `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 385 | browser verification that the Drive Explorer renders the measured | — | — |
 | `scripts/verify_drive_path_modal.js` | C | Node (CommonJS) | 305 | browser verification that clicking a drive row actually opens the | — | — |
-| `scripts/verify_mining_registers.js` | C | Node (CommonJS) | 180 | browser verification that the mining board renders the measured | — | — |
-| `scripts/verify_mobile_overflow.js` | C | Node (CommonJS) | 258 | browser verification that no view clips content off-screen on narrow | — | — |
+| `scripts/verify_mining_registers.js` | C | Node (CommonJS) | 182 | browser verification that the mining board renders the measured | — | — |
+| `scripts/verify_mobile_overflow.js` | C | Node (CommonJS) | 260 | browser verification that no view clips content off-screen on narrow | — | — |
 | `scripts/verify_research_actionability.js` | C | Node (CommonJS) | 196 | browser verification of research-advisor actionability against a | — | — |
 | `scripts/verify_research_tab_layout.js` | C | Node (CommonJS) | 248 | browser verification of the Research Advisor layout and legibility | — | — |
 | `scripts/verify_research_vs_procurement.js` | C | Node (CommonJS) | 384 | browser verification of separating procurement from research and of | — | — |
 | `scripts/verify_supabase_rls.js` | C | Node (CommonJS) | 196 | verify Supabase RLS policies and hosted endpoints behave as | `main` | — |
-| `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 314 | browser verification of the v2 navigation acceptance checks against a | — | — |
+| `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 316 | browser verification of the v2 navigation acceptance checks against a | — | — |
 
 ## `server/`
 

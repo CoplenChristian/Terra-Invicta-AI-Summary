@@ -8,11 +8,13 @@
 const { chromium } = require('playwright');
 const http = require('http');
 const path = require('path');
+const { ensureBundleBuilt } = require('../tests/fixtures/ensureBundle.js');
 
 process.env.PORT = '3888';
 process.env.NODE_ENV = 'test';
 
 async function runVerification() {
+  ensureBundleBuilt();
   console.log('[Verification] Starting local server on port 3888...');
   // Require fresh server
   const app = require('../server/index.js');

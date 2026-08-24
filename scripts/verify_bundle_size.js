@@ -15,22 +15,42 @@ const APP_DIR = path.resolve(__dirname, '../public/v2/app');
 // Measured baseline floor (React 18 + React-DOM + MUI v6 + Emotion in production mode):
 // - Raw: 302.81 KB (310,082 bytes)
 // - Gzip: 82.69 KB (84,672 bytes)
-// Budget set with deliberate headroom for the 16 components to be migrated in Phases 2..17:
-// - Max Gzipped: 250 KB (256,000 bytes)
-// - Max Uncompressed: 1,000 KB (1,024,000 bytes)
+// Budget set strictly to measured baseline floor + 15% headroom:
+// - Max Gzipped: 96 KB (98,304 bytes) [82.69 KB * 1.15 = 95.09 KB]
+// - Max Uncompressed: 350 KB (358,400 bytes) [302.81 KB * 1.15 = 348.23 KB]
+// NOTE: Each component migration phase may raise the budget explicitly in its commit
+// with the documented justification.
 const BUDGET = {
-  maxGzipBytes: 250 * 1024,
-  maxRawBytes: 1000 * 1024
+  maxGzipBytes: 96 * 1024,
+  maxRawBytes: 350 * 1024
 };
+
+// Allowed build artifact patterns emitted by Vite
+const ALLOWED_EXTENSIONS = new Set(['.js', '.css', '.map']);
+
+function isBuildArtifact(filePath) {
+  const base = path.basename(filePath);
+  const ext = path.extname(base);
+  if (!ALLOWED_EXTENSIONS.has(ext)) return false;
+  if (base.endsWith('.disabled') || base.endsWith('.bak') || base.endsWith('.tmp')) return false;
+  return true;
+}
 
 function formatKb(bytes) {
   return `${(bytes / 1024).toFixed(2)} KB (${bytes.toLocaleString()} bytes)`;
 }
 
-function measureBundle() {
+function measureBundle(options = {}) {
+  const allowMissing = options.allowMissing || process.argv.includes('--allow-missing');
+
   if (!fs.existsSync(APP_DIR)) {
-    console.warn(`[verify_bundle_size] Directory ${APP_DIR} does not exist (run 'npm run build' first).`);
-    return { files: [], totalRaw: 0, totalGzip: 0, passed: true, skipped: true };
+    if (allowMissing) {
+      console.warn(`[verify_bundle_size] Directory ${APP_DIR} does not exist (skipped via --allow-missing).`);
+      return { files: [], totalRaw: 0, totalGzip: 0, passed: true, skipped: true };
+    }
+    console.error(`[verify_bundle_size] ERROR: Bundle directory ${APP_DIR} is absent.`);
+    console.error('Cannot evaluate bundle size budget. Run `npm run build` first, or pass --allow-missing if intentional.');
+    return { files: [], totalRaw: 0, totalGzip: 0, passed: false, skipped: false, missing: true };
   }
 
   const fileList = [];
@@ -40,7 +60,7 @@ function measureBundle() {
       const stat = fs.statSync(full);
       if (stat.isDirectory()) {
         walk(full);
-      } else if (stat.isFile()) {
+      } else if (stat.isFile() && isBuildArtifact(full)) {
         fileList.push(full);
       }
     }
@@ -48,8 +68,13 @@ function measureBundle() {
   walk(APP_DIR);
 
   if (fileList.length === 0) {
-    console.warn(`[verify_bundle_size] No files found in ${APP_DIR}.`);
-    return { files: [], totalRaw: 0, totalGzip: 0, passed: true, skipped: true };
+    if (allowMissing) {
+      console.warn(`[verify_bundle_size] No build artifacts found in ${APP_DIR} (skipped via --allow-missing).`);
+      return { files: [], totalRaw: 0, totalGzip: 0, passed: true, skipped: true };
+    }
+    console.error(`[verify_bundle_size] ERROR: No valid build artifacts found in ${APP_DIR}.`);
+    console.error('Cannot evaluate bundle size budget. Run `npm run build` first.');
+    return { files: [], totalRaw: 0, totalGzip: 0, passed: false, skipped: false, missing: true };
   }
 
   let totalRaw = 0;
@@ -83,8 +108,12 @@ function measureBundle() {
 
 function printReport(result) {
   if (result.skipped) {
-    console.log('[verify_bundle_size] Bundle check skipped (no build output present).');
+    console.log('[verify_bundle_size] Bundle check skipped (no build output present, --allow-missing passed).');
     return;
+  }
+
+  if (result.missing) {
+    process.exit(1);
   }
 
   console.log('========================================================');
@@ -111,4 +140,4 @@ if (require.main === module) {
   printReport(res);
 }
 
-module.exports = { measureBundle, BUDGET };
+module.exports = { measureBundle, BUDGET, isBuildArtifact };

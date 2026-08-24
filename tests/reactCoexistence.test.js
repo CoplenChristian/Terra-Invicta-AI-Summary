@@ -13,11 +13,13 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { chromium } = require('playwright');
+const { ensureBundleBuilt } = require('./fixtures/ensureBundle.js');
 
 const TEST_PORT = Number(process.env.REACT_PROOF_PORT || 3996);
 const SHELL_PATH = '/v2/index.html';
 
 test('React coexistence proof mounts via VIEWS registry and reads global state', async () => {
+  ensureBundleBuilt();
   const app = require('../server/index.js');
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(TEST_PORT, resolve));

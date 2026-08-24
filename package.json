@@ -30,6 +30,7 @@
     "@modelcontextprotocol/server-sequential-thinking": "^2025.7.1",
     "@vitejs/plugin-react": "^4.7.0",
     "npx": "^10.2.2",
+    "playwright": "1.56.1",
     "playwright-mcp": "^0.0.13",
     "puppeteer-mcp-server": "^0.7.2",
     "vite": "^5.4.21"

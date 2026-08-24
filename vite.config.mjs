@@ -16,6 +16,7 @@ const backendPort = Number(process.env.PORT || 3000);
 const backendHost = process.env.HOST || '127.0.0.1';
 
 export default defineConfig({
+  mode: 'production',
   plugins: [react()],
   publicDir: false,
   define: {

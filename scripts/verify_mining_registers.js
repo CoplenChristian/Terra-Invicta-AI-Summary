@@ -126,6 +126,8 @@ async function verifyMode(page, mode) {
 }
 
 async function run() {
+  const { ensureBundleBuilt } = require('../tests/fixtures/ensureBundle.js');
+  ensureBundleBuilt();
   const app = require('../server/index.js');
   const http = require('http');
   const server = http.createServer(app);

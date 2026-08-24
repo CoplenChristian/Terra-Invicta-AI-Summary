@@ -133,6 +133,8 @@ async function selectMode(page, mode) {
 }
 
 async function runVerification() {
+  const { ensureBundleBuilt } = require('../tests/fixtures/ensureBundle.js');
+  ensureBundleBuilt();
   const app = require('../server/index.js');
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(TEST_PORT, resolve));

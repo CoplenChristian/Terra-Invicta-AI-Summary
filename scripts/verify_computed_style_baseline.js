@@ -123,7 +123,56 @@ function captureDomState(trackedProps) {
   return { rootProps, elements };
 }
 
+const crypto = require('crypto');
+const { ensureBundleBuilt } = require('../tests/fixtures/ensureBundle.js');
+const saveParser = require('../server/saveParser.js');
+
+function getActiveSaveFingerprint() {
+  const args = process.argv.slice(2);
+  let savePath = null;
+  if (args.includes('--save')) {
+    savePath = args[args.indexOf('--save') + 1];
+  } else if (process.env.TI_SAVE_FILE) {
+    savePath = process.env.TI_SAVE_FILE;
+  }
+
+  let saveFullPath = null;
+  if (savePath) {
+    saveFullPath = path.isAbsolute(savePath) ? savePath : path.resolve(process.cwd(), savePath);
+    if (!fs.existsSync(saveFullPath)) {
+      // Check in default saves folder
+      const folder = saveParser.resolveSaveFolder();
+      const candidate = path.join(folder, savePath);
+      if (fs.existsSync(candidate)) {
+        saveFullPath = candidate;
+      }
+    }
+  } else {
+    const saveInfo = saveParser.getLatestSaveFile();
+    saveFullPath = saveInfo?.fullPath;
+  }
+
+  if (!saveFullPath || !fs.existsSync(saveFullPath)) {
+    throw new Error('[verify_computed_style_baseline] No active save file found!');
+  }
+  const content = fs.readFileSync(saveFullPath);
+  const md5 = crypto.createHash('md5').update(content).digest('hex');
+  const stats = fs.statSync(saveFullPath);
+  return {
+    savePath: saveFullPath,
+    saveFileName: path.basename(saveFullPath),
+    md5,
+    sizeBytes: stats.size,
+    mtime: stats.mtime.toISOString()
+  };
+}
+
 async function captureFullState(page, logPrefix = '') {
+  const saveStart = getActiveSaveFingerprint();
+  if (logPrefix) {
+    console.log(`[Capture] Starting against save: ${saveStart.saveFileName} (MD5: ${saveStart.md5.slice(0, 8)}...)`);
+  }
+
   const result = {};
 
   for (const mode of MODES) {
@@ -151,21 +200,71 @@ async function captureFullState(page, logPrefix = '') {
     }
   }
   if (logPrefix) console.log();
-  return result;
+
+  const saveEnd = getActiveSaveFingerprint();
+  if (saveStart.md5 !== saveEnd.md5 || saveStart.savePath !== saveEnd.savePath) {
+    throw new Error(
+      `[verify_computed_style_baseline] SAVE DRIFT DETECTED during capture!\n` +
+      `  Start: ${saveStart.saveFileName} (${saveStart.md5})\n` +
+      `  End:   ${saveEnd.saveFileName} (${saveEnd.md5})\n` +
+      `CLAUDE.md requires capture against a frozen save.`
+    );
+  }
+
+  return {
+    metadata: {
+      saveFileName: saveStart.saveFileName,
+      savePath: saveStart.savePath,
+      saveMd5Start: saveStart.md5,
+      saveMd5End: saveEnd.md5,
+      saveMd5: saveStart.md5,
+      saveSizeBytes: saveStart.sizeBytes,
+      saveMtime: saveStart.mtime,
+      capturedAt: new Date().toISOString()
+    },
+    states: result
+  };
 }
 
-function diffStates(stateA, stateB, labelA = 'Run A', labelB = 'Run B') {
+function diffStates(rawA, rawB, labelA = 'Run A', labelB = 'Run B') {
   const diffs = [];
+  const metaA = rawA?.metadata || {};
+  const metaB = rawB?.metadata || {};
+  const statesA = rawA?.states || rawA || {};
+  const statesB = rawB?.states || rawB || {};
+
+  // Save MD5 verification guard
+  const md5A = metaA.saveMd5 || metaA.saveMd5Start;
+  const md5B = metaB.saveMd5 || metaB.saveMd5Start;
+  if (md5A && md5B && md5A !== md5B) {
+    diffs.push(
+      `REFUSING TO DIFF CAPTURES FROM DIFFERENT SAVES!\n` +
+      `  - ${labelA}: ${metaA.saveFileName || 'unknown'} (MD5: ${md5A})\n` +
+      `  - ${labelB}: ${metaB.saveFileName || 'unknown'} (MD5: ${md5B})\n` +
+      `Captures must be against the exact same MD5-verified save.`
+    );
+    return diffs;
+  }
 
   for (const mode of MODES) {
     for (const vp of VIEWPORTS) {
       const vpKey = `${vp.width}x${vp.height}`;
       for (const view of VIEWS) {
-        const dataA = stateA[mode]?.[vpKey]?.[view] || { rootProps: {}, elements: [] };
-        const dataB = stateB[mode]?.[vpKey]?.[view] || { rootProps: {}, elements: [] };
+        const dataA = statesA[mode]?.[vpKey]?.[view];
+        const dataB = statesB[mode]?.[vpKey]?.[view];
+
+        // Fail if a state is missing or has zero elements
+        if (!dataA || !Array.isArray(dataA.elements) || dataA.elements.length === 0) {
+          diffs.push(`[${mode} ${vpKey} ${view}] Missing or empty DOM state in ${labelA} (found ${dataA?.elements?.length ?? 0} elements)`);
+          continue;
+        }
+        if (!dataB || !Array.isArray(dataB.elements) || dataB.elements.length === 0) {
+          diffs.push(`[${mode} ${vpKey} ${view}] Missing or empty DOM state in ${labelB} (found ${dataB?.elements?.length ?? 0} elements)`);
+          continue;
+        }
 
         // Check root custom props
-        const allCustom = Array.from(new Set([...Object.keys(dataA.rootProps), ...Object.keys(dataB.rootProps)])).sort();
+        const allCustom = Array.from(new Set([...Object.keys(dataA.rootProps || {}), ...Object.keys(dataB.rootProps || {})])).sort();
         for (const k of allCustom) {
           if (dataA.rootProps[k] !== dataB.rootProps[k]) {
             diffs.push(`[${mode} ${vpKey} ${view} :root] Variable '${k}' differs: '${dataA.rootProps[k]}' vs '${dataB.rootProps[k]}'`);
@@ -216,6 +315,7 @@ function diffStates(stateA, stateB, labelA = 'Run A', labelB = 'Run B') {
 }
 
 async function run() {
+  ensureBundleBuilt();
   const args = process.argv.slice(2);
   const outDir = path.join(__dirname, '..', 'tmp', 'computed-style-captures');
   fs.mkdirSync(outDir, { recursive: true });
@@ -294,4 +394,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { captureFullState, diffStates };
+module.exports = { captureFullState, diffStates, getActiveSaveFingerprint };

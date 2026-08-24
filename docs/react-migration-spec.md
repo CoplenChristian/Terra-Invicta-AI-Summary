@@ -79,13 +79,21 @@ inside the existing page to prove the two can share a document.
 Deliverables & Settled Decisions:
 
 - **Vite build produces into `public/v2/app/`**: Fixed entry filename `bundle.js`, loaded via `<script type="module" src="/v2/app/bundle.js">` in `public/v2/index.html`. `type="module"` provides deferred execution after DOM parse and classic scripts. `public/v2/app/` is gitignored to keep build artifacts out of source control.
+- **Clean Checkout Verification (Decision: Option A)**:
+  - All browser verification harnesses (`verify_v2_navigation.js`, `verify_mobile_overflow.js`, `verify_drive_explorer.js`, `verify_mining_registers.js`, `verify_computed_style_baseline.js`, `reactCoexistence.test.js`) use `tests/fixtures/ensureBundle.js` to ensure `public/v2/app/bundle.js` is built before launching browsers on a fresh checkout.
+  - *Why Option A*: Running verification against the actual compiled bundle ensures test runs prove the real integrated page assembly that users receive, avoiding runtime 404 workarounds in `index.html`.
 - **`npm run dev` vs `npm start`**:
   - `npm run dev` launches the Vite dev server with Hot Module Replacement (HMR) and proxies `/api/*` and `/v2/data/*` requests to the Express backend (dynamic port resolution with literal fallback, no `config.json` coupling).
   - `npm start` remains unchanged, running `node server/index.js` and serving the static distribution via `express.static('public')`.
 - **`npm test`**: Unchanged (`node scripts/run_unit_tests.js`). Passes with 1398 tests / 1396 pass / 0 fail / 2 conditional skips (+1 test `tests/reactCoexistence.test.js`).
 - **`build:site`**: Remains `node scripts/build_static_snapshot.js` for Phase 0. *(Forward prerequisite for Phase 2: `npm run build:site` must chain `npm run build` before snapshot generation once the first real React panel is shipped so the worker static bundle includes `public/v2/app/bundle.js`)*.
-- **Computed style verification**: `scripts/verify_computed_style_baseline.js` proved 100% determinism across two identical baseline runs (0 diffs across all 48 states: 6 views × 4 viewports × 2 modes, with custom properties sorted alphabetically and `#hudSnapshot` wall clock masked), and verified **0 computed style or geometry differences** on the 15 unmigrated panels before and after Phase 0.
-- **Bundle size floor & budget**: Measured baseline production floor for React 18 + React-DOM + MUI v6 + Emotion is **302.81 KB raw** (310,082 bytes) / **82.69 KB gzipped** (84,672 bytes). Enforced via `scripts/verify_bundle_size.js` with budget **< 250 KB gzipped / < 1,000 KB raw** providing ~167 KB gzip headroom for the 16 components.
+- **Computed style verification & Save Fingerprint Guard**:
+  - `scripts/verify_computed_style_baseline.js` records the save filename and MD5 at start and end of every capture, aborting if the live save changes mid-run.
+  - `--diff-files` refuses to diff captures from different save MD5s, and fails if any matrix state is missing or empty.
+  - Baseline proof proved 100% determinism (0 diffs across all 48 states: 6 views × 4 viewports × 2 modes, with custom properties sorted alphabetically and `#hudSnapshot` wall clock masked), verifying **0 computed style or geometry differences** on the 15 unmigrated panels.
+- **Tightened Bundle Size Budget**:
+  - Measured baseline production floor for React 18 + React-DOM + MUI v6 + Emotion: **302.81 KB raw** (310,082 bytes) / **82.69 KB gzipped** (84,672 bytes).
+  - Budget set strictly to **measured floor + 15%**: **< 96 KB gzipped / < 350 KB raw** (enforced via `scripts/verify_bundle_size.js`, exiting code 1 on missing bundle unless `--allow-missing` is passed). Each subsequent component migration phase may raise the budget explicitly in its commit with a documented reason.
 
 **Check-in gate:** the dashboard is visually byte-identical, the suite is green, and one
 React panel is on screen.
@@ -223,4 +231,4 @@ editing `server/` or `shared/`, something has gone wrong — stop and say so.
 - **MUI v6 or v7?**
   **Answer**: **MUI v6** (`@mui/material` v6.5.0) with `@emotion/react` and `@emotion/styled`. Pinned because MUI v6 is the production-stable, long-term-supported engine with mature React 18/19 compatibility and predictable token-based styling.
 - **Bundle size budget.**
-  **Answer**: Measured production baseline floor is **302.81 KB raw / 82.69 KB gzipped**. Enforced via `scripts/verify_bundle_size.js` with budget **< 250 KB gzipped / < 1,000 KB raw**, providing ~167 KB gzip headroom for the 16 components.
+  **Answer**: Measured production baseline floor is **302.81 KB raw / 82.69 KB gzipped**. Enforced via `scripts/verify_bundle_size.js` with budget **< 96 KB gzipped / < 350 KB raw** (measured floor + 15%), with each component phase permitted to raise it explicitly in its commit with a documented reason.
