@@ -116,6 +116,21 @@ executes, whatever the mode says.
 
 ## Continuing an earlier conversation
 
+**New task, new session. Resume is for follow-up feedback only.**
+
+Start a fresh session for every new piece of work. Use `--resume` / `--resume-last`
+**only** to give feedback on work that lane already has in flight — "you missed
+two of the four verdicts", "the suite is red, here is the failure", "that claim
+is wrong, here is the evidence".
+
+Never pile an unrelated task onto a warm session just because resuming is cheap.
+The accumulated context belongs to the previous task: it inflates the input
+tokens of every later call, it drags the earlier task's framing into the new one,
+and it destroys the session as a record of what was actually asked. A lane that
+has just spent 140k tokens reviewing tests is not a good starting point for an
+unrelated migration.
+
+
 Every lane can resume instead of starting cold:
 
 ```bash
