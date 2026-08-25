@@ -21,9 +21,13 @@ which is the point.
 
 | round | trigger | who |
 | --- | --- | --- |
-| **1** | now | Composer, Antigravity, DeepSeek, Codex, Grok, MiniMax |
+| **1** | now | Composer, Antigravity, DeepSeek, Codex, MiniMax |
 | **2** | Track E merged | MiniMax (review) |
 | **3** | Track E reviewed **and** characterisation merged | Antigravity ×2–3, on components |
+
+**Grok's lane is held** to preserve Cursor usage for Composer — see the struck
+section below. Claude took the contracts work instead, so Round 1 is **four
+prompts to send**, not five.
 
 Between every round I merge sequentially and verify against the live save. Do
 not merge your own lane.
@@ -185,9 +189,19 @@ counts against the 1399 / 1397 pass / 0 fail / 2 skip baseline.
 
 ---
 
-## → Grok 4.6 (Cursor)
+## ~~→ Grok 4.6 (Cursor)~~ — **held, reassigned to Claude 2026-08-24**
 
-Analysis, single-shot. Do **not** give it a long autonomous run.
+**Do not send this.** Cursor usage is being preserved for Composer, which is the
+better call: Composer is also Cursor, Track E is the critical path, and
+`CLAUDE.md` rates Composer as the only good fit for a long multi-file agentic run
+while Grok's agentic coding measurably regressed.
+
+The lane is not deferred — it feeds the Round 3 briefs and is needed by the time
+Track E and characterisation land. **Claude took it**, fanned across five
+read-only agents by component group, which keeps the Cursor budget entirely for
+Track E. Output lands in `docs/react-component-contracts.md`.
+
+The brief below is retained only as the record of what that lane was asked for.
 
 ```
 Read docs/react-component-contracts.md. It maps all 16 v2 components but stops at
