@@ -86,7 +86,7 @@ Deliverables & Settled Decisions:
   - `npm run dev` launches the Vite dev server with Hot Module Replacement (HMR) and proxies `/api/*` and `/v2/data/*` requests to the Express backend (dynamic port resolution with literal fallback, no `config.json` coupling).
   - `npm start` remains unchanged, running `node server/index.js` and serving the static distribution via `express.static('public')`.
 - **`npm test`**: Unchanged (`node scripts/run_unit_tests.js`). Passes with 1398 tests / 1396 pass / 0 fail / 2 conditional skips (+1 test `tests/reactCoexistence.test.js`).
-- **`build:site`**: Remains `node scripts/build_static_snapshot.js` for Phase 0. *(Forward prerequisite for Phase 2: `npm run build:site` must chain `npm run build` before snapshot generation once the first real React panel is shipped so the worker static bundle includes `public/v2/app/bundle.js`)*.
+- **`build:site`**: Chains `npm run build && node scripts/build_static_snapshot.js` so that Vite build runs before snapshot generation and the worker static bundle includes `public/v2/app/bundle.js` (Phase 2 forward prerequisite met).
 - **Computed style verification & Save Fingerprint Guard**:
   - `scripts/verify_computed_style_baseline.js` records the save filename and MD5 at start and end of every capture, aborting if the live save changes mid-run.
   - `--diff-files` refuses to diff captures from different save MD5s, and fails if any matrix state is missing or empty.
@@ -225,7 +225,7 @@ editing `server/` or `shared/`, something has gone wrong — stop and say so.
 ## Questions answered in Phase 0
 
 - **Does the hosted worker serve a bundle now?**
-  **Answer**: For Phase 0, `scripts/build_static_snapshot.js` coexists without requiring `npm run build` because no live React panels have shipped yet. In Phase 2, `npm run build:site` will run `vite build` prior to snapshot flattening so `dist/` embeds `public/v2/app/bundle.js`.
+  **Answer**: `npm run build:site` chains `npm run build && node scripts/build_static_snapshot.js`, ensuring `vite build` runs prior to snapshot flattening and `dist/` embeds `public/v2/app/bundle.js` on clean checkouts and production builds.
 - **Do the 24 stylesheets stay?**
   **Answer**: Yes, hybrid approach. The 24 stylesheets stay as the global foundation for unmigrated panels and layouts. In Phase 1, the MUI theme is derived directly from `:root` CSS custom property tokens. Unmigrated panels remain completely untouched and pixel-stable.
 - **MUI v6 or v7?**

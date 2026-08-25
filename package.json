@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "verify:bundle": "node scripts/verify_bundle_size.js",
-    "build:site": "node scripts/build_static_snapshot.js",
+    "build:site": "npm run build && node scripts/build_static_snapshot.js",
     "push:supabase": "node scripts/push_latest_to_supabase.js",
     "push:dry-run": "node scripts/push_latest_to_supabase.js --dry-run",
     "verify:supabase": "node scripts/verify_supabase_rls.js",
