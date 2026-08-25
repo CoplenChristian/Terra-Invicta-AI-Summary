@@ -1,0 +1,86 @@
+{
+  "_comment": [
+    "DISPATCH POLICY — you own this file. Claude reads it; Claude never writes it.",
+    "",
+    "Every lane carries a `mode` of exactly one of three values:",
+    "",
+    "  auto    Claude may dispatch this lane without asking you first.",
+    "  ask     Claude must get your explicit per-request approval in chat before dispatching.",
+    "  reject  Never dispatch. The script refuses and says this config forbade it.",
+    "",
+    "This file is the single source of truth for policy. Changing a mode changes",
+    "behaviour with no code edit. Writing `auto` here IS your standing approval for",
+    "that lane — the script does not second-guess it and does not downgrade it.",
+    "",
+    "A lane you delete from `lanes` is not thereby allowed. An unlisted lane is",
+    "treated as `ask`, and the script says the config did not mention it. There is",
+    "no config switch that makes an unlisted lane `auto`.",
+    "An unrecognised mode value is also treated as `ask`, with a warning naming it.",
+    "",
+    "WHAT THE SCRIPT ENFORCES REGARDLESS OF THIS FILE:",
+    "  1. A lane whose availability probe does not come back READY is never",
+    "     dispatched. Unknown is not the same as available.",
+    "  2. `--dry-run` never executes anything, whatever the mode says.",
+    "  3. A `-fast` Cursor slug is WARNED about, loudly, and then run anyway.",
+    "     It is your allowance to spend.",
+    "",
+    "COST AND RISK, PER LANE:",
+    "  codex        HIGHEST RISK. Your ~/.codex/config.toml sets",
+    "               sandbox_mode = \"danger-full-access\", so this lane runs with full",
+    "               filesystem access and no approval prompts. It can delete or",
+    "               rewrite anything this account can reach. Nothing in this repo",
+    "               changes that config; only you should. Keep it `ask` unless you",
+    "               have a specific reason not to.",
+    "  deepseek     METERED. Costs real money per call, billed to OpenCode Go.",
+    "  antigravity  Has a ~16k input-token floor per call. There is no cheap `agy`",
+    "               call; a one-line question costs about what a long one does.",
+    "  composer     Shares one Cursor allowance with `grok`.",
+    "  grok         Shares one Cursor allowance with `composer`. Composer is the only",
+    "               lane rated for long multi-file agentic runs, so Grok spending",
+    "               comes directly out of a lane that has no substitute. Prefer Grok",
+    "               for analysis and single-shot reasoning, and keep the budget for",
+    "               Composer's long builds.",
+    "  minimax      Included in the MiniMax coding plan: unlimited weekly, but a",
+    "               limited rolling 5-hour window.",
+    "",
+    "OPTIONAL PER-LANE KEYS:",
+    "  model    Model slug for lanes that take one. Omit to use the value in",
+    "           `defaults` below (shown by `node check_lanes.js`).",
+    "  binary   Absolute path to the CLI, if it is not on PATH and not at the",
+    "           known install location. Omit unless you have moved it.",
+    "  note     Free text. The script echoes it; it has no effect on behaviour."
+  ],
+
+  "version": 1,
+
+  "lanes": {
+    "minimax": {
+      "mode": "ask",
+      "model": "minimax-coding-plan/MiniMax-M3",
+      "note": "Reviewing and verification, not implementation. Slow but more powerful."
+    },
+    "deepseek": {
+      "mode": "ask",
+      "model": "opencode-go/deepseek-v4-flash",
+      "note": "METERED — real money. Backend implementation and review. No vision: never send it a screenshot or a task that needs one."
+    },
+    "antigravity": {
+      "mode": "ask",
+      "note": "Very fast. Frontend work. ~16k input-token floor per call."
+    },
+    "composer": {
+      "mode": "ask",
+      "model": "composer-2.5",
+      "note": "Long multi-file implementation runs. Shares the Cursor allowance with grok."
+    },
+    "grok": {
+      "mode": "ask",
+      "model": "cursor-grok-4.6-low",
+      "note": "Analysis, research, single-shot code. Its agentic coding regressed against 4.5 — do not give it long autonomous runs. Shares the Cursor allowance with composer."
+    },
+    "codex": {
+      "mode": "ask",
+      "note": "UNSANDBOXED — danger-full-access, approval never. All-rounder, punches above its size. Highest-risk lane in this file."
+    }
+  }
+}
