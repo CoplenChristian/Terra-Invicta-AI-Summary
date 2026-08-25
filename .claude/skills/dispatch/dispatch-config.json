@@ -50,9 +50,7 @@
     "           known install location. Omit unless you have moved it.",
     "  note     Free text. The script echoes it; it has no effect on behaviour."
   ],
-
   "version": 1,
-
   "lanes": {
     "minimax": {
       "mode": "auto",
