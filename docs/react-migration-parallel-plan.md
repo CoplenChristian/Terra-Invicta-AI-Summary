@@ -113,6 +113,74 @@ visual; either for logic.
 
 ---
 
+# Wave 2 — seven lanes, 2026-08-24
+
+Tracks A, B, C and D are done and pushed (`febcbfc`). Everything in the React
+spine is now blocked on Track E — **except the one large body of work that needs
+no React at all**, which is what fills the other lanes.
+
+**Six components have no unit test naming them**: `mc-budget`, `council-orders`,
+`executive-boards`, `intelligence-library`, `faction-intel`, `world-map` —
+**3,004 source lines**, including the two largest overlays in the product.
+`docs/react-component-contracts.md` calls this the single biggest risk in the
+migration, and it is not a React problem. Each of those phases must add
+**characterisation coverage before migrating**, or the phase cannot tell a
+successful migration from a lossy one.
+
+That work splits into four lanes and blocks nothing.
+
+## The lanes
+
+| # | lane | tool | why this tool |
+| --- | --- | --- | --- |
+| 1 | **Track E — the five primitives** | Composer 2.5 | long multi-file agentic run; critical path |
+| 2 | characterisation: `world-map`, `mc-budget` | Antigravity | fastest, and these are the two with real DOM behaviour (SVG; an interactive stepper) |
+| 3 | port cleanup, then characterisation: `executive-boards`, `council-orders` | DeepSeek | scripts are backend work; no screenshot needed for either |
+| 4 | characterisation: `intelligence-library`, `faction-intel` | Codex 5.6 | the two biggest overlays, 1,843 lines — an all-rounder that punches above its size |
+| 5 | Track C part 2 — contract depth for all 16 | Grok 4.6 | analysis and single-shot is its peak; **not** a long autonomous run |
+| 6 | review + audit | MiniMax M3 | reviews rather than implements; has vision |
+| 7 | merge, verify, hold `index.html` | Claude | — |
+
+**Nothing here shares a file.** Composer is in `src/v2/`, three lanes add new
+`tests/*.test.js` files, Grok edits one doc, DeepSeek edits `scripts/verify_*.js`.
+The one known merge point — `public/v2/index.html` — is untouched until the first
+component actually migrates.
+
+## What every characterisation lane must do
+
+The point is to capture what the component renders **today**, so a later rewrite
+that silently drops a field fails loudly.
+
+- **Use fixtures, never the live save.** `tests/fixtures/frozenSnapshots.js` for
+  snapshot data, `tests/fixtures/renderHarness.js` to render. That harness
+  executes the shipped `public/v2/js/shared.js`, so the sandbox cannot drift from
+  production — it exists because two earlier harnesses stubbed `escapeHtml` with
+  something that did not escape. `tests/noLiveSaveInUnitSuite.test.js` guards this.
+- **Both modes.** Player redacts, and several of these panels are a genuinely
+  different answer rather than a filtered one. A panel characterised in one mode
+  is not characterised.
+- **Enumerate the unavailable states.** Every place the component renders
+  UNAVAILABLE, UNKNOWN or an em dash needs its own assertion, because a rewrite is
+  exactly where one silently becomes `0`.
+- **Assert visible text, not innerHTML.** `visibleText` in the harness decodes
+  entities; a raw tag-strip reports `&lt;1 mo` as `1 mo`.
+- **Break the component deliberately and show the test red.** A characterisation
+  test written from current output passes by construction — deleting a field from
+  the payload and watching it fail is the only thing that proves it works.
+- Five of the six are render-only (`render(root, payload)`); `faction-intel` is
+  self-fetching and opens on demand, so it needs its fetch stubbed.
+
+## Standing constraints for every lane
+
+- Bind test servers to **port 0**, never a fixed port.
+- **Nothing under `server/` or `shared/`** — this whole migration is a rendering
+  change.
+- Report exact suite counts and explain the delta. Baseline **1399 / 1397 pass /
+  0 fail / 2 skip**.
+- Merges are sequential and Claude does them; do not merge your own lane.
+
+---
+
 ## What Claude does throughout
 
 Planning, review of every agent plan before it runs, merging, and **empirical verification
