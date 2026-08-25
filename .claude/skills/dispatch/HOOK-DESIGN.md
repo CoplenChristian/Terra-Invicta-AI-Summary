@@ -26,6 +26,21 @@ Bash call executes. That is what turns `ask` from a convention into a gate.
 
 ---
 
+## The standing rule this enforces
+
+**Every dispatch goes through `check_lanes.js`. There are no exceptions and no
+workarounds.** Direct invocation of `opencode`, `agy`, `cursor-agent` or `codex`
+is forbidden regardless of whether this hook is installed — see the rule at the
+top of `SKILL.md`.
+
+The hook exists because a rule Claude is asked to follow and a rule the harness
+enforces are different things, and the gap between them is exactly where a
+mistake becomes expensive. **The hook is the backstop, not the rule.** Nothing
+below should be read as "direct calls are a supported path that happens to be
+gated" — direct calls are a violation, and the hook's job is to catch one.
+
+---
+
 ## The hole in the obvious design, and it is the important part
 
 The naive hook watches for `check_lanes.js` and gates it. **That gates the

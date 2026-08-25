@@ -15,6 +15,34 @@ sits beside this skill at `.claude/skills/dispatch/dispatch-config.json`,
 which the user owns and edits. Read that file's `_comment` before assuming anything
 about what you are allowed to dispatch.
 
+## THE RULE: the wrapper is the only way in. No workarounds.
+
+**Every dispatch to every lane goes through `check_lanes.js`. Without exception.**
+
+Do **not** invoke `opencode`, `agy`, `cursor-agent` or `codex` directly — not with
+`Bash`, not through a shell script, not via a `cd … && …` chain, not by calling
+their underlying `node index.js` payloads, not by asking another agent or another
+session to run them, and not "just this once because the wrapper is in the way."
+
+This is not a style preference. **The wrapper is where the user's policy lives.**
+The modes in `dispatch-config.json`, the cost and risk warnings, the `-fast`
+guard, the session pre-flight check, the refusal to run under a missing policy —
+none of that exists in the CLIs themselves. A direct call is not a shortcut past
+some boilerplate; it is a dispatch that the user never had the chance to
+authorise, spending an allowance they are actively managing.
+
+The lane commands documented in `## Notes on the plumbing` are there so the
+wrapper's output can be **read and understood**, and so a human can run one
+deliberately. They are not an alternative interface for Claude.
+
+**If the wrapper blocks you, that is the system working.** The correct responses
+are: tell the user what was refused and why, ask them to approve it, or ask them
+to change the mode in the config. The incorrect response is to reach around it.
+
+An approval hook enforces this at the harness level — see `HOOK-DESIGN.md` — but
+the rule stands whether or not the hook is installed. Do not treat the absence of
+enforcement as permission.
+
 ## The three modes
 
 Every lane in the config carries a `mode` of exactly `auto`, `ask` or `reject`.
