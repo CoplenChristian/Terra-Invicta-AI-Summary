@@ -34,7 +34,76 @@ not merge your own lane.
 
 ---
 
-# ROUND 1 — send all six now
+---
+
+# STATUS — Round 1 closed 2026-08-24
+
+All four dispatched lanes merged and pushed. Suite **1496 / 1494 pass / 0 fail /
+2 skip**, tree clean, origin level.
+
+| lane | landed | contribution (measured in isolation) |
+| --- | --- | ---: |
+| Composer — Track E primitives | `16293a4` | +12 tests |
+| Antigravity — characterisation | `87f3f55` | +26 |
+| DeepSeek — port 0 + characterisation | `a9a0c53` | +39 |
+| Codex — the two overlays | `af76a7e` | +20 |
+
+1399 + 12 + 26 + 39 + 20 = **1496**, which reconciles exactly. **No lane could
+compute its own delta**: `run_unit_tests.js` walks the directory rather than a
+manifest, so four lanes writing into one tree each counted the others' untracked
+files. Reported deltas were +36, +38 and +58 against true figures of 26, 12 and
+20. Measure each lane's files alone before believing a delta.
+
+**Six of the seven untested components are now covered.**
+`alien-hate-economics` is the holdout — see Round 1b.
+
+**Two things came out of the wave that were not in it:**
+
+- The suite is **intermittently red** from browser-test contention: 5 browser
+  test files became 11, and `node --test` runs them concurrently. A failure at
+  30,294ms that passes alone in 944ms is a timeout wearing an assertion's
+  clothes. Out to DeepSeek. Until fixed, "suite green" from any lane is a coin
+  flip and needs a second run.
+- Defect **#9** in `docs/live-defect-register.md`: priority targets truncate
+  **79 of 87** with no announcement, in the component *and* in
+  `shared/markdownExports.mjs`, which is the AI-facing surface and ships to the
+  hosted worker.
+
+---
+
+# ROUND 1b — send now
+
+## → Antigravity (or any free lane)
+
+The seventh untested component. Use the Round 1 characterisation prompt below
+with `alien-hate-economics` as the only component, plus this:
+
+```
+alien-hate-economics is the last of the seven with no test naming it.
+tests/alienHateEconomics.test.js exists and shares its name but imports
+server/alienHateEconomics -- it never loads the component. Do not be reassured
+by it.
+
+Two things specific to this one:
+
+1. It exposes { render, renderHud }, not a single render. renderHud mutates
+   #hudHateMeter, an element that is NOT in the VIEWS registry, so
+   assertViewRegistryIntegrity() does not cover it. Characterise BOTH entry
+   points, and record what renderHud mounts and where.
+
+2. Open lead to confirm or clear while you are in there: renderHud is reported to
+   render an unmeasured hate as a green GAME ESTIMATE, because
+   visibleEstimate: 'UNKNOWN' is truthy and is compared only against
+   'UNAVAILABLE'. A sibling at :227 handles both correctly
+   (`if (!text || text === 'UNAVAILABLE' || text === 'UNKNOWN') return null`),
+   which is what makes the inconsistency plausible. Assert whichever is true --
+   an unknown rendered as a confident estimate is a defect; the same code
+   correctly refusing is coverage worth having.
+```
+
+---
+
+# ROUND 1 — the original dispatch (complete)
 
 ## → Composer 2.5 (Cursor)
 
