@@ -319,12 +319,66 @@ correct, and the reader concludes it is absent.** Searching the dashboard for wh
 you can see on your own ship returns nothing, and there is no signal that a
 rename happened — an honest "not found" is indistinguishable from a real absence.
 
-It is not confined to drives. The same `templateLoader.js` path builds names for
-every template family, and `TIProjectTemplate.en` carries the matching
-`Project_AdvancedOrionDrive=H-Orion Drive`, so research and project names are
-almost certainly affected too. **Scope this before fixing it** — the fix is to
-read the localisation table and prefer it over `friendlyName`, but the count
-above is drives only.
+### Scoped 2026-08-25: **519 renames across 18 families, 6.1× the drives figure**
+
+Measured against the installed game, whitespace-insensitive. The 85-of-541 drives
+figure reproduces exactly.
+
+| family | divergent | | family | divergent |
+| --- | ---: | --- | --- | ---: |
+| projects | **139** | | traits | 26 |
+| weapons: laser | **86** | | utilityModules | 22 |
+| drives | **85** | | shipHulls | 16 |
+| orgs | 40 | | weapons: magnetic | 15 |
+| habModules | 26 | | radiators | **13 of 13** |
+| techs, missions, reactors, shipArmor, weapons: gun/particle/plasma/missile | 51 combined | | | |
+
+**Save-sourced families are NOT affected and must not be "fixed".** Nations, hab
+sites and orgs-on-councilors render the **save's** `displayName`, which the game
+already writes localised — verified live: `ATZ` → `Aztlán`, `Mare Imbrium`,
+`ISIS`. Their template names diverge (36 and 490) but never reach the screen.
+Localising those would be a regression.
+
+**`effects` are a separate defect.** They have no `friendlyName`; the tech graph
+renders their `dataName` (`Effect_DetectAbductions`), and their localisation is
+keyed by `Context.displayName.<context>`, not by effect `dataName`. Different
+mechanism, do not fold it in.
+
+### Two couplings that make a naive fix destructive
+
+Neither is on the drive screen, and both were found by tracing consumers rather
+than by reading the render path.
+
+1. **The weapon loadout ↔ catalogue match is two-sided.**
+   `server/snapshot/space.js:88` writes the loader's weapon `displayName` into
+   `weaponLoadout[].systems`; `shared/intel/militaryValue.mjs:146-166,246` builds
+   `byDisplayName` from the baked `componentStats` name and matches redacted
+   ships' loadout strings against it. Both sides equal `friendlyName` today.
+   **Localise one side only and every redacted-ship weapon inventory silently
+   drops to zero.** They must move together, from the same source.
+2. **Mission `friendlyName` is an engine identity key.**
+   `server/engine/missionCatalogue.js:18-19` keys specs by it,
+   `server/engine/odds.js:169-170` matches `'Control Nation'`, and
+   `clocks.js:97` matches `'Defend Interests'`. The fix must add a **separate**
+   display field and leave `friendlyName` untouched.
+
+**Cleared:** the unlock index, tech-graph nodes, `componentStats` and
+`driveStats` are all keyed by `dataName`, so `displayName` is payload and
+changing it changes no keys. `driveExplorer.mjs:347,541` sorts by display name,
+which is presentation not identity. `refitAdvisor` and `production` match
+ship/design names from the **save**, not from template components.
+
+### It is not one line
+
+The name reaches the screen through roughly twenty expressions across **five
+files**: `server/templateLoader.js:307,339`, `server/snapshot/templates.js`
+(~12 sites), `server/snapshot/factions.js:346,656`, `server/snapshot/research.js:61`,
+and `shared/techGraph.mjs:238,306` — plus the two-sided weapon coupling.
+
+**Recommendation: fix the whole template-sourced set in one coordinated pass, not
+drives-first.** A drives-only fix leaves 434 renames live, and the coupling
+constraints mean any single-family fix still needs the full localisation layer
+anyway.
 
 Related, and separate: the DRIVES view showed **61 of 541 rows with 480 omitted**
 on the measured save. That truncation is honest — `itemsTotalCount` /
