@@ -768,7 +768,7 @@
   function visibilityForPower(context, faction) {
     var power = getPowerValue(faction);
     var explicit = readField(faction, ['powerVisibility', 'visibility']);
-    if (explicit.found && hasMetricValue(explicit.value)) return normalizeVisibility(explicit.value);
+    if (explicit.found && !isExplicitlyEmpty(explicit.value)) return normalizeVisibility(explicit.value);
     return visibilityForMetric(context, faction, 'power', power !== null);
   }
 
@@ -1131,15 +1131,27 @@
       power: ['powerVisibility']
     }[metricName] || [];
     var explicit = readField(faction, keys);
-    if (explicit.found && hasMetricValue(explicit.value)) return normalizeVisibility(explicit.value);
+    // Distinguish "field absent or empty" (fall back to data inference) from
+    // "field explicitly set, including to an UNAVAILABLE / UNKNOWN sentinel"
+    // (respect the caller's declaration). Using hasMetricValue here collapses
+    // both into the same branch because UNAVAILABLE / UNKNOWN are themselves
+    // missing labels for numeric purposes; that meant an explicit
+    // earthVisibility: 'UNAVAILABLE' fell through to VISIBLE on a faction that
+    // had data — the defect this guard is rewritten to avoid.
+    if (explicit.found && !isExplicitlyEmpty(explicit.value)) return normalizeVisibility(explicit.value);
     if (!hasData) return 'UNAVAILABLE';
     if (context.mode === 'OMNISCIENT') return 'RAW SAVE ONLY';
     if (context.mode === 'ENHANCED') return 'ENHANCED';
     return 'VISIBLE';
   }
+  function isExplicitlyEmpty(value) {
+    if (value === null || value === undefined) return true;
+    if (typeof value === 'string') return value.trim() === '';
+    return false;
+  }
 
   function normalizeVisibility(value) {
-    if (!hasMetricValue(value)) return 'UNAVAILABLE';
+    if (isExplicitlyEmpty(value)) return 'UNAVAILABLE';
     var raw = String(value).trim();
     var lower = raw.toLowerCase().replace(/[-\s]+/g, '_');
     var labels = {

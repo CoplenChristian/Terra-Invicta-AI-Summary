@@ -251,7 +251,7 @@
         money(nation.GDP),
         number(nation.milTech, 1),
         number(nation.armies, 0),
-        nation.nukes ? statusChip(number(nation.nukes, 0), 'danger') : '0',
+        numberValue(nation.nukes) === null ? number(null, 0) : statusChip(number(nation.nukes, 0), 'danger'),
         number(nation.unrest, 1),
         number(nation.cohesion, 1),
         number(nation.boost, 2),

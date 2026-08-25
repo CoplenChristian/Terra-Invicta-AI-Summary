@@ -828,49 +828,74 @@ test('per-metric: nation GDP null leaves GDP em dash while Mil tech, Armies, Unr
   assertNoRuntimePlaceholders(text, 'nation GDP null');
 });
 
-test('per-metric: nation nukes null renders the literal "0" token and is NOT em dash UNAVAILABLE', () => {
-  // DEFECT — SURFACED, NOT FIXED. The nation row uses
-  //   nation.nukes ? statusChip(number(nation.nukes, 0), 'danger') : '0'
-  // which collapses both "no nukes" (nukes: 0) and "data missing"
-  // (nukes: null) into the literal token "0". A reader cannot distinguish
-  // the two states from the rendered cell. The test pins that exact
-  // behaviour so the regression lands with a clear note rather than a quiet
-  // assertion. Fixing the underlying bug will require breaking this test —
-  // the break is intentional and the new token will need its own assertion.
-  // Measured baseline: "... 5.2 25 0 0.5 4.0 ..." — the "0" in that position
-  // is the Nukes column. Nulling nukes still produces a single "0" token,
-  // not an em dash and not "UNAVAILABLE".
-  const snapshot = measuredLibrarySnapshot();
-  snapshot.nations[0].nukes = null;
-  const { text } = renderLibrary(snapshot, { section: 'nations' });
+test('per-metric: nation nukes null renders an em dash while a measured zero renders the danger chip', () => {
+  // The nation row used to read `nation.nukes ? statusChip(number(nation.nukes, 0), 'danger') : '0'`,
+  // which collapsed both `nukes: 0` (measured) and `nukes: null` (unmeasured) into
+  // the literal "0" token — a reader could not distinguish a confirmed zero
+  // from a missing field. The fix routes through numberValue() so the unmeasured
+  // case takes the same em dash its neighbours use, while a measured zero still
+  // carries the danger chip. Two assertions keep the distinction explicit.
+  const measuredZero = measuredLibrarySnapshot();
+  measuredZero.nations[0].nukes = 0;
+  const { text: zeroText, html: zeroHtml } = renderLibrary(measuredZero, { section: 'nations' });
 
-  // Measured nation data row (one row, no Unrest label in the body — Unrest
-  // appears only as the column header):
-  //   "United States the Initiative 2 $22.00T 5.2 25 0 0.5 4.0 3.50 50"
-  // With nukes: null the second-to-last assertion the component makes is
-  //   nation.nukes ? statusChip(number(nation.nukes, 0), 'danger') : '0'
-  // so the nukes cell collapses to the literal "0". A reader cannot
-  // distinguish nukes: 0 from nukes: null from this cell. The test pins
-  // that behaviour — it asserts the literal "0" sits between Armies (25)
-  // and Unrest (0.5) in the data row, and is NOT em dash or UNAVAILABLE.
-  const dataRow = text.match(/the Initiative 2 \$22\.00T 5\.2 \d+ [^ ]+ 0\.\d+ \d+\.\d+ \d+\.\d+/);
-  assert.ok(dataRow, 'the measured nation data row must be located by its known tokens');
-  const tokens = dataRow[0].split(/\s+/);
-  // tokens: ["the", "Initiative", "2", "$22.00T", "5.2", "25", "<nukes>", "0.5", "4.0", "3.50"]
-  const nukesCell = tokens[6];
-  assert.strictEqual(nukesCell, '0',
-    'a null nukes field must collapse to the literal token "0" — NOT em dash, NOT UNAVAILABLE');
-  assert.ok(text.includes('5.2 25 0 0.5'),
-    'the literal row sequence "5.2 25 0 0.5" must appear — Armies=25, Nukes=0, Unrest=0.5');
-  assert.ok(text.includes('0 0.5 4.0'),
-    'the measured Nukes/Unrest/Cohesion neighbours must stay measured as 0 / 0.5 / 4.0');
-  // (the em-dash "—" appears elsewhere on the page — header meta, etc. —
-  // so we rely on the data-row tokens above, not a page-wide em-dash check)
-  // The header row reads "Armies Nukes Unrest" and the data row reads
-  // "25 0 0.5", so "Armies 25 0 Unrest" never co-occurs in the visible
-  // text. Anchor on data-row tokens instead — see the includes() checks
-  // above for "5.2 25 0 0.5" and "0 0.5 4.0".
-  assertNoRuntimePlaceholders(text, 'nation nukes null');
+  const nulled = measuredLibrarySnapshot();
+  nulled.nations[0].nukes = null;
+  const { text: nullText, html: nullHtml } = renderLibrary(nulled, { section: 'nations' });
+
+  const measuredN = measuredLibrarySnapshot();
+  measuredN.nations[0].nukes = 5;
+  const { text: fiveText, html: fiveHtml } = renderLibrary(measuredN, { section: 'nations' });
+
+  // Measured zero: the danger chip wraps the literal 0 — and the cell carries
+  // the chip class. The reader sees "this nation has zero nukes" as a claim.
+  assert.ok(
+    zeroHtml.includes('<span class="intel-library-chip intel-library-chip--danger">0</span>'),
+    'measured nukes: 0 must render the danger chip with the literal token 0'
+  );
+  assert.ok(
+    zeroText.includes('5.2 25 0 0.5'),
+    'measured zero nukes must still appear between Armies (25) and Unrest (0.5)'
+  );
+
+  // Measured nonzero: same chip wrapper, with the count.
+  assert.ok(
+    fiveHtml.includes('<span class="intel-library-chip intel-library-chip--danger">5</span>'),
+    'measured nukes: 5 must render the danger chip with the count'
+  );
+  assert.ok(
+    fiveText.includes('5.2 25 5 0.5'),
+    'measured nonzero nukes must appear between Armies (25) and Unrest (0.5)'
+  );
+
+  // Unmeasured: a plain em dash, identical to the affordance the neighbouring
+  // cells already use for missing values. No chip wrapper — an unmeasured
+  // value cannot carry the danger tone.
+  assert.ok(
+    nullHtml.includes('<td>—</td>'),
+    'null nukes must render a plain em dash cell, not the danger chip'
+  );
+  assert.ok(
+    !nullHtml.includes('intel-library-chip--danger'),
+    'an unmeasured nukes cell must not carry the danger tone'
+  );
+  assert.ok(
+    nullText.includes('5.2 25 — 0.5'),
+    'unmeasured nukes must appear as an em dash between Armies (25) and Unrest (0.5)'
+  );
+
+  // The measured zero and the measured five render the chip; the unmeasured
+  // does not. Anchor on the chip class to keep the distinction under test,
+  // not just on token equality (a regression that flipped "0" to a non-chip
+  // "—" would otherwise pass).
+  assert.ok(
+    /<td>(?:<span class="intel-library-chip intel-library-chip--danger">0<\/span>|—)<\/td>/.test(nullHtml),
+    'the nukes cell must be either a chip-wrapped zero or an em dash — never the literal "0" outside a chip'
+  );
+
+  assertNoRuntimePlaceholders(nullText, 'nation nukes null');
+  assertNoRuntimePlaceholders(zeroText, 'nation nukes zero');
+  assertNoRuntimePlaceholders(fiveText, 'nation nukes five');
 });
 
 test('per-metric: metadata gameTimeString null leaves Campaign date em dash in DATA PROVENANCE while Last modified and Active save stay measured', () => {

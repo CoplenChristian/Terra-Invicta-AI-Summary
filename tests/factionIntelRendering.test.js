@@ -821,13 +821,72 @@ test('RELATION visibility tag reads UNAVAILABLE when both relationship entries a
   assertNoRuntimePlaceholders(text, 'RELATION UNAVAILABLE');
 });
 
-test('EARTH visibility tag follows earthVisibility through normalizeVisibility', () => {
-  for (const [raw, label] of [['visible', 'VISIBLE'], ['partial', 'PARTIAL'], ['confirmed', 'CONFIRMED'], ['unavailable', 'VISIBLE']]) {
+test('EARTH visibility tag respects an explicit UNAVAILABLE / UNKNOWN / VISIBLE declaration', () => {
+  // The dossier used to read `if (explicit.found && hasMetricValue(explicit.value))`
+  // for the EARTH / SPACE / RESEARCH / VISIBILITY tags. Because MISSING_VALUES
+  // contains both 'UNAVAILABLE' and 'UNKNOWN', any value that uppercased to
+  // either of those strings failed the guard and fell through to the
+  // data-inference branch — meaning an explicit earthVisibility: 'unavailable'
+  // (or 'UNAVAILABLE') rendered as EARTH VISIBLE on a faction that had
+  // earth metrics. That inverted an explicit negative into a positive claim.
+  // The fix routes the guard through isExplicitlyEmpty so only truly absent
+  // or empty-string values fall back; every declared string (including the
+  // UNAVAILABLE / UNKNOWN sentinels) is normalised and shown. Three classes
+  // must remain under test: a positive declared label, a declared UNAVAILABLE
+  // sentinel (the bug case), and a declared UNKNOWN sentinel.
+  for (const [raw, label] of [
+    ['visible', 'VISIBLE'],
+    ['partial', 'PARTIAL'],
+    ['confirmed', 'CONFIRMED'],
+    ['available', 'AVAILABLE'],
+    ['enhanced', 'ENHANCED']
+  ]) {
     const snap = measuredFactionDossierSnapshot();
     snap.factions[1].earthVisibility = raw;
     const { text } = renderRival(snap);
-    assert.ok(text.includes(`EARTH ${label}`), `${raw} -> EARTH ${label}\n${text}`);
+    assert.ok(text.includes(`EARTH ${label}`),
+      `declared earthVisibility: '${raw}' must surface as EARTH ${label}\n${text}`);
   }
+
+  // Explicit UNAVAILABLE — bug case. Used to read 'EARTH VISIBLE' because the
+  // 'unavailable' string uppercased into the MISSING_VALUES set and the guard
+  // treated it as "no declaration", then fell through to VISIBLE on a faction
+  // with earth data. After the fix, normalizeVisibility('unavailable') returns
+  // 'UNAVAILABLE' and the EARTH tag surfaces that exactly. Both lowercase and
+  // uppercase spellings of the sentinel must take the same path.
+  for (const raw of ['unavailable', 'UNAVAILABLE']) {
+    const snap = measuredFactionDossierSnapshot();
+    snap.factions[1].earthVisibility = raw;
+    const { text } = renderRival(snap);
+    assert.ok(text.includes('EARTH UNAVAILABLE'),
+      `declared earthVisibility: '${raw}' must surface as EARTH UNAVAILABLE, NOT EARTH VISIBLE\n${text}`);
+    assert.ok(!text.match(/EARTH VISIBLE/),
+      `declared earthVisibility: '${raw}' must NOT render as EARTH VISIBLE\n${text}`);
+  }
+
+  // Explicit UNKNOWN — same family. The fix routes both sentinels through
+  // normalizeVisibility, which already maps 'unknown' to 'UNKNOWN'.
+  for (const raw of ['unknown', 'UNKNOWN']) {
+    const snap = measuredFactionDossierSnapshot();
+    snap.factions[1].earthVisibility = raw;
+    const { text } = renderRival(snap);
+    assert.ok(text.includes('EARTH UNKNOWN'),
+      `declared earthVisibility: '${raw}' must surface as EARTH UNKNOWN, NOT EARTH VISIBLE\n${text}`);
+    assert.ok(!text.match(/EARTH VISIBLE/),
+      `declared earthVisibility: '${raw}' must NOT render as EARTH VISIBLE\n${text}`);
+  }
+
+  // Distinct from the explicit-sentinel case: a faction with earth data but
+  // no declared earthVisibility field at all still falls through to the
+  // data-inference branch and reads EARTH VISIBLE (the legacy behaviour for
+  // absent declarations, not the bug). This is the regression guard for the
+  // other side of the change — make sure the fix did not over-correct and
+  // start rendering truly absent declarations as UNAVAILABLE.
+  const snap = measuredFactionDossierSnapshot();
+  delete snap.factions[1].earthVisibility;
+  const { text } = renderRival(snap);
+  assert.ok(text.includes('EARTH VISIBLE'),
+    `an absent earthVisibility on a faction with earth data must still fall back to EARTH VISIBLE\n${text}`);
 });
 
 // ---------------------------------------------------------------------------

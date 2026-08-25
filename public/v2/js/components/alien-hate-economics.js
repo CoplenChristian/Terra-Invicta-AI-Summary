@@ -245,8 +245,14 @@
       : (Number.isFinite(pips) ? pips * 10 : null);
     const floor = finiteOrNull(economics?.minimumAlienHate);
     const applicable = economics?.applicable !== false;
+    // An unmeasured hate is unmeasured, regardless of which sentinel the
+    // snapshot uses to say so. The pip-count helper at L227 already treats
+    // 'UNAVAILABLE' and 'UNKNOWN' the same way; this branch did not, so an
+    // explicit visibleEstimate: 'UNKNOWN' bypassed the unavailable gate and
+    // fell through to the safe estimate ladder, rendering 'GAME ESTIMATE'
+    // (green) for an unknown value.
     const unavailable = !applicable
-      || (numeric === null && (!estimate || estimate === 'UNAVAILABLE'));
+      || (numeric === null && (!estimate || estimate === 'UNAVAILABLE' || estimate === 'UNKNOWN'));
 
     let tone = 'is-unknown';
     let status = 'UNAVAILABLE';

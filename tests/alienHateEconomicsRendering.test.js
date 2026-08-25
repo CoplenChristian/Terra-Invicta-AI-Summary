@@ -693,20 +693,63 @@ test('HUD absent and empty economics both use the same unavailable fallback', ()
   assert.strictEqual(absent.ariaNow, null);
 });
 
-test('HUD currently treats literal UNKNOWN as a green GAME ESTIMATE', () => {
+test('HUD treats literal UNKNOWN as unavailable, NOT as a green GAME ESTIMATE', () => {
+  // renderHud used to derive `unavailable` from `(numeric === null && (!estimate || estimate === 'UNAVAILABLE'))`.
+  // That gate treated 'UNAVAILABLE' and any other unmeasured sentinel the same
+  // way — except 'UNKNOWN', which is truthy and bypassed the gate. The result
+  // was a green `GAME ESTIMATE` HUD for a value the snapshot had explicitly
+  // flagged as unknown, with the wrong fill state and a misleading aria-label.
+  // The sibling helper pipCount at L227 already treats both sentinels the same
+  // way (`if (!text || text === 'UNAVAILABLE' || text === 'UNKNOWN') return null`);
+  // the fix brings renderHud's availability gate in line with that.
   const economics = economicsFor('player');
-  const hud = renderHud(economics, { visibleEstimate: 'UNKNOWN' });
 
-  // This is the reported live defect, deliberately characterised rather than
-  // fixed here: UNKNOWN bypasses `unavailable`, has no pip count, then falls
-  // through the estimate ladder's safe branch.
-  assert.strictEqual(hud.text, 'ALIEN HATE UNKNOWN GAME ESTIMATE');
-  assert.strictEqual(hud.value, 'UNKNOWN');
-  assert.strictEqual(hud.status, 'GAME ESTIMATE');
-  assert.strictEqual(hud.className, 'init-hud-hate is-safe');
-  assert.strictEqual(hud.fillWidth, '0%');
-  assert.strictEqual(hud.floorHidden, false);
-  assert.strictEqual(hud.floorLeft, '62.208000000000006%');
-  assert.strictEqual(hud.ariaNow, null);
-  assert.strictEqual(hud.ariaLabel, 'Alien hate UNKNOWN, GAME ESTIMATE. Open full economics.');
+  // UNKNOWN with no project gate: must render the same unavailable surface as
+  // a declared UNAVAILABLE — same text, same tone, same fill, same aria.
+  // Both probes come from a real renderHud run after the fix; the assertion
+  // pins the corrected behaviour and the distinctness from the old green
+  // GAME ESTIMATE (regression guard).
+  const unknown = renderHud(economics, { visibleEstimate: 'UNKNOWN' });
+  assert.strictEqual(unknown.text, 'ALIEN HATE UNAVAILABLE UNAVAILABLE',
+    'an explicit visibleEstimate: "UNKNOWN" must render the same UNAVAILABLE surface as "UNAVAILABLE"');
+  assert.strictEqual(unknown.value, 'UNAVAILABLE');
+  assert.strictEqual(unknown.status, 'UNAVAILABLE');
+  assert.strictEqual(unknown.className, 'init-hud-hate is-unknown',
+    'an unknown hate must NOT carry the is-safe tone');
+  assert.ok(!unknown.className.split(/\s+/).includes('is-safe'),
+    'regression guard: the bug surfaced as `is-safe`; that class must not return');
+  assert.strictEqual(unknown.fillWidth, '0%');
+  assert.strictEqual(unknown.floorHidden, true,
+    'the floor marker must hide when the value is unknown — the bug pinned `false`');
+  assert.strictEqual(unknown.ariaNow, null,
+    'an unknown value must NOT advertise a numeric aria-valuenow');
+  assert.strictEqual(unknown.ariaLabel, 'Alien hate UNAVAILABLE, UNAVAILABLE. Open full economics.',
+    'the aria-label must reflect the unavailable state, not a green estimate');
+
+  // Cross-check: declared UNAVAILABLE produces the same surface. The two
+  // sentinels are now indistinguishable in the HUD — same path, same output.
+  const unavailable = renderHud(economics, { visibleEstimate: 'UNAVAILABLE' });
+  assert.strictEqual(unavailable.text, unknown.text);
+  assert.strictEqual(unavailable.className, unknown.className);
+
+  // UNKNOWN with a requiredProject: still unavailable, but the status pill
+  // must reflect the gate, not collapse to a generic UNAVAILABLE. This is the
+  // same path the explicit UNAVAILABLE+requiredProject test at line 669
+  // covers, and UNKNOWN must take the same path — that's the second
+  // distinction (unknown vs measured-safe is what #7 is about).
+  const gatedUnknown = renderHud(economics, { visibleEstimate: 'UNKNOWN', requiredProject: 'Project_TheirOperations' });
+  assert.strictEqual(gatedUnknown.text, 'ALIEN HATE UNAVAILABLE INTEL GATED');
+  assert.strictEqual(gatedUnknown.status, 'INTEL GATED');
+  assert.strictEqual(gatedUnknown.className, 'init-hud-hate is-unknown');
+  assert.strictEqual(gatedUnknown.fillWidth, '0%');
+  assert.strictEqual(gatedUnknown.floorHidden, true);
+
+  // Regression guard on the estimate ladder: a real pip estimate must still
+  // take the safe branch and read as GAME ESTIMATE. The fix must not over-
+  // correct and start sending measured estimates through the unavailable gate.
+  const measured = renderHud(economics, { visibleEstimate: '■■■□□' });
+  assert.strictEqual(measured.status, 'GAME ESTIMATE',
+    'a measured pip estimate must still read as GAME ESTIMATE');
+  assert.ok(measured.className.split(/\s+/).includes('is-safe'),
+    'a measured pip estimate must still carry the is-safe tone');
 });
