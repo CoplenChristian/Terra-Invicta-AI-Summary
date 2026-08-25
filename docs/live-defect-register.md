@@ -14,14 +14,17 @@ the cited lines. "Demonstrated" means executed. "Confirmed reachable" means the
 producer's own contract permits the input, but it does not occur on the current
 save.
 
-**Tally: six confirmed, one demoted to latent, one lead.** #7
-(`alien-hate-economics` `renderHud`) remains unchecked. #3 was **demoted** after
-its supporting claim turned out to be false — see the correction there. One
-further candidate was investigated and **cleared** — see the end of #8.
+**Tally as of 2026-08-25: 14 entries — 10 confirmed, 2 latent, 1 fixed, 1 lead.**
+#1 and #9 are **fixed and shipped**. #3 was fixed as part of the `mc-budget`
+React migration (`2c1427f`) rather than ported. #3 had first been **demoted** to
+latent after its supporting claim turned out to be false — see the correction
+there. #7 (`alien-hate-economics` `renderHud`) remains unchecked. One further
+candidate was investigated and **cleared** — see the end of #8.
 
-**Live on the dashboard right now: #1, #2, #5 and #9.** Those four are worth
-fixing ahead of their migration phase. #4, #6 and #8 are real but need a specific
-input or width; #3 is latent.
+**Live on the dashboard right now: #2, #5, #11, #12 and #13.** Those five are
+worth fixing ahead of their migration phase. #4, #6, #8 and #10 are real but need
+a specific input or width; #14 is a live path that the current fleet does not
+reach.
 
 **#9 is the one to fix first.** It is the only defect that also reaches the AI
 markdown exports and the hosted worker, it drops 91% of its records, and unlike
@@ -464,9 +467,66 @@ an absent value takes whatever affordance the neighbouring cells already use.
 
 ---
 
+## 13. `strategic-commentary` renders a Monte Carlo band as the whole uncertainty — **confirmed live**
+
+`public/v2/js/components/strategic-commentary.js:83-86` renders each engagement
+tier's threshold as `bandLabel` and nothing else:
+
+```js
+${tier.winnable
+  ? `<em>${escapeHtml(tier.bandLabel)}</em>`
+  : '<span style="color: var(--danger); …">UNWINNABLE</span>'}
+```
+
+The server emits an `uncertainty` object alongside it, and the emission carries
+an authored warning — `server/commentary/simulation.js:576-578`:
+
+> The band never travels without what it covers. A consumer that renders
+> `bandLabel` alone would otherwise present Monte Carlo spread as though it were
+> the total uncertainty.
+
+This component is that consumer. `uncertainty` is **never rendered by any v2
+component** — grepped 2026-08-25, zero hits across `public/v2/js/components/`
+and `src/v2/`. Meanwhile `shared/engagementModel.mjs:104` records that the band
+"understates the spread whenever a meaningful share of seeds is unwinnable."
+
+Live against the current save, all five tiers carry `uncertainty: PRESENT` and
+the panel shows five bare hull counts — `1 hull`, `2 hulls`, `3–4 hulls`,
+`5 hulls`, `6–7 hulls` — read by a human as a requirement, not a p20–p80 band
+over 120 seeds. This is not an absent value rendered as present; it is a
+**partial** value rendered as a total one, which is harder to notice.
+
+## 14. `UNWINNABLE` means "above the ceiling I swept", not "cannot be won" — **latent, live path**
+
+Same three lines. When `tier.winnable` is falsy the component prints a red
+`UNWINNABLE`. `shared/engagementModel.mjs:58-62` says exactly what that flag
+does and does not mean:
+
+> a sweep returning `winnable: false` means "the answer is above the ceiling I
+> swept", **NEVER** "this cannot be won". `guaranteedWinHullCount` computes that
+> bound in closed form so a caller can size its own ceiling from the model
+> rather than from a number somebody picked, and `shared/fleetEngagement.mjs`
+> uses it to keep "beyond the modelled range" distinct from "not winnable".
+
+The ceiling is `MAX_SIMULATED_HULLS = 24`. So `UNWINNABLE` should read as
+"more than 24 hulls" — a procurement figure — and instead reads as a wall.
+`shared/fleetEngagement.mjs` already preserves the distinction; this component
+discards it at the last line before the DOM.
+
+**Latent today:** all five tiers are `winnable: true` against the current fleet
+(checked 2026-08-25 via `/api/v2/briefing`). It is a live path, not dead code —
+a weaker fleet or a heavier opponent tier reaches it, and the model exists
+precisely to be asked about opponents you cannot yet beat.
+
+Both #13 and #14 sit in the same ternary, and both are cases of a **shared
+module authoring a careful distinction that the render boundary throws away.**
+The engine comments were written by someone who anticipated this exact consumer.
+
+---
+
 ## What these have in common
 
-Six of the eight are the same defect: **an unmeasured value given a confident
+Nine of the fourteen are the same defect: **an unmeasured value given a confident
 default at the render boundary.** Not in the engine, not in the save parser —
 those layers are careful. It happens in the last few lines before the DOM, where
 `?? 0`, `|| 0` and `?? 5.0` look like defensive programming.
@@ -478,5 +538,25 @@ can detect.
 `<Value>` in Track E exists to make this class structurally impossible, which is
 the argument for fixing these **as part of** the component migrations rather than
 before: a port that keeps `?? 5.0` has not migrated the panel, it has laundered
-the defect through a new component. But #1, #3 and #5 are visible on the live
-dashboard now and do not need to wait for their phase.
+the defect through a new component. #3 is the proof that this works — it was
+corrected during the `mc-budget` port rather than carried across, and the test
+asserting the correction did not exist before the migration.
+
+### The second shape, added 2026-08-25
+
+#13 and #14 are not absence-rendered-as-presence. They are a **partial or
+qualified value rendered as a total one**, and they have a distinguishing
+feature: in both cases the producing module **anticipated this consumer in a
+comment** and the render boundary ignored it anyway.
+
+- `simulation.js:576` — "The band never travels without what it covers."
+  The component renders the band alone.
+- `engagementModel.mjs:58` — `winnable: false` means above the swept ceiling,
+  "**NEVER** this cannot be won." The component prints `UNWINNABLE`.
+
+This shape is harder to catch than `|| 0`, because nothing is missing and no
+value is wrong — the number shown is real, it is simply not the whole claim.
+Grep finds `?? 0`; it does not find a dropped `uncertainty`. The check that
+works is asking, per field, **what the producer said this value does not mean**,
+and it is worth running against the remaining components rather than waiting to
+stumble on the next one.
