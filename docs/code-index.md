@@ -56,7 +56,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/publish/supabaseWriter.js` | C | Node (CommonJS) | 342 | publish stage 4 — every network write the publish makes, ordered to | `MAX_COMPACT_HISTORY_BYTES, MAX_UPSERT_BATCH_BYTES, MAX_UPSERT_BATCH_ROWS, batchSnapshotRows, buildCampaignPayload, commitCampaignPointer, createServiceClient, readExistingCampaign, shouldAdvancePointer, sleep, storeStrategicHistoryAndPrune, upsertSnapshotRows, …(+1)` | — |
 | `scripts/publish/techGraph.js` | C | Node (CommonJS) | 102 | publish stage 3a — apply the shared/inline/omitted tech-tree mode | `applyTechTreeMode, buildSharedTechGraph, splitTechTree, techGraphFingerprint` | `tests/techGraph.test.js` |
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 258 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
-| `scripts/run_unit_tests.js` | C | Node (CommonJS) | 35 | run the deterministic unit test suite — every tests/**/*.test.js file | — | — |
+| `scripts/run_unit_tests.js` | C | Node (CommonJS) | 66 | run the deterministic unit test suite — every tests/**/*.test.js file | — | — |
 | `scripts/verify_bundle_size.js` | C | Node (CommonJS) | 144 | measures the raw and gzipped byte sizes of the bundled React + MUI | `BUDGET, isBuildArtifact, measureBundle` | — |
 | `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 411 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates, getActiveSaveFingerprint` | — |
 | `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 384 | browser verification that the Drive Explorer renders the measured | — | — |
