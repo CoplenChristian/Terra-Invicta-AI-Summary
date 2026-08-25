@@ -17,6 +17,17 @@
  * of this file is about the other half of that: eight rows must never read as
  * eight options, and an older payload that carries no group fields must render
  * as plain rows rather than as "+0 more" or "+undefined more".
+ *
+ * The portfolio budget bar is pinned here too. An empty budget payload used to
+ * fabricate four ceilings and their percentages; missing ceilings now remain
+ * visibly unmeasured, while a measured zero remains a real zero.
+ *
+ * RED PROOF (2026-08-25): temporarily deleted the literal `NOT MEASURED` from
+ * the ALIEN HATE BUDGET meter's unavailable `<strong>` branch. Running only
+ * this file went red with 2 failures: the empty-budget `deepStrictEqual`
+ * reported an empty alien-hate reading, and the three-state assertion
+ * "an absent ceiling is not zero" received `''` instead of `NOT MEASURED`.
+ * The component branch was restored immediately.
  */
 
 const { test } = require('node:test');
@@ -49,6 +60,24 @@ function renderToString(cyclePlan) {
   };
   board.render(root, { engineDirectives: { cyclePlan } });
   return root.innerHTML;
+}
+
+const BUDGET_LABELS = [
+  'ALIEN HATE BUDGET',
+  'INFLUENCE POOL',
+  'OPERATIONS POOL',
+  'MISSION CONTROL'
+];
+
+function budgetMeter(html, label) {
+  const match = html.match(new RegExp(
+    `<div class="directive-budget-item">\\s*`
+      + `<div class="directive-budget-label">\\s*`
+      + `<span>${label}</span>\\s*<strong>([^<]*)</strong>\\s*</div>\\s*`
+      + `<div class="directive-budget-track">([\\s\\S]*?)</div>\\s*</div>`
+  ));
+  assert.ok(match, `${label} meter must render`);
+  return { value: match[1], track: match[2] };
 }
 
 const BENCH_SECTION = /BENCHED ALTERNATIVES[\s\S]*?(?=ALLOCATION STRATEGY|$)/;
@@ -91,6 +120,45 @@ function planWithBench(benched, overrides = {}) {
 // The engine's own cap is 8, so eight is the live maximum -- and it is above the
 // 5 the board used to impose, which is what makes this test the regression pin.
 const EIGHT_ROWS = Array.from({ length: 8 }, (_, i) => row(i));
+
+test('an empty budgets object marks all four ceilings unmeasured and draws no fictional fills', () => {
+  const html = renderToString(planWithBench([], { budgets: {} }));
+  const readings = Object.fromEntries(BUDGET_LABELS.map(label => [label, budgetMeter(html, label).value]));
+
+  assert.deepStrictEqual(readings, {
+    'ALIEN HATE BUDGET': 'NOT MEASURED',
+    'INFLUENCE POOL': 'NOT MEASURED',
+    'OPERATIONS POOL': 'NOT MEASURED',
+    'MISSION CONTROL': 'NOT MEASURED'
+  });
+  assert.strictEqual(
+    (html.match(/class="directive-budget-fill(?:\s|")/g) || []).length,
+    0,
+    'an unmeasured ceiling has no percentage, so it must draw no fill'
+  );
+  for (const fabricated of ['0.0 / 5.0', '0 / 100', '0 / 50']) {
+    assert.ok(!html.includes(fabricated), `must not fabricate ${fabricated}`);
+  }
+});
+
+test('budget ceilings distinguish measured zero, absent, and measured non-zero', () => {
+  const zero = budgetMeter(renderToString(planWithBench([], {
+    budgets: { alienHate: { used: 0, cap: 0, capMeasured: true } }
+  })), 'ALIEN HATE BUDGET');
+  const absent = budgetMeter(renderToString(planWithBench([], {
+    budgets: { alienHate: { used: 0, cap: null, capMeasured: false } }
+  })), 'ALIEN HATE BUDGET');
+  const nonZero = budgetMeter(renderToString(planWithBench([], {
+    budgets: { alienHate: { used: 1.5, cap: 6, capMeasured: true } }
+  })), 'ALIEN HATE BUDGET');
+
+  assert.strictEqual(zero.value, '0.0 / 0.0', 'a measured zero is still a measured ceiling');
+  assert.match(zero.track, /style="width: 0%"/, 'zero used of a zero ceiling draws an empty measured bar');
+  assert.strictEqual(absent.value, 'NOT MEASURED', 'an absent ceiling is not zero');
+  assert.strictEqual(absent.track.trim(), '', 'an absent ceiling has no percentage bar');
+  assert.strictEqual(nonZero.value, '1.5 / 6.0');
+  assert.match(nonZero.track, /style="width: 25%"/);
+});
 
 test('the board renders EVERY row the engine sent, not a slice of them', () => {
   const html = renderToString(planWithBench(EIGHT_ROWS));
@@ -348,6 +416,8 @@ test('an older payload with no bench budget renders no affordability claim at al
 
   assert.strictEqual((html.match(/class="directive-bench-budget"/g) || []).length, 0,
     'nothing was read, so nothing is claimed');
+  assert.strictEqual((html.match(/class="directive-budgets-bar"/g) || []).length, 0,
+    'an absent budgets payload must reach renderBudgets\' existing guard');
   assert.ok(!/row\(s\) below fit/.test(visibleText(html)));
 });
 

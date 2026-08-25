@@ -219,61 +219,73 @@
     const ops = budgets.operations || budgets.ops || {};
     const mc = budgets.missionControl || {};
 
-    const hateSpent = num(hate.used ?? hate.spent) ?? 0;
-    const hateCeil = num(hate.cap ?? hate.ceiling) ?? 5.0;
-    const hatePct = Math.min(100, Math.round((hateSpent / Math.max(0.1, hateCeil)) * 100));
+    const hateSpent = num(hate.used ?? hate.spent);
+    const hateCeil = num(hate.cap ?? hate.ceiling);
+    const hateMeasured = hate.capMeasured === true && hateSpent !== null && hateCeil !== null;
+    const hatePct = hateMeasured
+      ? (hateCeil > 0 ? Math.min(100, Math.round((hateSpent / hateCeil) * 100)) : (hateSpent > 0 ? 100 : 0))
+      : null;
 
-    const infSpent = num(inf.used ?? inf.spent) ?? 0;
-    const infStock = num(inf.cap ?? inf.stock) ?? 100;
-    const infPct = Math.min(100, Math.round((infSpent / Math.max(1, infStock)) * 100));
+    const infSpent = num(inf.used ?? inf.spent);
+    const infStock = num(inf.cap ?? inf.stock);
+    const infMeasured = inf.capMeasured === true && infSpent !== null && infStock !== null;
+    const infPct = infMeasured
+      ? (infStock > 0 ? Math.min(100, Math.round((infSpent / infStock) * 100)) : (infSpent > 0 ? 100 : 0))
+      : null;
 
-    const opsSpent = num(ops.used ?? ops.spent) ?? 0;
-    const opsStock = num(ops.cap ?? ops.stock) ?? 50;
-    const opsPct = Math.min(100, Math.round((opsSpent / Math.max(1, opsStock)) * 100));
+    const opsSpent = num(ops.used ?? ops.spent);
+    const opsStock = num(ops.cap ?? ops.stock);
+    const opsMeasured = ops.capMeasured === true && opsSpent !== null && opsStock !== null;
+    const opsPct = opsMeasured
+      ? (opsStock > 0 ? Math.min(100, Math.round((opsSpent / opsStock) * 100)) : (opsSpent > 0 ? 100 : 0))
+      : null;
 
-    const mcCur = num(mc.used ?? mc.current) ?? 0;
-    const mcCap = num(mc.cap ?? mc.capacity) ?? 100;
-    const mcPct = Math.min(100, Math.round((mcCur / Math.max(1, mcCap)) * 100));
+    const mcCur = num(mc.used ?? mc.current);
+    const mcCap = num(mc.cap ?? mc.capacity);
+    const mcMeasured = mc.capMeasured === true && mcCur !== null && mcCap !== null;
+    const mcPct = mcMeasured
+      ? (mcCap > 0 ? Math.min(100, Math.round((mcCur / mcCap) * 100)) : (mcCur > 0 ? 100 : 0))
+      : null;
 
     return `
       <div class="directive-budgets-bar">
         <div class="directive-budget-item">
           <div class="directive-budget-label">
             <span>ALIEN HATE BUDGET</span>
-            <strong>${hateSpent.toFixed(1)} / ${hateCeil.toFixed(1)}</strong>
+            <strong>${hateMeasured ? `${hateSpent.toFixed(1)} / ${hateCeil.toFixed(1)}` : 'NOT MEASURED'}</strong>
           </div>
           <div class="directive-budget-track">
-            <div class="directive-budget-fill ${hateSpent > hateCeil ? 'directive-budget-fill--danger' : 'directive-budget-fill--warn'}" style="width: ${hatePct}%"></div>
+            ${hateMeasured ? `<div class="directive-budget-fill ${hateSpent > hateCeil ? 'directive-budget-fill--danger' : 'directive-budget-fill--warn'}" style="width: ${hatePct}%"></div>` : ''}
           </div>
         </div>
 
         <div class="directive-budget-item">
           <div class="directive-budget-label">
             <span>INFLUENCE POOL</span>
-            <strong>${infSpent} / ${infStock}</strong>
+            <strong>${infMeasured ? `${infSpent} / ${infStock}` : 'NOT MEASURED'}</strong>
           </div>
           <div class="directive-budget-track">
-            <div class="directive-budget-fill" style="width: ${infPct}%"></div>
+            ${infMeasured ? `<div class="directive-budget-fill" style="width: ${infPct}%"></div>` : ''}
           </div>
         </div>
 
         <div class="directive-budget-item">
           <div class="directive-budget-label">
             <span>OPERATIONS POOL</span>
-            <strong>${opsSpent} / ${opsStock}</strong>
+            <strong>${opsMeasured ? `${opsSpent} / ${opsStock}` : 'NOT MEASURED'}</strong>
           </div>
           <div class="directive-budget-track">
-            <div class="directive-budget-fill" style="width: ${opsPct}%"></div>
+            ${opsMeasured ? `<div class="directive-budget-fill" style="width: ${opsPct}%"></div>` : ''}
           </div>
         </div>
 
         <div class="directive-budget-item">
           <div class="directive-budget-label">
             <span>MISSION CONTROL</span>
-            <strong>${mcCur} / ${mcCap}</strong>
+            <strong>${mcMeasured ? `${mcCur} / ${mcCap}` : 'NOT MEASURED'}</strong>
           </div>
           <div class="directive-budget-track">
-            <div class="directive-budget-fill directive-budget-fill--accent" style="width: ${mcPct}%"></div>
+            ${mcMeasured ? `<div class="directive-budget-fill directive-budget-fill--accent" style="width: ${mcPct}%"></div>` : ''}
           </div>
         </div>
       </div>`;
@@ -657,7 +669,7 @@
     const unassigned = Array.isArray(cyclePlan.unassigned) ? cyclePlan.unassigned : [];
     const clocks = Array.isArray(cyclePlan.clocks) ? cyclePlan.clocks : [];
     const horizon = Array.isArray(cyclePlan.horizon) ? cyclePlan.horizon : [];
-    const budgets = cyclePlan.budgets || {};
+    const budgets = cyclePlan.budgets;
     const reasoning = cyclePlan.decisionReasoning || engineDirectives?.decisionReasoning;
     const riskFloor = cyclePlan.riskFloor || null;
     const riskFloorPercent = num(riskFloor?.percent);
