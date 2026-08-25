@@ -28,13 +28,42 @@ else — no data-fetching decision, no state ownership question, no cache.
 
 That splits the work into two genuinely different jobs, and the easy one is the majority.
 
-### Class R — render-only (9)
+> **Corrected 2026-08-24 after five lanes read every component.** The paragraph
+> above was the doc's headline and it is **wrong for four components**. Three do
+> not take `render(root, payload)` at all:
+>
+> - **`strategic-commentary`** is `renderStrategicCommentary(data, containerId =
+>   'strategicCommentary')` — it takes a container **id string**, not a root, and
+>   writes to `#commentaryModeBadge`, which sits **outside its own mount**
+>   (`index.html:360` vs `:363`).
+> - **`detail-panel`** exports `{open, close, syncPageInert}` and has **no
+>   `render`** — an imperative body-appended singleton modal with 8 call sites
+>   across 5 files, plus global `inert` state shared with two other overlays.
+> - **`alien-hate-economics`** exposes `{render, renderHud}`, and `renderHud`
+>   mutates `#hudHateMeter` — an element **not in the `VIEWS` registry**, so
+>   `assertViewRegistryIntegrity()` does not cover it.
+> - **`world-map`** self-fetches `/v2/data/world.geojson` through a module-global
+>   promise cache (`world-map.js:9,272-281,506`), so it is not cleanly class R.
+>
+> `faction-intel` moves the other way: **0 `fetch(` calls in the file** — it is
+> class R, not F. The class split below is corrected; the original claim that
+> "`render(root, payload)` **is** `<Component {...payload} />`" holds for the
+> majority but is not the universal it was written as.
 
-Fed from the snapshot or briefing by `mission-control.js`. Pure functions of their payload.
+### Class R — render-only (8)
 
-`council-orders` · `strategic-commentary` · `mc-budget` · `directive-board` ·
-`alien-hate-economics` · `executive-boards` · `world-map` · `detail-panel` ·
-`intelligence-library`
+Fed from the snapshot or briefing by `mission-control.js`.
+
+`council-orders` · `mc-budget` · `directive-board` · `executive-boards` ·
+`intelligence-library` · `faction-intel` · `alien-hate-economics`\* ·
+`strategic-commentary`\*
+
+\* both have a second entry point or a non-standard signature — see the
+correction above.
+
+### Neither — imperative (1)
+
+`detail-panel`. Opened and closed by callers; owns no payload.
 
 ### Class F — self-fetching (7)
 
@@ -63,44 +92,82 @@ Size is source lines. **Pinned by** is what will fail if the migration changes b
 this is the safety net, and where it says *none by name* the phase must add coverage
 before migrating, not after.
 
+**The `pinned by` column below was rewritten on 2026-08-24.** The original was
+assembled from test *filenames*, and filenames lied — six of sixteen rows were
+wrong, in the one column that is the entire safety net. Each entry now names what
+was actually verified to load the component.
+
 | # | component | lines | class | global | pinned by |
 | ---: | --- | ---: | :-: | --- | --- |
 | 2 | `unlocked-tech` | 371 | F | `MissionControlUnlockedTech` | `unlockedTechPanel.test.js` |
-| 3 | `mc-budget` | 187 | R | `MissionControlMcBudget` | **none by name** |
-| 4 | `strategic-commentary` | 202 | R | `MissionControlStrategicCommentary` | `strategicCommentary.test.js` |
-| 5 | `fleet-engagement` | 260 | F | `MissionControlFleetEngagement` | `fleetEngagement.test.js` |
-| 6 | `mining-expansion` | 618 | F | `MissionControlMiningExpansion` | `miningExpansion.test.js`, `miningExpansionNullDiscipline.test.js`, `verify_mining_registers.js` |
-| 7 | `alien-hate-economics` | 323 | R | `MissionControlHateEconomics` | `alienHateEconomics.test.js` |
-| 8 | `council-orders` | 348 | R | `MissionControlCouncilOrders` | **none by name** |
-| 9 | `executive-boards` | 415 | R | *(no single global)* | **none by name** |
-| 10 | `fleet-procurement` | 607 | F | `MissionControlFleetProcurement` | `verify_research_vs_procurement.js` |
-| 11 | `research-advisor` | 1055 | F | `MissionControlResearchAdvisor` | 4 verify scripts, **no unit test** |
-| 12 | `intelligence-library` | 582 | R | `IntelligenceLibrary` | **none by name** |
-| 13 | `faction-intel` | 1261 | F | `FactionIntelScreen` | **none by name** |
-| 14 | `detail-panel` | 219 | R | `MissionControlDetailPanel` | `verify_drive_path_modal.js` |
+| 3 | `mc-budget` | 187 | R | `MissionControlMcBudget` | **none** |
+| 4 | `strategic-commentary` | 202 | R\* | `MissionControlStrategicCommentary` | `strategicCommentary.test.js` |
+| 5 | `fleet-engagement` | 260 | F | `MissionControlFleetEngagement` | `fleetEngagement.test.js` — but **its registers are asserted nowhere**, see below |
+| 6 | `mining-expansion` | 618 | F | `MissionControlMiningExpansion` | `miningExpansion.test.js`, `miningExpansionNullDiscipline.test.js`, `mineModuleOutput.test.js:537`, `miningBoardRendering.test.js:36`, `verify_mining_registers.js` |
+| 7 | `alien-hate-economics` | 323 | R\* | `MissionControlHateEconomics` | **none** — `alienHateEconomics.test.js:4` imports `server/alienHateEconomics`, not the component |
+| 8 | `council-orders` | 348 | R | `MissionControlCouncilOrders` | **none** |
+| 9 | `executive-boards` | 415 | R | `MissionControlBoards` (7 functions) | **none** |
+| 10 | `fleet-procurement` | 607 | F | `MissionControlFleetProcurement` | `refitAdvisor.test.js:321,755,820,944`, `verify_research_vs_procurement.js` |
+| 11 | `research-advisor` | 1055 | F | `MissionControlResearchAdvisor` | `refitAdvisor.test.js:1006` (`slotFacts` / `openFullRanking` only — **nothing covers `render`**), 3 verify scripts |
+| 12 | `intelligence-library` | 582 | R | `IntelligenceLibrary` | **none** |
+| 13 | `faction-intel` | 1261 | **R** | `FactionIntelScreen` | **none** |
+| 14 | `detail-panel` | 219 | — | `MissionControlDetailPanel` | `verify_drive_path_modal.js` |
 | 15 | `directive-board` | 768 | R | `MissionControlDirectiveBoard` | `directiveBoardBench.test.js` |
-| 16 | `drive-explorer` | 1186 | F | `MissionControlDriveExplorer` | `driveExplorer.test.js`, `verify_drive_explorer.js`, `verify_v2_navigation.js` |
-| 17 | `world-map` | 511 | R | `WorldTheaterMap` | **none by name** |
+| 16 | `drive-explorer` | 1186 | F | `MissionControlDriveExplorer` | `driveExplorer.test.js`, `verify_drive_explorer.js`, `verify_v2_navigation.js`, `verify_drive_path_modal.js` |
+| 17 | `world-map` | 511 | R\* | `WorldTheaterMap` | **none** |
 
-### Six components have no unit test naming them
+### Seven components have no test naming them — not six
 
-`mc-budget`, `council-orders`, `executive-boards`, `intelligence-library`, `faction-intel`,
-`world-map` — **3,004 source lines with no named unit coverage.** Two are the largest
-overlays in the product.
+`mc-budget`, `alien-hate-economics`, `council-orders`, `executive-boards`,
+`intelligence-library`, `faction-intel`, `world-map` — **3,627 source lines**.
 
-This is the single biggest risk in the migration and it is not a React problem. A rewrite
-of `faction-intel` (1,261 lines) currently has nothing that would fail if it silently
-dropped a field.
+`alien-hate-economics` was the correction: it *looks* covered, because
+`tests/alienHateEconomics.test.js` exists and shares its name. That file imports
+`server/alienHateEconomics` and never loads the component. It is the
+"guard that outlives its target" pattern, and it was propagated into the wave
+plan before anyone opened the file.
 
-**Each of those phases must add characterisation coverage BEFORE migrating** — capture what
-the component renders today from a fixture, assert it, then migrate and assert the same.
-Otherwise the phase cannot tell a successful migration from a lossy one.
+**Each of those phases must add characterisation coverage BEFORE migrating** —
+capture what the component renders today from a fixture, assert it, then migrate
+and assert the same. Otherwise the phase cannot tell a successful migration from
+a lossy one.
 
-### `executive-boards` has no single global
+### One measured/estimated register pair has no guard at all
 
-Every other component exposes one `window.*` object. This one does not — it registers
-several render functions. Whatever it does instead should be established before migrating,
-since the strangler mount assumes one entry point per panel.
+`.fe-meas` / `.fe-est` on `fleet-engagement` are asserted in **no test and no
+verify script**. `verify_drive_explorer.js` asserts `.de-*` only
+(`:63-64, :122-137`); `verify_mining_registers.js` covers mining. The
+two-register split is described everywhere as pinned by computed style, and for
+one of its three instances that was never true.
+
+### `executive-boards` and the seven legacy charts underneath it
+
+It exposes `window.MissionControlBoards` with **seven** render functions
+(`executive-boards.js:406-414`) targeting seven differently-named legacy
+containers across four views.
+
+The migration hazard is in the controller, not the component:
+`mission-control.js:1569, 1640, 1667, 1694, 1738, 1775, 1839` each read
+`if (window.MissionControlBoards?.renderX) { …; return; }`, and the **complete
+pre-component chart implementation is the else-path**. A React version that stops
+setting that global does not fail — the controller silently renders the 2024
+chart and **re-overwrites the React root on every `renderDashboard()`**. CI
+cannot see it.
+
+### Primitives the five do not cover
+
+Named by four of the five lanes independently, so this is not one component's
+special pleading:
+
+**`Modal`** (`detail-panel`, `drive-explorer`), **`Overlay`** chrome shared by
+`detail-panel` / `faction-intel` / `intelligence-library`, **`Meter`/`Gauge`**
+(`directive-board` needs two bar systems), **`Chip`**, **`Badge`**, **`Notice`**,
+**`FilterBar`** (`drive-explorer`), **`Tabs`**, and a **`VisibilityTag`** for
+`faction-intel`'s eleven-state visibility vocabulary.
+
+Also: `strategic-commentary` uses `.commentary-sim-table`, a **sixth** table
+system absent from Track E's `TABLE_VARIANTS` — and `DataTable.jsx:15` *throws*
+on an unknown variant.
 
 ---
 
