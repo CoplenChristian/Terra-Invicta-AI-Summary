@@ -20,23 +20,21 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/index.html` | — | Browser (legacy v1) | 535 | legacy v1 dashboard shell -- DO NOT EDIT | — | — |
 | `public/js/api.js` | BS | Browser (legacy, non-module) | 129 | the legacy v1 API client — runtime probe and the fetch wrapper the | — | — |
 | `public/js/app.js` | BS | Browser (legacy, non-module) | 1517 | the legacy v1 dashboard controller — renders the old UI and must not | — | — |
-| `public/v2/js/components/alien-hate-economics.js` | BS | Browser (classic, global IIFE) | 324 | renders the save-derived Mission Control hate floor without | — | — |
+| `public/v2/js/components/alien-hate-economics.js` | BS | Browser (classic, global IIFE) | 330 | renders the save-derived Mission Control hate floor without | — | — |
 | `public/v2/js/components/council-orders.js` | BS | Browser (classic, global IIFE) | 349 | renders the at-a-glance answer to "what should each councilor do | — | — |
 | `public/v2/js/components/detail-panel.js` | BS | Browser (classic, global IIFE) | 220 | the shared detail surface for clickable Mission Control modules — | — | — |
-| `public/v2/js/components/directive-board.js` | BS | Browser (classic, global IIFE) | 769 | renders the Directive Engine v2 Cycle Plan. | — | — |
+| `public/v2/js/components/directive-board.js` | BS | Browser (classic, global IIFE) | 781 | renders the Directive Engine v2 Cycle Plan. | — | — |
 | `public/v2/js/components/drive-explorer.js` | BS | Browser (classic, global IIFE) | 1187 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
 | `public/v2/js/components/executive-boards.js` | BS | Browser (classic, global IIFE) | 416 | renders the executive boards — faction power, resources, and the | — | — |
-| `public/v2/js/components/faction-intel.js` | BS | Browser (classic, global IIFE) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
+| `public/v2/js/components/faction-intel.js` | BS | Browser (classic, global IIFE) | 1274 | faction intelligence as a scan-first decision surface. | — | — |
 | `public/v2/js/components/fleet-engagement.js` | BS | Browser (classic, global IIFE) | 261 | renders the per-fleet engagement estimates — what force each alien | — | — |
 | `public/v2/js/components/fleet-procurement.js` | BS | Browser (classic, global IIFE) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
 | `public/v2/js/components/intelligence-library.js` | BS | Browser (classic, global IIFE) | 595 | renders the intelligence library — the drillable intelligence | — | — |
-| `public/v2/js/components/mc-budget.js` | BS | Browser (classic, global IIFE) | 188 | the Mission Control budget planner — MC is the sole input to the | — | `tests/mc-budget.test.js` |
 | `public/v2/js/components/mining-expansion.js` | BS | Browser (classic, global IIFE) | 619 | the mining expansion board — capacity, runways, and need-weighted | — | — |
 | `public/v2/js/components/research-advisor.js` | BS | Browser (classic, global IIFE) | 1056 | phase 4 of the research advisor, on screen. | — | — |
-| `public/v2/js/components/strategic-commentary.js` | BS | Browser (classic, global IIFE) | 203 | renders the non-LLM four-layer Strategic Commentary Engine output. | — | — |
 | `public/v2/js/components/unlocked-tech.js` | BS | Browser (classic, global IIFE) | 372 | renders the searchable list of the observer faction's unlocked | — | — |
 | `public/v2/js/components/world-map.js` | BS | Browser (classic, global IIFE) | 512 | renders the interactive world/space theater map surface. | — | `tests/world-map.test.js` |
-| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2055 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2087 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (classic, global IIFE) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
@@ -58,7 +56,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 258 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
 | `scripts/run_unit_tests.js` | C | Node (CommonJS) | 66 | run the deterministic unit test suite — every tests/**/*.test.js file | — | — |
 | `scripts/verify_bundle_size.js` | C | Node (CommonJS) | 144 | measures the raw and gzipped byte sizes of the bundled React + MUI | `BUDGET, isBuildArtifact, measureBundle` | — |
-| `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 411 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates, getActiveSaveFingerprint` | — |
+| `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 442 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates, getActiveSaveFingerprint` | — |
 | `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 384 | browser verification that the Drive Explorer renders the measured | — | — |
 | `scripts/verify_drive_path_modal.js` | C | Node (CommonJS) | 304 | browser verification that clicking a drive row actually opens the | — | — |
 | `scripts/verify_mining_registers.js` | C | Node (CommonJS) | 181 | browser verification that the mining board renders the measured | — | — |
@@ -245,8 +243,10 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/tableVariants.js` | E | Browser (React JSX) | 77 | maps DataTable variant keys to the six real table systems in the v2 | `DEFAULT_SCROLL_HINT_TEXT, TABLE_VARIANTS` | — |
 | `src/v2/components/TruncationNote.jsx` | E | Browser (React JSX) | 80 | announce capped lists with total and omitted counts. An absent omitted | `TruncationNote` | — |
 | `src/v2/components/Value.jsx` | E | Browser (React JSX) | 80 | render a numeric value or an explicit unavailable/absent state. Never | `Value` | — |
-| `src/v2/main.jsx` | E | Browser (React JSX) | 143 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, mountCoexistenceProof, mountReactPanel, unmountReactPanel` | — |
-| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 192 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
+| `src/v2/main.jsx` | E | Browser (React JSX) | 172 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, mountCoexistenceProof, mountReactPanel, renderMcBudget, renderStrategicCommentary, unmountReactPanel` | — |
+| `src/v2/panels/McBudget.jsx` | E | Browser (React JSX) | 275 | Mission Control budget planner — MC is the sole input to the alien | `McBudget` | — |
+| `src/v2/panels/StrategicCommentary.jsx` | E | Browser (React JSX) | 286 | renders the non-LLM four-layer Strategic Commentary Engine output | `StrategicCommentary` | `tests/StrategicCommentary.test.js` |
+| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 223 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
 | `src/v2/theme.js` | E | Browser (React JSX) | 266 | MUI createTheme mirror of the v2 CSS custom-property vocabulary in | `cssParityExpectations, initiativeCategorical, initiativeSpace, initiativeTheme, initiativeTokens` | — |
 
 ## `public/v2/css/`
@@ -275,7 +275,7 @@ The v2 stylesheet in **cascade order** — the numeric prefix and the shell's
 | 16 | `public/v2/css/16-board-skill-cells.css` | 35 | Councilor skill cells in the executive board tables. |
 | 17 | `public/v2/css/17-directive-board.css` | 1399 | The directive engine board and the council orders panel. |
 | 18 | `public/v2/css/18-mining-expansion.css` | 496 | The mining expansion board and the wide-card capping. |
-| 19 | `public/v2/css/19-strategic-commentary.css` | 196 | The strategic commentary panel. |
+| 19 | `public/v2/css/19-strategic-commentary.css` | 218 | The strategic commentary panel. |
 | 20 | `public/v2/css/20-research-advisor.css` | 421 | The research advisor panel on COMMAND. |
 | 21 | `public/v2/css/21-fleet-procurement.css` | 205 | FLEET view and the procurement / refit cards. |
 | 22 | `public/v2/css/22-drive-explorer.css` | 579 | DRIVES: the drive catalogue and its two registers. |

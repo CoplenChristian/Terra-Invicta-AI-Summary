@@ -17,10 +17,12 @@ import {
   TruncationNote,
 } from './components/index.js';
 import { McBudget } from './panels/McBudget.jsx';
-import { renderMcBudget } from './main.jsx';
+import { StrategicCommentary } from './panels/StrategicCommentary.jsx';
+import { renderMcBudget, renderStrategicCommentary } from './main.jsx';
 
 if (typeof window !== 'undefined') {
   window.MissionControlMcBudget = { render: renderMcBudget };
+  window.MissionControlStrategicCommentary = { renderStrategicCommentary };
 }
 
 const SCENES = {
@@ -34,6 +36,7 @@ const SCENES = {
   truncation: TruncationScene,
   cascade: CascadeScene,
   mcBudget: McBudgetScene,
+  strategicCommentary: StrategicCommentaryScene,
 };
 
 const PANEL_MODIFIERS = ['priority', 'alert', 'featured', 'quiet', 'dense', 'commentary'];
@@ -185,6 +188,18 @@ function McBudgetScene() {
   return (
     <div id="mc-budget-harness-mount" data-testid="mc-budget-harness">
       <McBudget payload={payload} />
+    </div>
+  );
+}
+
+function StrategicCommentaryScene() {
+  const payload = window.__STRATEGIC_COMMENTARY_PAYLOAD__;
+  return (
+    <div data-testid="strategic-commentary-harness">
+      <span id="commentaryModeBadge" className="commentary-mode-tag">CAMPAIGN READ</span>
+      <div id="strategicCommentary" aria-live="polite">
+        <StrategicCommentary data={payload} />
+      </div>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { createRoot } from 'react-dom/client';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { McBudget } from './panels/McBudget.jsx';
+import { StrategicCommentary } from './panels/StrategicCommentary.jsx';
 
 /**
  * Throwaway Phase 0 Coexistence Proof Component.
@@ -124,17 +125,32 @@ export function renderMcBudget(root, payload) {
   mountReactPanel(root, <McBudget payload={payload} />);
 }
 
+/**
+ * Strangler bridge matching window.MissionControlStrategicCommentary.renderStrategicCommentary.
+ * Accepts a container id string (not an element) — the registry adapter absorbs that difference.
+ */
+export function renderStrategicCommentary(commentaryData, containerId = 'strategicCommentary') {
+  const container = typeof containerId === 'string'
+    ? document.getElementById(containerId)
+    : containerId;
+  if (!container) return;
+  mountReactPanel(container, <StrategicCommentary data={commentaryData} />);
+}
+
 // Expose mounting registry on window for strangler migration interoperability
 if (typeof window !== 'undefined') {
   window.MissionControlMcBudget = { render: renderMcBudget };
+  window.MissionControlStrategicCommentary = { renderStrategicCommentary };
 
   window.MissionControlReact = {
     mountReactPanel,
     unmountReactPanel,
     mountCoexistenceProof,
     mountMcBudget: renderMcBudget,
+    mountStrategicCommentary: renderStrategicCommentary,
     CoexistenceProof,
     McBudget,
+    StrategicCommentary,
   };
 
   const urlParams = new URLSearchParams(window.location.search);

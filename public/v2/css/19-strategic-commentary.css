@@ -192,4 +192,26 @@
   padding: 12px 0;
 }
 
+.commentary-sim-uncertainty {
+  margin-top: 6px;
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.commentary-sim-uncertainty summary {
+  cursor: pointer;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.commentary-sim-uncertainty-body {
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.commentary-sim-uncertainty-body ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
 

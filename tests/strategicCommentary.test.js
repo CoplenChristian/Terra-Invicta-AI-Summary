@@ -477,52 +477,8 @@ test('Simulation: a single-hull band reads "1 hull", and wider bands stay plural
 // available and simply omitted it otherwise, with no explanation, so a reader
 // could not tell "no engagement model was run" from "the model found nothing
 // worth warning about". Silence is the same defect class as a confident number.
-// ---------------------------------------------------------------------------
-test('Commentary panel: an unavailable sweep renders its reason instead of vanishing', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const vm = require('node:vm');
-
-  const componentPath = path.join(__dirname, '..', 'public', 'v2', 'js',
-    'components', 'strategic-commentary.js');
-  const elements = {
-    strategicCommentary: { innerHTML: '' },
-    commentaryModeBadge: { textContent: '' }
-  };
-  const sandbox = {
-    window: {},
-    console,
-    document: { getElementById: (id) => elements[id] || null }
-  };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(componentPath, 'utf8'), sandbox, { filename: componentPath });
-
-  const sim = runMonteCarloSimulation(unratedFacts('player'));
-  sandbox.window.MissionControlStrategicCommentary.renderStrategicCommentary({
-    available: true,
-    mode: 'player',
-    headline: 'Campaign Intelligence Assessment: Status quo across major theaters',
-    prose: 'Current campaign telemetry indicates stable operational posture.',
-    beats: [],
-    simulation: { ...sim, reason: sim.reason }
-  });
-
-  const html = elements.strategicCommentary.innerHTML;
-  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-
-  assert.match(text, /NOT SIMULATED/, 'the panel says the sweep did not run');
-  assert.ok(text.includes('No default rating is substituted'),
-    'the reason reaches the reader rather than being swallowed');
-  assert.doesNotMatch(text, /UNWINNABLE/,
-    '"could not be run" must not render as "was run and lost"');
-  assert.doesNotMatch(text, /\d+\s*(–|-)?\s*\d*\s*hulls?\b/,
-    'no hull COUNT may be shown for a sweep that never ran');
-  for (const token of ['null', 'undefined', 'NaN', '[object Object]']) {
-    assert.ok(!text.includes(token), `rendered text contains "${token}"`);
-  }
-});
-
+// Panel rendering for an unavailable sweep is covered in
+// tests/strategic-commentary.test.js via the Playwright primitives harness.
 // ---------------------------------------------------------------------------
 // THE REMAINING CONFIDENT DEFAULTS IN simulation.js
 //
