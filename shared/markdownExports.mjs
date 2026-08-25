@@ -3003,12 +3003,20 @@ export function renderCompactSnapshotMarkdown(filteredData) {
   const priorityFactionName = filteredData.priorityTargetFaction?.name || SERVANTS_DISPLAY_NAME;
   lines.push(`## Strategic Enemy Holdings (Priority Targets: ${priorityFactionName})`);
   lines.push(``);
-  const topTargets = (filteredData.servantTargets || []).slice(0, 8);
+  const priorityTargetsDisplayCap = 8;
+  const allServantTargets = Array.isArray(filteredData.servantTargets)
+    ? filteredData.servantTargets
+    : null;
+  const topTargets = allServantTargets ? allServantTargets.slice(0, priorityTargetsDisplayCap) : [];
   if (topTargets.length > 0) {
     for (const t of topTargets) {
       const targetCPs = t.targetCPCount ?? t.servantCPCount ?? 0;
       const targetGdp = isMeasured(t.gdpTrillion) ? `$${t.gdpTrillion}T GDP` : 'GDP UNAVAILABLE';
       lines.push(`- **${t.nationName}** (Target Score: ${t.score}/100) — ${targetGdp}, ${targetCPs}/${t.totalCPCount} ${t.targetFactionName || priorityFactionName} CPs${t.nukes > 0 ? `, ${t.nukes} Nukes` : ''} [${t.reasons.join('; ')}]`);
+    }
+    const omittedCount = allServantTargets.length - topTargets.length;
+    if (omittedCount > 0) {
+      lines.push(`*${topTargets.length} of ${allServantTargets.length} priority targets shown; ${omittedCount} omitted by the ${priorityTargetsDisplayCap}-entry display cap.*`);
     }
   } else {
     lines.push(`- No major hostile holdings currently identified.`);

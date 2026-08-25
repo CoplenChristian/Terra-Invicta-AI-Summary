@@ -1475,3 +1475,43 @@ test('section 11 does not grow with the size of the save, at any fleet multiple'
   assert.strictEqual(sizes.size, 1,
     `section 11 changed size across a 20x fleet multiple (${[...sizes].join(', ')} bytes) — it is not fixed-size`);
 });
+
+// ---------------------------------------------------------------------------
+// Priority target truncation in compact snapshot markdown
+// ---------------------------------------------------------------------------
+
+test('compact snapshot markdown announces priority targets omitted by the display cap', () => {
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
+  const allTargets = snapshot.servantTargets;
+  assert.ok(Array.isArray(allTargets) && allTargets.length > 8,
+    'the frozen intel fixture must carry more than eight servant targets so truncation is exercised');
+
+  const markdown = renderCompactSnapshotMarkdown(snapshot);
+  const renderedLines = (markdown.match(/^- \*\*/gm) || []).length;
+  const section = markdown.match(/## Strategic Enemy Holdings[\s\S]*?(?=## Technology)/);
+  assert.ok(section, 'the strategic holdings section must render');
+  const holdingsLines = (section[0].match(/^- \*\*/gm) || []).length;
+  assert.strictEqual(holdingsLines, 8, 'only eight priority target rows may render in markdown');
+  assert.match(section[0], new RegExp(
+    `\\*8 of ${allTargets.length} priority targets shown; ${allTargets.length - 8} omitted by the 8-entry display cap\\.\\*`
+  ));
+  assert.ok(renderedLines >= holdingsLines, 'other sections must still render alongside the capped holdings block');
+});
+
+test('compact snapshot markdown does not claim priority-target totals when servantTargets is absent or empty', () => {
+  const base = loadFixture(PLAYER_FIXTURE_PATH);
+  delete base.provenance;
+
+  for (const label of ['absent', 'empty']) {
+    const snapshot = JSON.parse(JSON.stringify(base));
+    if (label === 'absent') delete snapshot.servantTargets;
+    else snapshot.servantTargets = [];
+    const section = renderCompactSnapshotMarkdown(snapshot).match(
+      /## Strategic Enemy Holdings[\s\S]*?(?=## Technology)/
+    );
+    assert.ok(section, `${label} servantTargets must still render the holdings header`);
+    assert.match(section[0], /No major hostile holdings currently identified/);
+    assert.ok(!section[0].includes('priority targets shown'), `${label} servantTargets must not announce a shown total`);
+    assert.ok(!section[0].includes('omitted by the 8-entry display cap'), `${label} servantTargets must not announce omissions`);
+  }
+});

@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**205 JS modules** and **24 stylesheet parts** (229 indexed files).
+**206 JS modules** and **24 stylesheet parts** (230 indexed files).
 
 ## `public/`
 
@@ -29,7 +29,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/faction-intel.js` | BS | Browser (classic, global IIFE) | 1262 | faction intelligence as a scan-first decision surface. | — | — |
 | `public/v2/js/components/fleet-engagement.js` | BS | Browser (classic, global IIFE) | 261 | renders the per-fleet engagement estimates — what force each alien | — | — |
 | `public/v2/js/components/fleet-procurement.js` | BS | Browser (classic, global IIFE) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
-| `public/v2/js/components/intelligence-library.js` | BS | Browser (classic, global IIFE) | 583 | renders the intelligence library — the drillable intelligence | — | — |
+| `public/v2/js/components/intelligence-library.js` | BS | Browser (classic, global IIFE) | 595 | renders the intelligence library — the drillable intelligence | — | — |
 | `public/v2/js/components/mc-budget.js` | BS | Browser (classic, global IIFE) | 188 | the Mission Control budget planner — MC is the sole input to the | — | `tests/mc-budget.test.js` |
 | `public/v2/js/components/mining-expansion.js` | BS | Browser (classic, global IIFE) | 619 | the mining expansion board — capacity, runways, and need-weighted | — | — |
 | `public/v2/js/components/research-advisor.js` | BS | Browser (classic, global IIFE) | 1056 | phase 4 of the research advisor, on screen. | — | — |
@@ -197,7 +197,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `shared/intel/researchRanking.mjs` | E | Node + Cloudflare worker (ESM) | 1358 | the /api/intel/research-ranking projection composing the phase-4 | `CHAIN_MONTHS_BASIS, dedupeByGateProject, researchRankingResource` | `tests/researchRanking.test.js` |
 | `shared/intel/theaters.mjs` | E | Node + Cloudflare worker (ESM) | 196 | body-by-body posture — the twelve-body theater board and the | `bodyStatusResource, theatersResource` | — |
 | `shared/intelResources.mjs` | **B** E | Node + Cloudflare worker (ESM) | 154 | public entry point for the intel projections — a barrel re-exporting | `COMBAT_POWER_SOURCE, DEFAULT_DETAIL_LEVEL, DETAIL_AWARE_RESOURCES, DETAIL_LEVELS, EXPANSION_MINE_LIMIT_GRANTS, EXPANSION_MISSION_TECH_NAMES, EXPANSION_THEATER_ACCESSIBILITY, FLEET_SUMMARY_OMITTED_FIELDS, INTEL_ENDPOINT_EXAMPLES, INTEL_ENDPOINT_INDEX, MINING_RESOURCES, MINING_SCARCITY_WEIGHTS, …(+60)` | `tests/intelResources.test.js` |
-| `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 3155 | shared markdown export renderers for the model-facing .md endpoints | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, accelOr, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, …(+8)` | `tests/markdownExports.test.js` |
+| `shared/markdownExports.mjs` | E | Node + Cloudflare worker (ESM) | 3163 | shared markdown export renderers for the model-facing .md endpoints | `THREATS_BYTE_BUDGET, WAR_ROOM_BYTE_BUDGET, accelOr, buildDesignLookup, buildHabModuleAggregates, evaluateHostileRelevance, extractWeaponAndPdSummary, fixedOr, formatFleetDesignRollup, isGenuinelyHostileFaction, isMeasured, localeOr, …(+8)` | `tests/markdownExports.test.js` |
 | `shared/militaryValue.mjs` | E | Node + Cloudflare worker (ESM) | 1227 | military valuation of the unlock families phase 1 did not cover — | `AXIS_SETS, CLASS_KINDS, COMPONENT_CLASS_SPECS, MAGAZINE_BASIS_CODES, MILITARY_CLASS_SPECS, MILITARY_FORMULAE, MOUNT_HARDPOINTS, RATIO_UNAVAILABLE_CODES, WEAPON_CLASS_SPECS, WEAPON_ROLES, armorMetrics, batteryMetrics, …(+15)` | `tests/militaryValue.test.js` |
 | `shared/mineModuleOutput.mjs` | E | Node + Cloudflare worker (ESM) | 755 | the mine module's own output multiplier — measured per built mine, | `MINE_MODULE_MEASURED_ON, MINE_MODULE_PROJECTION_POLICY, MINE_MODULE_STATES, MINE_MODULE_TEMPLATES, MINE_OPERATIONAL_STATUS, applyMineModuleMultiplier, buildMineModuleCapability, buildMineUpgradeOpportunities, mineModuleDataAvailable, resolveMineModuleMultiplier` | `tests/mineModuleOutput.test.js` |
 | `shared/miningTechBonus.mjs` | E | Node + Cloudflare worker (ESM) | 426 | the observer's per-resource mine-output multipliers from completed | `ADDITIVE_MINING_BONUS_PROJECTS, MINING_BONUS_MEASURED_ON, MINING_BONUS_RULES, MINING_BONUS_STACKING, MINING_BONUS_STATES, UNMODELLED_FACTORS, applyMiningTechBonus, buildMiningTechBonuses, miningTechBonusCaveat` | `tests/miningTechBonus.test.js` |
@@ -241,11 +241,12 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/index.js` | **B** E | Browser (React JSX) | 14 | barrel export for the five shared React primitives (Track E). | `DEFAULT_SCROLL_HINT_TEXT, DataTable, Estimated, Measured, Panel, TABLE_VARIANTS, TruncationNote, Value, measureScrollable, syncOneScrollHint` | — |
 | `src/v2/components/Measured.jsx` | E | Browser (React JSX) | 56 | the measured register — mono, upright, full-contrast text for values | `Measured` | — |
 | `src/v2/components/Panel.jsx` | E | Browser (React JSX) | 70 | React replacement for `.tech-card` — header, title, body, and all six | `Panel` | — |
+| `src/v2/components/parseNumeric.js` | E | Browser (React JSX) | 13 | shared numeric parse for <Value> — null/undefined/'' are absent, not | `parseNumeric` | — |
 | `src/v2/components/tableVariants.js` | E | Browser (React JSX) | 77 | maps DataTable variant keys to the six real table systems in the v2 | `DEFAULT_SCROLL_HINT_TEXT, TABLE_VARIANTS` | — |
 | `src/v2/components/TruncationNote.jsx` | E | Browser (React JSX) | 80 | announce capped lists with total and omitted counts. An absent omitted | `TruncationNote` | — |
-| `src/v2/components/Value.jsx` | E | Browser (React JSX) | 85 | render a numeric value or an explicit unavailable/absent state. Never | `Value` | — |
+| `src/v2/components/Value.jsx` | E | Browser (React JSX) | 80 | render a numeric value or an explicit unavailable/absent state. Never | `Value` | — |
 | `src/v2/main.jsx` | E | Browser (React JSX) | 143 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, mountCoexistenceProof, mountReactPanel, unmountReactPanel` | — |
-| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 134 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
+| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 192 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
 | `src/v2/theme.js` | E | Browser (React JSX) | 266 | MUI createTheme mirror of the v2 CSS custom-property vocabulary in | `cssParityExpectations, initiativeCategorical, initiativeSpace, initiativeTheme, initiativeTokens` | — |
 
 ## `public/v2/css/`

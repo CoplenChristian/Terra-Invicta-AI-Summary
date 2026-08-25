@@ -42,6 +42,7 @@
 - **United Malay Nation** (Target Score: 70/100) — $9.69T GDP, 0/5 the Servants CPs [Superpower Economy ($9.7T GDP); Strategic Mission Control (45 MC); Significant Boost Launch Capacity (13.7/mo); High Research Output (444/mo)]
 - **Russia** (Target Score: 70/100) — $6.54T GDP, 0/4 the Servants CPs [Superpower Economy ($6.5T GDP); Strategic Mission Control (22 MC); Significant Boost Launch Capacity (4.8/mo); High Research Output (209/mo)]
 - **Türkiye** (Target Score: 60/100) — $3.47T GDP, 0/4 the Servants CPs [Major Economy ($3.5T GDP); Strategic Mission Control (15 MC); Significant Boost Launch Capacity (4.2/mo); High Research Output (206/mo)]
+*8 of 80 priority targets shown; 72 omitted by the 8-entry display cap.*
 
 ## Technology
 

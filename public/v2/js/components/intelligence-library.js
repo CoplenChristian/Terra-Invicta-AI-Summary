@@ -258,12 +258,24 @@
         number(nation.missionControl, 0)
       ]);
     });
-    var targetRows = (snapshot.servantTargets || []).slice(0, 8).map(function targetRow(target) {
+    var priorityTargetCap = 8;
+    var allTargets = Array.isArray(snapshot.servantTargets) ? snapshot.servantTargets : null;
+    var shownTargets = allTargets ? allTargets.slice(0, priorityTargetCap) : [];
+    var targetRows = shownTargets.map(function targetRow(target) {
       return '<div class="intel-library-target"><strong>' + display(target.nationName) + '</strong><span>' + display(target.targetFactionName) + ' / score ' + display(target.score) + '</span><small>' + display((target.reasons || []).join(' · ')) + '</small></div>';
     }).join('');
+    var targetsSection = '';
+    if (allTargets && allTargets.length > 0) {
+      var omittedCount = allTargets.length - shownTargets.length;
+      var omissionNote = omittedCount > 0
+        ? '<p class="intel-library-muted">Showing ' + number(shownTargets.length, 0) + ' of ' + number(allTargets.length, 0) + ' targets; '
+          + number(omittedCount, 0) + ' further target' + (omittedCount === 1 ? ' is' : 's are') + ' omitted from this view.</p>'
+        : '';
+      targetsSection = '<section class="intel-library-block intel-library-targets"><div class="intel-library-block-heading"><span>PRIORITY TARGETS</span><small>GENERATED FROM CURRENT OBSERVER</small></div><div class="intel-library-target-list">' + targetRows + '</div>' + omissionNote + '</section>';
+    }
     return '<div class="intel-library-section-intro"><div><div class="intel-library-kicker">EARTH OPERATIONS / NATIONS</div><h3>Geopolitical holdings</h3><p>Every nation in the filtered snapshot, including control points, GDP, military posture and launch capacity.</p></div><span class="intel-library-count">' + countLabel(rows.length, 'nation') + '</span></div>' +
       table(['Nation', 'Executive', 'CPs', 'GDP', 'Mil tech', 'Armies', 'Nukes', 'Unrest', 'Cohesion', 'Boost/mo', 'MC'], rows, 'No nations are available in this intelligence view.') +
-      (targetRows ? '<section class="intel-library-block intel-library-targets"><div class="intel-library-block-heading"><span>PRIORITY TARGETS</span><small>GENERATED FROM CURRENT OBSERVER</small></div><div class="intel-library-target-list">' + targetRows + '</div></section>' : '');
+      targetsSection;
   }
 
   function resourceCell(value) {

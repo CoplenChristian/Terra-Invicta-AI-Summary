@@ -319,6 +319,40 @@ test('intelligence library renders an em dash for an explicitly unmeasured natio
 });
 
 // ---------------------------------------------------------------------------
+// Priority target truncation must announce omissions, not drop them silently.
+// ---------------------------------------------------------------------------
+
+test('priority targets announce how many records the 8-entry display cap omits', () => {
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
+  const allTargets = snapshot.servantTargets;
+  assert.ok(Array.isArray(allTargets) && allTargets.length > 8,
+    'the frozen intel fixture must carry more than eight servant targets so truncation is exercised');
+  const omitted = allTargets.length - 8;
+  const { html, text } = renderLibrary(snapshot, { section: 'nations' });
+  const renderedTargets = (html.match(/class="intel-library-target"/g) || []).length;
+  assert.strictEqual(renderedTargets, 8, 'only the first eight priority targets may render');
+  assert.match(text, new RegExp(`Showing 8 of ${allTargets.length} targets`));
+  assert.match(text, new RegExp(`${omitted} further targets are omitted from this view`));
+});
+
+test('priority targets stay hidden when servantTargets is absent or empty', () => {
+  const base = {
+    mode: 'player',
+    observerFactionName: 'the Initiative',
+    metadata: { gameTimeString: 'TARGET INPUT' },
+    factions: [],
+    nations: [{ displayName: 'Testland', executiveFactionName: 'None', controlPoints: [], GDP: 1, milTech: 1, armies: 0, nukes: 0, unrest: 0, cohesion: 0, boost: 0, missionControl: 0 }]
+  };
+  for (const label of ['absent', 'empty']) {
+    const snapshot = label === 'absent' ? { ...base } : { ...base, servantTargets: [] };
+    const { text } = renderLibrary(snapshot, { section: 'nations' });
+    assert.ok(!text.includes('PRIORITY TARGETS'), `${label} servantTargets must not mount the priority panel`);
+    assert.ok(!text.includes('omitted from this view'), `${label} servantTargets must not claim omissions`);
+    assert.ok(!text.includes('Showing 0 of'), `${label} servantTargets must not read as showing zero of zero`);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Empty versus absent payload fields, section navigation, and overlay hooks.
 // ---------------------------------------------------------------------------
 
