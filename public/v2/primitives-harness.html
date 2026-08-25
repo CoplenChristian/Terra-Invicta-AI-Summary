@@ -30,8 +30,13 @@
   <link rel="stylesheet" href="/v2/css/23-unlocked-tech.css">
   <link rel="stylesheet" href="/v2/css/24-fleet-engagement.css">
   <style>
-    /* Equal-specificity cascade probe — single class, rgb(1, 2, 3). */
+    /* Cascade probes. .cascade-order-probe is (0,1,0); Emotion's &-prefixed
+       rules compile to .css-*.cascade-order-* at (0,2,0), so the base probe
+       measures a specificity win, not equal specificity. The late probe is
+       injected at runtime after Emotion's <style> tags. */
     .cascade-order-probe { color: rgb(1, 2, 3); }
+    .cascade-order-important { color: rgb(5, 10, 15) !important; }
+    .cascade-order-late { color: rgb(11, 12, 13); }
     body { margin: 16px; background: var(--canvas); color: var(--text); }
   </style>
 </head>

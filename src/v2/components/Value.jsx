@@ -6,12 +6,7 @@
  */
 
 import React from 'react';
-
-function parseNumeric(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
-}
+import { parseNumeric } from './parseNumeric.js';
 
 function defaultFormat(value, decimals) {
   const num = parseNumeric(value);

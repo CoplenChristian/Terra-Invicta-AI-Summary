@@ -22,6 +22,7 @@ test('TruncationNote unknown omitted count does not claim showing all', async ()
         known: read('trunc-known'),
         unknown: read('trunc-unknown'),
         complete: read('trunc-complete'),
+        completeNoTotal: read('trunc-complete-no-total'),
       };
     });
 
@@ -34,5 +35,11 @@ test('TruncationNote unknown omitted count does not claim showing all', async ()
 
     assert.equal(notes.complete.state, 'complete');
     assert.match(notes.complete.text, /All entries shown/i);
+
+    // omittedCount 0 with NO total count must render the bare label with no
+    // number at all — a literal 0 beside it is the regression being pinned.
+    assert.equal(notes.completeNoTotal.state, 'complete');
+    assert.equal(notes.completeNoTotal.text, 'All entries shown.');
+    assert.doesNotMatch(notes.completeNoTotal.text, /\d/, 'complete note without a total must carry no count');
   });
 });

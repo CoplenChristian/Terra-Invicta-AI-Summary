@@ -168,25 +168,35 @@ has carried at least one factual error.
 
 Recorded 2026-08-24 as part of Track E implementation.
 
-### 1. Cascade order — Emotion wins at equal specificity
+### 1. Cascade order — Emotion wins at higher specificity; global wins on `!important` and on a later duplicate at matching specificity
 
-Measured in the real page (`public/v2/primitives-harness.html`) with two
-`.cascade-order-probe` spans: linked CSS sets `color: rgb(1, 2, 3)` and an
-Emotion `styled()` rule sets `color: rgb(40, 50, 60)` on the same single-class
-selector. **`getComputedStyle` on the Emotion-mounted element returns
-`rgb(40, 50, 60)`** — Emotion injects after the 24 linked sheets and wins at
-equal specificity. Pinned by `tests/reactCascadeOrder.test.js`.
+Measured in the real page (`public/v2/primitives-harness.html`): the linked/inline
+`.cascade-order-probe` rule sets `color: rgb(1, 2, 3)` at **(0,1,0)**, while the
+Emotion `styled()` rule is written `&.cascade-order-probe`, which compiles to
+`.css-*.cascade-order-probe` at **(0,2,0)**. **`getComputedStyle` on the
+Emotion-mounted element returns `rgb(40, 50, 60)`** — a specificity win, **not**
+the equal-specificity result the first record claimed. Two genuinely threatening
+cases are pinned alongside it: a global `.cascade-order-important`
+`!important` rule beats Emotion at (0,2,0), and a global `.cascade-order-late`
+rule duplicated at (0,2,0) in a stylesheet injected **after** Emotion's runtime
+`<style>` tags wins by source order. Emotion wins only when it is both
+heavier-specificity and injected later. All three are pinned by
+`tests/reactCascadeOrder.test.js`.
 
 **Implication for the fifteen component phases:** primitives and migrated panels
-may use MUI `sx` / `styled()` for new styling. Existing global class names are
-still kept on migrated surfaces where the vanilla CSS already defines the look
-(`.tech-card`, table wraps, register classes) so load-bearing cascade pairs in
-the 24 sheets (`mining-meas__value` beating `mining-yields-text`, etc.) stay
-attached to real elements without relying on injection order.
+may use MUI `sx` / `styled()` for new styling, but they stay ahead of the 24
+linked sheets only by the specificity of their compiled selectors and by
+Emotion's injection position (it appends to `<head>` at render). A global rule
+that must win needs `!important` or a later, equal-or-higher-specificity
+position. Existing global class names are still kept on migrated surfaces where
+the vanilla CSS already defines the look (`.tech-card`, table wraps, register
+classes) so load-bearing cascade pairs in the 24 sheets
+(`mining-meas__value` beating `mining-yields-text`, etc.) stay attached to real
+elements without relying on injection order.
 
 ### 2. Primitives keep global class names on the DOM
 
-Even though Emotion wins at equal specificity, `<Panel>`, `<DataTable>`,
+Even though Emotion wins the base probe, `<Panel>`, `<DataTable>`,
 `<Measured>`, `<Estimated>` emit the same class names the vanilla components use
 today. MUI is present in the harness for the cascade probe only; production
 `bundle.js` does not import the primitives yet (`daecedcfcba6a9f13baa95134ad700bc`

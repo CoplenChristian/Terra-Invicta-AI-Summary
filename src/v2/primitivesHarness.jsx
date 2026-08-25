@@ -19,19 +19,35 @@ import {
 
 const SCENES = {
   panel: PanelScene,
+  panelModifiers: PanelModifiersScene,
   dataTableOverflow: DataTableOverflowScene,
   dataTableFits: DataTableFitsScene,
+  dataTableVariants: DataTableVariantsScene,
   registers: RegistersScene,
   value: ValueScene,
   truncation: TruncationScene,
   cascade: CascadeScene,
 };
 
+const PANEL_MODIFIERS = ['priority', 'alert', 'featured', 'quiet', 'dense', 'commentary'];
+
 function PanelScene() {
   return (
     <Panel title="Probe panel" modifier="priority" data-testid="harness-panel">
       <p>Panel body</p>
     </Panel>
+  );
+}
+
+function PanelModifiersScene() {
+  return (
+    <div data-testid="harness-panel-modifiers">
+      {PANEL_MODIFIERS.map((mod) => (
+        <Panel key={mod} title={`${mod} panel`} modifier={mod} data-testid={`harness-panel-${mod}`}>
+          <p>{mod} body</p>
+        </Panel>
+      ))}
+    </div>
   );
 }
 
@@ -60,6 +76,19 @@ function DataTableFitsScene() {
   return (
     <div style={{ width: 400 }} data-testid="harness-table-fits">
       <DataTable variant="de" columns={columns} rows={rows} />
+    </div>
+  );
+}
+
+function DataTableVariantsScene() {
+  const columns = [{ key: 'a', label: 'Alpha' }, { key: 'b', label: 'Beta' }];
+  const rows = [{ key: '1', a: 'A', b: 'B' }];
+  const variants = ['de', 'mc-board', 'fe', 'mining', 'intel-library', 'commentary-sim'];
+  return (
+    <div data-testid="harness-datatable-variants">
+      {variants.map((v) => (
+        <DataTable key={v} variant={v} columns={columns} rows={rows} />
+      ))}
     </div>
   );
 }
@@ -93,23 +122,52 @@ function TruncationScene() {
       <TruncationNote totalCount={25} omittedCount={5} data-testid="trunc-known" />
       <TruncationNote totalCount={25} data-testid="trunc-unknown" />
       <TruncationNote totalCount={10} omittedCount={0} data-testid="trunc-complete" />
+      <TruncationNote omittedCount={0} data-testid="trunc-complete-no-total" />
     </div>
   );
 }
 
-/** Equal-specificity probe: one class selector on each side. */
+/** Cascade probes. Each Emotion rule compiles to .css-*.cascade-order-* at (0,2,0). */
 const CascadeEmotionProbe = styled('span')({
   '&.cascade-order-probe': {
     color: 'rgb(40, 50, 60)',
   },
+  '&.cascade-order-important': {
+    color: 'rgb(60, 70, 80)',
+  },
+  '&.cascade-order-late': {
+    color: 'rgb(70, 80, 90)',
+  },
 });
 
 function CascadeScene() {
+  React.useLayoutEffect(() => {
+    // A global rule duplicated in a stylesheet injected AFTER Emotion's runtime
+    // <style> tags. At matching (0,2,0) specificity the later source wins.
+    const late = document.createElement('style');
+    late.setAttribute('data-cascade-late', 'true');
+    late.textContent = '.cascade-order-late.cascade-order-late { color: rgb(21, 22, 23); }';
+    document.head.appendChild(late);
+    document.documentElement.setAttribute('data-cascade-late-applied', '1');
+  }, []);
+
   return (
     <div data-testid="harness-cascade">
       <span className="cascade-order-probe" data-testid="cascade-global">global</span>
       <CascadeEmotionProbe className="cascade-order-probe" data-testid="cascade-emotion">
         emotion
+      </CascadeEmotionProbe>
+
+      <span className="cascade-order-important" data-testid="cascade-important-global">
+        important global
+      </span>
+      <CascadeEmotionProbe className="cascade-order-important" data-testid="cascade-important-emotion">
+        important emotion
+      </CascadeEmotionProbe>
+
+      <span className="cascade-order-late" data-testid="cascade-late-global">late global</span>
+      <CascadeEmotionProbe className="cascade-order-late" data-testid="cascade-late-emotion">
+        late emotion
       </CascadeEmotionProbe>
     </div>
   );
