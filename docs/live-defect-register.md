@@ -285,6 +285,55 @@ array length they are slicing — which is available at both call sites.
 
 ---
 
+## 10. 85 drives are shown under a name the game never displays — **confirmed**
+
+Found by the user, 2026-08-25: *"I don't see H-Orion drive in the drive screen."*
+It is there. It is called something else.
+
+`server/templateLoader.js:339`
+
+```js
+displayName: item.friendlyName || item.displayName || (item.dataName || …)
+```
+
+The dashboard takes the template's `friendlyName` and **never reads
+`StreamingAssets/Localization/en/TIDriveTemplate.en`**, which is where the game
+gets the name it puts in front of the player:
+
+```
+TIDriveTemplate.displayName.AdvancedOrionDrivex1=H-Orion Drive
+```
+
+Measured across the catalogue: **85 of 541 drives (15.7%) have a localised name
+that differs from the `friendlyName` the dashboard renders.** Whole families are
+affected, not stragglers:
+
+| dashboard shows | the game shows |
+| --- | --- |
+| Ponderomotive VASIMR ×1–×6 | **Advanced VASIMR** ×1–×6 |
+| Advanced Pebble Drive ×1–×6 | **Particle Drive** ×1–×6 |
+| Advanced Orion Drive ×1 | **H-Orion Drive** |
+
+The failure mode is the worst kind for a reference tool: **the data is present and
+correct, and the reader concludes it is absent.** Searching the dashboard for what
+you can see on your own ship returns nothing, and there is no signal that a
+rename happened — an honest "not found" is indistinguishable from a real absence.
+
+It is not confined to drives. The same `templateLoader.js` path builds names for
+every template family, and `TIProjectTemplate.en` carries the matching
+`Project_AdvancedOrionDrive=H-Orion Drive`, so research and project names are
+almost certainly affected too. **Scope this before fixing it** — the fix is to
+read the localisation table and prefer it over `friendlyName`, but the count
+above is drives only.
+
+Related, and separate: the DRIVES view showed **61 of 541 rows with 480 omitted**
+on the measured save. That truncation is honest — `itemsTotalCount` /
+`itemsOmittedCount` are carried — but it means most of the catalogue is off screen
+by default, which compounds the naming problem when someone is hunting for a
+specific drive.
+
+---
+
 ## What these have in common
 
 Six of the eight are the same defect: **an unmeasured value given a confident
