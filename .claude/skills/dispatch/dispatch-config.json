@@ -67,7 +67,7 @@
       "note": "Very fast. Frontend work. ~16k input-token floor per call."
     },
     "composer": {
-      "mode": "auto",
+      "mode": "ask",
       "model": "composer-2.5",
       "note": "Long multi-file implementation runs. Shares the Cursor allowance with grok."
     },
@@ -77,7 +77,7 @@
       "note": "Analysis, research, single-shot code. Its agentic coding regressed against 4.5 — do not give it long autonomous runs. Shares the Cursor allowance with composer."
     },
     "codex": {
-      "mode": "auto",
+      "mode": "ask",
       "note": "UNSANDBOXED — danger-full-access, approval never. All-rounder, punches above its size. Highest-risk lane in this file."
     }
   }
