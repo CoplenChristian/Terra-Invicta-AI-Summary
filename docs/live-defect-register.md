@@ -14,9 +14,14 @@ the cited lines. "Demonstrated" means executed. "Confirmed reachable" means the
 producer's own contract permits the input, but it does not occur on the current
 save.
 
-**Final tally: seven confirmed or demonstrated, one lead.** Only #7
-(`alien-hate-economics` `renderHud`) remains unchecked. One candidate was
-investigated and **cleared** — see the note at the end of #8.
+**Tally: six confirmed, one demoted to latent, one lead.** #7
+(`alien-hate-economics` `renderHud`) remains unchecked. #3 was **demoted** after
+its supporting claim turned out to be false — see the correction there. One
+further candidate was investigated and **cleared** — see the end of #8.
+
+**Live on the dashboard right now: #1, #2 and #5.** Those three are the ones
+worth fixing ahead of their migration phase. #4, #6 and #8 are real but need a
+specific input or width; #3 is latent.
 
 ---
 
@@ -72,7 +77,34 @@ answer and the wrong answer are on screen together.
 
 ---
 
-## 3. `mc-budget` renders `PROJECTED FLOOR 0.0` for an unmeasured multiplier — **demonstrated**
+## 3. `mc-budget` coerces an unmeasured multiplier to zero — **latent, NOT live** (corrected)
+
+> **Corrected 2026-08-24, same day.** This entry originally claimed the panel
+> renders `PROJECTED FLOOR 0.0` today, on the grounds that "both committed
+> fixtures omit `difficultyMultiplier` entirely". **That is false.** Measured
+> directly:
+>
+> ```
+> difficultyMultiplier  = 0.3
+> concealmentMultiplier = 0.6400000000000001
+> usedMissionControl    = 162
+> ```
+>
+> Both fixtures carry the field. The lane's `0.0` came from a **crafted**
+> payload, which proves the coercion is reachable — not that it occurs.
+> Antigravity's characterisation test independently asserts
+> `PROJECTED FLOOR 31.1` from the real fixture, and is right.
+>
+> **The code defect is still real** — `|| 0` on a `num()` that deliberately
+> returns null is the wrong idiom and will produce a confident zero the moment
+> the field is absent. But it is latent, not shipping, and it does **not** belong
+> in the "visible on the live dashboard now" group. Demoted accordingly.
+>
+> Recording this because I published the fixture claim as fact without opening
+> the fixture, which is the same failure as building the pin column from
+> filenames.
+
+### Original entry, retained
 
 `public/v2/js/components/mc-budget.js:61-62`
 
