@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**195 JS modules** and **24 stylesheet parts** (219 indexed files).
+**196 JS modules** and **24 stylesheet parts** (220 indexed files).
 
 ## `public/`
 
@@ -237,6 +237,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | module | B/E/C | runtime | lines | purpose | exports | test |
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
 | `src/v2/main.jsx` | E | Browser (React JSX) | 143 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, mountCoexistenceProof, mountReactPanel, unmountReactPanel` | — |
+| `src/v2/theme.js` | E | Browser (React JSX) | 266 | MUI createTheme mirror of the v2 CSS custom-property vocabulary in | `cssParityExpectations, initiativeCategorical, initiativeSpace, initiativeTheme, initiativeTokens` | — |
 
 ## `public/v2/css/`
 

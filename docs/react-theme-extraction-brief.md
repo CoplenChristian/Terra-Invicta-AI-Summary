@@ -119,7 +119,12 @@ intent trio onto MUI's names, keep the categorical set separate, and record the
   `--capture` then `--diff-files` against the pre-existing baseline must come back
   identical. Adding a theme object that nothing renders yet cannot move a pixel,
   and if it does, something is being injected that should not be.
-  The current baseline is md5 `6783cc9b4ebfe8ab9eaabc75e452b336`.
+  **Corrected 2026-08-24 after the Phase 0 follow-up (`ae758cd`):** the pre-React
+  reference is `tmp/computed-style-captures/post_phase0.json`, md5
+  `6783cc9b4ebfe8ab9eaabc75e452b336`. Do **not** use `baseline_run1.json` — it was
+  overwritten by the follow-up's re-run and now carries the new
+  `{metadata, states}` schema and a different save fingerprint. Legacy captures
+  still diff correctly (`rawA?.states || rawA` is backward compatible).
 - **`verify_mobile_overflow.js`** — 0 unreachable at 375/414/768 both modes;
   COMMAND under 3.25 screens at 1920 (currently **2.98**).
 - `verify_drive_explorer.js`, `verify_mining_registers.js`,
@@ -151,3 +156,43 @@ concurrently for the Phase 0 follow-up.
 
 Report anything where this brief is wrong. It has been measured, but the last two
 briefs in this migration each carried a factual error, so assume there is one.
+
+---
+
+## Decisions
+
+Recorded 2026-08-24 as part of Track D implementation in `src/v2/theme.js`.
+
+### 1. Spacing — named entries, `theme.spacing` unused
+
+MUI's default `spacing(n) = n × 8px` reproduces only three of the nine real steps
+(8, 16, 24). The theme carries the full scale as **`theme.initiative.space`**
+with keys matching the CSS suffixes (`2xs`, `xs`, `sm`, `md`, `lg`, `xl`, `2xl`,
+`3xl`, `4xl`). `createTheme` is left on MUI's default `spacing` multiplier;
+migrated components must read `theme.initiative.space.sm` (etc.), not
+`theme.spacing(1)`. The parity test asserts all nine named entries against the
+computed `--space-*` custom properties.
+
+### 2. Typography — token-named custom variants, no h1–h6 force-fit
+
+Nine font-size tokens map to **`theme.typography` variants named for the tokens**:
+`tag`, `meta`, `metric`, `row`, `section`, `kpi`, `title`, `mapName`, `mapNote`.
+These are not aliased onto MUI's semantic names (`caption`, `body1`, `h6`, …) —
+`--fs-tag` (169 uses) is a 9px table-header tier, not a caption. Display tiers
+use `fontFamilyDisplay` / the `kpi` and `title` variants' `fontFamily: var(--display)`
+stack. `fontFamilyMono` holds the mono stack separately from `fontFamily`.
+
+### 3. Palette — intent on MUI names, categorical set separate, `danger` → `error`
+
+Intent colours map onto MUI's palette: `primary` = accent trio (`main` /
+`light` = accent-strong; `accent-soft` lives on `palette.initiative.accentSoft`),
+`error.main` = **`--danger`** (the CSS name stays `--danger`; only the MUI key is
+`error`), `success` / `warning` / `info` = success / warning / blue. Surfaces and
+text tiers sit on `background` / `text` plus `palette.initiative` for
+raised/inset/line-strong/text-dim.
+
+The seven-hue categorical set is **`palette.initiative.categorical`** (and mirrored
+on `theme.initiative.categorical`): `cyan`, `blue`, `pink`, `gold`, `emerald`,
+`crimson`, `purple`, each with `main` and `glow`. Alias-backed hues
+(`--init-cyan` = `var(--accent)`, etc.) are not duplicated — they resolve through
+the intent entries above.
