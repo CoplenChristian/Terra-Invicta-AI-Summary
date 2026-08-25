@@ -16,6 +16,12 @@ import {
   Value,
   TruncationNote,
 } from './components/index.js';
+import { McBudget } from './panels/McBudget.jsx';
+import { renderMcBudget } from './main.jsx';
+
+if (typeof window !== 'undefined') {
+  window.MissionControlMcBudget = { render: renderMcBudget };
+}
 
 const SCENES = {
   panel: PanelScene,
@@ -27,6 +33,7 @@ const SCENES = {
   value: ValueScene,
   truncation: TruncationScene,
   cascade: CascadeScene,
+  mcBudget: McBudgetScene,
 };
 
 const PANEL_MODIFIERS = ['priority', 'alert', 'featured', 'quiet', 'dense', 'commentary'];
@@ -169,6 +176,15 @@ function CascadeScene() {
       <CascadeEmotionProbe className="cascade-order-late" data-testid="cascade-late-emotion">
         late emotion
       </CascadeEmotionProbe>
+    </div>
+  );
+}
+
+function McBudgetScene() {
+  const payload = window.__MC_BUDGET_PAYLOAD__;
+  return (
+    <div id="mc-budget-harness-mount" data-testid="mc-budget-harness">
+      <McBudget payload={payload} />
     </div>
   );
 }

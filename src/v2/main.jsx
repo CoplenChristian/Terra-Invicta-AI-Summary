@@ -13,6 +13,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import { McBudget } from './panels/McBudget.jsx';
 
 /**
  * Throwaway Phase 0 Coexistence Proof Component.
@@ -115,13 +116,25 @@ export function mountCoexistenceProof(targetPanelId = 'strategicCommentary') {
   return mountReactPanel(wrapper, <CoexistenceProof targetPanelId={targetPanelId} />);
 }
 
+/**
+ * Strangler bridge matching window.MissionControlMcBudget.render(root, payload).
+ */
+export function renderMcBudget(root, payload) {
+  if (!root) return;
+  mountReactPanel(root, <McBudget payload={payload} />);
+}
+
 // Expose mounting registry on window for strangler migration interoperability
 if (typeof window !== 'undefined') {
+  window.MissionControlMcBudget = { render: renderMcBudget };
+
   window.MissionControlReact = {
     mountReactPanel,
     unmountReactPanel,
     mountCoexistenceProof,
-    CoexistenceProof
+    mountMcBudget: renderMcBudget,
+    CoexistenceProof,
+    McBudget,
   };
 
   const urlParams = new URLSearchParams(window.location.search);
