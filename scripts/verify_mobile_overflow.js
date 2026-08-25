@@ -22,8 +22,6 @@
 const { chromium } = require('playwright');
 const http = require('http');
 
-const TEST_PORT = Number(process.env.MOBILE_VERIFY_PORT || 3993);
-
 // The shell is requested as `/v2/index.html`, never `/v2/`. `res.sendFile`
 // defaults to `dotfiles: 'ignore'`, so the `/v2` route 404s whenever the repo is
 // checked out beneath a dotted directory (a git worktree under `.claude/`).

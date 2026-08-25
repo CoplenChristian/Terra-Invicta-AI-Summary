@@ -18,14 +18,13 @@ const { chromium } = require('playwright');
 const http = require('http');
 const assert = require('node:assert');
 
-const TEST_PORT = 3995;
-
 async function runVerification() {
   const app = require('../server/index.js');
   const server = http.createServer(app);
 
-  await new Promise((resolve) => server.listen(TEST_PORT, resolve));
-  console.log(`[Verification] Server listening on http://localhost:${TEST_PORT}`);
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
+  console.log(`[Verification] Server listening on http://localhost:${port}`);
 
   let browser;
   try {
@@ -57,7 +56,7 @@ async function runVerification() {
       for (const vp of VIEWPORTS) {
         console.log(`\n--- Viewport: ${vp.name} (${vp.width}x${vp.height}) ---`);
         await page.setViewportSize({ width: vp.width, height: vp.height });
-        await page.goto(`http://localhost:${TEST_PORT}/v2/#/command`, { waitUntil: 'domcontentloaded' });
+        await page.goto(`http://localhost:${port}/v2/#/command`, { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(600);
 
         // Switch to the target mode if needed

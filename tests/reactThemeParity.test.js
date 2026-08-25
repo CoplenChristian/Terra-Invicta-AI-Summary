@@ -13,7 +13,6 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { chromium } = require('playwright');
 
-const TEST_PORT = Number(process.env.REACT_THEME_PARITY_PORT || 3997);
 const SHELL_PATH = '/v2/index.html';
 
 // Sixteen pure var() aliases (--bg-deep, --init-cyan, …) are intentionally omitted.

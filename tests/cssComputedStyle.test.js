@@ -13,8 +13,6 @@ const path = require('node:path');
 const http = require('http');
 const { chromium } = require('playwright');
 
-const TEST_PORT = 3991;
-
 function parseRgb(colorStr) {
   if (!colorStr) return null;
   const rgbMatch = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);

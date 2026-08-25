@@ -19,7 +19,6 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const TEST_PORT = Number(process.env.COMPUTED_STYLE_PORT || 3995);
 const SHELL_PATH = '/v2/index.html';
 
 const VIEWS = ['command', 'expansion', 'fleet', 'drives', 'threat', 'records'];

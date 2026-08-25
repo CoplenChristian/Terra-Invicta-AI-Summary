@@ -67,8 +67,6 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const { chromium } = require('playwright');
 
-const TEST_PORT = Number(process.env.COMMAND_LAYOUT_PORT || 3989);
-
 // `/v2/` goes through `res.sendFile`, which 404s from a checkout under a dot
 // directory (every agent worktree). `/v2/index.html` is served by
 // express.static, which sets a root and does not. Same reason

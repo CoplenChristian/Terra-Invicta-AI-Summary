@@ -2,7 +2,7 @@
  * Verification script for v2 Navigation Acceptance Checks (§5 of v2-navigation-plan.md).
  * Purpose: browser verification of the v2 navigation acceptance checks against a
  *   fresh local server using Playwright.
- * Runs against a fresh local server on port 3888 using Playwright.
+ * Binds an ephemeral port so concurrent verification runs cannot collide.
  */
 
 const { chromium } = require('playwright');
@@ -73,7 +73,7 @@ async function runVerification() {
           // reported as defects. Everything after this point still counts.
           consoleErrors.length = consoleBefore;
           networkErrors.length = networkBefore;
-          await page.goto(`http://localhost:3888${shellPath}${suffix}`, { waitUntil: 'networkidle' });
+          await page.goto(`http://localhost:${port}${shellPath}${suffix}`, { waitUntil: 'networkidle' });
         }
       };
 
