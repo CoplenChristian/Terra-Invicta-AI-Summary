@@ -522,6 +522,100 @@ Both #13 and #14 sit in the same ternary, and both are cases of a **shared
 module authoring a careful distinction that the render boundary throws away.**
 The engine comments were written by someone who anticipated this exact consumer.
 
+### The correct rendering already exists — in the AI export, not the browser
+
+`shared/markdownExports.mjs:2602-2631` handles **both** defects, thoroughly:
+
+```js
+const count = tier.winnable === true
+  ? (tier.bandLabel || 'UNAVAILABLE')
+  : `NOT REACHED at any count up to ${localeOr(tier.uncertainty?.maxHullsSwept)} hulls`;
+```
+
+— that is #14 done right, and the comment above it says why: *"`winnable: false`
+is a CEILING report, not an impossibility verdict."* It then carries the partial
+band caveat only when it bites (`ratio < 1` → *"band taken over only X% of
+seeds, so it UNDERSTATES the spread"*), emits a **"What those counts are NOT"**
+block naming the opponent rating basis and stating that the band covers
+run-to-run variance *"and NOTHING else — not error in the opponent ratings, and
+not model misspecification"*, and when no uncertainty record was carried at all
+it says so and adds *"Treat them as unverified."*
+
+**This inverts the usual direction of this project's defects.** The standing
+rule in `CLAUDE.md` is that a new figure reaches the browser and never reaches
+the AI exports — measured 2026-08-21, four of six additions missed. Here the
+exports are correct and the browser is the surface that lost the caveat. The
+rule is not "push things toward the exports", it is **every surface or none**,
+and the check has to run in both directions.
+
+It also means the fix needs no new wording invented. Two surfaces spelling the
+same caveat differently would be its own defect; the migration should reuse
+these sentences. That is the standard to review the port against.
+
+---
+
+## 15. The bench is scored, ordered, and is not a ranking — **demonstrated live**
+
+`public/v2/js/components/directive-board.js`, `renderBenched` at `:514`.
+
+Each benched row renders its score prominently — `<span class="directive-benched-score">Score ${score.toFixed(2)}</span>`
+at `:552` — and the rows are listed top to bottom. Nothing in the panel says
+what `server/engine/assignment.js:1287-1289` states outright:
+
+> the emitted list is therefore **NOT in descending score order, and must not be
+> read as a ranking**. It is the best few, in the order the engine produced them.
+
+Grepped 2026-08-25: the words "ranking", "not a rank" and "ordered by" appear
+nowhere in `directive-board.js`.
+
+**Demonstrated against the live save**, `/api/v2/briefing?mode=player&observer=4712`:
+
+| row | score | action |
+| --: | --: | :-- |
+| 0 | 6.03 | Take the Executive control point in Madagascar |
+| 1 | 6 | Investigate Bonnie Molloy |
+| 2 | **9** | Convert alien-detection capability into… |
+| 3 | 5.61 | Advise Government: European Union |
+| 4 | 4.38 | Advise Government: Mexico |
+| 5 | 4.06 | Advise Government: Myanmar |
+| 6 | 4.14 | Advise Government: Switzerland |
+| 7 | **7** | Advise Government: United States of North America |
+
+Descending would be `9, 7, 6.03, 6, 5.61, 4.38, 4.14, 4.06`. The best available
+alternative sits **third**; the second-best sits **last**. Rows 5 and 6 are
+inverted against each other by 0.08. A reader scanning top-down for the
+strongest option reads 6.03 as the winner when it is the third-best of eight.
+
+This is not a fabricated value and not an absent one — every score shown is
+correct. The defect is the **arrangement**, which carries an implication the
+data does not support, and which the producing module explicitly warned about.
+
+`shared/markdownExports.mjs:2410-2411` gets it right: *"the carried array is
+then ordered by generation rather than by score, so the sequence is NOT a
+ranking and the row count counts GROUPS rather than options."* Same inversion as
+#13 and #14 — **the AI export is correct and the browser is the surface that
+lost it.**
+
+Fixing it does not mean re-sorting. Generation order is deliberate and
+`assignment.js:1279-1286` records two measured alternatives that were both
+worse. It means **saying** the order is not a ranking, in the panel, in the
+words the export already uses.
+
+### One thing this sweep got wrong, worth recording
+
+`shared/benchSelection.mjs:346` warns that a mixed group "must say so", and a
+grep for `budgetDisplacedCount` returned **zero** hits in every v2 component —
+which looked like a sixth defect. It is not. `directive-board.js:503-512`
+renders exactly that caveat (*"Mixed group: N of M option(s) here were refused
+by a budget, so the reason above does not describe all of them"*) off a
+differently-named field, `groupBudgetDisplacedCount`, and only when it actually
+disagrees with the row's own verdict — which is better than always rendering it.
+
+**A field-name grep cannot answer "is this caveat surfaced".** It answers "is
+this identifier present", and the two differ whenever the render boundary
+renames. Every candidate this sweep produced had to be read at the call site
+before it counted, and one of six did not survive that.
+
 ---
 
 ## What these have in common
