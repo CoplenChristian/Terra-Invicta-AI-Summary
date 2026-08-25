@@ -388,6 +388,52 @@ specific drive.
 
 ---
 
+## 11. An explicit UNAVAILABLE visibility renders as VISIBLE — **confirmed**
+
+`public/v2/js/components/faction-intel.js`, found 2026-08-25 while correcting
+characterisation assertions.
+
+```js
+var MISSING_VALUES = { '': true, 'UNKNOWN': true, 'UNAVAILABLE': true, … };   // :17-24
+
+function visibilityForMetric(context, faction, metricName, hasData) {          // :1126
+  var explicit = readField(faction, keys);
+  if (explicit.found && hasMetricValue(explicit.value)) return normalizeVisibility(explicit.value);
+  if (!hasData) return 'UNAVAILABLE';
+  …
+  return 'VISIBLE';
+}
+```
+
+`'UNAVAILABLE'` is itself in `MISSING_VALUES`, so `hasMetricValue('UNAVAILABLE')`
+is **false**. An explicit `earthVisibility: 'UNAVAILABLE'` therefore fails the
+guard, skips the explicit branch, and — on a faction that has data — falls
+through to **`VISIBLE`**.
+
+**The signal that says "we cannot see this" is discarded and rendered as its
+opposite.** That is worse than this repo's usual `Number(null) === 0`: it is not
+an absent value coerced to zero, it is an explicit negative assertion inverted
+into a positive one. A reader is told intelligence is visible precisely when the
+snapshot said it is not.
+
+The guard's intent is clearly to ignore *empty* values and fall back. The bug is
+that the sentinel meaning "explicitly unavailable" is in the same set as the
+sentinels meaning "nothing here", so it cannot be distinguished from absence.
+
+Two related findings from the same pass, both **behaviour, not defects**, but
+worth knowing before `faction-intel` is rewritten:
+
+- **The relationship display reads the `relationship` string label, never the
+  `hate` number.** `unwrapRelationshipValue` takes the first of
+  `['relationship','relation','status','attitude','stance','label','name','value']`,
+  so nulling `factionRelationships[i].hate` changes nothing on screen — the
+  dossier renders `Hate of us 4.50` from the `relationship: 'HATE 4.50'` string.
+  Any rewrite that starts reading `hate` changes what is displayed.
+- The visibility tag comes from `candidate.visibility`, not from the metric, so
+  it reads `RELATION OBSERVER FACTION TELEMETRY` rather than a relation state.
+
+---
+
 ## What these have in common
 
 Six of the eight are the same defect: **an unmeasured value given a confident
