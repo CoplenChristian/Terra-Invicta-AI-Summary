@@ -23,12 +23,14 @@ and one measurement that has to be taken before any of them is trusted.
 `<Panel>` must cover all six or the phases that need the other four will invent
 local variants, which is the drift this component exists to prevent.
 
-**The five tables are all real `<table>` elements.** `.mc-board-table`,
-`.de-table`, `.fe-table`, `.mining-table` and `.intel-library-table` every one
-render `<table><thead><tr><th>` / `<tbody><tr><td>`. `.de-table` puts custom
-class names on the rows and cells (`.de-row`, `.de-cell`, `.de-th`) but is still
-`border-collapse: collapse` on a real table. **One component can serve all five** —
-this is a naming difference, not five architectures.
+**The six tables are all real `<table>` elements.** `.mc-board-table`,
+`.de-table`, `.fe-table`, `.mining-table`, `.intel-library-table` and
+`.commentary-sim-table` every one render `<table><thead><tr><th>` /
+`<tbody><tr><td>`. `.de-table` puts custom class names on the rows and cells
+(`.de-row`, `.de-cell`, `.de-th`) but is still `border-collapse: collapse` on a
+real table. **One component can serve all six** — this is a naming difference,
+not six architectures. `.commentary-sim-table` has no scroll wrap (it sits
+inside `.commentary-sim-section`).
 
 **The scroll container is already unified, and you should not redesign it.**
 `22-drive-explorer.css:291-311` groups `.de-table-wrap` with
@@ -159,3 +161,82 @@ One commit on a branch off `main`:
 
 Report anything where this brief is wrong. Every brief in this migration so far
 has carried at least one factual error.
+
+---
+
+## Decisions
+
+Recorded 2026-08-24 as part of Track E implementation.
+
+### 1. Cascade order — Emotion wins at equal specificity
+
+Measured in the real page (`public/v2/primitives-harness.html`) with two
+`.cascade-order-probe` spans: linked CSS sets `color: rgb(1, 2, 3)` and an
+Emotion `styled()` rule sets `color: rgb(40, 50, 60)` on the same single-class
+selector. **`getComputedStyle` on the Emotion-mounted element returns
+`rgb(40, 50, 60)`** — Emotion injects after the 24 linked sheets and wins at
+equal specificity. Pinned by `tests/reactCascadeOrder.test.js`.
+
+**Implication for the fifteen component phases:** primitives and migrated panels
+may use MUI `sx` / `styled()` for new styling. Existing global class names are
+still kept on migrated surfaces where the vanilla CSS already defines the look
+(`.tech-card`, table wraps, register classes) so load-bearing cascade pairs in
+the 24 sheets (`mining-meas__value` beating `mining-yields-text`, etc.) stay
+attached to real elements without relying on injection order.
+
+### 2. Primitives keep global class names on the DOM
+
+Even though Emotion wins at equal specificity, `<Panel>`, `<DataTable>`,
+`<Measured>`, `<Estimated>` emit the same class names the vanilla components use
+today. MUI is present in the harness for the cascade probe only; production
+`bundle.js` does not import the primitives yet (`daecedcfcba6a9f13baa95134ad700bc`
+unchanged).
+
+### 3. Register vocabulary — `register` prop maps legacy schemes
+
+One component pair (`Measured` / `Estimated`) with `register="de"|"fe"|"mining"`
+mapping to `.de-measured__value`, `.fe-meas__value`, `.mining-meas__value` and
+their estimate counterparts. There is no `.de-estimated` half-name in CSS.
+
+### 4. Shapes the sixteen components may still need
+
+Nothing blocks migration, but these gaps are explicit:
+
+- **`<DataTable>` custom interiors:** `.de-table` rows use `.de-row` / `.de-cell`
+  with per-column classes (`de-cell--name`, sticky first column). The primitive
+  exposes `columns`/`rows` for simple tables and `children` for full interior
+  control — drive-explorer will use `children`.
+- **`<TruncationNote>` styling:** takes `className` because each panel uses a
+  different note class (`directive-benched-omitted`, `ra-census`, etc.).
+- **`mining-table--upgrades`:** class is used in JS but has no dedicated rules in
+  `18-mining-expansion.css` (brief claim checked — variant is supported, rules
+  are not separate).
+- **Per-panel scroll hint text:** `DataTable` accepts `hintText`; defaults to
+  the DRIVES string.
+- **`commentary-sim`:** sixth table system — `variant="commentary-sim"` maps to
+  `.commentary-sim-table` with no scroll wrap (table sits inside
+  `.commentary-sim-section` today).
+
+### 5. Nine contract primitives — included vs deferred
+
+Track E ships **only the five** named in this brief (`Panel`, `DataTable`,
+`Measured`/`Estimated`, `Value`, `TruncationNote`). All nine surfaces flagged
+independently across the contract lanes are **deferred to a follow-on primitive
+batch** (Track E₂ or per-component unblock). Deferring one later serialises
+against every in-flight component phase — the table below is the decision now.
+
+| Primitive | Track E | Needed by (contract lanes) | Notes |
+| --- | --- | --- | --- |
+| **`Overlay`** | **Deferred** | `detail-panel`, `faction-intel`, `intelligence-library` (3) | Shared `.detail-panel` / `.faction-intel-screen` / `.intelligence-library-screen` chrome + `setOverlayOpen` in `mission-control.js`. Highest serialisation risk with Modal. |
+| **`Modal`** | **Deferred** | `detail-panel`, `drive-explorer`, `faction-intel` (3) | `MissionControlDetailPanel.open` and drive path modal; overlaps Overlay styling in `09-detail-panel.css`. |
+| **`Meter` / `Gauge`** | **Deferred** | `directive-board` (2 bar systems), `alien-hate-economics` (`#hudHateMeter`) | Two distinct bar vocabularies; not one component. |
+| **`Chip`** | **Deferred** | `drive-explorer`, `directive-board`, `executive-boards`, `faction-intel` | `.de-chip`, `statusChip`, faction status tones — shared tone map, not one class. |
+| **`Badge`** | **Deferred** | `directive-board`, `council-orders`, `strategic-commentary` | `.directive-status-badge--*`, commentary mode badge, council chips. |
+| **`Notice`** | **Deferred** | `drive-explorer`, `mining-expansion`, `research-advisor` | `.de-notice--warn` / `--filters` and panel-specific notice blocks. |
+| **`FilterBar`** | **Deferred** | `drive-explorer`, `unlocked-tech`, `intelligence-library` | `.de-controls` and search/filter rows with live counts. |
+| **`Tabs`** | **Deferred** | `intelligence-library`, `faction-intel`, shell nav | Nested `role="tablist"` groups — section nav is controller-owned, not one panel. |
+| **`VisibilityTag`** | **Deferred** | `faction-intel` | Eleven-state `buildVisibilityTag` / `normalizeVisibility` vocabulary. |
+
+**Recommended E₂ order:** `Overlay` + `Modal` first (three consumers each, shared
+CSS in `09-detail-panel.css`), then `Chip`/`Badge`, then panel-specific
+`FilterBar` / `Notice` / `Tabs` / `VisibilityTag` / `Meter`.
