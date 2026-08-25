@@ -35,6 +35,36 @@ const DEFAULT_CONFIG_PATH = path.resolve(SKILL_DIR, 'dispatch-config.json');
 
 const VALID_MODES = ['auto', 'ask', 'reject'];
 
+// Cursor's workspace-trust flags. A config value outside this table is REJECTED
+// and never forwarded: this string becomes an element of an argv array handed to
+// a CLI, and a policy file is not a place to accept an arbitrary flag.
+//
+// The three are NOT interchangeable, which is why the grant text is carried
+// beside the flag instead of being inferred at the call site. Read from
+// `cursor-agent --help` (payload 2026.08.11-e8db854) on 2026-08-25:
+//   --trust      "Trust the current workspace without prompting"
+//   -f, --force  "Force allow commands unless explicitly denied"
+//   --yolo       "Alias for --force (Run Everything)"
+// So --trust settles the directory-trust prompt and nothing else, while --yolo
+// and -f additionally auto-approve the commands the agent then runs. That is a
+// materially larger grant and the output has to say so out loud.
+const TRUST_FLAGS = {
+  '--trust': {
+    grant: 'trusts this directory only; it does not auto-approve commands',
+    autoApprovesEveryCommand: false,
+  },
+  '--yolo': {
+    grant: 'AUTO-APPROVES EVERY COMMAND this agent runs, unless explicitly denied',
+    autoApprovesEveryCommand: true,
+  },
+  '-f': {
+    grant: 'AUTO-APPROVES EVERY COMMAND this agent runs, unless explicitly denied (same as --yolo)',
+    autoApprovesEveryCommand: true,
+  },
+};
+
+const VALID_TRUST_FLAGS = Object.keys(TRUST_FLAGS);
+
 const EXIT = {
   OK: 0,
   APPROVAL_REQUIRED: 2,
@@ -60,6 +90,7 @@ const LANES = {
     binName: 'opencode',
     fallbackPath: 'C:\\Users\\cople\\.opencode\\bin\\opencode.exe',
     supportsModel: true,
+    supportsTrustFlag: false, // opencode has no such flag; passing one would be a bad argument
     defaultModel: 'minimax-coding-plan/MiniMax-M3',
     costClass: 'plan-included',
     costNote: 'Unlimited weekly on the MiniMax coding plan; limited rolling 5-hour window.',
@@ -73,6 +104,7 @@ const LANES = {
     binName: 'opencode',
     fallbackPath: 'C:\\Users\\cople\\.opencode\\bin\\opencode.exe',
     supportsModel: true,
+    supportsTrustFlag: false, // opencode has no such flag; passing one would be a bad argument
     defaultModel: 'opencode-go/deepseek-v4-flash',
     costClass: 'metered',
     costNote: 'METERED — real money per call, billed to OpenCode Go.',
@@ -86,6 +118,7 @@ const LANES = {
     binName: 'agy',
     fallbackPath: 'C:\\Users\\cople\\AppData\\Local\\agy\\bin\\agy.exe',
     supportsModel: true,
+    supportsTrustFlag: false, // agy has no such flag; passing one would be a bad argument
     defaultModel: null, // uses the CLI's own configured default
     costClass: 'floor-per-call',
     costNote: '~16k input-token floor per call — a one-line question costs about what a long one does.',
@@ -105,11 +138,12 @@ const LANES = {
     binName: 'cursor-agent',
     fallbackPath: 'C:\\Users\\cople\\AppData\\Local\\cursor-agent\\cursor-agent.cmd',
     supportsModel: true,
+    supportsTrustFlag: true,
     defaultModel: 'composer-2.5',
     costClass: 'shared-cursor-allowance',
     costNote: 'Shares one Cursor allowance with the grok lane.',
     routing: 'Long multi-file implementation runs. The only lane rated for long-horizon agentic work.',
-    buildArgs: ({ model, prompt, resume }) => cursorArgs(model, prompt, resume),
+    buildArgs: ({ model, prompt, resume, trustFlag }) => cursorArgs(model, prompt, resume, trustFlag),
   },
   grok: {
     key: 'grok',
@@ -118,12 +152,13 @@ const LANES = {
     binName: 'cursor-agent',
     fallbackPath: 'C:\\Users\\cople\\AppData\\Local\\cursor-agent\\cursor-agent.cmd',
     supportsModel: true,
+    supportsTrustFlag: true,
     defaultModel: 'cursor-grok-4.6-high',
     costClass: 'shared-cursor-allowance',
     costNote:
       'Shares one Cursor allowance with composer. Composer is the only lane rated for long multi-file agentic runs, so Grok spending comes directly out of a lane with no substitute.',
     routing: 'Analysis, research and single-shot code. Its agentic coding regressed against 4.5 — do not give it long autonomous runs.',
-    buildArgs: ({ model, prompt, resume }) => cursorArgs(model, prompt, resume),
+    buildArgs: ({ model, prompt, resume, trustFlag }) => cursorArgs(model, prompt, resume, trustFlag),
   },
   codex: {
     key: 'codex',
@@ -132,6 +167,7 @@ const LANES = {
     binName: 'codex',
     fallbackPath: 'F:\\Apps\\codex',
     supportsModel: false,
+    supportsTrustFlag: false, // codex has no such flag; its sandbox posture lives in ~/.codex/config.toml
     defaultModel: null, // taken from the user's ~/.codex/config.toml
     costClass: 'plan-included',
     costNote: 'Included in the ChatGPT plan.',
@@ -152,6 +188,11 @@ const LANES = {
 // as a POSITIONAL that precedes the prompt. Building argv per lane is what keeps
 // the codex form well-formed.
 //
+// The same per-lane shape is why a trust flag cannot leak: only cursorArgs even
+// accepts one. opencodeArgs and codexArgs have no parameter for it, so a
+// misconfigured `trustFlag` on those lanes has nowhere to go structurally, on
+// top of being rejected earlier by resolveTrustFlag.
+//
 // Verified 2026-08-24/25 against the installed CLIs.
 
 function opencodeArgs(model, prompt, resume) {
@@ -165,13 +206,19 @@ function opencodeArgs(model, prompt, resume) {
   return args;
 }
 
-function cursorArgs(model, prompt, resume) {
-  //   fresh : -p --output-format json --model <m> <prompt>
-  //   last  : -p --output-format json --model <m> --continue <prompt>
-  //   id    : -p --output-format json --model <m> --resume <id> <prompt>
+function cursorArgs(model, prompt, resume, trustFlag) {
+  //   fresh : -p --output-format json --model <m> [trust] <prompt>
+  //   last  : -p --output-format json --model <m> [trust] --continue <prompt>
+  //   id    : -p --output-format json --model <m> [trust] --resume <id> <prompt>
   // `--resume [chatId]` takes an OPTIONAL value, so the id is always passed
   // explicitly — a bare `--resume` would swallow the prompt as its chatId.
+  //
+  // The trust flag is the ONLY value in this argv that came from the config
+  // without being a model slug, so it is admitted only after resolveTrustFlag
+  // matched it against TRUST_FLAGS. `null` here means no flag at all — the
+  // absent case must not become an empty-string argv element.
   const args = ['-p', '--output-format', 'json', '--model', model];
+  if (typeof trustFlag === 'string' && trustFlag !== '') args.push(trustFlag);
   if (resume.kind === 'last') args.push('--continue');
   else if (resume.kind === 'id') args.push('--resume', resume.id);
   args.push(prompt);
@@ -437,6 +484,13 @@ function loadConfig(configPath) {
         `Config sets a model for lane "${key}", but that lane takes no model flag. The value is ignored.`
       );
     }
+    if (entry.trustFlag !== undefined && entry.trustFlag !== null && !LANES[key].supportsTrustFlag) {
+      result.warnings.push(
+        `Config sets trustFlag ${JSON.stringify(entry.trustFlag)} for lane "${key}", but only the Cursor lanes ` +
+          `(${LANE_KEYS.filter((k) => LANES[k].supportsTrustFlag).join(', ')}) have such a flag. ` +
+          `The ${LANES[key].cli} CLI would reject it as an unknown argument, so it is IGNORED and never reaches the command line.`
+      );
+    }
   }
 
   return result;
@@ -505,6 +559,84 @@ function resolveModel(laneKey, config) {
     source: lane.defaultModel === null ? 'cli-default' : 'built-in-default',
     note: lane.defaultModel === null ? 'No model flag is passed; the CLI uses its own configured default.' : null,
   };
+}
+
+/**
+ * Resolves the optional per-lane `trustFlag` and says exactly what it grants.
+ *
+ * This field exists because cursor-agent refuses to start in an untrusted
+ * directory ("Workspace Trust Required"), and the fix is a flag that grants the
+ * agent standing permission. That is precisely the kind of grant that must live
+ * in the policy file the user owns rather than being hardcoded here, so it can
+ * be revoked with an edit and no code change.
+ *
+ * Four outcomes, and the difference between the middle two is the point:
+ *   - lane has no such flag -> null, ignored, with a warning from loadConfig.
+ *     Nothing reaches argv, so a bad value here is harmless rather than fatal.
+ *   - not configured        -> null. Absent stays absent; there is no default
+ *                              grant and no implicit trust.
+ *   - a value in TRUST_FLAGS -> that flag, plus the plain-words grant text.
+ *   - anything else         -> a hard ERROR. An unrecognised string is never
+ *                              forwarded: it is about to become an element of an
+ *                              argv array passed to a CLI, and "pass it through
+ *                              and let the CLI complain" is how a typo in a
+ *                              policy file turns into an unintended argument.
+ */
+function resolveTrustFlag(laneKey, config) {
+  const lane = LANES[laneKey];
+  const entry = Object.prototype.hasOwnProperty.call(config.lanes, laneKey) ? config.lanes[laneKey] : null;
+  const configured = entry === null ? undefined : entry.trustFlag;
+
+  const none = {
+    flag: null,
+    configured: configured === undefined ? null : configured,
+    grant: null,
+    autoApprovesEveryCommand: false,
+    source: 'not-configured',
+    note: null,
+    error: null,
+  };
+
+  if (configured === undefined || configured === null) return none;
+
+  if (!lane.supportsTrustFlag) {
+    // Ignored, not fatal: it never reaches the command line. loadConfig has
+    // already warned about it by name.
+    return Object.assign({}, none, {
+      source: 'lane-takes-no-trust-flag',
+      note:
+        `Lane "${laneKey}" runs the ${lane.cli} CLI, which has no workspace-trust flag. ` +
+        `The configured value ${JSON.stringify(configured)} is ignored and is NOT passed to the command line.`,
+    });
+  }
+
+  if (typeof configured !== 'string' || !Object.prototype.hasOwnProperty.call(TRUST_FLAGS, configured)) {
+    return Object.assign({}, none, {
+      source: 'invalid-trust-flag-value',
+      error:
+        `Lane "${laneKey}" has trustFlag ${JSON.stringify(configured)}, which is not one of ` +
+        `${VALID_TRUST_FLAGS.join(', ')}. Refusing to dispatch: this value would become an argument to ` +
+        `${lane.cli}, and an unrecognised flag from a policy file is never passed through. ` +
+        `Fix the value in ${config.path}, or remove the key to dispatch with no trust flag.`,
+    });
+  }
+
+  const spec = TRUST_FLAGS[configured];
+  return {
+    flag: configured,
+    configured,
+    grant: spec.grant,
+    autoApprovesEveryCommand: spec.autoApprovesEveryCommand,
+    source: 'config',
+    note: null,
+    error: null,
+  };
+}
+
+/** One short line naming the grant, for the previews the user approves from. */
+function describeTrustFlag(trust) {
+  if (trust.flag === null) return null;
+  return `${trust.flag} — ${trust.grant}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -1472,6 +1604,7 @@ function buildLaneReport(laneKey, config, cwd) {
   const lane = LANES[laneKey];
   const modeInfo = resolveMode(laneKey, config);
   const modelInfo = resolveModel(laneKey, config);
+  const trustInfo = resolveTrustFlag(laneKey, config);
   const probe = probeLane(laneKey, config, cwd);
   const fast = checkFastSlug(laneKey, modelInfo.model, probe.modelCatalogue);
 
@@ -1486,6 +1619,14 @@ function buildLaneReport(laneKey, config, cwd) {
     model: modelInfo.model,
     modelSource: modelInfo.source,
     modelNote: modelInfo.note,
+    trustFlag: trustInfo.flag,
+    trustFlagConfigured: trustInfo.configured,
+    trustFlagSource: trustInfo.source,
+    trustFlagGrant: trustInfo.grant,
+    trustFlagAutoApprovesEveryCommand: trustInfo.autoApprovesEveryCommand,
+    trustFlagNote: trustInfo.note,
+    trustFlagError: trustInfo.error,
+    trustFlagDisplay: describeTrustFlag(trustInfo),
     available: probe.available,
     state: probe.state,
     reason: probe.reason,
@@ -1559,6 +1700,9 @@ async function main() {
         if (l.modeSource !== 'config') notes.push(`mode: ${l.modeReason}`);
         if (l.available !== true) notes.push(`${l.available === false ? 'unavailable' : 'UNKNOWN'}: ${l.reason || 'no reason recorded'}`);
         if (l.modelNote !== null) notes.push(`model: ${l.modelNote}`);
+        if (l.trustFlagError !== null) notes.push(`TRUST FLAG INVALID: ${l.trustFlagError}`);
+        if (l.trustFlagNote !== null) notes.push(`trust flag: ${l.trustFlagNote}`);
+        if (l.trustFlagDisplay !== null) notes.push(`trust flag: ${l.trustFlagDisplay}`);
         if (l.fastSlug.isFast) notes.push(l.fastSlug.warning);
         if (l.risk !== null) notes.push(`risk: ${l.risk}`);
         if (notes.length > 0) {
@@ -1611,6 +1755,36 @@ async function main() {
     );
   }
 
+  // GATE 0.5 — the policy file's trust flag must be a value this script
+  // recognises. Checked before the lane is probed or contacted, because a
+  // malformed policy value is a config error rather than a lane problem, and
+  // because it must fail identically under --dry-run: a preview that quietly
+  // dropped an unrecognised flag would show the user a command that is not the
+  // one a real run would build.
+  const earlyTrust = resolveTrustFlag(opts.lane, config);
+  if (earlyTrust.error !== null) {
+    if (!opts.json) process.stderr.write(`Config error: ${earlyTrust.error}\n`);
+    emit(
+      {
+        ok: false,
+        action: 'invalid-trust-flag',
+        lane: opts.lane,
+        errors: [earlyTrust.error],
+        trustFlag: null,
+        trustFlagConfigured: earlyTrust.configured,
+        trustFlagSource: earlyTrust.source,
+        validTrustFlags: VALID_TRUST_FLAGS,
+        configPath: config.path,
+        configFound: config.found,
+        promptFile: prompt.resolvedPath,
+        promptChars: prompt.text.length,
+        probed: false,
+      },
+      opts,
+      EXIT.USAGE_ERROR
+    );
+  }
+
   const report = buildLaneReport(opts.lane, config, opts.cwd);
   const lane = LANES[opts.lane];
   const resume = resumeIntent(opts);
@@ -1624,6 +1798,11 @@ async function main() {
     modeReason: report.modeReason,
     model: report.model,
     modelSource: report.modelSource,
+    trustFlag: report.trustFlag,
+    trustFlagSource: report.trustFlagSource,
+    trustFlagGrant: report.trustFlagGrant,
+    trustFlagAutoApprovesEveryCommand: report.trustFlagAutoApprovesEveryCommand,
+    trustFlagDisplay: report.trustFlagDisplay,
     available: report.available,
     state: report.state,
     reason: report.reason,
@@ -1649,6 +1828,13 @@ async function main() {
   if (report.fastSlug.isFast) {
     payload.warnings.push(report.fastSlug.warning);
     complain(`\n${report.fastSlug.warning}\n`);
+  }
+
+  // A trustFlag configured on a lane with no such flag grants nothing, but the
+  // user should hear that their setting had no effect rather than assume it did.
+  if (report.trustFlagNote !== null) {
+    payload.warnings.push(report.trustFlagNote);
+    complain(`\nTRUST FLAG IGNORED — ${report.trustFlagNote}\n`);
   }
 
   // GATE 1 — availability. Only a proven-ready lane may be dispatched.
@@ -1696,7 +1882,13 @@ async function main() {
   payload.outputFile = outputFile;
 
   // Build the command. The prompt is one argv element; no shell is involved.
-  const args = lane.buildArgs({ model: report.model, prompt: prompt.text, resume, outputFile });
+  const args = lane.buildArgs({
+    model: report.model,
+    prompt: prompt.text,
+    resume,
+    outputFile,
+    trustFlag: report.trustFlag,
+  });
   payload.command = {
     file: report.transport.command,
     args: report.transport.prefixArgs.concat(args),
@@ -1719,6 +1911,7 @@ async function main() {
     say(`  session   ${describeResume(payload.resume)}`);
     say(`  cost      ${report.costClass} — ${report.costNote}`);
     if (report.risk !== null) say(`  RISK      ${report.risk}`);
+    if (report.trustFlagDisplay !== null) say(`  TRUST     ${report.trustFlagDisplay}`);
     say(`  command   ${payload.commandDisplay}`);
     say(`  argv      ${JSON.stringify(payload.command.args.map((a) => (a === prompt.text ? `<prompt: ${prompt.text.length} chars>` : a)))}`);
     say(`  would run without --dry-run: ${payload.wouldExecute ? 'YES' : `NO — mode is "${report.mode}" and --approve was not given`}`);
@@ -1729,11 +1922,18 @@ async function main() {
   if (report.mode === 'ask' && !opts.approve) {
     payload.action = 'approval-required';
     payload.reason = `Lane "${opts.lane}" is "ask": ${report.modeReason} Explicit per-request approval is required before this runs.`;
+    // The trust grant goes into the reason itself, not only the rendered argv.
+    // Approving is approving the grant too, and a privilege escalation the
+    // approval card does not name is worse than no card at all.
+    if (report.trustFlagDisplay !== null) {
+      payload.reason += ` This dispatch also passes ${report.trustFlagDisplay}.`;
+    }
     complain(`APPROVAL REQUIRED — nothing was executed.`);
     complain(`  ${payload.reason}`);
     complain(`  session: ${describeResume(payload.resume)}`);
     complain(`  cost: ${report.costClass} — ${report.costNote}`);
     if (report.risk !== null) complain(`  RISK: ${report.risk}`);
+    if (report.trustFlagDisplay !== null) complain(`  TRUST: ${report.trustFlagDisplay}`);
     complain(`  command that would run:`);
     complain(`    ${payload.commandDisplay}`);
     complain(`  After the user says yes, re-run the same command with --approve.`);

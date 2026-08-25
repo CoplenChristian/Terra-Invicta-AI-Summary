@@ -252,6 +252,48 @@ prints a prominent warning naming the non-fast alternative and then **proceeds**
 it is the user's allowance to spend. Surface that warning to the user; do not
 silently swallow it, and do not refuse the run over it.
 
+### Workspace trust on the Cursor lanes (`trustFlag`)
+
+`cursor-agent` refuses to start in a directory it has not been told to trust, and
+it cannot prompt when run non-interactively — the dispatch fails immediately with
+`Workspace Trust Required`. The fix is an **optional per-lane config field**,
+`trustFlag`, on the Cursor lanes only.
+
+It is deliberately not hardcoded. This grants a privilege, so it lives in the
+file the user owns and can be revoked by deleting one line, with no code change.
+
+| value | what it grants |
+| --- | --- |
+| *(omitted, or `null`)* | nothing — no flag is passed |
+| `"--trust"` | trusts that directory **only**; every command is still approved individually |
+| `"--yolo"` | alias for `--force`, "Run Everything" — **auto-approves every command the agent runs**, unless explicitly denied |
+| `"-f"` | short form of `--force`. The same grant as `--yolo` |
+
+Read from `cursor-agent --help` (payload `2026.08.11-e8db854`) on 2026-08-25.
+`--trust` is the *smallest* grant that clears the error; `--yolo` and `-f` are
+materially larger, because the agent then executes shell commands with no
+per-command approval.
+
+**Shipped state:** `composer` is set to `"--yolo"` (approved 2026-08-25, for long
+unattended builds). `grok` has **no** `trustFlag` — untested there and not
+approved. If a grok dispatch hits the trust error, **ask the user** rather than
+adding one; `"--trust"` is the smaller grant to offer.
+
+Three behaviours to rely on:
+
+- **Any flag in force is named, with what it grants, in the `--dry-run` preview
+  and the `ask` approval message** — on its own `TRUST:` line and inside the
+  reason text. Relay it when you ask for approval. Approving the dispatch is
+  approving the grant, and an escalation the user did not see named is worse than
+  no approval card at all.
+- **An unrecognised value is rejected, never forwarded** (exit 5), naming the
+  value and the three accepted ones. That string would otherwise become an
+  argument to a CLI. Note `"--force"` itself is *not* accepted — use `"--yolo"`
+  or `"-f"`.
+- **Set on a non-Cursor lane it is ignored with a warning** and never reaches the
+  command line. `opencode`, `agy` and `codex` have no such flag and would reject
+  it as an unknown argument.
+
 ## Token usage
 
 Every lane returns JSON, and the script parses a usage block out of it and reports
@@ -275,6 +317,9 @@ input, output, total, cache and cost. Two things to know:
 3. `reject` cannot be overridden by any flag.
 4. The prompt is never passed through a shell.
 5. It never edits the config, and never edits `~/.codex/config.toml`.
+6. A `trustFlag` value it does not recognise fails the dispatch (exit 5) instead
+   of being passed to the CLI, and any flag it does accept is named — with what
+   it grants — in every preview the user approves from.
 
 It does **not** downgrade or override any mode. The config is authoritative.
 

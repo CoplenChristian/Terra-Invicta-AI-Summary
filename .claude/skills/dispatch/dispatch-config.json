@@ -23,6 +23,12 @@
     "  2. `--dry-run` never executes anything, whatever the mode says.",
     "  3. A `-fast` Cursor slug is WARNED about, loudly, and then run anyway.",
     "     It is your allowance to spend.",
+    "  4. A `trustFlag` value it does not recognise is REJECTED, not forwarded.",
+    "     That string would become an argument to a CLI, so a typo here fails the",
+    "     dispatch (exit 5) instead of being passed through.",
+    "  5. Any `trustFlag` in force is named, with what it grants, in both the",
+    "     `--dry-run` preview and the `ask` approval message — so you never approve",
+    "     a dispatch without seeing the grant it carries.",
     "",
     "COST AND RISK, PER LANE:",
     "  codex        HIGHEST RISK. Your ~/.codex/config.toml sets",
@@ -48,7 +54,34 @@
     "           `defaults` below (shown by `node check_lanes.js`).",
     "  binary   Absolute path to the CLI, if it is not on PATH and not at the",
     "           known install location. Omit unless you have moved it.",
-    "  note     Free text. The script echoes it; it has no effect on behaviour."
+    "  note     Free text. The script echoes it; it has no effect on behaviour.",
+    "",
+    "  trustFlag",
+    "           CURSOR LANES ONLY (`composer`, `grok`). Omit it, or set it to null,",
+    "           and no trust flag is passed at all. It exists because cursor-agent",
+    "           refuses to start in an untrusted directory (\"Workspace Trust",
+    "           Required\") and will not prompt when run non-interactively.",
+    "",
+    "           THIS KEY GRANTS A PRIVILEGE. Delete it to revoke that grant; no code",
+    "           change is needed, which is the whole reason it lives here. Exactly",
+    "           three values are accepted, and they are NOT equivalent — read from",
+    "           `cursor-agent --help` on 2026-08-25:",
+    "",
+    "             \"--trust\"  Trusts this directory, and nothing more. Every command",
+    "                       the agent wants to run is still approved individually.",
+    "                       This is the SMALLEST grant that fixes the trust error.",
+    "             \"--yolo\"   Alias for `--force` — \"Run Everything\". AUTO-APPROVES",
+    "                       EVERY COMMAND THE AGENT RUNS, unless explicitly denied.",
+    "                       Materially larger than trusting the directory: the agent",
+    "                       executes shell commands with no per-command approval.",
+    "             \"-f\"       The short form of `--force`. Same grant as `--yolo`.",
+    "",
+    "           Set on any other lane the value is IGNORED with a warning and never",
+    "           reaches the command line — opencode, agy and codex have no such flag",
+    "           and would reject it as an unknown argument.",
+    "",
+    "           Any other value is a hard error; the dispatch refuses rather than",
+    "           passing an unrecognised flag to a CLI."
   ],
   "version": 1,
   "lanes": {
@@ -69,12 +102,13 @@
     "composer": {
       "mode": "ask",
       "model": "composer-2.5",
-      "note": "Long multi-file implementation runs. Shares the Cursor allowance with grok."
+      "trustFlag": "--yolo",
+      "note": "Long multi-file implementation runs. Shares the Cursor allowance with grok. trustFlag --yolo approved 2026-08-25: it auto-approves every command this lane runs, which is what a long unattended build needs. Downgrade to \"--trust\" for directory trust alone, or delete the key to revoke."
     },
     "grok": {
       "mode": "ask",
       "model": "cursor-grok-4.6-high",
-      "note": "Analysis, research, single-shot code. Its agentic coding regressed against 4.5 — do not give it long autonomous runs. Shares the Cursor allowance with composer."
+      "note": "Analysis, research, single-shot code. Its agentic coding regressed against 4.5 — do not give it long autonomous runs. Shares the Cursor allowance with composer. No trustFlag: untested here and not approved. If it hits \"Workspace Trust Required\", ask before adding one — \"--trust\" is the smaller grant."
     },
     "codex": {
       "mode": "ask",
