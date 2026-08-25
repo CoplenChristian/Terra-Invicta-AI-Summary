@@ -4,7 +4,8 @@
 /*
  * check_lanes.js — probe and dispatch the external agent CLI lanes.
  *
- * Policy lives in .claude/dispatch-config.json, which the user owns. This file
+ * Policy lives in dispatch-config.json beside this script, which the user owns
+ * and this script never writes. It sits with the skill so it can be found. This file
  * owns the invocations, the availability probes, and the safety rules that hold
  * whatever the config says.
  *
@@ -27,7 +28,10 @@ const { spawnSync, spawn } = require('child_process');
 const { collectOutput } = require('./collect_output.js');
 
 const SKILL_DIR = __dirname;
-const DEFAULT_CONFIG_PATH = path.resolve(SKILL_DIR, '..', '..', 'dispatch-config.json');
+// Resolved from the script's own location, never from process.cwd(): this is
+// invoked from wherever a dispatch happens to be running, and a policy file that
+// resolved differently per working directory would be a silent policy change.
+const DEFAULT_CONFIG_PATH = path.resolve(SKILL_DIR, 'dispatch-config.json');
 
 const VALID_MODES = ['auto', 'ask', 'reject'];
 
@@ -360,7 +364,11 @@ check_lanes.js — probe and dispatch external agent CLI lanes.
 
 /**
  * Loads the policy file. Never invents policy:
- *   - file missing        -> every lane ask, with a warning
+ *   - file missing        -> hard error naming the expected path. There is no
+ *                            implicit all-ask policy: an "ask" lane still
+ *                            dispatches under --approve, so a missing file plus
+ *                            --approve would otherwise run a lane the user never
+ *                            configured.
  *   - file malformed      -> hard error, no guessing
  *   - lane unlisted       -> ask, and the reason says the config did not mention it
  *   - mode value invalid  -> ask, and the reason names the invalid value
@@ -377,9 +385,11 @@ function loadConfig(configPath) {
   };
 
   if (!fileExists(configPath)) {
-    result.warnings.push(
-      `Config file not found at ${configPath}. Every lane is treated as "ask" until it exists.`
-    );
+    result.fatal =
+      `No policy file at ${configPath}. ` +
+      `Refusing to run under a policy the user never wrote — there are no built-in lane defaults to fall back to. ` +
+      `Restore the file (it belongs beside check_lanes.js), or pass --config <path> to point at it. ` +
+      `Every lane ships as "ask"; see .claude/skills/dispatch/SKILL.md.`;
     return result;
   }
 

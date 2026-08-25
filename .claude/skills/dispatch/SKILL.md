@@ -10,7 +10,8 @@ allowed-tools:
 ---
 
 This skill routes work to the external agent CLIs installed on this machine. Policy
-is not in this file and not in the script — it is in `.claude/dispatch-config.json`,
+is not in this file and not in the script — it is in `dispatch-config.json`, which
+sits beside this skill at `.claude/skills/dispatch/dispatch-config.json`,
 which the user owns and edits. Read that file's `_comment` before assuming anything
 about what you are allowed to dispatch.
 
@@ -28,7 +29,14 @@ A lane the config does not mention is treated as `ask`, and the script says the
 config did not mention it. There is no setting that makes an unlisted lane `auto`.
 An unrecognised mode value is also treated as `ask`.
 
-**Do not edit `.claude/dispatch-config.json`.** If a lane is blocking work, say so
+**If the config file is missing entirely, the script refuses to run at all**
+(exit 5) and names the path it expected. It does not fall back to an implicit
+all-ask policy, because `ask` plus `--approve` still dispatches — so a missing
+file would otherwise let a lane run under a policy the user never wrote. If you
+see that error, tell the user the file is gone rather than working around it with
+`--config`.
+
+**Do not edit `.claude/skills/dispatch/dispatch-config.json`.** If a lane is blocking work, say so
 and let the user change it. Changing policy on the user's behalf defeats the point
 of the file.
 
