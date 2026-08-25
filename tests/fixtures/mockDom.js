@@ -286,7 +286,7 @@ function serializeNode(node) {
 
   if (node.children.length === 0) {
     if (node._textContent) {
-      return `<${tag}${attrs}>${escapeAttr(node._textContent)}</${tag}>`;
+      return `<${tag}${attrs}>${node._textContent}</${tag}>`;
     }
     const voidTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'circle', 'path', 'rect', 'line']);
     if (voidTags.has(tag)) {
@@ -295,8 +295,9 @@ function serializeNode(node) {
     return `<${tag}${attrs}></${tag}>`;
   }
 
+  const ownText = node._textContent || '';
   const inner = node.children.map(serializeNode).join('');
-  return `<${tag}${attrs}>${inner}</${tag}>`;
+  return `<${tag}${attrs}>${ownText}${inner}</${tag}>`;
 }
 
 function serializeChildren(node) {

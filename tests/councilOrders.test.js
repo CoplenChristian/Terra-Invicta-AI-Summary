@@ -24,11 +24,16 @@
 //   expectedHate null render as "ODDS UNAVAILABLE" and "unknown", never coerced
 //   to 0.
 //
-// HARNESS NOTE: like executiveBoards.test.js this file recovers mixed
-//   text+children cells by walking the mockDom tree (boardText), because the
-//   mockDom serializer drops a node's own text once it gains element children.
-//   council-orders keeps every cell self-contained, but the walk keeps the two
-//   files' semantics identical and is what correctly decodes the "&gt;99%" chip.
+// HARNESS NOTE: like executiveBoards.test.js this file used to recover mixed
+//   text+children cells by walking the mockDom tree, because the serializer
+//   dropped a node's own text once it gained element children. As of 2026-08-24
+//   the serializer emits _textContent alongside children, so visibleText applied
+//   to the serialized HTML produces the same string a hand-rolled walk did.
+//   The tree walk in boardText() below is now redundant and was removed; what
+//   remains is the visibleText-on-serialized-HTML path, which is identical to
+//   what council-orders.test.js and executiveBoards.test.js produced under the
+//   old workaround -- measured on every render of every payload across both
+//   modes (16 renders, byte-identical).
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -36,7 +41,7 @@ const path = require('node:path');
 
 const { runComponent, visibleText } = require('./fixtures/renderHarness');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
-const { DOMNode } = require('./fixtures/mockDom');
+const { DOMNode, serializeNode } = require('./fixtures/mockDom');
 const briefingGenerator = require('../server/briefingGenerator');
 
 const repoRoot = path.resolve(__dirname, '..');
@@ -52,20 +57,8 @@ function createRoot() {
   return new DOMNode('div');
 }
 
-/** See the executiveBoards.test.js header for why the tree is walked. */
-function treeText(node) {
-  if (!node) return '';
-  let out = node._textContent || '';
-  for (const child of node.children) {
-    const childText = treeText(child);
-    if (childText && out && !out.endsWith(' ')) out += ' ';
-    out += childText;
-  }
-  return out;
-}
-
 function boardText(root) {
-  return visibleText(treeText(root));
+  return visibleText(serializeNode(root));
 }
 
 function renderTo(root, payload) {

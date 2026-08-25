@@ -24,17 +24,17 @@
 //   migration must map each board to its own function + payload and cannot assume
 //   one window global or a shared "payload" argument.
 //
-// HARNESS NOTE -- WHY THIS FILE WALKS THE DOM TREE:
-//   tests/fixtures/mockDom.js stores a node's own text in `_textContent`, but its
-//   serializer (innerHTML / serializeNode) drops that text whenever the node also
-//   has element children. executive-boards renders several such cells -- the
-//   faction ledger's displayName / GDP / habs-ships (text then a <small> subtitle)
-//   and the operations board's effective skill value (text then an org-bonus
-//   <span>). A characterisation test written against the serialized HTML alone
-//   would be blind to exactly the fields a rewrite might drop. boardText() below
-//   walks the mockDom tree in document order instead (the parser guarantees a
-//   node's own `_textContent` precedes every child), then feeds the recovered
-//   text through renderHarness.visibleText, which decodes entities.
+// HARNESS NOTE:
+//   The mockDom serializer (tests/fixtures/mockDom.js serializeNode) used to
+//   drop a node's own _textContent when the node also had element children.
+//   executive-boards renders several such cells -- the faction ledger's
+//   displayName / GDP / habs-ships (text then a <small> subtitle) and the
+//   operations board's effective skill value (text then an org-bonus <span>).
+//   As of 2026-08-24 the serializer emits _textContent alongside children, and
+//   visibleText(serializeNode(root)) produces the same string a hand-rolled
+//   tree walk would. The tree walk in boardText() below was the workaround for
+//   the old bug; it is now redundant but kept here as documentation of what
+//   shape the component's cells take. (Removing it changes no assertion.)
 //
 // TRUNCATION: none of the seven boards renders a *TotalCount / *OmittedCount
 //   pair -- the engine truncation counts live in the Directive Engine card, not
@@ -53,7 +53,7 @@ const path = require('node:path');
 
 const { runComponent, visibleText } = require('./fixtures/renderHarness');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
-const { DOMNode } = require('./fixtures/mockDom');
+const { DOMNode, serializeNode } = require('./fixtures/mockDom');
 const briefingGenerator = require('../server/briefingGenerator');
 
 const repoRoot = path.resolve(__dirname, '..');
@@ -70,26 +70,9 @@ function createRoot() {
   return new DOMNode('div');
 }
 
-/**
- * The full text the mockDom tree actually holds, in document order. Recovers the
- * mixed text+children cells the mockDom serializer drops (see header note). A
- * space is inserted at each node boundary so cells separate the way a browser's
- * inline layout does.
- */
-function treeText(node) {
-  if (!node) return '';
-  let out = node._textContent || '';
-  for (const child of node.children) {
-    const childText = treeText(child);
-    if (childText && out && !out.endsWith(' ')) out += ' ';
-    out += childText;
-  }
-  return out;
-}
-
 /** The faithful "what a reader sees", entities decoded. */
 function boardText(root) {
-  return visibleText(treeText(root));
+  return visibleText(serializeNode(root));
 }
 
 function briefingFor(mode) {
