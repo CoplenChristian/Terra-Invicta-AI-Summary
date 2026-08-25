@@ -14,17 +14,26 @@ the cited lines. "Demonstrated" means executed. "Confirmed reachable" means the
 producer's own contract permits the input, but it does not occur on the current
 save.
 
-**Tally as of 2026-08-25: 14 entries — 10 confirmed, 2 latent, 1 fixed, 1 lead.**
-#1 and #9 are **fixed and shipped**. #3 was fixed as part of the `mc-budget`
-React migration (`2c1427f`) rather than ported. #3 had first been **demoted** to
-latent after its supporting claim turned out to be false — see the correction
-there. #7 (`alien-hate-economics` `renderHud`) remains unchecked. One further
-candidate was investigated and **cleared** — see the end of #8.
+**Tally as of 2026-08-25: 16 entries — 6 fixed, 5 live, 1 latent, 4 conditional.**
 
-**Live on the dashboard right now: #2, #5, #11, #12 and #13.** Those five are
-worth fixing ahead of their migration phase. #4, #6, #8 and #10 are real but need
-a specific input or width; #14 is a live path that the current fleet does not
-reach.
+#1 and #9 are **fixed and shipped**. #3 was fixed as part of the `mc-budget`
+React migration (`2c1427f`) rather than ported, and had first been **demoted**
+to latent after its supporting claim turned out to be false — see the correction
+there. **#7, #11 and #12 were fixed 2026-08-25** (`7a48add`), verified by
+reverting each component with the new tests in place and confirming exactly one
+test failed per file. One further candidate was investigated and **cleared** —
+see the end of #8.
+
+**Live on the dashboard right now: #2, #5, #13, #15 and #16.** #16 is in the
+**verification tooling**, so it invalidates evidence rather than a panel and
+should be fixed before the next migration leans on it. #4, #6, #8 and #10 are
+real but need a specific input or width; #14 is a live path that the current
+fleet does not reach.
+
+*Correction: the commit that added #15 stated in its message that this header
+had been re-derived to 15 entries. It had not — that edit was never made, and
+the header still read 14 until #16 was added. The counts above are derived from
+the entries below rather than incremented.*
 
 **#9 is the one to fix first.** It is the only defect that also reaches the AI
 markdown exports and the hosted worker, it drops 91% of its records, and unlike
@@ -615,6 +624,58 @@ disagrees with the row's own verdict — which is better than always rendering i
 this identifier present", and the two differ whenever the render boundary
 renames. Every candidate this sweep produced had to be read at the call site
 before it counted, and one of six did not survive that.
+
+---
+
+## 16. `--save` makes the style harness stamp a save it never rendered — **demonstrated, and it is in the verification tooling**
+
+`scripts/verify_computed_style_baseline.js`. This is the tool `CLAUDE.md`
+mandates for proving a refactor changed nothing, so a defect here invalidates
+evidence rather than a panel.
+
+`savePath` is read in `getActiveSaveFingerprint()` at `:130-145` and used at
+`:161` to stamp the capture's metadata. **It is never passed to the harness
+server**, which resolves the latest save independently. So `--save <path>`
+changes only the *label* on the capture, never what is rendered. The run log
+says both halves out loud and they disagree:
+
+```
+[Capture] Starting against save: frozen.gz (MD5: 4461068f...)
+[Server] Parsing save Autosave.gz...
+```
+
+**Demonstrated 2026-08-25.** Two captures were taken twenty minutes apart with
+`--save frozen.gz`, around a stashed change, while the game was running:
+
+| capture | stamped savePath | rendered campaign date |
+| :-- | :-- | :-- |
+| `before_composer.json` | `frozen.gz` | **1 Feb 2039** |
+| `after_composer.json` | `frozen.gz` | **16–17 Feb 2039** |
+
+Identical fingerprints, two game states a fortnight apart, and the guard
+**passed** — it compared the stamps, which matched by construction. The diff
+then reported 13,563 differences, overwhelmingly the campaign advancing, in
+which any real style regression would be undetectable.
+
+### The part that makes it worse than a no-op
+
+`:203-211` detects a save moving *during* a capture by comparing
+`getActiveSaveFingerprint()` at the start and the end. With `--save` both calls
+stat the same static file, so the comparison is frozen.gz against itself and
+**can never fire** — while the live save the server is actually reading drifts
+freely underneath it.
+
+So passing `--save` **disables** the drift detector, and the error message it
+disables reads *"CLAUDE.md requires capture against a frozen save."* The flag
+that exists to satisfy the rule is the flag that switches off its enforcement.
+Without `--save`, the detector works.
+
+This is the same family as everything above it — a check that cannot be
+evaluated reporting "fine" instead of "unknown" — except that here the
+unevaluated check is the one the other verifications rest on. Every
+"computed-style diff verified" claim made with `--save` while the game was
+running is worth nothing, and cannot be distinguished after the fact from one
+that is sound.
 
 ---
 
