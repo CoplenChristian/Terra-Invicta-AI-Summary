@@ -1,11 +1,12 @@
 ---
 name: dispatch
-description: Use when work should be handed to one of the external agent CLIs rather than done inline — delegating an implementation pass, farming out a long multi-file build, getting a second opinion or independent review of a plan or diff, running a fast frontend change, or asking another model to analyse something. Covers the lanes minimax, deepseek, antigravity, composer, grok and codex, reached through opencode, agy, cursor-agent and codex. Also use when the user asks which tool should get a job, whether a lane is available or authenticated, what a dispatch would cost, or why a dispatch was refused. Not for work Claude should simply do itself.
-version: 1.0.0
+description: Use when work should be handed to one of the external agent CLIs rather than done inline — delegating an implementation pass, farming out a long multi-file build, getting a second opinion or independent review of a plan or diff, running a fast frontend change, or asking another model to analyse something. Also covers continuing or resuming an earlier conversation with one of those tools, and collecting the output file a dispatch left behind. Covers the lanes minimax, deepseek, antigravity, composer, grok and codex, reached through opencode, agy, cursor-agent and codex. Also use when the user asks which tool should get a job, whether a lane is available or authenticated, what a dispatch would cost, or why a dispatch was refused. Not for work Claude should simply do itself.
+version: 1.1.0
 user-invocable: true
 argument-hint: "[check | <lane> <what to delegate>]"
 allowed-tools:
   - Bash(node .claude/skills/dispatch/check_lanes.js *)
+  - Bash(node .claude/skills/dispatch/collect_output.js *)
 ---
 
 This skill routes work to the external agent CLIs installed on this machine. Policy
@@ -67,6 +68,7 @@ corrupted, and on Windows it can be partly *executed*.
 | 4 | lane unavailable | report the stated reason. Do not try another transport |
 | 5 | usage or config error | fix the invocation, or report the config problem |
 | 6 | dispatch failed | relay stderr and the exit status |
+| 7 | the session named for resume does not exist | report it. Do NOT retry without the resume flag |
 
 **4. After the user says yes to an `ask` lane**, re-run the identical command with
 `--approve`. Never pass `--approve` in the same turn as the request — the approval
@@ -75,6 +77,79 @@ never overrides an unavailable lane.
 
 Use `--dry-run` whenever you want to show the user what would happen. It never
 executes, whatever the mode says.
+
+## Continuing an earlier conversation
+
+Every lane can resume instead of starting cold:
+
+```bash
+node .claude/skills/dispatch/check_lanes.js --lane grok --prompt-file p.md --resume-last
+node .claude/skills/dispatch/check_lanes.js --lane codex --prompt-file p.md --resume <id>
+```
+
+The two are mutually exclusive — "the most recent" and "this specific one" are
+different instructions, so passing both is an error rather than a silent
+preference.
+
+**Resuming is dispatching.** A `reject` lane still refuses, an `ask` lane still
+needs approval, and an unavailable lane is still not dispatched. Nothing about
+resume relaxes the gates.
+
+**A named session that provably does not exist is a hard failure (exit 7), never
+a fresh start.** Silently starting cold when the user asked to continue is the
+absent-value-as-benign-default bug wearing a different hat, and it is not
+hypothetical: measured 2026-08-25, `codex exec resume --last` against a session
+store with no recorded sessions did **not** error — it went straight to a model
+call. The script checks the session store before dispatching for exactly that
+reason.
+
+What can be checked differs by provider, and the output always says which:
+
+| lane | resume-last | resume-id | verifiable? |
+| --- | --- | --- | --- |
+| minimax, deepseek | `--continue` | `--session <id>` | yes — `opencode session list` |
+| codex | `resume --last` | `resume <id>` | yes — `~/.codex/sessions` |
+| antigravity | `--continue` | `--conversation <ID>` | **no** — no list command |
+| composer, grok | `--continue` | `--resume <id>` | **no** — `ls` is an interactive TUI |
+
+For the unverifiable lanes the output says the session was **NOT VERIFIED**.
+Relay that wording; do not upgrade it to "resumed" when reporting to the user.
+
+Both `--dry-run` and the `ask` output print a `session` line naming what would be
+continued, so a resume is never mistaken for a fresh start.
+
+Note that codex resume restructures the command into a `resume` **subcommand**
+with the id as a positional before the prompt — it is not a flag. The script
+builds argv per lane for that reason; do not hand-assemble these commands.
+
+## Collecting a dispatch's output file
+
+`codex` is run with `--output-last-message`, which writes its final answer to a
+file — much more reliable than scraping stdout. When the script dispatches codex
+itself it collects and deletes that file automatically, leaving nothing behind.
+
+When a lane is `ask`, **the user runs the printed command themselves**, so the
+file lands wherever that command put it. Collect it with:
+
+```bash
+node .claude/skills/dispatch/collect_output.js <path> [--keep] [--json] [--force]
+```
+
+It prints the contents, then deletes the file — but only after a successful read,
+and only when the path is one it can plausibly own (under a temp/scratch root, or
+with a dispatch-output basename). Anything else is printed and **not** deleted,
+with the failed rule named; `--force` overrides and warns. Directories and
+symlinks are never deleted.
+
+Keep these states apart when reporting:
+
+- **missing file** (exit 1) — a failure. It is not "the agent replied with
+  nothing"; an agent that said nothing would leave an empty file, not no file.
+- **empty file** (exit 0) — a real, empty result. It is deleted.
+- **refused to delete** (exit 4) — the contents *were* printed; only cleanup was
+  skipped. Say so, and name the file so the user can remove it.
+- **delete failed** (exit 3) — contents printed, and **the file still exists**.
+  Never report cleanup that did not happen.
 
 ## Which lane gets the job
 
@@ -86,7 +161,7 @@ From the working agreement in `CLAUDE.md`:
 | `deepseek` | fast | backend implementation **and** review | **anything visual — it has no vision** |
 | `minimax` | slow | review, critique, verification | implementation |
 | `composer` | moderate | **long multi-file implementation runs** | — |
-| `grok` | moderate | analysis, research, single-shot code | long autonomous agent runs — its agentic coding regressed against 4.5 |
+| `grok` | moderate | analysis, research, single-shot code (defaults to `cursor-grok-4.6-high`) | long autonomous agent runs — its agentic coding regressed against 4.5 |
 | `codex` | moderate | all-rounder; punches above its size | see the risk note below |
 
 Composer for the long build, Grok for the thinking. Routing them the other way round
@@ -119,7 +194,9 @@ they can do faster. When they are away, dispatching is the point.
 ### `-fast` Cursor slugs
 
 The model slug is a per-lane config field. The lanes default to `composer-2.5` and
-`cursor-grok-4.6-low`. If the user configures a slug containing `-fast`, the script
+`cursor-grok-4.6-high`. Only slugs ending in `-fast` warn: the 4.6 family runs
+`low`, `medium`, `high`, `xhigh` and a `-fast` variant of each, and the four
+non-fast ones are silent. If the user configures a slug containing `-fast`, the script
 prints a prominent warning naming the non-fast alternative and then **proceeds** —
 it is the user's allowance to spend. Surface that warning to the user; do not
 silently swallow it, and do not refuse the run over it.

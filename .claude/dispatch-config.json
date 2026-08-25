@@ -75,7 +75,7 @@
     },
     "grok": {
       "mode": "ask",
-      "model": "cursor-grok-4.6-low",
+      "model": "cursor-grok-4.6-high",
       "note": "Analysis, research, single-shot code. Its agentic coding regressed against 4.5 — do not give it long autonomous runs. Shares the Cursor allowance with composer."
     },
     "codex": {

@@ -24,6 +24,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync, spawn } = require('child_process');
+const { collectOutput } = require('./collect_output.js');
 
 const SKILL_DIR = __dirname;
 const DEFAULT_CONFIG_PATH = path.resolve(SKILL_DIR, '..', '..', 'dispatch-config.json');
@@ -37,6 +38,7 @@ const EXIT = {
   LANE_UNAVAILABLE: 4,
   USAGE_ERROR: 5,
   DISPATCH_FAILED: 6,
+  SESSION_UNRESOLVABLE: 7,
 };
 
 const PROBE_TIMEOUT_MS = 90000;
@@ -58,7 +60,7 @@ const LANES = {
     costClass: 'plan-included',
     costNote: 'Unlimited weekly on the MiniMax coding plan; limited rolling 5-hour window.',
     routing: 'Reviewing and verification, not implementation. Slower but more powerful.',
-    buildArgs: ({ model, prompt }) => ['run', '-m', model, '--format', 'json', prompt],
+    buildArgs: ({ model, prompt, resume }) => opencodeArgs(model, prompt, resume),
   },
   deepseek: {
     key: 'deepseek',
@@ -71,7 +73,7 @@ const LANES = {
     costClass: 'metered',
     costNote: 'METERED — real money per call, billed to OpenCode Go.',
     routing: 'Backend implementation and review. NO VISION: never send a screenshot or a task needing one.',
-    buildArgs: ({ model, prompt }) => ['run', '-m', model, '--format', 'json', prompt],
+    buildArgs: ({ model, prompt, resume }) => opencodeArgs(model, prompt, resume),
   },
   antigravity: {
     key: 'antigravity',
@@ -84,9 +86,11 @@ const LANES = {
     costClass: 'floor-per-call',
     costNote: '~16k input-token floor per call — a one-line question costs about what a long one does.',
     routing: 'Very fast. Frontend work.',
-    buildArgs: ({ model, prompt }) => {
+    buildArgs: ({ model, prompt, resume }) => {
       const args = ['-p', prompt, '--output-format', 'json'];
       if (model !== null) args.push('--model', model);
+      if (resume.kind === 'last') args.push('--continue');
+      else if (resume.kind === 'id') args.push('--conversation', resume.id);
       return args;
     },
   },
@@ -101,7 +105,7 @@ const LANES = {
     costClass: 'shared-cursor-allowance',
     costNote: 'Shares one Cursor allowance with the grok lane.',
     routing: 'Long multi-file implementation runs. The only lane rated for long-horizon agentic work.',
-    buildArgs: ({ model, prompt }) => ['-p', '--output-format', 'json', '--model', model, prompt],
+    buildArgs: ({ model, prompt, resume }) => cursorArgs(model, prompt, resume),
   },
   grok: {
     key: 'grok',
@@ -110,12 +114,12 @@ const LANES = {
     binName: 'cursor-agent',
     fallbackPath: 'C:\\Users\\cople\\AppData\\Local\\cursor-agent\\cursor-agent.cmd',
     supportsModel: true,
-    defaultModel: 'cursor-grok-4.6-low',
+    defaultModel: 'cursor-grok-4.6-high',
     costClass: 'shared-cursor-allowance',
     costNote:
       'Shares one Cursor allowance with composer. Composer is the only lane rated for long multi-file agentic runs, so Grok spending comes directly out of a lane with no substitute.',
     routing: 'Analysis, research and single-shot code. Its agentic coding regressed against 4.5 — do not give it long autonomous runs.',
-    buildArgs: ({ model, prompt }) => ['-p', '--output-format', 'json', '--model', model, prompt],
+    buildArgs: ({ model, prompt, resume }) => cursorArgs(model, prompt, resume),
   },
   codex: {
     key: 'codex',
@@ -131,9 +135,64 @@ const LANES = {
     risk: 'HIGHEST RISK LANE. ~/.codex/config.toml sets sandbox_mode = "danger-full-access" and runs report approval: never, so this lane has full filesystem access with no prompts.',
     // stdin is closed rather than redirected from /dev/null: spawn() takes
     // stdio: ['ignore', ...], which is the portable form of `< /dev/null`.
-    buildArgs: ({ prompt }) => ['exec', '--skip-git-repo-check', prompt],
+    buildArgs: ({ prompt, resume, outputFile }) => codexArgs(prompt, resume, outputFile),
+    // codex writes its final message to a file, which beats parsing stdout.
+    wantsOutputFile: true,
   },
 };
+
+// --- per-lane argv builders -------------------------------------------------
+//
+// Resume is NOT a flag that can be appended uniformly. Three providers append a
+// flag; codex restructures argv into a `resume` SUBCOMMAND with the session id
+// as a POSITIONAL that precedes the prompt. Building argv per lane is what keeps
+// the codex form well-formed.
+//
+// Verified 2026-08-24/25 against the installed CLIs.
+
+function opencodeArgs(model, prompt, resume) {
+  //   fresh : run -m <model> --format json <prompt>
+  //   last  : run -m <model> --format json -c <prompt>
+  //   id    : run -m <model> --format json -s <id> <prompt>
+  const args = ['run', '-m', model, '--format', 'json'];
+  if (resume.kind === 'last') args.push('--continue');
+  else if (resume.kind === 'id') args.push('--session', resume.id);
+  args.push(prompt);
+  return args;
+}
+
+function cursorArgs(model, prompt, resume) {
+  //   fresh : -p --output-format json --model <m> <prompt>
+  //   last  : -p --output-format json --model <m> --continue <prompt>
+  //   id    : -p --output-format json --model <m> --resume <id> <prompt>
+  // `--resume [chatId]` takes an OPTIONAL value, so the id is always passed
+  // explicitly — a bare `--resume` would swallow the prompt as its chatId.
+  const args = ['-p', '--output-format', 'json', '--model', model];
+  if (resume.kind === 'last') args.push('--continue');
+  else if (resume.kind === 'id') args.push('--resume', resume.id);
+  args.push(prompt);
+  return args;
+}
+
+function codexArgs(prompt, resume, outputFile) {
+  //   fresh : exec --skip-git-repo-check [-o FILE] <prompt>
+  //   last  : exec resume --last --skip-git-repo-check [-o FILE] <prompt>
+  //   id    : exec resume --skip-git-repo-check [-o FILE] <id> <prompt>
+  //
+  // `codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]` — the id is a positional
+  // that comes BEFORE the prompt, so appending a flag would malform the command.
+  // With `--last` and no id, the single positional binds to PROMPT: verified by
+  // running `exec resume --last` with no positional, which answered "Reading
+  // prompt from stdin..." rather than treating it as a missing session id.
+  const args = ['exec'];
+  if (resume.kind !== 'none') args.push('resume');
+  if (resume.kind === 'last') args.push('--last');
+  args.push('--skip-git-repo-check');
+  if (outputFile !== null) args.push('--output-last-message', outputFile);
+  if (resume.kind === 'id') args.push(resume.id);
+  args.push(prompt);
+  return args;
+}
 
 const LANE_KEYS = Object.keys(LANES);
 
@@ -196,11 +255,13 @@ function parseArgs(argv) {
     configPath: DEFAULT_CONFIG_PATH,
     cwd: process.cwd(),
     timeoutMs: DEFAULT_DISPATCH_TIMEOUT_MS,
+    resumeLast: false,
+    resumeId: null,
     help: false,
     errors: [],
   };
 
-  const needsValue = new Set(['--lane', '--prompt-file', '--config', '--cwd', '--timeout']);
+  const needsValue = new Set(['--lane', '--prompt-file', '--config', '--cwd', '--timeout', '--resume']);
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -215,7 +276,10 @@ function parseArgs(argv) {
       else if (arg === '--prompt-file') out.promptFile = value;
       else if (arg === '--config') out.configPath = path.resolve(value);
       else if (arg === '--cwd') out.cwd = path.resolve(value);
-      else if (arg === '--timeout') {
+      else if (arg === '--resume') {
+        if (value.trim() === '') out.errors.push('--resume requires a session id');
+        else out.resumeId = value.trim();
+      } else if (arg === '--timeout') {
         const ms = toFiniteNumber(value);
         if (ms === null || ms <= 0) out.errors.push(`--timeout must be a positive number of milliseconds, got "${value}"`);
         else out.timeoutMs = ms;
@@ -225,11 +289,28 @@ function parseArgs(argv) {
     if (arg === '--json') out.json = true;
     else if (arg === '--dry-run') out.dryRun = true;
     else if (arg === '--approve') out.approve = true;
+    else if (arg === '--resume-last') out.resumeLast = true;
     else if (arg === '--help' || arg === '-h') out.help = true;
     else out.errors.push(`unrecognised argument "${arg}"`);
   }
 
+  // Mutually exclusive: "the most recent" and "this specific one" are different
+  // instructions, and silently preferring one would resume a session the user
+  // did not name.
+  if (out.resumeLast && out.resumeId !== null) {
+    out.errors.push(
+      `--resume-last and --resume <id> are mutually exclusive. --resume-last continues that lane's most recent session; --resume names a specific one. Pass exactly one.`
+    );
+  }
+
   return out;
+}
+
+/** The resume instruction, as a value rather than two loose booleans. */
+function resumeIntent(opts) {
+  if (opts.resumeLast) return { kind: 'last', id: null, label: 'most recent session' };
+  if (opts.resumeId !== null) return { kind: 'id', id: opts.resumeId, label: `session ${opts.resumeId}` };
+  return { kind: 'none', id: null, label: 'new session' };
 }
 
 const HELP = `
@@ -248,6 +329,14 @@ check_lanes.js — probe and dispatch external agent CLI lanes.
         reject  refuse, exit ${EXIT.REFUSED_BY_CONFIG}
       An unlisted lane is treated as ask.
 
+  Resume (works on every lane; resuming IS dispatching, so the same mode gating
+  applies and a reject lane still refuses)
+    --resume-last       continue that lane's most recent session
+    --resume <id>       continue a specific session
+      Mutually exclusive. An id that a provider's session store proves absent is
+      a hard failure (exit ${EXIT.SESSION_UNRESOLVABLE}) — never a silent fresh start. Where a provider
+      offers no way to check, the output says the session was NOT verified.
+
   Flags
     --json              machine-readable output
     --dry-run           print the command, never execute, whatever the mode
@@ -262,6 +351,7 @@ check_lanes.js — probe and dispatch external agent CLI lanes.
   Exit codes
     ${EXIT.OK}  ok          ${EXIT.APPROVAL_REQUIRED}  approval required   ${EXIT.REFUSED_BY_CONFIG}  refused by config
     ${EXIT.LANE_UNAVAILABLE}  unavailable ${EXIT.USAGE_ERROR}  usage/config error  ${EXIT.DISPATCH_FAILED}  dispatch failed
+    ${EXIT.SESSION_UNRESOLVABLE}  session named for resume does not exist
 `;
 
 // ---------------------------------------------------------------------------
@@ -948,6 +1038,185 @@ function probeLane(laneKey, config, cwd) {
 }
 
 // ---------------------------------------------------------------------------
+// Session resolution
+//
+// Three-valued, like availability, and for the same reason:
+//   verified === true   a session store confirmed this session exists
+//   verified === false  a session store proved it does NOT  -> hard failure
+//   verified === null   this provider exposes no way to check -> say so, proceed
+//
+// Why false is a hard failure rather than a warning: measured 2026-08-25,
+// `codex exec resume --last` against a CODEX_HOME with no recorded sessions did
+// NOT error. It went straight to a model call — i.e. it silently started a fresh
+// conversation when asked to resume. That is this repo's most-repeated defect
+// class (an absent value treated as a benign default) living inside a vendor
+// CLI, so the check has to happen here, before dispatch.
+// ---------------------------------------------------------------------------
+
+const CODEX_CWD_SCAN_WINDOW = 50;
+
+function codexSessionsRoot() {
+  if (typeof process.env.CODEX_HOME === 'string' && process.env.CODEX_HOME.trim() !== '') {
+    return path.join(process.env.CODEX_HOME.trim(), 'sessions');
+  }
+  const home = process.env.USERPROFILE || os.homedir();
+  if (typeof home !== 'string' || home.trim() === '') return null;
+  return path.join(home, '.codex', 'sessions');
+}
+
+/** Rollout files newest-first: ~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl */
+function listCodexRollouts() {
+  const root = codexSessionsRoot();
+  if (root === null) return { root: null, files: [], error: 'No home directory could be resolved.' };
+  if (!dirExists(root)) return { root, files: [], error: null };
+  let entries;
+  try {
+    entries = fs.readdirSync(root, { recursive: true });
+  } catch (err) {
+    return { root, files: [], error: `${root} could not be read: ${err.message}` };
+  }
+  const files = [];
+  for (const rel of entries) {
+    const name = path.basename(String(rel));
+    if (!/^rollout-.*\.jsonl$/.test(name)) continue;
+    const full = path.join(root, String(rel));
+    let mtime = null;
+    try {
+      mtime = fs.statSync(full).mtimeMs;
+    } catch (_) {
+      continue;
+    }
+    const m = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(name);
+    files.push({ path: full, mtime, id: m === null ? null : m[1].toLowerCase() });
+  }
+  files.sort((a, b) => b.mtime - a.mtime);
+  return { root, files, error: null };
+}
+
+/** Reads only the session_meta line to recover the recorded cwd. */
+function codexRolloutCwd(file) {
+  let fd = null;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(65536);
+    const read = fs.readSync(fd, buf, 0, buf.length, 0);
+    const firstLine = buf.slice(0, read).toString('utf8').split('\n')[0];
+    const parsed = JSON.parse(firstLine);
+    const cwd = parsed && parsed.payload ? parsed.payload.cwd : null;
+    return typeof cwd === 'string' ? cwd : null;
+  } catch (_) {
+    return null;
+  } finally {
+    if (fd !== null) {
+      try { fs.closeSync(fd); } catch (_) { /* ignore */ }
+    }
+  }
+}
+
+function verifyCodexSession(resume, cwd) {
+  const { root, files, error } = listCodexRollouts();
+  if (error !== null) {
+    return { verified: null, reason: `The codex session store could not be read (${error}), so ${resume.label} was NOT verified.` };
+  }
+
+  if (resume.kind === 'id') {
+    const wanted = resume.id.toLowerCase();
+    const hit = files.find((f) => f.id === wanted);
+    if (hit !== undefined) {
+      return { verified: true, reason: null, detail: `Matched rollout ${path.basename(hit.path)}` };
+    }
+    return {
+      verified: false,
+      reason: `No codex session "${resume.id}" exists in ${root} (${files.length} recorded session(s) scanned). Not dispatching — a resume that cannot find its session must not fall back to a fresh conversation.`,
+    };
+  }
+
+  // resume.kind === 'last'
+  if (files.length === 0) {
+    return {
+      verified: false,
+      reason: `There are no recorded codex sessions in ${root === null ? '(no session store)' : root}, so there is nothing to resume. Measured 2026-08-25: \`codex exec resume --last\` does NOT error in this situation — it silently starts a fresh conversation. Refusing to dispatch.`,
+    };
+  }
+
+  const window = files.slice(0, CODEX_CWD_SCAN_WINDOW);
+  const match = window.find((f) => {
+    const recorded = codexRolloutCwd(f.path);
+    return recorded !== null && path.resolve(recorded).toLowerCase() === path.resolve(cwd).toLowerCase();
+  });
+  if (match !== undefined) {
+    return { verified: true, reason: null, detail: `Newest session for this directory: ${path.basename(match.path)}` };
+  }
+  return {
+    verified: null,
+    reason: `${files.length} codex session(s) exist, but none of the newest ${window.length} recorded a cwd matching ${cwd}. codex's \`--last\` filters by cwd by default, so it may find nothing here and start fresh instead. The session to be resumed was NOT verified.`,
+  };
+}
+
+function verifyOpencodeSession(resume, transport, cwd) {
+  const res = runProbe(transport.command, transport.prefixArgs.concat(['session', 'list']), cwd);
+  if (!res.ok || res.timedOut || res.status !== 0) {
+    return {
+      verified: null,
+      reason: `\`opencode session list\` did not complete (${res.errorMessage || `exit ${res.status}`}), so ${resume.label} was NOT verified.`,
+    };
+  }
+  const ids = [];
+  for (const line of stripAnsi(res.stdout).split(/\r?\n/)) {
+    const m = /^(ses_[A-Za-z0-9]+)\s/.exec(line.trim());
+    if (m !== null) ids.push(m[1]);
+  }
+  if (ids.length === 0) {
+    if (resume.kind === 'last') {
+      return {
+        verified: false,
+        reason: '`opencode session list` reported no sessions, so there is nothing for --continue to resume. Refusing to dispatch rather than starting a fresh conversation.',
+      };
+    }
+    return {
+      verified: null,
+      reason: `\`opencode session list\` returned no parseable session ids, so ${resume.label} was NOT verified.`,
+    };
+  }
+  if (resume.kind === 'last') {
+    return { verified: true, reason: null, detail: `Most recent of ${ids.length} session(s): ${ids[0]}` };
+  }
+  if (ids.includes(resume.id)) {
+    return { verified: true, reason: null, detail: `Matched in \`opencode session list\` (${ids.length} session(s))` };
+  }
+  return {
+    verified: false,
+    reason: `Session "${resume.id}" is not in \`opencode session list\` (${ids.length} session(s) found). Not dispatching — a resume that cannot find its session must not fall back to a fresh conversation.`,
+  };
+}
+
+/**
+ * Resolves what a resume would actually continue, before anything is dispatched.
+ */
+function verifySession(laneKey, resume, transport, cwd) {
+  if (resume.kind === 'none') return { verified: true, reason: null, detail: 'New session; nothing to resolve.' };
+
+  const cli = LANES[laneKey].cli;
+
+  if (cli === 'opencode') return verifyOpencodeSession(resume, transport, cwd);
+  if (cli === 'codex') return verifyCodexSession(resume, cwd);
+
+  if (cli === 'agy') {
+    return {
+      verified: null,
+      reason: `agy exposes no non-interactive conversation-list command, so ${resume.label} could NOT be verified before dispatch. If the conversation does not exist, agy decides what happens — this script did not confirm it.`,
+    };
+  }
+  if (cli === 'cursor-agent') {
+    return {
+      verified: null,
+      reason: `cursor-agent's \`ls\` is an interactive TUI picker (it fails with "Raw mode is not supported" when stdin is closed), so ${resume.label} could NOT be verified before dispatch. If the chat does not exist, cursor-agent decides what happens — this script did not confirm it.`,
+    };
+  }
+  return { verified: null, reason: `No session check is defined for cli "${cli}".` };
+}
+
+// ---------------------------------------------------------------------------
 // Token usage parsing
 //
 // Shapes differ per CLI and have NOT been verified against a live dispatch
@@ -1152,6 +1421,15 @@ function dispatch(transport, args, cwd, timeoutMs) {
 // Output
 // ---------------------------------------------------------------------------
 
+/** One line naming what a dispatch would continue, and how sure we are. */
+function describeResume(resume) {
+  if (resume.kind === 'none') return 'NEW session (no resume requested)';
+  const what = resume.kind === 'last' ? 'CONTINUING the most recent session' : `CONTINUING session ${resume.id}`;
+  if (resume.verified === true) return `${what} — verified. ${resume.detail || ''}`.trim();
+  if (resume.verified === null) return `${what} — NOT VERIFIED (this provider offers no way to check).`;
+  return `${what} — UNRESOLVABLE.`;
+}
+
 function availabilityLabel(available) {
   if (available === true) return 'yes';
   if (available === false) return 'NO';
@@ -1325,6 +1603,7 @@ async function main() {
 
   const report = buildLaneReport(opts.lane, config, opts.cwd);
   const lane = LANES[opts.lane];
+  const resume = resumeIntent(opts);
 
   const payload = {
     ok: false,
@@ -1371,8 +1650,43 @@ async function main() {
     emit(payload, opts, EXIT.LANE_UNAVAILABLE);
   }
 
+  // GATE 1.5 — session resolution. Runs before dry-run and before the ask gate,
+  // because an unresolvable session is an error at every mode: there is no point
+  // asking the user to approve a resume that cannot find its session, and a
+  // dry-run should surface the problem too.
+  const sessionCheck = verifySession(opts.lane, resume, report.transport, opts.cwd);
+  payload.resume = {
+    kind: resume.kind,
+    id: resume.id,
+    label: resume.label,
+    verified: sessionCheck.verified,
+    verifiedReason: sessionCheck.reason === undefined ? null : sessionCheck.reason,
+    detail: sessionCheck.detail === undefined ? null : sessionCheck.detail,
+  };
+
+  if (sessionCheck.verified === false) {
+    payload.action = 'session-unresolvable';
+    payload.reason = sessionCheck.reason;
+    complain(`SESSION UNRESOLVABLE — nothing was executed.`);
+    complain(`  ${sessionCheck.reason}`);
+    complain(`  Resuming was requested (${resume.label}); starting a fresh conversation instead would be a silent substitution, so this is a failure, not a fallback.`);
+    emit(payload, opts, EXIT.SESSION_UNRESOLVABLE);
+  }
+
+  if (resume.kind !== 'none' && sessionCheck.verified === null) {
+    payload.warnings.push(`Session NOT verified: ${sessionCheck.reason}`);
+    complain(`\nSESSION NOT VERIFIED — ${sessionCheck.reason}\n`);
+  }
+
+  // codex writes its final message to a file, which is far more reliable than
+  // scraping stdout. Only lanes that support it get one.
+  const outputFile = lane.wantsOutputFile === true
+    ? path.join(os.tmpdir(), `dispatch-${opts.lane}-${Date.now()}-${process.pid}.txt`)
+    : null;
+  payload.outputFile = outputFile;
+
   // Build the command. The prompt is one argv element; no shell is involved.
-  const args = lane.buildArgs({ model: report.model, prompt: prompt.text });
+  const args = lane.buildArgs({ model: report.model, prompt: prompt.text, resume, outputFile });
   payload.command = {
     file: report.transport.command,
     args: report.transport.prefixArgs.concat(args),
@@ -1392,6 +1706,7 @@ async function main() {
     say(`DRY RUN — nothing was executed.`);
     say(`  lane      ${opts.lane} (${report.label})`);
     say(`  mode      ${report.mode}  [${report.modeSource}]`);
+    say(`  session   ${describeResume(payload.resume)}`);
     say(`  cost      ${report.costClass} — ${report.costNote}`);
     if (report.risk !== null) say(`  RISK      ${report.risk}`);
     say(`  command   ${payload.commandDisplay}`);
@@ -1406,6 +1721,7 @@ async function main() {
     payload.reason = `Lane "${opts.lane}" is "ask": ${report.modeReason} Explicit per-request approval is required before this runs.`;
     complain(`APPROVAL REQUIRED — nothing was executed.`);
     complain(`  ${payload.reason}`);
+    complain(`  session: ${describeResume(payload.resume)}`);
     complain(`  cost: ${report.costClass} — ${report.costNote}`);
     if (report.risk !== null) complain(`  RISK: ${report.risk}`);
     complain(`  command that would run:`);
@@ -1433,6 +1749,21 @@ async function main() {
     payload.reason = `Lane "${opts.lane}" failed to start: ${result.error}`;
     complain(`DISPATCH FAILED: ${payload.reason}`);
     emit(payload, opts, EXIT.DISPATCH_FAILED);
+  }
+
+  // codex's --output-last-message file: a far more reliable final answer than
+  // scraping stdout. Collected and cleaned up through the SAME implementation
+  // the standalone collect_output.js exposes, so the read/delete rules — and the
+  // refusal to delete anything outside a temp root — are not written twice.
+  // Absent stays null: an unwritten file is not an empty reply.
+  if (outputFile !== null) {
+    const collected = collectOutput(outputFile, {});
+    payload.lastMessage = collected.content;
+    payload.lastMessageFile = collected.path;
+    payload.lastMessageDeleted = collected.deleted;
+    payload.lastMessageReason = collected.existed === false
+      ? `${opts.lane} did not write ${outputFile}, so the final message is UNKNOWN (not empty). ${collected.reason}`
+      : collected.reason;
   }
 
   const usage = extractUsage(opts.lane, result.stdout);
