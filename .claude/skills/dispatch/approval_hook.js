@@ -15,9 +15,14 @@
  *
  *  1. THE WRAPPER IS NOT THE CAPABILITY. Gating only check_lanes.js gates the
  *     front door of a building with no walls — every lane is reachable through
- *     `opencode run`, `agy -p`, `cursor-agent -p` and `codex exec`. Both
- *     families are detected here, and for a direct call the lane is INFERRED
- *     from the binary plus the model slug.
+ *     `opencode run`, `omp -p`, `agy -p`, `cursor-agent -p` and `codex exec`.
+ *     Both families are detected here, and for a direct call the lane is
+ *     INFERRED from the binary plus the model slug.
+ *
+ *     `omp` was added 2026-08-25 when the minimax lane moved off opencode. A
+ *     new transport that the detector does not know about is not a gap in a
+ *     nice-to-have — it makes that lane the one lane reachable ungated, which
+ *     is precisely the walls-less building above.
  *
  *  2. UNKNOWN IS NOT SAFE. A recognised binary whose lane cannot be determined
  *     inherits the strictest mode among the lanes that binary can serve. A
@@ -71,8 +76,8 @@ const DECISION_FOR_MODE = { auto: 'silent', ask: 'ask', reject: 'deny' };
 const LANES = {
   minimax: {
     label: 'MiniMax M3',
-    binary: 'opencode',
-    defaultModel: 'minimax-coding-plan/MiniMax-M3',
+    binary: 'omp',
+    defaultModel: 'minimax-code/MiniMax-M3',
     cost: 'Plan-included: unlimited weekly, limited rolling 5-hour window.',
     risk: null,
   },
@@ -117,7 +122,8 @@ const LANE_KEYS = Object.keys(LANES);
 
 /** Which lanes each binary can serve. Used when the lane cannot be determined. */
 const BINARY_LANES = {
-  opencode: ['minimax', 'deepseek'],
+  opencode: ['deepseek'],
+  omp: ['minimax'],
   agy: ['antigravity'],
   'cursor-agent': ['composer', 'grok'],
   codex: ['codex'],
@@ -125,9 +131,26 @@ const BINARY_LANES = {
 
 const BINARY_NAMES = Object.keys(BINARY_LANES);
 
-/** Subcommands and flags that read metadata and never spend a token. */
+/**
+ * Subcommands and flags that read metadata and never spend a token.
+ *
+ * These are ALLOWLISTS, not exclusion lists, and deliberately conservative. A
+ * subcommand that is not here is gated as an unrecognised invocation of a
+ * spending binary, which is noise at worst; a spending subcommand mistakenly
+ * listed here is a silent dispatch. omp in particular ships ~40 subcommands,
+ * several of which do call a model (`commit`, `cleanse`, `compress`, `bench`,
+ * `if-bench`, `shell`, `acp`, `join`), so only the ones that provably cannot
+ * are listed. `omp token` is also deliberately absent: it prints a credential,
+ * which is not something to wave through silently.
+ */
 const METADATA = {
   opencode: new Set(['auth', 'models', 'model', 'session', 'sessions', 'serve', 'upgrade', 'install', 'uninstall', 'completion', 'github', 'stats', 'help', 'version']),
+  omp: new Set([
+    'models', 'model', 'usage', 'stats', 'config', 'auth-broker', 'auth-gateway',
+    'completions', 'update', 'setup', 'gc', 'ps', 'worktree', 'plugin', 'install',
+    'tiny-models', 'ssh', 'grievances', 'ttsr', 'gallery', 'render', 'read',
+    'help', 'version',
+  ]),
   agy: new Set(['models', 'model', 'auth', 'login', 'logout', 'help', 'version', 'update', 'upgrade', 'mcp']),
   'cursor-agent': new Set(['login', 'logout', 'status', 'ls', 'list', 'update', 'upgrade', 'mcp', 'help', 'version']),
   codex: new Set(['login', 'logout', 'help', 'completion', 'mcp', 'mcp-server', 'app-server', 'version']),
@@ -140,9 +163,33 @@ const METADATA_FLAGS = new Set([
 /** Flags that consume the next token, so a subcommand hunt does not eat a value. */
 const VALUE_FLAGS = {
   opencode: new Set(['-m', '--model', '-s', '--session', '--format', '--agent', '--port', '--hostname', '--log-level', '--config']),
+  // Read from `omp --help` (omp/18.0.5) on 2026-08-25. `-p/--print` and
+  // `-c/--continue` take NO value and are deliberately absent.
+  omp: new Set([
+    '--model', '--smol', '--slow', '--plan', '--prewalk-into', '--plan-yolo-into',
+    '--provider', '--api-key', '--system-prompt', '--append-system-prompt',
+    '--profile', '--alias', '--cwd', '--mode', '--config', '--add-dir',
+    '-r', '--resume', '--session-dir', '--models', '--tools', '--thinking',
+    '--service-tier', '--hook', '-e', '--extension', '--skills', '--export',
+    '--max-time', '--approval-mode', '--plugin-dir',
+  ]),
   agy: new Set(['--model', '-m', '--output-format', '--conversation', '--config']),
   'cursor-agent': new Set(['--model', '-m', '--output-format', '--resume', '--config', '--api-key', '--workdir']),
   codex: new Set(['-m', '--model', '-c', '--config', '-C', '--cd', '-s', '--sandbox', '-a', '--ask-for-approval', '--profile', '-i', '--image', '-o', '--output-last-message']),
+};
+
+/**
+ * How each CLI spells "continue" and "resume this one", so the reason string can
+ * say a dispatch is resuming. Per-binary rather than a shared list because the
+ * same letter means different things: `-c` is `--continue` on omp but `--config`
+ * on codex, and reading one as the other would put a false Session line in front
+ * of the user. codex is absent because its resume is a SUBCOMMAND, not a flag.
+ */
+const RESUME_FLAGS = {
+  opencode: { last: ['--continue', '-c'], id: ['-s', '--session'] },
+  omp: { last: ['--continue', '-c'], id: ['-r', '--resume'] },
+  agy: { last: ['--continue'], id: ['--conversation'] },
+  'cursor-agent': { last: ['--continue'], id: ['--resume'] },
 };
 
 /**
@@ -150,7 +197,7 @@ const VALUE_FLAGS = {
  * non-identifier character on both sides so `docs/codex-notes.md` and
  * `Terra-Invicta` do not match, while `codex.exe` and `check_lanes.js` do.
  */
-const RAW_MARKER_RE = /(?:^|[^A-Za-z0-9_-])(opencode|cursor-agent|codex|agy|check_lanes)(?![A-Za-z0-9_-])/i;
+const RAW_MARKER_RE = /(?:^|[^A-Za-z0-9_-])(opencode|cursor-agent|codex|agy|omp|check_lanes)(?![A-Za-z0-9_-])/i;
 
 // ---------------------------------------------------------------------------
 // Lexer. The command arrives as ONE string and may be spelled many ways.
@@ -439,8 +486,15 @@ function laneFromModel(binary, slug) {
   if (typeof slug !== 'string' || slug.trim() === '') return null;
   const s = slug.toLowerCase();
   if (binary === 'opencode') {
-    if (s.includes('minimax')) return 'minimax';
     if (s.includes('opencode-go') || s.includes('deepseek')) return 'deepseek';
+    return null;
+  }
+  if (binary === 'omp') {
+    if (s.includes('minimax')) return 'minimax';
+    // Any other slug is UNRESOLVED, not "not our business". omp serves exactly
+    // one lane in this policy, so classifyDirect falls back to that single
+    // candidate and the call is still gated under the minimax mode rather than
+    // slipping through as an unknown.
     return null;
   }
   if (binary === 'cursor-agent') {
@@ -622,6 +676,10 @@ function classifyDirect(binary, args, wholeSegment, how) {
   else if (binary === 'codex') recognisedForm = subLower === 'exec' || subLower === 'e';
   else if (binary === 'cursor-agent') recognisedForm = hasFlag(args, ['-p', '--print']);
   else if (binary === 'agy') recognisedForm = hasFlag(args, ['-p', '--print', '--prompt']);
+  // A bare `omp` opens the interactive TUI, which spends just as readily as
+  // `-p` does. It is gated either way; `recognisedForm` only decides whether
+  // the reason says the invocation could be read.
+  else if (binary === 'omp') recognisedForm = hasFlag(args, ['-p', '--print']);
 
   const resolvedLane = lane !== null ? lane : single;
 
@@ -644,10 +702,29 @@ function classifyDirect(binary, args, wholeSegment, how) {
     dryRun: false,
     approve: false,
     configOverride: null,
-    resume: hasFlag(args, ['--continue', '-c']) ? 'most recent session' : null,
+    resume: detectResume(binary, args),
     recognisedForm,
     display: joinDisplay(wholeSegment),
   };
+}
+
+/** What a direct call would continue, or null for a fresh conversation. */
+function detectResume(binary, args) {
+  if (binary === 'codex') {
+    // `codex exec resume [--last] [SESSION_ID]` — a subcommand, not a flag.
+    if (!args.some((t) => t.toLowerCase() === 'resume')) return null;
+    return hasFlag(args, ['--last']) ? 'most recent session' : 'a named session';
+  }
+  const spec = RESUME_FLAGS[binary];
+  if (spec === undefined) return null;
+  const id = readFlagValue(args, spec.id);
+  if (typeof id === 'string' && id.trim() !== '') return `session ${id}`;
+  if (hasFlag(args, spec.last)) return 'most recent session';
+  // The flag was present with no readable value. On omp that is the picker
+  // form, which is worse than a named resume, not better — say so rather than
+  // reporting a fresh conversation.
+  if (spec.id.length > 0 && hasFlag(args, spec.id)) return 'a session named by an unreadable value';
+  return null;
 }
 
 /**

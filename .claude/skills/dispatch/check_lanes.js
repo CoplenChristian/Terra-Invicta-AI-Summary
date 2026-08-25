@@ -13,12 +13,14 @@
  *   - Absent stays null. Number(null) === 0, so nothing here coerces a missing
  *     measurement into a number. An unknown availability state is `null`, never
  *     `true`; a missing token count is `null`, never `0`.
- *   - Prompts arrive as FILES and are passed as one element of an argv array to
- *     spawn(). No shell is used anywhere in the dispatch path, so quotes,
+ *   - Prompts arrive as FILES. Most lanes get the file's TEXT as one element of
+ *     an argv array; the omp lane gets the FILE ITSELF, attached as `@<path>`.
+ *     No shell is used anywhere in the dispatch path either way, so quotes,
  *     backticks, newlines and shell metacharacters in a prompt cannot be
  *     reinterpreted by cmd.exe or by a POSIX shell.
  *
- * Invocations verified 2026-08-24. Do not re-derive them from CLI help text.
+ * Invocations verified 2026-08-24, and the omp lane 2026-08-25 against
+ * omp/18.0.5. Do not re-derive them from CLI help text.
  */
 
 const fs = require('fs');
@@ -35,35 +37,102 @@ const DEFAULT_CONFIG_PATH = path.resolve(SKILL_DIR, 'dispatch-config.json');
 
 const VALID_MODES = ['auto', 'ask', 'reject'];
 
-// Cursor's workspace-trust flags. A config value outside this table is REJECTED
-// and never forwarded: this string becomes an element of an argv array handed to
-// a CLI, and a policy file is not a place to accept an arbitrary flag.
+// Standing-permission flags, PER CLI. A config value outside the table for the
+// lane it was set on is REJECTED and never forwarded: this string becomes an
+// element of an argv array handed to a CLI, and a policy file is not a place to
+// accept an arbitrary flag.
 //
-// The three are NOT interchangeable, which is why the grant text is carried
-// beside the flag instead of being inferred at the call site. Read from
-// `cursor-agent --help` (payload 2026.08.11-e8db854) on 2026-08-25:
+// The accepted literals are a property of the CLI, not of the mechanism. There
+// is no global set: `--yolo` is meaningless to agy and
+// `--dangerously-skip-permissions` is meaningless to cursor-agent, so a literal
+// valid on one lane is rejected on another rather than being handed to a CLI
+// that would treat it as an unknown argument. Validation is therefore always
+// against the accepted set of the lane being dispatched.
+//
+// Within a CLI the values are NOT interchangeable either, which is why the grant
+// text is carried beside each flag instead of being inferred at the call site.
+//
+// cursor-agent — read from `cursor-agent --help` (payload 2026.08.11-e8db854) on
+// 2026-08-25:
 //   --trust      "Trust the current workspace without prompting"
 //   -f, --force  "Force allow commands unless explicitly denied"
 //   --yolo       "Alias for --force (Run Everything)"
 // So --trust settles the directory-trust prompt and nothing else, while --yolo
 // and -f additionally auto-approve the commands the agent then runs. That is a
 // materially larger grant and the output has to say so out loud.
+//
+// agy — read from `agy --help` (agy 1.1.20) on 2026-08-25:
+//   --dangerously-skip-permissions  "Auto-approve all tool permission requests
+//                                    without prompting"
+// agy offers NO smaller grant: there is no directory-trust-only flag to fall back
+// to, so unlike cursor-agent there is no `--trust` equivalent to recommend. The
+// nearest neighbours in that help text are not substitutes — `--sandbox` ("Run in
+// a sandbox with terminal restrictions enabled") restricts rather than grants,
+// and `--mode accept-edits` covers edits only, not the tool permission requests
+// that fail a headless run. Verified 2026-08-25 that agy accepts the flag
+// (`agy --dangerously-skip-permissions models` exits 0).
+//
+// `autoApprovesEveryCommand` is the "this is the big grant" boolean, and it is
+// true for anything that auto-approves the agent's own actions — commands on
+// cursor-agent, every tool call on agy. The human-readable `grant` string carries
+// the CLI-accurate wording; this flag only decides how loud to be.
 const TRUST_FLAGS = {
-  '--trust': {
-    grant: 'trusts this directory only; it does not auto-approve commands',
-    autoApprovesEveryCommand: false,
+  'cursor-agent': {
+    '--trust': {
+      grant: 'trusts this directory only; it does not auto-approve commands',
+      autoApprovesEveryCommand: false,
+    },
+    '--yolo': {
+      grant: 'AUTO-APPROVES EVERY COMMAND this agent runs, unless explicitly denied',
+      autoApprovesEveryCommand: true,
+    },
+    '-f': {
+      grant: 'AUTO-APPROVES EVERY COMMAND this agent runs, unless explicitly denied (same as --yolo)',
+      autoApprovesEveryCommand: true,
+    },
   },
-  '--yolo': {
-    grant: 'AUTO-APPROVES EVERY COMMAND this agent runs, unless explicitly denied',
-    autoApprovesEveryCommand: true,
-  },
-  '-f': {
-    grant: 'AUTO-APPROVES EVERY COMMAND this agent runs, unless explicitly denied (same as --yolo)',
-    autoApprovesEveryCommand: true,
+  agy: {
+    '--dangerously-skip-permissions': {
+      grant: 'AUTO-APPROVES EVERY TOOL this agent runs, without prompting — not just directory trust',
+      autoApprovesEveryCommand: true,
+    },
   },
 };
 
-const VALID_TRUST_FLAGS = Object.keys(TRUST_FLAGS);
+/** The trust-flag table a lane accepts, or null if its CLI has no such flag. */
+function laneTrustFlags(lane) {
+  return lane.trustFlags === undefined || lane.trustFlags === null ? null : lane.trustFlags;
+}
+
+function supportsTrustFlag(lane) {
+  return laneTrustFlags(lane) !== null;
+}
+
+/** The literals THIS lane accepts. Empty for a lane whose CLI has no such flag. */
+function acceptedTrustFlags(lane) {
+  const table = laneTrustFlags(lane);
+  return table === null ? [] : Object.keys(table);
+}
+
+/**
+ * Every lane that accepts a literal, and what it accepts — for error text, so a
+ * rejection can point at where the value the user typed would actually be valid
+ * instead of only saying "not here".
+ */
+function trustFlagLaneSummary() {
+  return LANE_KEYS
+    .filter((k) => supportsTrustFlag(LANES[k]))
+    .map((k) => `${k} (${LANES[k].cli}: ${acceptedTrustFlags(LANES[k]).join(', ')})`);
+}
+
+/** The CLIs, other than this lane's, that would accept this literal. */
+function trustFlagAcceptedElsewhere(value, laneKey) {
+  if (typeof value !== 'string') return [];
+  return Object.keys(TRUST_FLAGS).filter(
+    (cli) =>
+      cli !== LANES[laneKey].cli && Object.prototype.hasOwnProperty.call(TRUST_FLAGS[cli], value)
+  );
+}
 
 const EXIT = {
   OK: 0,
@@ -86,16 +155,29 @@ const LANES = {
   minimax: {
     key: 'minimax',
     label: 'MiniMax M3',
-    cli: 'opencode',
-    binName: 'opencode',
-    fallbackPath: 'C:\\Users\\cople\\.opencode\\bin\\opencode.exe',
+    cli: 'omp',
+    binName: 'omp',
+    // Installed to PATH by its own installer, but a shell started before that
+    // install will not see it — hence the same PATH-then-known-location order
+    // every other lane uses. Measured 2026-08-25: omp/18.0.5 at this path.
+    fallbackPath: 'C:\\Users\\cople\\AppData\\Local\\omp\\omp.exe',
     supportsModel: true,
-    supportsTrustFlag: false, // opencode has no such flag; passing one would be a bad argument
-    defaultModel: 'minimax-coding-plan/MiniMax-M3',
+    trustFlags: null, // omp has --auto-approve/--approval-mode, but no run has needed one and granting a standing permission is the user's call, not this file's
+    defaultModel: 'minimax-code/MiniMax-M3',
+    // omp's `--model` is a FUZZY match, so a slug it does not recognise can
+    // resolve to a DIFFERENT model rather than failing. That would run a model
+    // the policy does not name, which is a policy bypass, so this lane requires
+    // its configured slug to be an exact entry in the live `omp models` catalogue.
+    requiresExactModelInCatalogue: true,
+    // The prompt is ATTACHED with `@<path>` rather than inlined as an argv
+    // element. Measured 2026-08-25: a missing or unreadable @file makes omp exit
+    // 1 with "Error: File not found: <path>" BEFORE it resolves the model, so a
+    // prompt can never be silently dropped from a dispatch.
+    promptDelivery: 'attached-file',
     costClass: 'plan-included',
     costNote: 'Unlimited weekly on the MiniMax coding plan; limited rolling 5-hour window.',
     routing: 'Reviewing and verification, not implementation. Slower but more powerful.',
-    buildArgs: ({ model, prompt, resume }) => opencodeArgs(model, prompt, resume),
+    buildArgs: ({ model, promptPath, resume, cwd }) => ompArgs(model, promptPath, resume, cwd),
   },
   deepseek: {
     key: 'deepseek',
@@ -104,7 +186,7 @@ const LANES = {
     binName: 'opencode',
     fallbackPath: 'C:\\Users\\cople\\.opencode\\bin\\opencode.exe',
     supportsModel: true,
-    supportsTrustFlag: false, // opencode has no such flag; passing one would be a bad argument
+    trustFlags: null, // opencode has no such flag; passing one would be a bad argument
     defaultModel: 'opencode-go/deepseek-v4-flash',
     costClass: 'metered',
     costNote: 'METERED — real money per call, billed to OpenCode Go.',
@@ -118,18 +200,12 @@ const LANES = {
     binName: 'agy',
     fallbackPath: 'C:\\Users\\cople\\AppData\\Local\\agy\\bin\\agy.exe',
     supportsModel: true,
-    supportsTrustFlag: false, // agy has no such flag; passing one would be a bad argument
+    trustFlags: TRUST_FLAGS.agy, // --dangerously-skip-permissions only; agy has no smaller grant
     defaultModel: null, // uses the CLI's own configured default
     costClass: 'floor-per-call',
     costNote: '~16k input-token floor per call — a one-line question costs about what a long one does.',
     routing: 'Very fast. Frontend work.',
-    buildArgs: ({ model, prompt, resume }) => {
-      const args = ['-p', prompt, '--output-format', 'json'];
-      if (model !== null) args.push('--model', model);
-      if (resume.kind === 'last') args.push('--continue');
-      else if (resume.kind === 'id') args.push('--conversation', resume.id);
-      return args;
-    },
+    buildArgs: ({ model, prompt, resume, trustFlag }) => agyArgs(model, prompt, resume, trustFlag),
   },
   composer: {
     key: 'composer',
@@ -138,7 +214,7 @@ const LANES = {
     binName: 'cursor-agent',
     fallbackPath: 'C:\\Users\\cople\\AppData\\Local\\cursor-agent\\cursor-agent.cmd',
     supportsModel: true,
-    supportsTrustFlag: true,
+    trustFlags: TRUST_FLAGS['cursor-agent'],
     defaultModel: 'composer-2.5',
     costClass: 'shared-cursor-allowance',
     costNote: 'Shares one Cursor allowance with the grok lane.',
@@ -152,7 +228,7 @@ const LANES = {
     binName: 'cursor-agent',
     fallbackPath: 'C:\\Users\\cople\\AppData\\Local\\cursor-agent\\cursor-agent.cmd',
     supportsModel: true,
-    supportsTrustFlag: true,
+    trustFlags: TRUST_FLAGS['cursor-agent'],
     defaultModel: 'cursor-grok-4.6-high',
     costClass: 'shared-cursor-allowance',
     costNote:
@@ -167,7 +243,7 @@ const LANES = {
     binName: 'codex',
     fallbackPath: 'F:\\Apps\\codex',
     supportsModel: false,
-    supportsTrustFlag: false, // codex has no such flag; its sandbox posture lives in ~/.codex/config.toml
+    trustFlags: null, // codex has no such flag; its sandbox posture lives in ~/.codex/config.toml
     defaultModel: null, // taken from the user's ~/.codex/config.toml
     costClass: 'plan-included',
     costNote: 'Included in the ChatGPT plan.',
@@ -188,10 +264,11 @@ const LANES = {
 // as a POSITIONAL that precedes the prompt. Building argv per lane is what keeps
 // the codex form well-formed.
 //
-// The same per-lane shape is why a trust flag cannot leak: only cursorArgs even
-// accepts one. opencodeArgs and codexArgs have no parameter for it, so a
-// misconfigured `trustFlag` on those lanes has nowhere to go structurally, on
-// top of being rejected earlier by resolveTrustFlag.
+// The same per-lane shape is why a trust flag cannot leak: only cursorArgs and
+// agyArgs accept one, and each pushes a literal its own CLI understands.
+// opencodeArgs and codexArgs have no parameter for it, so a misconfigured
+// `trustFlag` on those lanes has nowhere to go structurally, on top of being
+// rejected earlier by resolveTrustFlag.
 //
 // Verified 2026-08-24/25 against the installed CLIs.
 
@@ -206,6 +283,72 @@ function opencodeArgs(model, prompt, resume) {
   return args;
 }
 
+// The one-line message that rides alongside the attached brief. omp's shape is
+// `omp [flags] [@files...] [messages...]`, and the verified 2026-08-25 run that
+// produced correct work used exactly this pairing.
+const OMP_PROMPT_INSTRUCTION = 'Complete the task described in the attached brief.';
+
+function ompArgs(model, promptPath, resume, cwd) {
+  //   fresh : -p --mode json --model <m> --cwd <dir> @<prompt> <instruction>
+  //   last  : ... --continue ...
+  //   id    : ... --resume <id> ...
+  //
+  // Three things here are load-bearing.
+  //
+  // 1. `-r/--resume` WITH NO VALUE OPENS AN INTERACTIVE PICKER (`omp --help`,
+  //    18.0.5: "Resume a session (by ID prefix, path, or picker if omitted)").
+  //    A dispatch runs with stdin closed and nobody watching, so a bare --resume
+  //    must never be built. The id is required to be non-empty here rather than
+  //    trusted from the caller: silently dropping the flag would start a fresh
+  //    conversation under a resume instruction, which is the exact substitution
+  //    the session pre-flight exists to prevent.
+  // 2. `--cwd` is passed even though spawn() already sets the working directory,
+  //    because omp AUTO-SWITCHES TO A TEMP DIR when started in ~ unless told
+  //    otherwise (`--allow-home`). Naming the directory removes that surprise,
+  //    and it matches the invocation verified on 2026-08-25.
+  // 3. The prompt is ATTACHED, not inlined: `@<path>`. A missing file is a hard
+  //    failure (exit 1, before model resolution), so the prompt cannot be
+  //    silently omitted from the call.
+  const args = ['-p', '--mode', 'json', '--model', model];
+  if (typeof cwd === 'string' && cwd.trim() !== '') args.push('--cwd', cwd);
+  if (resume.kind === 'last') {
+    args.push('--continue');
+  } else if (resume.kind === 'id') {
+    const id = typeof resume.id === 'string' ? resume.id.trim() : '';
+    if (id === '') {
+      throw new Error(
+        'Refusing to build an omp resume with an empty session id: `omp -r` with no value opens an INTERACTIVE PICKER, which a headless dispatch can never answer.'
+      );
+    }
+    args.push('--resume', id);
+  }
+  if (typeof promptPath !== 'string' || promptPath.trim() === '') {
+    throw new Error('Refusing to build an omp dispatch with no prompt file to attach.');
+  }
+  args.push(`@${promptPath}`);
+  args.push(OMP_PROMPT_INSTRUCTION);
+  return args;
+}
+
+function agyArgs(model, prompt, resume, trustFlag) {
+  //   fresh : -p <prompt> --output-format json [--model <m>] [trust]
+  //   last  : ... --continue
+  //   id    : ... --conversation <id>
+  // `-p` takes the prompt as its VALUE, so the prompt is not a positional and the
+  // flags that follow it still parse.
+  //
+  // Same rule as cursorArgs: this is the only argv element that came from the
+  // config without being a model slug, so it is admitted only after
+  // resolveTrustFlag matched it against THIS lane's table. `null` means no flag
+  // at all — the absent case must not become an empty-string argv element.
+  const args = ['-p', prompt, '--output-format', 'json'];
+  if (model !== null) args.push('--model', model);
+  if (typeof trustFlag === 'string' && trustFlag !== '') args.push(trustFlag);
+  if (resume.kind === 'last') args.push('--continue');
+  else if (resume.kind === 'id') args.push('--conversation', resume.id);
+  return args;
+}
+
 function cursorArgs(model, prompt, resume, trustFlag) {
   //   fresh : -p --output-format json --model <m> [trust] <prompt>
   //   last  : -p --output-format json --model <m> [trust] --continue <prompt>
@@ -215,8 +358,9 @@ function cursorArgs(model, prompt, resume, trustFlag) {
   //
   // The trust flag is the ONLY value in this argv that came from the config
   // without being a model slug, so it is admitted only after resolveTrustFlag
-  // matched it against TRUST_FLAGS. `null` here means no flag at all — the
-  // absent case must not become an empty-string argv element.
+  // matched it against THIS lane's table — a literal agy accepts never reaches
+  // here. `null` means no flag at all; the absent case must not become an
+  // empty-string argv element.
   const args = ['-p', '--output-format', 'json', '--model', model];
   if (typeof trustFlag === 'string' && trustFlag !== '') args.push(trustFlag);
   if (resume.kind === 'last') args.push('--continue');
@@ -246,6 +390,47 @@ function codexArgs(prompt, resume, outputFile) {
 }
 
 const LANE_KEYS = Object.keys(LANES);
+
+/**
+ * Startup integrity check on the trust-flag plumbing.
+ *
+ * A lane may only DECLARE a trust-flag table if its argv builder actually
+ * threads one through. The failure this guards against is silent and the wrong
+ * way round: the config would name a grant, the dry-run and approval card would
+ * both announce it, the user would approve it — and the flag would never reach
+ * the command line, so the dispatch would fail exactly as it did before while
+ * every surface claimed the grant was in force. Declaring is cheap; the check
+ * proves the declaration is wired.
+ *
+ * It runs at module load and throws, because the lane registry is code rather
+ * than config: a mismatch can only be introduced by editing this file.
+ */
+function assertTrustFlagPlumbing() {
+  const SENTINEL = '--dispatch-trust-flag-plumbing-probe';
+  for (const key of LANE_KEYS) {
+    const lane = LANES[key];
+    const accepted = acceptedTrustFlags(lane);
+    if (accepted.length === 0) continue;
+    const argv = lane.buildArgs({
+      model: lane.defaultModel,
+      prompt: '<plumbing probe — never dispatched>',
+      resume: { kind: 'none', id: null },
+      outputFile: null,
+      trustFlag: SENTINEL,
+    });
+    if (!argv.includes(SENTINEL)) {
+      throw new Error(
+        `Lane registry is inconsistent: lane "${key}" declares trust flags ` +
+          `(${accepted.join(', ')}) but its buildArgs did not place the value in argv. ` +
+          `A declared-but-unplumbed trust flag would be announced in the dry-run and the ` +
+          `approval card and then never passed to ${lane.cli}. Thread trustFlag through that ` +
+          `lane's argv builder, or set trustFlags: null on the lane.`
+      );
+    }
+  }
+}
+
+assertTrustFlagPlumbing();
 
 // ---------------------------------------------------------------------------
 // Small helpers. Every one of these returns null rather than a stand-in value.
@@ -484,11 +669,11 @@ function loadConfig(configPath) {
         `Config sets a model for lane "${key}", but that lane takes no model flag. The value is ignored.`
       );
     }
-    if (entry.trustFlag !== undefined && entry.trustFlag !== null && !LANES[key].supportsTrustFlag) {
+    if (entry.trustFlag !== undefined && entry.trustFlag !== null && !supportsTrustFlag(LANES[key])) {
       result.warnings.push(
-        `Config sets trustFlag ${JSON.stringify(entry.trustFlag)} for lane "${key}", but only the Cursor lanes ` +
-          `(${LANE_KEYS.filter((k) => LANES[k].supportsTrustFlag).join(', ')}) have such a flag. ` +
-          `The ${LANES[key].cli} CLI would reject it as an unknown argument, so it is IGNORED and never reaches the command line.`
+        `Config sets trustFlag ${JSON.stringify(entry.trustFlag)} for lane "${key}", but the ${LANES[key].cli} CLI ` +
+          `has no standing-permission flag at all. Lanes that accept one: ${trustFlagLaneSummary().join('; ')}. ` +
+          `${LANES[key].cli} would reject the value as an unknown argument, so it is IGNORED and never reaches the command line.`
       );
     }
   }
@@ -564,23 +749,32 @@ function resolveModel(laneKey, config) {
 /**
  * Resolves the optional per-lane `trustFlag` and says exactly what it grants.
  *
- * This field exists because cursor-agent refuses to start in an untrusted
- * directory ("Workspace Trust Required"), and the fix is a flag that grants the
- * agent standing permission. That is precisely the kind of grant that must live
- * in the policy file the user owns rather than being hardcoded here, so it can
- * be revoked with an edit and no code change.
+ * This field exists because two of the CLIs refuse to do useful work headlessly
+ * without a standing permission: cursor-agent will not start in an untrusted
+ * directory ("Workspace Trust Required"), and agy auto-DENIES any tool
+ * permission it cannot prompt for, returning no work done. The fix in both cases
+ * is a flag that grants standing permission — precisely the kind of grant that
+ * must live in the policy file the user owns rather than being hardcoded here,
+ * so it can be revoked with an edit and no code change.
+ *
+ * Validation is against THIS LANE's accepted set, never a global union. The
+ * literals are per-CLI, so a value valid on another lane is rejected here rather
+ * than forwarded: handing `--yolo` to agy, or `--dangerously-skip-permissions`
+ * to cursor-agent, would either fail as an unknown argument or — worse — be
+ * treated as something else entirely.
  *
  * Four outcomes, and the difference between the middle two is the point:
- *   - lane has no such flag -> null, ignored, with a warning from loadConfig.
- *     Nothing reaches argv, so a bad value here is harmless rather than fatal.
+ *   - lane's CLI has no such flag -> null, ignored, with a warning from
+ *     loadConfig. Nothing reaches argv, so a bad value is harmless, not fatal.
  *   - not configured        -> null. Absent stays absent; there is no default
  *                              grant and no implicit trust.
- *   - a value in TRUST_FLAGS -> that flag, plus the plain-words grant text.
- *   - anything else         -> a hard ERROR. An unrecognised string is never
- *                              forwarded: it is about to become an element of an
- *                              argv array passed to a CLI, and "pass it through
- *                              and let the CLI complain" is how a typo in a
- *                              policy file turns into an unintended argument.
+ *   - a value this lane accepts -> that flag, plus the plain-words grant text.
+ *   - anything else         -> a hard ERROR naming the set this lane accepts. An
+ *                              unrecognised string is never forwarded: it is
+ *                              about to become an element of an argv array
+ *                              passed to a CLI, and "pass it through and let the
+ *                              CLI complain" is how a typo in a policy file
+ *                              turns into an unintended argument.
  */
 function resolveTrustFlag(laneKey, config) {
   const lane = LANES[laneKey];
@@ -599,29 +793,42 @@ function resolveTrustFlag(laneKey, config) {
 
   if (configured === undefined || configured === null) return none;
 
-  if (!lane.supportsTrustFlag) {
+  const accepted = laneTrustFlags(lane);
+
+  if (accepted === null) {
     // Ignored, not fatal: it never reaches the command line. loadConfig has
     // already warned about it by name.
     return Object.assign({}, none, {
       source: 'lane-takes-no-trust-flag',
       note:
-        `Lane "${laneKey}" runs the ${lane.cli} CLI, which has no workspace-trust flag. ` +
+        `Lane "${laneKey}" runs the ${lane.cli} CLI, which has no standing-permission flag. ` +
         `The configured value ${JSON.stringify(configured)} is ignored and is NOT passed to the command line.`,
     });
   }
 
-  if (typeof configured !== 'string' || !Object.prototype.hasOwnProperty.call(TRUST_FLAGS, configured)) {
+  if (typeof configured !== 'string' || !Object.prototype.hasOwnProperty.call(accepted, configured)) {
+    // The accepted literals are per-CLI, so "not accepted here" is the common
+    // case for a value that is perfectly valid on another lane. Say which,
+    // because "--yolo is not one of --dangerously-skip-permissions" reads like a
+    // typo when it is actually a lane mix-up.
+    const elsewhere = trustFlagAcceptedElsewhere(configured, laneKey);
+    const misrouted =
+      elsewhere.length === 0
+        ? ''
+        : ` That literal belongs to ${elsewhere.join(', ')}, not ${lane.cli}: trust flags are per-CLI ` +
+          `and are never forwarded across lanes.`;
     return Object.assign({}, none, {
       source: 'invalid-trust-flag-value',
       error:
-        `Lane "${laneKey}" has trustFlag ${JSON.stringify(configured)}, which is not one of ` +
-        `${VALID_TRUST_FLAGS.join(', ')}. Refusing to dispatch: this value would become an argument to ` +
-        `${lane.cli}, and an unrecognised flag from a policy file is never passed through. ` +
+        `Lane "${laneKey}" has trustFlag ${JSON.stringify(configured)}, which lane "${laneKey}" does not accept. ` +
+        `That lane runs ${lane.cli}, which accepts: ${acceptedTrustFlags(lane).join(', ')}.${misrouted} ` +
+        `Refusing to dispatch: this value would become an argument to ${lane.cli}, and an unrecognised flag ` +
+        `from a policy file is never passed through. ` +
         `Fix the value in ${config.path}, or remove the key to dispatch with no trust flag.`,
     });
   }
 
-  const spec = TRUST_FLAGS[configured];
+  const spec = accepted[configured];
   return {
     flag: configured,
     configured,
@@ -820,7 +1027,10 @@ function resolveTransport(laneKey, binaryPath) {
   const dir = path.dirname(binaryPath);
   const ext = path.extname(binaryPath).toLowerCase();
 
-  if (lane.cli === 'opencode' || lane.cli === 'agy') {
+  // omp ships as a single .exe (152 MB, measured 2026-08-25) and needs no shim
+  // resolution, but it shares this branch so a future .cmd-shimmed install is
+  // followed to its payload rather than routed through cmd.exe.
+  if (lane.cli === 'opencode' || lane.cli === 'agy' || lane.cli === 'omp') {
     if (ext === '.exe' || ext === '.com') return { command: binaryPath, prefixArgs: [], kind: 'direct-exe' };
 
     const sibling = `${binaryPath}.exe`;
@@ -1074,6 +1284,99 @@ function probeLane(laneKey, config, cwd) {
     return probe;
   }
 
+  if (lane.cli === 'omp') {
+    // `omp models --json` reads the local catalogue (~1.0 s, measured
+    // 2026-08-25) and lists only the providers this install can actually reach.
+    // That separates the two states cleanly: NOT INSTALLED is already handled
+    // above by transport resolution, and INSTALLED BUT UNAUTHENTICATED shows up
+    // here as a binary that runs and returns an empty catalogue.
+    const res = run(['models', '--json']);
+    if (!res.ok || res.timedOut) {
+      probe.available = null;
+      probe.state = res.timedOut ? 'probe-timeout' : 'probe-failed';
+      probe.reason = `\`omp models --json\` did not complete (${res.errorMessage || 'timed out'}), so this lane is UNKNOWN — not assumed usable.`;
+      return probe;
+    }
+
+    const combined = stripAnsi(`${res.stdout}\n${res.stderr}`);
+    let catalogue = null;
+    try {
+      const parsed = JSON.parse(stripAnsi(res.stdout).replace(/^\uFEFF/, ''));
+      if (parsed !== null && typeof parsed === 'object' && Array.isArray(parsed.models)) catalogue = parsed.models;
+    } catch (_) {
+      catalogue = null;
+    }
+
+    if (res.status !== 0 || catalogue === null) {
+      if (/\b(log ?in|sign ?in|unauthenticated|unauthorized|not authenticated|no api key|api key)\b/i.test(combined)) {
+        probe.available = false;
+        probe.state = 'unauthenticated';
+        probe.reason = '`omp models --json` reported an authentication problem. Sign in with `omp auth-broker login <provider>`, or set that provider\'s API key environment variable.';
+        probe.evidence = firstLines(combined, 3);
+        return probe;
+      }
+      probe.available = null;
+      probe.state = 'probe-failed';
+      probe.reason = `\`omp models --json\` exited ${res.status} and did not return a parseable {"models":[…]} catalogue, so this lane is UNKNOWN.`;
+      probe.evidence = firstLines(combined, 3);
+      return probe;
+    }
+
+    // Both spellings `--model` accepts as an exact name: the provider/model
+    // selector and the bare model id. Shape measured 2026-08-25:
+    //   {"models":[{"provider":"minimax-code","id":"MiniMax-M3",
+    //               "selector":"minimax-code/MiniMax-M3", …}]}
+    const slugs = [];
+    for (const m of catalogue) {
+      if (m === null || typeof m !== 'object') continue;
+      if (typeof m.selector === 'string' && m.selector !== '') slugs.push(m.selector);
+      if (typeof m.id === 'string' && m.id !== '') slugs.push(m.id);
+    }
+    probe.modelCatalogue = slugs;
+    probe.evidence = `omp models --json listed ${catalogue.length} model(s)`;
+
+    if (catalogue.length === 0) {
+      probe.available = false;
+      probe.state = 'unauthenticated';
+      probe.reason =
+        'omp is installed and runs, but `omp models --json` returned an EMPTY catalogue: no provider is reachable, so nothing can be dispatched. ' +
+        'Sign in with `omp auth-broker login <provider>`, or set that provider\'s API key environment variable, then re-probe.';
+      return probe;
+    }
+
+    // omp's `--model` is a FUZZY match ("opus", "gpt-5.2", or an explicit
+    // provider/model), so a slug it does not recognise does NOT necessarily
+    // fail — it can resolve to a different model. A dispatch that silently runs
+    // a model the config does not name is a policy bypass, so the configured
+    // slug must be an EXACT catalogue entry. This is deliberately stricter than
+    // omp itself: refusing here costs nothing, and refusing after the fact is
+    // not possible.
+    if (lane.requiresExactModelInCatalogue === true) {
+      const configuredModel = resolveModel(laneKey, config).model;
+      if (typeof configuredModel === 'string' && configuredModel.trim() !== '') {
+        const wanted = configuredModel.trim().toLowerCase();
+        if (!slugs.some((s) => s.toLowerCase() === wanted)) {
+          const near = slugs.filter((s) => s.toLowerCase().includes(wanted) || wanted.includes(s.toLowerCase()));
+          probe.available = false;
+          probe.state = 'model-not-in-catalogue';
+          probe.reason =
+            `Lane "${laneKey}" is configured with model ${JSON.stringify(configuredModel)}, which is not an exact entry in omp's live catalogue ` +
+            `(${catalogue.length} model(s) listed). omp's \`--model\` is a fuzzy match, so dispatching this would not reliably fail — it could ` +
+            `resolve to a different model than the policy names, which is a policy bypass. Refusing to dispatch. ` +
+            (near.length > 0
+              ? `Closest catalogue entries: ${near.slice(0, 6).join(', ')}.`
+              : 'Run `omp models --json` to see what this install can reach.');
+          return probe;
+        }
+      }
+    }
+
+    probe.available = true;
+    probe.state = 'ready';
+    probe.reason = null;
+    return probe;
+  }
+
   if (lane.cli === 'agy') {
     const res = run(['models']);
     if (!res.ok || res.timedOut) {
@@ -1295,6 +1598,158 @@ function verifyCodexSession(resume, cwd) {
   };
 }
 
+// --- omp session store ------------------------------------------------------
+//
+// omp has NO non-interactive list command. `omp -r` with no value opens a
+// PICKER (`omp --help`, 18.0.5: "Resume a session (by ID prefix, path, or
+// picker if omitted)"), which a dispatch running with stdin closed can never
+// answer, so there is nothing to shell out to. Reading the store directly is
+// the only way to check a resume target before spending anything.
+//
+// Layout, read from a real session written 2026-08-25:
+//   <agent dir>/sessions/<mangled cwd>/<ISO timestamp>_<uuid>.jsonl
+// and the file's second record is
+//   {"type":"session","version":3,"id":"<uuid>","timestamp":…,"cwd":"F:\\…"}
+//
+// The recorded `cwd` is read rather than the directory name, because the
+// mangling ("--F--Windsurf-Terra-Invicta-AI-Summary--") is undocumented and
+// reconstructing it would be a guess. The agent dir is PI_CODING_AGENT_DIR or
+// ~/.omp/agent. `--session-dir` would move the store wholesale, but this script
+// never passes it, so the default location is the one a dispatch would use.
+
+function ompSessionsRoot() {
+  const explicit = process.env.PI_CODING_AGENT_DIR;
+  if (typeof explicit === 'string' && explicit.trim() !== '') {
+    return path.join(explicit.trim(), 'sessions');
+  }
+  const home = process.env.USERPROFILE || os.homedir();
+  if (typeof home !== 'string' || home.trim() === '') return null;
+  return path.join(home, '.omp', 'agent', 'sessions');
+}
+
+/** Reads only the session_meta record, for the id and the recorded cwd. */
+function ompSessionMeta(file) {
+  let fd = null;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(65536);
+    const read = fs.readSync(fd, buf, 0, buf.length, 0);
+    for (const line of buf.slice(0, read).toString('utf8').split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed === '' || trimmed[0] !== '{') continue;
+      let parsed;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch (_) {
+        continue; // the window may have cut a line in half
+      }
+      if (parsed !== null && typeof parsed === 'object' && parsed.type === 'session') {
+        return {
+          id: typeof parsed.id === 'string' && parsed.id !== '' ? parsed.id : null,
+          cwd: typeof parsed.cwd === 'string' && parsed.cwd !== '' ? parsed.cwd : null,
+        };
+      }
+    }
+  } catch (_) {
+    /* unreadable: absent stays null, never a stand-in id */
+  } finally {
+    if (fd !== null) {
+      try { fs.closeSync(fd); } catch (_) { /* ignore */ }
+    }
+  }
+  return { id: null, cwd: null };
+}
+
+/** Every recorded session, newest first. */
+function listOmpSessions() {
+  const root = ompSessionsRoot();
+  if (root === null) return { root: null, files: [], error: 'No home directory could be resolved.' };
+  if (!dirExists(root)) return { root, files: [], error: null };
+  let entries;
+  try {
+    entries = fs.readdirSync(root, { recursive: true });
+  } catch (err) {
+    return { root, files: [], error: `${root} could not be read: ${err.message}` };
+  }
+  const files = [];
+  for (const rel of entries) {
+    const name = path.basename(String(rel));
+    if (!/\.jsonl$/i.test(name)) continue;
+    const full = path.join(root, String(rel));
+    let mtime = null;
+    try {
+      const st = fs.statSync(full);
+      if (!st.isFile()) continue;
+      mtime = st.mtimeMs;
+    } catch (_) {
+      continue;
+    }
+    const meta = ompSessionMeta(full);
+    files.push({ path: full, mtime, id: meta.id, cwd: meta.cwd });
+  }
+  files.sort((a, b) => b.mtime - a.mtime);
+  return { root, files, error: null };
+}
+
+function verifyOmpSession(resume, cwd) {
+  const { root, files, error } = listOmpSessions();
+  if (error !== null) {
+    return { verified: null, reason: `The omp session store could not be read (${error}), so ${resume.label} was NOT verified.` };
+  }
+
+  if (resume.kind === 'id') {
+    const wanted = resume.id.toLowerCase();
+    // omp accepts an ID PREFIX as well as a full id, so a prefix matching
+    // exactly one recorded session is a real hit — and a prefix matching
+    // several is unknown, not a hit: this script cannot say which one omp
+    // would pick, so it declines to claim the resume was checked.
+    const exact = files.filter((f) => f.id !== null && f.id.toLowerCase() === wanted);
+    if (exact.length > 0) {
+      return { verified: true, reason: null, detail: `Matched ${path.basename(exact[0].path)}` };
+    }
+    const prefix = files.filter((f) => f.id !== null && f.id.toLowerCase().startsWith(wanted));
+    if (prefix.length === 1) {
+      return { verified: true, reason: null, detail: `Id prefix matched exactly one session: ${prefix[0].id}` };
+    }
+    if (prefix.length > 1) {
+      return {
+        verified: null,
+        reason:
+          `Id prefix "${resume.id}" matches ${prefix.length} recorded omp sessions (${prefix.slice(0, 4).map((f) => f.id).join(', ')}). ` +
+          `omp would pick one of them and this script cannot say which, so ${resume.label} was NOT verified. Pass the full session id.`,
+      };
+    }
+    return {
+      verified: false,
+      reason:
+        `No omp session "${resume.id}" exists in ${root} (${files.length} recorded session(s) scanned, by full id and by id prefix). ` +
+        `Not dispatching — a resume that cannot find its session must not fall back to a fresh conversation.`,
+    };
+  }
+
+  // resume.kind === 'last'
+  if (files.length === 0) {
+    return {
+      verified: false,
+      reason:
+        `There are no recorded omp sessions in ${root === null ? '(no session store)' : root}, so there is nothing for --continue to resume. ` +
+        `Refusing to dispatch rather than starting a fresh conversation under a resume instruction.`,
+    };
+  }
+  const match = files.find(
+    (f) => f.cwd !== null && path.resolve(f.cwd).toLowerCase() === path.resolve(cwd).toLowerCase()
+  );
+  if (match !== undefined) {
+    return { verified: true, reason: null, detail: `Newest session recorded for this directory: ${match.id || path.basename(match.path)}` };
+  }
+  return {
+    verified: null,
+    reason:
+      `${files.length} omp session(s) exist, but none records a cwd matching ${cwd}. omp stores sessions per working directory, so \`--continue\` ` +
+      `may find nothing here and start fresh instead. The session to be resumed was NOT verified.`,
+  };
+}
+
 function verifyOpencodeSession(resume, transport, cwd) {
   const res = runProbe(transport.command, transport.prefixArgs.concat(['session', 'list']), cwd);
   if (!res.ok || res.timedOut || res.status !== 0) {
@@ -1342,6 +1797,7 @@ function verifySession(laneKey, resume, transport, cwd) {
 
   if (cli === 'opencode') return verifyOpencodeSession(resume, transport, cwd);
   if (cli === 'codex') return verifyCodexSession(resume, cwd);
+  if (cli === 'omp') return verifyOmpSession(resume, cwd);
 
   if (cli === 'agy') {
     return {
@@ -1361,10 +1817,17 @@ function verifySession(laneKey, resume, transport, cwd) {
 // ---------------------------------------------------------------------------
 // Token usage parsing
 //
-// Shapes differ per CLI and have NOT been verified against a live dispatch
-// (verifying would mean spending the user's budget). The parser is therefore
-// tolerant AND self-reporting: when it finds nothing it returns null and says
-// so. It never reports 0 tokens for an unmeasured call.
+// Shapes differ per CLI. For most lanes they have NOT been verified against a
+// live dispatch (verifying would mean spending the user's budget). The parser
+// is therefore tolerant AND self-reporting: when it finds nothing it returns
+// null and says so. It never reports 0 tokens for an unmeasured call.
+//
+// The exception is omp, whose `usage` object was read from a REAL session
+// record on disk (2026-08-25) — see USAGE_NESTED_FIELDS. What that measurement
+// does NOT establish is that `omp -p --mode json` prints the same object to
+// stdout, which is what this parser actually reads. If a real omp dispatch
+// comes back with usage: null while its stdout plainly contains counts, the
+// aliases need extending — report it rather than inventing a number.
 // ---------------------------------------------------------------------------
 
 const USAGE_CONTAINER_KEYS = new Set(['usage', 'tokenUsage', 'token_usage', 'tokens', 'token_counts', 'tokenCounts']);
@@ -1377,6 +1840,26 @@ const USAGE_FIELDS = {
   cacheWriteTokens: ['cache_creation_input_tokens', 'cacheCreationInputTokens', 'cache_write', 'cacheWrite'],
   reasoningTokens: ['reasoning_tokens', 'reasoningTokens'],
   costUsd: ['cost', 'total_cost', 'totalCost', 'cost_usd', 'costUsd', 'costUSD'],
+};
+
+/**
+ * Fields that some providers nest one level down.
+ *
+ * omp reports cost as an OBJECT, not a number. Measured 2026-08-25 from a real
+ * omp session record:
+ *
+ *   "usage":{"input":215,"output":939,"cacheRead":107319,"cacheWrite":0,
+ *            "totalTokens":108473,"reasoningTokens":22,
+ *            "cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}}
+ *
+ * toFiniteNumber correctly refuses that object rather than coercing it, so
+ * without this pass the cost would read "unknown" while the number sat one
+ * level down. Every token field in that shape — input / output / cacheRead /
+ * cacheWrite / totalTokens / reasoningTokens — is already an alias above, so
+ * nothing else about omp needed a new field name.
+ */
+const USAGE_NESTED_FIELDS = {
+  costUsd: [['cost', 'total'], ['cost', 'total_cost'], ['cost', 'totalCost'], ['cost', 'usd']],
 };
 
 function parseJsonDocuments(stdout) {
@@ -1447,6 +1930,31 @@ function normaliseUsage(container, containerPath) {
       usage.fieldsFound.push(`${containerPath}.${hit.key}`);
     }
   }
+
+  // Second pass, only for fields the flat pass left null: a value nested one
+  // level down. A field the flat pass already read is never overwritten.
+  for (const [field, paths] of Object.entries(USAGE_NESTED_FIELDS)) {
+    if (usage[field] !== null && usage[field] !== undefined) continue;
+    for (const parts of paths) {
+      let node = container;
+      let reachable = true;
+      for (const part of parts) {
+        if (node === null || typeof node !== 'object' || !Object.prototype.hasOwnProperty.call(node, part)) {
+          reachable = false;
+          break;
+        }
+        node = node[part];
+      }
+      if (!reachable) continue;
+      const n = toFiniteNumber(node);
+      if (n === null) continue; // absent or unparseable stays null, never 0
+      usage[field] = n;
+      anyFound = true;
+      usage.fieldsFound.push(`${containerPath}.${parts.join('.')}`);
+      break;
+    }
+  }
+
   if (!anyFound) return null;
 
   usage.totalDerived = false;
@@ -1570,6 +2078,14 @@ function describeResume(resume) {
   if (resume.verified === true) return `${what} — verified. ${resume.detail || ''}`.trim();
   if (resume.verified === null) return `${what} — NOT VERIFIED (this provider offers no way to check).`;
   return `${what} — UNRESOLVABLE.`;
+}
+
+/** How the prompt reaches the CLI, so a preview never leaves it ambiguous. */
+function describePromptDelivery(command, prompt) {
+  if (command.promptDelivery === 'attached-file') {
+    return `ATTACHED as @${command.promptPath} (${prompt.text.length} chars). A missing @file makes omp exit 1 before it resolves the model, so the prompt cannot be silently omitted.`;
+  }
+  return `one argv element, ${prompt.text.length} chars from ${command.promptPath} (no shell, so nothing in it is reinterpreted)`;
 }
 
 function availabilityLabel(available) {
@@ -1773,7 +2289,10 @@ async function main() {
         trustFlag: null,
         trustFlagConfigured: earlyTrust.configured,
         trustFlagSource: earlyTrust.source,
-        validTrustFlags: VALID_TRUST_FLAGS,
+        // Lane-scoped, not a global union: the payload names one lane, and the
+        // set that lane accepts is the only set that could have made it valid.
+        validTrustFlags: acceptedTrustFlags(LANES[opts.lane]),
+        validTrustFlagsByLane: trustFlagLaneSummary(),
         configPath: config.path,
         configFound: config.found,
         promptFile: prompt.resolvedPath,
@@ -1881,18 +2400,37 @@ async function main() {
     : null;
   payload.outputFile = outputFile;
 
-  // Build the command. The prompt is one argv element; no shell is involved.
-  const args = lane.buildArgs({
-    model: report.model,
-    prompt: prompt.text,
-    resume,
-    outputFile,
-    trustFlag: report.trustFlag,
-  });
+  // Build the command. No shell is involved either way. Most lanes take the
+  // prompt as one argv element; omp takes it as an ATTACHED FILE (`@<path>`),
+  // so promptArgIndex is null there rather than a bogus index — absent stays
+  // absent, and args.indexOf() returning -1 must not be reported as a position.
+  let args;
+  try {
+    args = lane.buildArgs({
+      model: report.model,
+      prompt: prompt.text,
+      promptPath: prompt.resolvedPath,
+      resume,
+      outputFile,
+      trustFlag: report.trustFlag,
+      cwd: opts.cwd,
+    });
+  } catch (err) {
+    const message = `Lane "${opts.lane}" could not build a command: ${err && err.message ? err.message : String(err)}`;
+    payload.action = 'command-unbuildable';
+    payload.reason = message;
+    payload.errors = [message];
+    complain(`DISPATCH NOT BUILT: ${message}`);
+    emit(payload, opts, EXIT.USAGE_ERROR);
+  }
+
+  const promptArgIndex = args.indexOf(prompt.text);
   payload.command = {
     file: report.transport.command,
     args: report.transport.prefixArgs.concat(args),
-    promptArgIndex: report.transport.prefixArgs.length + args.indexOf(prompt.text),
+    promptArgIndex: promptArgIndex === -1 ? null : report.transport.prefixArgs.length + promptArgIndex,
+    promptDelivery: lane.promptDelivery === 'attached-file' ? 'attached-file' : 'argv-element',
+    promptPath: prompt.resolvedPath,
     transport: report.transport.kind,
     shell: false,
     stdin: 'closed (portable equivalent of < /dev/null)',
@@ -1912,6 +2450,7 @@ async function main() {
     say(`  cost      ${report.costClass} — ${report.costNote}`);
     if (report.risk !== null) say(`  RISK      ${report.risk}`);
     if (report.trustFlagDisplay !== null) say(`  TRUST     ${report.trustFlagDisplay}`);
+    say(`  prompt    ${describePromptDelivery(payload.command, prompt)}`);
     say(`  command   ${payload.commandDisplay}`);
     say(`  argv      ${JSON.stringify(payload.command.args.map((a) => (a === prompt.text ? `<prompt: ${prompt.text.length} chars>` : a)))}`);
     say(`  would run without --dry-run: ${payload.wouldExecute ? 'YES' : `NO — mode is "${report.mode}" and --approve was not given`}`);
@@ -1934,6 +2473,7 @@ async function main() {
     complain(`  cost: ${report.costClass} — ${report.costNote}`);
     if (report.risk !== null) complain(`  RISK: ${report.risk}`);
     if (report.trustFlagDisplay !== null) complain(`  TRUST: ${report.trustFlagDisplay}`);
+    complain(`  prompt: ${describePromptDelivery(payload.command, prompt)}`);
     complain(`  command that would run:`);
     complain(`    ${payload.commandDisplay}`);
     complain(`  After the user says yes, re-run the same command with --approve.`);

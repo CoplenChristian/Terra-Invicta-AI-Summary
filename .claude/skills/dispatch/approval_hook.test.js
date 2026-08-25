@@ -39,7 +39,7 @@ fs.writeFileSync(
     {
       version: 1,
       lanes: {
-        minimax: { mode: 'auto', model: 'minimax-coding-plan/MiniMax-M3' },
+        minimax: { mode: 'auto', model: 'minimax-code/MiniMax-M3' },
         deepseek: { mode: 'ask', model: 'opencode-go/deepseek-v4-flash' },
         antigravity: { mode: 'ask' },
         composer: { mode: 'auto', model: 'composer-2.5' },
@@ -323,7 +323,8 @@ const SPELLINGS = [
   ['npx prefix', 'npx -y codex exec "go"', 'deny'],
   ['agy direct', 'agy -p "make the panel" --output-format json', 'ask'],
   ['agy resume', 'agy -p "carry on" --continue', 'ask'],
-  ['opencode minimax (auto)', 'opencode run -m minimax-coding-plan/MiniMax-M3 --format json "check this"', null],
+  ['opencode deepseek (ask)', 'opencode run -m opencode-go/deepseek-v4-flash --format json "check this"', 'ask'],
+  ['omp minimax (auto)', 'omp -p --mode json --model minimax-code/MiniMax-M3 @brief.md "go"', null],
   ['powershell -Command', 'powershell -Command "codex exec go"', 'deny'],
 ];
 
@@ -486,7 +487,7 @@ console.log('\n=== live policy (the user\'s real dispatch-config.json) ===\n');
 // catches a hook that ignores the config, and it survives any policy the user
 // sets — including one that lists no lanes at all.
 const LIVE_LANE_COMMANDS = {
-  minimax: 'opencode run -m minimax-coding-plan/MiniMax-M3 --format json "go"',
+  minimax: 'omp -p --mode json --model minimax-code/MiniMax-M3 @brief.md "go"',
   deepseek: 'opencode run -m opencode-go/deepseek-v4-flash --format json "go"',
   antigravity: 'agy -p "go"',
   composer: `node .claude/skills/dispatch/check_lanes.js --lane composer --prompt-file ${PROMPT_FILE}`,
