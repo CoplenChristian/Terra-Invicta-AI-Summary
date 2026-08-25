@@ -10,8 +10,13 @@ across.** That is the migration-relevant part: a rewrite that reproduces the
 current output exactly reproduces these too.
 
 Confidence is stated per defect. "Confirmed" means read in source by Claude at
-the cited lines. "Demonstrated" means executed. "Reported" means a lane found it
-and it has not been independently checked — treat those two as leads, not facts.
+the cited lines. "Demonstrated" means executed. "Confirmed reachable" means the
+producer's own contract permits the input, but it does not occur on the current
+save.
+
+**Final tally: seven confirmed or demonstrated, one lead.** Only #7
+(`alien-hate-economics` `renderHud`) remains unchecked. One candidate was
+investigated and **cleared** — see the note at the end of #8.
 
 ---
 
@@ -170,13 +175,37 @@ it. That assertion exists precisely to catch a panel rendering nowhere.
 
 ---
 
-## 8. `mining-expansion` may print the literal string `null` — **reported, unverified**
+## 8. `mining-expansion` prints the literal string `null` — **confirmed reachable**
 
 `public/v2/js/components/mining-expansion.js:509` interpolates `${s.name}` for
 each bonus source. The surrounding guard checks `sources.length`, which catches an
-empty array but not a null `name` inside a present entry. Consistent with this
-repo's recorded rule that an unresolvable identity must never become a string,
-but not demonstrated.
+empty array but not a null `name` inside a present entry.
+
+Traced to the producer, `shared/spaceMiningBonus.mjs:248`:
+
+```js
+name: org?.displayName ?? null,
+```
+
+The field is **explicitly nullable**. So an org that carries a mining bonus, is
+active (`applyingBonuses === true`), and has no `displayName` reaches the
+consumer as `{ name: null, value: 0.05 }` and renders as **`null +5%`**.
+
+The producer demonstrates that it knows names can be absent — its own error path
+at `:243` writes `'(unnamed)'` as a fallback. Only the success path ships the raw
+null. This is the recorded rule that an unresolvable identity must never become a
+string, broken across a module boundary: careful on one side, unguarded on the
+other.
+
+Reachable by type, not observed on the current save — no org on it is both
+bonus-carrying and unnamed. Fix the consumer regardless; the producer's contract
+permits it.
+
+**Not a defect, checked and cleared:** the neighbouring
+`Math.round(num(s.value) * 100)` cannot coerce a null to `+0%`. Line 240 does
+`if (value === null || value === 0) continue;` and the effect branch requires
+`typeof value === 'number'`, so `s.value` is always a non-zero number by the time
+the consumer sees it.
 
 ---
 
