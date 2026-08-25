@@ -434,6 +434,36 @@ worth knowing before `faction-intel` is rewritten:
 
 ---
 
+## 12. An unknown nuclear arsenal renders as zero — **confirmed**
+
+`public/v2/js/components/intelligence-library.js`, nation row.
+
+```js
+nation.nukes ? statusChip(number(nation.nukes, 0), 'danger') : '0'
+```
+
+The ternary tests **truthiness**, so `null`, `undefined` and a measured `0` all
+take the same branch and render the literal token `'0'`. A reader cannot tell
+"this nation has no nuclear weapons" from "we have not measured this nation's
+nuclear weapons".
+
+This is the register's most common shape — absent rendered as zero — on one of
+the highest-stakes fields in the product. Everywhere else the nation row uses an
+em dash or `UNAVAILABLE` for an unmeasured value; nukes is the exception, and it
+is the one where the two states have the most different meaning.
+
+Found 2026-08-25 while writing per-metric characterisation coverage. It is
+**pinned rather than fixed**, deliberately: `tests/intelligenceLibraryRendering.test.js`
+carries a test asserting the current `'0'` output with a comment saying the fix
+will require breaking it. That is the right order — the characterisation lands
+first so the eventual correction shows up as a deliberate, reviewed change rather
+than a silent one.
+
+Fixing it means distinguishing the branches: a measured `0` keeps its `'0'`, and
+an absent value takes whatever affordance the neighbouring cells already use.
+
+---
+
 ## What these have in common
 
 Six of the eight are the same defect: **an unmeasured value given a confident
