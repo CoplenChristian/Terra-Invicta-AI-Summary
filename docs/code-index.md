@@ -58,16 +58,16 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 258 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
 | `scripts/run_unit_tests.js` | C | Node (CommonJS) | 35 | run the deterministic unit test suite — every tests/**/*.test.js file | — | — |
 | `scripts/verify_bundle_size.js` | C | Node (CommonJS) | 144 | measures the raw and gzipped byte sizes of the bundled React + MUI | `BUDGET, isBuildArtifact, measureBundle` | — |
-| `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 398 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates, getActiveSaveFingerprint` | — |
-| `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 385 | browser verification that the Drive Explorer renders the measured | — | — |
+| `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 412 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates, getActiveSaveFingerprint` | — |
+| `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 384 | browser verification that the Drive Explorer renders the measured | — | — |
 | `scripts/verify_drive_path_modal.js` | C | Node (CommonJS) | 305 | browser verification that clicking a drive row actually opens the | — | — |
-| `scripts/verify_mining_registers.js` | C | Node (CommonJS) | 182 | browser verification that the mining board renders the measured | — | — |
-| `scripts/verify_mobile_overflow.js` | C | Node (CommonJS) | 260 | browser verification that no view clips content off-screen on narrow | — | — |
+| `scripts/verify_mining_registers.js` | C | Node (CommonJS) | 181 | browser verification that the mining board renders the measured | — | — |
+| `scripts/verify_mobile_overflow.js` | C | Node (CommonJS) | 261 | browser verification that no view clips content off-screen on narrow | — | — |
 | `scripts/verify_research_actionability.js` | C | Node (CommonJS) | 196 | browser verification of research-advisor actionability against a | — | — |
 | `scripts/verify_research_tab_layout.js` | C | Node (CommonJS) | 248 | browser verification of the Research Advisor layout and legibility | — | — |
 | `scripts/verify_research_vs_procurement.js` | C | Node (CommonJS) | 384 | browser verification of separating procurement from research and of | — | — |
 | `scripts/verify_supabase_rls.js` | C | Node (CommonJS) | 196 | verify Supabase RLS policies and hosted endpoints behave as | `main` | — |
-| `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 316 | browser verification of the v2 navigation acceptance checks against a | — | — |
+| `scripts/verify_v2_navigation.js` | C | Node (CommonJS) | 315 | browser verification of the v2 navigation acceptance checks against a | — | — |
 
 ## `server/`
 

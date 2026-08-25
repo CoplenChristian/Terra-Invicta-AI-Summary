@@ -74,13 +74,14 @@ test('initiative theme values match computed :root custom properties', async () 
 
   const app = require('../server/index.js');
   const server = http.createServer(app);
-  await new Promise(resolve => server.listen(TEST_PORT, resolve));
+  await new Promise(resolve => server.listen(0, resolve));
+  const port = server.address().port;
 
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
-    await page.goto(`http://localhost:${TEST_PORT}${SHELL_PATH}#/command`, {
+    await page.goto(`http://localhost:${port}${SHELL_PATH}#/command`, {
       waitUntil: 'domcontentloaded',
     });
 

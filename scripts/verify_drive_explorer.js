@@ -23,8 +23,6 @@
 
 const { chromium } = require('playwright');
 
-const PORT = Number(process.env.VERIFY_PORT || 3889);
-process.env.PORT = String(PORT);
 process.env.NODE_ENV = 'test';
 
 // `res.sendFile` refuses to serve a path containing a dot-directory (send's
@@ -43,9 +41,9 @@ function check(condition, message, detail) {
   }
 }
 
-async function verifyMode(page, mode) {
+async function verifyMode(page, mode, port) {
   console.log(`\n=== mode: ${mode} ===`);
-  await page.goto(`http://localhost:${PORT}${SHELL}?mode=${mode}#/drives`, { waitUntil: 'networkidle' });
+  await page.goto(`http://localhost:${port}${SHELL}?mode=${mode}#/drives`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#driveExplorer .de-table', { timeout: 120000 });
 
   // --- 1. the view is registered and reachable ----------------------------
@@ -342,9 +340,10 @@ async function run() {
   const { ensureBundleBuilt } = require('../tests/fixtures/ensureBundle.js');
   ensureBundleBuilt();
   const app = require('../server/index.js');
-  const server = app.listen(PORT);
+  const server = app.listen(0);
   await new Promise(resolve => server.once('listening', resolve));
-  console.log(`[Verification] Server listening on http://localhost:${PORT}`);
+  const port = server.address().port;
+  console.log(`[Verification] Server listening on http://localhost:${port}`);
 
   let browser;
   try {
@@ -356,7 +355,7 @@ async function run() {
     page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
 
     for (const mode of ['player', 'omniscient']) {
-      await verifyMode(page, mode);
+      await verifyMode(page, mode, port);
     }
 
     console.log(`\nConsole errors: ${consoleErrors.length}`);

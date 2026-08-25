@@ -167,7 +167,7 @@ function getActiveSaveFingerprint() {
   };
 }
 
-async function captureFullState(page, logPrefix = '') {
+async function captureFullState(page, logPrefix = '', port = 0) {
   const saveStart = getActiveSaveFingerprint();
   if (logPrefix) {
     console.log(`[Capture] Starting against save: ${saveStart.saveFileName} (MD5: ${saveStart.md5.slice(0, 8)}...)`);
@@ -183,7 +183,7 @@ async function captureFullState(page, logPrefix = '') {
       result[mode][vpKey] = {};
 
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await page.goto(`http://localhost:${TEST_PORT}${SHELL_PATH}#/command`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`http://localhost:${port}${SHELL_PATH}#/command`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1000);
       await selectMode(page, mode);
 
@@ -233,10 +233,23 @@ function diffStates(rawA, rawB, labelA = 'Run A', labelB = 'Run B') {
   const statesA = rawA?.states || rawA || {};
   const statesB = rawB?.states || rawB || {};
 
-  // Save MD5 verification guard
+  // Save MD5 verification guard: refuse if either capture lacks a fingerprint, or if fingerprints differ
   const md5A = metaA.saveMd5 || metaA.saveMd5Start;
   const md5B = metaB.saveMd5 || metaB.saveMd5Start;
-  if (md5A && md5B && md5A !== md5B) {
+
+  if (!md5A || !md5B) {
+    const missing = [];
+    if (!md5A) missing.push(`${labelA} (${metaA.saveFileName || 'unfingerprinted capture'})`);
+    if (!md5B) missing.push(`${labelB} (${metaB.saveFileName || 'unfingerprinted capture'})`);
+    diffs.push(
+      `REFUSING TO DIFF UNVERIFIABLE CAPTURES!\n` +
+      `  Capture missing save MD5 fingerprint: ${missing.join(', ')}\n` +
+      `CLAUDE.md: an unfingerprinted capture is UNVERIFIABLE, not compatible. Captures must be taken with the fingerprinting harness against an MD5-verified frozen save.`
+    );
+    return diffs;
+  }
+
+  if (md5A !== md5B) {
     diffs.push(
       `REFUSING TO DIFF CAPTURES FROM DIFFERENT SAVES!\n` +
       `  - ${labelA}: ${metaA.saveFileName || 'unknown'} (MD5: ${md5A})\n` +
@@ -322,8 +335,9 @@ async function run() {
 
   const app = require('../server/index.js');
   const server = http.createServer(app);
-  await new Promise(resolve => server.listen(TEST_PORT, resolve));
-  console.log(`[Computed Style Harness] Server started on http://localhost:${TEST_PORT}${SHELL_PATH}`);
+  await new Promise(resolve => server.listen(0, resolve));
+  const serverPort = server.address().port;
+  console.log(`[Computed Style Harness] Server started on http://localhost:${serverPort}${SHELL_PATH}`);
 
   let browser;
   try {
@@ -334,11 +348,11 @@ async function run() {
     if (args.includes('--baseline-proof')) {
       console.log('--- RUNNING BASELINE DETERMINISM PROOF (2 identical runs) ---');
       console.log('Capturing Baseline Run 1...');
-      const run1 = await captureFullState(page, 'Run 1');
+      const run1 = await captureFullState(page, 'Run 1', serverPort);
       fs.writeFileSync(path.join(outDir, 'baseline_run1.json'), JSON.stringify(run1, null, 2));
 
       console.log('Capturing Baseline Run 2...');
-      const run2 = await captureFullState(page, 'Run 2');
+      const run2 = await captureFullState(page, 'Run 2', serverPort);
       fs.writeFileSync(path.join(outDir, 'baseline_run2.json'), JSON.stringify(run2, null, 2));
 
       console.log('Diffing Baseline Run 1 vs Baseline Run 2...');
@@ -355,7 +369,7 @@ async function run() {
     if (args.includes('--capture')) {
       const filename = args[args.indexOf('--capture') + 1] || 'capture.json';
       console.log(`Capturing state to ${filename}...`);
-      const state = await captureFullState(page, 'Capture');
+      const state = await captureFullState(page, 'Capture', serverPort);
       fs.writeFileSync(path.join(outDir, filename), JSON.stringify(state, null, 2));
       console.log(`✔ State saved to ${path.join(outDir, filename)}`);
       return;
@@ -377,7 +391,7 @@ async function run() {
     }
 
     console.log('Capturing baseline state...');
-    const baseline = await captureFullState(page, 'Baseline');
+    const baseline = await captureFullState(page, 'Baseline', serverPort);
     fs.writeFileSync(path.join(outDir, 'baseline.json'), JSON.stringify(baseline, null, 2));
     console.log(`✔ Baseline captured to ${path.join(outDir, 'baseline.json')}`);
 

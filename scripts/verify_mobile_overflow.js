@@ -137,8 +137,9 @@ async function runVerification() {
   ensureBundleBuilt();
   const app = require('../server/index.js');
   const server = http.createServer(app);
-  await new Promise(resolve => server.listen(TEST_PORT, resolve));
-  console.log(`[verify] server on http://localhost:${TEST_PORT}${SHELL_PATH}`);
+  await new Promise(resolve => server.listen(0, resolve));
+  const port = server.address().port;
+  console.log(`[verify] server on http://localhost:${port}${SHELL_PATH}`);
 
   const failures = [];
   let browser;
@@ -155,7 +156,7 @@ async function runVerification() {
 
       for (const vp of NARROW_VIEWPORTS) {
         await page.setViewportSize({ width: vp.width, height: vp.height });
-        await page.goto(`http://localhost:${TEST_PORT}${SHELL_PATH}#/command`, { waitUntil: 'domcontentloaded' });
+        await page.goto(`http://localhost:${port}${SHELL_PATH}#/command`, { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(1200);
         await selectMode(page, mode);
 
@@ -217,7 +218,7 @@ async function runVerification() {
       // raised: 2.98 here, 3.104 there, from the same page. Neither is wrong;
       // compare each against its own history, never against the other.
       await page.setViewportSize({ width: 1920, height: 1080 });
-      await page.goto(`http://localhost:${TEST_PORT}${SHELL_PATH}#/command`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`http://localhost:${port}${SHELL_PATH}#/command`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1400);
       await selectMode(page, mode);
       const screens = await page.evaluate(() => {

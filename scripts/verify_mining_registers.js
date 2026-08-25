@@ -22,8 +22,6 @@
 
 const { chromium } = require('playwright');
 
-const PORT = Number(process.env.VERIFY_PORT || 3892);
-process.env.PORT = String(PORT);
 process.env.NODE_ENV = 'test';
 
 // `res.sendFile` refuses to serve a path containing a dot-directory (send's
@@ -42,9 +40,9 @@ function check(condition, message, detail) {
   }
 }
 
-async function verifyMode(page, mode) {
+async function verifyMode(page, mode, port) {
   console.log(`\n=== mode: ${mode} ===`);
-  await page.goto(`http://localhost:${PORT}${SHELL}?mode=${mode}#/expansion`, { waitUntil: 'networkidle' });
+  await page.goto(`http://localhost:${port}${SHELL}?mode=${mode}#/expansion`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#miningExpansion .mining-expansion-board', { timeout: 120000 });
 
   const styles = await page.evaluate(() => {
@@ -131,9 +129,10 @@ async function run() {
   const app = require('../server/index.js');
   const http = require('http');
   const server = http.createServer(app);
-  server.listen(PORT);
+  server.listen(0);
   await new Promise(resolve => server.once('listening', resolve));
-  console.log(`[Verification] Server listening on http://localhost:${PORT}`);
+  const port = server.address().port;
+  console.log(`[Verification] Server listening on http://localhost:${port}`);
 
   let browser;
   try {
@@ -146,7 +145,7 @@ async function run() {
 
     const seen = {};
     for (const mode of ['player', 'omniscient']) {
-      seen[mode] = await verifyMode(page, mode);
+      seen[mode] = await verifyMode(page, mode, port);
     }
 
     // The mine module multiplier is read from the OBSERVER's own sites and its

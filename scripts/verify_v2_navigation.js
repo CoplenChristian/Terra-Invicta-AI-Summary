@@ -10,17 +10,16 @@ const http = require('http');
 const path = require('path');
 const { ensureBundleBuilt } = require('../tests/fixtures/ensureBundle.js');
 
-process.env.PORT = '3888';
 process.env.NODE_ENV = 'test';
 
 async function runVerification() {
   ensureBundleBuilt();
-  console.log('[Verification] Starting local server on port 3888...');
   // Require fresh server
   const app = require('../server/index.js');
 
-  const server = app.listen(3888, async () => {
-    console.log('[Verification] Server listening on http://localhost:3888');
+  const server = app.listen(0, async () => {
+    const port = server.address().port;
+    console.log(`[Verification] Server listening on http://localhost:${port}`);
     let browser;
     try {
       browser = await chromium.launch({ headless: true });
@@ -63,7 +62,7 @@ async function runVerification() {
       const gotoShell = async (suffix) => {
         const consoleBefore = consoleErrors.length;
         const networkBefore = networkErrors.length;
-        await page.goto(`http://localhost:3888${shellPath}${suffix}`, { waitUntil: 'networkidle' });
+        await page.goto(`http://localhost:${port}${shellPath}${suffix}`, { waitUntil: 'networkidle' });
         if (await page.$('.init-nav-btn[data-view="command"]')) return;
         if (shellPath === '/v2/') {
           console.warn('[Verification] WARNING: /v2/ did not serve the dashboard shell (dot-directory checkout?). '

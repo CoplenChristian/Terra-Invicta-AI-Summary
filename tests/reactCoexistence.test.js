@@ -15,14 +15,14 @@ const http = require('node:http');
 const { chromium } = require('playwright');
 const { ensureBundleBuilt } = require('./fixtures/ensureBundle.js');
 
-const TEST_PORT = Number(process.env.REACT_PROOF_PORT || 3996);
 const SHELL_PATH = '/v2/index.html';
 
 test('React coexistence proof mounts via VIEWS registry and reads global state', async () => {
   ensureBundleBuilt();
   const app = require('../server/index.js');
   const server = http.createServer(app);
-  await new Promise(resolve => server.listen(TEST_PORT, resolve));
+  await new Promise(resolve => server.listen(0, resolve));
+  const port = server.address().port;
 
   let browser;
   try {
@@ -32,7 +32,7 @@ test('React coexistence proof mounts via VIEWS registry and reads global state',
     page.on('pageerror', err => console.error('PAGE ERROR:', err));
 
     // 1. Load with proof flag
-    await page.goto(`http://localhost:${TEST_PORT}${SHELL_PATH}?react_proof=1#/command`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://localhost:${port}${SHELL_PATH}?react_proof=1#/command`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1500);
 
     const hasBundle = await page.evaluate(() => typeof window.MissionControlReact !== 'undefined');
@@ -61,7 +61,7 @@ test('React coexistence proof mounts via VIEWS registry and reads global state',
     // 2. Load without proof flag -> proof component must NOT be present
     const cleanContext = await browser.newContext();
     const cleanPage = await cleanContext.newPage();
-    await cleanPage.goto(`http://localhost:${TEST_PORT}${SHELL_PATH}#/command`, { waitUntil: 'domcontentloaded' });
+    await cleanPage.goto(`http://localhost:${port}${SHELL_PATH}#/command`, { waitUntil: 'domcontentloaded' });
     await cleanPage.waitForTimeout(1000);
 
     const cleanProof = await cleanPage.$('[data-testid="react-coexistence-proof"]');

@@ -141,7 +141,8 @@ function findClippedText(selectors) {
 async function withPage(fn) {
   const app = require('../server/index.js');
   const server = http.createServer(app);
-  await new Promise((resolve) => server.listen(TEST_PORT, resolve));
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
@@ -149,7 +150,7 @@ async function withPage(fn) {
     const page = await context.newPage();
     const pageErrors = [];
     page.on('pageerror', (err) => pageErrors.push(String(err)));
-    await page.goto(`http://localhost:${TEST_PORT}${SHELL}#/command`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://localhost:${port}${SHELL}#/command`, { waitUntil: 'domcontentloaded' });
     await settle(page);
     await fn(page, pageErrors);
   } finally {

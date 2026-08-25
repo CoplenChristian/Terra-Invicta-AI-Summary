@@ -48,7 +48,8 @@ test('computed CSS variables on document.documentElement resolve correctly witho
   const app = require('../server/index.js');
   const server = http.createServer(app);
 
-  await new Promise((resolve) => server.listen(TEST_PORT, resolve));
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
 
   let browser;
   try {
@@ -56,7 +57,7 @@ test('computed CSS variables on document.documentElement resolve correctly witho
     const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
     const page = await context.newPage();
 
-    await page.goto(`http://localhost:${TEST_PORT}/v2/#/command`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://localhost:${port}/v2/#/command`, { waitUntil: 'domcontentloaded' });
 
     const styles = await page.evaluate(() => {
       const rootStyle = getComputedStyle(document.documentElement);
