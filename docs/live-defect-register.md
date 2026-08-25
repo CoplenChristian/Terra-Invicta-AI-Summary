@@ -127,16 +127,32 @@ omitted counts to the consumer. The component already knows both numbers.
 
 ---
 
-## 6. `drive-explorer`'s scroll hint dies after the first interaction — **structurally confirmed, browser-unverified**
+## 6. `drive-explorer`'s scroll hint dies after the first interaction — **confirmed in browser**
 
 `public/v2/js/components/drive-explorer.js` `paint()` replaces the whole panel
 with `container.innerHTML = …` and then calls only `bindControls(container)`.
 `syncScrollHints` is **never called from this file**; it lives in
 `mission-control.js` and fires on load, two fetch paths, resize, and overlay open.
 
-So a client-side-only interaction rebuilds the table and leaves the hint
-unmeasured until something else triggers a resync. Needs a browser to confirm,
-and it should be confirmed before it is fixed.
+Reproduced 2026-08-24 by loading DRIVES and changing the sort `<select>`, which
+is a client-side re-render with no fetch:
+
+| viewport | on load | after client-side sort | still overflowing by |
+| --- | --- | --- | ---: |
+| 900px | `de-scroll-hint is-scrollable` | `de-scroll-hint` | **153px** |
+| 700px | `de-scroll-hint is-scrollable` | `de-scroll-hint` | **353px** |
+
+The hint element survives; only the measured `is-scrollable` class is lost. The
+table demonstrably still scrolls — `scrollWidth` 989 against `clientWidth` 836
+and 636 — and the only affordance telling the reader so is gone until a resize.
+
+At 1280px the check is inconclusive and correctly so: the table does not overflow
+there, so the hint is absent either way. **A verification run at desktop width
+alone would have reported this as fine.**
+
+This is the exact property `tests/missionControlLayout.test.js` protects — that
+scroll hints are driven by measured overflow, never by viewport width. The rule
+holds; nothing re-runs the measurement after this component repaints.
 
 ---
 
