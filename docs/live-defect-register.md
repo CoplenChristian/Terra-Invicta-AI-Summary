@@ -19,9 +19,15 @@ save.
 its supporting claim turned out to be false — see the correction there. One
 further candidate was investigated and **cleared** — see the end of #8.
 
-**Live on the dashboard right now: #1, #2 and #5.** Those three are the ones
-worth fixing ahead of their migration phase. #4, #6 and #8 are real but need a
-specific input or width; #3 is latent.
+**Live on the dashboard right now: #1, #2, #5 and #9.** Those four are worth
+fixing ahead of their migration phase. #4, #6 and #8 are real but need a specific
+input or width; #3 is latent.
+
+**#9 is the one to fix first.** It is the only defect that also reaches the AI
+markdown exports and the hosted worker, it drops 91% of its records, and unlike
+the others it is not confined to a component the migration will rewrite anyway —
+`shared/markdownExports.mjs` is explicitly out of scope for this migration, so
+nothing else is going to touch it.
 
 ---
 
@@ -238,6 +244,44 @@ permits it.
 `if (value === null || value === 0) continue;` and the effect branch requires
 `typeof value === 'number'`, so `s.value` is always a non-zero number by the time
 the consumer sees it.
+
+---
+
+## 9. Priority targets truncate 79 of 87 silently — in the panel **and** the AI export — **confirmed**
+
+Found by the intelligence-library characterisation lane, which correctly left it
+alone. It is worse than that lane reported: the same truncation exists in **two**
+surfaces, and the second is the one that matters more.
+
+```js
+public/v2/js/components/intelligence-library.js:261
+  (snapshot.servantTargets || []).slice(0, 8)
+
+shared/markdownExports.mjs:3006
+  (filteredData.servantTargets || []).slice(0, 8)
+```
+
+Measured on both frozen fixtures: **87 servant targets exist, 8 render, 79 are
+dropped** — 91% of the data, with no count, no note, and no `*TotalCount` /
+`*OmittedCount` pair anywhere in the payload or either consumer. Grepping the
+component for any omission language returns nothing.
+
+Two things make the second instance the serious one:
+
+- **`shared/markdownExports.mjs` is the AI-facing surface.** `CLAUDE.md` states
+  the rule directly for this file: *"Mind the byte budget; if the new figure does
+  not fit, say what was dropped rather than silently truncating."* An agent
+  reading `/latest-snapshot.md` sees eight holdings and has no way to learn there
+  are eighty-seven.
+- **It is in `shared/`, so it ships to the Cloudflare worker too.** The hosted
+  site truncates identically.
+
+This is the same defect class as #5 (`research-advisor` dropping two of four
+groups) but an order of magnitude larger, and #5 is browser-only.
+
+Fixing it needs a produced count, not just a consumer change: nothing upstream
+currently emits the total, so both consumers would have to derive it from the
+array length they are slicing — which is available at both call sites.
 
 ---
 
