@@ -677,6 +677,50 @@ unevaluated check is the one the other verifications rest on. Every
 running is worth nothing, and cannot be distinguished after the fact from one
 that is sound.
 
+### PARTIALLY FIXED 2026-08-25 — and the remainder is the same shape
+
+Two things landed and both are genuine improvements:
+
+- **`--save` outside the configured save folder is now refused**, loudly, with
+  exit code 1, naming the resolved path and the folder it must be in. Both sides
+  are `realpathSync`'d, so the `C:\Users\cople\Documents` → `F:\Documents`
+  junction on this machine resolves correctly. The old behaviour — stamp a
+  fingerprint for a file the server cannot reach — is now impossible.
+- **The pin reaches the server** via `?save=<basename>`, which
+  `server/http/requestContext.js:49` already accepted and validated through
+  `requestValidation.resolveSavePath`. No new door was opened; the front end was
+  wired to an existing gated one.
+
+**The headline problem is not solved.** `public/v2/js/mission-control.js:1074`
+threads the pin onto `/api/v2/briefing` — and that is **one of eleven**
+save-reading fetches in the v2 front end. The others carry no pin:
+
+`/api/refresh` (**the mode switch**), `/api/save-state`,
+`/api/intel/drive-explorer`, `/api/intel/fleet-engagement`,
+`/api/intel/mining-expansion`, `/api/intel/refit-advisor`,
+`/api/intel/research-ranking`, `/api/intel/tech-path`, `/api/export`,
+`/api/publish`.
+
+So a capture renders the pinned save for the initial player-mode briefing and
+the **live** save for the mode switch and every per-view intel panel. The run
+log says it plainly, alternating within a single capture:
+
+```
+[Server] Parsing save zz_verify_frozen.gz...
+[Server] Parsing save Autosave.gz...
+```
+
+**Measured 2026-08-25:** two captures of the **same pinned save with no code
+change between them** produced **2,485 differences**. Every one of the thirty
+the script prints is `omniscient command` — the pass reached through the
+unpinned `/api/refresh`.
+
+The harness therefore still cannot produce a reproducible capture while the game
+is running, which is the whole reason `--save` exists. The remaining work is to
+thread the pin through the other ten fetches, or to route them all through one
+helper that cannot forget it — the second being the fix that stays fixed, and
+the same argument `shared/intel/registry.mjs` settled for route definitions.
+
 ---
 
 ## What these have in common

@@ -51,6 +51,33 @@ const SAVE_POLL_INTERVAL_MS = 5000;
 const SAVE_AUTOLOAD_STORAGE_KEY = 'ti-save-autoload';
 let savePollTimer = null;
 
+// Pinned save name, set when the URL carries ?save=<name>. The verification
+// harness uses this to render a frozen save while the live game is running:
+// without the pin the harness would stamp a fingerprint for one file and the
+// server would render another, which is exactly defect #16. Null means
+// "no pin; load the newest save", which is the default dashboard behaviour.
+function resolvePinnedSaveName() {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const name = params.get('save');
+    if (!name) return null;
+    // The server's resolveSavePath checks: simple basename, no slashes or ..,
+    // .gz/.json extension. Mirror those checks so the pin fails loudly here
+    // rather than producing a 400 inside the briefing fetch.
+    const isSimpleName = name === name.split(/[\\/]/).pop()
+      && !name.includes('..')
+      && !name.includes('\0');
+    if (!isSimpleName || !/\.(?:gz|json)$/i.test(name)) {
+      console.warn(`[Mission Control] Ignoring invalid ?save= value '${name}'.`);
+      return null;
+    }
+    return name;
+  } catch (_) {
+    return null;
+  }
+}
+const pinnedSaveName = resolvePinnedSaveName();
+
 // The player's success-odds floor for councilor actions, persisted the same way
 // the autoload toggle is. ABSENT IS NOT ZERO: no stored value means "send no
 // riskFloor parameter", which the server resolves to the configured default
@@ -1038,8 +1065,13 @@ async function loadData() {
     const riskFloorParam = state.riskFloorPercent === null || state.riskFloorPercent === undefined
       ? ''
       : `&riskFloor=${encodeURIComponent(state.riskFloorPercent)}`;
+    // The save pin (set by the verify_computed_style_baseline harness via
+    // ?save=<name>) threads through to the briefing fetch so the server
+    // renders the same pinned save the harness's fingerprint labels. A null
+    // value falls back to the dashboard's normal "newest save" behaviour.
+    const savePinParam = pinnedSaveName ? `&save=${encodeURIComponent(pinnedSaveName)}` : '';
     const res = await fetch(
-      `/api/v2/briefing?mode=${state.mode}&observer=${state.observer}${riskFloorParam}`,
+      `/api/v2/briefing?mode=${state.mode}&observer=${state.observer}${savePinParam}${riskFloorParam}`,
       { signal: controller.signal }
     );
     const json = await res.json();

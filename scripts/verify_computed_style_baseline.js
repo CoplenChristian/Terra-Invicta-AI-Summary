@@ -152,7 +152,31 @@ function getActiveSaveFingerprint() {
   }
 
   if (!saveFullPath || !fs.existsSync(saveFullPath)) {
-    throw new Error('[verify_computed_style_baseline] No active save file found!');
+    throw new Error(`[verify_computed_style_baseline] --save file not found: ${savePath || '(none)'}`);
+  }
+  // The server's snapshot routes accept ?save=<basename> and resolve it
+  // strictly inside the configured save folder (server/requestValidation.js
+  // resolveSavePath). If --save resolved to anything outside that folder the
+  // harness would stamp a fingerprint the server cannot render, which is
+  // exactly defect #16. Refuse loudly instead.
+  if (savePath) {
+    const folder = path.resolve(saveParser.resolveSaveFolder());
+    // realpathSync can throw if the file vanished between the existsSync
+    // check above and now; treat that as "not pinned" so the next line
+    // reports a clean error.
+    let resolvedFolder, resolvedSave;
+    try {
+      resolvedFolder = fs.realpathSync(folder);
+      resolvedSave = fs.realpathSync(saveFullPath);
+    } catch (_) {
+      throw new Error(`[verify_computed_style_baseline] --save '${savePath}' could not be resolved at '${saveFullPath}'. The file may have moved or been deleted.`);
+    }
+    if (path.dirname(resolvedSave).toLowerCase() !== resolvedFolder.toLowerCase()) {
+      throw new Error(
+        `[verify_computed_style_baseline] --save '${savePath}' resolves to '${resolvedSave}', which is outside the configured save folder '${resolvedFolder}'. ` +
+        `The harness server can only render saves inside its save folder. Move the file there or pass just the basename (e.g. --save <basename>.gz).`
+      );
+    }
   }
   const content = fs.readFileSync(saveFullPath);
   const md5 = crypto.createHash('md5').update(content).digest('hex');
@@ -182,7 +206,14 @@ async function captureFullState(page, logPrefix = '', port = 0) {
       result[mode][vpKey] = {};
 
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await page.goto(`http://localhost:${port}${SHELL_PATH}#/command`, { waitUntil: 'domcontentloaded' });
+      // The save pin (defect #16) reaches the server through ?save=<name>.
+      // The front-end (mission-control.js) reads the same query param and
+      // threads it onto the /api/v2/briefing fetch, so the server renders
+      // the file the capture's fingerprint labels. The fingerprint reader
+      // below refuses any --save that doesn't resolve to a file inside the
+      // server's save folder, so this URL is always a real save there.
+      const saveQuery = saveStart.saveFileName ? `?save=${encodeURIComponent(saveStart.saveFileName)}` : '';
+      await page.goto(`http://localhost:${port}${SHELL_PATH}${saveQuery}#/command`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1000);
       await selectMode(page, mode);
 
