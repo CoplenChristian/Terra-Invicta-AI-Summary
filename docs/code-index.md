@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**208 JS modules** and **24 stylesheet parts** (232 indexed files).
+**211 JS modules** and **24 stylesheet parts** (235 indexed files).
 
 ## `public/`
 
@@ -21,9 +21,6 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/js/api.js` | BS | Browser (legacy, non-module) | 129 | the legacy v1 API client — runtime probe and the fetch wrapper the | — | — |
 | `public/js/app.js` | BS | Browser (legacy, non-module) | 1517 | the legacy v1 dashboard controller — renders the old UI and must not | — | — |
 | `public/v2/js/components/detail-panel.js` | BS | Browser (classic, global IIFE) | 220 | the shared detail surface for clickable Mission Control modules — | — | — |
-| `public/v2/js/components/directive-board.js` | BS | Browser (classic, global IIFE) | 781 | renders the Directive Engine v2 Cycle Plan. | — | — |
-| `public/v2/js/components/drive-explorer.js` | BS | Browser (classic, global IIFE) | 1187 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
-| `public/v2/js/components/faction-intel.js` | BS | Browser (classic, global IIFE) | 1274 | faction intelligence as a scan-first decision surface. | — | — |
 | `public/v2/js/components/fleet-procurement.js` | BS | Browser (classic, global IIFE) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
 | `public/v2/js/components/research-advisor.js` | BS | Browser (classic, global IIFE) | 1068 | phase 4 of the research advisor, on screen. | — | — |
 | `public/v2/js/components/unlocked-tech.js` | BS | Browser (classic, global IIFE) | 372 | renders the searchable list of the observer faction's unlocked | — | — |
@@ -49,6 +46,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/publish/techGraph.js` | C | Node (CommonJS) | 102 | publish stage 3a — apply the shared/inline/omitted tech-tree mode | `applyTechTreeMode, buildSharedTechGraph, splitTechTree, techGraphFingerprint` | `tests/techGraph.test.js` |
 | `scripts/push_latest_to_supabase.js` | **B** C | Node (CommonJS) | 258 | the publish CLI — build Player/Enhanced/Omniscient payloads per | `applyTechTreeMode, main, parseArgs, techGraphFingerprint, usage` | — |
 | `scripts/run_unit_tests.js` | C | Node (CommonJS) | 66 | run the deterministic unit test suite — every tests/**/*.test.js file | — | — |
+| `scripts/set_initiative_alien_hate.js` | C | Node (CommonJS) | 378 | safely edit the Initiative's assessed alien hate in a local save. | `finiteOrNull, main, parseArgs` | — |
 | `scripts/verify_bundle_size.js` | C | Node (CommonJS) | 144 | measures the raw and gzipped byte sizes of the bundled React + MUI | `BUDGET, isBuildArtifact, measureBundle` | — |
 | `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 442 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates, getActiveSaveFingerprint` | — |
 | `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 384 | browser verification that the Drive Explorer renders the measured | — | — |
@@ -237,18 +235,23 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/tableVariants.js` | E | Browser (React JSX) | 77 | maps DataTable variant keys to the six real table systems in the v2 | `DEFAULT_SCROLL_HINT_TEXT, TABLE_VARIANTS` | — |
 | `src/v2/components/TruncationNote.jsx` | E | Browser (React JSX) | 90 | announce capped lists with total and omitted counts. An absent omitted | `TruncationNote` | — |
 | `src/v2/components/Value.jsx` | E | Browser (React JSX) | 80 | render a numeric value or an explicit unavailable/absent state. Never | `Value` | — |
-| `src/v2/main.jsx` | E | Browser (React JSX) | 353 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, mountCoexistenceProof, mountReactPanel, renderAlienHateEconomics, renderCapabilityMatrix, renderCouncilOrders, renderFactionLedger, renderFleetEngagement, renderHudAlienHateEconomics, renderIntelligenceLibrary, renderLogisticsBoard, renderMcBudget, …(+7)` | — |
+| `src/v2/main.jsx` | E | Browser (React JSX) | 425 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, mountCoexistenceProof, mountReactPanel, renderAlienHateEconomics, renderCapabilityMatrix, renderCouncilOrders, renderDirectiveBoard, renderFactionIntel, renderFactionLedger, renderFleetEngagement, renderHudAlienHateEconomics, renderIntelligenceLibrary, …(+9)` | — |
 | `src/v2/panels/AlienHateEconomics.jsx` | E | Browser (React JSX) | 499 | renders the save-derived Mission Control hate floor and Total War | `AlienHateEconomics, fmtNumber, renderHudAlienHateEconomics` | `tests/AlienHateEconomics.test.js` |
 | `src/v2/panels/CouncilOrders.jsx` | E | Browser (React JSX) | 384 | React port of public/v2/js/components/council-orders.js. Renders the | `CouncilOrders, focusDirectiveBoard` | `tests/CouncilOrders.test.js` |
+| `src/v2/panels/DirectiveBoard.jsx` | E | Browser (React JSX) | 1004 | React port of public/v2/js/components/directive-board.js — renders | `DirectiveBoard` | — |
+| `src/v2/panels/DriveExplorer.jsx` | E | Browser (React JSX) | 939 | the DRIVES view in React — every drive in the catalogue rated against | `DriveExplorer, driveExplorerInternals, renderDriveExplorer, setDriveExplorerMount` | `tests/DriveExplorer.test.js` |
+| `src/v2/panels/driveExplorerUtils.mjs` | E | Browser (React JSX) | 557 | pure formatters, filters, sorters and research-path shaping for the | `BUCKETS, BUCKET_LABEL, BUCKET_TITLE, ESTIMATE_CAPTION, OUTCOME, REACTOR_FILTERS, ROW_CAPS, SCROLL_HINT_TEXT, SORTS, STATUS_LABEL, STATUS_TONE, THRESHOLDS, …(+21)` | — |
 | `src/v2/panels/ExecutiveBoards.jsx` | E | Browser (React JSX) | 743 | renders the executive boards — faction power, resources, and the | `CapabilityMatrixBoard, FactionLedgerBoard, LogisticsBoard, NationQueueBoard, OperationsBoard, ResearchWatchlistBoard, TheaterBoard` | `tests/ExecutiveBoards.test.js` |
 | `src/v2/panels/executiveBoardsUtils.js` | E | Browser (React JSX) | 236 | pure formatters and selectors for the executive boards React panel — | `BOARD_SCROLL_HINT, EM_DASH, alienForceSummary, availabilityByProjectId, bodyKey, bodyLabel, completedProjectSignal, factionById, factionDelta, factionLogoHtml, factionName, factionStatus, …(+14)` | — |
+| `src/v2/panels/FactionIntel.jsx` | E | Browser (React JSX) | 579 | the faction dossier overlay — a scan-first two-pane decision surface | `FactionIntel, createEmptyController, createFactionIntelController` | — |
+| `src/v2/panels/factionIntelUtils.js` | E | Browser (React JSX) | 948 | pure selectors, formatters and visibility rules for the faction | `MISSING_VALUES, UNKNOWN_RELATIONSHIP, UNKNOWN_VALUE, accentColor, buildContext, buildFactionIntel, chooseInitialKey, cleanRelationshipValue, councilorRowFields, councilorTopSkill, councilorVisibility, countVisibleAssets, …(+51)` | — |
 | `src/v2/panels/FleetEngagement.jsx` | E | Browser (React JSX) | 304 | renders the per-fleet engagement estimates — what force each alien | `FleetEngagement` | `tests/FleetEngagement.test.js` |
 | `src/v2/panels/IntelligenceLibrary.jsx` | E | Browser (React JSX) | 1206 | renders the intelligence library — the drillable intelligence surface | `IntelligenceLibrary` | — |
 | `src/v2/panels/intelligenceLibraryUtils.js` | E | Browser (React JSX) | 175 | pure formatters and selectors for the intelligence library React | `EM_DASH, activeCouncilors, councilorProfile, countLabel, displayText, factionColorById, factionLogoHtml, factionMap, factionNameById, matchesSpaceTheater, money, number, …(+6)` | — |
 | `src/v2/panels/McBudget.jsx` | E | Browser (React JSX) | 275 | Mission Control budget planner — MC is the sole input to the alien | `McBudget` | — |
 | `src/v2/panels/MiningExpansion.jsx` | E | Browser (React JSX) | 1050 | render the mining expansion board in React with explicit presence | `MiningExpansion` | `tests/MiningExpansion.test.js` |
 | `src/v2/panels/StrategicCommentary.jsx` | E | Browser (React JSX) | 286 | renders the non-LLM four-layer Strategic Commentary Engine output | `StrategicCommentary` | `tests/StrategicCommentary.test.js` |
-| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 359 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
+| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 446 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
 | `src/v2/theme.js` | E | Browser (React JSX) | 266 | MUI createTheme mirror of the v2 CSS custom-property vocabulary in | `cssParityExpectations, initiativeCategorical, initiativeSpace, initiativeTheme, initiativeTokens` | — |
 
 ## `public/v2/css/`

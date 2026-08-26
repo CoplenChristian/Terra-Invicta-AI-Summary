@@ -9,9 +9,8 @@
  *
  * The engine's selection (`shared/benchSelection.mjs`) is now the ONLY
  * selection and the board renders every row it is handed. The comparator is
- * deliberately not reimplemented here: these components are classic `<script>`
- * tags with no `type="module"`, so they cannot import `shared/*.mjs` at all,
- * and a hand-copied rule is a rule waiting to drift.
+ * deliberately not reimplemented there, and a hand-copied rule is a rule
+ * waiting to drift.
  *
  * Each row now stands for a whole (mission, target) sibling group, so the rest
  * of this file is about the other half of that: eight rows must never read as
@@ -28,38 +27,79 @@
  * reported an empty alien-hate reading, and the three-state assertion
  * "an absent ceiling is not zero" received `''` instead of `NOT MEASURED`.
  * The component branch was restored immediately.
+ *
+ * ---------------------------------------------------------------------------
+ * PORTED 2026-08-26 to the React panel. HARNESS CHANGED, ASSERTIONS DID NOT.
+ * ---------------------------------------------------------------------------
+ *
+ * `public/v2/js/components/directive-board.js` was deleted in the React
+ * migration, so the `runComponent(componentPath, ...)` sandbox this file used
+ * would now die with ENOENT on all nineteen tests. Every assertion below is
+ * byte-identical to the version that guarded the vanilla component; only the
+ * plumbing that produces `html` moved. `node --test` cannot render React out of
+ * the Vite bundle (three earlier runs died on `Minified React error #327`), so
+ * the panel is driven in a real browser through the primitives harness.
+ *
+ * TWO plumbing edits were needed and neither weakens a check:
+ *
+ *   1. `renderToString` is now async and renders through the same
+ *      `window.MissionControlDirectiveBoard.render(root, payload)` bridge that
+ *      `public/v2/js/mission-control.js` calls. One shared page serves all
+ *      nineteen tests; the root `after()` closes it.
+ *   2. `budgetMeter` reads the `<strong>` with `([\s\S]*?)` through
+ *      `visibleText` instead of `([^<]*)`. Register defect #1 was the four
+ *      INVENTED ceilings in this meter, and the fix now routes each reading
+ *      through the `<Value>` primitive, whose explicit presence signal is what
+ *      makes `Number(null) === 0` structurally unreachable. `<Value>` renders a
+ *      `<span data-value-state="…">` inside the `<strong>`, which `[^<]*`
+ *      cannot cross. On the old markup the two extractions return the same
+ *      strings, so the readings compared below are unchanged.
+ *
+ * The structural guard ("the board holds no bench cap of its own") now reads
+ * `src/v2/panels/DirectiveBoard.jsx`. The React port keeps `renderBenched` and
+ * `renderHorizon` as named functions in that order precisely so the guard still
+ * has a window to scan.
+ *
+ * RED PROOF, RE-RUN ON THE PORT (2026-08-26). Two deliberate breaks, each
+ * rebuilt into the harness before running:
+ *   - `absentLabel="NOT MEASURED"` emptied on the budget meters -> the SAME 2
+ *     failures the pre-migration proof recorded (the empty-budget
+ *     `deepStrictEqual`, and "an absent ceiling is not zero").
+ *   - `BENCH_ORDER_NOTE` replaced with "Ranked best first." -> 1 failure, the
+ *     generation-order caveat (register defect #15).
+ * Both were restored immediately. Without this the ported suite could have been
+ * green by construction against a panel that renders nothing.
  */
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
-const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'directive-board.js');
+const componentPath = path.join(repoRoot, 'src', 'v2', 'panels', 'DirectiveBoard.jsx');
 
 // The v2 stylesheet is an ordered set of parts; this reads all of them in
 // cascade order, so "the rule exists" keeps meaning "the browser will find it".
 const { readMissionControlCss } = require('./fixtures/missionControlCss');
 
-const { visibleText, runComponent } = require('./fixtures/renderHarness');
+const { visibleText } = require('./fixtures/renderHarness');
+const {
+  withSharedDirectiveBoardPage,
+  closeSharedDirectiveBoardPage,
+  renderDirectiveBoardOnPage,
+} = require('./fixtures/directiveBoardBrowser');
 
-function loadBoard() {
-  return runComponent(componentPath, {
-    document: { getElementById: () => null }
-  }).window.MissionControlDirectiveBoard;
-}
+after(async () => {
+  await closeSharedDirectiveBoardPage();
+});
 
-/** The board attaches listeners after writing innerHTML, so the root needs both. */
-function renderToString(cyclePlan) {
-  const board = loadBoard();
-  const root = {
-    innerHTML: '',
-    querySelector: () => null,
-    querySelectorAll: () => []
-  };
-  board.render(root, { engineDirectives: { cyclePlan } });
-  return root.innerHTML;
+/** The rendered board, through the bridge the dashboard itself calls. */
+async function renderToString(cyclePlan) {
+  return withSharedDirectiveBoardPage(async (page) => {
+    const { html } = await renderDirectiveBoardOnPage(page, { engineDirectives: { cyclePlan } });
+    return html;
+  });
 }
 
 const BUDGET_LABELS = [
@@ -73,11 +113,18 @@ function budgetMeter(html, label) {
   const match = html.match(new RegExp(
     `<div class="directive-budget-item">\\s*`
       + `<div class="directive-budget-label">\\s*`
-      + `<span>${label}</span>\\s*<strong>([^<]*)</strong>\\s*</div>\\s*`
+      + `<span>${label}</span>\\s*<strong>([\\s\\S]*?)</strong>\\s*</div>\\s*`
       + `<div class="directive-budget-track">([\\s\\S]*?)</div>\\s*</div>`
   ));
   assert.ok(match, `${label} meter must render`);
-  return { value: match[1], track: match[2] };
+  // A browser normalises `style="width: 0%"` to `style="width: 0%;"` when it
+  // serialises the DOM back to HTML. The old VM sandbox read the component's
+  // template STRING before any browser touched it, so it never saw the
+  // semicolon. It is an artefact of reading real DOM, not a change in the bar
+  // that is drawn, and stripping it here keeps the width assertions below
+  // byte-identical to the pre-migration file.
+  const track = match[2].replace(/(style="[^"]*?);"/g, '$1"');
+  return { value: visibleText(match[1]), track };
 }
 
 const BENCH_SECTION = /BENCHED ALTERNATIVES[\s\S]*?(?=ALLOCATION STRATEGY|$)/;
@@ -121,8 +168,8 @@ function planWithBench(benched, overrides = {}) {
 // 5 the board used to impose, which is what makes this test the regression pin.
 const EIGHT_ROWS = Array.from({ length: 8 }, (_, i) => row(i));
 
-test('an empty budgets object marks all four ceilings unmeasured and draws no fictional fills', () => {
-  const html = renderToString(planWithBench([], { budgets: {} }));
+test('an empty budgets object marks all four ceilings unmeasured and draws no fictional fills', async () => {
+  const html = await renderToString(planWithBench([], { budgets: {} }));
   const readings = Object.fromEntries(BUDGET_LABELS.map(label => [label, budgetMeter(html, label).value]));
 
   assert.deepStrictEqual(readings, {
@@ -141,14 +188,14 @@ test('an empty budgets object marks all four ceilings unmeasured and draws no fi
   }
 });
 
-test('budget ceilings distinguish measured zero, absent, and measured non-zero', () => {
-  const zero = budgetMeter(renderToString(planWithBench([], {
+test('budget ceilings distinguish measured zero, absent, and measured non-zero', async () => {
+  const zero = budgetMeter(await renderToString(planWithBench([], {
     budgets: { alienHate: { used: 0, cap: 0, capMeasured: true } }
   })), 'ALIEN HATE BUDGET');
-  const absent = budgetMeter(renderToString(planWithBench([], {
+  const absent = budgetMeter(await renderToString(planWithBench([], {
     budgets: { alienHate: { used: 0, cap: null, capMeasured: false } }
   })), 'ALIEN HATE BUDGET');
-  const nonZero = budgetMeter(renderToString(planWithBench([], {
+  const nonZero = budgetMeter(await renderToString(planWithBench([], {
     budgets: { alienHate: { used: 1.5, cap: 6, capMeasured: true } }
   })), 'ALIEN HATE BUDGET');
 
@@ -160,8 +207,8 @@ test('budget ceilings distinguish measured zero, absent, and measured non-zero',
   assert.match(nonZero.track, /style="width: 25%"/);
 });
 
-test('the board renders EVERY row the engine sent, not a slice of them', () => {
-  const html = renderToString(planWithBench(EIGHT_ROWS));
+test('the board renders EVERY row the engine sent, not a slice of them', async () => {
+  const html = await renderToString(planWithBench(EIGHT_ROWS));
   const text = benchText(html);
 
   for (const b of EIGHT_ROWS) {
@@ -193,7 +240,7 @@ test('the board holds no bench cap of its own', () => {
     'renderBenched must not slice the array the engine handed it');
 });
 
-test('a collapsed row prints what it stands for', () => {
+test('a collapsed row prints what it stands for', async () => {
   const collapsed = row(0, {
     groupCount: 5,
     groupOmittedCount: 4,
@@ -201,14 +248,14 @@ test('a collapsed row prints what it stands for', () => {
     groupScoreLow: 68.75,
     groupScoreHigh: 68.75
   });
-  const text = benchText(renderToString(planWithBench([collapsed, row(1)])));
+  const text = benchText(await renderToString(planWithBench([collapsed, row(1)])));
 
   assert.ok(text.includes('+4 more Purge options in China, all scoring 68.75'),
     `the group note must reach the reader: ${text}`);
 });
 
-test('a singleton row prints no group line at all — never "+0 more", never "undefined"', () => {
-  const html = renderToString(planWithBench(EIGHT_ROWS));
+test('a singleton row prints no group line at all — never "+0 more", never "undefined"', async () => {
+  const html = await renderToString(planWithBench(EIGHT_ROWS));
   const text = benchText(html);
 
   assert.ok(!/\+0 more/.test(text), 'a singleton must not claim siblings it does not have');
@@ -221,7 +268,7 @@ test('a singleton row prints no group line at all — never "+0 more", never "un
   );
 });
 
-test('an older payload with no group fields renders as plain rows', () => {
+test('an older payload with no group fields renders as plain rows', async () => {
   // Exactly the shape a snapshot published before this change carries: no
   // `groupCount`, no `groupNote`, no `benchedRepresentedCount`.
   const legacy = [0, 1, 2].map((i) => ({
@@ -234,7 +281,7 @@ test('an older payload with no group fields renders as plain rows', () => {
   const plan = planWithBench(legacy);
   delete plan.benchedRepresentedCount;
 
-  const html = renderToString(plan);
+  const html = await renderToString(plan);
   const text = benchText(html);
 
   assert.strictEqual((html.match(/class="directive-benched-item"/g) || []).length, 3);
@@ -248,13 +295,13 @@ test('an older payload with no group fields renders as plain rows', () => {
   assert.ok(!/standing for 0 candidates/.test(text), text);
 });
 
-test('the footer says how many CANDIDATES the rows stand for, so eight rows are not read as eight options', () => {
+test('the footer says how many CANDIDATES the rows stand for, so eight rows are not read as eight options', async () => {
   const rows = [
     row(0, { groupCount: 5, groupOmittedCount: 4, groupNote: '+4 more Purge options in China, all scoring 68.75' }),
     row(1, { groupCount: 4, groupOmittedCount: 3, groupNote: '+3 more Purge options in India, all scoring 50.64' }),
     ...Array.from({ length: 6 }, (_, i) => row(i + 2))
   ];
-  const text = benchText(renderToString(planWithBench(rows)));
+  const text = benchText(await renderToString(planWithBench(rows)));
 
   assert.ok(/Showing 8 rows of 427 benched/.test(text), text);
   assert.ok(/standing for 15 candidates/.test(text), text);
@@ -320,9 +367,9 @@ const LIVE_BENCH_BUDGET = Object.freeze({
   reason: '0 of the 8 row(s) shown fit the 3.16 hate left of a 7.9 cycle cap.'
 });
 
-test('the board prints the reason the engine measured, not a councilor it made up', () => {
+test('the board prints the reason the engine measured, not a councilor it made up', async () => {
   const rows = Array.from({ length: 8 }, (_, i) => budgetRefusedRow(i));
-  const text = benchText(renderToString(planWithBench(rows, {
+  const text = benchText(await renderToString(planWithBench(rows, {
     budgets: LIVE_BUDGET,
     benchBudget: LIVE_BENCH_BUDGET,
     assignments: [{ councilorId: 5797, councilor: { name: 'Hemaraj Pavanaja' }, candidate: { title: 'Purge China' } }]
@@ -338,19 +385,19 @@ test('the board prints the reason the engine measured, not a councilor it made u
   assert.ok(!/assigned to direct high-priority mission/.test(text), text);
 });
 
-test('a row with no recorded reason says so rather than borrowing the councilor sentence', () => {
+test('a row with no recorded reason says so rather than borrowing the councilor sentence', async () => {
   const bare = row(0);
   delete bare.displacedBy;
-  const text = benchText(renderToString(planWithBench([bare])));
+  const text = benchText(await renderToString(planWithBench([bare])));
 
   assert.ok(/recorded no reason/i.test(text), `an absent reason must be stated: ${text}`);
   assert.ok(!/assigned to direct high-priority mission/.test(text), text);
   assert.ok(!/undefined/.test(text), text);
 });
 
-test('the bench header states the budget and how many rows fit it', () => {
+test('the bench header states the budget and how many rows fit it', async () => {
   const rows = Array.from({ length: 8 }, (_, i) => budgetRefusedRow(i));
-  const text = benchText(renderToString(planWithBench(rows, {
+  const text = benchText(await renderToString(planWithBench(rows, {
     budgets: LIVE_BUDGET,
     benchBudget: LIVE_BENCH_BUDGET
   })));
@@ -361,10 +408,10 @@ test('the bench header states the budget and how many rows fit it', () => {
   assert.ok(/ALTERNATIVES sharing one alienHate pool/.test(text), text);
 });
 
-test('a floor-derived hate cap is labelled an upper bound on the board', () => {
+test('a floor-derived hate cap is labelled an upper bound on the board', async () => {
   // Player mode's live shape: the cap comes from the Mission Control hate floor
   // because the true hate is redacted, so it can only overstate the budget.
-  const text = benchText(renderToString(planWithBench([row(0)], {
+  const text = benchText(await renderToString(planWithBench([row(0)], {
     budgets: {
       alienHate: {
         used: 0, cap: 8.5, capMeasured: true, unit: 'hate',
@@ -378,8 +425,8 @@ test('a floor-derived hate cap is labelled an upper bound on the board', () => {
   assert.ok(/MC hate floor/.test(text), text);
 });
 
-test('an unmeasured hate cap says the check was skipped, never that the budget is zero', () => {
-  const text = benchText(renderToString(planWithBench([row(0)], {
+test('an unmeasured hate cap says the check was skipped, never that the budget is zero', async () => {
+  const text = benchText(await renderToString(planWithBench([row(0)], {
     budgets: {
       alienHate: {
         used: 0, cap: null, capMeasured: false, unit: 'hate',
@@ -392,8 +439,8 @@ test('an unmeasured hate cap says the check was skipped, never that the budget i
   assert.ok(!/0\.00 \/ 0\.00/.test(text), 'an unread cap must never render as a measured zero');
 });
 
-test('an uncomputed joint total says NOT COMPUTED rather than implying every row fits', () => {
-  const text = benchText(renderToString(planWithBench([row(0)], {
+test('an uncomputed joint total says NOT COMPUTED rather than implying every row fits', async () => {
+  const text = benchText(await renderToString(planWithBench([row(0)], {
     budgets: LIVE_BUDGET,
     benchBudget: {
       rowCount: 1, pricedRowCount: 0, unpricedRowCount: 1, pools: [], pool: null,
@@ -408,11 +455,11 @@ test('an uncomputed joint total says NOT COMPUTED rather than implying every row
   assert.ok(!/row\(s\) below fit/.test(text), 'no count may be asserted when none was computed');
 });
 
-test('an older payload with no bench budget renders no affordability claim at all', () => {
+test('an older payload with no bench budget renders no affordability claim at all', async () => {
   const plan = planWithBench([row(0)]);
   delete plan.benchBudget;
   delete plan.budgets;
-  const html = renderToString(plan);
+  const html = await renderToString(plan);
 
   assert.strictEqual((html.match(/class="directive-bench-budget"/g) || []).length, 0,
     'nothing was read, so nothing is claimed');
@@ -421,9 +468,9 @@ test('an older payload with no bench budget renders no affordability claim at al
   assert.ok(!/row\(s\) below fit/.test(visibleText(html)));
 });
 
-test('a MIXED group does not present the representative\'s reason as the whole group\'s', () => {
+test('a MIXED group does not present the representative\'s reason as the whole group\'s', async () => {
   const mixed = budgetRefusedRow(0, { groupCount: 5, groupOmittedCount: 4, groupBudgetDisplacedCount: 2 });
-  const text = benchText(renderToString(planWithBench([mixed], {
+  const text = benchText(await renderToString(planWithBench([mixed], {
     budgets: LIVE_BUDGET, benchBudget: LIVE_BENCH_BUDGET
   })));
 
@@ -434,7 +481,7 @@ test('a MIXED group does not present the representative\'s reason as the whole g
   // reads on the one row where it matters.
 
   const uniform = budgetRefusedRow(0, { groupCount: 5, groupOmittedCount: 4, groupBudgetDisplacedCount: 5 });
-  const uniformText = benchText(renderToString(planWithBench([uniform], {
+  const uniformText = benchText(await renderToString(planWithBench([uniform], {
     budgets: LIVE_BUDGET, benchBudget: LIVE_BENCH_BUDGET
   })));
   assert.ok(!/Mixed group/.test(uniformText), uniformText);
@@ -452,7 +499,7 @@ test('the new bench-budget elements have stylesheet rules, so they are not invis
   }
 });
 
-test('the bench explicitly states that the order is generation order and NOT a ranking', () => {
+test('the bench explicitly states that the order is generation order and NOT a ranking', async () => {
   // 1. Live save sequence: non-descending scores (6.03, 6.00, 9.00, 5.61, 4.38, 4.06, 4.14, 7.00)
   // Best alternative (9.00) sits third, second-best (7.00) sits last.
   const scores = [6.03, 6.0, 9.0, 5.61, 4.38, 4.06, 4.14, 7.0];
@@ -463,7 +510,7 @@ test('the bench explicitly states that the order is generation order and NOT a r
     benchedRepresentedCount: 15
   });
 
-  const textCapped = benchText(renderToString(plan));
+  const textCapped = benchText(await renderToString(plan));
   assert.ok(
     textCapped.includes('Ordered by generation rather than by score, so the sequence is NOT a ranking and the row count counts groups rather than options.'),
     `Capped bench must state generation ordering and NOT a ranking: ${textCapped}`
@@ -478,7 +525,7 @@ test('the bench explicitly states that the order is generation order and NOT a r
     benchedRepresentedCount: 2
   });
 
-  const textUncapped = benchText(renderToString(uncappedPlan));
+  const textUncapped = benchText(await renderToString(uncappedPlan));
   assert.ok(
     textUncapped.includes('Ordered by generation rather than by score, so the sequence is NOT a ranking and the row count counts groups rather than options.'),
     `Uncapped bench must also state generation ordering and NOT a ranking: ${textUncapped}`

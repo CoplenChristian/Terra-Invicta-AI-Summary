@@ -21,6 +21,21 @@ import { IntelligenceLibrary } from './panels/IntelligenceLibrary.jsx';
 import { MiningExpansion } from './panels/MiningExpansion.jsx';
 import { CouncilOrders } from './panels/CouncilOrders.jsx';
 import {
+  DriveExplorer,
+  driveExplorerInternals,
+  fetchDriveExplorer,
+  loadDriveExplorer,
+  openDrivePath,
+  renderDriveExplorer,
+  setDriveExplorerMount,
+} from './panels/DriveExplorer.jsx';
+import { DirectiveBoard } from './panels/DirectiveBoard.jsx';
+import {
+  FactionIntel,
+  createEmptyController,
+  createFactionIntelController,
+} from './panels/FactionIntel.jsx';
+import {
   CapabilityMatrixBoard,
   FactionLedgerBoard,
   LogisticsBoard,
@@ -204,6 +219,18 @@ export function renderCouncilOrders(root, payload) {
 }
 
 /**
+ * Strangler bridge matching window.MissionControlDirectiveBoard.render(root, payload).
+ *
+ * `root` is #directiveBoard, the mount id CouncilOrders.jsx cross-navigates to.
+ * The payload keeps the vanilla shape — `engineDirectives`, `riskFloorPreference`
+ * (null = "no stored choice", NOT 0) and `onRiskFloorChange`.
+ */
+export function renderDirectiveBoard(root, payload) {
+  if (!root) return;
+  mountReactPanel(root, <DirectiveBoard payload={payload} />);
+}
+
+/**
  * Strangler bridge matching window.IntelligenceLibrary.render(container, snapshot, briefing, observerId, options).
  */
 export function renderIntelligenceLibrary(container, snapshot, briefing, observerId, options = {}) {
@@ -217,6 +244,31 @@ export function renderIntelligenceLibrary(container, snapshot, briefing, observe
       options={options}
     />,
   );
+}
+
+/**
+ * Strangler bridge matching window.FactionIntelScreen.render(container, snapshot, briefing, observerId).
+ *
+ * Returns the same imperative controller the vanilla dossier did — mission-control.js
+ * calls `.select(id)` on the line after this one, and `root.render()` has not
+ * committed by then, so selection state lives in the controller rather than in
+ * a React ref. `container` may be a selector string or an element.
+ */
+export function renderFactionIntel(container, snapshot, briefing, observerId) {
+  const target = typeof container === 'string'
+    ? document.querySelector(container)
+    : (container && typeof container.nodeType === 'number' ? container : null);
+  if (!target) return createEmptyController();
+
+  const controller = createFactionIntelController({
+    container: target,
+    snapshot,
+    briefing,
+    observerId,
+  });
+  controller.setUnmount(() => unmountReactPanel(target));
+  mountReactPanel(target, <FactionIntel controller={controller} />);
+  return controller;
 }
 
 /**
@@ -266,6 +318,11 @@ export function renderResearchWatchlist(container, snapshot) {
   mountReactPanel(container, <ResearchWatchlistBoard snapshot={snapshot} />);
 }
 
+// The DRIVES panel owns a module-level store (scripts/verify_drive_explorer.js
+// reads it), so it mounts itself rather than being handed a fresh element on
+// every change. It only needs the mount function.
+setDriveExplorerMount(mountReactPanel);
+
 export { renderHudAlienHateEconomics };
 
 // Expose mounting registry on window for strangler migration interoperability
@@ -285,7 +342,16 @@ if (typeof window !== 'undefined') {
     renderHud: renderHudAlienHateEconomics,
   };
   window.MissionControlCouncilOrders = { render: renderCouncilOrders };
+  window.MissionControlDirectiveBoard = { render: renderDirectiveBoard };
   window.IntelligenceLibrary = { render: renderIntelligenceLibrary };
+  window.FactionIntelScreen = { render: renderFactionIntel };
+  window.MissionControlDriveExplorer = {
+    load: loadDriveExplorer,
+    render: renderDriveExplorer,
+    fetchDriveExplorer,
+    openDrivePath,
+    _internals: driveExplorerInternals,
+  };
   window.MissionControlBoards = {
     renderFactionLedger,
     renderLogisticsBoard,
@@ -305,9 +371,12 @@ if (typeof window !== 'undefined') {
     mountFleetEngagement: renderFleetEngagement,
     mountMiningExpansion: renderMiningExpansion,
     mountCouncilOrders: renderCouncilOrders,
+    mountDirectiveBoard: renderDirectiveBoard,
     mountAlienHateEconomics: renderAlienHateEconomics,
     renderHudAlienHateEconomics,
     mountIntelligenceLibrary: renderIntelligenceLibrary,
+    mountFactionIntel: renderFactionIntel,
+    mountDriveExplorer: renderDriveExplorer,
     renderFactionLedger,
     renderLogisticsBoard,
     renderCapabilityMatrix,
@@ -323,8 +392,11 @@ if (typeof window !== 'undefined') {
     FleetEngagement,
     MiningExpansion,
     CouncilOrders,
+    DirectiveBoard,
     AlienHateEconomics,
     IntelligenceLibrary,
+    FactionIntel,
+    DriveExplorer,
     FactionLedgerBoard,
     LogisticsBoard,
     CapabilityMatrixBoard,

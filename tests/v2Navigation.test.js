@@ -49,10 +49,12 @@ test('public/v2/index.html defines 6 view sections and topbar navigation without
   assert.ok(html.includes('id="view-threat"'), 'must contain #view-threat');
   assert.ok(html.includes('id="view-records"'), 'must contain #view-records');
 
-  // The DRIVES panel needs a mount element as well as a script tag: the mining
-  // board once had the script and no element and rendered nowhere.
+  // The DRIVES panel needs a mount element as well as something that loads it:
+  // the mining board once had the script and no element and rendered nowhere.
+  // The panel became src/v2/panels/DriveExplorer.jsx on 2026-08-26, so what
+  // loads it is the React migration bundle rather than its own <script> tag.
   assert.ok(html.includes('id="driveExplorer"'), 'must contain the #driveExplorer mount element');
-  assert.ok(html.includes('/v2/js/components/drive-explorer.js'), 'must load the drive explorer component');
+  assert.ok(html.includes('/v2/app/bundle.js'), 'must load the React bundle that provides the drive explorer');
 
   // Initial inactive view attributes
   assert.ok(/id="view-expansion"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-expansion must be initially hidden and inert');

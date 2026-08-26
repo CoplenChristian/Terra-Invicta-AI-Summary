@@ -1,9 +1,9 @@
 // tests/factionIntelRendering.test.js
 //
 // Purpose: characterisation coverage for
-//   public/v2/js/components/faction-intel.js. The dossier is an overlay fed
+//   src/v2/panels/FactionIntel.jsx. The dossier is an overlay fed
 //   when opened; these tests pin its visible records, mode-specific
-//   redaction, controller selection, and close cleanup before the React
+//   redaction, controller selection, and close cleanup after the React
 //   migration.
 //
 // ENTRY-POINT CONTRACT (confirmed against public/v2/index.html call sites):
@@ -11,6 +11,16 @@
 //   render(container, snapshot, briefing, observerId) mounts the dossier into
 //     container and returns a controller with { select, getSelectedFaction,
 //     getSelectedId, destroy }.
+//
+// Harness: real browser via tests/fixtures/factionIntelBrowser.js and
+//   public/v2/primitives-harness.html?scene=factionIntel. The scene renders
+//   <FactionIntel controller={...} /> and publishes that controller on
+//   window.__FACTION_INTEL_CONTROLLER__, so select / getSelectedId / destroy
+//   below drive the real production controller, not a test double.
+//
+//   `node --test` cannot render a React component out of the Vite bundle
+//   (Minified React error #327), which is why every assertion here runs in a
+//   real browser rather than against a mock DOM.
 //
 // MODE LABELS:
 //   - 'player'      -> 'PLAYER INTEL' + 'OBSERVER' + 'VISIBLE' / 'PARTIAL'
@@ -35,7 +45,7 @@
 //     - relationshipMetrics Summary when neither theirs nor ours is present
 //     - displayRelationship when value is null / undefined
 //     - getMode when mode field is missing entirely (returns 'UNKNOWN VIEW')
-//   Visibility-tag normalization (normalizeVisibility, L1141-1159) maps:
+//   Visibility-tag normalization (normalizeVisibility) maps:
 //     raw_save_only / raw_save -> 'RAW SAVE ONLY'
 //     unavailable -> 'UNAVAILABLE'
 //     unknown -> 'UNKNOWN'
@@ -46,7 +56,7 @@
 //     enhanced -> 'ENHANCED'
 //     snapshot_flag -> 'SNAPSHOT FLAG'
 //     anything else (after trim+upper) -> upper-cased literal
-//   Visibility tags at L329-338:
+//   Visibility tags on the detail pane:
 //     - RELATION (relationship.visibility)
 //     - HATE OF US (theirsVisibility) — observer-relative only, hidden for observer
 //     - OUR HATE (oursVisibility) — observer-relative only, hidden for observer
@@ -55,7 +65,7 @@
 //     - SPACE (space.visibility)
 //     - RESEARCH (research.visibility)
 //     - VISIBILITY (for power, from visibilityForPower)
-//   Councilor row affordances (L443-475):
+//   Councilor row affordances (councilorRowFields):
 //     - name null -> 'UNAVAILABLE' (UNKNOWN_VALUE)
 //     - location null -> 'UNAVAILABLE'
 //     - profession null -> 'Councilor' literal fallback
@@ -63,13 +73,13 @@
 //     - skill measurable -> 'SKILL / ABBR value'
 //     - skill no source -> 'SKILL / UNAVAILABLE'
 //     - status normalizeVisibility('unknown') -> 'UNKNOWN' when no value
-//   Councilor visibility (councilorVisibility, L495-501):
+//   Councilor visibility (councilorVisibility):
 //     - mode === 'OMNISCIENT' -> 'RAW SAVE ONLY'
 //     - observer faction -> 'CONFIRMED'
 //     - any councilor.visibility === 'detected' -> 'PARTIAL'
 //     - any councilor.isTurnedMole === true -> 'CONFIRMED'
 //     - otherwise: 'VISIBLE' if councilors.length > 0 else 'UNAVAILABLE'
-//   Action-plan affordances (deriveActions, L612-675):
+//   Action-plan affordances (deriveActions):
 //     - observer: research throughput / terrestrial / space branches
 //     - non-observer: relationship / terrestrial / space branches
 //     - always: hate branch with requiredProject vs visible signal
@@ -81,105 +91,43 @@
 //     - councilors.length === 0 -> 'No councilors are visible for this faction
 //                                   in the current intelligence mode.'
 //     - default note (no visibilityNote, no hate.note) -> 'Data discipline'
-//   Notes (L356-369):
+//   Notes:
 //     - faction.visibilityNote present -> 'Visibility note' note
 //     - hate.note present (when hate requiredProject) -> 'Alien-hate access' note
 //     - neither present -> default 'Data discipline' note
 //
-// RED PROOF (2026-08-25): <filled in after the red-proof exercise below>
+// RED PROOF (2026-08-26, re-run after the React migration): replaced the
+//   explicit-declaration guard in visibilityForMetric
+//   (src/v2/panels/factionIntelUtils.js) with the pre-fix
+//   `hasMetricValue(explicit.value)` — i.e. deliberately reopened live-defect
+//   #11. The run went 35 pass / 1 fail: 'EARTH visibility tag respects an
+//   explicit UNAVAILABLE / UNKNOWN / VISIBLE declaration' failed on
+//   "declared earthVisibility: 'unavailable' must surface as EARTH UNAVAILABLE,
+//   NOT EARTH VISIBLE", with the dumped render showing EARTH VISIBLE on a
+//   faction whose snapshot declared the opposite. Restoring isExplicitlyEmpty
+//   returned all 36 to green. That one test is the only guard on #11 — do not
+//   weaken it.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { runComponent, visibleText } = require('./fixtures/renderHarness');
+const {
+  withFactionIntelHarnessPage,
+  getHarnessText,
+  selectFaction,
+  getSelectedId,
+  destroyController,
+  harnessChildCount,
+  installSelectionRecorder,
+  readSelections,
+  fetchCalls,
+} = require('./fixtures/factionIntelBrowser');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
-const { DOMNode, createMockEnvironment, serializeNode } = require('./fixtures/mockDom');
 
 const repoRoot = path.resolve(__dirname, '..');
-const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'faction-intel.js');
 const shellPath = path.join(repoRoot, 'public', 'v2', 'index.html');
-
-// FactionIntelScreen uses a few native DOM conveniences that are not needed by
-// the older SVG tests. Keep the additions local to this characterization file;
-// renderHarness still supplies the shipped shared.js implementation.
-function installComponentDomProperties() {
-  if (!Object.prototype.hasOwnProperty.call(DOMNode.prototype, 'childNodes')) {
-    Object.defineProperty(DOMNode.prototype, 'childNodes', {
-      configurable: true,
-      get() { return this.children; }
-    });
-  }
-
-  if (!Object.prototype.hasOwnProperty.call(DOMNode.prototype, 'nodeType')) {
-    Object.defineProperty(DOMNode.prototype, 'nodeType', {
-      configurable: true,
-      get() { return this.tagName === '#TEXT' ? 3 : 1; }
-    });
-  }
-
-  if (!Object.prototype.hasOwnProperty.call(DOMNode.prototype, 'classList')) {
-    Object.defineProperty(DOMNode.prototype, 'classList', {
-      configurable: true,
-      get() {
-        const node = this;
-        const getClasses = () => new Set((node.getAttribute('class') || '').split(/\s+/).filter(Boolean));
-        const save = classes => node.setAttribute('class', [...classes].join(' '));
-        return {
-          contains(className) { return getClasses().has(className); },
-          add(...classNames) {
-            const classes = getClasses();
-            classNames.forEach(className => classes.add(className));
-            save(classes);
-          },
-          remove(...classNames) {
-            const classes = getClasses();
-            classNames.forEach(className => classes.delete(className));
-            save(classes);
-          },
-          toggle(className, force) {
-            const classes = getClasses();
-            const shouldHave = force === undefined ? !classes.has(className) : Boolean(force);
-            if (shouldHave) classes.add(className); else classes.delete(className);
-            save(classes);
-            return shouldHave;
-          }
-        };
-      }
-    });
-  }
-
-  const styleDescriptor = Object.getOwnPropertyDescriptor(DOMNode.prototype, 'style');
-  if (styleDescriptor && !styleDescriptor.get.__factionIntelPatched) {
-    const getStyle = styleDescriptor.get;
-    const patchedGetStyle = function patchedStyle() {
-      const base = getStyle.call(this);
-      const node = this;
-      return new Proxy({
-        setProperty(name, value) {
-          base[name] = value;
-        },
-        removeProperty(name) {
-          delete node._style[name];
-        }
-      }, {
-        get(target, property) {
-          if (property in target) return target[property];
-          return base[property];
-        },
-        set(target, property, value) {
-          base[property] = value;
-          return true;
-        }
-      });
-    };
-    Object.defineProperty(patchedGetStyle, '__factionIntelPatched', { value: true });
-    Object.defineProperty(DOMNode.prototype, 'style', { ...styleDescriptor, get: patchedGetStyle });
-  }
-}
-
-installComponentDomProperties();
 
 function firstObservedEnemy(snapshot) {
   return snapshot.councilors.find(councilor =>
@@ -214,27 +162,13 @@ function expectedMaskedTopSkill(councilor) {
   return `SKILL / ${abbreviations[key] || key.slice(0, 3).toUpperCase()} ${value}`;
 }
 
-function renderFaction(snapshot, observerId = 4712) {
-  const fetchCalls = [];
-  const fetchStub = (url, options) => {
-    fetchCalls.push({ url, options });
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve({ data: snapshot })
-    });
-  };
-  const { document, window } = createMockEnvironment({ fetch: fetchStub });
-  document.createTextNode = text => {
-    const node = document.createElement('#text');
-    node.textContent = text;
-    return node;
-  };
-  const sandbox = runComponent(componentPath, { document, window, fetch: fetchStub });
-  const root = document.createElement('div');
-  const controller = sandbox.window.FactionIntelScreen.render(root, snapshot, null, observerId);
-  const html = serializeNode(root);
-  return { controller, document, fetchCalls, html, root, text: visibleText(html) };
+/**
+ * Mounts the dossier and hands the page to `run`. The vanilla suite stubbed a
+ * fetch seam here; the browser fixture installs a fetch spy instead, so
+ * "never reaches the network" is still an assertion rather than an assumption.
+ */
+function renderFaction(snapshot, observerId = 4712, run) {
+  return withFactionIntelHarnessPage({ snapshot, briefing: null, observerId }, run);
 }
 
 // ---------------------------------------------------------------------------
@@ -427,56 +361,61 @@ function measuredFactionDossierSnapshot(overrides = {}) {
 // Normal render: both modes, including the open-time fetch seam.
 // ---------------------------------------------------------------------------
 
-test('faction dossier renders the normal player snapshot without reaching the network', () => {
+test('faction dossier renders the normal player snapshot without reaching the network', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
-  const rendered = renderFaction(snapshot);
 
-  assert.strictEqual(rendered.fetchCalls.length, 0, 'the open-time fetch seam must be stubbed, never sent to the network by the unit test');
-  assert.ok(rendered.text.includes('Faction intelligence'));
-  assert.ok(rendered.text.includes('PLAYER INTEL'));
-  assert.ok(rendered.text.includes('the Initiative'));
-  assert.ok(rendered.text.includes('Faction roster'));
-  assert.ok(rendered.text.includes('Earth footprint'));
-  assert.ok(rendered.text.includes('Space posture'));
-  assert.ok(rendered.text.includes('Research posture'));
-  assert.ok(rendered.text.includes('Councilor roster'));
-  assert.ok(rendered.text.includes('Plan of action'));
-  assert.strictEqual(rendered.controller.getSelectedId(), 4712);
+  await renderFaction(snapshot, 4712, async (page) => {
+    const text = await getHarnessText(page);
+
+    assert.strictEqual((await fetchCalls(page)).length, 0, 'the open-time fetch seam must be stubbed, never sent to the network by the unit test');
+    assert.ok(text.includes('Faction intelligence'));
+    assert.ok(text.includes('PLAYER INTEL'));
+    assert.ok(text.includes('the Initiative'));
+    assert.ok(text.includes('Faction roster'));
+    assert.ok(text.includes('Earth footprint'));
+    assert.ok(text.includes('Space posture'));
+    assert.ok(text.includes('Research posture'));
+    assert.ok(text.includes('Councilor roster'));
+    assert.ok(text.includes('Plan of action'));
+    assert.strictEqual(await getSelectedId(page), 4712);
+  });
 });
 
-test('faction dossier renders the omniscient snapshot and an alien faction selection', () => {
+test('faction dossier renders the omniscient snapshot and an alien faction selection', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient' });
   const alien = firstAlien(snapshot);
   assert.ok(alien, 'the frozen omniscient fixture must contain an alien councilor');
 
-  const rendered = renderFaction(snapshot);
-  assert.ok(rendered.controller.select(4717));
-  const text = visibleText(serializeNode(rendered.root));
+  await renderFaction(snapshot, 4712, async (page) => {
+    assert.ok(await selectFaction(page, 4717));
+    const text = await getHarnessText(page);
 
-  assert.ok(text.includes('OMNISCIENT'));
-  assert.ok(text.includes('the Aliens'));
-  assert.ok(text.includes(alien.displayName));
-  assert.ok(text.includes('ALIEN HATE'));
-  assert.ok(text.includes('RAW SAVE ONLY'));
-  assert.strictEqual(rendered.controller.getSelectedId(), 4717);
+    assert.ok(text.includes('OMNISCIENT'));
+    assert.ok(text.includes('the Aliens'));
+    assert.ok(text.includes(alien.displayName));
+    assert.ok(text.includes('ALIEN HATE'));
+    assert.ok(text.includes('RAW SAVE ONLY'));
+    assert.strictEqual(await getSelectedId(page), 4717);
+  });
 });
 
 // ---------------------------------------------------------------------------
 // Player redaction: maskedAttributes is the visible source for rivals.
 // ---------------------------------------------------------------------------
 
-test('faction dossier keeps an observed enemy councilor in player mode', () => {
+test('faction dossier keeps an observed enemy councilor in player mode', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
   const target = firstObservedEnemy(snapshot);
   assert.ok(target, 'the frozen player fixture must contain an observed enemy');
   assert.equal(target.attributes, undefined, 'the raw enemy attributes must be absent in player mode');
 
-  const rendered = renderFaction(snapshot);
-  assert.ok(rendered.controller.select(target.factionId));
-  const text = visibleText(serializeNode(rendered.root));
+  await renderFaction(snapshot, 4712, async (page) => {
+    assert.ok(await selectFaction(page, target.factionId));
+    const text = await getHarnessText(page);
 
-  assert.ok(text.includes(target.displayName), 'an attributes-only filter would silently drop this player-visible councilor');
-  assert.ok(text.includes(expectedMaskedTopSkill(target)), 'the dossier must read the visible skill from maskedAttributes');
+    assert.ok(text.includes(target.displayName), 'an attributes-only filter would silently drop this player-visible councilor');
+    assert.ok(text.includes(expectedMaskedTopSkill(target)), 'the dossier must read the visible skill from maskedAttributes');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -492,64 +431,81 @@ function sparseSnapshot() {
   };
 }
 
-test('faction dossier renders UNAVAILABLE when faction metrics are not measured', () => {
-  const rendered = renderFaction(sparseSnapshot());
-  assert.ok(rendered.text.includes('UNAVAILABLE'), 'missing hate, power, Earth, space, and research metrics must remain UNAVAILABLE');
+test('faction dossier renders UNAVAILABLE when faction metrics are not measured', async () => {
+  await renderFaction(sparseSnapshot(), 4712, async (page) => {
+    const text = await getHarnessText(page);
+    assert.ok(text.includes('UNAVAILABLE'), 'missing hate, power, Earth, space, and research metrics must remain UNAVAILABLE');
+  });
 });
 
-test('faction dossier renders UNKNOWN for an unmeasured relationship', () => {
-  const rendered = renderFaction(sparseSnapshot());
-  assert.ok(rendered.text.includes('UNKNOWN'), 'an absent observer-relative relationship must remain UNKNOWN');
+test('faction dossier renders UNKNOWN for an unmeasured relationship', async () => {
+  await renderFaction(sparseSnapshot(), 4712, async (page) => {
+    const text = await getHarnessText(page);
+    assert.ok(text.includes('UNKNOWN'), 'an absent observer-relative relationship must remain UNKNOWN');
+  });
 });
 
-test('faction dossier preserves an explicit em dash visibility marker', () => {
+test('faction dossier preserves an explicit em dash visibility marker', async () => {
   const snapshot = sparseSnapshot();
   snapshot.factions[0].earthVisibility = '—';
-  const rendered = renderFaction(snapshot);
-  assert.ok(rendered.text.includes('EARTH —'), 'an explicitly unmeasured visibility marker must remain an em dash');
+  await renderFaction(snapshot, 4712, async (page) => {
+    const text = await getHarnessText(page);
+    assert.ok(text.includes('EARTH —'), 'an explicitly unmeasured visibility marker must remain an em dash');
+  });
 });
 
-test('faction dossier empty and absent inputs remain distinct', () => {
-  const empty = renderFaction({ mode: 'player', factions: [], councilors: [] });
-  assert.ok(empty.text.includes('No selectable factions were supplied.'));
-  assert.ok(empty.text.includes('0 entries'));
+test('faction dossier empty and absent inputs remain distinct', async () => {
+  await renderFaction({ mode: 'player', factions: [], councilors: [] }, 4712, async (page) => {
+    const text = await getHarnessText(page);
+    assert.ok(text.includes('No selectable factions were supplied.'));
+    assert.ok(text.includes('0 entries'));
+  });
 
-  const absent = renderFaction(undefined);
-  assert.ok(absent.text.includes('No faction data is present in the current snapshot.'));
-  assert.ok(absent.text.includes('No selectable factions were supplied.'));
+  await renderFaction(undefined, 4712, async (page) => {
+    const text = await getHarnessText(page);
+    assert.ok(text.includes('No faction data is present in the current snapshot.'));
+    assert.ok(text.includes('No selectable factions were supplied.'));
+  });
 });
 
 // ---------------------------------------------------------------------------
 // Selection, open/close mount contract, and no silent list loss.
 // ---------------------------------------------------------------------------
 
-test('faction selection emits the selected record and destroy closes the overlay mount', () => {
+test('faction selection emits the selected record and destroy closes the overlay mount', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient' });
-  const selected = [];
-  const rendered = renderFaction(snapshot);
-  rendered.root.onFactionIntelSelect = detail => selected.push(detail);
 
-  assert.ok(rendered.controller.select(4717));
-  assert.strictEqual(selected.length, 1);
-  assert.strictEqual(selected[0].factionId, 4717);
-  assert.strictEqual(selected[0].observerId, 4712);
-  assert.strictEqual(rendered.controller.getSelectedId(), 4717);
+  await renderFaction(snapshot, 4712, async (page) => {
+    await installSelectionRecorder(page);
 
-  rendered.controller.destroy();
-  assert.strictEqual(rendered.root.children.length, 0, 'destroy must remove the dossier shell from the overlay mount');
-  rendered.controller.destroy();
-  assert.strictEqual(rendered.root.children.length, 0, 'destroy must be idempotent');
+    assert.ok(await selectFaction(page, 4717));
+    const { handoffs } = await readSelections(page);
+    assert.strictEqual(handoffs.length, 1);
+    assert.strictEqual(handoffs[0].factionId, 4717);
+    assert.strictEqual(handoffs[0].observerId, 4712);
+    assert.strictEqual(await getSelectedId(page), 4717);
+
+    await destroyController(page);
+    assert.strictEqual(await harnessChildCount(page), 0, 'destroy must remove the dossier shell from the overlay mount');
+    await destroyController(page);
+    assert.strictEqual(await harnessChildCount(page), 0, 'destroy must be idempotent');
+  });
 });
 
-test('faction dossier overlay has open mount and close controls in the shipped shell', () => {
+test('faction dossier overlay has open mount and close controls in the shipped shell', async () => {
   const shell = fs.readFileSync(shellPath, 'utf8');
   assert.match(shell, /id="openFactionIntelBtn"/);
   assert.match(shell, /id="closeFactionIntelBtn"/);
   assert.match(shell, /data-faction-intel-close/);
   assert.match(shell, /id="factionIntelRoot"/);
 
-  const rendered = renderFaction(loadFixtureFilteredSnapshot({ mode: 'player' }));
-  assert.strictEqual(rendered.root.querySelector('[data-faction-intel-component="true"]').getAttribute('data-faction-intel-component'), 'true');
+  await renderFaction(loadFixtureFilteredSnapshot({ mode: 'player' }), 4712, async (page) => {
+    const marker = await page.evaluate(() => {
+      const el = document.querySelector('[data-faction-intel-component="true"]');
+      return el ? el.getAttribute('data-faction-intel-component') : null;
+    });
+    assert.strictEqual(marker, 'true');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -559,180 +515,182 @@ test('faction dossier overlay has open mount and close controls in the shipped s
 
 const RIVAL = 4713;
 
-function renderRival(snap) {
-  const rendered = renderFaction(snap, 4712);
-  assert.ok(rendered.controller.select(RIVAL), `controller.select(${RIVAL}) must succeed`);
-  return { rendered, text: visibleText(serializeNode(rendered.root)) };
+async function renderRival(snap) {
+  const text = await renderFaction(snap, 4712, async (page) => {
+    assert.ok(await selectFaction(page, RIVAL), `controller.select(${RIVAL}) must succeed`);
+    return getHarnessText(page);
+  });
+  return { text };
 }
 
-test('null Hate of us leaves Our hate measured and Summary tracking', () => {
+test('null Hate of us leaves Our hate measured and Summary tracking', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factionRelationships', 0, 'relationship'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Hate of us UNAVAILABLE'), 'the incoming relationship reads UNAVAILABLE');
   assert.ok(text.includes('Our hate 2.10'), 'the outgoing relationship stays measured');
   assert.ok(text.includes('Summary ONE DIRECTION RECORDED'), 'Summary reflects the remaining direction');
   assertNoRuntimePlaceholders(text, 'Hate of us null');
 });
 
-test('null Our hate leaves Hate of us measured', () => {
+test('null Our hate leaves Hate of us measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factionRelationships', 1, 'relationship'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Our hate UNAVAILABLE'));
   assert.ok(text.includes('Hate of us 4.50'));
   assert.ok(text.includes('Summary ONE DIRECTION RECORDED'));
   assertNoRuntimePlaceholders(text, 'Our hate null');
 });
 
-test('null both directions yields Summary UNKNOWN and two UNAVAILABLE rows', () => {
+test('null both directions yields Summary UNKNOWN and two UNAVAILABLE rows', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factionRelationships', 0, 'relationship'], null);
   setPath(snap, ['factionRelationships', 1, 'relationship'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Hate of us UNAVAILABLE'));
   assert.ok(text.includes('Our hate UNAVAILABLE'));
   assert.ok(text.includes('Summary UNKNOWN'), 'both null -> Summary UNKNOWN');
   assertNoRuntimePlaceholders(text, 'both relationships null');
 });
 
-test('null Composite score estimate leaves Military score measured', () => {
+test('null Composite score estimate leaves Military score measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'powerScore', 'overall'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Composite score estimate UNAVAILABLE'));
   assert.ok(text.includes('Military score 15 / 100'));
   assertNoRuntimePlaceholders(text, 'Composite null');
 });
 
-test('null Military score leaves Composite score estimate measured', () => {
+test('null Military score leaves Composite score estimate measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'powerScore', 'military'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Military score UNAVAILABLE'));
   assert.ok(text.includes('Composite score estimate 35 / 100'));
   assertNoRuntimePlaceholders(text, 'Military null');
 });
 
-test('null powerScore entirely makes Estimated read UNAVAILABLE', () => {
+test('null powerScore entirely makes Estimated read UNAVAILABLE', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'powerScore'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Estimated UNAVAILABLE'), 'a null powerScore cannot default Estimated to NO');
   assert.ok(text.includes('Composite score estimate UNAVAILABLE'));
   assertNoRuntimePlaceholders(text, 'powerScore null');
 });
 
-test('null Control points leaves Nations and GDP measured', () => {
+test('null Control points leaves Nations and GDP measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'controlPointsCount'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Control points UNAVAILABLE'));
   assert.ok(text.includes('GDP $22T'));
   assert.ok(text.includes('Population 1,200'));
   assertNoRuntimePlaceholders(text, 'Control points null');
 });
 
-test('null GDP leaves Control points and Population measured', () => {
+test('null GDP leaves Control points and Population measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'totalGdp'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('GDP UNAVAILABLE'));
   assert.ok(text.includes('Control points 18'));
   assert.ok(text.includes('Population 1,200'));
   assertNoRuntimePlaceholders(text, 'GDP null');
 });
 
-test('null Population leaves GDP and Economy score measured', () => {
+test('null Population leaves GDP and Economy score measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'totalPopulation'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Population UNAVAILABLE'));
   assert.ok(text.includes('GDP $22T'));
   assert.ok(text.includes('Economy score 40 / 100'));
   assertNoRuntimePlaceholders(text, 'Population null');
 });
 
-test('null Economy score leaves Politics score measured', () => {
+test('null Economy score leaves Politics score measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'powerScore', 'earthEconomy'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Economy score UNAVAILABLE'));
   assert.ok(text.includes('Politics score 50 / 100'));
   assertNoRuntimePlaceholders(text, 'Economy score null');
 });
 
-test('null Politics score leaves Economy score measured', () => {
+test('null Politics score leaves Economy score measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'powerScore', 'earthPolitics'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Politics score UNAVAILABLE'));
   assert.ok(text.includes('Economy score 40 / 100'));
   assertNoRuntimePlaceholders(text, 'Politics score null');
 });
 
-test('null Habs leaves Fleets and Ships measured', () => {
+test('null Habs leaves Fleets and Ships measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'habsCount'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Habs / stations UNAVAILABLE'));
   assert.ok(text.includes('Fleets 1'));
   assert.ok(text.includes('Ships 3'));
   assertNoRuntimePlaceholders(text, 'Habs null');
 });
 
-test('null Ships leaves Combat power and Space score measured', () => {
+test('null Ships leaves Combat power and Space score measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'shipsCount'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Ships UNAVAILABLE'));
   assert.ok(text.includes('Combat power 1,200'));
   assert.ok(text.includes('Space score 25 / 100'));
   assertNoRuntimePlaceholders(text, 'Ships null');
 });
 
-test('null Combat power leaves Ships and Fleet score measured', () => {
+test('null Combat power leaves Ships and Fleet score measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'combatPowerAvailable'], false);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Combat power UNAVAILABLE'));
   assert.ok(text.includes('Ships 3'));
   assert.ok(text.includes('Fleet score 20 / 100'));
   assertNoRuntimePlaceholders(text, 'Combat power null');
 });
 
-test('null Space score leaves Fleet score measured', () => {
+test('null Space score leaves Fleet score measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'powerScore', 'spaceEconomy'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Space score UNAVAILABLE'));
   assert.ok(text.includes('Fleet score 20 / 100'));
   assertNoRuntimePlaceholders(text, 'Space score null');
 });
 
-test('null Research output leaves Projects listed and Available projects measured', () => {
+test('null Research output leaves Projects listed and Available projects measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'totalResearch'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Research output UNAVAILABLE'));
   assert.ok(text.includes('Projects listed 1 listed'));
   assert.ok(text.includes('Available projects 8'));
   assertNoRuntimePlaceholders(text, 'Research output null');
 });
 
-test('null Projects listed leaves Research output measured', () => {
+test('null Projects listed leaves Research output measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'completedProjects'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Projects listed UNAVAILABLE'));
   assert.ok(text.includes('Research output 420 / cycle'));
   assertNoRuntimePlaceholders(text, 'Projects listed null');
 });
 
-test('null Available projects leaves Active projects listed measured', () => {
+test('null Available projects leaves Active projects listed measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 1, 'availableProjectsCount'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('Available projects UNAVAILABLE'));
   assert.ok(text.includes('Active projects listed 0'));
   assertNoRuntimePlaceholders(text, 'Available projects null');
@@ -742,37 +700,37 @@ test('null Available projects leaves Active projects listed measured', () => {
 // Councilor row: each null field produces a distinct visible affordance.
 // ---------------------------------------------------------------------------
 
-test('null councilor displayName renders UNAVAILABLE while location stays measured', () => {
+test('null councilor displayName renders UNAVAILABLE while location stays measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['councilors', 1, 'displayName'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('UNAVAILABLE'));
   assert.ok(text.includes('LOCATION / United States'));
   assertNoRuntimePlaceholders(text, 'councilor name null');
 });
 
-test('null councilor locationName renders LOCATION / UNAVAILABLE while name stays measured', () => {
+test('null councilor locationName renders LOCATION / UNAVAILABLE while name stays measured', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['councilors', 1, 'locationName'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('LOCATION / UNAVAILABLE'));
   assert.ok(text.includes('Prophet Vance'));
   assertNoRuntimePlaceholders(text, 'councilor location null');
 });
 
-test('null councilor activeMissionName renders the No active mission fallback', () => {
+test('null councilor activeMissionName renders the No active mission fallback', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['councilors', 1, 'activeMissionName'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('MISSION / No active mission'));
   assert.ok(text.includes('Prophet Vance'));
   assertNoRuntimePlaceholders(text, 'councilor mission null');
 });
 
-test('null councilor maskedAttributes renders SKILL / UNAVAILABLE', () => {
+test('null councilor maskedAttributes renders SKILL / UNAVAILABLE', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['councilors', 1, 'maskedAttributes'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('SKILL / UNAVAILABLE'));
   assert.ok(text.includes('Prophet Vance'));
   assertNoRuntimePlaceholders(text, 'councilor skill null');
@@ -783,14 +741,14 @@ test('null councilor maskedAttributes renders SKILL / UNAVAILABLE', () => {
 // render. The dossier must not collapse to the absent-input banner.
 // ---------------------------------------------------------------------------
 
-test('partial render keeps measured values beside independently absent values in the same render', () => {
+test('partial render keeps measured values beside independently absent values in the same render', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factionRelationships', 0, 'hate'], null);
   setPath(snap, ['factions', 1, 'controlPointsCount'], null);
   setPath(snap, ['factions', 1, 'shipsCount'], null);
   setPath(snap, ['factions', 1, 'totalResearch'], null);
   setPath(snap, ['factions', 1, 'powerScore', 'overall'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assertIncludesAll(text, [
     'Hate of us 4.50',
     'Our hate 2.10',
@@ -811,17 +769,17 @@ test('partial render keeps measured values beside independently absent values in
 // Visibility tag surface: enumerated per normalizeVisibility mapping.
 // ---------------------------------------------------------------------------
 
-test('RELATION visibility tag reads UNAVAILABLE when both relationship entries are missing', () => {
+test('RELATION visibility tag reads UNAVAILABLE when both relationship entries are missing', async () => {
   const snap = measuredFactionDossierSnapshot();
   for (const idx of [0, 1]) setPath(snap, ['factionRelationships', idx, 'hate'], null);
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('RELATION OBSERVER FACTION TELEMETRY'));
   assert.ok(text.includes('HATE OF US OBSERVER FACTION TELEMETRY'));
   assert.ok(text.includes('OUR HATE OBSERVER FACTION TELEMETRY'));
   assertNoRuntimePlaceholders(text, 'RELATION UNAVAILABLE');
 });
 
-test('EARTH visibility tag respects an explicit UNAVAILABLE / UNKNOWN / VISIBLE declaration', () => {
+test('EARTH visibility tag respects an explicit UNAVAILABLE / UNKNOWN / VISIBLE declaration', async () => {
   // The dossier used to read `if (explicit.found && hasMetricValue(explicit.value))`
   // for the EARTH / SPACE / RESEARCH / VISIBILITY tags. Because MISSING_VALUES
   // contains both 'UNAVAILABLE' and 'UNKNOWN', any value that uppercased to
@@ -843,7 +801,7 @@ test('EARTH visibility tag respects an explicit UNAVAILABLE / UNKNOWN / VISIBLE 
   ]) {
     const snap = measuredFactionDossierSnapshot();
     snap.factions[1].earthVisibility = raw;
-    const { text } = renderRival(snap);
+    const { text } = await renderRival(snap);
     assert.ok(text.includes(`EARTH ${label}`),
       `declared earthVisibility: '${raw}' must surface as EARTH ${label}\n${text}`);
   }
@@ -857,7 +815,7 @@ test('EARTH visibility tag respects an explicit UNAVAILABLE / UNKNOWN / VISIBLE 
   for (const raw of ['unavailable', 'UNAVAILABLE']) {
     const snap = measuredFactionDossierSnapshot();
     snap.factions[1].earthVisibility = raw;
-    const { text } = renderRival(snap);
+    const { text } = await renderRival(snap);
     assert.ok(text.includes('EARTH UNAVAILABLE'),
       `declared earthVisibility: '${raw}' must surface as EARTH UNAVAILABLE, NOT EARTH VISIBLE\n${text}`);
     assert.ok(!text.match(/EARTH VISIBLE/),
@@ -869,7 +827,7 @@ test('EARTH visibility tag respects an explicit UNAVAILABLE / UNKNOWN / VISIBLE 
   for (const raw of ['unknown', 'UNKNOWN']) {
     const snap = measuredFactionDossierSnapshot();
     snap.factions[1].earthVisibility = raw;
-    const { text } = renderRival(snap);
+    const { text } = await renderRival(snap);
     assert.ok(text.includes('EARTH UNKNOWN'),
       `declared earthVisibility: '${raw}' must surface as EARTH UNKNOWN, NOT EARTH VISIBLE\n${text}`);
     assert.ok(!text.match(/EARTH VISIBLE/),
@@ -884,7 +842,7 @@ test('EARTH visibility tag respects an explicit UNAVAILABLE / UNKNOWN / VISIBLE 
   // start rendering truly absent declarations as UNAVAILABLE.
   const snap = measuredFactionDossierSnapshot();
   delete snap.factions[1].earthVisibility;
-  const { text } = renderRival(snap);
+  const { text } = await renderRival(snap);
   assert.ok(text.includes('EARTH VISIBLE'),
     `an absent earthVisibility on a faction with earth data must still fall back to EARTH VISIBLE\n${text}`);
 });
@@ -893,24 +851,26 @@ test('EARTH visibility tag respects an explicit UNAVAILABLE / UNKNOWN / VISIBLE 
 // Action-plan branches: observer vs non-observer take distinct paths.
 // ---------------------------------------------------------------------------
 
-test('observer action plan reacts to a null alien-hate value with the requiredProject branch', () => {
+test('observer action plan reacts to a null alien-hate value with the requiredProject branch', async () => {
   const snap = measuredFactionDossierSnapshot();
   setPath(snap, ['factions', 0, 'alienHate'], { visibility: 'unavailable', value: null, requiredProject: 'Project_TheirOperations', playerVisible: false });
-  const rendered = renderFaction(snap, 4712);
-  assert.strictEqual(rendered.controller.getSelectedId(), 4712);
-  const text = visibleText(serializeNode(rendered.root));
-  assert.ok(text.includes('Alien-hate access'), 'a null alien-hate with requiredProject triggers the hate note');
-  assert.ok(text.includes('Project_TheirOperations'), 'the requiredProject must surface in the plan');
-  assert.ok(!text.includes('Treat alien-hate posture as unknown'));
-  assertNoRuntimePlaceholders(text, 'hate requiredProject');
+  await renderFaction(snap, 4712, async (page) => {
+    assert.strictEqual(await getSelectedId(page), 4712);
+    const text = await getHarnessText(page);
+    assert.ok(text.includes('Alien-hate access'), 'a null alien-hate with requiredProject triggers the hate note');
+    assert.ok(text.includes('Project_TheirOperations'), 'the requiredProject must surface in the plan');
+    assert.ok(!text.includes('Treat alien-hate posture as unknown'));
+    assertNoRuntimePlaceholders(text, 'hate requiredProject');
+  });
 });
 
-test('non-observer action plan keeps the surveillance wording and surfaces relationship posture', () => {
+test('non-observer action plan keeps the surveillance wording and surfaces relationship posture', async () => {
   const snap = measuredFactionDossierSnapshot();
-  const rendered = renderFaction(snap, 4712);
-  assert.ok(rendered.controller.select(RIVAL));
-  const text = visibleText(serializeNode(rendered.root));
-  assert.ok(text.includes('Plan of action'));
-  assert.ok(/surveillance|relationship|Hate of us/i.test(text), 'non-observer branch surfaces relationship / surveillance text');
-  assertNoRuntimePlaceholders(text, 'non-observer plan');
+  await renderFaction(snap, 4712, async (page) => {
+    assert.ok(await selectFaction(page, RIVAL));
+    const text = await getHarnessText(page);
+    assert.ok(text.includes('Plan of action'));
+    assert.ok(/surveillance|relationship|Hate of us/i.test(text), 'non-observer branch surfaces relationship / surveillance text');
+    assertNoRuntimePlaceholders(text, 'non-observer plan');
+  });
 });

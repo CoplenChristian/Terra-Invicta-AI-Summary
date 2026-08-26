@@ -26,18 +26,22 @@
 // PROPERTY (the sections partition the path; the counts reconcile; no null
 // reaches the text) so a later save does not turn this file red.
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 
 const techIntel = require('../server/techIntel');
 const techGraph = require('../shared/techGraph.mjs');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
 const templateLoader = require('../server/templateLoader');
 const { buildResourceProjection } = require('../shared/intel/registry.mjs');
-const { MISSION_CONTROL_SHARED } = require('./fixtures/renderHarness');
+const {
+  getDriveExplorerHarnessPage,
+  closeDriveExplorerHarness,
+  renderDriveExplorerOnPage,
+  openDrivePathOnPage
+} = require('./fixtures/driveExplorerBrowser');
 
 const OBSERVER = 4712;
 const MODES = ['player', 'omniscient'];
@@ -220,30 +224,17 @@ templateTest('a compact drive row names the gate project the modal opens on', ()
 // 3. THE PANEL — the click affordance, and what the modal says
 // ---------------------------------------------------------------------------
 
-/** Loads the panel into its own window, which tests can then stub against. */
-function loadPanelSandbox(fetchImpl) {
-  const code = fs.readFileSync(
-    path.join(__dirname, '..', 'public', 'v2', 'js', 'components', 'drive-explorer.js'), 'utf8');
-  const sandbox = {
-    console,
-    // The SHIPPED bundle, not a hand-copy of its escaper. The copy that used to
-    // sit here was faithful, so nothing was wrong with it -- but it was a second
-    // thing to keep in step with `public/v2/js/shared.js`, and the harness
-    // executes that file rather than reproducing it.
-    MissionControlShared: MISSION_CONTROL_SHARED,
-    fetch: fetchImpl || (() => Promise.reject(new Error('no network in this test'))),
-    URLSearchParams
-  };
-  sandbox.window = sandbox;
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(code, sandbox, { filename: 'drive-explorer.js' });
-  return { panel: sandbox.window.MissionControlDriveExplorer, sandbox };
+// The panel became src/v2/panels/DriveExplorer.jsx on 2026-08-26. Its pure
+// half — the modal shaping these tests are about — is an ESM module both Vite
+// and a bare Node test can read; the DOM half runs in the real browser harness,
+// because `node --test` cannot render React out of the Vite bundle.
+let utilsPromise = null;
+function driveExplorerUtils() {
+  if (!utilsPromise) utilsPromise = import('../src/v2/panels/driveExplorerUtils.mjs');
+  return utilsPromise;
 }
 
-function loadPanel() {
-  return loadPanelSandbox().panel;
-}
+after(async () => { await closeDriveExplorerHarness(); });
 
 const FORBIDDEN = ['null', 'undefined', 'NaN', '[object Object]'];
 
@@ -254,13 +245,11 @@ function assertNoPlaceholders(text, label) {
   }
 }
 
-templateTest('every drive row carries a real control that opens its path, not a bare <tr>', () => {
-  const panel = loadPanel();
+templateTest('every drive row carries a real control that opens its path, not a bare <tr>', async () => {
+  const page = await getDriveExplorerHarnessPage();
   const payload = buildResourceProjection(live('player'), 'drive-explorer',
     { mode: 'player', observerId: OBSERVER, limit: 1000 });
-  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
-  panel.render(container, payload);
-  const html = container.innerHTML;
+  const html = await renderDriveExplorerOnPage(page, payload);
 
   const rowCount = (html.match(/<tr class="de-row/g) || []).length;
   const buttonCount = (html.match(/data-de-path="/g) || []).length;
@@ -275,15 +264,15 @@ templateTest('every drive row carries a real control that opens its path, not a 
     'and it must name what it does for a reader who cannot see the row');
 });
 
-templateTest('the modal splits the path into faction projects and global techs, and both reconcile', () => {
-  const panel = loadPanel();
+templateTest('the modal splits the path into faction projects and global techs, and both reconcile', async () => {
+  const { pathPanelOptions } = await driveExplorerUtils();
   const payload = buildResourceProjection(live('player'), 'drive-explorer',
     { mode: 'player', observerId: OBSERVER, limit: 1000 });
   const row = payload.items.find(entry => entry.availability.gateProjectId === PION_TORCH_GATE);
   assert.ok(row, 'the live save must still carry a drive gated on the Pion Torch project');
 
   const projection = techIntel.buildPath(live('player'), 'player', OBSERVER, [PION_TORCH_GATE]);
-  const options = panel._internals.pathPanelOptions(row, projection);
+  const options = pathPanelOptions(row, projection);
 
   const byTitle = new Map(options.sections.map(section => [section.title, section]));
   const factionRemain = projection.remainingPath.filter(node => node.type === 'faction_project').length;
@@ -328,8 +317,8 @@ templateTest('the modal splits the path into faction projects and global techs, 
   assertNoPlaceholders(text, 'the drive path modal');
 });
 
-templateTest('a part-researched node shows its progress rather than reading as untouched', () => {
-  const panel = loadPanel();
+templateTest('a part-researched node shows its progress rather than reading as untouched', async () => {
+  const { pathPanelOptions } = await driveExplorerUtils();
   const payload = buildResourceProjection(live('player'), 'drive-explorer',
     { mode: 'player', observerId: OBSERVER, limit: 1000 });
   const row = payload.items.find(entry => entry.availability.gateProjectId === PION_TORCH_GATE);
@@ -338,7 +327,7 @@ templateTest('a part-researched node shows its progress rather than reading as u
   const researching = projection.remainingPath.filter(node => node.status === 'researching');
   assert.ok(researching.length > 0, 'the live save must have something in progress on this path');
 
-  const options = panel._internals.pathPanelOptions(row, projection);
+  const options = pathPanelOptions(row, projection);
   const rendered = options.sections.flatMap(section => section.rows);
   for (const node of researching) {
     const entry = rendered.find(candidate => candidate.label === node.displayName);
@@ -348,8 +337,8 @@ templateTest('a part-researched node shows its progress rather than reading as u
   }
 });
 
-test('a never-researchable node makes the total unknown, never a smaller number', () => {
-  const panel = loadPanel();
+test('a never-researchable node makes the total unknown, never a smaller number', async () => {
+  const { pathPanelOptions } = await driveExplorerUtils();
   const row = {
     driveId: 'drive_x',
     displayName: 'Sentinel Drive',
@@ -373,7 +362,7 @@ test('a never-researchable node makes the total unknown, never a smaller number'
     availabilityCaveat: 'Prerequisites met does not mean startable. Availability is rolled monthly.'
   };
 
-  const options = panel._internals.pathPanelOptions(row, projection);
+  const options = pathPanelOptions(row, projection);
   const facts = new Map(options.facts.map(fact => [fact.label, fact.value]));
 
   assert.match(facts.get('TOTAL REMAINING'), /UNKNOWN/,
@@ -394,18 +383,19 @@ test('a never-researchable node makes the total unknown, never a smaller number'
 });
 
 test('an ungated drive says why there is no path, rather than opening an empty modal', async () => {
-  const { panel, sandbox } = loadPanelSandbox();
-  const opened = [];
-  sandbox.MissionControlDetailPanel = { open: (options) => opened.push(options) };
-  panel._internals.state.payload = {
-    items: [{
-      driveId: 'drive_ungated',
-      displayName: 'Ungated Drive',
-      availability: { bucket: 'fittable', gateProjectId: null, gateProjectName: null }
-    }]
-  };
-
-  await panel.openDrivePath('drive_ungated', null);
+  const page = await getDriveExplorerHarnessPage();
+  const opened = await openDrivePathOnPage(page, {
+    driveId: 'drive_ungated',
+    statePatch: {
+      payload: {
+        items: [{
+          driveId: 'drive_ungated',
+          displayName: 'Ungated Drive',
+          availability: { bucket: 'fittable', gateProjectId: null, gateProjectName: null }
+        }]
+      }
+    }
+  });
 
   assert.strictEqual(opened.length, 1, 'a click on an ungated drive must still open the modal');
   const facts = new Map(opened[0].facts.map(fact => [fact.label, fact.value]));
@@ -416,20 +406,22 @@ test('an ungated drive says why there is no path, rather than opening an empty m
 });
 
 test('a failed path fetch opens an honest unavailable modal, never a fabricated empty path', async () => {
-  const { panel, sandbox } = loadPanelSandbox(() => Promise.resolve({ ok: false, status: 503 }));
-  const opened = [];
-  sandbox.MissionControlDetailPanel = { open: (options) => opened.push(options) };
-  panel._internals.state.observer = OBSERVER;
-  panel._internals.state.mode = 'player';
-  panel._internals.state.payload = {
-    items: [{
-      driveId: 'drive_gated',
-      displayName: 'Gated Drive',
-      availability: { bucket: 'researchable', gateProjectId: 'Project_Gate', gateProjectName: 'Gate' }
-    }]
-  };
-
-  await panel.openDrivePath('drive_gated', null);
+  const page = await getDriveExplorerHarnessPage();
+  const opened = await openDrivePathOnPage(page, {
+    driveId: 'drive_gated',
+    fetchStatus: 503,
+    statePatch: {
+      observer: OBSERVER,
+      mode: 'player',
+      payload: {
+        items: [{
+          driveId: 'drive_gated',
+          displayName: 'Gated Drive',
+          availability: { bucket: 'researchable', gateProjectId: 'Project_Gate', gateProjectName: 'Gate' }
+        }]
+      }
+    }
+  });
 
   assert.strictEqual(opened.length, 1);
   assert.ok(!opened[0].sections, 'no sections may be rendered from a payload that never arrived');
@@ -475,12 +467,12 @@ templateTest('the endpoint carries a real topological order, not a reversed pre-
   }
 });
 
-test('the modal orders by the endpoint order, and does not mutate what it was handed', () => {
-  const panel = loadPanel();
+test('the modal orders by the endpoint order, and does not mutate what it was handed', async () => {
+  const { inDependencyOrder } = await driveExplorerUtils();
   const emitted = [{ id: 'target' }, { id: 'dependent' }, { id: 'dependency' }];
   const order = ['dependency', 'dependent', 'target'];
   assert.deepStrictEqual(
-    panel._internals.inDependencyOrder(emitted, order).map(node => node.id),
+    inDependencyOrder(emitted, order).map(node => node.id),
     ['dependency', 'dependent', 'target'],
     'the step you can start first is listed first'
   );
@@ -491,13 +483,13 @@ test('the modal orders by the endpoint order, and does not mutate what it was ha
   // rather than disappearing from the section.
   const withStranger = [{ id: 'target' }, { id: 'stranger' }, { id: 'dependency' }];
   assert.deepStrictEqual(
-    panel._internals.inDependencyOrder(withStranger, order).map(node => node.id),
+    inDependencyOrder(withStranger, order).map(node => node.id),
     ['dependency', 'target', 'stranger'],
     'an unordered node is placed last, never dropped');
 });
 
-test('research points render as points, and absence renders as absence', () => {
-  const { rp } = loadPanel()._internals;
+test('research points render as points, and absence renders as absence', async () => {
+  const { rp } = await driveExplorerUtils();
   assert.strictEqual(rp(1300325), '1,300,325 RP');
   assert.strictEqual(rp(0), '0 RP');
   assert.strictEqual(rp(-1), 'NEVER RESEARCHED');
@@ -517,7 +509,7 @@ test('the sections and notes live on the one shared detail panel', () => {
   assert.match(source, /id="detailPanelNotes"/, 'and the caveat notes');
 
   const driveSource = fs.readFileSync(
-    path.join(__dirname, '..', 'public', 'v2', 'js', 'components', 'drive-explorer.js'), 'utf8');
+    path.join(__dirname, '..', 'src', 'v2', 'panels', 'DriveExplorer.jsx'), 'utf8');
   assert.match(driveSource, /MissionControlDetailPanel/,
     'the drive panel must reuse the shared modal rather than build a second one');
   assert.ok(!/createElement\(['"]dialog['"]\)/.test(driveSource),

@@ -1,12 +1,12 @@
 # React migration — progress and handoff
 
-**State as of 2026-08-25, end of day. Last green commit: `6b8071d`.**
+**State as of 2026-08-26. Last green commit: see git log.**
 
 `npm test` exits 0, both builds succeed, `verify_v2_navigation.js` reports 0
 console and 0 network errors, `verify_mobile_overflow.js` passes with 0
 unreachable content and COMMAND at 3.05 screens against a 3.25 budget.
 
-**8 of 16 components migrated. 2,304 lines of vanilla component deleted today.**
+**11 of 16 components migrated.**
 
 ---
 

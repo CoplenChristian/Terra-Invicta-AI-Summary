@@ -15,18 +15,19 @@
 // is hardcoded -- docs/research-advisor-spec.md section 0 forbids it, and a
 // campaign-specific test would pass here and fail on the next save.
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
 
 const snapshotBuilder = require('../server/snapshotBuilder');
 const snapshotIdentity = require('../server/snapshotIdentity');
 const intelligenceFilter = require('../server/intelligenceFilter');
 const { makeSaveData } = require('./fixtures/syntheticSave');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
-const { MISSION_CONTROL_SHARED } = require('./fixtures/renderHarness');
+const {
+  getDriveExplorerHarnessPage,
+  closeDriveExplorerHarness,
+  renderDriveExplorerOnPage
+} = require('./fixtures/driveExplorerBrowser');
 const { buildResourceProjection, INTEL_ENDPOINT_INDEX, INTEL_ENDPOINT_EXAMPLES, SUPPORTED_RESOURCES } =
   require('../shared/intel/registry.mjs');
 const { DRIVE_AVAILABILITY, DRIVE_SORTS, MEASUREMENT_BASIS, driveExplorerResource } =
@@ -46,6 +47,16 @@ function live(mode) {
 
 const project = (snapshot, options = {}) =>
   buildResourceProjection(snapshot, 'drive-explorer', { mode: 'player', ...options });
+
+// The panel's pure half is ESM (Vite consumes it too), so it is reached by
+// dynamic import rather than require. One promise, resolved once.
+let utilsPromise = null;
+function driveExplorerUtils() {
+  if (!utilsPromise) utilsPromise = import('../src/v2/panels/driveExplorerUtils.mjs');
+  return utilsPromise;
+}
+
+after(async () => { await closeDriveExplorerHarness(); });
 
 /** Every row, so a census assertion is about the catalogue and not a page of it. */
 const allRows = (snapshot, options = {}) => project(snapshot, { limit: 1000, ...options });
@@ -890,39 +901,28 @@ test('the war room never reports an unreadable destination table as zero destina
 
 // ---------------------------------------------------------------------------
 // 11. THE PANEL
+//
+// The panel is src/v2/panels/DriveExplorer.jsx now, so these run in a real
+// browser through public/v2/primitives-harness.html rather than against a
+// string of HTML built in a vm sandbox. `node --test` cannot render React out
+// of the Vite bundle, and the DOM is the thing under test here.
+//
+// Every assertion below is the one that guarded the vanilla panel, unchanged.
+// Only the way the markup is obtained moved.
 // ---------------------------------------------------------------------------
 
-function loadPanel() {
-  const code = fs.readFileSync(path.join(__dirname, '..', 'public', 'v2', 'js', 'components', 'drive-explorer.js'), 'utf8');
-  const sandbox = {
-    console,
-    // The SHIPPED bundle, not a hand-copy of its escaper. The copy that used to
-    // sit here was faithful, so nothing was wrong with it -- but it was a second
-    // thing to keep in step with `public/v2/js/shared.js`, and the harness
-    // executes that file rather than reproducing it.
-    MissionControlShared: MISSION_CONTROL_SHARED,
-    fetch: () => Promise.reject(new Error('no network in this test'))
-  };
-  sandbox.window = sandbox;
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(code, sandbox, { filename: 'drive-explorer.js' });
-  return sandbox.window.MissionControlDriveExplorer;
-}
-
-test('the panel renders both registers, the estimate caption, and no null placeholders', () => {
-  const panel = loadPanel();
+test('the panel renders both registers, the estimate caption, and no null placeholders', async () => {
+  const { ESTIMATE_CAPTION } = await driveExplorerUtils();
+  const page = await getDriveExplorerHarnessPage();
   const payload = allRows(live('player'));
-  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
 
-  panel.render(container, payload);
-  const html = container.innerHTML;
+  const html = await renderDriveExplorerOnPage(page, payload);
 
   assert.match(html, /de-measured__value/, 'measured figures must carry the measured register class');
   assert.match(html, /de-estimate__value/, 'estimate figures must carry the estimate register class');
   assert.match(html, /de-tag--measured/, 'the MEASURED tag must render');
   assert.match(html, /de-tag--estimate/, 'the ESTIMATE tag must render');
-  assert.ok(html.includes(panel._internals.ESTIMATE_CAPTION),
+  assert.ok(html.includes(ESTIMATE_CAPTION),
     'the destinations column must carry its estimate caption');
   assert.match(html, /not a measurement/, 'the legend must say the estimate is not a measurement');
   assert.match(html, /is not an unreachable one/, 'the legend must carry the absent-body caveat');
@@ -937,13 +937,11 @@ test('the panel renders both registers, the estimate caption, and no null placeh
   assert.ok(!/\bNaN\b/.test(stripped), 'no NaN may reach the rendered text');
 });
 
-test('the panel renders the cruise column it already offered a sort for', () => {
-  const panel = loadPanel();
+test('the panel renders the cruise column it already offered a sort for', async () => {
+  const page = await getDriveExplorerHarnessPage();
   const payload = allRows(live('player'));
-  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
 
-  panel.render(container, payload);
-  const html = container.innerHTML;
+  const html = await renderDriveExplorerOnPage(page, payload);
 
   assert.match(html, /CRUISE ACCEL m\/s²/, 'the cruise column must have a header');
   assert.match(html, /COMBAT ACCEL m\/s²/, 'beside the combat one, not instead of it');
@@ -968,8 +966,8 @@ test('the panel renders the cruise column it already offered a sort for', () => 
     .slice(0, 5);
   assert.ok(smallest.length > 0, 'the live catalogue must carry accelerations below 0.001 for this to test anything');
   const bySmallest = { ...payload, items: smallest };
-  panel.render(container, bySmallest);
-  const smallRows = [...container.innerHTML.matchAll(/<tr class="de-row[\s\S]*?<\/tr>/g)].map(match => match[0]);
+  const smallHtml = await renderDriveExplorerOnPage(page, bySmallest);
+  const smallRows = [...smallHtml.matchAll(/<tr class="de-row[\s\S]*?<\/tr>/g)].map(match => match[0]);
   for (const rendered of smallRows) {
     const cells = [...rendered.matchAll(/de-measured__value">([^<]*)</g)].map(match => match[1]);
     for (const index of [1, 2]) {
@@ -981,8 +979,8 @@ test('the panel renders the cruise column it already offered a sort for', () => 
   }
 });
 
-test('a small acceleration renders as a small number, never as a confident 0.000', () => {
-  const { accel } = loadPanel()._internals;
+test('a small acceleration renders as a small number, never as a confident 0.000', async () => {
+  const { accel } = await driveExplorerUtils();
   // The live catalogue's smallest measured acceleration. `toFixed(3)` printed
   // this as `0.000`, which a reader cannot tell from a measured zero.
   assert.strictEqual(accel(0.00016846), '0.000168');
@@ -997,10 +995,10 @@ test('a small acceleration renders as a small number, never as a confident 0.000
   assert.strictEqual(accel('not a number'), '—');
 });
 
-test('a null cruise acceleration renders as unavailable and sorts last, never as zero', () => {
-  const panel = loadPanel();
+test('a null cruise acceleration renders as unavailable and sorts last, never as zero', async () => {
+  const { visibleRows, defaultViewState } = await driveExplorerUtils();
+  const page = await getDriveExplorerHarnessPage();
   const live_ = allRows(live('player'));
-  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
 
   // A synthetic row: computable overall, with only the cruise measurement absent.
   // shared/propulsion.mjs and shared/intel/driveExplorer.mjs both have paths that
@@ -1020,38 +1018,35 @@ test('a null cruise acceleration renders as unavailable and sorts last, never as
   };
   const payload = { ...live_, items: rows };
 
-  panel._internals.state.sort = 'cruise-acceleration';
-  panel._internals.state.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '' };
-  try {
-    panel.render(container, payload);
-    const rendered = [...container.innerHTML.matchAll(/<tr class="de-row[\s\S]*?<\/tr>/g)].map(match => match[0]);
-    const synthetic = rendered.find(row => /Synthetic Null Cruise/.test(row));
-    assert.ok(synthetic, 'the synthetic row must render at all');
+  const html = await renderDriveExplorerOnPage(page, payload, { sort: 'cruise-acceleration' });
+  const rendered = [...html.matchAll(/<tr class="de-row[\s\S]*?<\/tr>/g)].map(match => match[0]);
+  const synthetic = rendered.find(row => /Synthetic Null Cruise/.test(row));
+  assert.ok(synthetic, 'the synthetic row must render at all');
 
-    const cells = [...synthetic.matchAll(/de-measured__value">([^<]*)</g)].map(match => match[1]);
-    assert.strictEqual(cells[2], '—', 'an unmeasured cruise acceleration renders as an em dash, never as 0');
-    assert.match(synthetic, /UNAVAILABLE/, 'and says so in the sub-line rather than showing a multiple');
+  const cells = [...synthetic.matchAll(/de-measured__value">([^<]*)</g)].map(match => match[1]);
+  assert.strictEqual(cells[2], '—', 'an unmeasured cruise acceleration renders as an em dash, never as 0');
+  assert.match(synthetic, /UNAVAILABLE/, 'and says so in the sub-line rather than showing a multiple');
 
-    assert.strictEqual(rendered.indexOf(synthetic), rendered.length - 1,
-      'and it sorts last under the cruise sort rather than as though it were zero');
+  assert.strictEqual(rendered.indexOf(synthetic), rendered.length - 1,
+    'and it sorts last under the cruise sort rather than as though it were zero');
 
-    // Filtered on, it is untestable rather than a failure.
-    panel._internals.state.thresholds.minCruiseAcceleration = '1';
-    const outcome = panel._internals.visibleRows(rows);
-    assert.strictEqual(outcome.untestableCount, 1);
-    assert.strictEqual(outcome.untestableDrives[0].driveId, 'SyntheticNullCruise');
-    assert.ok(!outcome.rows.some(row => row.driveId === 'SyntheticNullCruise'));
-  } finally {
-    panel._internals.state.sort = 'delta-v';
-    panel._internals.state.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '' };
-  }
+  // Filtered on, it is untestable rather than a failure.
+  const outcome = visibleRows(rows, {
+    ...defaultViewState(),
+    sort: 'cruise-acceleration',
+    thresholds: { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '1' }
+  });
+  assert.strictEqual(outcome.untestableCount, 1);
+  assert.strictEqual(outcome.untestableDrives[0].driveId, 'SyntheticNullCruise');
+  assert.ok(!outcome.rows.some(row => row.driveId === 'SyntheticNullCruise'));
 });
 
-test('the panel and the endpoint reach the same answer for the same minimums', () => {
+test('the panel and the endpoint reach the same answer for the same minimums', async () => {
   // The panel filters client-side because it already holds all 541 rows, so the
   // rule exists twice. This is what stops the two drifting: same thresholds,
   // same rows, same three counts, in both modes.
-  const panel = loadPanel();
+  const { visibleRows, defaultViewState } = await driveExplorerUtils();
+  const panelState = defaultViewState();
   const matrix = [
     { minDeltaV: '10' },
     { minCombatAcceleration: '20' },
@@ -1095,18 +1090,16 @@ test('the panel and the endpoint reach the same answer for the same minimums', (
       const unfiltered = allRows(scenario.snapshot, { mode, ...scenario.options });
       for (const thresholds of matrix) {
       const endpoint = allRows(scenario.snapshot, { mode, ...scenario.options, thresholds });
-      panel._internals.state.thresholds = {
+      panelState.thresholds = {
         minDeltaV: thresholds.minDeltaV ?? '',
         minCombatAcceleration: thresholds.minCombatAcceleration ?? '',
         minCruiseAcceleration: thresholds.minCruiseAcceleration ?? ''
       };
-      const browser = panel._internals.visibleRows(unfiltered.items);
+      const browser = visibleRows(unfiltered.items, panelState);
       const label = `[${mode}/${scenario.label}] ${JSON.stringify(thresholds)}`;
 
-      // `Array.from` and not `.map`: the panel runs in a vm realm, so an array
-      // it builds carries THAT realm's Array.prototype and `deepStrictEqual`
-      // compares prototypes. Without this the assertion fails on two arrays
-      // whose contents are identical, which is a very confusing way to be red.
+      // `Array.from` and not `.map`, kept from the vm-sandbox era this test was
+      // written in: it costs nothing and the assertion shape is unchanged.
       assert.deepStrictEqual(
         Array.from(browser.rows, row => row.driveId).sort(),
         endpoint.items.map(row => row.driveId).sort(),
@@ -1129,65 +1122,59 @@ test('the panel and the endpoint reach the same answer for the same minimums', (
     // The matrix is only worth running if the untestable branch is genuinely
     // reached on both sides. Asserted rather than assumed, because a live save
     // with no null measurement would leave `Number(null) === 0` undetected.
-    panel._internals.state.thresholds = { minDeltaV: '10', minCombatAcceleration: '', minCruiseAcceleration: '' };
+    panelState.thresholds = { minDeltaV: '10', minCombatAcceleration: '', minCruiseAcceleration: '' };
     const unflownRows = allRows(snapshot, { mode, designId: unflownId }).items;
-    assert.ok(panel._internals.visibleRows(unflownRows).untestableCount > 0,
+    assert.ok(visibleRows(unflownRows, panelState).untestableCount > 0,
       `[${mode}] the unflown scenario must actually exercise the untestable branch`);
-    panel._internals.state.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '1' };
+    panelState.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '1' };
     const partialRows = allRows(partialSnapshot, { mode }).items;
-    const partialOutcome = panel._internals.visibleRows(partialRows);
+    const partialOutcome = visibleRows(partialRows, panelState);
     assert.strictEqual(partialOutcome.untestableCount, 1,
       `[${mode}] the partial scenario must leave exactly the stripped drive untestable`);
     assert.ok(partialOutcome.belowThresholdCount > 0,
       `[${mode}] and must still have genuine failures beside it, or the two are not distinguished`);
   }
-  panel._internals.state.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '' };
+  panelState.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '' };
 });
 
-test('the panel labels the unit on every minimum control, and says what an untestable row means', () => {
-  const panel = loadPanel();
+test('the panel labels the unit on every minimum control, and says what an untestable row means', async () => {
+  const { THRESHOLDS } = await driveExplorerUtils();
+  const page = await getDriveExplorerHarnessPage();
   const payload = allRows(live('player'));
-  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
 
-  panel.render(container, payload);
-  const html = container.innerHTML;
+  const html = await renderDriveExplorerOnPage(page, payload);
   // "> 10" is ambiguous between km/s and m/s², so each control names its unit.
   assert.match(html, /MIN ΔV \(km\/s\)/);
   assert.match(html, /MIN COMBAT ACCEL \(m\/s²\)/);
   assert.match(html, /MIN CRUISE ACCEL \(m\/s²\)/);
-  for (const entry of panel._internals.THRESHOLDS) {
+  for (const entry of THRESHOLDS) {
     assert.ok(html.includes(`data-de-threshold="${entry.key}"`), `${entry.key} must have a control`);
     assert.ok(html.includes(entry.placeholder), `${entry.key}'s placeholder must state its unit too`);
   }
 
-  panel._internals.state.thresholds = { minDeltaV: '10', minCombatAcceleration: '', minCruiseAcceleration: '' };
-  try {
-    panel.render(container, payload);
-    const filteredHtml = container.innerHTML;
-    assert.match(filteredHtml, /MINIMUMS ACTIVE/, 'an active minimum must announce itself');
-    assert.match(filteredHtml, /measured and fall short/, 'the failures must be counted on screen');
-    assert.match(filteredHtml, /untestable/i, 'and the untestable exclusions named as a separate category');
+  const filteredHtml = await renderDriveExplorerOnPage(page, payload, {
+    thresholds: { minDeltaV: '10', minCombatAcceleration: '', minCruiseAcceleration: '' }
+  });
+  assert.match(filteredHtml, /MINIMUMS ACTIVE/, 'an active minimum must announce itself');
+  assert.match(filteredHtml, /measured and fall short/, 'the failures must be counted on screen');
+  assert.match(filteredHtml, /untestable/i, 'and the untestable exclusions named as a separate category');
 
-    panel._internals.state.thresholds.minDeltaV = 'abc';
-    panel.render(container, payload);
-    assert.match(container.innerHTML, /IGNORED rather than/,
-      'a rejected minimum must say it was ignored, not silently behave as no filter');
-    const stripped = container.innerHTML.replace(/<[^>]*>/g, ' ');
-    assert.ok(!/\bNaN\b/.test(stripped), 'and must not leak a NaN while doing it');
-  } finally {
-    panel._internals.state.thresholds = { minDeltaV: '', minCombatAcceleration: '', minCruiseAcceleration: '' };
-  }
+  const rejectedHtml = await renderDriveExplorerOnPage(page, payload, {
+    thresholds: { minDeltaV: 'abc', minCombatAcceleration: '', minCruiseAcceleration: '' }
+  });
+  assert.match(rejectedHtml, /IGNORED rather than/,
+    'a rejected minimum must say it was ignored, not silently behave as no filter');
+  const stripped = rejectedHtml.replace(/<[^>]*>/g, ' ');
+  assert.ok(!/\bNaN\b/.test(stripped), 'and must not leak a NaN while doing it');
 });
 
-test('the panel distinguishes an unavailable destination table from zero destinations', () => {
-  const panel = loadPanel();
+test('the panel distinguishes an unavailable destination table from zero destinations', async () => {
+  const page = await getDriveExplorerHarnessPage();
   const snapshot = live('player');
   const unflown = allRows(snapshot).designs.find(design => design.shipsInService === 0);
   const payload = allRows(snapshot, { designId: unflown.designId });
-  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
 
-  panel.render(container, payload);
-  const html = container.innerHTML;
+  const html = await renderDriveExplorerOnPage(page, payload);
   assert.ok(!/Only 0 destinations are modelled/.test(html),
     'an unreadable destination table must never render as a confident zero');
   assert.match(html, /which is not the same as none being reachable/,
@@ -1197,17 +1184,16 @@ test('the panel distinguishes an unavailable destination table from zero destina
     'the missing measured baseline must be stated rather than filled in');
 });
 
-test('the panel says so honestly when there is nothing to render', () => {
-  const panel = loadPanel();
-  const container = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+test('the panel says so honestly when there is nothing to render', async () => {
+  const page = await getDriveExplorerHarnessPage();
 
-  panel.render(container, null);
-  assert.match(container.innerHTML, /UNAVAILABLE/);
-  assert.ok(!/de-table/.test(container.innerHTML), 'no fabricated table may be rendered');
+  const empty = await renderDriveExplorerOnPage(page, null);
+  assert.match(empty, /UNAVAILABLE/);
+  assert.ok(!/de-table/.test(empty), 'no fabricated table may be rendered');
 
-  panel.render(container, allRows({ ...live('player'), driveStats: {} }));
-  assert.match(container.innerHTML, /UNAVAILABLE/);
-  assert.match(container.innerHTML, /re-publish/, 'the reason must reach the reader');
+  const noCatalogue = await renderDriveExplorerOnPage(page, allRows({ ...live('player'), driveStats: {} }));
+  assert.match(noCatalogue, /UNAVAILABLE/);
+  assert.match(noCatalogue, /re-publish/, 'the reason must reach the reader');
 });
 
 // ---------------------------------------------------------------------------

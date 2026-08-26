@@ -23,7 +23,17 @@ import { IntelligenceLibrary } from './panels/IntelligenceLibrary.jsx';
 import { AlienHateEconomics, renderHudAlienHateEconomics } from './panels/AlienHateEconomics.jsx';
 import { MiningExpansion } from './panels/MiningExpansion.jsx';
 import { CouncilOrders } from './panels/CouncilOrders.jsx';
+import { DirectiveBoard } from './panels/DirectiveBoard.jsx';
 import { FactionLedgerBoard } from './panels/ExecutiveBoards.jsx';
+import { FactionIntel, createFactionIntelController } from './panels/FactionIntel.jsx';
+import {
+  DriveExplorer,
+  driveExplorerInternals,
+  fetchDriveExplorer,
+  loadDriveExplorer,
+  openDrivePath,
+  renderDriveExplorer,
+} from './panels/DriveExplorer.jsx';
 import {
   renderFactionLedger,
   renderLogisticsBoard,
@@ -39,8 +49,10 @@ import {
   renderFleetEngagement,
   renderMiningExpansion,
   renderCouncilOrders,
+  renderDirectiveBoard,
   renderAlienHateEconomics,
   renderIntelligenceLibrary,
+  renderFactionIntel,
   fetchFleetEngagement,
   fetchMiningExpansion,
 } from './main.jsx';
@@ -61,7 +73,16 @@ if (typeof window !== 'undefined') {
     renderHud: renderHudAlienHateEconomics,
   };
   window.IntelligenceLibrary = { render: renderIntelligenceLibrary };
+  window.FactionIntelScreen = { render: renderFactionIntel };
   window.MissionControlCouncilOrders = { render: renderCouncilOrders };
+  window.MissionControlDirectiveBoard = { render: renderDirectiveBoard };
+  window.MissionControlDriveExplorer = {
+    load: loadDriveExplorer,
+    render: renderDriveExplorer,
+    fetchDriveExplorer,
+    openDrivePath,
+    _internals: driveExplorerInternals,
+  };
   window.MissionControlBoards = {
     renderFactionLedger,
     renderLogisticsBoard,
@@ -88,9 +109,12 @@ const SCENES = {
   fleetEngagement: FleetEngagementScene,
   miningExpansion: MiningExpansionScene,
   councilOrders: CouncilOrdersScene,
+  directiveBoard: DirectiveBoardScene,
   intelligenceLibrary: IntelligenceLibraryScene,
   alienHateEconomics: AlienHateEconomicsScene,
   executiveBoards: ExecutiveBoardsScene,
+  factionIntel: FactionIntelScene,
+  driveExplorer: DriveExplorerScene,
 };
 
 const PANEL_MODIFIERS = ['priority', 'alert', 'featured', 'quiet', 'dense', 'commentary'];
@@ -303,6 +327,25 @@ function CouncilOrdersScene() {
   );
 }
 
+function DirectiveBoardScene() {
+  const payload = window.__DIRECTIVE_BOARD_PAYLOAD__;
+  return (
+    <div data-testid="directive-board-harness">
+      {/* The production mount. public/v2/index.html owns <div id="directiveBoard">
+          and CouncilOrders.jsx resolves assignment cards THROUGH that id, so the
+          real panel is rendered inside it here rather than beside it — otherwise
+          the cross-panel selector would be tested against a hand-written mirror
+          instead of against what this component actually emits. */}
+      <div id="directiveBoard" aria-live="polite">
+        <DirectiveBoard payload={payload} />
+      </div>
+      {/* A second mount the bench suite re-renders into, so nineteen cycle plans
+          cost one browser rather than nineteen. */}
+      <div id="directive-board-test-root" />
+    </div>
+  );
+}
+
 function IntelligenceLibraryScene() {
   const payload = window.__INTELLIGENCE_LIBRARY_PAYLOAD__ || {};
   const options = { ...(payload.options || {}) };
@@ -330,12 +373,56 @@ function AlienHateEconomicsScene() {
   );
 }
 
+/**
+ * The dossier is driven by an imperative controller, so the scene creates one,
+ * renders the panel against it, and hands the wrapper element back as the
+ * dispatch target for `faction-intel-select`. The controller is published on
+ * window so a test can call select / getSelectedId / destroy on the real thing.
+ */
+function FactionIntelScene() {
+  const payload = window.__FACTION_INTEL_PAYLOAD__ || {};
+  const wrapperRef = React.useRef(null);
+  const [controller] = React.useState(() => createFactionIntelController({
+    snapshot: payload.snapshot,
+    briefing: payload.briefing,
+    observerId: payload.observerId,
+  }));
+
+  React.useLayoutEffect(() => {
+    controller.setContainer(wrapperRef.current);
+    window.__FACTION_INTEL_CONTROLLER__ = controller;
+    return () => controller.setContainer(null);
+  }, [controller]);
+
+  return (
+    <div data-testid="faction-intel-harness" ref={wrapperRef}>
+      <FactionIntel controller={controller} />
+    </div>
+  );
+}
+
 function ExecutiveBoardsScene() {
   const payload = window.__EXECUTIVE_BOARDS_PAYLOAD__;
   return (
     <div data-testid="executive-boards-harness">
       <FactionLedgerBoard snapshot={payload} />
       <div id="executive-board-test-root" />
+    </div>
+  );
+}
+
+function DriveExplorerScene() {
+  // The panel is store-driven — scripts/verify_drive_explorer.js reads
+  // `_internals.state` and the vanilla panel it replaces worked the same way —
+  // so the payload prop SEEDS the store and the tests then drive it with
+  // `_internals.setPayload` / `_internals.patchState` against this one instance.
+  // #driveExplorer is the id the VIEWS registry mounts into on the real shell.
+  const payload = window.__DRIVE_EXPLORER_PAYLOAD__;
+  return (
+    <div data-testid="drive-explorer-harness">
+      <div id="driveExplorer">
+        <DriveExplorer payload={payload} />
+      </div>
     </div>
   );
 }
