@@ -85,9 +85,11 @@ action, and `push:dry-run` exists to rehearse it.
   table row "the shipyard throughput model".
 ## React migration status
 
-**Live progress and handoff: [`react-migration-progress.md`](react-migration-progress.md)** —
-8 of 16 components migrated, what is left and in what order, the definition of
-done, and measured lane findings. Read it before starting a migration wave.
+**COMPLETE — see [`react-migration-progress.md`](react-migration-progress.md).**
+All 16 components are React under `src/v2/panels/`; `public/v2/js/components/` is
+empty. Nine defects were fixed at the port rather than separately. That doc
+carries the definition of done, the verification procedure, the four issues left
+behind, and measured lane findings.
 
 ---
 
