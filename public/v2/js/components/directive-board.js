@@ -522,6 +522,7 @@
     // represented count, and 0 would be a measurement of something nobody read.
     const represented = num(cyclePlan.benchedRepresentedCount);
     const omitted = Math.max(0, total - benched.length);
+    const orderNote = 'Ordered by generation rather than by score, so the sequence is NOT a ranking and the row count counts groups rather than options.';
     return `
       <div class="directive-benched-section">
         <div class="directive-subheading">BENCHED ALTERNATIVES &amp; TRADE-OFFS (${total})</div>
@@ -569,14 +570,13 @@
               </div>`;
           }).join('')}
         </div>
-        ${omitted > 0 ? `
-          <div class="directive-benched-omitted">
-            Showing ${benched.length} row${benched.length === 1 ? '' : 's'} of ${total} benched,
-            ${represented === null
-              ? 'standing for an unrecorded number of candidates'
-              : `standing for ${represented} candidate${represented === 1 ? '' : 's'}`};
-            ${omitted} further alternative${omitted === 1 ? ' is' : 's are'} omitted from this view.
-          </div>` : ''}
+        <div class="directive-benched-omitted">
+          ${omitted > 0 ? `Showing ${benched.length} row${benched.length === 1 ? '' : 's'} of ${total} benched,
+          ${represented === null
+            ? 'standing for an unrecorded number of candidates'
+            : `standing for ${represented} candidate${represented === 1 ? '' : 's'}`};
+          ${omitted} further alternative${omitted === 1 ? ' is' : 's are'} omitted from this view. ` : ''}${orderNote}
+        </div>
       </div>`;
   }
 

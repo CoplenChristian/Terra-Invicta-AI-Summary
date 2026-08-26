@@ -206,22 +206,25 @@
 
   function statusLabel(statusValue, hostileCount, ownCount, hasRecord) {
     if (!hasRecord) return 'NO DATA';
-    if (statusValue !== undefined) {
+    if (statusValue !== undefined && statusValue !== null && String(statusValue).trim() !== '') {
       var status = String(statusValue).split('(')[0].trim();
       if (status) return status.toUpperCase();
     }
-    if (hostileCount > 0) return 'CONTESTED';
-    if (ownCount > 0) return 'SECURED';
-    return 'STABLE';
+    if (hostileCount !== null && hostileCount !== undefined && hostileCount > 0) return 'CONTESTED';
+    if (ownCount !== null && ownCount !== undefined && ownCount > 0) return 'SECURED';
+    if (hostileCount !== null && hostileCount !== undefined && ownCount !== null && ownCount !== undefined) return 'STABLE';
+    return 'UNKNOWN';
   }
 
   function statusKey(statusValue, hostileCount, ownCount, hasRecord) {
     if (!hasRecord) return 'neutral';
     var status = normalize(statusValue);
-    if (hostileCount > 0 || /hostile|contest|critical|red/.test(status)) return 'hostile';
-    if (ownCount > 0 || /secure|friendly|own|initiative/.test(status)) return 'own';
+    if ((hostileCount !== null && hostileCount !== undefined && hostileCount > 0) || /hostile|contest|critical|red/.test(status)) return 'hostile';
+    if ((ownCount !== null && ownCount !== undefined && ownCount > 0) || /secure|friendly|own|initiative/.test(status)) return 'own';
     if (/watch|alert|elevat|unstable|warn/.test(status)) return 'watch';
-    return 'stable';
+    if (hostileCount !== null && hostileCount !== undefined && ownCount !== null && ownCount !== undefined) return 'stable';
+    if (status) return 'stable';
+    return 'neutral';
   }
 
   function paletteFor(key) {
@@ -392,11 +395,11 @@
         var hostileCount = readCount(record, ['hostileCount', 'hostile', 'hostiles', 'hostileNations']);
         var ownCount = readCount(record, ['ownCount', 'own', 'ownedCount', 'securedCount', 'friendlyCount']);
         var statusValue = readFirst(record, ['statusTone', 'status', 'currentStatus', 'state']);
-        var visualStatus = statusLabel(statusValue, hostileCount || 0, ownCount || 0, !!record);
+        var visualStatus = statusLabel(statusValue, hostileCount, ownCount, !!record);
         var view = {
           theater: theater,
           record: record,
-          statusKey: statusKey(statusValue, hostileCount || 0, ownCount || 0, !!record),
+          statusKey: statusKey(statusValue, hostileCount, ownCount, !!record),
           selected: (selectedId !== null && selectedId === recordId(record, theater.key)) || record === selectedRecord,
           hovered: false,
           countries: [],
@@ -495,11 +498,39 @@
 
       var totalHostile = 0;
       var totalOwn = 0;
+      var hostileMeasuredCount = 0;
+      var ownMeasuredCount = 0;
+      var totalTheaters = THEATERS.length;
+
       views.forEach(function sumCounts(view) {
-        totalHostile += view.record ? (readCount(view.record, ['hostileCount', 'hostile', 'hostiles', 'hostileNations']) || 0) : 0;
-        totalOwn += view.record ? (readCount(view.record, ['ownCount', 'own', 'ownedCount', 'securedCount', 'friendlyCount']) || 0) : 0;
+        if (!view.record) return;
+        var h = readCount(view.record, ['hostileCount', 'hostile', 'hostiles', 'hostileNations']);
+        var o = readCount(view.record, ['ownCount', 'own', 'ownedCount', 'securedCount', 'friendlyCount']);
+        if (h !== null) {
+          totalHostile += h;
+          hostileMeasuredCount += 1;
+        }
+        if (o !== null) {
+          totalOwn += o;
+          ownMeasuredCount += 1;
+        }
       });
-      appendText(doc, svg, 'world-map-summary', 'CURRENT / HOSTILE ' + totalHostile + ' · OWN ' + totalOwn, { x: 696, y: 335, fill: COLORS.textSoft, 'font-family': 'var(--mono,monospace)', 'font-size': TYPE.note, 'font-weight': 700, 'text-anchor': 'end', 'letter-spacing': 0.6 });
+
+      var summaryText;
+      if (hostileMeasuredCount === totalTheaters && ownMeasuredCount === totalTheaters) {
+        summaryText = 'CURRENT / HOSTILE ' + totalHostile + ' · OWN ' + totalOwn;
+      } else if (hostileMeasuredCount === 0 && ownMeasuredCount === 0) {
+        summaryText = 'CURRENT / HOSTILE — · OWN — (0 OF ' + totalTheaters + ' THEATERS MEASURED)';
+      } else if (hostileMeasuredCount === ownMeasuredCount) {
+        var unmeasured = totalTheaters - hostileMeasuredCount;
+        summaryText = 'CURRENT / HOSTILE ' + totalHostile + ' · OWN ' + totalOwn + ' (' + hostileMeasuredCount + ' OF ' + totalTheaters + ' THEATERS MEASURED, ' + unmeasured + ' UNMEASURED)';
+      } else {
+        var hPart = hostileMeasuredCount === totalTheaters ? String(totalHostile) : (hostileMeasuredCount > 0 ? totalHostile + ' (' + hostileMeasuredCount + '/' + totalTheaters + ')' : '—');
+        var oPart = ownMeasuredCount === totalTheaters ? String(totalOwn) : (ownMeasuredCount > 0 ? totalOwn + ' (' + ownMeasuredCount + '/' + totalTheaters + ')' : '—');
+        summaryText = 'CURRENT / HOSTILE ' + hPart + ' · OWN ' + oPart;
+      }
+
+      appendText(doc, svg, 'world-map-summary', summaryText, { x: 696, y: 335, fill: COLORS.textSoft, 'font-family': 'var(--mono,monospace)', 'font-size': TYPE.note, 'font-weight': 700, 'text-anchor': 'end', 'letter-spacing': 0.6 });
       appendText(doc, svg, 'world-map-data-note', 'COUNTRY GEOMETRY: BUNDLED GEOJSON', { x: 360, y: 300, 'text-anchor': 'middle' });
     }
 

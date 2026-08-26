@@ -163,7 +163,7 @@ test('world-map handles empty array and empty items object with NO DATA and em d
   assert.ok(text.includes('AFRICA NO DATA H — / OWN —'), 'empty input must render NO DATA and em dashes for Africa');
   assert.ok(text.includes('EAST ASIA / PACIFIC NO DATA H — / OWN —'), 'empty input must render NO DATA and em dashes for East Asia');
 
-  assert.ok(text.includes('CURRENT / HOSTILE 0 · OWN 0'), 'empty input total summary must be 0 hostile and 0 own');
+  assert.ok(text.includes('CURRENT / HOSTILE — · OWN — (0 OF 6 THEATERS MEASURED)'), 'empty input total summary must state 0 of 6 theaters measured with em dashes');
   assertNoPlaceholderText(html, 'empty array input');
 });
 
@@ -171,10 +171,12 @@ test('world-map handles absent input (null and undefined) gracefully', async () 
   const { container: containerNull } = await renderMap(null);
   const textNull = visibleText(serializeNode(containerNull));
   assert.ok(textNull.includes('NORTH AMERICA NO DATA H — / OWN —'), 'null theaters must render NO DATA');
+  assert.ok(textNull.includes('CURRENT / HOSTILE — · OWN — (0 OF 6 THEATERS MEASURED)'), 'null input summary must be unmeasured');
 
   const { container: containerUndef } = await renderMap(undefined);
   const textUndef = visibleText(serializeNode(containerUndef));
   assert.ok(textUndef.includes('NORTH AMERICA NO DATA H — / OWN —'), 'undefined theaters must render NO DATA');
+  assert.ok(textUndef.includes('CURRENT / HOSTILE — · OWN — (0 OF 6 THEATERS MEASURED)'), 'undefined input summary must be unmeasured');
 });
 
 test('world-map slices source input to at most 6 theaters (THEATERS.length)', async () => {
@@ -232,9 +234,57 @@ test('world-map renders em dash for null or undefined counts, never converting t
   assert.ok(html.includes('Hostile count —; own count —.'),
     'aria-label must carry em dash for unmeasured counts');
 
-  // South America with no statusTone defaults to STABLE when counts are 0/null
-  assert.ok(text.includes('SOUTH AMERICA STABLE H — / OWN —'),
-    'undefined counts must render as em dash "—"');
+  // South America with no statusTone and unmeasured counts renders UNKNOWN rather than claiming STABLE
+  assert.ok(text.includes('SOUTH AMERICA UNKNOWN H — / OWN —'),
+    'undefined counts and status must render as UNKNOWN and em dash "—"');
+
+  // Summary reflects 0 of 6 theaters measured
+  assert.ok(text.includes('CURRENT / HOSTILE — · OWN — (0 OF 6 THEATERS MEASURED)'),
+    'summary reflects 0 measured theaters');
+});
+
+test('world-map summary distinguishes complete sum, partial sum, and unmeasured sum', async () => {
+  // 1. Complete sum (all 6 measured)
+  const completeTheaters = [
+    { key: 'nam', name: 'North America', hostileCount: 0, ownCount: 1 },
+    { key: 'sam', name: 'South America', hostileCount: 2, ownCount: 0 },
+    { key: 'eur', name: 'Europe', hostileCount: 1, ownCount: 0 },
+    { key: 'mea', name: 'Eurasia', hostileCount: 0, ownCount: 0 },
+    { key: 'afr', name: 'Africa', hostileCount: 0, ownCount: 0 },
+    { key: 'eap', name: 'East Asia', hostileCount: 0, ownCount: 0 }
+  ];
+  const { container: containerComplete } = await renderMap(completeTheaters);
+  const textComplete = visibleText(serializeNode(containerComplete));
+  assert.ok(textComplete.includes('CURRENT / HOSTILE 3 · OWN 1'), 'complete sum must render clean total');
+  assert.ok(!textComplete.includes('MEASURED'), 'complete sum must not carry partial qualifier');
+
+  // 2. Partial sum (4 measured, 2 unmeasured/null)
+  const partialTheaters = [
+    { key: 'nam', name: 'North America', hostileCount: 0, ownCount: 1 },
+    { key: 'sam', name: 'South America', hostileCount: 2, ownCount: 0 },
+    { key: 'eur', name: 'Europe', hostileCount: 1, ownCount: 0 },
+    { key: 'mea', name: 'Eurasia', hostileCount: 0, ownCount: 0 },
+    { key: 'afr', name: 'Africa', hostileCount: null, ownCount: null },
+    { key: 'eap', name: 'East Asia', hostileCount: null, ownCount: null }
+  ];
+  const { container: containerPartial } = await renderMap(partialTheaters);
+  const textPartial = visibleText(serializeNode(containerPartial));
+  assert.ok(
+    textPartial.includes('CURRENT / HOSTILE 3 · OWN 1 (4 OF 6 THEATERS MEASURED, 2 UNMEASURED)'),
+    `partial sum must explicitly report measured vs unmeasured theater counts: ${textPartial}`
+  );
+
+  // 3. Outright unmeasured sum (0 measured)
+  const unmeasuredTheaters = [
+    { key: 'nam', name: 'North America', hostileCount: null, ownCount: null },
+    { key: 'sam', name: 'South America', hostileCount: null, ownCount: null }
+  ];
+  const { container: containerUnmeasured } = await renderMap(unmeasuredTheaters);
+  const textUnmeasured = visibleText(serializeNode(containerUnmeasured));
+  assert.ok(
+    textUnmeasured.includes('CURRENT / HOSTILE — · OWN — (0 OF 6 THEATERS MEASURED)'),
+    `unmeasured sum must render em dashes and state 0 measured: ${textUnmeasured}`
+  );
 });
 
 test('world-map renders custom titles and ariaLabels when supplied in options', async () => {

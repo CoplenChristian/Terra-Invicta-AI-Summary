@@ -432,6 +432,7 @@ test('a MIXED group does not present the representative\'s reason as the whole g
 
   // And a UNIFORM group must not raise the caveat, or it becomes noise nobody
   // reads on the one row where it matters.
+
   const uniform = budgetRefusedRow(0, { groupCount: 5, groupOmittedCount: 4, groupBudgetDisplacedCount: 5 });
   const uniformText = benchText(renderToString(planWithBench([uniform], {
     budgets: LIVE_BUDGET, benchBudget: LIVE_BENCH_BUDGET
@@ -449,4 +450,38 @@ test('the new bench-budget elements have stylesheet rules, so they are not invis
   ]) {
     assert.ok(new RegExp(`\\.${rule}\\s*\\{`).test(css), `.${rule} must be styled`);
   }
+});
+
+test('the bench explicitly states that the order is generation order and NOT a ranking', () => {
+  // 1. Live save sequence: non-descending scores (6.03, 6.00, 9.00, 5.61, 4.38, 4.06, 4.14, 7.00)
+  // Best alternative (9.00) sits third, second-best (7.00) sits last.
+  const scores = [6.03, 6.0, 9.0, 5.61, 4.38, 4.06, 4.14, 7.0];
+  const liveShapedRows = scores.map((s, i) => row(i, { score: s }));
+  const plan = planWithBench(liveShapedRows, {
+    benchedTotalCount: 427,
+    benchedOmittedCount: 419,
+    benchedRepresentedCount: 15
+  });
+
+  const textCapped = benchText(renderToString(plan));
+  assert.ok(
+    textCapped.includes('Ordered by generation rather than by score, so the sequence is NOT a ranking and the row count counts groups rather than options.'),
+    `Capped bench must state generation ordering and NOT a ranking: ${textCapped}`
+  );
+  assert.ok(textCapped.includes('Showing 8 rows of 427 benched'), 'Capped bench still carries omission count');
+
+  // 2. Uncapped bench (omitted === 0): caveat is still stated because generation order is not a ranking
+  const fewRows = [row(0, { score: 6.03 }), row(1, { score: 9.0 })];
+  const uncappedPlan = planWithBench(fewRows, {
+    benchedTotalCount: 2,
+    benchedOmittedCount: 0,
+    benchedRepresentedCount: 2
+  });
+
+  const textUncapped = benchText(renderToString(uncappedPlan));
+  assert.ok(
+    textUncapped.includes('Ordered by generation rather than by score, so the sequence is NOT a ranking and the row count counts groups rather than options.'),
+    `Uncapped bench must also state generation ordering and NOT a ranking: ${textUncapped}`
+  );
+  assert.ok(!textUncapped.includes('omitted from this view'), 'Uncapped bench carries no omission line');
 });

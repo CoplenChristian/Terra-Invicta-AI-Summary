@@ -453,11 +453,16 @@
   /**
    * The first `GROUPS_SHOWN` groups that actually contain rows, separating
    * Actionable (buildable now, researchable now) from Aspirational.
+   *
+   * A capped list carries its total and omitted counts so the reader is not
+   * left with a silent truncation.
    */
   function renderGroups(groups, renderRow) {
     const populated = (Array.isArray(groups) ? groups : []).filter(group => group.items && group.items.length > 0);
     if (populated.length === 0) return '';
-    return populated.slice(0, GROUPS_SHOWN).map(group => `
+    const shown = populated.slice(0, GROUPS_SHOWN);
+    const omittedGroups = populated.length - shown.length;
+    const groupsHtml = shown.map(group => `
       <div class="ra-group${ACTIONABLE_GROUPS.includes(group.state) ? ' is-actionable' : ' is-aspirational'}">
         <div class="ra-group__label">
           <span>${escapeHtml(group.label || group.state || 'Unknown')}</span>
@@ -466,6 +471,13 @@
         <ul class="ra-group__list">${group.items.slice(0, ROWS_PER_GROUP).map(renderRow).join('')}</ul>
       </div>
     `).join('');
+
+    const omissionNote = omittedGroups > 0
+      ? `<p class="ra-census">Showing ${int(shown.length)} of ${int(populated.length)} availability groups; `
+        + `${int(omittedGroups)} further group${omittedGroups === 1 ? ' is' : 's are'} omitted from this view.</p>`
+      : '';
+
+    return groupsHtml + omissionNote;
   }
 
   /**

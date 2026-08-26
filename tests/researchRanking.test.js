@@ -1974,4 +1974,91 @@ test('the two chain badges have CSS of their own, resolving to real colours', ()
   assert.notEqual(colorOf('.ra-tag--chain'), resolve(tokens.get('--text-muted')));
 });
 
+test('research-advisor distinguishes capped groups list from whole list with explicit omission note', () => {
+  const makeGroup = (state, label, name) => ({
+    state,
+    label,
+    count: 3,
+    items: [
+      {
+        id: `item-${state}`,
+        displayName: name,
+        improvementMultiple: 2.0,
+        axisLabel: 'combat power',
+        remainingResearchCost: 1000,
+        monthsAtCurrentIncome: 1
+      }
+    ]
+  });
+
+  // 1. Whole list (2 groups <= GROUPS_SHOWN=2): no omission note
+  const twoGroupsPayload = {
+    resource: 'research-ranking',
+    military: {
+      rankedCount: 6,
+      candidatesConsidered: 6,
+      unrankable: { counts: {} },
+      groups: [
+        makeGroup('researchable-now', 'Researchable now', 'Project Alpha'),
+        makeGroup('prereq-clear-but-unrolled', 'Prerequisites met — unrolled', 'Project Beta')
+      ]
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  };
+  const htmlTwo = renderToString(twoGroupsPayload);
+  const textTwo = visibleText(htmlTwo);
+  assert.ok(textTwo.includes('Researchable now'), 'Group 1 must render');
+  assert.ok(textTwo.includes('Prerequisites met — unrolled'), 'Group 2 must render');
+  assert.ok(!textTwo.includes('omitted from this view'), 'No omission note when all populated groups fit within GROUPS_SHOWN');
+
+  // 2. Capped list (4 groups > GROUPS_SHOWN=2): renders first 2 groups and explicit omission note
+  const fourGroupsPayload = {
+    resource: 'research-ranking',
+    military: {
+      rankedCount: 12,
+      candidatesConsidered: 12,
+      unrankable: { counts: {} },
+      groups: [
+        makeGroup('researchable-now', 'Researchable now', 'Project Alpha'),
+        makeGroup('prereq-clear-but-unrolled', 'Prerequisites met — unrolled', 'Project Beta'),
+        makeGroup('prereq-blocked', 'Prerequisites not met', 'Project Gamma'),
+        makeGroup('unranked-tech', 'Unranked technology', 'Project Delta')
+      ]
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  };
+  const htmlFour = renderToString(fourGroupsPayload);
+  const textFour = visibleText(htmlFour);
+  assert.ok(textFour.includes('Researchable now'), 'Group 1 must render');
+  assert.ok(textFour.includes('Prerequisites met — unrolled'), 'Group 2 must render');
+  assert.ok(!textFour.includes('Project Gamma'), 'Group 3 items must be omitted from main card');
+  assert.ok(!textFour.includes('Project Delta'), 'Group 4 items must be omitted from main card');
+  assert.ok(
+    textFour.includes('Showing 2 of 4 availability groups; 2 further groups are omitted from this view.'),
+    `Capped groups list must state total and omitted group counts: ${textFour}`
+  );
+
+  // 3. Capped list with 3 groups (omitted count = 1 singular)
+  const threeGroupsPayload = {
+    resource: 'research-ranking',
+    military: {
+      rankedCount: 9,
+      candidatesConsidered: 9,
+      unrankable: { counts: {} },
+      groups: [
+        makeGroup('researchable-now', 'Researchable now', 'Project Alpha'),
+        makeGroup('prereq-clear-but-unrolled', 'Prerequisites met — unrolled', 'Project Beta'),
+        makeGroup('prereq-blocked', 'Prerequisites not met', 'Project Gamma')
+      ]
+    },
+    economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
+  };
+  const htmlThree = renderToString(threeGroupsPayload);
+  const textThree = visibleText(htmlThree);
+  assert.ok(
+    textThree.includes('Showing 2 of 3 availability groups; 1 further group is omitted from this view.'),
+    `Singular omitted group must be grammatically correct: ${textThree}`
+  );
+});
+
 
