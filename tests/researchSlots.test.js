@@ -8,9 +8,8 @@
 // change cannot quietly start offering an optimisation the model cannot
 // support.
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
-const path = require('node:path');
 
 const snapshotBuilder = require('../server/snapshotBuilder');
 const snapshotIdentity = require('../server/snapshotIdentity');
@@ -398,23 +397,28 @@ test('a snapshot published before phase 5 degrades to a stated reason, not a cra
 // THE PANEL
 // ---------------------------------------------------------------------------
 
-const componentPath = path.join(__dirname, '..', 'public', 'v2', 'js', 'components', 'research-advisor.js');
+// The visible-text reader comes from the shared harness: the local one-line
+// `visibleText` stripped tags without decoding entities, so an escaped "<1 mo"
+// was read as a tag and eaten whole. See `tests/fixtures/renderHarness.js`.
+const { visibleText } = require('./fixtures/renderHarness');
 
-// The sandbox and the visible-text reader both come from the shared harness:
-// `{ window: {} }` left the component escaping through a fallback that does not
-// escape, and the local one-line `visibleText` stripped tags without decoding
-// entities, so an escaped "<1 mo" was read as a tag and eaten whole. See
-// `tests/fixtures/renderHarness.js`.
-const { visibleText, runComponent } = require('./fixtures/renderHarness');
+// THE PANEL IS REACT NOW (2026-08-26). `public/v2/js/components/research-advisor.js`
+// was deleted and `src/v2/panels/ResearchAdvisor.jsx` renders through the same
+// `window.MissionControlResearchAdvisor` bridge. `node --test` cannot render a
+// React component out of the Vite bundle, so the two panel tests below read
+// markup produced by a real browser driving that bridge. Their assertions are
+// unchanged; only the renderer moved, and it became async.
+const {
+  getResearchAdvisorHarnessPage,
+  closeResearchAdvisorHarness,
+  renderResearchAdvisorOnPage,
+} = require('./fixtures/researchAdvisorBrowser');
 
-function loadComponent() {
-  return runComponent(componentPath).window.MissionControlResearchAdvisor;
-}
+after(async () => { await closeResearchAdvisorHarness(); });
 
-function renderToString(payload) {
-  const root = { innerHTML: '', querySelector: () => null };
-  loadComponent().render(root, payload);
-  return root.innerHTML;
+async function renderToString(payload) {
+  const page = await getResearchAdvisorHarnessPage();
+  return renderResearchAdvisorOnPage(page, payload);
 }
 
 const PANEL_BASE = {
@@ -429,8 +433,8 @@ const PANEL_BASE = {
   economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
 };
 
-test('the card states the allocation on the line it already had, adding no height', () => {
-  const html = renderToString({ ...PANEL_BASE, slots: live() });
+test('the card states the allocation on the line it already had, adding no height', async () => {
+  const html = await renderToString({ ...PANEL_BASE, slots: live() });
   const text = visibleText(html);
   assert.match(text, /3\/6 slots weighted/);
   assert.match(text, /4 idle/, 'three unpipped holdings plus the one beyond the weighted slots');
@@ -441,8 +445,8 @@ test('the card states the allocation on the line it already had, adding no heigh
   }
 });
 
-test('an unavailable slot block leaves the income line alone rather than inventing zeros', () => {
-  const html = renderToString({
+test('an unavailable slot block leaves the income line alone rather than inventing zeros', async () => {
+  const html = await renderToString({
     ...PANEL_BASE,
     slots: buildResearchSlotAllocation(snapshotWith({ weights: null }), { observerId: OBSERVER })
   });

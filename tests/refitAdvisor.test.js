@@ -998,36 +998,24 @@ test('non-vacuous live save verification of armour indicator in player and omnis
   }
 });
 
-test('research advisor: openSlotDetails displays un-confounded REALLOCATION reasoning matching ALLOCATION_MODEL', () => {
-  const fs = require('fs');
-  const path = require('path');
-  const vm = require('vm');
-
-  const code = fs.readFileSync(path.join(__dirname, '../public/v2/js/components/research-advisor.js'), 'utf8');
+test('research advisor: openSlotDetails displays un-confounded REALLOCATION reasoning matching ALLOCATION_MODEL', async () => {
+  // THE PANEL IS REACT NOW (2026-08-26). `public/v2/js/components/research-advisor.js`
+  // was deleted; `slotFacts` and the full-ranking fact list are pure functions in
+  // `src/v2/panels/researchAdvisorUtils.mjs`, which the panel and the
+  // `window.MissionControlResearchAdvisor` bridge both consume. That half is ESM
+  // (Vite reads it too), so it is reached by dynamic import rather than a vm
+  // sandbox. `openFullRanking` takes the detail panel as an argument, so the mock
+  // below still receives a real open call. Every assertion is unchanged.
+  const advisor = await import('../src/v2/panels/researchAdvisorUtils.mjs');
   const panelMock = {
     open: payload => { panelPayload = payload; }
   };
-  // `escapeHtml: s => s` was not an escaper -- and worse, it returned a raw
-  // `null` unchanged, which a template literal then printed as the string
-  // "null". The shipped one turns that into '' and escapes the five entities.
-  const context = {
-    window: {
-      MissionControlDetailPanel: panelMock,
-      MissionControlShared: MISSION_CONTROL_SHARED
-    },
-    MissionControlShared: MISSION_CONTROL_SHARED,
-    MissionControlDetailPanel: panelMock,
-    console: { log: () => {}, warn: () => {} }
-  };
-  context.global = context.window;
-  vm.createContext(context);
-  vm.runInContext(code, context);
 
   // 1. With slots.model / slots.recommendation from live queryIntel
   const intel = queryFixtureIntel({ endpoint: 'research-ranking', mode: 'player', observer: 4712 });
   assert.ok(intel.slots, 'Intel payload must carry slots');
 
-  const factsFromIntel = context.window.MissionControlResearchAdvisor.slotFacts(intel.slots);
+  const factsFromIntel = advisor.slotFacts(intel.slots);
   const reallocFact = factsFromIntel.find(f => f.label === 'REALLOCATION');
   assert.ok(reallocFact, 'REALLOCATION fact must be present');
   assert.match(reallocFact.value, /no reallocation is recommended/i);
@@ -1039,14 +1027,14 @@ test('research advisor: openSlotDetails displays un-confounded REALLOCATION reas
   assert.match(reallocFact.value, /not a value model/);
 
   // Also test openFullRanking integrates slotFacts
-  context.window.MissionControlResearchAdvisor.openFullRanking(intel);
+  advisor.openFullRanking(intel, panelMock);
   assert.ok(panelPayload, 'Panel must have received open call');
   const panelRealloc = panelPayload.facts.find(f => f.label === 'REALLOCATION');
   assert.ok(panelRealloc, 'Panel must carry REALLOCATION fact');
   assert.strictEqual(panelRealloc.value, reallocFact.value);
 
   // 2. Fallback text when model and recommendation are absent
-  const fallbackFacts = context.window.MissionControlResearchAdvisor.slotFacts({
+  const fallbackFacts = advisor.slotFacts({
     available: true,
     slots: [{ index: 0, pips: 3, accumulatedResearch: 100, totalCost: 500, percent: 20, displayName: 'Test', kindLabel: 'Slot' }],
     freeProjectSlots: 0,

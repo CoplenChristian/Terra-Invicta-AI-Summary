@@ -24,6 +24,14 @@ import { AlienHateEconomics, renderHudAlienHateEconomics } from './panels/AlienH
 import { MiningExpansion } from './panels/MiningExpansion.jsx';
 import { CouncilOrders } from './panels/CouncilOrders.jsx';
 import { DirectiveBoard } from './panels/DirectiveBoard.jsx';
+import { ResearchAdvisor } from './panels/ResearchAdvisor.jsx';
+import {
+  fetchResearchRanking,
+  openFullRanking as openResearchFullRanking,
+  slotFacts as researchSlotFacts,
+} from './panels/researchAdvisorUtils.mjs';
+import { UnlockedTech } from './panels/UnlockedTech.jsx';
+import { WorldMap } from './panels/WorldMap.jsx';
 import { FactionLedgerBoard } from './panels/ExecutiveBoards.jsx';
 import { FactionIntel, createFactionIntelController } from './panels/FactionIntel.jsx';
 import {
@@ -50,9 +58,12 @@ import {
   renderMiningExpansion,
   renderCouncilOrders,
   renderDirectiveBoard,
+  renderResearchAdvisor,
+  loadUnlockedTech,
   renderAlienHateEconomics,
   renderIntelligenceLibrary,
   renderFactionIntel,
+  renderWorldMap,
   fetchFleetEngagement,
   fetchMiningExpansion,
 } from './main.jsx';
@@ -76,6 +87,14 @@ if (typeof window !== 'undefined') {
   window.FactionIntelScreen = { render: renderFactionIntel };
   window.MissionControlCouncilOrders = { render: renderCouncilOrders };
   window.MissionControlDirectiveBoard = { render: renderDirectiveBoard };
+  window.MissionControlResearchAdvisor = {
+    render: renderResearchAdvisor,
+    fetchResearchRanking,
+    openFullRanking: openResearchFullRanking,
+    slotFacts: researchSlotFacts,
+  };
+  window.MissionControlUnlockedTech = { load: loadUnlockedTech };
+  window.WorldTheaterMap = { render: renderWorldMap };
   window.MissionControlDriveExplorer = {
     load: loadDriveExplorer,
     render: renderDriveExplorer,
@@ -110,11 +129,14 @@ const SCENES = {
   miningExpansion: MiningExpansionScene,
   councilOrders: CouncilOrdersScene,
   directiveBoard: DirectiveBoardScene,
+  researchAdvisor: ResearchAdvisorScene,
+  unlockedTech: UnlockedTechScene,
   intelligenceLibrary: IntelligenceLibraryScene,
   alienHateEconomics: AlienHateEconomicsScene,
   executiveBoards: ExecutiveBoardsScene,
   factionIntel: FactionIntelScene,
   driveExplorer: DriveExplorerScene,
+  worldMap: WorldMapScene,
 };
 
 const PANEL_MODIFIERS = ['priority', 'alert', 'featured', 'quiet', 'dense', 'commentary'];
@@ -346,6 +368,46 @@ function DirectiveBoardScene() {
   );
 }
 
+function ResearchAdvisorScene() {
+  const payload = window.__RESEARCH_ADVISOR_PAYLOAD__;
+  return (
+    <div data-testid="research-advisor-harness">
+      {/* #researchAdvisor is the mount id public/v2/index.html owns and the
+          VIEWS registry drives, so the production path is what renders here. */}
+      <div id="researchAdvisor" aria-live="polite">
+        <ResearchAdvisor payload={payload} />
+      </div>
+      {/* A second mount the ported suite re-renders into through the same
+          window.MissionControlResearchAdvisor bridge mission-control.js calls.
+          Thirty-one payloads then cost one browser rather than thirty-one. */}
+      <div id="research-advisor-test-root" />
+    </div>
+  );
+}
+
+/**
+ * The RECORDS unlocked-technology panel.
+ *
+ * It takes no payload: it reads /api/intel/tech-tree and /api/intel/tech-search
+ * itself, so the scene supplies only the observer and the mode and the tests
+ * stub the two endpoints with page.route. #unlockedTech is the id
+ * public/v2/index.html owns and the VIEWS registry mounts into, so the real
+ * panel is rendered INSIDE it here rather than beside it.
+ */
+function UnlockedTechScene() {
+  const config = window.__UNLOCKED_TECH_CONFIG__ || {};
+  return (
+    <div data-testid="unlocked-tech-harness">
+      <div id="unlockedTech" className="unlocked-tech" aria-live="polite">
+        <UnlockedTech
+          observerId={config.observerId ?? 4712}
+          mode={config.mode ?? 'player'}
+        />
+      </div>
+    </div>
+  );
+}
+
 function IntelligenceLibraryScene() {
   const payload = window.__INTELLIGENCE_LIBRARY_PAYLOAD__ || {};
   const options = { ...(payload.options || {}) };
@@ -422,6 +484,27 @@ function DriveExplorerScene() {
     <div data-testid="drive-explorer-harness">
       <div id="driveExplorer">
         <DriveExplorer payload={payload} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The map is fed a payload and an options bag, exactly as
+ * `WorldTheaterMap.render(container, theaters, options)` was. `onSelect` cannot
+ * cross the Playwright boundary as a function, so the scene installs one that
+ * records every selected record on `window.__WORLD_MAP_SELECTIONS__`; the Node
+ * fixture drains that list and calls the test's own callback with it.
+ */
+function WorldMapScene() {
+  const payload = window.__WORLD_MAP_PAYLOAD__ || {};
+  const options = { ...(payload.options || {}) };
+  if (!window.__WORLD_MAP_SELECTIONS__) window.__WORLD_MAP_SELECTIONS__ = [];
+  options.onSelect = (record) => { window.__WORLD_MAP_SELECTIONS__.push(record); };
+  return (
+    <div data-testid="world-map-harness" style={{ width: 720 }}>
+      <div className="init-map-container">
+        <WorldMap theaters={payload.theaters} options={options} />
       </div>
     </div>
   );

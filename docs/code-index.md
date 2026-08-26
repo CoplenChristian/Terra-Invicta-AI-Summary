@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**211 JS modules** and **24 stylesheet parts** (235 indexed files).
+**214 JS modules** and **24 stylesheet parts** (238 indexed files).
 
 ## `public/`
 
@@ -22,9 +22,6 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/js/app.js` | BS | Browser (legacy, non-module) | 1517 | the legacy v1 dashboard controller — renders the old UI and must not | — | — |
 | `public/v2/js/components/detail-panel.js` | BS | Browser (classic, global IIFE) | 220 | the shared detail surface for clickable Mission Control modules — | — | — |
 | `public/v2/js/components/fleet-procurement.js` | BS | Browser (classic, global IIFE) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
-| `public/v2/js/components/research-advisor.js` | BS | Browser (classic, global IIFE) | 1068 | phase 4 of the research advisor, on screen. | — | — |
-| `public/v2/js/components/unlocked-tech.js` | BS | Browser (classic, global IIFE) | 372 | renders the searchable list of the observer faction's unlocked | — | — |
-| `public/v2/js/components/world-map.js` | BS | Browser (classic, global IIFE) | 543 | renders the interactive world/space theater map surface. | — | `tests/world-map.test.js` |
 | `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2114 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (classic, global IIFE) | 328 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
@@ -235,7 +232,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/tableVariants.js` | E | Browser (React JSX) | 77 | maps DataTable variant keys to the six real table systems in the v2 | `DEFAULT_SCROLL_HINT_TEXT, TABLE_VARIANTS` | — |
 | `src/v2/components/TruncationNote.jsx` | E | Browser (React JSX) | 90 | announce capped lists with total and omitted counts. An absent omitted | `TruncationNote` | — |
 | `src/v2/components/Value.jsx` | E | Browser (React JSX) | 80 | render a numeric value or an explicit unavailable/absent state. Never | `Value` | — |
-| `src/v2/main.jsx` | E | Browser (React JSX) | 425 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, mountCoexistenceProof, mountReactPanel, renderAlienHateEconomics, renderCapabilityMatrix, renderCouncilOrders, renderDirectiveBoard, renderFactionIntel, renderFactionLedger, renderFleetEngagement, renderHudAlienHateEconomics, renderIntelligenceLibrary, …(+9)` | — |
+| `src/v2/main.jsx` | E | Browser (React JSX) | 498 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchResearchRanking, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openResearchFullRanking, renderAlienHateEconomics, renderCapabilityMatrix, renderCouncilOrders, renderDirectiveBoard, renderFactionIntel, renderFactionLedger, …(+15)` | — |
 | `src/v2/panels/AlienHateEconomics.jsx` | E | Browser (React JSX) | 499 | renders the save-derived Mission Control hate floor and Total War | `AlienHateEconomics, fmtNumber, renderHudAlienHateEconomics` | `tests/AlienHateEconomics.test.js` |
 | `src/v2/panels/CouncilOrders.jsx` | E | Browser (React JSX) | 384 | React port of public/v2/js/components/council-orders.js. Renders the | `CouncilOrders, focusDirectiveBoard` | `tests/CouncilOrders.test.js` |
 | `src/v2/panels/DirectiveBoard.jsx` | E | Browser (React JSX) | 1004 | React port of public/v2/js/components/directive-board.js — renders | `DirectiveBoard` | — |
@@ -250,8 +247,14 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/panels/intelligenceLibraryUtils.js` | E | Browser (React JSX) | 175 | pure formatters and selectors for the intelligence library React | `EM_DASH, activeCouncilors, councilorProfile, countLabel, displayText, factionColorById, factionLogoHtml, factionMap, factionNameById, matchesSpaceTheater, money, number, …(+6)` | — |
 | `src/v2/panels/McBudget.jsx` | E | Browser (React JSX) | 275 | Mission Control budget planner — MC is the sole input to the alien | `McBudget` | — |
 | `src/v2/panels/MiningExpansion.jsx` | E | Browser (React JSX) | 1050 | render the mining expansion board in React with explicit presence | `MiningExpansion` | `tests/MiningExpansion.test.js` |
+| `src/v2/panels/ResearchAdvisor.jsx` | E | Browser (React JSX) | 368 | the COMMAND-view research advisor — what to research next, in two | `ResearchAdvisor` | — |
+| `src/v2/panels/researchAdvisorUtils.mjs` | E | Browser (React JSX) | 1087 | the DOM-free half of the research advisor — every formatter, row | `ACTIONABLE_GROUPS, ASPIRATIONAL_GROUPS, BACKLOG_TITLE, BEYOND_HORIZON, CENSUS_TITLE, CHAIN_TITLE, DELIVERY_DEMOTED_TITLE, DELIVERY_FAILS_TITLE, DELIVERY_UNKNOWN_TITLE, ECONOMIC_CAPTION_TITLE, FOOT_TITLE_BASE, GROUPS_SHOWN, …(+50)` | — |
 | `src/v2/panels/StrategicCommentary.jsx` | E | Browser (React JSX) | 286 | renders the non-LLM four-layer Strategic Commentary Engine output | `StrategicCommentary` | `tests/StrategicCommentary.test.js` |
-| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 446 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
+| `src/v2/panels/UnlockedTech.jsx` | E | Browser (React JSX) | 382 | the searchable list of the observer faction's unlocked research | `UnlockedTech` | — |
+| `src/v2/panels/unlockedTechUtils.js` | E | Browser (React JSX) | 167 | the pure reads behind the UNLOCKED TECHNOLOGY panel — census, | `DEBOUNCE_MS, RENDER_CAP, UNLOCK_CAP, applyScope, capSentence, categoryLabel, censusSentence, costLabel, isUnlocked, matchingUnlocks, normalise, readCensus, …(+5)` | — |
+| `src/v2/panels/WorldMap.jsx` | E | Browser (React JSX) | 443 | renders the interactive world/space theater map surface — six | `WorldMap, loadGeography, resetGeographyCache` | `tests/WorldMap.test.js` |
+| `src/v2/panels/worldMapUtils.js` | E | Browser (React JSX) | 472 | pure geometry, pairing and presence helpers for the WorldMap panel — | `COLORS, COUNTRY_THEATERS, GRATICULE_PATHS, HOSTILE_KEYS, ID_KEYS, LEGEND_ITEMS, NAME_KEYS, OWN_KEYS, STATUS_KEYS, THEATERS, TYPE, buildCountryPaths, …(+19)` | — |
+| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 529 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
 | `src/v2/theme.js` | E | Browser (React JSX) | 266 | MUI createTheme mirror of the v2 CSS custom-property vocabulary in | `cssParityExpectations, initiativeCategorical, initiativeSpace, initiativeTheme, initiativeTokens` | — |
 
 ## `public/v2/css/`

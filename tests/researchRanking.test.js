@@ -17,11 +17,10 @@
 // the REAL installed templates, so the turn-1 case exercises the same catalogue
 // the live save does.
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 
 const snapshotBuilder = require('../server/snapshotBuilder');
 const snapshotIdentity = require('../server/snapshotIdentity');
@@ -719,7 +718,6 @@ test('a prerequisite-blocked row names the prerequisites that block it', () => {
 // ---------------------------------------------------------------------------
 
 const repoRoot = path.resolve(__dirname, '..');
-const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'research-advisor.js');
 const v2ShellPath = path.join(repoRoot, 'public', 'v2', 'index.html');
 const missionControlPath = path.join(repoRoot, 'public', 'v2', 'js', 'mission-control.js');
 
@@ -730,17 +728,28 @@ const fleetComponentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components
 // `public/v2/js/shared.js` rather than copying it. Both defects the local
 // copies here carried -- a sandbox whose escapeHtml did not escape, and a
 // visibleText that did not decode -- are documented at the top of that file.
+// `escapeHtml` is still the shipped one; `visibleText` is now applied to markup
+// a real browser produced.
 const { visibleText, runComponent } = require('./fixtures/renderHarness');
 
-function loadComponent() {
-  return runComponent(componentPath).window.MissionControlResearchAdvisor;
-}
+// THE PANEL IS REACT NOW (2026-08-26). `public/v2/js/components/research-advisor.js`
+// was deleted and `src/v2/panels/ResearchAdvisor.jsx` renders through the same
+// `window.MissionControlResearchAdvisor` bridge mission-control.js already
+// called. `node --test` cannot render a React component out of the Vite bundle,
+// so every assertion below now reads markup produced by a real browser driving
+// that bridge. Every assertion is unchanged; only the plumbing that produces
+// `html` moved, and each renderer became async.
+const {
+  getResearchAdvisorHarnessPage,
+  closeResearchAdvisorHarness,
+  renderResearchAdvisorOnPage,
+} = require('./fixtures/researchAdvisorBrowser');
 
-function renderToString(payload) {
-  const component = loadComponent();
-  const root = { innerHTML: '', querySelector: () => null };
-  component.render(root, payload);
-  return root.innerHTML;
+after(async () => { await closeResearchAdvisorHarness(); });
+
+async function renderToString(payload) {
+  const page = await getResearchAdvisorHarnessPage();
+  return renderResearchAdvisorOnPage(page, payload);
 }
 
 // This sandbox was still `{ window: {} }` after its sibling above was repaired,
@@ -825,22 +834,26 @@ const subMonthChainPayload = () => ({
 });
 
 /**
- * The panel rendered through the sandbox this file used to build: no
- * `MissionControlShared`, so the component falls back to its own
- * `value => String(value ?? '')`, which does not escape.
+ * The panel's own markup with the escaping undone — what the pre-2026-08-22
+ * sandbox produced, reconstructed.
+ *
+ * That sandbox was `{ window: {} }`, so the vanilla component fell back to its
+ * own `value => String(value ?? '')`, which is not an escaper: the markup
+ * carried a raw `<` where the panel now writes `&lt;`. The vanilla file was
+ * deleted in the React migration, so the mechanism cannot be re-run — but the
+ * DEFECT is exactly "the same panel output with the five entities decoded", and
+ * that is reproducible from the real markup. Part 4 below still asks the same
+ * question of it, with the same assertions.
  */
-function renderThroughTheOldBrokenSandbox(payload) {
-  const source = fs.readFileSync(componentPath, 'utf8');
-  const sandbox = { window: {}, console, fetch: () => Promise.resolve(null) };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: componentPath });
-  const root = { innerHTML: '', querySelector: () => null };
-  sandbox.window.MissionControlResearchAdvisor.render(root, payload);
-  return root.innerHTML;
+const UNESCAPE = [[/&lt;/g, '<'], [/&gt;/g, '>'], [/&quot;/g, '"'], [/&#0?39;/g, "'"], [/&amp;/g, '&']];
+
+function withoutEscaping(html) {
+  let markup = String(html);
+  for (const [pattern, replacement] of UNESCAPE) markup = markup.replace(pattern, replacement);
+  return markup;
 }
 
-test('the render harness reports what a browser shows, not the markup, for a sub-month duration', () => {
+test('the render harness reports what a browser shows, not the markup, for a sub-month duration', async () => {
   // 1. The escaper is the shipped one and it actually escapes.
   assert.equal(escapeHtml('<1 mo'), '&lt;1 mo');
   assert.equal(escapeHtml('Ceres & Vesta'), 'Ceres &amp; Vesta');
@@ -855,7 +868,7 @@ test('the render harness reports what a browser shows, not the markup, for a sub
     'and a tooltip is still not counted as visible copy');
 
   // 3. End to end through the real panel: the duration survives.
-  const html = renderToString(subMonthChainPayload());
+  const html = await renderToString(subMonthChainPayload());
   assert.ok(html.includes('&lt;1 mo'), 'the panel escapes the "<" before it reaches the page');
   const text = visibleText(html);
   assert.ok(text.includes('900 pts · <1 mo'),
@@ -866,7 +879,7 @@ test('the render harness reports what a browser shows, not the markup, for a sub
   //    removed whole, so the duration vanished from "what a reader sees" and
   //    the next fragment closed the gap. This assertion is the proof that
   //    parts 1-3 are testing something real rather than passing by luck.
-  const brokenText = visibleText(renderThroughTheOldBrokenSandbox(subMonthChainPayload()));
+  const brokenText = visibleText(withoutEscaping(html));
   assert.ok(!brokenText.includes('<1 mo'),
     'the pre-2026-08-22 sandbox is expected to LOSE the duration — if it no longer does, '
     + 'the component stopped escaping and this whole harness argument needs revisiting');
@@ -879,8 +892,18 @@ test('the panel is mounted in the COMMAND view and loaded by the shell', () => {
   const missionControl = fs.readFileSync(missionControlPath, 'utf8');
 
   assert.ok(html.includes('id="researchAdvisor"'), 'the mount element must exist');
-  assert.ok(html.includes('/v2/js/components/research-advisor.js'),
-    'a component with no <script> tag renders nowhere');
+  // Flipped by the React migration (2026-08-26), following the precedent
+  // tests/miningBoardRendering.test.js:48 set: the vanilla component is deleted,
+  // so its <script> tag must be GONE and the bundle that now supplies
+  // `window.MissionControlResearchAdvisor` must be loaded instead. The
+  // mission-control.js control below proves the missing-script assertion is not
+  // vacuously true — it names the shell itself, which outlives every component.
+  assert.ok(!html.includes('/v2/js/components/research-advisor.js'),
+    'the deleted classic research advisor must not be loaded');
+  assert.ok(html.includes('/v2/js/mission-control.js'),
+    'the shell controller is loaded, so a missing-script assertion is meaningful');
+  assert.ok(html.includes('/v2/app/bundle.js'),
+    'a component with no <script> tag renders nowhere — the React bundle is that tag now');
 
   const command = html.match(/<section[^>]*id="view-command"[\s\S]*?<\/section>/);
   assert.ok(command, '#view-command must exist');
@@ -893,11 +916,11 @@ test('the panel is mounted in the COMMAND view and loaded by the shell', () => {
     'and the render dispatch must actually call it');
 });
 
-test('a payload whose every measurement is absent renders honest dashes, never "null"', () => {
+test('a payload whose every measurement is absent renders honest dashes, never "null"', async () => {
   // Deliberately hostile: this is the shape phases 1-3 produce on a snapshot
   // where nothing could be measured. Every one of these nulls is intentional
   // upstream and would print as the word "null" through a raw interpolation.
-  const html = renderToString({
+  const html = await renderToString({
     success: true,
     sources: {
       propulsion: { available: true, reason: null, designsInService: null, note: null },
@@ -944,9 +967,9 @@ test('a payload whose every measurement is absent renders honest dashes, never "
   assert.ok(html.includes('—'), 'an absent measurement renders as the unavailable dash');
 });
 
-test('a turn-1 payload renders the reason it is empty rather than an empty box', () => {
+test('a turn-1 payload renders the reason it is empty rather than an empty box', async () => {
   const payload = project(turnOneSnapshot('player'));
-  const html = renderToString(payload);
+  const html = await renderToString(payload);
   assertNoPlaceholderText(html, 'turn-1 payload');
   const text = visibleText(html);
   assert.match(text, /no baseline to|no hulls|Nothing can be ranked/i,
@@ -954,10 +977,10 @@ test('a turn-1 payload renders the reason it is empty rather than an empty box',
   assert.match(text, /ranked/, 'and the census still reports what was considered');
 });
 
-test('the live-shaped payload renders both tracks with no forbidden token', () => {
+test('the live-shaped payload renders both tracks with no forbidden token', async () => {
   for (const mode of ['player', 'omniscient']) {
     const payload = project(fleetScenario(SCENARIOS.deltaV, mode), { mode });
-    const html = renderToString(payload);
+    const html = await renderToString(payload);
     assertNoPlaceholderText(html, `${mode} payload`);
     const text = visibleText(html);
     assert.match(text, /MILITARY/);
@@ -965,7 +988,7 @@ test('the live-shaped payload renders both tracks with no forbidden token', () =
   }
 });
 
-test('the monthly unlock roll is shown only where a roll is still pending', () => {
+test('the monthly unlock roll is shown only where a roll is still pending', async () => {
   const base = {
     id: 'x', displayName: 'Candidate', axisLabel: 'combat acceleration', improvementMultiple: 2,
     valuePerResearchPoint: 0.001, remainingResearchCost: 1000, monthsAtCurrentIncome: 2,
@@ -987,17 +1010,17 @@ test('the monthly unlock roll is shown only where a roll is still pending', () =
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {}, reasons: [] }, units: [] }
   });
 
-  const rolling = visibleText(renderToString(shell('prereq-clear-but-unrolled', 'Not yet available')));
+  const rolling = visibleText(await renderToString(shell('prereq-clear-but-unrolled', 'Not yet available')));
   assert.match(rolling, /rolls 5%\/mo, cap 50%/, 'a pending roll and its cap are the whole proposition');
   assert.match(rolling, /may never land/, 'a cap below 100% may never land, and the player is entitled to know');
 
-  const available = visibleText(renderToString(shell('researchable-now', 'Researchable now')));
+  const available = visibleText(await renderToString(shell('researchable-now', 'Researchable now')));
   assert.ok(!/rolls /.test(available),
     'a researchable-now candidate has already rolled; printing its odds describes a dice throw that is over');
 });
 
-test('a payload with no valuation inputs renders unavailable rather than an empty ranking', () => {
-  const html = renderToString({
+test('a payload with no valuation inputs renders unavailable rather than an empty ranking', async () => {
+  const html = await renderToString({
     success: true,
     sources: {
       propulsion: { available: false, reason: 'driveStats is not present' },
@@ -1116,7 +1139,7 @@ test('a rule row that cannot be compared is carried with its reason, never dropp
   }
 });
 
-test('a unitless row is badged as such on the card, and a measured one is not', () => {
+test('a unitless row is badged as such on the card, and a measured one is not', async () => {
   const row = (overrides) => ({
     id: 'r', displayName: 'A Module', axisLabel: 'Farm (rule value)', axisBasis: 'basis',
     improvementMultiple: 5, valuePerResearchPoint: 0.0008, remainingResearchCost: 5000,
@@ -1138,13 +1161,13 @@ test('a unitless row is badged as such on the card, and a measured one is not', 
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   });
 
-  const unitless = renderToString(payload('rule-scalar'));
+  const unitless = await renderToString(payload('rule-scalar'));
   assert.match(unitless, /ra-tag--unitless/);
   assert.match(visibleText(unitless), /no unit/);
   assert.match(unitless, /no engineering axis/, 'the badge must carry its explanation as a tooltip');
   assertNoPlaceholderText(unitless, 'rule-scalar row');
 
-  const measured = renderToString(payload('measured'));
+  const measured = await renderToString(payload('measured'));
   assert.ok(!/ra-tag--unitless/.test(measured), 'a measured axis carries no badge');
 });
 
@@ -1284,7 +1307,7 @@ test('a failing munition is ordered behind a clearing row IN THE PAYLOAD, not ju
   assert.ok(named, 'the row the floor moved must be named in the census');
 });
 
-test('the delivery badges and the demotion line render, and neither prints a null', () => {
+test('the delivery badges and the demotion line render, and neither prints a null', async () => {
   const weaponRow = (overrides) => ({
     id: 'r', displayName: 'A Weapon', axisLabel: 'sustained output per hardpoint (MW)', axisBasis: 'basis',
     axisKind: 'measured', improvementMultiple: 6687502.98, valuePerResearchPoint: 334.375,
@@ -1305,7 +1328,7 @@ test('the delivery badges and the demotion line render, and neither prints a nul
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   });
 
-  const fails = renderToString(payload(weaponRow({ clearsDeliveryFloor: false }), null));
+  const fails = await renderToString(payload(weaponRow({ clearsDeliveryFloor: false }), null));
   assert.match(visibleText(fails), /fails delivery/);
   assert.match(fails, /ra-tag--warn/);
   assert.match(fails, /decides whether the damage lands/, 'the badge carries its explanation as a tooltip');
@@ -1313,7 +1336,7 @@ test('the delivery badges and the demotion line render, and neither prints a nul
 
   // Unknown gets its OWN badge, visibly distinct from the failure one, because
   // an unevaluated floor must never read as a cleared one.
-  const unknown = renderToString(payload(weaponRow({
+  const unknown = await renderToString(payload(weaponRow({
     clearsDeliveryFloor: null,
     context: { delivery: { shotsPerArrivingRound: null, floorValue: null, multipleOfFloor: null } }
   }), null));
@@ -1324,12 +1347,12 @@ test('the delivery badges and the demotion line render, and neither prints a nul
 
   // A row with no delivery context at all gets no badge: a reactor has no
   // delivery axis, and badging it would invent one.
-  const silent = renderToString(payload(weaponRow({ clearsDeliveryFloor: null, context: null }), null));
+  const silent = await renderToString(payload(weaponRow({ clearsDeliveryFloor: null, context: null }), null));
   assert.ok(!/delivery unchecked/.test(visibleText(silent)));
   assert.ok(!/fails delivery/.test(visibleText(silent)));
 
   // The census line: one line, naming the leader and the multiple.
-  const withCensus = renderToString(payload(weaponRow({ clearsDeliveryFloor: false }), {
+  const withCensus = await renderToString(payload(weaponRow({ clearsDeliveryFloor: false }), {
     count: 1,
     itemsShown: 1,
     itemsOmittedCount: 0,
@@ -1350,7 +1373,7 @@ test('the delivery badges and the demotion line render, and neither prints a nul
   assertNoPlaceholderText(withCensus, 'delivery census line');
 
   // An all-null demoted row still renders the em dash, never the word null.
-  const hostile = renderToString(payload(weaponRow({ clearsDeliveryFloor: false }), {
+  const hostile = await renderToString(payload(weaponRow({ clearsDeliveryFloor: false }), {
     count: 2,
     itemsShown: 1,
     itemsOmittedCount: 1,
@@ -1362,17 +1385,17 @@ test('the delivery badges and the demotion line render, and neither prints a nul
   assert.match(hostile, /—/);
 
   // Nothing demoted costs no height at all: the COMMAND column has none spare.
-  const clean = renderToString(payload(weaponRow({ clearsDeliveryFloor: true }),
+  const clean = await renderToString(payload(weaponRow({ clearsDeliveryFloor: true }),
     { count: 0, itemsShown: 0, itemsOmittedCount: 0, items: [] }));
   assert.ok(!/ranked below/.test(visibleText(clean)));
-  const absent = renderToString(payload(weaponRow({ clearsDeliveryFloor: true }), null));
+  const absent = await renderToString(payload(weaponRow({ clearsDeliveryFloor: true }), null));
   assert.ok(!/ranked below/.test(visibleText(absent)));
 });
 
-test('the live-shaped payload renders the delivery figures with no forbidden token, in both modes', () => {
+test('the live-shaped payload renders the delivery figures with no forbidden token, in both modes', async () => {
   for (const mode of ['player', 'omniscient']) {
     const payload = project(fleetScenario(SCENARIOS.armour, mode), { mode });
-    const html = renderToString(payload);
+    const html = await renderToString(payload);
     assertNoPlaceholderText(html, `${mode} delivery payload`);
     assert.ok(payload.military.deliveryDemoted, `${mode}: the census must reach the panel`);
   }
@@ -1383,7 +1406,7 @@ test('the live-shaped payload renders the delivery figures with no forbidden tok
 // Spec: docs/research-row-naming-spec.md
 // ---------------------------------------------------------------------------
 
-test('research rows display the project name as visible lead text and parenthesise unlock item when different', () => {
+test('research rows display the project name as visible lead text and parenthesise unlock item when different', async () => {
   const payload = {
     success: true,
     sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
@@ -1415,7 +1438,7 @@ test('research rows display the project name as visible lead text and parenthesi
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   };
 
-  const html = renderToString(payload);
+  const html = await renderToString(payload);
   assertNoPlaceholderText(html, 'project naming payload');
   const text = visibleText(html);
 
@@ -1427,7 +1450,7 @@ test('research rows display the project name as visible lead text and parenthesi
   assert.match(html, /ra-row__sub/, 'item name uses subdued styling span');
 });
 
-test('zero-cost rows do not render in research-advisor and render in fleet-procurement', () => {
+test('zero-cost rows do not render in research-advisor and render in fleet-procurement', async () => {
   const payload = {
     success: true,
     sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
@@ -1454,7 +1477,7 @@ test('zero-cost rows do not render in research-advisor and render in fleet-procu
   };
 
   // 1. Research advisor must contain no procurement block and no zero-cost rows
-  const advisorHtml = renderToString(payload);
+  const advisorHtml = await renderToString(payload);
   assertNoPlaceholderText(advisorHtml, 'research advisor zero-cost payload');
   assert.ok(!advisorHtml.includes('ra-procurement'), 'research advisor must not render .ra-procurement');
   assert.ok(!advisorHtml.includes('Dreadnought'), 'research advisor must not contain zero-cost items');
@@ -1491,7 +1514,7 @@ test('fleet procurement is mounted in FLEET view and loaded by the shell', () =>
     'and the render dispatch must actually call it');
 });
 
-test('matching project and item names render cleanly without redundant parentheses', () => {
+test('matching project and item names render cleanly without redundant parentheses', async () => {
   const payload = {
     success: true,
     sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
@@ -1517,7 +1540,7 @@ test('matching project and item names render cleanly without redundant parenthes
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   };
 
-  const html = renderToString(payload);
+  const html = await renderToString(payload);
   assertNoPlaceholderText(html, 'matching-names payload');
   const text = visibleText(html);
 
@@ -1526,7 +1549,7 @@ test('matching project and item names render cleanly without redundant parenthes
   assert.ok(!html.includes('ra-row__sub'), 'no sub-name span rendered for identical names');
 });
 
-test('the longest real labels (e.g. 57 characters) render without placeholder tokens', () => {
+test('the longest real labels (e.g. 57 characters) render without placeholder tokens', async () => {
   const payload = {
     success: true,
     sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
@@ -1552,7 +1575,7 @@ test('the longest real labels (e.g. 57 characters) render without placeholder to
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   };
 
-  const html = renderToString(payload);
+  const html = await renderToString(payload);
   assertNoPlaceholderText(html, 'longest-label payload');
   const text = visibleText(html);
   const expected = 'Hydrolox High Explosive Missiles (Copperhead Missile Pod)';
@@ -1560,7 +1583,7 @@ test('the longest real labels (e.g. 57 characters) render without placeholder to
   assert.ok(text.includes(expected), '57-character label renders in full in visible text');
 });
 
-test('alsoUnlocks > 1 is rendered as a visible badge, and <= 1 is not badged', () => {
+test('alsoUnlocks > 1 is rendered as a visible badge, and <= 1 is not badged', async () => {
   const payload = {
     success: true,
     sources: { propulsion: { available: true }, militaryValue: { available: true }, economicValue: { available: true } },
@@ -1602,7 +1625,7 @@ test('alsoUnlocks > 1 is rendered as a visible badge, and <= 1 is not badged', (
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   };
 
-  const html = renderToString(payload);
+  const html = await renderToString(payload);
   assertNoPlaceholderText(html, 'alsoUnlocks payload');
   const text = visibleText(html);
 
@@ -1645,7 +1668,7 @@ test('research-ranking produces capability verdicts for uncompared candidates', 
   }
 });
 
-test('research-advisor frontend renders chain steps and capability tags', () => {
+test('research-advisor frontend renders chain steps and capability tags', async () => {
   const payload = {
     resource: 'research-ranking',
     military: {
@@ -1680,7 +1703,7 @@ test('research-advisor frontend renders chain steps and capability tags', () => 
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   };
 
-  const html = renderToString(payload);
+  const html = await renderToString(payload);
   assertNoPlaceholderText(html, 'chain payload');
   const text = visibleText(html);
 
@@ -1870,11 +1893,11 @@ test('a promoted chain lands in its next step group, priced over the whole chain
   }
 });
 
-test('a multi-step chain is visible in COMMAND without opening the drill-down, in both modes', () => {
+test('a multi-step chain is visible in COMMAND without opening the drill-down, in both modes', async () => {
   for (const mode of ['player', 'omniscient']) {
     // The panel's own request: `limit=6`, summary detail.
     const payload = liveResult(mode, { limit: 6 });
-    const html = renderToString(payload);
+    const html = await renderToString(payload);
     assertNoPlaceholderText(html, `${mode} live payload`);
     const text = visibleText(html);
 
@@ -1907,9 +1930,9 @@ test('a multi-step chain is visible in COMMAND without opening the drill-down, i
   }
 });
 
-test('promotion changes no group budget: the card still paints two groups of two', () => {
+test('promotion changes no group budget: the card still paints two groups of two', async () => {
   for (const mode of ['player', 'omniscient']) {
-    const html = renderToString(liveResult(mode, { limit: 6 }));
+    const html = await renderToString(liveResult(mode, { limit: 6 }));
     // `ra-group ` with the trailing space, so `ra-group__label` and
     // `ra-group__list` inside each group are not counted as groups themselves.
     const groups = html.match(/class="ra-group /g) || [];
@@ -1974,7 +1997,7 @@ test('the two chain badges have CSS of their own, resolving to real colours', ()
   assert.notEqual(colorOf('.ra-tag--chain'), resolve(tokens.get('--text-muted')));
 });
 
-test('research-advisor distinguishes capped groups list from whole list with explicit omission note', () => {
+test('research-advisor distinguishes capped groups list from whole list with explicit omission note', async () => {
   const makeGroup = (state, label, name) => ({
     state,
     label,
@@ -2005,7 +2028,7 @@ test('research-advisor distinguishes capped groups list from whole list with exp
     },
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   };
-  const htmlTwo = renderToString(twoGroupsPayload);
+  const htmlTwo = await renderToString(twoGroupsPayload);
   const textTwo = visibleText(htmlTwo);
   assert.ok(textTwo.includes('Researchable now'), 'Group 1 must render');
   assert.ok(textTwo.includes('Prerequisites met — unrolled'), 'Group 2 must render');
@@ -2027,7 +2050,7 @@ test('research-advisor distinguishes capped groups list from whole list with exp
     },
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   };
-  const htmlFour = renderToString(fourGroupsPayload);
+  const htmlFour = await renderToString(fourGroupsPayload);
   const textFour = visibleText(htmlFour);
   assert.ok(textFour.includes('Researchable now'), 'Group 1 must render');
   assert.ok(textFour.includes('Prerequisites met — unrolled'), 'Group 2 must render');
@@ -2053,7 +2076,7 @@ test('research-advisor distinguishes capped groups list from whole list with exp
     },
     economic: { rankedCount: 0, candidatesConsidered: 0, unrankable: { counts: {} }, units: [] }
   };
-  const htmlThree = renderToString(threeGroupsPayload);
+  const htmlThree = await renderToString(threeGroupsPayload);
   const textThree = visibleText(htmlThree);
   assert.ok(
     textThree.includes('Showing 2 of 3 availability groups; 1 further group is omitted from this view.'),

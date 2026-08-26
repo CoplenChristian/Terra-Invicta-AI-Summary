@@ -20,6 +20,13 @@ import { AlienHateEconomics, renderHudAlienHateEconomics } from './panels/AlienH
 import { IntelligenceLibrary } from './panels/IntelligenceLibrary.jsx';
 import { MiningExpansion } from './panels/MiningExpansion.jsx';
 import { CouncilOrders } from './panels/CouncilOrders.jsx';
+import { ResearchAdvisor } from './panels/ResearchAdvisor.jsx';
+import {
+  fetchResearchRanking,
+  openFullRanking as openResearchFullRanking,
+  slotFacts as researchSlotFacts,
+} from './panels/researchAdvisorUtils.mjs';
+import { WorldMap } from './panels/WorldMap.jsx';
 import {
   DriveExplorer,
   driveExplorerInternals,
@@ -30,6 +37,7 @@ import {
   setDriveExplorerMount,
 } from './panels/DriveExplorer.jsx';
 import { DirectiveBoard } from './panels/DirectiveBoard.jsx';
+import { UnlockedTech } from './panels/UnlockedTech.jsx';
 import {
   FactionIntel,
   createEmptyController,
@@ -219,6 +227,57 @@ export function renderCouncilOrders(root, payload) {
 }
 
 /**
+ * Strangler bridge matching window.MissionControlResearchAdvisor.render(root, payload).
+ *
+ * `payload` may be null — mission-control.js renders the result of the fetch
+ * unconditionally, and null is a supported input that produces the honest
+ * "ranking endpoint did not answer" state rather than a placeholder ranking.
+ */
+export function renderResearchAdvisor(root, payload) {
+  if (!root) return;
+  mountReactPanel(root, <ResearchAdvisor payload={payload} />);
+}
+
+export { fetchResearchRanking, openResearchFullRanking, researchSlotFacts };
+
+/**
+ * Strangler bridge matching window.MissionControlUnlockedTech.load(observerId, mode, container).
+ *
+ * Not `render(root, payload)`: the RECORDS panel takes no payload object at all
+ * and reads its own two endpoints, so mission-control.js hands it the observer,
+ * the mode and the container it is to own. The call site is the lazy `records`
+ * branch of loadLazyViewPanels, guarded by a per-view load key.
+ */
+export function loadUnlockedTech(observerId, mode, container) {
+  const target = typeof container === 'string' ? document.getElementById(container) : container;
+  if (!target) return;
+  mountReactPanel(target, <UnlockedTech observerId={observerId} mode={mode} />);
+}
+
+/**
+ * Strangler bridge matching window.WorldTheaterMap.render(container, theaters, options).
+ *
+ * `container` may be a selector string or an element — mission-control.js resolves
+ * `.init-map-container` itself and hands the element over, but the vanilla panel
+ * accepted either and the signature is kept.
+ *
+ * The mount owns a `.world-map-fallback` child reading "REAL WORLD MAP
+ * INITIALIZING…" (public/v2/index.html). That fallback is the controller's
+ * absent-data affordance and it must survive until the map actually mounts, so it
+ * is removed here on the first render rather than left to React's container
+ * clearing.
+ */
+export function renderWorldMap(container, theaters, options = {}) {
+  const target = typeof container === 'string' ? document.querySelector(container) : container;
+  if (!target) return;
+  const fallback = typeof target.querySelector === 'function'
+    ? target.querySelector('.world-map-fallback')
+    : null;
+  if (fallback && typeof fallback.remove === 'function') fallback.remove();
+  mountReactPanel(target, <WorldMap theaters={theaters} options={options} />);
+}
+
+/**
  * Strangler bridge matching window.MissionControlDirectiveBoard.render(root, payload).
  *
  * `root` is #directiveBoard, the mount id CouncilOrders.jsx cross-navigates to.
@@ -343,6 +402,14 @@ if (typeof window !== 'undefined') {
   };
   window.MissionControlCouncilOrders = { render: renderCouncilOrders };
   window.MissionControlDirectiveBoard = { render: renderDirectiveBoard };
+  window.MissionControlResearchAdvisor = {
+    render: renderResearchAdvisor,
+    fetchResearchRanking,
+    openFullRanking: openResearchFullRanking,
+    slotFacts: researchSlotFacts,
+  };
+  window.MissionControlUnlockedTech = { load: loadUnlockedTech };
+  window.WorldTheaterMap = { render: renderWorldMap };
   window.IntelligenceLibrary = { render: renderIntelligenceLibrary };
   window.FactionIntelScreen = { render: renderFactionIntel };
   window.MissionControlDriveExplorer = {
@@ -372,6 +439,9 @@ if (typeof window !== 'undefined') {
     mountMiningExpansion: renderMiningExpansion,
     mountCouncilOrders: renderCouncilOrders,
     mountDirectiveBoard: renderDirectiveBoard,
+    mountResearchAdvisor: renderResearchAdvisor,
+    mountUnlockedTech: loadUnlockedTech,
+    mountWorldMap: renderWorldMap,
     mountAlienHateEconomics: renderAlienHateEconomics,
     renderHudAlienHateEconomics,
     mountIntelligenceLibrary: renderIntelligenceLibrary,
@@ -393,6 +463,9 @@ if (typeof window !== 'undefined') {
     MiningExpansion,
     CouncilOrders,
     DirectiveBoard,
+    ResearchAdvisor,
+    UnlockedTech,
+    WorldMap,
     AlienHateEconomics,
     IntelligenceLibrary,
     FactionIntel,

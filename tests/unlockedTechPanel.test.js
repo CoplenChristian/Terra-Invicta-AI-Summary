@@ -6,9 +6,27 @@
  * getComputedStyle off a live DOM. These are the cheap regression tripwires that
  * run in CI without a browser: they pin the wiring and the honesty rules that a
  * later edit could quietly undo.
+ *
+ * REACT MIGRATION (2026-08-26). The panel moved from the vanilla IIFE at
+ * public/v2/js/components/unlocked-tech.js to src/v2/panels/UnlockedTech.jsx
+ * plus src/v2/panels/unlockedTechUtils.js. Nothing here was dropped:
+ *
+ *   - The four source-text guards below (render cap, absent cost, display-name
+ *     -only match, server-side search) now read the React sources. They were
+ *     always source assertions rather than render assertions; the corresponding
+ *     RENDERED behaviour is pinned by tests/unlockedTechRendering.test.js, which
+ *     was written and confirmed green against the VANILLA component before the
+ *     port so it could not pass by construction.
+ *   - The shell-registration test now asserts the DELETED script tag stays
+ *     deleted and that the React bundle supplies window.MissionControlUnlockedTech
+ *     — the vanilla file, its script tag and the old global all had to go
+ *     together, and this is the guard that says so.
+ *   - The two census tests kept every assertion and every message; only the
+ *     mount changed, from a `vm` sandbox to the real browser harness, because
+ *     `node --test` cannot render a React component out of the Vite bundle.
  */
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -17,7 +35,9 @@ const vm = require('node:vm');
 const repoRoot = path.join(__dirname, '..');
 const htmlPath = path.join(repoRoot, 'public/v2/index.html');
 const missionControlJsPath = path.join(repoRoot, 'public/v2/js/mission-control.js');
-const panelJsPath = path.join(repoRoot, 'public/v2/js/components/unlocked-tech.js');
+const panelJsxPath = path.join(repoRoot, 'src/v2/panels/UnlockedTech.jsx');
+const panelUtilsPath = path.join(repoRoot, 'src/v2/panels/unlockedTechUtils.js');
+const reactBridgePath = path.join(repoRoot, 'src/v2/main.jsx');
 
 // The v2 stylesheet is an ordered set of parts. Both the text scans below and
 // the live-DOM test have to see ALL of them: the scroll-hint check derives the
@@ -286,22 +306,39 @@ test('the unlocked technology panel is registered in RECORDS and mounted inside 
     'unlockedTech must be listed in the records view registry entry'
   );
 
+  // The vanilla file, its script tag and the old global had to go together. A
+  // lane on an earlier wave shipped all three still in place, so the vanilla
+  // panel was what actually rendered and the React one was never reached.
   assert.ok(
-    /<script src="\/v2\/js\/components\/unlocked-tech\.js"><\/script>/.test(html),
-    'the panel script must be loaded by the shell'
+    !/components\/unlocked-tech\.js/.test(html),
+    'the deleted vanilla panel must not still be loaded by the shell'
+  );
+  assert.ok(
+    !fs.existsSync(path.join(repoRoot, 'public/v2/js/components/unlocked-tech.js')),
+    'the vanilla panel file must be gone, so the global can only come from the bundle'
+  );
+  assert.match(
+    fs.readFileSync(reactBridgePath, 'utf8'),
+    /window\.MissionControlUnlockedTech\s*=\s*\{\s*load:\s*loadUnlockedTech\s*\}/,
+    'the React bundle must supply the load(observerId, mode, container) global mission-control.js calls'
   );
 });
 
 test('the panel caps its rows and announces the omission rather than truncating silently', () => {
-  const js = fs.readFileSync(panelJsPath, 'utf8');
-  assert.match(js, /RENDER_CAP\s*=\s*\d+/, 'the render cap must be a named constant');
-  assert.match(js, /omitted by the \$\{RENDER_CAP\}-row display cap/, 'the cap must name itself in the footer');
-  assert.match(js, /shown of \$\{totalCount/, 'the footer must report shown-of-total');
+  const utils = fs.readFileSync(panelUtilsPath, 'utf8');
+  const jsx = fs.readFileSync(panelJsxPath, 'utf8');
+  assert.match(utils, /RENDER_CAP\s*=\s*\d+/, 'the render cap must be a named constant');
+  assert.match(utils, /omitted by the \$\{RENDER_CAP\}-row display cap/, 'the cap must name itself in the footer');
+  assert.match(utils, /shown of \$\{totalCount/, 'the footer must report shown-of-total');
+  // ...and the cap must reach the reader through the primitive that carries
+  // both counts, rather than through a sentence this file could stop printing.
+  assert.match(jsx, /<TruncationNote/, 'the announced cap must be rendered by TruncationNote');
 });
 
 test('an absent research cost renders as unavailable, never as zero', () => {
-  const js = fs.readFileSync(panelJsPath, 'utf8');
-  const fn = js.match(/function costLabel\(project\)\s*\{[\s\S]*?\n  \}/);
+  const utils = fs.readFileSync(panelUtilsPath, 'utf8');
+  const jsx = fs.readFileSync(panelJsxPath, 'utf8');
+  const fn = utils.match(/export function costLabel\(project\)\s*\{[\s\S]*?\n\}/);
   assert.ok(fn, 'costLabel must exist');
 
   // Number(null) === 0, so the guard has to be on presence, before coercion.
@@ -311,12 +348,19 @@ test('an absent research cost renders as unavailable, never as zero', () => {
     /return null;/.test(fn[0]),
     'an absent cost must return null so the row can say UNAVAILABLE'
   );
-  assert.match(js, /RESEARCH COST UNAVAILABLE/, 'the row must render an explicit unavailable state');
+  assert.match(jsx, /RESEARCH COST UNAVAILABLE/, 'the row must render an explicit unavailable state');
+  // In React `{cost}` with cost === null renders nothing at all — silently, and
+  // indistinguishably from a measured empty. <Value> carries the presence signal.
+  assert.match(
+    jsx,
+    /<Value[\s\S]{0,400}present=\{cost !== null\}/,
+    'the nullable cost must go through <Value> with an explicit presence flag'
+  );
 });
 
 test('the match explanation keys on the display name only, since ids leak the query term', () => {
-  const js = fs.readFileSync(panelJsPath, 'utf8');
-  const fn = js.match(/function matchingUnlocks\(project, query\)\s*\{[\s\S]*?\n  \}/);
+  const utils = fs.readFileSync(panelUtilsPath, 'utf8');
+  const fn = utils.match(/export function matchingUnlocks\(project, query\)\s*\{[\s\S]*?\n\}/);
   assert.ok(fn, 'matchingUnlocks must exist');
 
   // Project_CopperheadMissileBay's ID contains "Copperhead" while its display
@@ -327,67 +371,53 @@ test('the match explanation keys on the display name only, since ids leak the qu
     !/normalise\(project\.id\)/.test(fn[0]),
     'matchingUnlocks must not treat an internal-id match as a self-evident name match'
   );
-  assert.match(fn[0], /normalise\(project\.displayName\)\.includes\(q\)/, 'the display name is the self-evident match');
+  assert.match(
+    fn[0],
+    /normalise\(project && project\.displayName\)\.includes\(q\)/,
+    'the display name is the self-evident match'
+  );
 });
 
 test('the panel searches server-side and never reimplements matching', () => {
-  const js = fs.readFileSync(panelJsPath, 'utf8');
-  assert.match(js, /\/api\/intel\/tech-search\?observer=/, 'typed queries must go to the tech-search endpoint');
-  assert.match(js, /\/api\/intel\/tech-tree\?observer=/, 'the default list must come from the tech-tree endpoint');
+  const utils = fs.readFileSync(panelUtilsPath, 'utf8');
+  assert.match(utils, /\/api\/intel\/tech-search\?observer=/, 'typed queries must go to the tech-search endpoint');
+  assert.match(utils, /\/api\/intel\/tech-tree\?observer=/, 'the default list must come from the tech-tree endpoint');
 });
 
 /**
  * Run the real panel against stubbed endpoints.
  *
- * `routes` maps a URL fragment to the payload that endpoint should answer with.
- * Returns the panel API plus a live view of what it painted.
+ * `routes` maps an endpoint to the payload it should answer with. Returns a
+ * reader for what the panel painted, plus a `type` that drives the search box.
+ *
+ * PORTED, NOT REWRITTEN. This used to run the vanilla IIFE inside a `vm`
+ * sandbox with a fake container and a collapsed debounce. `node --test` cannot
+ * render a React component out of the Vite bundle -- three earlier runs died on
+ * `Minified React error #327` -- so the mount is now the real browser harness.
+ * The two tests below kept every assertion and every message; only `container
+ * .innerHTML` became `await mounted.html()`.
  */
-function mountUnlockedTechPanel(routes) {
-  const js = fs.readFileSync(panelJsPath, 'utf8');
-  const handlers = {};
-  const input = {
-    id: 'unlockedTechQuery',
-    value: '',
-    selectionStart: 0,
-    addEventListener: (type, fn) => { handlers[type] = fn; },
-    focus: () => {},
-    setSelectionRange: () => {}
-  };
-  const container = {
-    innerHTML: '',
-    querySelector: sel => (sel === '#unlockedTechQuery' ? input : null),
-    querySelectorAll: () => []
-  };
-
-  // The debounce is collapsed rather than waited on, and the promise `refresh`
-  // returns is captured so the assertions run against a finished paint.
-  let pending = null;
-  const sandbox = {
-    window: {},
-    document: { activeElement: null },
-    console,
-    setTimeout: fn => { pending = fn(); return 1; },
-    clearTimeout: () => {},
-    fetch: url => {
-      const route = Object.keys(routes).find(fragment => String(url).includes(fragment));
-      if (!route) return Promise.reject(new Error(`no stub for ${url}`));
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(routes[route]) });
-    }
-  };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(js, sandbox, { filename: panelJsPath });
-
+async function mountUnlockedTechPanel(routes, { observer = 4712, mode = 'player' } = {}) {
+  await browserHarness.startUnlockedTechHarness();
+  const { page } = await browserHarness.mountUnlockedTech({
+    observer,
+    mode,
+    routes: { tree: routes['/api/intel/tech-tree'], search: routes['/api/intel/tech-search'] },
+  });
+  openPages.push(page);
   return {
-    panel: sandbox.window.MissionControlUnlockedTech,
-    container,
-    type: async (value) => {
-      input.value = value;
-      handlers.input();
-      await pending;
-    }
+    html: () => browserHarness.getPanelHtml(page),
+    type: (value) => browserHarness.typeQuery(page, value),
   };
 }
+
+const browserHarness = require('./fixtures/unlockedTechBrowser.js');
+const openPages = [];
+
+after(async () => {
+  for (const page of openPages) await page.close().catch(() => {});
+  await browserHarness.stopUnlockedTechHarness();
+});
 
 test('an unreadable project census says so, and never prints a confident 0 of 0', async () => {
   // The graph is a static parse of the game templates, so no faction_project
@@ -397,21 +427,19 @@ test('an unreadable project census says so, and never prints a confident 0 of 0'
     const searchHit = {
       items: [{ id: 'Project_Laser', displayName: 'Basic Lasers', status: 'completed', researchCost: 100, unlocks: [] }]
     };
-    const mounted = mountUnlockedTechPanel({
+    const mounted = await mountUnlockedTechPanel({
       '/api/intel/tech-tree': treePayload,
       '/api/intel/tech-search': searchHit
     });
 
-    await mounted.panel.load(4712, 'player', mounted.container);
-
     // No query: the panel must not report the faction has completed nothing on
     // the strength of a graph it could not read.
     assert.ok(
-      !/has not completed any research projects/.test(mounted.container.innerHTML),
+      !/has not completed any research projects/.test(await mounted.html()),
       `nodes ${label}: an unread graph must not be reported as a faction with no research`
     );
     assert.match(
-      mounted.container.innerHTML,
+      await mounted.html(),
       /census is unavailable/,
       `nodes ${label}: the empty state must say the census could not be read`
     );
@@ -419,13 +447,13 @@ test('an unreadable project census says so, and never prints a confident 0 of 0'
     // With rows on screen from the separate search endpoint, the footer census
     // is what lied: "0 unlocked of 0 projects" beneath a list of real projects.
     await mounted.type('laser');
-    assert.match(mounted.container.innerHTML, /Basic Lasers/, `nodes ${label}: the search results must still render`);
+    assert.match(await mounted.html(), /Basic Lasers/, `nodes ${label}: the search results must still render`);
     assert.ok(
-      !/0 unlocked of 0 projects/.test(mounted.container.innerHTML),
+      !/0 unlocked of 0 projects/.test(await mounted.html()),
       `nodes ${label}: an absent census must not be coerced to zero`
     );
     assert.match(
-      mounted.container.innerHTML,
+      await mounted.html(),
       /Project census unavailable\./,
       `nodes ${label}: the footer must declare the census unavailable`
     );
@@ -439,13 +467,14 @@ test('a readable census is still reported as measured', async () => {
     { id: 'Project_C', type: 'faction_project', displayName: 'Charlie', status: 'available', researchCost: 30, unlocks: [] },
     { id: 'tech_root', type: 'tech', displayName: 'Not a project', status: 'completed' }
   ];
-  const mounted = mountUnlockedTechPanel({ '/api/intel/tech-tree': { nodes } });
+  const mounted = await mountUnlockedTechPanel(
+    { '/api/intel/tech-tree': { nodes } },
+    { mode: 'omniscient' }
+  );
 
-  await mounted.panel.load(4712, 'omniscient', mounted.container);
-
-  assert.match(mounted.container.innerHTML, /1 unlocked of 3 projects\./, 'a measured census must be reported as measured');
+  assert.match(await mounted.html(), /1 unlocked of 3 projects\./, 'a measured census must be reported as measured');
   assert.ok(
-    !/census is unavailable|census unavailable/.test(mounted.container.innerHTML),
+    !/census is unavailable|census unavailable/.test(await mounted.html()),
     'a readable census must not be reported as unavailable'
   );
 });

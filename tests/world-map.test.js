@@ -1,60 +1,38 @@
 // tests/world-map.test.js
 //
-// Purpose: characterisation tests for public/v2/js/components/world-map.js
+// Purpose: characterisation tests for src/v2/panels/WorldMap.jsx
 //   Captures exact rendering of the interactive SVG world/space theater map,
 //   including player/omniscient modes, every unavailable and em dash state,
 //   input variations, SVG typography ladder, GeoJSON loading and error states,
 //   and selection interactivity.
+//
+// HARNESS: these 16 assertions used to run the vanilla component in a mock DOM.
+//   The panel now renders through a REAL browser
+//   (public/v2/primitives-harness.html?scene=worldMap); its HTML is read back and
+//   re-parsed with the same mock DOM, so every read below is unchanged.
+//   tests/fixtures/worldMapBrowser.js documents the two plumbing changes that
+//   forced themselves: an interaction is now awaited, because no synchronous
+//   Node API can drive a live page, and the four-event no-throw check became
+//   `assert.doesNotReject` for the same reason. Every expected value and every
+//   assertion message is what it was.
 
-const { test } = require('node:test');
+const { test, before, after } = require('node:test');
 const assert = require('node:assert');
-const fs = require('node:fs');
-const path = require('node:path');
 
-const { runComponent, visibleText } = require('./fixtures/renderHarness');
+const {
+  openWorldMap,
+  startWorldMapHarness,
+  stopWorldMapHarness,
+  visibleText,
+} = require('./fixtures/worldMapBrowser');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
-const { createMockEnvironment, serializeNode } = require('./fixtures/mockDom');
 const briefingGenerator = require('../server/briefingGenerator');
 
-const repoRoot = path.resolve(__dirname, '..');
-const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'world-map.js');
-const geojsonPath = path.join(repoRoot, 'public', 'v2', 'data', 'world.geojson');
-const geojsonData = JSON.parse(fs.readFileSync(geojsonPath, 'utf8'));
-
-function setupHarness(options = {}) {
-  const { geojson = geojsonData, fetchError = null } = options;
-  const mockFetch = (url) => {
-    if (fetchError) {
-      return Promise.reject(fetchError);
-    }
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve(geojson)
-    });
-  };
-
-  const { document, window } = createMockEnvironment({ fetch: mockFetch });
-  const sandbox = runComponent(componentPath, {
-    window,
-    document,
-    fetch: mockFetch
-  });
-
-  return {
-    component: sandbox.window.WorldTheaterMap,
-    document,
-    window
-  };
-}
+before(async () => { await startWorldMapHarness(); });
+after(async () => { await stopWorldMapHarness(); });
 
 async function renderMap(theaters, options = {}, harnessOpts = {}) {
-  const { component, document } = setupHarness(harnessOpts);
-  const container = document.createElement('div');
-  const root = component.render(container, theaters, options);
-  // Yield microtask queue so Promise from loadGeography resolves and draws geography
-  await new Promise(resolve => setTimeout(resolve, 10));
-  return { container, root, document };
+  return openWorldMap(theaters, options, harnessOpts);
 }
 
 const FORBIDDEN = ['null', 'undefined', 'NaN', '[object Object]'];
@@ -79,8 +57,7 @@ test('world-map renders normal player mode briefing theaters with verified headi
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
   const briefing = briefingGenerator.generateMissionControlBriefing(snapshot, { mode: 'player', observer: 4712 });
 
-  const { container, root } = await renderMap(briefing.theaters);
-  const html = serializeNode(container);
+  const { root, html } = await renderMap(briefing.theaters);
   const text = visibleText(html);
 
   // Ready state
@@ -121,8 +98,7 @@ test('world-map renders omniscient mode briefing theaters with full fidelity', a
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient' });
   const briefing = briefingGenerator.generateMissionControlBriefing(snapshot, { mode: 'omniscient', observer: 4712 });
 
-  const { container } = await renderMap(briefing.theaters);
-  const html = serializeNode(container);
+  const { html } = await renderMap(briefing.theaters);
   const text = visibleText(html);
 
   assert.ok(text.includes('GLOBAL THEATER STATUS'), 'omniscient heading must be present');
@@ -141,8 +117,7 @@ test('world-map accepts endpoint payload object shape with { items: [...] }', as
   const briefing = briefingGenerator.generateMissionControlBriefing(snapshot, { mode: 'player', observer: 4712 });
   const payloadObject = { items: briefing.theaters };
 
-  const { container } = await renderMap(payloadObject);
-  const html = serializeNode(container);
+  const { html } = await renderMap(payloadObject);
   const text = visibleText(html);
 
   assert.ok(text.includes('NORTH AMERICA SECURED H 0 / OWN 1'), 'payload with items array must resolve theaters properly');
@@ -151,8 +126,7 @@ test('world-map accepts endpoint payload object shape with { items: [...] }', as
 });
 
 test('world-map handles empty array and empty items object with NO DATA and em dashes', async () => {
-  const { container } = await renderMap([]);
-  const html = serializeNode(container);
+  const { html } = await renderMap([]);
   const text = visibleText(html);
 
   // All 6 theaters must report NO DATA and H — / OWN —
@@ -168,13 +142,13 @@ test('world-map handles empty array and empty items object with NO DATA and em d
 });
 
 test('world-map handles absent input (null and undefined) gracefully', async () => {
-  const { container: containerNull } = await renderMap(null);
-  const textNull = visibleText(serializeNode(containerNull));
+  const { html: htmlNull } = await renderMap(null);
+  const textNull = visibleText(htmlNull);
   assert.ok(textNull.includes('NORTH AMERICA NO DATA H — / OWN —'), 'null theaters must render NO DATA');
   assert.ok(textNull.includes('CURRENT / HOSTILE — · OWN — (0 OF 6 THEATERS MEASURED)'), 'null input summary must be unmeasured');
 
-  const { container: containerUndef } = await renderMap(undefined);
-  const textUndef = visibleText(serializeNode(containerUndef));
+  const { html: htmlUndef } = await renderMap(undefined);
+  const textUndef = visibleText(htmlUndef);
   assert.ok(textUndef.includes('NORTH AMERICA NO DATA H — / OWN —'), 'undefined theaters must render NO DATA');
   assert.ok(textUndef.includes('CURRENT / HOSTILE — · OWN — (0 OF 6 THEATERS MEASURED)'), 'undefined input summary must be unmeasured');
 });
@@ -192,8 +166,7 @@ test('world-map slices source input to at most 6 theaters (THEATERS.length)', as
     { key: 'extra2', name: 'Extra Region 2', hostileCount: 5, ownCount: 5 }
   ];
 
-  const { container } = await renderMap(extraRecords);
-  const html = serializeNode(container);
+  const { html } = await renderMap(extraRecords);
   const text = visibleText(html);
 
   assert.ok(!text.includes('Extra Region'), 'theaters beyond 6 must be truncated');
@@ -222,8 +195,7 @@ test('world-map renders em dash for null or undefined counts, never converting t
     }
   ];
 
-  const { container } = await renderMap(degradedTheaters);
-  const html = serializeNode(container);
+  const { html } = await renderMap(degradedTheaters);
   const text = visibleText(html);
 
   assertNoPlaceholderText(html, 'degraded counts payload');
@@ -253,8 +225,8 @@ test('world-map summary distinguishes complete sum, partial sum, and unmeasured 
     { key: 'afr', name: 'Africa', hostileCount: 0, ownCount: 0 },
     { key: 'eap', name: 'East Asia', hostileCount: 0, ownCount: 0 }
   ];
-  const { container: containerComplete } = await renderMap(completeTheaters);
-  const textComplete = visibleText(serializeNode(containerComplete));
+  const { html: htmlComplete } = await renderMap(completeTheaters);
+  const textComplete = visibleText(htmlComplete);
   assert.ok(textComplete.includes('CURRENT / HOSTILE 3 · OWN 1'), 'complete sum must render clean total');
   assert.ok(!textComplete.includes('MEASURED'), 'complete sum must not carry partial qualifier');
 
@@ -267,8 +239,8 @@ test('world-map summary distinguishes complete sum, partial sum, and unmeasured 
     { key: 'afr', name: 'Africa', hostileCount: null, ownCount: null },
     { key: 'eap', name: 'East Asia', hostileCount: null, ownCount: null }
   ];
-  const { container: containerPartial } = await renderMap(partialTheaters);
-  const textPartial = visibleText(serializeNode(containerPartial));
+  const { html: htmlPartial } = await renderMap(partialTheaters);
+  const textPartial = visibleText(htmlPartial);
   assert.ok(
     textPartial.includes('CURRENT / HOSTILE 3 · OWN 1 (4 OF 6 THEATERS MEASURED, 2 UNMEASURED)'),
     `partial sum must explicitly report measured vs unmeasured theater counts: ${textPartial}`
@@ -279,8 +251,8 @@ test('world-map summary distinguishes complete sum, partial sum, and unmeasured 
     { key: 'nam', name: 'North America', hostileCount: null, ownCount: null },
     { key: 'sam', name: 'South America', hostileCount: null, ownCount: null }
   ];
-  const { container: containerUnmeasured } = await renderMap(unmeasuredTheaters);
-  const textUnmeasured = visibleText(serializeNode(containerUnmeasured));
+  const { html: htmlUnmeasured } = await renderMap(unmeasuredTheaters);
+  const textUnmeasured = visibleText(htmlUnmeasured);
   assert.ok(
     textUnmeasured.includes('CURRENT / HOSTILE — · OWN — (0 OF 6 THEATERS MEASURED)'),
     `unmeasured sum must render em dashes and state 0 measured: ${textUnmeasured}`
@@ -288,11 +260,10 @@ test('world-map summary distinguishes complete sum, partial sum, and unmeasured 
 });
 
 test('world-map renders custom titles and ariaLabels when supplied in options', async () => {
-  const { container } = await renderMap([], {
+  const { html } = await renderMap([], {
     title: 'Custom Theater Overview',
     ariaLabel: 'Custom accessibility label'
   });
-  const html = serializeNode(container);
   const text = visibleText(html);
 
   assert.ok(text.includes('Custom Theater Overview'), 'custom title must reach heading');
@@ -300,10 +271,9 @@ test('world-map renders custom titles and ariaLabels when supplied in options', 
 });
 
 test('world-map handles GeoJSON fetch failure with honest error state', async () => {
-  const { container, root } = await renderMap([], {}, {
+  const { root, html } = await renderMap([], {}, {
     fetchError: new Error('Network timeout loading world geometry')
   });
-  const html = serializeNode(container);
   const text = visibleText(html);
 
   assert.strictEqual(root.getAttribute('data-map-state'), 'error', 'state must be error on fetch failure');
@@ -391,7 +361,7 @@ test('world-map region click selects theater, calls onSelect, and updates aria-p
   assert.strictEqual(samRegion.getAttribute('aria-pressed'), 'false', 'initially unselected');
 
   // Click South America
-  samRegion.click();
+  await samRegion.click();
 
   assert.strictEqual(samRegion.getAttribute('aria-pressed'), 'true', 'South America must be aria-pressed=true after click');
   assert.ok(selectedCallbackRecord, 'onSelect callback must have fired');
@@ -415,13 +385,13 @@ test('world-map keyboard activation (Enter and Space) selects theater', async ()
   assert.ok(eurRegion, 'Europe region must exist');
 
   // Keydown Enter
-  eurRegion.dispatchEvent({ type: 'keydown', key: 'Enter' });
+  await eurRegion.dispatchEvent({ type: 'keydown', key: 'Enter' });
   assert.strictEqual(selectedId, 'eur', 'Enter key must trigger selection');
   assert.strictEqual(eurRegion.getAttribute('aria-pressed'), 'true');
 
   // Keydown Space on Africa
   const afrRegion = container.querySelector('[data-theater-id="afr"]');
-  afrRegion.dispatchEvent({ type: 'keydown', key: ' ' });
+  await afrRegion.dispatchEvent({ type: 'keydown', key: ' ' });
   assert.strictEqual(selectedId, 'afr', 'Space key must trigger selection');
   assert.strictEqual(afrRegion.getAttribute('aria-pressed'), 'true');
   assert.strictEqual(eurRegion.getAttribute('aria-pressed'), 'false');
@@ -434,11 +404,11 @@ test('world-map mouseenter and mouseleave update region view state without error
   const { container } = await renderMap(briefing.theaters);
   const namRegion = container.querySelector('[data-theater-id="nam"]');
 
-  assert.doesNotThrow(() => {
-    namRegion.dispatchEvent({ type: 'mouseenter' });
-    namRegion.dispatchEvent({ type: 'mouseleave' });
-    namRegion.dispatchEvent({ type: 'focus' });
-    namRegion.dispatchEvent({ type: 'blur' });
+  await assert.doesNotReject(async () => {
+    await namRegion.dispatchEvent({ type: 'mouseenter' });
+    await namRegion.dispatchEvent({ type: 'mouseleave' });
+    await namRegion.dispatchEvent({ type: 'focus' });
+    await namRegion.dispatchEvent({ type: 'blur' });
   }, 'mouse and focus events must execute without error');
 });
 
