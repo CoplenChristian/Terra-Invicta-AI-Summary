@@ -14,32 +14,48 @@ the cited lines. "Demonstrated" means executed. "Confirmed reachable" means the
 producer's own contract permits the input, but it does not occur on the current
 save.
 
-**Tally as of 2026-08-25: 16 entries — 6 fixed, 5 live, 1 latent, 4 conditional.**
+**Tally as of 2026-08-25: 16 entries — 9 fixed, 3 live, 4 conditional.**
 
-#1 and #9 are **fixed and shipped**. #3 was fixed as part of the `mc-budget`
-React migration (`2c1427f`) rather than ported, and had first been **demoted**
-to latent after its supporting claim turned out to be false — see the correction
-there. **#7, #11 and #12 were fixed 2026-08-25** (`7a48add`), verified by
-reverting each component with the new tests in place and confirming exactly one
-test failed per file. One further candidate was investigated and **cleared** —
-see the end of #8.
+**Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
+migration (`2c1427f`) rather than ported, having first been **demoted** to
+latent when its supporting claim turned out to be false — see the correction
+there. **#7, #11 and #12** (`7a48add`) were verified by reverting each component
+with the new tests in place and confirming exactly one test failed per file.
+**#13 and #14** were fixed in the `strategic-commentary` migration (`5d29c5f`),
+again as part of the port rather than carried across. **#16** is closed: two
+captures of the same pinned save now diff to **0**, down from 2,485.
 
-**Live on the dashboard right now: #2, #5, #13, #15 and #16.** #16 is in the
-**verification tooling**, so it invalidates evidence rather than a panel and
-should be fixed before the next migration leans on it. #4, #6, #8 and #10 are
-real but need a specific input or width; #14 is a live path that the current
-fleet does not reach.
+**Live on the dashboard right now: #2, #5 and #15.** All three are
+render-boundary fixes in vanilla components the migration has not reached.
+
+**Conditional:** #4, #6, #8 and #10 are real but need a specific input or width.
+
+One further candidate was investigated and **cleared** — see the end of #8.
+
+**The pattern across the fixed set is worth keeping.** Five of the nine (#3, #7,
+#11, #12, #13/#14) were corrected **as part of a migration or a characterisation
+pass**, not as standalone defect work — which is the argument for fixing at the
+port rather than before it. And three of them (#13, #14, #15) were cases where
+`shared/markdownExports.mjs` was already **right** and only the browser had lost
+the caveat, inverting this repo's usual direction.
 
 *Correction: the commit that added #15 stated in its message that this header
 had been re-derived to 15 entries. It had not — that edit was never made, and
 the header still read 14 until #16 was added. The counts above are derived from
 the entries below rather than incremented.*
 
-**#9 is the one to fix first.** It is the only defect that also reaches the AI
-markdown exports and the hosted worker, it drops 91% of its records, and unlike
-the others it is not confined to a component the migration will rewrite anyway —
-`shared/markdownExports.mjs` is explicitly out of scope for this migration, so
-nothing else is going to touch it.
+**#9 was the one to fix first, and it was.** It was the only defect that also
+reached the AI markdown exports and the hosted worker, it dropped 91% of its
+records, and unlike the others it was not confined to a component the migration
+would rewrite anyway — `shared/markdownExports.mjs` is out of scope for the
+migration, so nothing else was going to touch it. **That fix is committed but
+has not been published**, so the hosted site is still serving the truncated
+version until someone runs the publisher.
+
+**#16 is now the one that matters most**, for the same structural reason turned
+inward: it was the only defect in the **verification tooling**, so it invalidated
+evidence rather than a panel. It is fixed, which is what unblocks computed-style
+diffing for the remaining component migrations.
 
 ---
 
@@ -627,7 +643,7 @@ before it counted, and one of six did not survive that.
 
 ---
 
-## 16. `--save` makes the style harness stamp a save it never rendered — **demonstrated, and it is in the verification tooling**
+## 16. `--save` made the style harness stamp a save it never rendered — **FIXED 2026-08-25**
 
 `scripts/verify_computed_style_baseline.js`. This is the tool `CLAUDE.md`
 mandates for proving a refactor changed nothing, so a defect here invalidates
@@ -677,7 +693,53 @@ unevaluated check is the one the other verifications rest on. Every
 running is worth nothing, and cannot be distinguished after the fact from one
 that is sound.
 
-### PARTIALLY FIXED 2026-08-25 — and the remainder is the same shape
+### FIXED 2026-08-25 — proven with two captures that diff to zero
+
+**Closed.** Two captures of the same pinned save, taken with no code change
+between them while the game was running, produce **0 computed style or geometry
+differences** — down from 2,485. Every `Parsing save` line in both captures
+names the pinned file; neither mentions `Autosave.gz`. `npm test` exits 0 and
+`verify_v2_navigation.js` reports 0 console and 0 network errors. The proof was
+re-run *after* the guard change below rather than inherited from the earlier
+attempt.
+
+The probe save must be **backdated so it is not the newest file in the folder**,
+or the test proves nothing — the server would render it anyway. It sat at rank
+21 of 22 for these runs.
+
+**The fix is a `fetch` wrapper, not threaded call sites.** `shared.js` installs
+`withSavePin()` and overrides `global.fetch` before any component loads, so every
+`/api/` request is pinned **by default** and forgetting the pin at a new call
+site is structurally impossible. Only two files changed. It also caught a
+**twelfth** save-reading fetch that the enumeration below missed —
+`unlocked-tech.js`'s generic `fetchJson(url)` — which a call-site fix would have
+left unpinned. That is the argument for the design in one line.
+
+Exclusions are explicit and reasoned rather than forgotten: `/api/runtime` and
+`/api/saves` read no save; **`/api/save-state` must keep reporting the newest
+file** or the "new save available" banner cannot fire; and **`/api/publish` is
+deliberately never pinned**, because a verification pin silently redirecting a
+real publish is a much worse failure than an unpinned capture. `/api/export`
+*is* pinned — a decision, not an oversight: you export what you are looking at.
+
+**Two defects were introduced fixing it, and both were caught by running things
+rather than reading the report:**
+
+- A **load-time `throw`** in `mission-control.js` requiring `withSavePin` broke
+  four unit tests that load that file in isolation without `shared.js`.
+  `npm test` went red. The correction is not to delete the guard and not to fall
+  back silently — a silent identity fallback reintroduces this very defect in a
+  new costume, with a capture setting `?save=`, quietly failing to pin, and
+  reporting success. It is now gated on `__savePinRequested`: **no pin requested
+  → degrade quietly; pin requested but helper missing → throw.** Fail loudly
+  when the check cannot be honoured, stay quiet when there is nothing to honour.
+- The **`Request`-object branch could never fire.** `input.url` on a `Request` is
+  always absolute, so `pathname.indexOf('/api/') === 0` was false for every one.
+  Latent rather than live — no call site passes a `Request` today — but dead code
+  that looks live is worse than absent. `__pathnameOf()` now strips query and
+  hash, detects `://`, and parses with `new URL().pathname`.
+
+### The earlier partial fix, retained for the record
 
 Two things landed and both are genuine improvements:
 

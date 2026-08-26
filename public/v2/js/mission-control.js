@@ -56,27 +56,12 @@ let savePollTimer = null;
 // without the pin the harness would stamp a fingerprint for one file and the
 // server would render another, which is exactly defect #16. Null means
 // "no pin; load the newest save", which is the default dashboard behaviour.
-function resolvePinnedSaveName() {
-  try {
-    const params = new URLSearchParams(window.location.search || '');
-    const name = params.get('save');
-    if (!name) return null;
-    // The server's resolveSavePath checks: simple basename, no slashes or ..,
-    // .gz/.json extension. Mirror those checks so the pin fails loudly here
-    // rather than producing a 400 inside the briefing fetch.
-    const isSimpleName = name === name.split(/[\\/]/).pop()
-      && !name.includes('..')
-      && !name.includes('\0');
-    if (!isSimpleName || !/\.(?:gz|json)$/i.test(name)) {
-      console.warn(`[Mission Control] Ignoring invalid ?save= value '${name}'.`);
-      return null;
-    }
-    return name;
-  } catch (_) {
-    return null;
-  }
-}
-const pinnedSaveName = resolvePinnedSaveName();
+//
+// The pin itself now lives in shared.js (resolvePinnedSaveName / withSavePin),
+// and the shared fetch wrapper threads it onto every save-reading request -- a
+// pinned save stays pinned across the mode switch and every intel panel, which
+// is the defect's actual fix. This controller only requires the helper to be
+// present so a missing shared.js fails loud instead of silently unpinning.
 
 // The player's success-odds floor for councilor actions, persisted the same way
 // the autoload toggle is. ABSENT IS NOT ZERO: no stored value means "send no
@@ -165,8 +150,21 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
-// Prefer the shared utility when loaded ahead of this script.
+// Prefer the shared utility when loaded ahead of this script. The save-pin
+// helper is only load-bearing when the URL actually asks for a pinned save:
+// with no ?save= the pinned and unpinned behaviour are byte-identical, so a
+// missing shared.js -- as in the isolated unit sandbox -- degrades quietly to
+// identity and the local escapeHtml below still applies. When a pin IS
+// requested the wrapper is the only thing that can honour it: a capture that
+// set ?save= and quietly failed to pin would render the wrong save while
+// reporting success, which is exactly defect #16 -- so that is the one case
+// that must fail loud. shared.js loads first in the browser (index.html), so
+// this guard only fires on a broken load order or a pinned unit harness.
 const __shared = window.MissionControlShared;
+const __savePinRequested = /[?&]save=/.test(window.location?.search || '');
+if (__savePinRequested && (!__shared || typeof __shared.withSavePin !== 'function' || typeof __shared.resolvePinnedSaveName !== 'function')) {
+  throw new Error('[Mission Control] MissionControlShared.withSavePin is required; shared.js must load before mission-control.js.');
+}
 if (__shared) {
   escapeHtml = __shared.escapeHtml;
 }
@@ -713,6 +711,11 @@ function initEventListeners() {
       showToast('Publishing the newest save to the live site…');
 
       try {
+        // Deliberately NOT pinned. /api/publish ships the NEWEST save to the
+        // live site; a verification pin silently redirecting a real publish to
+        // an older save is a footgun with no capture-time benefit (the harness
+        // never clicks this button). The shared fetch wrapper's documented
+        // exclusion list covers the route by path.
         const publishResponse = await fetch('/api/publish', {
           method: 'POST',
           headers: {
@@ -726,8 +729,16 @@ function initEventListeners() {
         }
 
         try {
+          // Deliberately NOT pinned (excludeSavePin). The user just published
+          // the NEWEST save, so this refresh must re-parse that same newest
+          // save into the local view; routing the pin through it would show the
+          // pinned (older) save beside a "Live site updated from <newest>.gz"
+          // toast. The shared fetch wrapper pins every save-reading request by
+          // default, so this opt-out is explicit -- see the documented
+          // exclusions in shared.js.
           const refreshResponse = await fetch(`/api/refresh?mode=${state.mode}&observer=${state.observer}`, {
-            method: 'POST'
+            method: 'POST',
+            excludeSavePin: true
           });
           const refreshPayload = await refreshResponse.json().catch(() => ({}));
           if (!refreshResponse.ok || refreshPayload.success === false) {
@@ -921,6 +932,11 @@ async function refreshTelemetry({ manual = true } = {}) {
   const refreshBtn = document.getElementById('initRefreshBtn');
   if (refreshBtn && manual) refreshBtn.textContent = 'Refreshing…';
   try {
+    // Pinned by the shared fetch wrapper when the URL carries ?save=<name>, so
+    // a manual refresh during a pinned session stays on the pinned save. The
+    // autoload path (autoRefreshToNewestSave) only fires after the detector
+    // shows a newer save exists, which never happens while a historical save
+    // is pinned -- so the pin wins there by construction, not by accident.
     const refreshResponse = await fetch(`/api/refresh?mode=${state.mode}&observer=${state.observer}`, { method: 'POST' });
     const refreshPayload = await refreshResponse.json().catch(() => ({}));
     if (!refreshResponse.ok || refreshPayload.success === false) {
@@ -1005,6 +1021,13 @@ async function pollSaveState() {
   state.savePollInFlight = true;
   let payload;
   try {
+    // Deliberately NOT pinned. /api/save-state is the newest-save DETECTOR: it
+    // fingerprints the newest file on disk so the "new save available" banner
+    // can fire. Pinning it would ask for the pinned save's fingerprint (no
+    // change) and the banner would never appear. It also ignores ?save=
+    // server-side by design -- see the documented exclusions in shared.js.
+    // Note this poll only runs while the displayed snapshot is the newest
+    // (state.isLatestSnapshot), so a pinned historical save already disables it.
     const response = await fetch('/api/save-state', { cache: 'no-store' });
     if (!response.ok) return;
     payload = await response.json();
@@ -1066,12 +1089,12 @@ async function loadData() {
       ? ''
       : `&riskFloor=${encodeURIComponent(state.riskFloorPercent)}`;
     // The save pin (set by the verify_computed_style_baseline harness via
-    // ?save=<name>) threads through to the briefing fetch so the server
-    // renders the same pinned save the harness's fingerprint labels. A null
-    // value falls back to the dashboard's normal "newest save" behaviour.
-    const savePinParam = pinnedSaveName ? `&save=${encodeURIComponent(pinnedSaveName)}` : '';
+    // ?save=<name>) is appended to this and every other save-reading request by
+    // the shared fetch wrapper, so the server renders the same pinned save the
+    // harness's fingerprint labels. No pin -> URL unchanged -> the dashboard's
+    // normal "newest save" behaviour.
     const res = await fetch(
-      `/api/v2/briefing?mode=${state.mode}&observer=${state.observer}${savePinParam}${riskFloorParam}`,
+      `/api/v2/briefing?mode=${state.mode}&observer=${state.observer}${riskFloorParam}`,
       { signal: controller.signal }
     );
     const json = await res.json();
@@ -2047,6 +2070,10 @@ function showToast(msg) {
 async function copyLibraryExport(format, statusNode) {
   if (statusNode) statusNode.textContent = 'Preparing current handoff…';
   try {
+    // Pinned by the shared fetch wrapper: you export what you are looking at,
+    // and during a pinned session what you are looking at IS the pinned save.
+    // The mode/observer query still chooses the view; the pin only fixes which
+    // save the whole dashboard renders.
     const res = await fetch(`/api/export?format=${format === 'full' ? 'full' : 'chatgpt'}&mode=${encodeURIComponent(state.mode)}&observer=${encodeURIComponent(state.observer)}`);
     const payload = await res.json();
     if (!res.ok || !payload.success || !payload.markdown) throw new Error(payload.error || 'Export unavailable');

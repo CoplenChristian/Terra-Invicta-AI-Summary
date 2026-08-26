@@ -34,8 +34,8 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/research-advisor.js` | BS | Browser (classic, global IIFE) | 1056 | phase 4 of the research advisor, on screen. | — | — |
 | `public/v2/js/components/unlocked-tech.js` | BS | Browser (classic, global IIFE) | 372 | renders the searchable list of the observer faction's unlocked | — | — |
 | `public/v2/js/components/world-map.js` | BS | Browser (classic, global IIFE) | 512 | renders the interactive world/space theater map surface. | — | `tests/world-map.test.js` |
-| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2087 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
-| `public/v2/js/shared.js` | BS | Browser (classic, global IIFE) | 198 | the v2 single source of truth for HTML escaping, numeric | — | — |
+| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2114 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/shared.js` | BS | Browser (classic, global IIFE) | 328 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
 
