@@ -13,6 +13,7 @@
 // why the weighted sum below re-derives its own denominator.
 
 const templateLoader = require('../templateLoader');
+const { templateDisplayName } = require('../localization');
 const opportunityScorer = require('../opportunityScorer');
 const { INITIATIVE_DISPLAY_NAME } = require('../../shared/constants.mjs');
 const {
@@ -343,7 +344,7 @@ function buildFactions(rawFactions, {
       const acc = firstNumericOrNull(p.accumulatedResearch) ?? 0;
       return {
         projectId: p.projectTemplateName,
-        displayName: projT?.friendlyName || p.projectTemplateName,
+        displayName: templateDisplayName(projT, p.projectTemplateName),
         // Which research slot holds this project. The save states it, and it is
         // the index into `researchWeights` below -- a project in a slot the
         // weight array does not reach receives no research at all. Absent stays
@@ -653,7 +654,7 @@ function buildTechMatrix(keyProjects, { factions, rawFactions }) {
     const projTemplate = templateLoader.getProject(projId);
     const row = {
       projectId: projId,
-      displayName: projTemplate?.friendlyName || projId,
+      displayName: templateDisplayName(projTemplate, projId),
       category: projTemplate?.projectCategory || 'Special',
       effects: projTemplate?.effects || [],
       factions: {}

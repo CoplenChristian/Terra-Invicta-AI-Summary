@@ -5,6 +5,12 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveConfig } = require('./config');
+const {
+  LocalizationCatalogue,
+  resolveLocalizationPath,
+  normalizeForCompare,
+  templateFallbackName
+} = require('./localization');
 
 // Resolving the templates directory used to walk A: through Z: on every
 // construction, and TemplateLoader is constructed by the server, the publisher,
@@ -81,6 +87,13 @@ class TemplateLoader {
       techToEffects: new Map()
     };
     this.validationResults = [];
+    // The game's own display names, keyed by template file and dataName. Every
+    // item this loader reads is stamped with `_localizedName` from here, and
+    // `localizationCoverage` records per file how many resolved, how many
+    // differed from the template's `friendlyName`, and how many fell back --
+    // so the gap is a number rather than a silence. See docs/live-defect-register.md #10.
+    this.localization = new LocalizationCatalogue(null);
+    this.localizationCoverage = {};
     this.isLoaded = false;
   }
 
@@ -185,6 +198,21 @@ class TemplateLoader {
     }
 
     console.log(`[TemplateLoader] Loading game templates from ${this.templatesPath}...`);
+
+    // Resolved before any template is read: `loadJsonFile` stamps each item with
+    // the game's own display name as it goes, and a catalogue that resolves to
+    // nothing simply leaves `_localizedName` null on every item -- which is the
+    // pre-fix rendering, not a blank label.
+    const localizationPath = resolveLocalizationPath(this.templatesPath, {
+      configuredPath: this.config.paths?.localizationPath || null,
+      language: this.config.paths?.localizationLanguage || undefined
+    });
+    this.localization = new LocalizationCatalogue(localizationPath);
+    if (localizationPath) {
+      console.log(`[TemplateLoader] Localization: ${localizationPath}`);
+    } else {
+      console.warn('[TemplateLoader] No localization directory found; template friendlyName will be shown instead of the game\'s display name.');
+    }
 
     this.loadJsonFile('TITechTemplate.json', (item) => {
       const id = item.dataName || item.friendlyName;
@@ -304,7 +332,14 @@ class TemplateLoader {
       this.loadJsonFile(filename, (item) => {
         const id = item.dataName || item.displayName || item.friendlyName || item.templateName;
         if (!id) return;
-        const displayName = item.displayName || item.friendlyName || id;
+        // ONE SIDE OF A TWO-SIDED MATCH. `server/snapshot/space.js:buildWeaponLoadout`
+        // writes this string into `weaponLoadout[].systems`, and
+        // `shared/intel/militaryValue.mjs:buildCatalogueIndex` matches redacted
+        // ships' loadout strings against the `displayName` baked into
+        // `componentStats` by `server/snapshot/templates.js:buildWeaponStats`.
+        // Both sides must resolve the name the same way -- localise one only and
+        // every redacted-ship weapon inventory silently drops to zero.
+        const displayName = item._localizedName || item.friendlyName || item.displayName || id;
         const isPointDefense = /point.?defen[cs]e/i.test(`${id} ${displayName}`) ||
           (item.defenseMode === true && item.attackMode === false);
         this.templates.weaponModules.set(id, {
@@ -336,7 +371,7 @@ class TemplateLoader {
     this.unlockMappings.requiredProjectToComponents.get(projectId).push({
       componentType,
       id: item.dataName || item.displayName || item.friendlyName || item.templateName,
-      displayName: item.friendlyName || item.displayName || (item.dataName || item.templateName || item.componentType),
+      displayName: item._localizedName || item.friendlyName || item.displayName || (item.dataName || item.templateName || item.componentType),
       item
     });
   }
@@ -365,21 +400,120 @@ class TemplateLoader {
     }
   }
 
+  /**
+   * Stamp one template item with the game's own display name.
+   *
+   * `_localizedName` is the name the game puts in front of the player;
+   * `friendlyName` is the template's internal label. Every display path reads
+   * `_localizedName || friendlyName || ...`, so an item the localisation does
+   * not carry renders exactly as it did before this existed.
+   *
+   * Deliberately NOT applied to `friendlyName` itself: `server/engine/
+   * missionCatalogue.js` keys mission specs by it and `odds.js` / `clocks.js`
+   * match the literals 'Control Nation' and 'Defend Interests', so rewriting it
+   * would silently break mission matching.
+   */
+  /**
+   * How many entries in one template file claim each localised name.
+   *
+   * THE GAME'S LOCALISATION IS NOT A UNIQUE NAMING. Measured against the
+   * installed 1.0 templates on 2026-08-26, it deliberately collapses distinct
+   * entries onto a shared label wherever the in-game UI wants to hide the
+   * difference from the player:
+   *
+   *   TIShipHullTemplate      all 16 divergences: `Alien Battlecruiser` -> `Battlecruiser`,
+   *                           `Salamander Gunship` -> `Fighter` (15 alien hulls lose
+   *                           the prefix that distinguishes them from the human hull)
+   *   TIUtilityModuleTemplate 15 of 22: every alien module -> `Unknown`
+   *   TIHabModuleTemplate     18 of 26: nine `DestroyedModule*` -> `Destroyed Module`,
+   *                           nine `AlienDestroyedModule*` -> `Destroyed Alien Module`
+   *   TIGunTemplate           `40mm Nose Autocannon` -> `40mm Autocannon`, which the
+   *                           hull-mounted `40mmAutocannon` already carries
+   *
+   * That is the game redacting or collapsing in its own UI, not translating. This
+   * dashboard is a cross-faction reference that also serves an omniscient mode,
+   * and adopting a collapsed label there is a LOSS, not a correction: it made
+   * `tech-path?target=Battlecruiser` resolve to the ALIEN hull's unlock project,
+   * it would have rendered fifteen distinct alien utility modules as `Unknown`,
+   * and it collided seventeen names in `componentStats` -- which
+   * `militaryValue.buildCatalogueIndex` then drops as ambiguous, removing them
+   * from the redacted-ship weapon match.
+   *
+   * So the rule is: adopt the game's name only where it stays unique inside its
+   * own template file. Where it is claimed by more than one entry, keep the
+   * template's unique internal name and COUNT the entry as `ambiguous`, so the
+   * decision is a reported number rather than a silent policy.
+   */
+  countLocalizedNameClaims(fileBase, items) {
+    const claims = new Map();
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      const dataName = typeof item.dataName === 'string' && item.dataName !== '' ? item.dataName : null;
+      if (!dataName) continue;
+      const localized = this.localization.lookup(fileBase, dataName);
+      if (localized === null) continue;
+      claims.set(localized, (claims.get(localized) || 0) + 1);
+    }
+    return claims;
+  }
+
+  applyLocalizedName(fileBase, item, counters, claims) {
+    if (!item || typeof item !== 'object') return;
+    const dataName = typeof item.dataName === 'string' && item.dataName !== '' ? item.dataName : null;
+    if (!dataName) {
+      counters.unidentified += 1;
+      // Absent stays null. An item with no `dataName` cannot be looked up, and
+      // guessing from `friendlyName` is exactly the name-matching this replaces.
+      item._localizedName = null;
+      return;
+    }
+    counters.scanned += 1;
+    const localized = this.localization.lookup(fileBase, dataName);
+    if (localized === null) {
+      counters.fallback += 1;
+      item._localizedName = null;
+      return;
+    }
+    if ((claims.get(localized) || 0) > 1) {
+      // An ambiguous label is a lost distinction, not a better name. See
+      // countLocalizedNameClaims above.
+      counters.ambiguous += 1;
+      item._localizedName = null;
+      return;
+    }
+    counters.localized += 1;
+    const current = templateFallbackName(item) || dataName;
+    if (normalizeForCompare(localized) !== normalizeForCompare(current)) counters.divergent += 1;
+    item._localizedName = localized;
+  }
+
   loadJsonFile(filename, itemHandler) {
     const fullPath = path.join(this.templatesPath, filename);
     if (!fs.existsSync(fullPath)) return;
+    // `TIDriveTemplate.json` -> `TIDriveTemplate`, which is both the localisation
+    // file base and the key prefix inside it. The mapping holds for every
+    // template file this loader reads.
+    const fileBase = path.basename(filename, path.extname(filename));
+    if (!this.localizationCoverage[fileBase]) {
+      this.localizationCoverage[fileBase] = {
+        scanned: 0, localized: 0, divergent: 0, fallback: 0, ambiguous: 0, unidentified: 0
+      };
+    }
+    const counters = this.localizationCoverage[fileBase];
     try {
       const raw = fs.readFileSync(fullPath, 'utf8');
       const clean = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
       const data = JSON.parse(clean);
-      if (Array.isArray(data)) {
-        for (const item of data) {
-          itemHandler(item);
-        }
-      } else if (typeof data === 'object') {
-        for (const key of Object.keys(data)) {
-          itemHandler(data[key]);
-        }
+      const items = Array.isArray(data)
+        ? data
+        : (data && typeof data === 'object' ? Object.keys(data).map(key => data[key]) : []);
+      // Two passes: which localised names are contested has to be known BEFORE
+      // any item is stamped, because a contested name is refused for every
+      // claimant, not just the second one to arrive.
+      const claims = this.countLocalizedNameClaims(fileBase, items);
+      for (const item of items) {
+        this.applyLocalizedName(fileBase, item, counters, claims);
+        itemHandler(item);
       }
     } catch (err) {
       console.warn(`[TemplateLoader] Failed reading ${filename}:`, err.message);
@@ -487,6 +621,40 @@ class TemplateLoader {
 
   getComponentsForRequiredProject(projectId) {
     return this.unlockMappings.requiredProjectToComponents.get(projectId) || [];
+  }
+
+  /**
+   * How much of the installed catalogue the localisation actually covered.
+   *
+   * Per template file: how many entries were looked up, how many the game
+   * localises, how many of those differ from the template's `friendlyName`
+   * (i.e. how many names this fix corrects), and how many fell back to
+   * `friendlyName` because the localisation carries no entry. A fallback is an
+   * ABSENCE, not a failure -- but it is counted rather than left silent.
+   */
+  getLocalizationCoverage() {
+    const files = {};
+    const totals = { scanned: 0, localized: 0, divergent: 0, fallback: 0, ambiguous: 0, unidentified: 0 };
+    for (const [fileBase, counters] of Object.entries(this.localizationCoverage)) {
+      files[fileBase] = { ...counters };
+      for (const key of Object.keys(totals)) totals[key] += counters[key] || 0;
+    }
+    return {
+      available: this.localization.available,
+      directory: this.localization.directory,
+      language: this.localization.language,
+      unreadableFiles: this.localization.unreadableFiles,
+      files,
+      totals,
+      basis: 'game display names read from StreamingAssets/Localization/<lang>/<TemplateFile>.<lang>, '
+        + 'keyed by the template dataName. `divergent` is how many entries the game shows under a '
+        + 'different name than the template friendlyName; `fallback` is how many carry no localisation '
+        + 'entry and therefore still render their friendlyName; `ambiguous` is how many the game gives a '
+        + 'name ANOTHER entry in the same file also claims (alien hulls lose the prefix that separates '
+        + 'them from the human hull, alien utility modules all read "Unknown", the nine destroyed hab '
+        + 'modules share one label) -- those keep the template name, because a collapsed label is a lost '
+        + 'distinction in a cross-faction reference, not a correction.'
+    };
   }
 }
 

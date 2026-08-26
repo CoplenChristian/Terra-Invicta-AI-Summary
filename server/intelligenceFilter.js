@@ -205,6 +205,14 @@ class IntelligenceFilter {
         // module and councilor records, which the player branch redacts.
         techBonusCatalogue: rawSnapshot.techBonusCatalogue,
         effectIndex: rawSnapshot.effectIndex,
+        // How much of the installed catalogue the game's own display names
+        // covered, and how many entries still render the template's internal
+        // `friendlyName` because the localisation carries no entry or gives a
+        // name another entry also claims. Install-level fact, identical for
+        // every observer and every mode -- and it is the only place a reader
+        // can see the size of the gap rather than assuming there is none.
+        // See docs/live-defect-register.md #10.
+        localizationCoverage: rawSnapshot.localizationCoverage,
         miningScarcityWeights: rawSnapshot.miningScarcityWeights,
         isOmniscient: true
       };
@@ -653,6 +661,8 @@ class IntelligenceFilter {
       // observer in player mode, and the endpoint says so rather than
       // silently pricing a rival's research against our own figures.
       effectIndex: rawSnapshot.effectIndex,
+      // Install-level fact, not intelligence -- see the omniscient branch.
+      localizationCoverage: rawSnapshot.localizationCoverage,
       miningScarcityWeights: rawSnapshot.miningScarcityWeights,
       isOmniscient: false
     };

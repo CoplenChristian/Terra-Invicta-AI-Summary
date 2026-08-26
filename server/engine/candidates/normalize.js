@@ -126,7 +126,15 @@ function normalizeCandidate(candidate) {
   return {
     ...candidate,
     missionType,
+    // `friendlyName` is the ENGINE IDENTITY: `odds.js` matches the literal
+    // 'Control Nation' and `clocks.js` matches 'Defend Interests' against it, so
+    // it stays exactly what the template says. `displayName` is the name the
+    // game shows the player -- five of the fifty missions differ, e.g. the
+    // template's 'Assassinate Councilor' is 'Assassinate' on screen. Renderers
+    // read `displayName` and fall back to `friendlyName` when the spec carried
+    // none. See docs/live-defect-register.md #10.
     friendlyName: candidate.friendlyName || missionType,
+    displayName: candidate.displayName || spec?.displayName || candidate.friendlyName || missionType,
     family: candidate.family || null,
     target,
     hate,

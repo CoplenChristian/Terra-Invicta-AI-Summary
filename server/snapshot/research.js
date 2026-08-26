@@ -12,6 +12,7 @@
 // be baked on here rather than read at request time.
 
 const templateLoader = require('../templateLoader');
+const { templateDisplayName } = require('../localization');
 const techGraph = require('../../shared/techGraph.mjs');
 const { firstNumericOrNull, completionPercent } = require('./numbers');
 const { resolveFactionName } = require('./lookups');
@@ -58,7 +59,7 @@ function buildGlobalResearchSlots(techProgress, { factionsById, researchCostScal
     return {
       slotNumber: index + 1,
       techId: slot.techTemplateName,
-      displayName: techTemplate?.friendlyName || slot.techTemplateName,
+      displayName: templateDisplayName(techTemplate, slot.techTemplateName),
       category: techTemplate?.techCategory || 'General',
       accumulatedResearch: Math.round(accumulated),
       totalCost,

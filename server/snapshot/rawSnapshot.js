@@ -332,6 +332,13 @@ function buildRawSnapshot(saveData) {
       deepSystemSkywatchRule: templateLoader.config.analysis?.rules?.spaceAssets?.deepSystemDescription || null
     },
     techMatrix,
+    // How much of the installed catalogue the game's own localisation covered,
+    // per template file: how many entries resolved, how many the game shows
+    // under a DIFFERENT name than the template's internal `friendlyName`, and
+    // how many carry no localisation entry and therefore still render that
+    // internal name. A fallback is an absence, not a failure -- but it is
+    // counted rather than left silent. See docs/live-defect-register.md #10.
+    localizationCoverage: templateLoader.getLocalizationCoverage(),
     shipHullStats: buildShipHullStats(),
     missionSpecs: buildMissionSpecs(),
     // Baked for the same reason as the two above: the hosted Cloudflare worker

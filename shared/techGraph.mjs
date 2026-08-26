@@ -111,6 +111,21 @@ const STAT_KEYS_BY_TYPE = {
   hab_module: HAB_MODULE_STAT_KEYS
 };
 
+/**
+ * The name the game puts in front of the player for a tech or project template.
+ *
+ * `_localizedName` is stamped by `server/templateLoader.js` from the installed
+ * game's localisation files; `friendlyName` is the template's internal label,
+ * and 150 of the 899 techs and projects diverge (`Their Signatures` against the
+ * game's `Alien Signatures`). Null falls through to the pre-localisation
+ * rendering: this module also runs in the Cloudflare worker, which has no
+ * template directory and hands in whatever the published payload carried.
+ * See docs/live-defect-register.md #10.
+ */
+function templateNodeName(template, id) {
+  return template?._localizedName || template?.friendlyName || id;
+}
+
 function pickStats(item) {
   const stats = {};
   for (const key of STAT_KEYS_BY_TYPE[item.componentType] || []) {
@@ -235,7 +250,7 @@ export function buildTechGraph(templates, saveState = {}) {
     const prereqRefs = asArray(template.prereqs).map(pr => ({ id: pr, type: resolvePrereqType(pr) }));
     return {
       id,
-      displayName: template.friendlyName || id,
+      displayName: templateNodeName(template, id),
       type: 'global_tech',
       category,
       subcategory: template.AI_techRole || null,
@@ -303,7 +318,7 @@ export function buildTechGraph(templates, saveState = {}) {
     const unlocks = components.map(componentUnlock);
     return {
       id,
-      displayName: template.friendlyName || id,
+      displayName: templateNodeName(template, id),
       type: 'faction_project',
       category,
       subcategory: template.AI_projectRole || template.AI_techRole || null,

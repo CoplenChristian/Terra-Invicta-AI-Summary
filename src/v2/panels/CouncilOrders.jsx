@@ -50,7 +50,11 @@ function escapeHtml(value) {
 
 function missionLabel(candidate) {
   const c = candidate || {};
-  const label = c.friendlyName || c.missionType || c.missionSpec?.friendlyName || c.title;
+  // `displayName` is the game's own mission name; `friendlyName` is the engine's
+  // identity key for the same mission and is what it falls back to. See
+  // docs/live-defect-register.md #10.
+  const label = c.displayName || c.missionSpec?.displayName
+    || c.friendlyName || c.missionType || c.missionSpec?.friendlyName || c.title;
   return label ? String(label) : null;
 }
 

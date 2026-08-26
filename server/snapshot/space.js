@@ -15,6 +15,7 @@
 // a confident total of zero.
 
 const templateLoader = require('../templateLoader');
+const { templateDisplayName } = require('../localization');
 const spaceTheater = require('../spaceTheater');
 const { MS_PER_DAY } = require('../../shared/util.mjs');
 const {
@@ -586,7 +587,7 @@ function buildHabModules(rawHabModules, {
 
     const row = {
       id: moduleId,
-      name: template?.friendlyName || module.displayName || module.templateName,
+      name: templateDisplayName(template, module.displayName || module.templateName),
       templateName: module.templateName || null,
       moduleType,
       factionId,

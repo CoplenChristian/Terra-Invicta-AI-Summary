@@ -10,6 +10,10 @@
 // request time works locally and breaks the deployed site.
 
 const templateLoader = require('../templateLoader');
+// The game's own display name for a template entry, falling back to the
+// template's internal `friendlyName` when the localisation carries no entry.
+// See docs/live-defect-register.md #10 and server/localization.js.
+const { templateDisplayName } = require('../localization');
 
 /**
  * Indices into a TIMissionTemplate `hate` array (6 slots, one per mission
@@ -94,7 +98,13 @@ function buildMissionSpecs() {
     const cost = mission.cost || {};
 
     specs[dataName] = {
+      // AN ENGINE IDENTITY KEY, NOT A LABEL. `server/engine/missionCatalogue.js`
+      // keys specs by this, `odds.js` matches the literal 'Control Nation' and
+      // `clocks.js` matches 'Defend Interests'. It must keep saying exactly what
+      // the template says. The game's own name for the mission is `displayName`
+      // below -- five of the fifty differ (Assassinate Councilor -> Assassinate).
       friendlyName: mission.friendlyName || dataName,
+      displayName: templateDisplayName(mission, dataName),
       // Explicit zeros, never null. Everywhere else in this codebase null
       // means unmeasured, and the hate model depends on that distinction --
       // "costs nothing" and "unknown" must not share a value.
@@ -239,7 +249,7 @@ function buildUnlockIndex() {
       if (!gates[gateId].unlocks[spec.family]) gates[gateId].unlocks[spec.family] = [];
       gates[gateId].unlocks[spec.family].push({
         id,
-        displayName: item.friendlyName || item.displayName || id
+        displayName: templateDisplayName(item, id)
       });
     }
     families[spec.family] = {
@@ -280,7 +290,7 @@ function buildDriveStats() {
     const name = drive.dataName;
     if (!name) continue;
     stats[name] = {
-      displayName: drive.friendlyName || drive.displayName || name,
+      displayName: templateDisplayName(drive, name),
       // Absent stays null. A drive with no exhaust velocity is unmeasured, and
       // a delta-V of `0 * ln(ratio)` would render as a confident zero km/s.
       EV_kps: stat(drive.EV_kps),
@@ -323,7 +333,7 @@ function buildPropellantModules() {
     const name = module.dataName;
     if (!name) continue;
     modules[name] = {
-      displayName: module.friendlyName || module.displayName || name,
+      displayName: templateDisplayName(module, name),
       evMultiplier: typeof module.specialModuleValue === 'number' ? module.specialModuleValue : null,
       requiresHydrogenPropellant: rules.includes('RequiresHydrogenPropellant'),
       requiredProjectName: module.requiredProjectName || null
@@ -450,7 +460,12 @@ function buildWeaponStats(family) {
     const id = weapon.dataName;
     if (!id) continue;
     out[id] = compact({
-      displayName: weapon.friendlyName || weapon.displayName || id,
+      // THE OTHER SIDE OF THE TWO-SIDED WEAPON MATCH. `militaryValue.buildCatalogueIndex`
+      // indexes this string, and `space.js:buildWeaponLoadout` writes the loader's
+      // weapon displayName into a redacted ship's `weaponLoadout[].systems`. Both
+      // resolve through `templateDisplayName` so they cannot drift: localise one
+      // side only and every redacted-ship weapon inventory silently drops to zero.
+      displayName: templateDisplayName(weapon, id),
       mount: weapon.mount || null,
 
       // --- damage inputs -------------------------------------------------
@@ -551,7 +566,7 @@ function buildHullComponentStats() {
     const id = hull.dataName;
     if (!id) continue;
     out[id] = compact({
-      displayName: hull.friendlyName || hull.displayName || id,
+      displayName: templateDisplayName(hull, id),
       noseHardpoints: stat(hull.noseHardpoints),
       hullHardpoints: stat(hull.hullHardpoints),
       internalModules: stat(hull.internalModules),
@@ -576,7 +591,7 @@ function buildArmorStats() {
     const id = armor.dataName;
     if (!id) continue;
     out[id] = compact({
-      displayName: armor.friendlyName || armor.displayName || id,
+      displayName: templateDisplayName(armor, id),
       // Half-value layers: the thickness that halves the incoming flux. The
       // two channels are separate because they are separate threats.
       baryonicHalfValueCm: stat(armor.baryonicHalfValue_cm),
@@ -599,7 +614,7 @@ function buildPowerPlantStats() {
     const id = plant.dataName;
     if (!id) continue;
     out[id] = compact({
-      displayName: plant.friendlyName || plant.displayName || id,
+      displayName: templateDisplayName(plant, id),
       maxOutputGW: stat(plant.maxOutput_GW),
       // Tonnes per gigawatt. Inverted by the model into GW per tonne so the
       // axis reads "more is better" like every other output axis.
@@ -619,7 +634,7 @@ function buildRadiatorStats() {
     const id = radiator.dataName;
     if (!id) continue;
     out[id] = compact({
-      displayName: radiator.friendlyName || radiator.displayName || id,
+      displayName: templateDisplayName(radiator, id),
       specificPowerKWkg: stat(radiator.specificPower_2s_KWkg),
       specificMassKgM2: stat(radiator.specificMass_2s_kgm2),
       operatingTempK: stat(radiator.operatingTemp_K),
@@ -641,7 +656,7 @@ function buildHeatSinkStats() {
     const id = sink.dataName;
     if (!id) continue;
     out[id] = compact({
-      displayName: sink.displayName || sink.friendlyName || id,
+      displayName: templateDisplayName(sink, id),
       heatCapacityGJ: stat(sink.heatCapacity_GJ),
       massTons: stat(sink.mass_tons),
       crew: stat(sink.crew),
@@ -657,7 +672,7 @@ function buildBatteryStats() {
     const id = battery.dataName;
     if (!id) continue;
     out[id] = compact({
-      displayName: battery.friendlyName || battery.displayName || id,
+      displayName: templateDisplayName(battery, id),
       energyCapacityGJ: stat(battery.energyCapacity_GJ),
       massTons: stat(battery.mass_tons),
       rechargeRateGJs: stat(battery.rechargeRate_GJs),
@@ -682,7 +697,7 @@ function buildUtilityModuleStats() {
     // carries such a row.
     if (id === 'Empty') continue;
     out[id] = compact({
-      displayName: module.friendlyName || module.displayName || id,
+      displayName: templateDisplayName(module, id),
       massTons: stat(module.mass_tons),
       powerRequirementMW: stat(module.powerRequirement_MW),
       // 45 distinct rules across 58 modules. There is no exchange rate
@@ -705,7 +720,7 @@ function buildHabModuleStats() {
     const id = module.dataName;
     if (!id) continue;
     out[id] = compact({
-      displayName: module.friendlyName || module.displayName || id,
+      displayName: templateDisplayName(module, id),
       tier: stat(module.tier),
       baseMassTons: stat(module.baseMass_tons),
       crew: stat(module.crew),
@@ -965,7 +980,7 @@ function buildTechBonusCatalogue() {
     const bonuses = techBonusRows(template);
     if (bonuses.length === 0) continue;
     habModules[dataName] = {
-      displayName: template.friendlyName || dataName,
+      displayName: templateDisplayName(template, dataName),
       bonuses,
       // Named in the template, quantified nowhere. Carried so a consumer can
       // say the summed figure is an upper bound rather than the effective one.
@@ -981,7 +996,7 @@ function buildTechBonusCatalogue() {
     const bonuses = techBonusRows(template);
     if (bonuses.length === 0) continue;
     orgs[dataName] = {
-      displayName: template.friendlyName || dataName,
+      displayName: templateDisplayName(template, dataName),
       bonuses,
       diminishingReturns: false
     };
@@ -994,7 +1009,7 @@ function buildTechBonusCatalogue() {
     const bonuses = techBonusRows(template);
     if (bonuses.length === 0) continue;
     traits[dataName] = {
-      displayName: template.friendlyName || dataName,
+      displayName: templateDisplayName(template, dataName),
       bonuses,
       diminishingReturns: false
     };

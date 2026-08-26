@@ -438,7 +438,9 @@ function renderAssignmentCard(assignment, index, onOpen) {
 
       <div className="directive-mission-block">
         <div className="directive-mission-title">
-          {candidate.title || candidate.friendlyName || 'Directive Assignment'}
+          {/* `displayName` is the game's own mission name; `friendlyName` is the
+              engine identity key it falls back to. See defect register #10. */}
+          {candidate.title || candidate.displayName || candidate.friendlyName || 'Directive Assignment'}
         </div>
         <div className="directive-mission-target">
           {candidate.target?.name || candidate.target?.nation || 'Designated Target'}
@@ -881,7 +883,7 @@ function openAssignmentDetail(assignment, index, riskFloorInForce, riskFloorPerc
 
   window.MissionControlDetailPanel.open({
     eyebrow: `COUNCILOR ASSIGNMENT #${index + 1}`,
-    title: `${councilor.name || 'Operative'} — ${candidate.friendlyName || candidate.missionType || 'Mission'}`,
+    title: `${councilor.name || 'Operative'} — ${candidate.displayName || candidate.friendlyName || candidate.missionType || 'Mission'}`,
     summary: candidate.title
       || `Assign ${councilor.name} to ${candidate.missionType} targeting ${candidate.target?.name || candidate.target?.nation || 'target'}.`,
     facts: [
