@@ -1,6 +1,6 @@
 // tests/executiveBoards.test.js
 //
-// Purpose: characterisation tests for public/v2/js/components/executive-boards.js.
+// Purpose: characterisation tests for src/v2/panels/ExecutiveBoards.jsx.
 //   Captures exactly what the seven executive boards render RIGHT NOW so a later
 //   React rewrite that silently drops a field fails loudly. These assertions are
 //   a record of current output, not a review of it.
@@ -25,16 +25,9 @@
 //   one window global or a shared "payload" argument.
 //
 // HARNESS NOTE:
-//   The mockDom serializer (tests/fixtures/mockDom.js serializeNode) used to
-//   drop a node's own _textContent when the node also had element children.
-//   executive-boards renders several such cells -- the faction ledger's
-//   displayName / GDP / habs-ships (text then a <small> subtitle) and the
-//   operations board's effective skill value (text then an org-bonus <span>).
-//   As of 2026-08-24 the serializer emits _textContent alongside children, and
-//   visibleText(serializeNode(root)) produces the same string a hand-rolled
-//   tree walk would. The tree walk in boardText() below was the workaround for
-//   the old bug; it is now redundant but kept here as documentation of what
-//   shape the component's cells take. (Removing it changes no assertion.)
+//   Drives a real browser through tests/fixtures/executiveBoardsBrowser.js and
+//   public/v2/primitives-harness.html?scene=executiveBoards. MissionControlBoards
+//   render functions mount the React panel into #executive-board-test-root.
 //
 // TRUNCATION: none of the seven boards renders a *TotalCount / *OmittedCount
 //   pair -- the engine truncation counts live in the Directive Engine card, not
@@ -47,33 +40,42 @@
 //   their empty message for both empty and absent input. Both behaviours are
 //   pinned below.
 
-const { test } = require('node:test');
+const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
+const http = require('node:http');
+const { chromium } = require('playwright');
 
-const { runComponent, visibleText } = require('./fixtures/renderHarness');
+const { ensurePrimitivesHarnessBuilt } = require('./fixtures/ensurePrimitivesHarness.js');
+const { renderBoardOnPage, tryBoardOnPage, HARNESS_PATH } = require('./fixtures/executiveBoardsBrowser');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
-const { DOMNode, serializeNode } = require('./fixtures/mockDom');
 const briefingGenerator = require('../server/briefingGenerator');
-
-const repoRoot = path.resolve(__dirname, '..');
-const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'executive-boards.js');
+require('./fixtures/executiveBoardsBrowser');
 
 const OBSERVER = 4712;
 
-/** The seven render functions, keyed by the names mission-control.js uses. */
-function loadBoards() {
-  return runComponent(componentPath).window.MissionControlBoards;
-}
+let server;
+let browser;
+let page;
 
-function createRoot() {
-  return new DOMNode('div');
-}
+before(async () => {
+  ensurePrimitivesHarnessBuilt();
+  const app = require('../server/index.js');
+  server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
 
-/** The faithful "what a reader sees", entities decoded. */
-function boardText(root) {
-  return visibleText(serializeNode(root));
-}
+  browser = await chromium.launch({ headless: true });
+  page = await browser.newPage();
+  await page.goto(`http://127.0.0.1:${port}${HARNESS_PATH}?scene=executiveBoards`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.waitForSelector('[data-testid="executive-boards-harness"]', { timeout: 15000 });
+});
+
+after(async () => {
+  if (browser) await browser.close();
+  if (server) await new Promise((resolve) => server.close(resolve));
+});
 
 function briefingFor(mode) {
   const snapshot = loadFixtureFilteredSnapshot({ mode });
@@ -81,9 +83,9 @@ function briefingFor(mode) {
   return { snapshot, briefing };
 }
 
-function renderBoard(board, container, snapshot, third) {
-  assert.doesNotThrow(() => board(container, snapshot, third), 'the board must render without throwing');
-  return { text: boardText(container), html: container.innerHTML };
+async function renderBoard(boardName, snapshot, third) {
+  const { text, html } = await renderBoardOnPage(page, boardName, snapshot, third);
+  return { text, html };
 }
 
 const FORBIDDEN = ['null', 'undefined', 'NaN', '[object Object]'];
@@ -103,11 +105,9 @@ function assertNoPlaceholderText(text, label) {
 // renderFactionLedger
 // ---------------------------------------------------------------------------
 
-test('faction ledger normal render, player mode: observer leads, hate is redacted to UNAVAILABLE', () => {
+test('faction ledger normal render, player mode: observer leads, hate is redacted to UNAVAILABLE', async () => {
   const { snapshot } = briefingFor('player');
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text, html } = renderBoard(boards.renderFactionLedger, root, snapshot);
+  const { text, html } = await renderBoard('renderFactionLedger', snapshot);
 
   assert.ok(text.includes('LEDGER / CURRENT STATE'), 'board note must be present');
 
@@ -131,11 +131,9 @@ test('faction ledger normal render, player mode: observer leads, hate is redacte
   assertNoPlaceholderText(text, 'faction ledger player normal');
 });
 
-test('faction ledger normal render, omniscient mode: hate is measured, not UNAVAILABLE', () => {
+test('faction ledger normal render, omniscient mode: hate is measured, not UNAVAILABLE', async () => {
   const { snapshot } = briefingFor('omniscient');
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text, html } = renderBoard(boards.renderFactionLedger, root, snapshot);
+  const { text, html } = await renderBoard('renderFactionLedger', snapshot);
 
   assert.ok(text.includes('the Initiative'), 'observer displayName must render');
   assert.ok(html.includes('data-board-faction-id="4712"'), 'observer row must be present');
@@ -147,10 +145,8 @@ test('faction ledger normal render, omniscient mode: hate is measured, not UNAVA
   assertNoPlaceholderText(text, 'faction ledger omniscient normal');
 });
 
-test('faction ledger renders HATE UNAVAILABLE for a null hate estimate, its own assertion', () => {
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text } = renderBoard(boards.renderFactionLedger, root, {
+test('faction ledger renders HATE UNAVAILABLE for a null hate estimate, its own assertion', async () => {
+  const { text } = await renderBoard('renderFactionLedger', {
     observerFactionId: '1',
     factions: [{
       ID: '1', displayName: 'Initiative', totalGdp: 10,
@@ -162,10 +158,8 @@ test('faction ledger renders HATE UNAVAILABLE for a null hate estimate, its own 
   assertNoPlaceholderText(text, 'faction ledger null hate');
 });
 
-test('faction ledger renders an em dash for a missing ship delta', () => {
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text } = renderBoard(boards.renderFactionLedger, root, {
+test('faction ledger renders an em dash for a missing ship delta', async () => {
+  const { text } = await renderBoard('renderFactionLedger', {
     observerFactionId: '1',
     factions: [{ ID: '1', displayName: 'Initiative', totalGdp: 10, shipsCount: 3 }]
   });
@@ -174,15 +168,11 @@ test('faction ledger renders an em dash for a missing ship delta', () => {
   assertNoPlaceholderText(text, 'faction ledger em-dash ship delta');
 });
 
-test('faction ledger empty factions and absent snapshot both degrade to the empty message', () => {
-  const boards = loadBoards();
-
-  const emptyRoot = createRoot();
-  const empty = renderBoard(boards.renderFactionLedger, emptyRoot, { factions: [] });
+test('faction ledger empty factions and absent snapshot both degrade to the empty message', async () => {
+  const empty = await renderBoard('renderFactionLedger', { factions: [] });
   assert.ok(empty.text.includes('No faction records are available.'), 'empty factions must show the empty message');
 
-  const absentRoot = createRoot();
-  const absent = renderBoard(boards.renderFactionLedger, absentRoot, undefined);
+  const absent = await renderBoard('renderFactionLedger', undefined);
   assert.ok(absent.text.includes('No faction records are available.'), 'absent snapshot must show the empty message');
 
   // For this board empty and absent coincide; pin that both are safe.
@@ -193,12 +183,10 @@ test('faction ledger empty factions and absent snapshot both degrade to the empt
 // renderLogisticsBoard
 // ---------------------------------------------------------------------------
 
-test('logistics board normal render, player and omniscient: spend and runway stay UNAVAILABLE', () => {
+test('logistics board normal render, player and omniscient: spend and runway stay UNAVAILABLE', async () => {
   for (const mode of ['player', 'omniscient']) {
     const { snapshot, briefing } = briefingFor(mode);
-    const boards = loadBoards();
-    const root = createRoot();
-    const { text } = renderBoard(boards.renderLogisticsBoard, root, snapshot, briefing.strategic);
+    const { text } = await renderBoard('renderLogisticsBoard', snapshot, briefing.strategic);
 
     assert.ok(text.includes('LOGISTICS / STOCKPILE + OUTPUT'), `${mode}: board note must be present`);
     assert.ok(text.includes('Water'), `${mode}: the water resource row must render`);
@@ -211,9 +199,7 @@ test('logistics board normal render, player and omniscient: spend and runway sta
   }
 });
 
-test('logistics board renders each unavailable state with its own assertion', () => {
-  const boards = loadBoards();
-  const root = createRoot();
+test('logistics board renders each unavailable state with its own assertion', async () => {
   const strategic = {
     resourcePosition: {
       resources: {
@@ -224,7 +210,7 @@ test('logistics board renders each unavailable state with its own assertion', ()
       }
     }
   };
-  const { text } = renderBoard(boards.renderLogisticsBoard, root, {}, strategic);
+  const { text } = await renderBoard('renderLogisticsBoard', {}, strategic);
 
   assert.ok(text.includes('Spent / committed'), 'the column header must render');
   assert.ok(text.includes('UNAVAILABLE'), 'a null spendPerMonth must render UNAVAILABLE');
@@ -234,15 +220,11 @@ test('logistics board renders each unavailable state with its own assertion', ()
   assertNoPlaceholderText(text, 'logistics unavailable states');
 });
 
-test('logistics board with no resources, empty and absent, renders the resource-empty message', () => {
-  const boards = loadBoards();
-
-  const emptyRoot = createRoot();
-  const empty = renderBoard(boards.renderLogisticsBoard, emptyRoot, {}, {});
+test('logistics board with no resources, empty and absent, renders the resource-empty message', async () => {
+  const empty = await renderBoard('renderLogisticsBoard', {}, {});
   assert.ok(empty.text.includes('Resource production is unavailable in this snapshot.'), 'empty strategic must show resource-empty');
 
-  const absentRoot = createRoot();
-  const absent = renderBoard(boards.renderLogisticsBoard, absentRoot, undefined, undefined);
+  const absent = await renderBoard('renderLogisticsBoard', undefined, undefined);
   assert.ok(absent.text.includes('Resource production is unavailable in this snapshot.'), 'absent strategic must show resource-empty');
 });
 
@@ -250,12 +232,10 @@ test('logistics board with no resources, empty and absent, renders the resource-
 // renderCapabilityMatrix
 // ---------------------------------------------------------------------------
 
-test('capability matrix normal render, player and omniscient: ranks, signals and intel online', () => {
+test('capability matrix normal render, player and omniscient: ranks, signals and intel online', async () => {
   for (const mode of ['player', 'omniscient']) {
     const { snapshot, briefing } = briefingFor(mode);
-    const boards = loadBoards();
-    const root = createRoot();
-    const { text } = renderBoard(boards.renderCapabilityMatrix, root, snapshot, briefing);
+    const { text } = await renderBoard('renderCapabilityMatrix', snapshot, briefing);
 
     assert.ok(text.includes('CAPABILITY / DISCRETE SIGNALS'), `${mode}: board note must be present`);
     assert.ok(text.includes('Earth GDP rank'), `${mode}: the rank rows must render`);
@@ -271,10 +251,8 @@ test('capability matrix normal render, player and omniscient: ranks, signals and
   }
 });
 
-test('capability matrix renders UNAVAILABLE for every unmeasured value, with its own assertion', () => {
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text } = renderBoard(boards.renderCapabilityMatrix, root, {
+test('capability matrix renders UNAVAILABLE for every unmeasured value, with its own assertion', async () => {
+  const { text } = await renderBoard('renderCapabilityMatrix', {
     observerFactionId: '1',
     factions: [{ ID: '1', displayName: 'Initiative' }],
     capabilities: { canDetectAlienOperations: false, details: {} }
@@ -292,10 +270,8 @@ test('capability matrix renders UNAVAILABLE for every unmeasured value, with its
   assertNoPlaceholderText(text, 'capability unavailable states');
 });
 
-test('capability matrix renders UNAVAILABLE rank when the observer is excluded from the ranked list', () => {
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text } = renderBoard(boards.renderCapabilityMatrix, root, {
+test('capability matrix renders UNAVAILABLE rank when the observer is excluded from the ranked list', async () => {
+  const { text } = await renderBoard('renderCapabilityMatrix', {
     observerFactionId: '1',
     factions: [{
       ID: '1', displayName: 'the Alien Administration',
@@ -310,35 +286,24 @@ test('capability matrix renders UNAVAILABLE rank when the observer is excluded f
   assertNoPlaceholderText(text, 'capability unavailable rank');
 });
 
-test('capability matrix with no factions still renders the full UNAVAILABLE table; absent snapshot throws', () => {
-  const boards = loadBoards();
-
-  // There is NO empty state for this board: with no factions the ten fixed rows
-  // still render, every value UNAVAILABLE. Pin that behaviour.
-  const emptyRoot = createRoot();
-  const empty = renderBoard(boards.renderCapabilityMatrix, emptyRoot, { factions: [] }, {});
+test('capability matrix with no factions still renders the full UNAVAILABLE table; absent snapshot throws', async () => {
+  const empty = await renderBoard('renderCapabilityMatrix', { factions: [] }, {});
   assert.ok(empty.text.includes('Earth GDP rank'), 'the rank rows must still render with empty factions');
   assert.ok(empty.text.includes('UNAVAILABLE / month'), 'the unmeasured values must still render UNAVAILABLE');
   assert.ok(!empty.text.includes('No capability records are available.'), 'this board has no empty-record state');
 
-  const absentRoot = createRoot();
-  assert.throws(
-    () => boards.renderCapabilityMatrix(absentRoot, undefined, undefined),
-    /observerFactionId/,
-    'an absent snapshot must throw on the unguarded observerFactionId dereference'
-  );
+  const message = await tryBoardOnPage(page, 'renderCapabilityMatrix', undefined, undefined);
+  assert.match(message, /observerFactionId/, 'an absent snapshot must throw on the unguarded observerFactionId dereference');
 });
 
 // ---------------------------------------------------------------------------
 // renderTheaterBoard
 // ---------------------------------------------------------------------------
 
-test('theater board normal render, player and omniscient: posture, alien force, fleet breakdown', () => {
+test('theater board normal render, player and omniscient: posture, alien force, fleet breakdown', async () => {
   for (const mode of ['player', 'omniscient']) {
     const { snapshot, briefing } = briefingFor(mode);
-    const boards = loadBoards();
-    const root = createRoot();
-    const { text } = renderBoard(boards.renderTheaterBoard, root, snapshot, briefing.strategic);
+    const { text } = await renderBoard('renderTheaterBoard', snapshot, briefing.strategic);
 
     assert.ok(text.includes('SPACE / LOCATION FIRST'), `${mode}: board note must be present`);
     assert.ok(text.includes('57 fleets / 420 ships'), `${mode}: the all-tracked scope must render`);
@@ -355,10 +320,8 @@ test('theater board normal render, player and omniscient: posture, alien force, 
   }
 });
 
-test('theater board renders UNAVAILABLE average Sol fleet and em dashes for missing largest/inbound', () => {
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text } = renderBoard(boards.renderTheaterBoard, root, {
+test('theater board renders UNAVAILABLE average Sol fleet and em dashes for missing largest/inbound', async () => {
+  const { text } = await renderBoard('renderTheaterBoard', {
     fleets: [{ factionId: '4717', factionName: 'the Alien Administration', displayName: 'Xeno', shipsCount: 3 }]
   }, {
     spaceTheaters: [{
@@ -375,10 +338,8 @@ test('theater board renders UNAVAILABLE average Sol fleet and em dashes for miss
   assertNoPlaceholderText(text, 'theater unavailable states');
 });
 
-test('theater board renders the alien-force empty message and the theater empty message', () => {
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text } = renderBoard(boards.renderTheaterBoard, root, { fleets: [] }, { spaceTheaters: [], spacePosture: null });
+test('theater board renders the alien-force empty message and the theater empty message', async () => {
+  const { text } = await renderBoard('renderTheaterBoard', { fleets: [] }, { spaceTheaters: [], spacePosture: null });
 
   assert.ok(text.includes('Alien force posture is unavailable in this intelligence mode.'), 'no alien bodies must render the posture-empty message');
   assert.ok(text.includes('No theater posture is available.'), 'no theaters must render the theater-empty message');
@@ -389,12 +350,10 @@ test('theater board renders the alien-force empty message and the theater empty 
 // renderOperationsBoard
 // ---------------------------------------------------------------------------
 
-test('operations board normal render, player and omniscient: active councilors and mission coverage', () => {
+test('operations board normal render, player and omniscient: active councilors and mission coverage', async () => {
   for (const mode of ['player', 'omniscient']) {
     const { snapshot, briefing } = briefingFor(mode);
-    const boards = loadBoards();
-    const root = createRoot();
-    const { text } = renderBoard(boards.renderOperationsBoard, root, snapshot, briefing.strategic);
+    const { text } = await renderBoard('renderOperationsBoard', snapshot, briefing.strategic);
 
     assert.ok(text.includes('OPERATIONS / ACTIVE COUNCILORS'), `${mode}: board note must be present`);
     assert.ok(text.includes('Beth Hofmann'), `${mode}: an active councilor must render`);
@@ -406,10 +365,8 @@ test('operations board normal render, player and omniscient: active councilors a
   }
 });
 
-test('operations board renders Unknown, No active mission, em-dash skills and UNAVAILABLE role', () => {
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text } = renderBoard(boards.renderOperationsBoard, root, {
+test('operations board renders Unknown, No active mission, em-dash skills and UNAVAILABLE role', async () => {
+  const { text } = await renderBoard('renderOperationsBoard', {
     observerFactionId: '1',
     councilors: [{
       factionId: '1', displayName: 'Ghost', attributes: {},
@@ -426,10 +383,8 @@ test('operations board renders Unknown, No active mission, em-dash skills and UN
   assertNoPlaceholderText(text, 'operations unavailable states');
 });
 
-test('operations board renders UNAVAILABLE coverage name and em-dash coverage value', () => {
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text } = renderBoard(boards.renderOperationsBoard, root, {
+test('operations board renders UNAVAILABLE coverage name and em-dash coverage value', async () => {
+  const { text } = await renderBoard('renderOperationsBoard', {
     observerFactionId: '1',
     councilors: [{
       factionId: '1', displayName: 'Ghost', attributes: { Persuasion: 5 },
@@ -445,15 +400,11 @@ test('operations board renders UNAVAILABLE coverage name and em-dash coverage va
   assertNoPlaceholderText(text, 'operations coverage unavailable');
 });
 
-test('operations board with no active councilors renders the empty message; absent strategic is fine', () => {
-  const boards = loadBoards();
-
-  const emptyRoot = createRoot();
-  const empty = renderBoard(boards.renderOperationsBoard, emptyRoot, { observerFactionId: '1', councilors: [] }, {});
+test('operations board with no active councilors renders the empty message; absent strategic is fine', async () => {
+  const empty = await renderBoard('renderOperationsBoard', { observerFactionId: '1', councilors: [] }, {});
   assert.ok(empty.text.includes('No active councilors are available.'), 'no active councilors must show the empty message');
 
-  const absentRoot = createRoot();
-  const absent = renderBoard(boards.renderOperationsBoard, absentRoot, { observerFactionId: '1', councilors: [] }, undefined);
+  const absent = await renderBoard('renderOperationsBoard', { observerFactionId: '1', councilors: [] }, undefined);
   assert.ok(absent.text.includes('No active councilors are available.'), 'absent strategic must still render the empty message');
 });
 
@@ -461,12 +412,10 @@ test('operations board with no active councilors renders the empty message; abse
 // renderNationQueue
 // ---------------------------------------------------------------------------
 
-test('nation queue normal render, player and omniscient: postures and nukes', () => {
+test('nation queue normal render, player and omniscient: postures and nukes', async () => {
   for (const mode of ['player', 'omniscient']) {
     const { snapshot, briefing } = briefingFor(mode);
-    const boards = loadBoards();
-    const root = createRoot();
-    const { text } = renderBoard(boards.renderNationQueue, root, snapshot, briefing);
+    const { text } = await renderBoard('renderNationQueue', snapshot, briefing);
 
     assert.ok(text.includes('EARTH / ACTION QUEUE'), `${mode}: board note must be present`);
     assert.ok(text.includes('United States of North America'), `${mode}: the top nation must render`);
@@ -478,10 +427,8 @@ test('nation queue normal render, player and omniscient: postures and nukes', ()
   }
 });
 
-test('nation queue renders Independent, No CP detail, and the posture ladder', () => {
-  const boards = loadBoards();
-  const root = createRoot();
-  const { text } = renderBoard(boards.renderNationQueue, root, {
+test('nation queue renders Independent, No CP detail, and the posture ladder', async () => {
+  const { text } = await renderBoard('renderNationQueue', {
     observerFactionId: '1',
     nations: [
       // CP but no executive -> must still render, reading Independent.
@@ -502,31 +449,22 @@ test('nation queue renders Independent, No CP detail, and the posture ladder', (
   assertNoPlaceholderText(text, 'nation queue degraded');
 });
 
-test('nation queue with no nations renders the empty message; absent snapshot throws', () => {
-  const boards = loadBoards();
-
-  const emptyRoot = createRoot();
-  const empty = renderBoard(boards.renderNationQueue, emptyRoot, { observerFactionId: '1', nations: [] }, {});
+test('nation queue with no nations renders the empty message; absent snapshot throws', async () => {
+  const empty = await renderBoard('renderNationQueue', { observerFactionId: '1', nations: [] }, {});
   assert.ok(empty.text.includes('No nation holdings are available.'), 'no nations must show the empty message');
 
-  const absentRoot = createRoot();
-  assert.throws(
-    () => boards.renderNationQueue(absentRoot, undefined, undefined),
-    /observerFactionId/,
-    'an absent snapshot must throw on the unguarded observerFactionId dereference'
-  );
+  const message = await tryBoardOnPage(page, 'renderNationQueue', undefined, undefined);
+  assert.match(message, /observerFactionId/, 'an absent snapshot must throw on the unguarded observerFactionId dereference');
 });
 
 // ---------------------------------------------------------------------------
 // renderResearchWatchlist
 // ---------------------------------------------------------------------------
 
-test('research watchlist normal render, player and omniscient: global, faction projects, availability', () => {
+test('research watchlist normal render, player and omniscient: global, faction projects, availability', async () => {
   for (const mode of ['player', 'omniscient']) {
     const { snapshot } = briefingFor(mode);
-    const boards = loadBoards();
-    const root = createRoot();
-    const { text } = renderBoard(boards.renderResearchWatchlist, root, snapshot);
+    const { text } = await renderBoard('renderResearchWatchlist', snapshot);
 
     assert.ok(text.includes('GLOBAL RESEARCH'), `${mode}: the global section must render`);
     assert.ok(text.includes('Ultracapacitors 27.9%'), `${mode}: a global slot must render its progress`);
@@ -539,11 +477,8 @@ test('research watchlist normal render, player and omniscient: global, faction p
   }
 });
 
-test('research watchlist renders UNAVAILABLE lead, UNKNOWN availability, and GUARANTEED/RNG chips', () => {
-  const boards = loadBoards();
-
-  const unknownRoot = createRoot();
-  const unknown = renderBoard(boards.renderResearchWatchlist, unknownRoot, {
+test('research watchlist renders UNAVAILABLE lead, UNKNOWN availability, and GUARANTEED/RNG chips', async () => {
+  const unknown = await renderBoard('renderResearchWatchlist', {
     observerFactionId: '1', observerFactionName: 'Initiative',
     factions: [{
       ID: '1', displayName: 'Initiative',
@@ -556,8 +491,7 @@ test('research watchlist renders UNAVAILABLE lead, UNKNOWN availability, and GUA
   assert.ok(unknown.text.includes('UNAVAILABLE'), 'a missing lead faction must render UNAVAILABLE');
   assert.ok(unknown.text.includes('UNKNOWN'), 'a project with unknown availability must render UNKNOWN');
 
-  const rngRoot = createRoot();
-  const rng = renderBoard(boards.renderResearchWatchlist, rngRoot, {
+  const rng = await renderBoard('renderResearchWatchlist', {
     observerFactionId: '1', observerFactionName: 'Initiative',
     factions: [{
       ID: '1', displayName: 'Initiative',
@@ -569,8 +503,7 @@ test('research watchlist renders UNAVAILABLE lead, UNKNOWN availability, and GUA
   }, undefined);
   assert.ok(rng.text.includes('RNG 50% CAP · ~4 mo'), 'a capped project must render its RNG cap and wait months');
 
-  const guaRoot = createRoot();
-  const gua = renderBoard(boards.renderResearchWatchlist, guaRoot, {
+  const gua = await renderBoard('renderResearchWatchlist', {
     observerFactionId: '1', observerFactionName: 'Initiative',
     factions: [{
       ID: '1', displayName: 'Initiative',
@@ -583,11 +516,8 @@ test('research watchlist renders UNAVAILABLE lead, UNKNOWN availability, and GUA
   assert.ok(gua.text.includes('GUARANTEED · ~1 mo'), 'a schedulable project must render GUARANTEED');
 });
 
-test('research watchlist renders all three empty messages; absent snapshot throws', () => {
-  const boards = loadBoards();
-
-  const emptyRoot = createRoot();
-  const empty = renderBoard(boards.renderResearchWatchlist, emptyRoot, {
+test('research watchlist renders all three empty messages; absent snapshot throws', async () => {
+  const empty = await renderBoard('renderResearchWatchlist', {
     observerFactionId: '1', observerFactionName: 'Initiative', factions: [],
     capabilities: {}, globalResearch: {}, techTree: { nodes: [] }
   }, undefined);
@@ -595,10 +525,6 @@ test('research watchlist renders all three empty messages; absent snapshot throw
   assert.ok(empty.text.includes('No active faction projects are available.'), 'no faction projects must show the empty message');
   assert.ok(empty.text.includes('No locked capability records are available.'), 'no locked capabilities must show the empty message');
 
-  const absentRoot = createRoot();
-  assert.throws(
-    () => boards.renderResearchWatchlist(absentRoot, undefined),
-    /observerFactionId/,
-    'an absent snapshot must throw on the unguarded observerFactionId dereference'
-  );
+  const message = await tryBoardOnPage(page, 'renderResearchWatchlist', undefined);
+  assert.match(message, /observerFactionId/, 'an absent snapshot must throw on the unguarded observerFactionId dereference');
 });

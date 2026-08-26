@@ -1,11 +1,11 @@
 // tests/councilOrders.test.js
 //
-// Purpose: characterisation tests for public/v2/js/components/council-orders.js.
-//   Captures exactly what the council-orders panel renders RIGHT NOW so a later
-//   React rewrite that silently drops a field fails loudly. These assertions are
-//   a record of current output, not a review of it.
+// Purpose: characterisation tests for src/v2/panels/CouncilOrders.jsx. Captures
+//   exactly what the React panel renders through a real browser so a later
+//   change that silently drops a field fails loudly. These assertions are a
+//   record of current output, not a review of it.
 //
-// WHAT council-orders.js EXPOSES:
+// WHAT CouncilOrders.jsx EXPOSES THROUGH src/v2/main.jsx:
 //   window.MissionControlCouncilOrders = { render }
 //   render(root, payload) where payload = { engineDirectives: { cyclePlan } }.
 //   mission-control.js:1193 calls it as
@@ -24,47 +24,51 @@
 //   expectedHate null render as "ODDS UNAVAILABLE" and "unknown", never coerced
 //   to 0.
 //
-// HARNESS NOTE: like executiveBoards.test.js this file used to recover mixed
-//   text+children cells by walking the mockDom tree, because the serializer
-//   dropped a node's own text once it gained element children. As of 2026-08-24
-//   the serializer emits _textContent alongside children, so visibleText applied
-//   to the serialized HTML produces the same string a hand-rolled walk did.
-//   The tree walk in boardText() below is now redundant and was removed; what
-//   remains is the visibleText-on-serialized-HTML path, which is identical to
-//   what council-orders.test.js and executiveBoards.test.js produced under the
-//   old workaround -- measured on every render of every payload across both
-//   modes (16 renders, byte-identical).
+// HARNESS NOTE: the 14 assertions in this file are all driven through
+//   public/v2/primitives-harness.html?scene=councilOrders. No test loads the
+//   deleted vanilla component by path.
 
-const { test } = require('node:test');
+const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
+const http = require('node:http');
+const { chromium } = require('playwright');
 
-const { runComponent, visibleText } = require('./fixtures/renderHarness');
+const { ensurePrimitivesHarnessBuilt } = require('./fixtures/ensurePrimitivesHarness.js');
+const {
+  renderCouncilOrdersOnPage,
+  HARNESS_PATH,
+} = require('./fixtures/councilOrdersBrowser');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
-const { DOMNode, serializeNode } = require('./fixtures/mockDom');
 const briefingGenerator = require('../server/briefingGenerator');
-
-const repoRoot = path.resolve(__dirname, '..');
-const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'council-orders.js');
 
 const OBSERVER = 4712;
 
-function loadOrders() {
-  return runComponent(componentPath).window.MissionControlCouncilOrders;
-}
+let server;
+let browser;
+let page;
 
-function createRoot() {
-  return new DOMNode('div');
-}
+before(async () => {
+  ensurePrimitivesHarnessBuilt();
+  const app = require('../server/index.js');
+  server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
 
-function boardText(root) {
-  return visibleText(serializeNode(root));
-}
+  browser = await chromium.launch({ headless: true });
+  page = await browser.newPage();
+  await page.goto(`http://127.0.0.1:${port}${HARNESS_PATH}?scene=councilOrders`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.waitForSelector('[data-testid="council-orders-harness"]', { timeout: 15000 });
+});
 
-function renderTo(root, payload) {
-  const orders = loadOrders();
-  assert.doesNotThrow(() => orders.render(root, payload), 'render must not throw');
-  return { text: boardText(root), html: root.innerHTML };
+after(async () => {
+  if (browser) await browser.close();
+  if (server) await new Promise((resolve) => server.close(resolve));
+});
+
+async function renderTo(payload) {
+  return renderCouncilOrdersOnPage(page, payload);
 }
 
 function cyclePlanPayload(cyclePlan) {
@@ -90,12 +94,11 @@ function assertNoPlaceholderText(text, label) {
 // 1. NORMAL RENDER: PLAYER AND OMNISCIENT (a different answer, not a filtered one)
 // ---------------------------------------------------------------------------
 
-test('council orders normal render, player mode: three councilors, guaranteed orders, zero hate', () => {
+test('council orders normal render, player mode: three councilors, guaranteed orders, zero hate', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
   const briefing = briefingGenerator.generateMissionControlBriefing(snapshot, null, { mode: 'player', observer: OBSERVER });
 
-  const root = createRoot();
-  const { text, html } = renderTo(root, { engineDirectives: briefing.engineDirectives });
+  const { text, html } = await renderTo({ engineDirectives: briefing.engineDirectives });
 
   assert.ok(text.includes('3 COUNCILORS ACCOUNTED FOR'), 'the account status must count 3');
   assert.ok(text.includes('3 on mission · 0 idle · 0 without a slot'), 'the tally must read 3/0/0');
@@ -111,12 +114,11 @@ test('council orders normal render, player mode: three councilors, guaranteed or
   assertNoPlaceholderText(text, 'council orders player normal');
 });
 
-test('council orders normal render, omniscient mode: a rolled order with odds band and measured hate', () => {
+test('council orders normal render, omniscient mode: a rolled order with odds band and measured hate', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient' });
   const briefing = briefingGenerator.generateMissionControlBriefing(snapshot, null, { mode: 'omniscient', observer: OBSERVER });
 
-  const root = createRoot();
-  const { text } = renderTo(root, { engineDirectives: briefing.engineDirectives });
+  const { text } = await renderTo({ engineDirectives: briefing.engineDirectives });
 
   assert.ok(text.includes('5 COUNCILORS ACCOUNTED FOR'), 'the account status must count 5');
   assert.ok(text.includes('5 on mission · 0 idle · 0 without a slot'), 'the tally must read 5/0/0');
@@ -135,9 +137,8 @@ test('council orders normal render, omniscient mode: a rolled order with odds ba
 // 2. ODDS, HATE AND RISK-FLOOR STATES (each its own assertion)
 // ---------------------------------------------------------------------------
 
-test('council orders renders ODDS UNAVAILABLE when odds are null and unknown hate when hate is null', () => {
-  const root = createRoot();
-  const { text } = renderTo(root, cyclePlanPayload({
+test('council orders renders ODDS UNAVAILABLE when odds are null and unknown hate when hate is null', async () => {
+  const { text } = await renderTo(cyclePlanPayload({
     assignments: [{
       councilor: BASE_COUNCILOR,
       candidate: { friendlyName: 'Advise', family: 'council', target: { kind: 'nation', nation: 'United States' } },
@@ -155,9 +156,8 @@ test('council orders renders ODDS UNAVAILABLE when odds are null and unknown hat
   assertNoPlaceholderText(text, 'council orders null odds');
 });
 
-test('council orders renders GUARANTEED for automatic odds and 0 hate for a measured zero', () => {
-  const root = createRoot();
-  const { text } = renderTo(root, cyclePlanPayload({
+test('council orders renders GUARANTEED for automatic odds and 0 hate for a measured zero', async () => {
+  const { text } = await renderTo(cyclePlanPayload({
     assignments: [{
       councilor: BASE_COUNCILOR,
       candidate: { missionType: 'Advise', family: 'advisory', target: { kind: 'nation', name: 'Mexico' } },
@@ -174,9 +174,8 @@ test('council orders renders GUARANTEED for automatic odds and 0 hate for a meas
   assert.ok(!text.includes('ODDS UNAVAILABLE'), 'automatic odds must not fall back to unavailable');
 });
 
-test('council orders renders the roll band and positive hate to two decimals', () => {
-  const root = createRoot();
-  const { text } = renderTo(root, cyclePlanPayload({
+test('council orders renders the roll band and positive hate to two decimals', async () => {
+  const { text } = await renderTo(cyclePlanPayload({
     assignments: [{
       councilor: BASE_COUNCILOR,
       candidate: { friendlyName: 'Purge', family: 'expansion', target: { kind: 'controlPoint', controlPointType: 'ExtractiveSector', nation: 'China' } },
@@ -193,9 +192,8 @@ test('council orders renders the roll band and positive hate to two decimals', (
   assert.ok(text.includes('ExtractiveSector · China'), 'the control-point target must render');
 });
 
-test('council orders renders a >=100 roll as >99%, never 100%', () => {
-  const root = createRoot();
-  const { text } = renderTo(root, cyclePlanPayload({
+test('council orders renders a >=100 roll as >99%, never 100%', async () => {
+  const { text } = await renderTo(cyclePlanPayload({
     assignments: [{
       councilor: BASE_COUNCILOR,
       candidate: { friendlyName: 'Purge', family: 'expansion', target: { kind: 'none' } },
@@ -211,9 +209,8 @@ test('council orders renders a >=100 roll as >99%, never 100%', () => {
   assert.ok(!text.includes('100%'), 'the panel must never claim a literal 100%');
 });
 
-test('council orders renders FLOOR UNVERIFIED for an unknown risk floor and MARGINAL for a marginal pass', () => {
-  const unknownRoot = createRoot();
-  const unknown = renderTo(unknownRoot, cyclePlanPayload({
+test('council orders renders FLOOR UNVERIFIED for an unknown risk floor and MARGINAL for a marginal pass', async () => {
+  const unknown = await renderTo(cyclePlanPayload({
     assignments: [{
       councilor: BASE_COUNCILOR,
       candidate: { friendlyName: 'Advise', family: 'council', target: { kind: 'nation', nation: 'Mexico' } },
@@ -226,8 +223,7 @@ test('council orders renders FLOOR UNVERIFIED for an unknown risk floor and MARG
   }));
   assert.ok(unknown.text.includes('FLOOR UNVERIFIED'), 'an unchecked risk floor must render FLOOR UNVERIFIED');
 
-  const marginalRoot = createRoot();
-  const marginal = renderTo(marginalRoot, cyclePlanPayload({
+  const marginal = await renderTo(cyclePlanPayload({
     assignments: [{
       councilor: BASE_COUNCILOR,
       candidate: { friendlyName: 'Advise', family: 'council', target: { kind: 'nation', nation: 'Mexico' } },
@@ -245,9 +241,8 @@ test('council orders renders FLOOR UNVERIFIED for an unknown risk floor and MARG
 // 3. IDLE AND UNAVAILABLE ROWS
 // ---------------------------------------------------------------------------
 
-test('council orders renders an idle councilor with reason and free action', () => {
-  const root = createRoot();
-  const { text } = renderTo(root, cyclePlanPayload({
+test('council orders renders an idle councilor with reason and free action', async () => {
+  const { text } = await renderTo(cyclePlanPayload({
     assignments: [],
     unassigned: [{
       councilor: BASE_COUNCILOR,
@@ -264,9 +259,8 @@ test('council orders renders an idle councilor with reason and free action', () 
   assert.ok(text.includes('Free action: Advise Councilor (or Boost Nation)'), 'the free action and its alternates must render');
 });
 
-test('council orders renders an unavailable councilor with its status and reason', () => {
-  const root = createRoot();
-  const { text } = renderTo(root, cyclePlanPayload({
+test('council orders renders an unavailable councilor with its status and reason', async () => {
+  const { text } = await renderTo(cyclePlanPayload({
     assignments: [],
     unassigned: [],
     unavailable: [{ councilor: BASE_COUNCILOR, status: 'Injured', reasonDetail: 'Holds no mission slot this cycle.' }]
@@ -277,9 +271,8 @@ test('council orders renders an unavailable councilor with its status and reason
   assert.ok(text.includes('Holds no mission slot this cycle.'), 'the reason must render');
 });
 
-test('council orders renders Mission unnamed and No fixed target for a bare candidate, and Councilor for a missing one', () => {
-  const bareRoot = createRoot();
-  const bare = renderTo(bareRoot, cyclePlanPayload({
+test('council orders renders Mission unnamed and No fixed target for a bare candidate, and Councilor for a missing one', async () => {
+  const bare = await renderTo(cyclePlanPayload({
     assignments: [{
       councilor: { id: 2, name: 'Bob' },
       candidate: { target: {} },
@@ -293,8 +286,7 @@ test('council orders renders Mission unnamed and No fixed target for a bare cand
   assert.ok(bare.text.includes('Mission unnamed in this snapshot'), 'a candidate with no mission label must say so');
   assert.ok(bare.text.includes('No fixed target'), 'a candidate with no resolvable target must say so');
 
-  const noCouncilorRoot = createRoot();
-  const noCouncilor = renderTo(noCouncilorRoot, cyclePlanPayload({
+  const noCouncilor = await renderTo(cyclePlanPayload({
     assignments: [{
       candidate: { friendlyName: 'Advise' },
       odds: null,
@@ -307,7 +299,7 @@ test('council orders renders Mission unnamed and No fixed target for a bare cand
   assert.ok(noCouncilor.text.includes('Councilor'), 'an assignment with no councilor record must fall back to the Councilor label');
 });
 
-test('council orders renders every family label', () => {
+test('council orders renders every family label', async () => {
   const families = [
     ['expansion', 'EXPANSION'],
     ['council', 'COUNCIL'],
@@ -319,8 +311,7 @@ test('council orders renders every family label', () => {
     ['defense', 'DEFENSE']
   ];
   for (const [family, label] of families) {
-    const root = createRoot();
-    const { text } = renderTo(root, cyclePlanPayload({
+    const { text } = await renderTo(cyclePlanPayload({
       assignments: [{
         councilor: BASE_COUNCILOR,
         candidate: { friendlyName: 'M', family, target: { kind: 'none' } },
@@ -335,7 +326,7 @@ test('council orders renders every family label', () => {
   }
 });
 
-test('council orders renders each target kind through its label', () => {
+test('council orders renders each target kind through its label', async () => {
   const targets = [
     [{ kind: 'controlPoint', controlPointType: 'ExtractiveSector', nation: 'China' }, 'ExtractiveSector · China'],
     [{ kind: 'councilor', councilorName: 'Dr. Voss', faction: 'the Servants' }, 'Dr. Voss · the Servants'],
@@ -344,8 +335,7 @@ test('council orders renders each target kind through its label', () => {
     [{ kind: 'none' }, 'No fixed target']
   ];
   for (const [target, expected] of targets) {
-    const root = createRoot();
-    const { text } = renderTo(root, cyclePlanPayload({
+    const { text } = await renderTo(cyclePlanPayload({
       assignments: [{
         councilor: BASE_COUNCILOR,
         candidate: { friendlyName: 'M', family: 'council', target },
@@ -364,7 +354,7 @@ test('council orders renders each target kind through its label', () => {
 // 4. EMPTY AND ABSENT INPUT (they are different)
 // ---------------------------------------------------------------------------
 
-test('council orders renders the cycle-plan unavailable message for empty and absent payloads', () => {
+test('council orders renders the cycle-plan unavailable message for empty and absent payloads', async () => {
   const payloads = [
     ['empty object', {}],
     ['engineDirectives present but empty', { engineDirectives: {} }],
@@ -372,8 +362,7 @@ test('council orders renders the cycle-plan unavailable message for empty and ab
     ['undefined payload', undefined]
   ];
   for (const [label, payload] of payloads) {
-    const root = createRoot();
-    const { text } = renderTo(root, payload);
+    const { text } = await renderTo(payload);
     assert.ok(
       text.includes('Cycle plan unavailable for this snapshot'),
       `${label}: a missing cyclePlan must render the unavailable message`
@@ -381,8 +370,7 @@ test('council orders renders the cycle-plan unavailable message for empty and ab
   }
 });
 
-test('council orders renders the no-councilors message for a present but empty cycle plan', () => {
-  const root = createRoot();
-  const { text } = renderTo(root, cyclePlanPayload({ assignments: [], unassigned: [], unavailable: [] }));
+test('council orders renders the no-councilors message for a present but empty cycle plan', async () => {
+  const { text } = await renderTo(cyclePlanPayload({ assignments: [], unassigned: [], unavailable: [] }));
   assert.ok(text.includes('No councilors are reported in this cycle plan.'), 'an empty cycle plan is a different state from a missing one');
 });

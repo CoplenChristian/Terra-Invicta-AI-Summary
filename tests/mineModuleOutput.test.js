@@ -27,7 +27,6 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 
 const {
   MINE_MODULE_MEASURED_ON,
@@ -526,56 +525,9 @@ test('the measured and estimate registers on the mining board differ on font, st
 // 8. What the board actually renders
 // ---------------------------------------------------------------------------
 
-function renderBoard(payload) {
-  const componentPath = path.join(__dirname, '..', 'public', 'v2', 'js', 'components', 'mining-expansion.js');
-  const source = fs.readFileSync(componentPath, 'utf8');
-  const sandbox = { window: {}, console, fetch: () => Promise.resolve(null) };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: componentPath });
-  const root = { innerHTML: '' };
-  sandbox.window.MissionControlMiningExpansion.render(root, payload);
-  return root.innerHTML;
-}
-
-test('the board renders the measured upgrade block and the projected band in their own registers', () => {
-  const payload = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
-  const html = renderBoard(payload);
-  assert.match(html, /mining-meas__value/, 'measured figures carry the measured register class');
-  assert.match(html, /mining-est__value/, 'the projected band carries the estimate register class');
-  assert.match(html, /mining-est__tag/, 'the band carries a visible EST caption');
-  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-  assert.match(text, /NOT in the utility score/, 'the exclusion is stated in words, not only in the payload');
-  for (const token of ['null', 'undefined', 'NaN', '[object Object]']) {
-    assert.strictEqual(text.indexOf(token), -1, `the rendered board must not contain "${token}"`);
-  }
-});
-
-test('an unresolved capability renders as UNKNOWN rather than as "no bonus"', () => {
-  const payload = queryFixtureIntel({ endpoint: 'mining-expansion', mode: 'player', observer: OBSERVER });
-  const blinded = {
-    ...payload,
-    mineModuleCapability: {
-      available: false,
-      unavailableReason: 'the completed-project list could not be read',
-      buildableTiers: [],
-      bestBuildable: null,
-      projectedMultiplierRange: null
-    },
-    mineUpgrades: { ...payload.mineUpgrades, totalMonthlyGainMeasured: false },
-    available: payload.available.map(c => ({
-      ...c,
-      moduleMultiplier: { ...c.moduleMultiplier, projectedRangeAvailable: false }
-    }))
-  };
-  const text = renderBoard(blinded).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-  assert.match(text, /UNKNOWN/, 'an unresolved multiplier must say UNKNOWN');
-  assert.match(text, /UPGRADE HEADROOM UNRESOLVED/);
-  assert.ok(!/×1 to ×1/.test(text), 'no band may be printed when none could be resolved');
-  for (const token of ['null', 'undefined', 'NaN']) {
-    assert.strictEqual(text.indexOf(token), -1, `the degraded board must not contain "${token}"`);
-  }
-});
+// The React port is exercised in a real browser by
+// tests/mining-expansion.test.js. Its six checks cover both registers and the
+// unresolved capability branch without rebuilding a Node-side React harness.
 
 // ---------------------------------------------------------------------------
 // 9. The briefing surfaces carry the module term and say so

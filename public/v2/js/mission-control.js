@@ -1292,9 +1292,9 @@ function renderDashboard() {
     const miningEl = document.getElementById('miningExpansion');
     if (miningEl) {
       window.MissionControlMiningExpansion.fetchMiningExpansion(state.observer, state.mode).then(data => {
-        if (data) {
-          window.MissionControlMiningExpansion.render(miningEl, data);
-        }
+        // A failed fetch is still a renderable state. Passing null lets the
+        // React panel replace the loading copy with an honest unavailable one.
+        window.MissionControlMiningExpansion.render(miningEl, data);
       });
     }
   }

@@ -21,13 +21,28 @@ import { StrategicCommentary } from './panels/StrategicCommentary.jsx';
 import { FleetEngagement } from './panels/FleetEngagement.jsx';
 import { IntelligenceLibrary } from './panels/IntelligenceLibrary.jsx';
 import { AlienHateEconomics, renderHudAlienHateEconomics } from './panels/AlienHateEconomics.jsx';
+import { MiningExpansion } from './panels/MiningExpansion.jsx';
+import { CouncilOrders } from './panels/CouncilOrders.jsx';
+import { FactionLedgerBoard } from './panels/ExecutiveBoards.jsx';
+import {
+  renderFactionLedger,
+  renderLogisticsBoard,
+  renderCapabilityMatrix,
+  renderTheaterBoard,
+  renderOperationsBoard,
+  renderNationQueue,
+  renderResearchWatchlist,
+} from './main.jsx';
 import {
   renderMcBudget,
   renderStrategicCommentary,
   renderFleetEngagement,
+  renderMiningExpansion,
+  renderCouncilOrders,
   renderAlienHateEconomics,
   renderIntelligenceLibrary,
   fetchFleetEngagement,
+  fetchMiningExpansion,
 } from './main.jsx';
 
 if (typeof window !== 'undefined') {
@@ -37,11 +52,25 @@ if (typeof window !== 'undefined') {
     render: renderFleetEngagement,
     fetchFleetEngagement,
   };
+  window.MissionControlMiningExpansion = {
+    render: renderMiningExpansion,
+    fetchMiningExpansion,
+  };
   window.MissionControlHateEconomics = {
     render: renderAlienHateEconomics,
     renderHud: renderHudAlienHateEconomics,
   };
   window.IntelligenceLibrary = { render: renderIntelligenceLibrary };
+  window.MissionControlCouncilOrders = { render: renderCouncilOrders };
+  window.MissionControlBoards = {
+    renderFactionLedger,
+    renderLogisticsBoard,
+    renderCapabilityMatrix,
+    renderTheaterBoard,
+    renderOperationsBoard,
+    renderNationQueue,
+    renderResearchWatchlist,
+  };
 }
 
 const SCENES = {
@@ -57,8 +86,11 @@ const SCENES = {
   mcBudget: McBudgetScene,
   strategicCommentary: StrategicCommentaryScene,
   fleetEngagement: FleetEngagementScene,
+  miningExpansion: MiningExpansionScene,
+  councilOrders: CouncilOrdersScene,
   intelligenceLibrary: IntelligenceLibraryScene,
   alienHateEconomics: AlienHateEconomicsScene,
+  executiveBoards: ExecutiveBoardsScene,
 };
 
 const PANEL_MODIFIERS = ['priority', 'alert', 'featured', 'quiet', 'dense', 'commentary'];
@@ -235,6 +267,42 @@ function FleetEngagementScene() {
   );
 }
 
+function MiningExpansionScene() {
+  const payload = window.__MINING_EXPANSION_PAYLOAD__;
+  return (
+    <div id="miningExpansion" data-testid="mining-expansion-harness" aria-live="polite">
+      <MiningExpansion data={payload} />
+    </div>
+  );
+}
+
+function CouncilOrdersScene() {
+  const payload = window.__COUNCIL_ORDERS_PAYLOAD__;
+  // The Council Orders panel cross-navigates into #directiveBoard, which lives
+  // in the (still-vanilla) Directive Engine card. The harness mirrors that DOM
+  // here so the click handler has a target to resolve.
+  const assignments = payload?.engineDirectives?.cyclePlan?.assignments ?? [];
+  return (
+    <div data-testid="council-orders-harness">
+      <div id="council-orders-scene-root">
+        <CouncilOrders payload={payload} />
+      </div>
+      <div id="council-orders-test-root" />
+      <div id="directiveBoard" className="tech-card">
+        {assignments.map((entry, index) => (
+          <div
+            key={index}
+            className="directive-assignment-card"
+            data-assignment-index={index}
+          >
+            {entry.councilor?.name || 'Councilor'}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function IntelligenceLibraryScene() {
   const payload = window.__INTELLIGENCE_LIBRARY_PAYLOAD__ || {};
   const options = { ...(payload.options || {}) };
@@ -258,6 +326,16 @@ function AlienHateEconomicsScene() {
   return (
     <div id="alienHateEconomics" data-testid="alien-hate-economics-harness">
       <AlienHateEconomics economics={payload} />
+    </div>
+  );
+}
+
+function ExecutiveBoardsScene() {
+  const payload = window.__EXECUTIVE_BOARDS_PAYLOAD__;
+  return (
+    <div data-testid="executive-boards-harness">
+      <FactionLedgerBoard snapshot={payload} />
+      <div id="executive-board-test-root" />
     </div>
   );
 }

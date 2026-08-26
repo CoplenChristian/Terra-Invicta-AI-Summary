@@ -18,6 +18,17 @@ import { StrategicCommentary } from './panels/StrategicCommentary.jsx';
 import { FleetEngagement } from './panels/FleetEngagement.jsx';
 import { AlienHateEconomics, renderHudAlienHateEconomics } from './panels/AlienHateEconomics.jsx';
 import { IntelligenceLibrary } from './panels/IntelligenceLibrary.jsx';
+import { MiningExpansion } from './panels/MiningExpansion.jsx';
+import { CouncilOrders } from './panels/CouncilOrders.jsx';
+import {
+  CapabilityMatrixBoard,
+  FactionLedgerBoard,
+  LogisticsBoard,
+  NationQueueBoard,
+  OperationsBoard,
+  ResearchWatchlistBoard,
+  TheaterBoard,
+} from './panels/ExecutiveBoards.jsx';
 
 /**
  * Throwaway Phase 0 Coexistence Proof Component.
@@ -163,6 +174,36 @@ export function renderFleetEngagement(root, data) {
 }
 
 /**
+ * Strangler bridge matching window.MissionControlMiningExpansion.fetchMiningExpansion.
+ */
+export async function fetchMiningExpansion(observerId = 4712, mode = 'player') {
+  try {
+    const res = await fetch(`/api/intel/mining-expansion?observer=${observerId}&mode=${mode}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn('[MiningExpansion] Failed to fetch expansion data:', err);
+    return null;
+  }
+}
+
+/**
+ * Strangler bridge matching window.MissionControlMiningExpansion.render(root, payload).
+ */
+export function renderMiningExpansion(root, data) {
+  if (!root) return;
+  mountReactPanel(root, <MiningExpansion data={data} />);
+}
+
+/**
+ * Strangler bridge matching window.MissionControlCouncilOrders.render(root, payload).
+ */
+export function renderCouncilOrders(root, payload) {
+  if (!root) return;
+  mountReactPanel(root, <CouncilOrders payload={payload} />);
+}
+
+/**
  * Strangler bridge matching window.IntelligenceLibrary.render(container, snapshot, briefing, observerId, options).
  */
 export function renderIntelligenceLibrary(container, snapshot, briefing, observerId, options = {}) {
@@ -186,6 +227,45 @@ export function renderAlienHateEconomics(root, economics) {
   mountReactPanel(root, <AlienHateEconomics economics={economics} />);
 }
 
+export function renderFactionLedger(container, snapshot) {
+  if (!container) return;
+  mountReactPanel(container, <FactionLedgerBoard snapshot={snapshot} />);
+}
+
+export function renderLogisticsBoard(container, snapshot, strategic) {
+  if (!container) return;
+  mountReactPanel(container, <LogisticsBoard snapshot={snapshot} strategic={strategic} />);
+}
+
+export function renderCapabilityMatrix(container, snapshot, briefing) {
+  if (!container) return;
+  // Unguarded dereference preserved from the vanilla panel so absent snapshots throw synchronously.
+  void snapshot.observerFactionId;
+  mountReactPanel(container, <CapabilityMatrixBoard snapshot={snapshot} briefing={briefing} />);
+}
+
+export function renderTheaterBoard(container, snapshot, strategic) {
+  if (!container) return;
+  mountReactPanel(container, <TheaterBoard snapshot={snapshot} strategic={strategic} />);
+}
+
+export function renderOperationsBoard(container, snapshot, strategic) {
+  if (!container) return;
+  mountReactPanel(container, <OperationsBoard snapshot={snapshot} strategic={strategic} />);
+}
+
+export function renderNationQueue(container, snapshot, briefing) {
+  if (!container) return;
+  void snapshot.observerFactionId;
+  mountReactPanel(container, <NationQueueBoard snapshot={snapshot} briefing={briefing} />);
+}
+
+export function renderResearchWatchlist(container, snapshot) {
+  if (!container) return;
+  void snapshot.observerFactionId;
+  mountReactPanel(container, <ResearchWatchlistBoard snapshot={snapshot} />);
+}
+
 export { renderHudAlienHateEconomics };
 
 // Expose mounting registry on window for strangler migration interoperability
@@ -196,11 +276,25 @@ if (typeof window !== 'undefined') {
     render: renderFleetEngagement,
     fetchFleetEngagement,
   };
+  window.MissionControlMiningExpansion = {
+    render: renderMiningExpansion,
+    fetchMiningExpansion,
+  };
   window.MissionControlHateEconomics = {
     render: renderAlienHateEconomics,
     renderHud: renderHudAlienHateEconomics,
   };
+  window.MissionControlCouncilOrders = { render: renderCouncilOrders };
   window.IntelligenceLibrary = { render: renderIntelligenceLibrary };
+  window.MissionControlBoards = {
+    renderFactionLedger,
+    renderLogisticsBoard,
+    renderCapabilityMatrix,
+    renderTheaterBoard,
+    renderOperationsBoard,
+    renderNationQueue,
+    renderResearchWatchlist,
+  };
 
   window.MissionControlReact = {
     mountReactPanel,
@@ -209,16 +303,35 @@ if (typeof window !== 'undefined') {
     mountMcBudget: renderMcBudget,
     mountStrategicCommentary: renderStrategicCommentary,
     mountFleetEngagement: renderFleetEngagement,
+    mountMiningExpansion: renderMiningExpansion,
+    mountCouncilOrders: renderCouncilOrders,
     mountAlienHateEconomics: renderAlienHateEconomics,
     renderHudAlienHateEconomics,
     mountIntelligenceLibrary: renderIntelligenceLibrary,
+    renderFactionLedger,
+    renderLogisticsBoard,
+    renderCapabilityMatrix,
+    renderTheaterBoard,
+    renderOperationsBoard,
+    renderNationQueue,
+    renderResearchWatchlist,
     fetchFleetEngagement,
+    fetchMiningExpansion,
     CoexistenceProof,
     McBudget,
     StrategicCommentary,
     FleetEngagement,
+    MiningExpansion,
+    CouncilOrders,
     AlienHateEconomics,
     IntelligenceLibrary,
+    FactionLedgerBoard,
+    LogisticsBoard,
+    CapabilityMatrixBoard,
+    TheaterBoard,
+    OperationsBoard,
+    NationQueueBoard,
+    ResearchWatchlistBoard,
   };
 
   const urlParams = new URLSearchParams(window.location.search);

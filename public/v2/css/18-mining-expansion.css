@@ -133,6 +133,14 @@
   letter-spacing: normal;
 }
 
+.mining-section-truncation {
+  color: var(--text-dim);
+  font-size: var(--fs-tag);
+  font-weight: normal;
+  letter-spacing: normal;
+  text-align: right;
+}
+
 .mining-section-title--gated {
   margin-top: 6px;
   color: var(--text-soft);
