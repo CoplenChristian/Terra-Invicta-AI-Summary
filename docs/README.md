@@ -83,6 +83,14 @@ action, and `push:dry-run` exists to rehearse it.
 - ~~**The strategic commentary's throughput figure conflates queued SHIPS with shipyards.**~~
   **CLOSED 2026-08-22 — measured, and the dividend turned out to be wrong too.** See the Shipped
   table row "the shipyard throughput model".
+## React migration status
+
+**Live progress and handoff: [`react-migration-progress.md`](react-migration-progress.md)** —
+8 of 16 components migrated, what is left and in what order, the definition of
+done, and measured lane findings. Read it before starting a migration wave.
+
+---
+
 ## Shipped
 
 | doc | commit | note |
