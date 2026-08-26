@@ -14,7 +14,7 @@ the cited lines. "Demonstrated" means executed. "Confirmed reachable" means the
 producer's own contract permits the input, but it does not occur on the current
 save.
 
-**Tally as of 2026-08-25: 16 entries — 12 fixed, 0 live, 4 conditional.**
+**Tally as of 2026-08-26: 17 entries — 13 fixed, 1 live, 3 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -25,13 +25,24 @@ with the new tests in place and confirming exactly one test failed per file.
 again as part of the port rather than carried across. **#16** is closed: two
 captures of the same pinned save now diff to **0**, down from 2,485.
 
-**Live on the dashboard right now: NONE.** #2, #5 and #15 were fixed in
-`a3f8487` — the last three that were visible to a reader on the current save.
-Each was verified by reverting its component with the new tests in place: 4, 1
-and 1 tests failed respectively, so none is passing by construction.
+**#6 was fixed** in the `drive-explorer` React port (2026-08-26). Its root cause
+was finally named: `paint()` rebuilt the panel with `innerHTML` and replaced
+`.de-scroll-hint` with a fresh element, while `syncScrollHints` — the thing that
+measures overflow — lives in `mission-control.js` and was never called by the
+component at all.
 
-**Conditional:** #4, #6, #8 and #10 are real but need a specific input or width.
-They are the whole remaining set.
+**Live on the dashboard right now: #17.** Four fabricated fallbacks in the
+directive board, carried across the React port **deliberately**, because "no
+figure may change" was that port's bar. They are recorded here so fixing them is
+a separate, reviewable change rather than a silent one.
+
+#2, #5 and #15 were fixed in `a3f8487` — the last three that were visible to a
+reader on the current save. Each was verified by reverting its component with the
+new tests in place: 4, 1 and 1 tests failed respectively, so none is passing by
+construction.
+
+**Conditional:** #4 and #10 are real but need a specific input or width. With #6
+fixed, those two are the whole remaining conditional set.
 
 **Note on #2.** It produces no visible change on the current save, because every
 theater count there is measured. That is not the same as inert — the four tests
@@ -40,12 +51,21 @@ save simply does not exercise it today.
 
 One further candidate was investigated and **cleared** — see the end of #8.
 
-**The pattern across the fixed set is worth keeping.** Seven of the twelve (#3, #7,
-#11, #12, #13/#14, #2, #5) were corrected **as part of a migration or a characterisation
-pass**, not as standalone defect work — which is the argument for fixing at the
-port rather than before it. And three of them (#13, #14, #15) were cases where
-`shared/markdownExports.mjs` was already **right** and only the browser had lost
-the caveat, inverting this repo's usual direction.
+**The pattern across the fixed set is worth keeping.** Eight of the thirteen —
+#3, #7, #11, #12, #13, #14, #6 and, in effect, #2 and #5 — were corrected **as
+part of a migration or a characterisation pass**, not as standalone defect work.
+That is the argument for fixing at the port rather than queuing defects
+separately: the person already reading the component closely enough to rewrite it
+is the person best placed to notice.
+
+And three of them (#13, #14, #15) were cases where `shared/markdownExports.mjs`
+was already **right** and only the browser had lost the caveat, inverting this
+repo's usual direction.
+
+**#17 is the counter-case, and it is deliberate.** A port whose bar is "no figure
+may change" *cannot* fix a fabricated fallback without violating its own bar. The
+right move is what that agent did — flag it, carry it, and file it — rather than
+either silently fixing it or silently laundering it through a new component.
 
 *Correction: the commit that added #15 stated in its message that this header
 had been re-derived to 15 entries. It had not — that edit was never made, and
@@ -790,6 +810,63 @@ is running, which is the whole reason `--save` exists. The remaining work is to
 thread the pin through the other ten fetches, or to route them all through one
 helper that cannot forget it — the second being the fix that stays fixed, and
 the same argument `shared/intel/registry.mjs` settled for route definitions.
+
+---
+
+## 17. Four fabricated fallbacks in the directive board, carried across knowingly — **confirmed**
+
+Found 2026-08-26 by the agent porting `directive-board` to React, which flagged
+them rather than silently fixing or silently carrying them. They were documented
+in `react-component-contracts-detail.md` §3 but had never reached this register.
+
+They survive in `src/v2/panels/DirectiveBoard.jsx` **deliberately**, because "no
+figure may change" was the bar for that port. Fixing them is a separate,
+reviewable change — which is the point of writing them down.
+
+```js
+:67    if (!cost) return 'Free';
+:804   {reasoning.confidence || 'HIGH'}
+:904   assignment.opportunityCost || 'None'
+:905   whyList.join(' · ') || 'Optimal expected value under cycle budget constraints.'
+```
+
+Each is the register's signature shape — an unmeasured value given a confident
+default at the render boundary — and each picks the *reassuring* end:
+
+- **`'Free'`** reports an **absent** cost as a measured zero cost. A directive
+  whose cost could not be read is presented as costing nothing, which is the
+  most action-encouraging reading available.
+- **`'HIGH'`** renders an absent confidence as the highest confidence the field
+  can take. A recommendation the engine could not rate is shown as one it rated
+  best.
+- **`'None'`** and the tactical-rationale string both **fabricate a claim**:
+  the first asserts nothing was given up, the second asserts a rationale the
+  engine never produced.
+
+### Three `?? 0` on nullable counts, currently harmless
+
+`:231`, `:233`, `:935` coerce `riskFloorVetoedOmittedCount`,
+`riskFloorUnverifiedOmittedCount` and `riskFloorVetoedTotalCount`. All three sit
+behind a truthiness gate that renders nothing at zero, so no fabricated figure
+reaches a reader on today's payloads.
+
+**The reachable failure is a partial one:** if one omitted count were absent
+while its sibling was present, the "N further entries are omitted" line would
+**understate** rather than vanish — a truncation notice that under-reports its
+own truncation, which is worse than no notice.
+
+### An upper bound rendered as a plain count
+
+`server/engine/assignment.js:411` and `:471` emit
+`benchBudget.jointlyAffordableIsUpperBound` — `null` or `true` — and **no
+surface renders it**. Confirmed present on the live briefing at
+`.briefing.engineDirectives.cyclePlan.benchBudget.jointlyAffordableIsUpperBound`.
+
+So when the engine says "this joint affordability figure is an upper bound, not a
+measurement", the board shows the number and drops the qualifier. That is the
+same shape as **#13** (a Monte Carlo band rendered as the whole uncertainty) and
+**#15** (a non-ranking rendered as a ranking): not an absent value shown as
+present, but a **qualified** value shown as an unqualified one.
 
 ---
 
