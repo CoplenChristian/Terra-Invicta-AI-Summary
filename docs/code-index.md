@@ -27,13 +27,12 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/v2/js/components/drive-explorer.js` | BS | Browser (classic, global IIFE) | 1187 | renders the DRIVES view — every drive in the catalogue rated against | — | — |
 | `public/v2/js/components/executive-boards.js` | BS | Browser (classic, global IIFE) | 416 | renders the executive boards — faction power, resources, and the | — | — |
 | `public/v2/js/components/faction-intel.js` | BS | Browser (classic, global IIFE) | 1274 | faction intelligence as a scan-first decision surface. | — | — |
-| `public/v2/js/components/fleet-engagement.js` | BS | Browser (classic, global IIFE) | 261 | renders the per-fleet engagement estimates — what force each alien | — | — |
 | `public/v2/js/components/fleet-procurement.js` | BS | Browser (classic, global IIFE) | 608 | renders the FLEET view procurement recommendations and validated refit advisor | — | — |
 | `public/v2/js/components/intelligence-library.js` | BS | Browser (classic, global IIFE) | 595 | renders the intelligence library — the drillable intelligence | — | — |
 | `public/v2/js/components/mining-expansion.js` | BS | Browser (classic, global IIFE) | 619 | the mining expansion board — capacity, runways, and need-weighted | — | — |
-| `public/v2/js/components/research-advisor.js` | BS | Browser (classic, global IIFE) | 1056 | phase 4 of the research advisor, on screen. | — | — |
+| `public/v2/js/components/research-advisor.js` | BS | Browser (classic, global IIFE) | 1068 | phase 4 of the research advisor, on screen. | — | — |
 | `public/v2/js/components/unlocked-tech.js` | BS | Browser (classic, global IIFE) | 372 | renders the searchable list of the observer faction's unlocked | — | — |
-| `public/v2/js/components/world-map.js` | BS | Browser (classic, global IIFE) | 512 | renders the interactive world/space theater map surface. | — | `tests/world-map.test.js` |
+| `public/v2/js/components/world-map.js` | BS | Browser (classic, global IIFE) | 543 | renders the interactive world/space theater map surface. | — | `tests/world-map.test.js` |
 | `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2114 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (classic, global IIFE) | 328 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
@@ -243,10 +242,11 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/tableVariants.js` | E | Browser (React JSX) | 77 | maps DataTable variant keys to the six real table systems in the v2 | `DEFAULT_SCROLL_HINT_TEXT, TABLE_VARIANTS` | — |
 | `src/v2/components/TruncationNote.jsx` | E | Browser (React JSX) | 80 | announce capped lists with total and omitted counts. An absent omitted | `TruncationNote` | — |
 | `src/v2/components/Value.jsx` | E | Browser (React JSX) | 80 | render a numeric value or an explicit unavailable/absent state. Never | `Value` | — |
-| `src/v2/main.jsx` | E | Browser (React JSX) | 172 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, mountCoexistenceProof, mountReactPanel, renderMcBudget, renderStrategicCommentary, unmountReactPanel` | — |
+| `src/v2/main.jsx` | E | Browser (React JSX) | 202 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, mountCoexistenceProof, mountReactPanel, renderFleetEngagement, renderMcBudget, renderStrategicCommentary, unmountReactPanel` | — |
+| `src/v2/panels/FleetEngagement.jsx` | E | Browser (React JSX) | 304 | renders the per-fleet engagement estimates — what force each alien | `FleetEngagement` | `tests/FleetEngagement.test.js` |
 | `src/v2/panels/McBudget.jsx` | E | Browser (React JSX) | 275 | Mission Control budget planner — MC is the sole input to the alien | `McBudget` | — |
 | `src/v2/panels/StrategicCommentary.jsx` | E | Browser (React JSX) | 286 | renders the non-LLM four-layer Strategic Commentary Engine output | `StrategicCommentary` | `tests/StrategicCommentary.test.js` |
-| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 223 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
+| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 243 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
 | `src/v2/theme.js` | E | Browser (React JSX) | 266 | MUI createTheme mirror of the v2 CSS custom-property vocabulary in | `cssParityExpectations, initiativeCategorical, initiativeSpace, initiativeTheme, initiativeTokens` | — |
 
 ## `public/v2/css/`

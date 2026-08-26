@@ -49,7 +49,8 @@ function listUnitTestFiles(dir = testsRoot, out = []) {
 function isBrowserDriving(filePath) {
   const src = fs.readFileSync(filePath, 'utf8');
   return /chromium\.launch/.test(src)
-    || /require\([^)]*reactPrimitivesBrowser/.test(src);
+    || /require\([^)]*reactPrimitivesBrowser/.test(src)
+    || /require\([^)]*fixtures\/\w+Browser/.test(src);
 }
 
 /** The browser-driving files and the rest, both sorted. */

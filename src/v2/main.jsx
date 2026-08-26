@@ -15,6 +15,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { McBudget } from './panels/McBudget.jsx';
 import { StrategicCommentary } from './panels/StrategicCommentary.jsx';
+import { FleetEngagement } from './panels/FleetEngagement.jsx';
 
 /**
  * Throwaway Phase 0 Coexistence Proof Component.
@@ -137,10 +138,36 @@ export function renderStrategicCommentary(commentaryData, containerId = 'strateg
   mountReactPanel(container, <StrategicCommentary data={commentaryData} />);
 }
 
+/**
+ * Strangler bridge matching window.MissionControlFleetEngagement.fetchFleetEngagement.
+ */
+export async function fetchFleetEngagement(observerId = 4712, mode = 'player') {
+  try {
+    const res = await fetch(`/api/intel/fleet-engagement?observer=${observerId}&mode=${mode}&limit=12`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn('[FleetEngagement] Failed to fetch engagement estimates:', err);
+    return null;
+  }
+}
+
+/**
+ * Strangler bridge matching window.MissionControlFleetEngagement.render(root, data).
+ */
+export function renderFleetEngagement(root, data) {
+  if (!root) return;
+  mountReactPanel(root, <FleetEngagement data={data} />);
+}
+
 // Expose mounting registry on window for strangler migration interoperability
 if (typeof window !== 'undefined') {
   window.MissionControlMcBudget = { render: renderMcBudget };
   window.MissionControlStrategicCommentary = { renderStrategicCommentary };
+  window.MissionControlFleetEngagement = {
+    render: renderFleetEngagement,
+    fetchFleetEngagement,
+  };
 
   window.MissionControlReact = {
     mountReactPanel,
@@ -148,9 +175,12 @@ if (typeof window !== 'undefined') {
     mountCoexistenceProof,
     mountMcBudget: renderMcBudget,
     mountStrategicCommentary: renderStrategicCommentary,
+    mountFleetEngagement: renderFleetEngagement,
+    fetchFleetEngagement,
     CoexistenceProof,
     McBudget,
     StrategicCommentary,
+    FleetEngagement,
   };
 
   const urlParams = new URLSearchParams(window.location.search);

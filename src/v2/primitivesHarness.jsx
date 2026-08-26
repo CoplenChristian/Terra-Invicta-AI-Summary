@@ -18,11 +18,21 @@ import {
 } from './components/index.js';
 import { McBudget } from './panels/McBudget.jsx';
 import { StrategicCommentary } from './panels/StrategicCommentary.jsx';
-import { renderMcBudget, renderStrategicCommentary } from './main.jsx';
+import { FleetEngagement } from './panels/FleetEngagement.jsx';
+import {
+  renderMcBudget,
+  renderStrategicCommentary,
+  renderFleetEngagement,
+  fetchFleetEngagement,
+} from './main.jsx';
 
 if (typeof window !== 'undefined') {
   window.MissionControlMcBudget = { render: renderMcBudget };
   window.MissionControlStrategicCommentary = { renderStrategicCommentary };
+  window.MissionControlFleetEngagement = {
+    render: renderFleetEngagement,
+    fetchFleetEngagement,
+  };
 }
 
 const SCENES = {
@@ -37,6 +47,7 @@ const SCENES = {
   cascade: CascadeScene,
   mcBudget: McBudgetScene,
   strategicCommentary: StrategicCommentaryScene,
+  fleetEngagement: FleetEngagementScene,
 };
 
 const PANEL_MODIFIERS = ['priority', 'alert', 'featured', 'quiet', 'dense', 'commentary'];
@@ -200,6 +211,15 @@ function StrategicCommentaryScene() {
       <div id="strategicCommentary" aria-live="polite">
         <StrategicCommentary data={payload} />
       </div>
+    </div>
+  );
+}
+
+function FleetEngagementScene() {
+  const payload = window.__FLEET_ENGAGEMENT_PAYLOAD__;
+  return (
+    <div id="fleetEngagement" data-testid="fleet-engagement-harness" aria-live="polite">
+      <FleetEngagement data={payload} />
     </div>
   );
 }

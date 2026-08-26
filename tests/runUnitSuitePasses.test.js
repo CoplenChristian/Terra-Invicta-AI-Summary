@@ -50,7 +50,9 @@ test('browser/pure split: every browser-pass file drives a browser, every pure-p
   for (const file of browser) {
     const src = fs.readFileSync(file, 'utf8');
     assert.ok(
-      /chromium\.launch/.test(src) || /require\([^)]*reactPrimitivesBrowser/.test(src),
+      /chromium\.launch/.test(src)
+        || /require\([^)]*reactPrimitivesBrowser/.test(src)
+        || /require\([^)]*fixtures\/\w+Browser/.test(src),
       `${file}: routed to the browser pass but has no chromium.launch and no browser fixture require`
     );
   }
@@ -61,16 +63,20 @@ test('browser/pure split catches a NEW browser test file', () => {
   const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'runUnitPasses-'));
   const direct = path.join(probeDir, 'browserDirect.test.js');
   const fixture = path.join(probeDir, 'browserFixture.test.js');
+  const panelFixture = path.join(probeDir, 'browserPanelFixture.test.js');
   const pureProbe = path.join(probeDir, 'pureProbe.test.js');
 
   fs.writeFileSync(direct,
     "const { chromium } = require('playwright');\nchromium.launch({ headless: true });\n");
   fs.writeFileSync(fixture,
     "const { withPrimitivesHarnessPage } = require('../../tests/fixtures/reactPrimitivesBrowser.js');\n");
+  fs.writeFileSync(panelFixture,
+    "const { withMcBudgetHarnessPage } = require('../../tests/fixtures/mcBudgetBrowser.js');\n");
   fs.writeFileSync(pureProbe, "const n = 1 + 1;\n");
 
   assert.strictEqual(isBrowserDriving(direct), true, 'a direct chromium.launch must be browser-driving');
   assert.strictEqual(isBrowserDriving(fixture), true, 'a browser-fixture require must be browser-driving');
+  assert.strictEqual(isBrowserDriving(panelFixture), true, 'a panel browser-fixture require must be browser-driving');
   assert.strictEqual(isBrowserDriving(pureProbe), false, 'a pure-JS file must not be browser-driving');
 
   fs.rmSync(probeDir, { recursive: true, force: true });
