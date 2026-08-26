@@ -14,7 +14,7 @@ the cited lines. "Demonstrated" means executed. "Confirmed reachable" means the
 producer's own contract permits the input, but it does not occur on the current
 save.
 
-**Tally as of 2026-08-25: 16 entries — 9 fixed, 3 live, 4 conditional.**
+**Tally as of 2026-08-25: 16 entries — 12 fixed, 0 live, 4 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -25,10 +25,18 @@ with the new tests in place and confirming exactly one test failed per file.
 again as part of the port rather than carried across. **#16** is closed: two
 captures of the same pinned save now diff to **0**, down from 2,485.
 
-**Live on the dashboard right now: #2, #5 and #15.** All three are
-render-boundary fixes in vanilla components the migration has not reached.
+**Live on the dashboard right now: NONE.** #2, #5 and #15 were fixed in
+`a3f8487` — the last three that were visible to a reader on the current save.
+Each was verified by reverting its component with the new tests in place: 4, 1
+and 1 tests failed respectively, so none is passing by construction.
 
 **Conditional:** #4, #6, #8 and #10 are real but need a specific input or width.
+They are the whole remaining set.
+
+**Note on #2.** It produces no visible change on the current save, because every
+theater count there is measured. That is not the same as inert — the four tests
+that fail when the component is reverted are what establish the fix works; the
+save simply does not exercise it today.
 
 One further candidate was investigated and **cleared** — see the end of #8.
 
