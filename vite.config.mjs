@@ -26,6 +26,12 @@ export default defineConfig({
   // Source entry point for React app
   build: {
     outDir: path.resolve(__dirname, 'public/v2/app'),
+    // This build is the sole writer of public/v2/app, so emptying it is safe
+    // and wanted — it is the directory the live page loads, and stale chunks
+    // there get served. It was NOT the sole writer until 2026-08-26: the
+    // primitives harness built into the same directory, and every run of this
+    // build deleted it. See the header of vite.primitives.config.mjs. Do not
+    // point another build's outDir here.
     emptyOutDir: true,
     lib: {
       entry: path.resolve(__dirname, 'src/v2/main.jsx'),

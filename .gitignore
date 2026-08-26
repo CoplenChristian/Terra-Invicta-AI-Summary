@@ -15,6 +15,11 @@ template.config.local
 node_modules/
 dist/
 public/v2/app/
+# build/harness/ is the React primitives test harness bundle. It lives outside
+# public/ so `npm run build`'s emptyOutDir on public/v2/app cannot delete it
+# mid-test, and so build_static_snapshot.js does not copy 718 KB of test-only
+# code into dist/. See vite.primitives.config.mjs.
+build/
 tmp/
 
 # Save files and large binaries

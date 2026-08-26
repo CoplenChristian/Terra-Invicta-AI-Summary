@@ -91,14 +91,14 @@ export function CoexistenceProof({ targetPanelId }) {
         borderRadius: '4px',
         backgroundColor: 'rgba(100, 255, 218, 0.08)',
         color: 'var(--text, #e6f1ff)',
-        fontSize: '11px',
+        fontSize: 'var(--fs-metric)', // was '11px'; --fs-metric IS 11px
         fontFamily: 'monospace'
       }}
     >
       <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'var(--accent, #64ffda)' }}>
         [React Coexistence Proof]
       </Typography>
-      <Typography variant="body2" sx={{ fontSize: '11px' }}>
+      <Typography variant="body2" sx={{ fontSize: 'var(--fs-metric)' }}>
         Mounted in #{targetPanelId} · Live Save Date: {saveDate || 'Reading...'}
       </Typography>
     </Box>

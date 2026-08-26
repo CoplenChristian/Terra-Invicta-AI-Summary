@@ -112,7 +112,7 @@
       "note": "Reviewing and verification, not implementation. Slow but more powerful. Runs on omp (Oh My Pi), NOT opencode, as of 2026-08-25 — the slug is the omp provider id `minimax-code`, and it must be an EXACT entry in `omp models --json` or the dispatch is refused."
     },
     "deepseek": {
-      "mode": "ask",
+      "mode": "auto",
       "model": "opencode-go/deepseek-v4-flash",
       "note": "METERED — real money. Backend implementation and review. No vision: never send it a screenshot or a task that needs one."
     },
@@ -122,7 +122,7 @@
       "note": "Very fast. Frontend work. ~16k input-token floor per call. trustFlag --dangerously-skip-permissions approved 2026-08-25 after a headless dispatch returned no work done — agy auto-denies any tool permission it cannot prompt for. It AUTO-APPROVES EVERY TOOL the lane runs, which is a larger grant than directory trust; agy has no smaller flag. Chosen over adding allow-rules to agy's own settings.json so the grant stays here and revoking it is deleting this line."
     },
     "composer": {
-      "mode": "ask",
+      "mode": "auto",
       "model": "composer-2.5",
       "trustFlag": "--yolo",
       "note": "Long multi-file implementation runs. Shares the Cursor allowance with grok. trustFlag --yolo approved 2026-08-25: it auto-approves every command this lane runs, which is what a long unattended build needs. Downgrade to \"--trust\" for directory trust alone, or delete the key to revoke."
@@ -133,7 +133,7 @@
       "note": "Analysis, research, single-shot code. Its agentic coding regressed against 4.5 — do not give it long autonomous runs. Shares the Cursor allowance with composer. No trustFlag: untested here and not approved. If it hits \"Workspace Trust Required\", ask before adding one — \"--trust\" is the smaller grant."
     },
     "codex": {
-      "mode": "ask",
+      "mode": "auto",
       "note": "UNSANDBOXED — danger-full-access, approval never. All-rounder, punches above its size. Highest-risk lane in this file."
     }
   }

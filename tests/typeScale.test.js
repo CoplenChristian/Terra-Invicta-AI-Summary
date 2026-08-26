@@ -24,7 +24,17 @@
  *
  * SVG font sizes inside a viewBox are user units, not page pixels, and are
  * deliberately exempt -- see the --fs-map-* note in :root and TYPE in
- * world-map.js.
+ * worldMapUtils.js.
+ *
+ * CHECK 3 STOPPED COVERING ANY COMPONENT ON 2026-08-26, AND DID NOT SAY SO.
+ * It walked `public/v2/js` and matched only `.js`. The React migration moved all
+ * sixteen components to `.jsx` under `src/v2/panels/`, which that walk never
+ * reaches, so the guard went on reporting green over an empty component set --
+ * live defect register #18. This is the SECOND time in this codebase that code
+ * moved out from under a guard that walked a directory (the first was the
+ * SERVICE_ROLE scan after a file split), so check 3 now also asserts what it
+ * actually inspected: both roots non-empty, and at least the sixteen panels. A
+ * guard that passes because it found nothing to check is the failure mode.
  *
  * The stylesheet became an ordered set of parts on 2026-08-23. All three checks
  * read the whole set through tests/fixtures/missionControlCss.js, which takes
@@ -44,7 +54,60 @@ const {
   assertStylesheetManifest
 } = require('./fixtures/missionControlCss');
 
-const COMPONENT_DIR = path.join(__dirname, '..', 'public', 'v2', 'js');
+const ROOT_DIR = path.join(__dirname, '..');
+
+/**
+ * Where component code lives. Both roots, because it lives in both: the vanilla
+ * shell never moved, and the sixteen migrated components are under src/v2.
+ */
+const COMPONENT_ROOTS = [
+  'public/v2/js',
+  'src/v2'
+];
+
+/** Panels covered by the floor assertion below. */
+const PANEL_DIR = 'src/v2/panels';
+const PANEL_FLOOR = 16;
+
+const COMPONENT_EXTENSIONS = ['.js', '.jsx', '.mjs'];
+
+/**
+ * The token source, exempt for the same reason :root is exempt from check 1.
+ *
+ * theme.js is the React mirror of the :root custom properties -- it DEFINES the
+ * scale rather than spending it, and `typography.fontSize: 12.5` is MUI's base
+ * size, the one literal the ladder has to start from. It is not on trust:
+ * tests/reactThemeParity.test.js compares all 47 token values against
+ * getComputedStyle(document.documentElement), so a drift here fails there.
+ *
+ * Asserted to exist below, so this exemption cannot outlive the file it names.
+ */
+const TOKEN_SOURCE = 'src/v2/theme.js';
+
+/**
+ * The three shapes a font-size literal takes in this codebase.
+ *
+ * What is deliberately NOT here is the SVG presentation attribute, in either
+ * spelling. The vanilla form `'font-size': 8` carries no unit, and pattern 1
+ * requires one. The JSX form `fontSize={8}` is an attribute, and patterns 2 and
+ * 3 require a `:`. Both are SVG user units inside a viewBox -- 8 units renders
+ * near 7px in a 640px card and near 10px in a 900px one -- so they are a
+ * different coordinate system, not a page size. world-map sets its type that
+ * way on purpose.
+ *
+ * `style={{ fontSize: 8 }}` on an SVG element is NOT exempt and should not be:
+ * React appends `px` to a number in a style object, so that renders 8 page
+ * pixels, which is the very confusion the exemption exists to keep separate.
+ */
+const FONT_SIZE_LITERAL_PATTERNS = [
+  // A CSS declaration written into a string or a style="" attribute.
+  { label: 'css literal', re: /font-size:\s*(?!var\()[0-9.]+(?:px|rem|em)/ },
+  // A React style object with an explicit unit: style={{ fontSize: '9px' }}.
+  { label: 'style-object literal', re: /\bfontSize\s*:\s*['"`]\s*[0-9.]+(?:px|rem|em)/ },
+  // A React style object with a bare number: style={{ fontSize: 9 }}. React
+  // renders that as 9px, so it is the same declaration wearing a different hat.
+  { label: 'style-object number', re: /\bfontSize\s*:\s*[0-9.]+/ }
+];
 
 /** Declarations that are deliberately not a size on the scale. */
 const EXEMPT_VALUES = new Set([
@@ -173,24 +236,74 @@ test('the scale is seven steps, each visibly larger than the one below it', () =
   assert.strictEqual(sizes[0].px, 9, 'the floor stays at 9px; nothing on this dashboard renders below it');
 });
 
-test('no component script writes a font-size literal into an inline style', () => {
-  const offenders = [];
+/** Every component source file under both roots, repo-relative, sorted. */
+function componentSources() {
+  const found = [];
   const walk = dir => {
+    if (!fs.existsSync(dir)) return;
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) { walk(full); continue; }
-      if (!entry.name.endsWith('.js')) continue;
-      const src = fs.readFileSync(full, 'utf8');
-      src.split(/\r?\n/).forEach((line, index) => {
-        // `font-size: 9px` inside a style="" attribute. SVG presentation
-        // attributes (`'font-size': 8`) are user units and are exempt.
-        if (/font-size:\s*(?!var\()[0-9.]+(px|rem|em)/.test(line)) {
-          offenders.push(`${path.relative(COMPONENT_DIR, full)}:${index + 1}`);
-        }
-      });
+      if (!COMPONENT_EXTENSIONS.includes(path.extname(entry.name))) continue;
+      found.push(path.relative(ROOT_DIR, full).split(path.sep).join('/'));
     }
   };
-  walk(COMPONENT_DIR);
+  for (const root of COMPONENT_ROOTS) walk(path.join(ROOT_DIR, root));
+  return found.sort();
+}
+
+/**
+ * The assertion that makes check 3 mean something.
+ *
+ * Register #18: any guard that walks a directory rather than a manifest
+ * silently narrows as code relocates, and reports green the whole way down.
+ * This one cannot any more -- it states the size of the set it inspected, per
+ * root, and pins the panel count. Moving the panels somewhere neither root
+ * covers now fails here instead of passing quietly.
+ */
+test('the component walk actually reaches both roots and all sixteen panels', () => {
+  const inspected = componentSources();
+
+  assert.ok(inspected.length > 0, 'the component walk inspected no files at all');
+
+  for (const root of COMPONENT_ROOTS) {
+    const fromRoot = inspected.filter(rel => rel.startsWith(`${root}/`));
+    assert.ok(
+      fromRoot.length > 0,
+      `${root} contributed no component files -- either it moved or the extension list missed it`
+    );
+  }
+
+  const panels = inspected.filter(rel => rel.startsWith(`${PANEL_DIR}/`) && rel.endsWith('.jsx'));
+  assert.ok(
+    panels.length >= PANEL_FLOOR,
+    `expected at least ${PANEL_FLOOR} panels under ${PANEL_DIR}, found ${panels.length}. `
+    + 'The migration put sixteen there; fewer means they moved and this guard stopped covering them.'
+  );
+
+  assert.ok(
+    fs.existsSync(path.join(ROOT_DIR, TOKEN_SOURCE)),
+    `${TOKEN_SOURCE} is exempt from the literal check but does not exist -- `
+    + 'the exemption has outlived its target and is now silently widening the hole'
+  );
+});
+
+test('no component script writes a font-size literal into an inline style', () => {
+  const offenders = [];
+  let scanned = 0;
+
+  for (const rel of componentSources()) {
+    if (rel === TOKEN_SOURCE) continue;
+    scanned += 1;
+    const src = fs.readFileSync(path.join(ROOT_DIR, rel), 'utf8');
+    src.split(/\r?\n/).forEach((line, index) => {
+      for (const { label, re } of FONT_SIZE_LITERAL_PATTERNS) {
+        if (re.test(line)) offenders.push(`${rel}:${index + 1} (${label}): ${line.trim()}`);
+      }
+    });
+  }
+
+  assert.ok(scanned > 0, 'no component file was scanned, so this check proved nothing');
 
   assert.deepStrictEqual(
     offenders,

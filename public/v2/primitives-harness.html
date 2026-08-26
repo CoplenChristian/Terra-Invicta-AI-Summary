@@ -42,6 +42,11 @@
 </head>
 <body>
   <div id="primitives-harness-root"></div>
-  <script type="module" src="/v2/app/primitives-harness.js"></script>
+  <!-- Built to build/harness/ by vite.primitives.config.mjs and served at
+       /v2/harness by tests/fixtures/ensurePrimitivesHarness.js. It is NOT under
+       public/, so `npm run build`'s emptyOutDir on public/v2/app can no longer
+       delete it mid-test. This page is test-only; under a bare `node
+       server/index.js` this src 404s until a test has provisioned it. -->
+  <script type="module" src="/v2/harness/primitives-harness.js"></script>
 </body>
 </html>
