@@ -27,6 +27,22 @@
 // through CouncilOrders' selector — while the others stayed green. The
 // attribute was restored immediately. The companion proof is in
 // tests/directiveBoardBench.test.js's header.
+//
+// RED PROOF (2026-08-26, register defect #17): the four fabricated fallbacks
+// fixed below were each broken deliberately with the new tests in place, and
+// the right test went red before the fix was restored:
+//   - `formatCost`'s absent branch back to `if (!cost) return 'Free'` ->
+//     "an absent cost takes the affordance while a measured zero keeps saying
+//     Free" fails (absent renders 'Free', never 'COST UNAVAILABLE').
+//   - confidence back to `{reasoning.confidence || 'HIGH'}` ->
+//     "an absent confidence reads unrated while a rated confidence stays
+//     unchanged" fails ('Confidence: HIGH' instead of 'Confidence: unrated').
+//   - the detail-panel facts back to `opportunityCost || 'None'` and
+//     `whyList.join(' · ') || 'Optimal expected value …'` ->
+//     "the detail panel states absence for cost, opportunity cost and rationale
+//     rather than fabricating" fails on both 'None' and the canned sentence.
+// Each was restored immediately; without the deliberate break the absent
+// half of every assertion could be green against a panel that still fabricates.
 
 'use strict';
 
@@ -247,5 +263,120 @@ test('clearing the risk-floor control hands back null, never Number(\'\') === 0'
     assert.strictEqual(calls[1].value, 90, 'a chosen floor must arrive as a number');
     assert.strictEqual(calls[2].value, 0,
       'a deliberate 0 must arrive as 0, which is not the same reading as null');
+  });
+});
+
+test('an absent cost takes the affordance while a measured zero keeps saying Free', async () => {
+  // Register defect #17: `if (!cost) return 'Free'` reported an UNMEASURED cost
+  // as a measured zero, and `0` is falsy, so `cost: 0` was indistinguishable
+  // from no cost at all. The card tag now carries an explicit presence signal.
+  const absent = { ...ASSIGNMENT, candidate: { ...ASSIGNMENT.candidate, cost: undefined } };
+  const free = { ...ASSIGNMENT, candidate: { ...ASSIGNMENT.candidate, cost: 0 } };
+  const zeroAmount = { ...ASSIGNMENT, candidate: { ...ASSIGNMENT.candidate, cost: { amount: 0, resource: 'Influence' } } };
+
+  await withDirectiveBoardHarnessPage(payload(planWith({ assignments: [ASSIGNMENT] })), async (page) => {
+    const absentRender = await renderDirectiveBoardOnPage(page, payload(planWith({ assignments: [absent] })));
+    const freeRender = await renderDirectiveBoardOnPage(page, payload(planWith({ assignments: [free] })));
+    const zeroAmountRender = await renderDirectiveBoardOnPage(page, payload(planWith({ assignments: [zeroAmount] })));
+
+    assert.ok(absentRender.text.includes('COST UNAVAILABLE'),
+      `an absent cost must state the affordance: ${absentRender.text}`);
+    assert.ok(!absentRender.text.includes('Free'),
+      'an absent cost must never be reported as a measured zero');
+    assert.ok(freeRender.text.includes('Free'),
+      'a measured zero cost must keep saying Free');
+    assert.ok(zeroAmountRender.text.includes('0 Influence'),
+      'a measured zero amount must keep its own reading');
+    assertNoPlaceholderText(absentRender.html, 'directive-board absent cost');
+  });
+});
+
+test('an absent confidence reads unrated while a rated confidence stays unchanged', async () => {
+  // Register defect #17: `reasoning.confidence || 'HIGH'` rendered an unrated
+  // recommendation as the highest rating the field can take.
+  const unrated = planWith({
+    decisionReasoning: { heading: 'Why this action', summary: 'The engine explains its choice.', counts: {}, sources: [] },
+  });
+  const conditional = planWith({
+    decisionReasoning: { heading: 'Why this action', summary: 'The engine explains its choice.', counts: {}, confidence: 'conditional', sources: [] },
+  });
+
+  await withDirectiveBoardHarnessPage(payload(planWith({})), async (page) => {
+    const unratedRender = await renderDirectiveBoardOnPage(page, payload(unrated));
+    const conditionalRender = await renderDirectiveBoardOnPage(page, payload(conditional));
+
+    assert.ok(unratedRender.text.includes('Confidence: unrated'),
+      `an absent confidence must not read as the highest rating: ${unratedRender.text}`);
+    assert.ok(!/Confidence: HIGH/.test(unratedRender.text),
+      'an unrated recommendation must never be shown as HIGH');
+    assert.ok(conditionalRender.text.includes('Confidence: conditional'),
+      'a rated confidence renders unchanged');
+  });
+});
+
+test('the detail panel states absence for cost, opportunity cost and rationale rather than fabricating', async () => {
+  // Register defect #17: the three facts used `|| 'Free'`-style defaults that
+  // FABRICATED a measured claim — 'None' asserted nothing was given up, and
+  // the canned rationale asserted a reason the engine never produced. Absent
+  // stays null through resolveValue on the string-only facts surface.
+  const bare = {
+    ...ASSIGNMENT,
+    candidate: { ...ASSIGNMENT.candidate, cost: undefined },
+    opportunityCost: undefined,
+    why: [],
+  };
+  const measured = {
+    ...ASSIGNMENT,
+    candidate: { ...ASSIGNMENT.candidate, cost: { amount: 0, resource: 'Influence' } },
+    opportunityCost: 'Forgoes Advise Government: Switzerland at 4.14.',
+    why: ['Highest expected value available to this operative this cycle.'],
+  };
+
+  await withDirectiveBoardHarnessPage(payload(planWith({ assignments: [bare] })), async (page) => {
+    const factValues = async (assignments) => page.evaluate(async (list) => {
+      const root = document.getElementById('directive-board-test-root');
+      const plan = {
+        assignments: list,
+        unassigned: [],
+        clocks: [],
+        horizon: [],
+        budgets: {},
+        riskFloor: { percent: 0, inForce: false, configured: true },
+        benched: [],
+      };
+      const opened = [];
+      const realOpen = window.MissionControlDetailPanel.open;
+      window.MissionControlDetailPanel.open = (options) => opened.push(options);
+      try {
+        window.MissionControlDirectiveBoard.render(root, { engineDirectives: { cyclePlan: plan } });
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        const card = root.querySelector('.directive-assignment-card');
+        if (!card) return null;
+        card.click();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      } finally {
+        window.MissionControlDetailPanel.open = realOpen;
+      }
+      const facts = opened[0] ? opened[0].facts : [];
+      return Object.fromEntries(facts.map((f) => [f.label, f.value]));
+    }, assignments);
+
+    const bareFacts = await factValues([bare]);
+    const measuredFacts = await factValues([measured]);
+
+    assert.ok(bareFacts, 'clicking the card must reach MissionControlDetailPanel.open');
+    assert.strictEqual(bareFacts['Resource cost'], 'Cost unavailable',
+      'an absent cost must take the affordance in the detail panel too');
+    assert.strictEqual(bareFacts['Opportunity cost'], 'Not computed',
+      'an uncomputed opportunity cost must not claim "None"');
+    assert.strictEqual(bareFacts['Tactical rationale'], 'No rationale recorded',
+      'an absent rationale must not be handed a fabricated expected-value sentence');
+    assert.strictEqual(measuredFacts['Resource cost'], '0 Influence',
+      'a measured zero cost still renders as zero');
+    assert.strictEqual(measuredFacts['Opportunity cost'], 'Forgoes Advise Government: Switzerland at 4.14.',
+      'a measured opportunity cost renders unchanged');
+    assert.strictEqual(measuredFacts['Tactical rationale'],
+      'Highest expected value available to this operative this cycle.',
+      'a recorded rationale renders unchanged');
   });
 });

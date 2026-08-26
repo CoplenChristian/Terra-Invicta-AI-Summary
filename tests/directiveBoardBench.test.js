@@ -69,6 +69,20 @@
  *     generation-order caveat (register defect #15).
  * Both were restored immediately. Without this the ported suite could have been
  * green by construction against a panel that renders nothing.
+ *
+ * RED PROOF (2026-08-26, register defect #17): the risk-floor count coercions
+ * were restored to `?? 0` / `?? held.length` with the new tests in place, and
+ * all three went red:
+ *   - "an absent risk-floor omitted count is not reported as zero when its
+ *     sibling is present" fails — the omission line prints the understating
+ *     "3 further entries are omitted" instead of naming the unrecorded half.
+ *   - "an absent risk-floor total is not replaced by the length of the page in
+ *     hand" fails — the heading prints `(2)` (the page length) instead of
+ *     "(2 shown, total unrecorded)", and the badge prints a confident held
+ *     count.
+ *   - "measured risk-floor counts still render their real numbers" stays green
+ *     on both halves, which is the point: the break only corrupts the absent
+ *     path. The coercions were restored immediately.
  */
 
 const { test, after } = require('node:test');
@@ -531,4 +545,92 @@ test('the bench explicitly states that the order is generation order and NOT a r
     `Uncapped bench must also state generation ordering and NOT a ranking: ${textUncapped}`
   );
   assert.ok(!textUncapped.includes('omitted from this view'), 'Uncapped bench carries no omission line');
+});
+
+// ---------------------------------------------------------------------------
+// REGISTER DEFECT #17, second half: the risk-floor count fields were coerced
+// with `?? 0` (omitted counts) and `?? held.length` (totals). An absent
+// omitted count was read as zero, which made the truncation notice UNDERSTATE
+// whenever one half was measured and the other was not; an absent total was
+// replaced with the length of the page in hand, which made a capped list report
+// itself complete. Absent now stays null and the section says so.
+// ---------------------------------------------------------------------------
+
+const HELD_ROWS = [
+  { title: 'Purge China', councilorName: 'Mahangeet Pakimor', reason: '89% below the 90% floor' },
+  { title: 'Purge India', councilorName: 'Hemaraj Pavanaja', reason: 'below floor' },
+];
+
+function riskFloorPlan(overrides = {}) {
+  return planWithBench([], {
+    riskFloor: { percent: 75, inForce: true, configured: true },
+    ...overrides,
+  });
+}
+
+test('an absent risk-floor omitted count is not reported as zero when its sibling is present', async () => {
+  // The reachable failure from the register: the VETOED omitted count is
+  // measured (3) but the UNVERIFIED one was never emitted. `?? 0` summed
+  // 3 + 0 and printed a confident "3 further entries are omitted" — an
+  // understatement of its own truncation.
+  const plan = riskFloorPlan({
+    riskFloorVetoed: HELD_ROWS,
+    riskFloorVetoedTotalCount: 5,
+    riskFloorVetoedOmittedCount: 3,
+    riskFloorUnverified: [],
+    riskFloorUnverifiedTotalCount: null,
+    riskFloorUnverifiedOmittedCount: null,
+  });
+  const text = visibleText(await renderToString(plan));
+
+  assert.ok(/HELD BACK BY YOUR RISK FLOOR \(5\)/.test(text),
+    `the measured held total must still render: ${text}`);
+  assert.ok(text.includes('3 held back omitted from this view; the remaining omitted count is unrecorded.'),
+    `the known half must be named and the unrecorded half stated, never read as zero: ${text}`);
+  assert.ok(!text.includes('3 further entries are omitted'),
+    'a partial omitted count must not understate the truncation notice');
+});
+
+test('an absent risk-floor total is not replaced by the length of the page in hand', async () => {
+  // `?? held.length` used to make an unread total read as the shown count, so
+  // the heading said "(2)" and the omission line was suppressed entirely — the
+  // register's "a capped list reporting itself complete" shape.
+  const plan = riskFloorPlan({
+    riskFloorVetoed: HELD_ROWS,
+    riskFloorVetoedTotalCount: null,
+    riskFloorVetoedOmittedCount: null,
+    riskFloorUnverified: [],
+    riskFloorUnverifiedTotalCount: null,
+    riskFloorUnverifiedOmittedCount: null,
+  });
+  const text = visibleText(await renderToString(plan));
+
+  assert.ok(/HELD BACK BY YOUR RISK FLOOR \(2 shown, total unrecorded\)/.test(text),
+    `an absent total must not be read as the page length: ${text}`);
+  assert.ok(text.includes('Showing 2 held back — total unrecorded; '
+    + 'The number of further entries omitted from this view is unrecorded.'),
+    `an unrecorded total must not make a capped list report itself complete: ${text}`);
+  assert.ok(!/· \d+ HELD/.test(text),
+    'the status badge must not print a held count nobody measured');
+});
+
+test('measured risk-floor counts still render their real numbers', async () => {
+  // The other half of every count assertion: a fully-measured payload must keep
+  // the exact heading and omission sentence, so the absent-path change above
+  // cannot have disturbed the measured path.
+  const plan = riskFloorPlan({
+    riskFloorVetoed: HELD_ROWS,
+    riskFloorVetoedTotalCount: 5,
+    riskFloorVetoedOmittedCount: 3,
+    riskFloorUnverified: [{ title: 'Investigate Alien Activity', councilorName: 'Idle Operative', reason: 'no odds computed' }],
+    riskFloorUnverifiedTotalCount: 4,
+    riskFloorUnverifiedOmittedCount: 3,
+  });
+  const text = visibleText(await renderToString(plan));
+
+  assert.ok(/HELD BACK BY YOUR RISK FLOOR \(5 \+ 4 UNVERIFIED\)/.test(text),
+    `measured totals must keep the heading exactly: ${text}`);
+  assert.ok(text.includes('Showing 2 of 5 held back and 1 of 4 unverified; '
+    + '6 further entries are omitted from this view.'),
+    `measured counts must keep the exact omission sentence: ${text}`);
 });

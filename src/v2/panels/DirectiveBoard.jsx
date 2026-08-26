@@ -42,10 +42,24 @@
  *    number. Each meter now routes its readout through <Value>, whose presence
  *    signal is explicit, and draws no fill at all when the ceiling was never
  *    measured.
+ *
+ * 3. FABRICATED FALLBACKS ARE STATED, NOT FILLED IN (register defect #17).
+ *    Four absent readings used to render the reassuring end of their range:
+ *    `'Free'` for an unmeasured cost, `'HIGH'` for an unrated confidence,
+ *    `'None'` for an uncomputed opportunity cost, and a canned rationale for an
+ *    assignment that recorded none. Each now routes through <Value> /
+ *    resolveValue, which carry an explicit presence signal: an absent cost
+ *    reads `COST UNAVAILABLE` / `Cost unavailable`, an unrated confidence reads
+ *    `unrated`, an uncomputed opportunity cost reads `Not computed`, and an
+ *    absent rationale reads `No rationale recorded`. A measured zero cost still
+ *    says `Free` / `0 <resource>`. The risk-floor count fields are read with
+ *    `num()` and LEFT null when the engine never emitted them: `?? 0` used to
+ *    understate the "N further entries are omitted" line, and `?? held.length`
+ *    made a capped list report itself complete.
  */
 
 import React from 'react';
-import { Value } from '../components/Value.jsx';
+import { Value, resolveValue } from '../components/Value.jsx';
 
 function num(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -64,7 +78,13 @@ const FAMILY_LABEL = {
 };
 
 function formatCost(cost) {
-  if (!cost) return 'Free';
+  // ABSENT STAYS NULL (register defect #17). `if (!cost) return 'Free'` reported
+  // an unmeasured cost as a measured zero -- the most action-encouraging
+  // reading available -- and `0` is falsy, so a measured zero cost was
+  // indistinguishable from no cost at all. Null here is the honest absent
+  // signal; callers route it through `<Value>` / `resolveValue`.
+  if (cost === null || cost === undefined) return null;
+  if (cost === 0) return 'Free';
   const amount = num(cost.amount);
   const resource = cost.resource || 'Resource';
   if (amount !== null) return `${amount} ${resource}`;
@@ -227,11 +247,24 @@ function renderRiskNote(riskFloor) {
 function renderRiskFloorHeld(cyclePlan) {
   const held = Array.isArray(cyclePlan.riskFloorVetoed) ? cyclePlan.riskFloorVetoed : [];
   const unverified = Array.isArray(cyclePlan.riskFloorUnverified) ? cyclePlan.riskFloorUnverified : [];
-  const heldTotal = num(cyclePlan.riskFloorVetoedTotalCount) ?? held.length;
-  const heldOmitted = num(cyclePlan.riskFloorVetoedOmittedCount) ?? 0;
-  const unverifiedTotal = num(cyclePlan.riskFloorUnverifiedTotalCount) ?? unverified.length;
-  const unverifiedOmitted = num(cyclePlan.riskFloorUnverifiedOmittedCount) ?? 0;
-  if (heldTotal === 0 && unverifiedTotal === 0) return null;
+  // ABSENT STAYS NULL (register defect #17). `?? 0` on the omitted counts read
+  // an engine field that was never emitted as a confident zero, which made the
+  // "N further entries are omitted" line UNDERSTATE whenever one half's count
+  // was present and the other's was not; `?? held.length` / `?? unverified.length`
+  // replaced an unread total with the length of the page in hand, which made a
+  // capped list report itself complete. None of these is a measurement of zero.
+  const heldTotal = num(cyclePlan.riskFloorVetoedTotalCount);
+  const heldOmitted = num(cyclePlan.riskFloorVetoedOmittedCount);
+  const unverifiedTotal = num(cyclePlan.riskFloorUnverifiedTotalCount);
+  const unverifiedOmitted = num(cyclePlan.riskFloorUnverifiedOmittedCount);
+
+  // A measured zero and a fully-absent payload both have nothing to say. The
+  // guard tests for ANY signal of held-back entries rather than coercing the
+  // absent totals to zero -- the Number(null) === 0 trap that used to decide.
+  const anyHeldBack = held.length > 0 || unverified.length > 0
+    || (heldTotal ?? 0) > 0 || (unverifiedTotal ?? 0) > 0
+    || (heldOmitted ?? 0) > 0 || (unverifiedOmitted ?? 0) > 0;
+  if (!anyHeldBack) return null;
 
   const row = (entry, tone, key) => (
     <div className={`directive-risk-held-item directive-risk-held-item--${tone}`} key={key}>
@@ -243,22 +276,62 @@ function renderRiskFloorHeld(cyclePlan) {
     </div>
   );
 
-  const totalOmitted = heldOmitted + unverifiedOmitted;
+  // An omitted count the engine never emitted is not zero. With a measured
+  // total the number is still derivable arithmetic (total - shown); with
+  // neither, it is genuinely unrecorded and must not print as a confident 0.
+  const resolveOmitted = (shown, total, omitted) => (
+    omitted !== null ? omitted : (total !== null ? Math.max(0, total - shown) : null)
+  );
+  const heldOmittedResolved = resolveOmitted(held.length, heldTotal, heldOmitted);
+  const unverifiedOmittedResolved = resolveOmitted(unverified.length, unverifiedTotal, unverifiedOmitted);
+  const totalOmitted = heldOmittedResolved !== null && unverifiedOmittedResolved !== null
+    ? heldOmittedResolved + unverifiedOmittedResolved
+    : null;
+
+  const headingTotal = `${heldTotal === null ? `${held.length} shown, total unrecorded` : heldTotal}`
+    + (unverifiedTotal === null
+      ? (unverified.length > 0 ? ` + ${unverified.length} unverified shown, total unrecorded` : '')
+      : (unverifiedTotal > 0 ? ` + ${unverifiedTotal} UNVERIFIED` : ''));
+
+  const heldShown = heldTotal === null
+    ? `Showing ${held.length} held back — total unrecorded`
+    : `Showing ${held.length} of ${heldTotal} held back`;
+  const showUnverifiedClause = unverifiedTotal === null ? unverified.length > 0 : unverifiedTotal > 0;
+  const unverifiedShown = !showUnverifiedClause
+    ? null
+    : (unverifiedTotal === null
+      ? `and ${unverified.length} unverified — total unrecorded`
+      : `and ${unverified.length} of ${unverifiedTotal} unverified`);
+  const shownClause = `${heldShown}${unverifiedShown ? ` ${unverifiedShown}` : ''}`;
+
+  let omittedClause = null;
+  if (totalOmitted !== null && totalOmitted > 0) {
+    omittedClause = `${totalOmitted} further entr${totalOmitted === 1 ? 'y is' : 'ies are'} omitted from this view.`;
+  } else if (totalOmitted === null) {
+    // At least one half's omitted count is unrecorded. Naming only the half
+    // that IS known would understate the truncation, so the known parts are
+    // named and the remainder is said to be unrecorded rather than printing a
+    // partial total as though it were the whole.
+    const knownOmitted = [];
+    if (heldOmittedResolved !== null && heldOmittedResolved > 0) knownOmitted.push(`${heldOmittedResolved} held back`);
+    if (unverifiedOmittedResolved !== null && unverifiedOmittedResolved > 0) knownOmitted.push(`${unverifiedOmittedResolved} unverified`);
+    omittedClause = knownOmitted.length
+      ? `${knownOmitted.join(' and ')} omitted from this view; the remaining omitted count is unrecorded.`
+      : 'The number of further entries omitted from this view is unrecorded.';
+  }
 
   return (
     <div className="directive-risk-held-section">
       <div className="directive-subheading">
-        {`HELD BACK BY YOUR RISK FLOOR (${heldTotal}${unverifiedTotal ? ` + ${unverifiedTotal} UNVERIFIED` : ''})`}
+        {`HELD BACK BY YOUR RISK FLOOR (${headingTotal})`}
       </div>
       <div className="directive-risk-held-list">
         {held.map((entry, index) => row(entry, 'veto', `veto-${index}`))}
         {unverified.map((entry, index) => row(entry, 'unknown', `unknown-${index}`))}
       </div>
-      {totalOmitted > 0 ? (
+      {omittedClause ? (
         <div className="directive-risk-held-omitted">
-          {`Showing ${held.length} of ${heldTotal} held back${unverifiedTotal
-            ? ` and ${unverified.length} of ${unverifiedTotal} unverified` : ''}; `
-            + `${totalOmitted} further entr${totalOmitted === 1 ? 'y is' : 'ies are'} omitted from this view.`}
+          {`${shownClause}; ${omittedClause}`}
         </div>
       ) : null}
     </div>
@@ -432,7 +505,16 @@ function renderAssignmentCard(assignment, index, onOpen) {
         </div>
         <div className="directive-tags">
           <span className={`directive-family-tag directive-family-tag--${fam}`}>{famLabel}</span>
-          {cost ? <span className="directive-cost-tag">{formatCost(cost)}</span> : null}
+          {/* Absent stays null: an unmeasured cost reads COST UNAVAILABLE, never
+              'Free' and never nothing, and a measured zero keeps saying Free. */}
+          <span className="directive-cost-tag">
+            <Value
+              present={cost !== null && cost !== undefined}
+              value={formatCost(cost)}
+              format={(value) => String(value)}
+              absentLabel="COST UNAVAILABLE"
+            />
+          </span>
         </div>
       </div>
 
@@ -803,7 +885,19 @@ function renderDecisionReasoning(reasoning, cyclePlan) {
     generated === null ? null : <span>{`${generated} total evaluated`}</span>,
     allocated === null ? null : <span>{`${allocated} allocated`}</span>,
     benchedTotal === null ? null : <span>{`${benchedTotal} benched`}</span>,
-    <span>{'Confidence: '}<strong>{reasoning.confidence || 'HIGH'}</strong></span>
+    <span>
+      {'Confidence: '}
+      <strong>
+        {/* Absent stays null: an unrated recommendation must not read as the
+            highest rating the field can take (register defect #17). */}
+        <Value
+          present={typeof reasoning.confidence === 'string' && reasoning.confidence.trim() !== ''}
+          value={reasoning.confidence}
+          format={(value) => String(value)}
+          absentLabel="unrated"
+        />
+      </strong>
+    </span>
   ].filter(Boolean);
 
   return (
@@ -876,6 +970,7 @@ function openAssignmentDetail(assignment, index, riskFloorInForce, riskFloorPerc
   if (typeof window === 'undefined' || !window.MissionControlDetailPanel) return;
   const councilor = assignment.councilor || {};
   const candidate = assignment.candidate || {};
+  const cost = candidate.cost;
   const odds = assignment.odds;
   const ev = num(assignment.expectedValue);
   const hateExp = num(assignment.expectedHate);
@@ -902,9 +997,30 @@ function openAssignmentDetail(assignment, index, riskFloorInForce, riskFloorPerc
       },
       { label: 'Expected Value', value: ev !== null ? `${ev.toFixed(2)} pts` : '—' },
       { label: 'Expected Hate', value: hateExp !== null ? (hateExp === 0 ? '0 hate (Safe)' : `+${hateExp.toFixed(2)} hate`) : 'Not computable without mission odds' },
-      { label: 'Resource cost', value: formatCost(candidate.cost) },
-      { label: 'Opportunity cost', value: assignment.opportunityCost || 'None' },
-      { label: 'Tactical rationale', value: whyList.join(' · ') || 'Optimal expected value under cycle budget constraints.' }
+      { label: 'Resource cost', value: resolveValue({
+        // Absent stays null: an unmeasured cost reads as unavailable, never as
+        // 'Free' (register defect #17). `formatCost` returns null for absent.
+        present: cost !== null && cost !== undefined,
+        value: formatCost(cost),
+        format: (v) => String(v),
+        absentLabel: 'Cost unavailable'
+      }).text },
+      { label: 'Opportunity cost', value: resolveValue({
+        // Absent stays null: an uncomputed opportunity cost is not the claim
+        // 'None', which asserts nothing was given up (register defect #17).
+        present: typeof assignment.opportunityCost === 'string' && assignment.opportunityCost.trim() !== '',
+        value: assignment.opportunityCost,
+        format: (v) => String(v),
+        absentLabel: 'Not computed'
+      }).text },
+      { label: 'Tactical rationale', value: resolveValue({
+        // Absent stays null: an assignment that recorded no rationale must not
+        // be handed a canned expected-value sentence (register defect #17).
+        present: whyList.length > 0,
+        value: whyList.join(' · '),
+        format: (v) => String(v),
+        absentLabel: 'No rationale recorded'
+      }).text }
     ],
     actions: [
       {
@@ -934,7 +1050,10 @@ export function DirectiveBoard({ payload }) {
   const riskFloor = cyclePlan.riskFloor || null;
   const riskFloorPercent = num(riskFloor?.percent);
   const riskFloorInForce = riskFloor?.inForce === true;
-  const riskHeldTotal = num(cyclePlan.riskFloorVetoedTotalCount) ?? 0;
+  // Absent stays null (register defect #17): a held count the engine never
+  // emitted is not a measured zero, and the truthiness gate below already
+  // suppresses the "· N HELD" segment for an unmeasured total.
+  const riskHeldTotal = num(cyclePlan.riskFloorVetoedTotalCount);
   const onRiskFloorChange = payload?.onRiskFloorChange;
 
   const openDetail = (index) => {
