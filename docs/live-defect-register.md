@@ -40,8 +40,8 @@ save simply does not exercise it today.
 
 One further candidate was investigated and **cleared** — see the end of #8.
 
-**The pattern across the fixed set is worth keeping.** Five of the nine (#3, #7,
-#11, #12, #13/#14) were corrected **as part of a migration or a characterisation
+**The pattern across the fixed set is worth keeping.** Seven of the twelve (#3, #7,
+#11, #12, #13/#14, #2, #5) were corrected **as part of a migration or a characterisation
 pass**, not as standalone defect work — which is the argument for fixing at the
 port rather than before it. And three of them (#13, #14, #15) were cases where
 `shared/markdownExports.mjs` was already **right** and only the browser had lost
@@ -60,7 +60,7 @@ migration, so nothing else was going to touch it. **That fix is committed but
 has not been published**, so the hosted site is still serving the truncated
 version until someone runs the publisher.
 
-**#16 is now the one that matters most**, for the same structural reason turned
+**#16 was the one that mattered most**, for the same structural reason turned
 inward: it was the only defect in the **verification tooling**, so it invalidated
 evidence rather than a panel. It is fixed, which is what unblocks computed-style
 diffing for the remaining component migrations.
