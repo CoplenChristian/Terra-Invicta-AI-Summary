@@ -1097,6 +1097,77 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
   return renderWithByteBudget(blocks, ladder, clampOrder, maxBytes);
 }
 
+/**
+ * The war room's headline note on template-name localisation. The catalogue
+ * covers drives, weapons, hab modules, hulls, projects and effects: every
+ * proper noun this document renders that did not come from a faction or
+ * nation name. Two failure modes have to be visible:
+ *
+ *   1. **Coverage is absent** from the snapshot -- the Cloudflare Worker and
+ *      the synthetic test fixture never carry it. Saying "0 localised, 462
+ *      fallback" here would be a lie; the measurement was not made.
+ *   2. **The localisation directory could not be read** -- different install
+ *      path, Steam library on another drive, modded install. `available` is
+ *      false, every template name the document prints silently reverts to
+ *      the template's internal friendlyName, and every AI consumer reports
+ *      "Neutron Flux Lantern" as if it were the drive's name. A reader must
+ *      not be able to mistake this for the healthy case.
+ *
+ * When coverage IS available and healthy, one line is enough -- the per-file
+ * block already lives at `/api/intel/localization-coverage` and the per-family
+ * detail does not belong in a 30 KB war-room brief.
+ *
+ * @returns {string[]} markdown lines WITHOUT a trailing blank; caller pads.
+ */
+function localizationCoverageLines(filteredSnapshot) {
+  const coverage = filteredSnapshot.localizationCoverage;
+  if (!coverage || typeof coverage !== 'object') {
+    // ABSENT. This is the hosted-Worker / synthetic-fixture case. "Was not
+    // read" is the honest answer; it must not collapse into "fine" or "zero".
+    return [
+      '**Template names:** UNAVAILABLE -- localisation coverage was not read for this snapshot. '
+        + 'Every template-sourced name in this document (drives, weapons, hab modules, hulls, '
+        + 'projects) is the internal friendlyName from the game template, NOT the name the game '
+        + 'shows on screen. Do not treat them as player-facing labels.'
+    ];
+  }
+
+  if (coverage.available !== true) {
+    // DIRECTORY UNREADABLE. The measurement ran but the install had no
+    // localisable files to read. Every name this document prints for drives,
+    // weapons, hab modules, hulls and projects reverts to the template's
+    // internal friendlyName -- "Neutron Flux Lantern" not "Poseidon Lantern",
+    // "Advanced Orion Drive" not "H-Orion Drive". A reader cannot tell this
+    // apart from the healthy case without this line.
+    const dir = coverage.directory ? ` (resolved at \`${coverage.directory}\`)` : '';
+    return [
+      `**Template names:** UNREADABLE -- the game's localisation directory could not be read${dir}. `
+        + 'Every template-sourced name in this document (drives, weapons, hab modules, hulls, '
+        + 'projects) is the internal friendlyName from the game template, NOT the name the game '
+        + 'shows on screen. Treat them as internal identifiers.'
+    ];
+  }
+
+  // HEALTHY. One line. Per-family detail rides on the snapshot as localizationCoverage.
+  const totals = coverage.totals || {};
+  const scanned = Number(totals.scanned) || 0;
+  const localized = Number(totals.localized) || 0;
+  const fallback = Number(totals.fallback) || 0;
+  const divergent = Number(totals.divergent) || 0;
+  const ambiguous = Number(totals.ambiguous) || 0;
+  const unidentified = Number(totals.unidentified) || 0;
+  const unreadable = Array.isArray(coverage.unreadableFiles) ? coverage.unreadableFiles.length : 0;
+  const lang = coverage.language ? ` (${coverage.language})` : '';
+  return [
+    `**Template names (localisation${lang}):** ${localized}/${scanned} entries game-localised; `
+      + `${divergent} rendered under a different name than the template friendlyName; `
+      + `${fallback} carried no entry and reverted to the internal friendlyName; `
+      + `${ambiguous} ambiguous (shared label kept as template name); `
+      + `${unidentified} unidentifiable; `
+      + `${unreadable} template file(s) unreadable.`
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // 2. /latest-war-room.md  (20-30 KB)
 // ---------------------------------------------------------------------------
@@ -1128,7 +1199,6 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   ]);
   ourOrbits.delete('sol');
   ourOrbits.delete('deep space');
-
   const blocks = [];
   blocks.push(fixedBlock('title', [
     `# TI Strategic War Room Briefing`,
@@ -1141,6 +1211,11 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     // The `|| 'Normal'` that used to close this line invented a difficulty for
     // a save that never stated one; an unread difficulty now says so.
     `**Difficulty:** ${meta.difficultyLabel || meta.difficulty || 'UNAVAILABLE'}`,
+    // Localisation coverage for template-sourced proper nouns (drives,
+    // weapons, hab modules, hulls, projects). The Cloudflare Worker does not
+    // compute this; the absent branch is loud on purpose -- the reader must
+    // not mistake "was not read" for "fine".
+    ...localizationCoverageLines(filteredSnapshot),
     ``
   ]));
 

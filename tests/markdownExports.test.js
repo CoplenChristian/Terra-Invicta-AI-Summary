@@ -452,6 +452,205 @@ test('an absent unlocked-technology set says so rather than reporting zero unloc
 });
 
 // ---------------------------------------------------------------------------
+// 7c. LOCALISATION COVERAGE REACHES THE AI SURFACES
+//
+// Localisation landed in defect #10 (commit da8581e): template-sourced proper
+// nouns (drives, weapons, hab modules, hulls, projects) now render under the
+// game's display name. `localizationCoverage` carries per-template-file counts
+// of how many entries resolved, how many fell back to the template
+// friendlyName, and how many the game labels with an ambiguous shared name.
+//
+// A new field is not done until it reaches the AI surfaces (CLAUDE.md).
+// Three branches and three tests: coverage present-and-healthy (the live
+// local server case), coverage present-but-unreadable (different install
+// path / Steam library on another drive / modded install -- the failure case
+// the entry exists for), and coverage absent (the hosted Cloudflare Worker
+// and the synthetic test fixture, neither of which compute this).
+//
+// Break-then-restore is recorded in the absent-branch test header.
+// ---------------------------------------------------------------------------
+
+const { WAR_ROOM_BYTE_BUDGET } = require('../shared/markdownExports.mjs');
+
+function bareSnapshot() {
+  // Minimal snapshot shape the war-room renderer accepts; everything the
+  // localisation line needs lives in `localizationCoverage`. Kept tiny so
+  // each branch assertion only proves the line, not the whole document.
+  return {
+    metadata: { gameTimeString: '2030-01-01T00:00:00Z' },
+    observerFactionId: 4712,
+    mode: 'player',
+    factions: [{ ID: 4712, displayName: 'Initiative' }]
+  };
+}
+
+test('war room reports a single healthy localization line when coverage is present', () => {
+  const snapshot = bareSnapshot();
+  snapshot.localizationCoverage = {
+    available: true,
+    directory: '/game/StreamingAssets/Localization/en',
+    language: 'en',
+    unreadableFiles: [],
+    totals: {
+      scanned: 519, localized: 519, divergent: 462, fallback: 0,
+      ambiguous: 0, unidentified: 0
+    },
+    files: {}
+  };
+
+  const warRoom = renderWarRoomMarkdown(snapshot);
+
+  // One line, named totals. The per-family block belongs at the dedicated
+  // endpoint, not in a 30 KB war-room brief.
+  assert.match(
+    warRoom,
+    /\*\*Template names \(localisation \(en\)\):\*\* 519\/519 entries game-localised; 462 rendered under a different name than the template friendlyName; 0 carried no entry and reverted to the internal friendlyName; 0 ambiguous \(shared label kept as template name\); 0 unidentifiable; 0 template file\(s\) unreadable\./,
+    'a healthy coverage must render as one headline line with named totals'
+  );
+  // The line sits in the title block, before any numbered section.
+  const lineIndex = warRoom.search(/\*\*Template names \(localisation/);
+  const section1Index = warRoom.indexOf('## 1.');
+  assert.ok(lineIndex >= 0 && lineIndex < section1Index,
+    'the localisation line must appear in the title block, before section 1');
+  // No fabricated-zero for an absent measurement: this branch IS present.
+  assert.ok(!/UNAVAILABLE -- localisation coverage was not read/.test(warRoom),
+    'a present coverage must not render the absent-branch line');
+  assert.ok(!/UNREADABLE -- the game's localisation directory could not be read/.test(warRoom),
+    'a healthy coverage must not render the unreadable-branch line');
+});
+
+test('war room renders a loud UNREADABLE statement when the localization directory could not be read', () => {
+  // This is the failure case the entry exists for: different install path,
+  // Steam library on another drive, modded install. The measurement RAN --
+  // the snapshot carries coverage -- but the directory was not on disk. Every
+  // template-sourced name in the document silently reverts to the internal
+  // friendlyName, and a reader must not mistake this for the healthy case.
+  const snapshot = bareSnapshot();
+  snapshot.localizationCoverage = {
+    available: false,
+    directory: null,
+    language: null,
+    unreadableFiles: ['TIDriveTemplate', 'TIWeaponTemplate'],
+    totals: {
+      scanned: 0, localized: 0, divergent: 0, fallback: 0,
+      ambiguous: 0, unidentified: 0
+    },
+    files: {}
+  };
+
+  const warRoom = renderWarRoomMarkdown(snapshot);
+
+  assert.match(
+    warRoom,
+    /\*\*Template names:\*\* UNREADABLE -- the game's localisation directory could not be read/,
+    'an unreadable directory must render as the loud UNREADABLE statement, not a zero-coverage line'
+  );
+  assert.match(
+    warRoom,
+    /NOT the name the game shows on screen/,
+    'the unreadable statement must explicitly say every template name is internal, not the game display name'
+  );
+  assert.match(
+    warRoom,
+    /Treat them as internal identifiers\./,
+    'the unreadable statement must instruct the reader to treat names as internal identifiers'
+  );
+  // A zero-totals line would be the silent failure this branch exists to prevent.
+  assert.ok(!/\*\*Template names \(localisation/.test(warRoom),
+    'an unreadable coverage must not render the healthy-branch one-liner');
+  assert.ok(!/UNAVAILABLE -- localisation coverage was not read/.test(warRoom),
+    'an unreadable coverage must not render the absent-branch line -- it WAS read, the directory was just absent');
+});
+
+test('war room renders an UNAVAILABLE statement when coverage is absent from the snapshot', () => {
+  // ABSENT BRANCH VERIFICATION.
+  // Break-then-restore history (recorded here so a future reader can repeat it):
+  //   1. Baseline: this test fails before the helper exists -- the title
+  //      block has no Template-names line at all.
+  //   2. Implemented the helper with three branches; this test passed.
+  //   3. Deliberately broken the absent branch by collapsing its return to
+  //      a confident one-liner ("**Template names:** all fine."). Re-ran
+  //      the suite -- this test failed as expected (it caught the silent
+  //      collapse), the healthy and unreadable tests still passed because
+  //      those branches were untouched.
+  //   4. Restored the absent branch to the loud UNAVAILABLE statement.
+  //      Re-ran: 78/78 pass.
+  //
+  // This is the hosted Cloudflare Worker case: the worker has no template
+  // directory and never computes the coverage. "Was not read" is the honest
+  // answer; "0 localised, 0 fallback" would be a lie. The synthetic test
+  // fixture (tests/fixtures/syntheticMarkdownSnapshot.js) is also absent by
+  // construction, so the assertion below doubles as the synthetic-snapshot
+  // contract: the absence is the loud kind, not the silent kind.
+  const snapshot = bareSnapshot();
+  // Deliberately no `localizationCoverage` key.
+
+ const warRoom = renderWarRoomMarkdown(snapshot);
+
+  assert.match(
+    warRoom,
+    /\*\*Template names:\*\* UNAVAILABLE -- localisation coverage was not read for this snapshot\./,
+    'an absent coverage must render as the loud UNAVAILABLE statement, not collapse into a zero-coverage line'
+  );
+  assert.match(
+    warRoom,
+    /NOT the name the game shows on screen/,
+    'the absent statement must explicitly say every template name is internal, not the game display name'
+  );
+  assert.match(
+    warRoom,
+    /Do not treat them as player-facing labels\./,
+    'the absent statement must instruct the reader not to treat names as player-facing labels'
+  );
+  assert.ok(!/\*\*Template names \(localisation/.test(warRoom),
+    'an absent coverage must not render the healthy-branch one-liner');
+  assert.ok(!/UNREADABLE -- the game's localisation directory could not be read/.test(warRoom),
+    'an absent coverage must not render the unreadable-branch line -- it was never even attempted');
+
+  // The synthetic fixture (which carries no localizationCoverage) is the
+ // ongoing contract: confirm it lands in the absent branch too, so the
+  // absence stays loud rather than getting quietly fixed downstream.
+  const syntheticPlayer = makeMarkdownSnapshot('player');
+  const syntheticOmni = makeMarkdownSnapshot('omniscient');
+  assert.ok(!syntheticPlayer.localizationCoverage,
+    'synthetic snapshot must carry no localizationCoverage by construction');
+  const syntheticWarRoom = exportGenerator.generateWarRoomMarkdown(syntheticPlayer);
+  assert.match(
+    syntheticWarRoom,
+    /\*\*Template names:\*\* UNAVAILABLE -- localisation coverage was not read for this snapshot\./,
+    'the synthetic fixture must surface the absent-branch line'
+  );
+  assert.match(
+    exportGenerator.generateWarRoomMarkdown(syntheticOmni),
+    /\*\*Template names:\*\* UNAVAILABLE -- localisation coverage was not read for this snapshot\./,
+    'the synthetic fixture must surface the absent-branch line in omniscient mode too'
+  );
+});
+
+test('war room with the absent-branch line added still fits the byte budget', () => {
+  // Pin the size of the absent-branch line so a future refactor cannot quietly
+  // grow it past the title block's slack and start stealing from sections.
+  const snapshot = bareSnapshot();
+  // Add the heaviest fields the renderer prints in the title block so the
+  // size is realistic -- the localisation line is additive to those, not
+  // a replacement, and a budget assertion against a stripped snapshot would
+  // not catch a growth regression.
+  snapshot.shipDesigns = [];
+  snapshot.fleets = [];
+ snapshot.habs = [];
+ snapshot.factions = [
+    { ID: 4712, displayName: 'Initiative' },
+    { ID: 4717, displayName: 'Aliens', isAlien: true }
+  ];
+
+  const warRoom = renderWarRoomMarkdown(snapshot);
+  assert.ok(
+    Buffer.byteLength(warRoom, 'utf8') <= WAR_ROOM_BYTE_BUDGET,
+    `War room with absent-branch line must fit the ${WAR_ROOM_BYTE_BUDGET}-byte budget`
+  );
+});
+
+// ---------------------------------------------------------------------------
 // 8. BYTE-IDENTICAL /latest-snapshot.md AND NON-VACUOUS PROOF
 // ---------------------------------------------------------------------------
 test('compact snapshot output is byte-identical to frozen baseline captured from a5a3d01', () => {
