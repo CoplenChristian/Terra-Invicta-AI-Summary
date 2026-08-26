@@ -39,9 +39,27 @@
  * Everything else — the substring alias pairing hazard, the missing `Togo`, the
  * `name.length > 19` short-label swap, the status truncation at the first `(` —
  * is carried across unchanged and is documented in worldMapUtils.js.
+ *
+ * ---------------------------------------------------------------------------
+ * DEFECT #19, FIXED 2026-08-26: THE FIGURES ARE <Value> NOW
+ * ---------------------------------------------------------------------------
+ * The port shipped with the presence contract restated locally, because
+ * `<Value>` emitted a `<span>` and a `<span>` inside `<svg>` does not render.
+ * `<Value>` now takes `as`, so the two per-theater counts are emitted as
+ * `<Value as="tspan">` inside the same `<text>` and the panel's private
+ * `countLabel` / `valueState` are gone. The `data-hostile-state` /
+ * `data-own-state` / `data-summary-state` attributes are UNCHANGED and still
+ * asserted; they are now fed by the primitive rather than by a local copy of
+ * its rule. No visible text moved — the tspans' text content concatenates to
+ * exactly the string `countsText` used to hold.
+ *
+ * The summary line stays a single `<text>`: it is a composed sentence, not a
+ * value cell. Its two figures are resolved by `<Value>`'s own `resolveValue`,
+ * so the dash it prints is the primitive's dash.
  */
 
 import React from 'react';
+import { Value } from '../components/Value.jsx';
 import {
   COLORS,
   GRATICULE_PATHS,
@@ -52,7 +70,6 @@ import {
   paletteFor,
   resolveRecords,
   summariseCounts,
-  valueState,
 } from './worldMapUtils.js';
 
 const DEFAULT_GEOJSON_URL = '/v2/data/world.geojson';
@@ -188,10 +205,21 @@ function TheaterRegion({ view, countries, selected, hovered, focused, onSelect, 
         letterSpacing={0.35}
         pointerEvents="none"
         textAnchor="middle"
-        data-hostile-state={valueState(view.hostileCount)}
-        data-own-state={valueState(view.ownCount)}
+        data-hostile-state={view.hostile.state}
+        data-own-state={view.own.state}
       >
-        {view.countsText}
+        {/* `as="tspan"` is load-bearing, not cosmetic. <Value>'s default <span>
+            is created in the SVG namespace here and renders nothing at all,
+            while still contributing its text to innerHTML — so a regression
+            would look correct to every text-scraping assertion and be invisible
+            on screen. tests/reactPrimitivesValue.test.js measures the emitted
+            node's geometry for exactly that reason. The two per-axis states
+            stay on this <text> because that is the aggregate a consumer reads;
+            each tspan also carries its own data-value-state. */}
+        {'H '}
+        <Value as="tspan" present={view.hostile.present} value={view.hostileCount} />
+        {' / OWN '}
+        <Value as="tspan" present={view.own.present} value={view.ownCount} />
       </text>
       {countries.map((entry, index) => (
         <CountryPath

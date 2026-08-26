@@ -6,24 +6,26 @@
  * tested without a DOM.
  *
  * ---------------------------------------------------------------------------
- * WHY THERE IS NO <Value> ON THIS SURFACE
+ * THE PRESENCE CONTRACT IS <Value>'s, NOT THIS FILE'S (defect #19, fixed)
  * ---------------------------------------------------------------------------
- * `<Value>` emits an HTML `<span>`. Inside an `<svg>` React creates children in
- * the SVG namespace, so that span becomes an SVG `span` element — a node with no
- * rendering behaviour. Every number this panel prints lives inside an SVG
- * `<text>`, so the primitive cannot be placed here without a `<foreignObject>`
- * wrapper that would break `text-anchor`, the inline `font-size` user units and
- * the label geometry.
+ * This file used to carry `countLabel` and `valueState` — `<Value>`'s rule
+ * restated locally, because the primitive emitted a `<span>` and a `<span>`
+ * inside an `<svg>` is created in the SVG namespace and does not render. Both
+ * are gone. `<Value>` now takes `as`, so the panel emits
+ * `<Value as="tspan">` inside its `<text>` nodes, and exports `resolveValue`
+ * for the two places on this surface where no element can go at all: the
+ * `aria-label` / `<title>` string and the composed summary sentence.
  *
- * `countLabel` below is therefore `<Value>`'s contract restated for SVG, and
- * deliberately nothing more: presence is an explicit argument, absent renders
- * `'—'`, and nothing is ever coerced through `Number()`. The panel also stamps
- * `data-value-state` on the emitting `<text>` node, so the presence signal is
- * structural rather than a matter of reading the glyph — the same signal
- * `<Value>` carries. Until `<Value>` gains an `as`/render-prop escape hatch this
- * is a second implementation of the repo's most defect-prone rule, and that is
- * a known cost, not an oversight.
+ * So there is one implementation of "absent stays null" on this surface and it
+ * is the shared one. What remains local is `readCount` — the *reading* half,
+ * which decides whether a briefing record measured a count at all. That is a
+ * payload-shape question (`hostileCount` vs `hostile` vs `hostiles`, and
+ * `Number(undefined)` staying `NaN`), not a rendering one, and `<Value>` takes
+ * presence as an explicit argument precisely so that decision stays with the
+ * caller who can actually make it.
  */
+
+import { ABSENT_LABEL, resolveValue } from '../components/Value.jsx';
 
 /**
  * The map's own type ladder, in SVG user units -- NOT the page's --fs-* scale.
@@ -173,14 +175,21 @@ export function readCount(record, keys) {
   return value !== undefined && Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : null;
 }
 
-/** `<Value>`'s absent affordance, for a surface `<Value>` cannot reach. */
-export function countLabel(value) {
-  return value === null || value === undefined ? '—' : String(value);
-}
-
-/** 'measured' | 'absent' — the presence signal `<Value>` stamps as data-value-state. */
-export function valueState(value) {
-  return value === null || value === undefined ? 'absent' : 'measured';
+/**
+ * One count, resolved through the shared primitive.
+ *
+ * `readCount` returns a number or `null` and never `undefined`, so presence is
+ * `!== null` and is passed to `<Value>` explicitly rather than inferred from
+ * falsiness — a measured 0 is present.
+ *
+ * The returned object is what the view model carries: `.present` feeds
+ * `<Value as="tspan">` in the SVG, `.text` feeds the aria-label and `<title>`
+ * strings that can hold no element, and `.state` feeds the per-axis
+ * `data-*-state` attributes on the emitting `<text>`.
+ */
+export function countFigure(value) {
+  const present = value !== null && value !== undefined;
+  return { present, ...resolveValue({ value, present }) };
 }
 
 export function recordName(record, theater) {
@@ -354,6 +363,13 @@ export function resolveRecords(theaters) {
  *
  * A sum is only printed bare when EVERY theater was measured. Otherwise the line
  * says how many of the six it covers, and a wholly unread axis renders `—`.
+ *
+ * The two figures are resolved by `<Value>`'s own `resolveValue`, so the dash
+ * here is the same dash the per-theater lines print. The SENTENCE is composed
+ * locally because it is a sentence, not a value cell — `state` below is a
+ * completeness verdict ('complete' | 'partial' | 'unmeasured'), a different
+ * vocabulary from the primitive's presence state, and `data-summary-state`
+ * carries it.
  */
 export function summariseCounts(views) {
   const totalTheaters = THEATERS.length;
@@ -374,26 +390,31 @@ export function summariseCounts(views) {
     }
   });
 
+  // A sum of nothing is not a zero. `present` is the count of theaters that
+  // contributed, never the total itself.
+  const hostileFigure = resolveValue({ value: totalHostile, present: hostileMeasuredCount > 0 });
+  const ownFigure = resolveValue({ value: totalOwn, present: ownMeasuredCount > 0 });
+
   let text;
   let state;
   if (hostileMeasuredCount === totalTheaters && ownMeasuredCount === totalTheaters) {
     state = 'complete';
-    text = `CURRENT / HOSTILE ${totalHostile} · OWN ${totalOwn}`;
+    text = `CURRENT / HOSTILE ${hostileFigure.text} · OWN ${ownFigure.text}`;
   } else if (hostileMeasuredCount === 0 && ownMeasuredCount === 0) {
     state = 'unmeasured';
-    text = `CURRENT / HOSTILE — · OWN — (0 OF ${totalTheaters} THEATERS MEASURED)`;
+    text = `CURRENT / HOSTILE ${ABSENT_LABEL} · OWN ${ABSENT_LABEL} (0 OF ${totalTheaters} THEATERS MEASURED)`;
   } else if (hostileMeasuredCount === ownMeasuredCount) {
     state = 'partial';
     const unmeasured = totalTheaters - hostileMeasuredCount;
-    text = `CURRENT / HOSTILE ${totalHostile} · OWN ${totalOwn} (${hostileMeasuredCount} OF ${totalTheaters} THEATERS MEASURED, ${unmeasured} UNMEASURED)`;
+    text = `CURRENT / HOSTILE ${hostileFigure.text} · OWN ${ownFigure.text} (${hostileMeasuredCount} OF ${totalTheaters} THEATERS MEASURED, ${unmeasured} UNMEASURED)`;
   } else {
     state = 'partial';
-    const hPart = hostileMeasuredCount === totalTheaters
-      ? String(totalHostile)
-      : (hostileMeasuredCount > 0 ? `${totalHostile} (${hostileMeasuredCount}/${totalTheaters})` : '—');
-    const oPart = ownMeasuredCount === totalTheaters
-      ? String(totalOwn)
-      : (ownMeasuredCount > 0 ? `${totalOwn} (${ownMeasuredCount}/${totalTheaters})` : '—');
+    const hPart = hostileMeasuredCount === totalTheaters || hostileMeasuredCount === 0
+      ? hostileFigure.text
+      : `${hostileFigure.text} (${hostileMeasuredCount}/${totalTheaters})`;
+    const oPart = ownMeasuredCount === totalTheaters || ownMeasuredCount === 0
+      ? ownFigure.text
+      : `${ownFigure.text} (${ownMeasuredCount}/${totalTheaters})`;
     text = `CURRENT / HOSTILE ${hPart} · OWN ${oPart}`;
   }
 
@@ -419,24 +440,27 @@ export function buildTheaterViews(records, { selectedId = null, selectedTheater 
     const record = pairings[index];
     const hostileCount = readCount(record, HOSTILE_KEYS);
     const ownCount = readCount(record, OWN_KEYS);
+    const hostile = countFigure(hostileCount);
+    const own = countFigure(ownCount);
     const statusValue = readFirst(record, STATUS_KEYS);
     const hasRecord = !!record;
     const label = statusLabel(statusValue, hostileCount, ownCount, hasRecord);
     const name = recordName(record, theater);
     const theaterId = recordId(record, theater.key);
-    const ariaLabel = `${name}. Current status ${label}. Hostile count ${countLabel(hostileCount)}; own count ${countLabel(ownCount)}. Activate to select this theater.`;
+    const ariaLabel = `${name}. Current status ${label}. Hostile count ${hostile.text}; own count ${own.text}. Activate to select this theater.`;
     return {
       theater,
       record,
       hostileCount,
       ownCount,
+      hostile,
+      own,
       statusLabel: label,
       statusKey: statusKey(statusValue, hostileCount, ownCount, hasRecord),
       name,
       theaterId,
       ariaLabel,
       labelText: name.length > 19 ? theater.shortLabel : name.toUpperCase(),
-      countsText: `H ${countLabel(hostileCount)} / OWN ${countLabel(ownCount)}`,
       initiallySelected: (selectedId !== null && selectedId === theaterId) || (record !== null && record === selectedTheater),
     };
   });

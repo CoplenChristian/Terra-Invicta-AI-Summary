@@ -151,6 +151,7 @@ const SCENES = {
   dataTableVariants: DataTableVariantsScene,
   registers: RegistersScene,
   value: ValueScene,
+  valueSvg: ValueSvgScene,
   truncation: TruncationScene,
   cascade: CascadeScene,
   mcBudget: McBudgetScene,
@@ -254,6 +255,58 @@ function ValueScene() {
       <Value present={true} value={0} data-testid="value-zero" />
       <Value present={false} value={0} data-testid="value-absent" />
       <Value present={true} value={null} data-testid="value-unavailable" />
+    </div>
+  );
+}
+
+/**
+ * The `as` escape hatch, inside a real SVG (defect #19).
+ *
+ * TWO HOSTS WITH IDENTICAL CONTENT, differing only in `as`, because the failure
+ * this guards against is INVISIBLE to text scraping: a `<span>` created in the
+ * SVG namespace still contributes its characters to `innerHTML` and to
+ * `textContent`, so `visibleText()` reports the figure a reader cannot see. The
+ * only honest discriminator is geometry — the tspan host renders wider than the
+ * span host because the span's glyphs are never painted.
+ *
+ * The third host proves the absent affordance survives the hop: `—` must be a
+ * real painted glyph, not a dash the DOM merely holds.
+ */
+function ValueSvgScene() {
+  return (
+    <div data-testid="harness-value-svg">
+      <svg viewBox="0 0 320 160" width="320" height="160" data-testid="value-svg-canvas">
+        <text
+          x={10}
+          y={30}
+          fontFamily="monospace"
+          fontSize={16}
+          data-testid="svg-host-tspan"
+        >
+          {'H '}
+          <Value as="tspan" present value={0} data-testid="svg-value-tspan" />
+        </text>
+        <text
+          x={10}
+          y={70}
+          fontFamily="monospace"
+          fontSize={16}
+          data-testid="svg-host-span"
+        >
+          {'H '}
+          <Value present value={0} data-testid="svg-value-span" />
+        </text>
+        <text
+          x={10}
+          y={110}
+          fontFamily="monospace"
+          fontSize={16}
+          data-testid="svg-host-absent"
+        >
+          {'H '}
+          <Value as="tspan" present={false} value={0} data-testid="svg-value-absent" />
+        </text>
+      </svg>
     </div>
   );
 }

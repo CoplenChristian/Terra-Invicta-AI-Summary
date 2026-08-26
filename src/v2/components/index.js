@@ -9,5 +9,5 @@ export { DataTable, syncOneScrollHint, measureScrollable } from './DataTable.jsx
 export { TABLE_VARIANTS, DEFAULT_SCROLL_HINT_TEXT } from './tableVariants.js';
 export { Measured } from './Measured.jsx';
 export { Estimated } from './Estimated.jsx';
-export { Value } from './Value.jsx';
+export { Value, resolveValue, ABSENT_LABEL, UNAVAILABLE_LABEL } from './Value.jsx';
 export { TruncationNote } from './TruncationNote.jsx';
