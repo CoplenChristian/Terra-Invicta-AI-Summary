@@ -19,12 +19,18 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const url = require('node:url');
 const vm = require('node:vm');
 
 const repoRoot = path.resolve(__dirname, '..');
 const v2IndexHtmlPath = path.join(repoRoot, 'public', 'v2', 'index.html');
 const missionControlJsPath = path.join(repoRoot, 'public', 'v2', 'js', 'mission-control.js');
-const detailPanelJsPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'detail-panel.js');
+// syncPageInert moved to src/v2/panels/detailPanelUtils.mjs when the shared
+// detail panel became React (2026-08-26). It is loaded as a module and handed a
+// fake document rather than being run through `vm` against a sandboxed global;
+// every assertion below is unchanged.
+const detailPanelUtilsPath = path.join(repoRoot, 'src', 'v2', 'panels', 'detailPanelUtils.mjs');
+const detailPanelUtils = () => import(url.pathToFileURL(detailPanelUtilsPath).href);
 
 test('public/v2/index.html defines 6 view sections and topbar navigation without init-records accordion', () => {
   const html = fs.readFileSync(v2IndexHtmlPath, 'utf8');
@@ -147,9 +153,7 @@ test('VIEWS registry in mission-control.js defines exactly the 6 required views 
   }, /VIEW REGISTRY INTEGRITY ERROR/, 'assertViewRegistryIntegrity must throw loudly when a panel is missing');
 });
 
-test('detail-panel syncPageInert manages inert across topbar and all .init-view sections', () => {
-  const js = fs.readFileSync(detailPanelJsPath, 'utf8');
-
+test('detail-panel syncPageInert manages inert across topbar and all .init-view sections', async () => {
   let topbarInert = false;
   let mainInert = false;
   const sections = [
@@ -204,13 +208,9 @@ test('detail-panel syncPageInert manages inert across topbar and all .init-view 
     }
   };
 
-  const sandbox = { window: {}, document: fakeDoc, console };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(js, sandbox, { filename: detailPanelJsPath });
-
-  const { syncPageInert } = sandbox.window.MissionControlDetailPanel;
-  assert.ok(typeof syncPageInert === 'function');
+  const { syncPageInert: syncPageInertModule } = await detailPanelUtils();
+  const syncPageInert = () => syncPageInertModule(fakeDoc);
+  assert.ok(typeof syncPageInertModule === 'function');
 
   // Initial state: no overlay
   syncPageInert();

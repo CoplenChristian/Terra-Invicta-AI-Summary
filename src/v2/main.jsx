@@ -26,6 +26,12 @@ import {
   openFullRanking as openResearchFullRanking,
   slotFacts as researchSlotFacts,
 } from './panels/researchAdvisorUtils.mjs';
+import { FleetProcurement, RefitDesignCard } from './panels/FleetProcurement.jsx';
+import {
+  fetchProcurement as fetchFleetProcurement,
+  openProcurementDetails,
+  openRefitDetails,
+} from './panels/fleetProcurementUtils.mjs';
 import { WorldMap } from './panels/WorldMap.jsx';
 import {
   DriveExplorer,
@@ -37,6 +43,12 @@ import {
   setDriveExplorerMount,
 } from './panels/DriveExplorer.jsx';
 import { DirectiveBoard } from './panels/DirectiveBoard.jsx';
+import {
+  DetailPanel,
+  close as closeDetailPanel,
+  open as openDetailPanel,
+  syncPageInert as syncDetailPanelPageInert,
+} from './panels/DetailPanel.jsx';
 import { UnlockedTech } from './panels/UnlockedTech.jsx';
 import {
   FactionIntel,
@@ -241,6 +253,35 @@ export function renderResearchAdvisor(root, payload) {
 export { fetchResearchRanking, openResearchFullRanking, researchSlotFacts };
 
 /**
+ * Strangler bridge matching window.MissionControlFleetProcurement.render(root, payload, refitPayload).
+ *
+ * `payload` may be null — mission-control.js renders whatever the paired fetch
+ * resolved to, and null is a supported input producing the honest "the ranking
+ * endpoint did not answer" card rather than a placeholder list.
+ */
+export function renderFleetProcurement(root, payload, refitPayload = null) {
+  if (!root) return;
+  mountReactPanel(root, <FleetProcurement payload={payload} refitPayload={refitPayload} />);
+}
+
+/**
+ * Strangler bridge for one refit card in isolation.
+ *
+ * THE ONE SIGNATURE CHANGE IN THIS MIGRATION. The vanilla exported
+ * `renderRefitDesignCard(design)` returning an HTML string; React mounts rather
+ * than serialises, so this takes the mount element first. Nothing in
+ * `mission-control.js` called it — the card grid is rendered by `render` — so
+ * the only consumer is `tests/refitAdvisor.test.js`, which now reads the
+ * mounted card's markup out of a real browser.
+ */
+export function renderRefitDesignCard(root, design) {
+  if (!root) return;
+  mountReactPanel(root, <RefitDesignCard design={design} />);
+}
+
+export { fetchFleetProcurement, openProcurementDetails, openRefitDetails };
+
+/**
  * Strangler bridge matching window.MissionControlUnlockedTech.load(observerId, mode, container).
  *
  * Not `render(root, payload)`: the RECORDS panel takes no payload object at all
@@ -408,6 +449,13 @@ if (typeof window !== 'undefined') {
     openFullRanking: openResearchFullRanking,
     slotFacts: researchSlotFacts,
   };
+  window.MissionControlFleetProcurement = {
+    render: renderFleetProcurement,
+    fetchProcurement: fetchFleetProcurement,
+    renderRefitDesignCard,
+    openProcurementDetails,
+    openRefitDetails,
+  };
   window.MissionControlUnlockedTech = { load: loadUnlockedTech };
   window.WorldTheaterMap = { render: renderWorldMap };
   window.IntelligenceLibrary = { render: renderIntelligenceLibrary };
@@ -428,6 +476,21 @@ if (typeof window !== 'undefined') {
     renderNationQueue,
     renderResearchWatchlist,
   };
+  // The shared dialog every clickable module opens. `{ open, close,
+  // syncPageInert }` is the exact surface the vanilla component published and
+  // all five callers still reach it by that name, unchanged. Deliberately NO
+  // `_internals` here: the reset seam the browser tests use is published by
+  // primitivesHarness.jsx only, so the production shape stays exactly these three.
+  window.MissionControlDetailPanel = {
+    open: openDetailPanel,
+    close: closeDetailPanel,
+    syncPageInert: syncDetailPanelPageInert,
+  };
+  // The vanilla script loaded BEFORE mission-control.js, so the page's first
+  // `setActiveView` reconciled inert through it. This bundle is a deferred
+  // module and therefore runs after, so the reconciliation is done once here
+  // instead of being silently skipped.
+  syncDetailPanelPageInert();
 
   window.MissionControlReact = {
     mountReactPanel,
@@ -440,6 +503,7 @@ if (typeof window !== 'undefined') {
     mountCouncilOrders: renderCouncilOrders,
     mountDirectiveBoard: renderDirectiveBoard,
     mountResearchAdvisor: renderResearchAdvisor,
+    mountFleetProcurement: renderFleetProcurement,
     mountUnlockedTech: loadUnlockedTech,
     mountWorldMap: renderWorldMap,
     mountAlienHateEconomics: renderAlienHateEconomics,
@@ -447,6 +511,8 @@ if (typeof window !== 'undefined') {
     mountIntelligenceLibrary: renderIntelligenceLibrary,
     mountFactionIntel: renderFactionIntel,
     mountDriveExplorer: renderDriveExplorer,
+    openDetailPanel,
+    closeDetailPanel,
     renderFactionLedger,
     renderLogisticsBoard,
     renderCapabilityMatrix,
@@ -464,12 +530,15 @@ if (typeof window !== 'undefined') {
     CouncilOrders,
     DirectiveBoard,
     ResearchAdvisor,
+    FleetProcurement,
+    RefitDesignCard,
     UnlockedTech,
     WorldMap,
     AlienHateEconomics,
     IntelligenceLibrary,
     FactionIntel,
     DriveExplorer,
+    DetailPanel,
     FactionLedgerBoard,
     LogisticsBoard,
     CapabilityMatrixBoard,

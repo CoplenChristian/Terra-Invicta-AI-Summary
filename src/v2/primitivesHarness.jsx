@@ -30,6 +30,12 @@ import {
   openFullRanking as openResearchFullRanking,
   slotFacts as researchSlotFacts,
 } from './panels/researchAdvisorUtils.mjs';
+import { FleetProcurement } from './panels/FleetProcurement.jsx';
+import {
+  fetchProcurement as fetchFleetProcurement,
+  openProcurementDetails,
+  openRefitDetails,
+} from './panels/fleetProcurementUtils.mjs';
 import { UnlockedTech } from './panels/UnlockedTech.jsx';
 import { WorldMap } from './panels/WorldMap.jsx';
 import { FactionLedgerBoard } from './panels/ExecutiveBoards.jsx';
@@ -42,6 +48,12 @@ import {
   openDrivePath,
   renderDriveExplorer,
 } from './panels/DriveExplorer.jsx';
+import {
+  close as closeDetailPanel,
+  detailPanelInternals,
+  open as openDetailPanel,
+  syncPageInert as syncDetailPanelPageInert,
+} from './panels/DetailPanel.jsx';
 import {
   renderFactionLedger,
   renderLogisticsBoard,
@@ -59,6 +71,8 @@ import {
   renderCouncilOrders,
   renderDirectiveBoard,
   renderResearchAdvisor,
+  renderFleetProcurement,
+  renderRefitDesignCard,
   loadUnlockedTech,
   renderAlienHateEconomics,
   renderIntelligenceLibrary,
@@ -93,6 +107,13 @@ if (typeof window !== 'undefined') {
     openFullRanking: openResearchFullRanking,
     slotFacts: researchSlotFacts,
   };
+  window.MissionControlFleetProcurement = {
+    render: renderFleetProcurement,
+    fetchProcurement: fetchFleetProcurement,
+    renderRefitDesignCard,
+    openProcurementDetails,
+    openRefitDetails,
+  };
   window.MissionControlUnlockedTech = { load: loadUnlockedTech };
   window.WorldTheaterMap = { render: renderWorldMap };
   window.MissionControlDriveExplorer = {
@@ -110,6 +131,15 @@ if (typeof window !== 'undefined') {
     renderOperationsBoard,
     renderNationQueue,
     renderResearchWatchlist,
+  };
+  // main.jsx installs this too; restated here so the harness publishes the same
+  // surface, and so a fixture that swaps the global out and back (see
+  // tests/fixtures/driveExplorerBrowser.js) restores the real panel, not undefined.
+  window.MissionControlDetailPanel = {
+    open: openDetailPanel,
+    close: closeDetailPanel,
+    syncPageInert: syncDetailPanelPageInert,
+    _internals: detailPanelInternals,
   };
 }
 
@@ -130,6 +160,7 @@ const SCENES = {
   councilOrders: CouncilOrdersScene,
   directiveBoard: DirectiveBoardScene,
   researchAdvisor: ResearchAdvisorScene,
+  fleetProcurement: FleetProcurementScene,
   unlockedTech: UnlockedTechScene,
   intelligenceLibrary: IntelligenceLibraryScene,
   alienHateEconomics: AlienHateEconomicsScene,
@@ -137,6 +168,7 @@ const SCENES = {
   factionIntel: FactionIntelScene,
   driveExplorer: DriveExplorerScene,
   worldMap: WorldMapScene,
+  detailPanel: DetailPanelScene,
 };
 
 const PANEL_MODIFIERS = ['priority', 'alert', 'featured', 'quiet', 'dense', 'commentary'];
@@ -386,6 +418,37 @@ function ResearchAdvisorScene() {
 }
 
 /**
+ * The FLEET procurement + refit advisor panel.
+ *
+ * THREE MOUNTS, DELIBERATELY:
+ *
+ *   #fleetProcurement            — the PRODUCTION mount id public/v2/index.html
+ *                                  owns and the VIEWS registry drives, so the
+ *                                  production path is what renders here. Fed by
+ *                                  `window.__FLEET_PROCUREMENT_PAYLOAD__`.
+ *   #fleet-procurement-test-root — the bench the ported suite re-renders whole
+ *                                  panels into through the bridge.
+ *   #fleet-procurement-card-root — one refit card in isolation, standing in for
+ *                                  the vanilla's `renderRefitDesignCard(design)`
+ *                                  string return.
+ *
+ * Fifty-odd payloads then cost one browser rather than fifty.
+ */
+function FleetProcurementScene() {
+  const payload = window.__FLEET_PROCUREMENT_PAYLOAD__;
+  const refitPayload = window.__FLEET_PROCUREMENT_REFIT_PAYLOAD__ || null;
+  return (
+    <div data-testid="fleet-procurement-harness">
+      <div id="fleetProcurement">
+        <FleetProcurement payload={payload} refitPayload={refitPayload} />
+      </div>
+      <div id="fleet-procurement-test-root" />
+      <div id="fleet-procurement-card-root" />
+    </div>
+  );
+}
+
+/**
  * The RECORDS unlocked-technology panel.
  *
  * It takes no payload: it reads /api/intel/tech-tree and /api/intel/tech-search
@@ -506,6 +569,65 @@ function WorldMapScene() {
       <div className="init-map-container">
         <WorldMap theaters={payload.theaters} options={options} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * The shared dialog does not mount into the scene — it appends `#mcDetailPanel`
+ * to `document.body` itself, exactly as it does on the real shell. So the scene
+ * supplies the PAGE AROUND IT: the topbar, two `.init-view` sections, `main`,
+ * and the two sibling overlay shells whose ids `syncPageInert` keys on. Without
+ * those there is nothing for the inert bookkeeping to act on and the part of
+ * this component most likely to break silently would go untested.
+ *
+ * The panel is opened from `window.__DETAIL_PANEL_PAYLOAD__` on mount, so the
+ * scene really does render it. The open is deferred to a microtask because
+ * `open()` commits with `flushSync`, and calling that from inside a React effect
+ * is a warning — the trigger button and the tests' own
+ * `MissionControlDetailPanel.open(…)` calls reach it the way a real caller does.
+ */
+function DetailPanelScene() {
+  const payload = window.__DETAIL_PANEL_PAYLOAD__;
+  const opened = React.useRef(false);
+
+  React.useEffect(() => {
+    if (opened.current || !payload) return;
+    opened.current = true;
+    queueMicrotask(() => openDetailPanel(payload));
+  }, [payload]);
+
+  return (
+    <div data-testid="detail-panel-harness">
+      <header className="init-topbar">
+        <button
+          id="detailPanelHarnessTrigger"
+          className="init-btn"
+          type="button"
+          onClick={() => openDetailPanel(window.__DETAIL_PANEL_PAYLOAD__ || {})}
+        >
+          Open detail
+        </button>
+      </header>
+      <main>
+        <section id="view-command" className="init-view" aria-hidden="false">
+          <p>COMMAND view content</p>
+        </section>
+        <section id="view-records" className="init-view" hidden aria-hidden="true">
+          <p>RECORDS view content</p>
+        </section>
+      </main>
+      <section id="factionIntelScreen" className="faction-intel-screen" hidden aria-hidden="true">
+        <div className="faction-intel-screen__dialog">Faction dossier</div>
+      </section>
+      <section
+        id="intelligenceLibraryScreen"
+        className="intelligence-library-screen"
+        hidden
+        aria-hidden="true"
+      >
+        <div className="intelligence-library-screen__dialog">Intelligence library</div>
+      </section>
     </div>
   );
 }

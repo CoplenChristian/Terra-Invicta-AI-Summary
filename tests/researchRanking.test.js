@@ -721,8 +721,6 @@ const repoRoot = path.resolve(__dirname, '..');
 const v2ShellPath = path.join(repoRoot, 'public', 'v2', 'index.html');
 const missionControlPath = path.join(repoRoot, 'public', 'v2', 'js', 'mission-control.js');
 
-const fleetComponentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'fleet-procurement.js');
-
 // The REAL escapeHtml and the entity-decoding `visibleText` now live in
 // `tests/fixtures/renderHarness.js`, which executes the shipped
 // `public/v2/js/shared.js` rather than copying it. Both defects the local
@@ -730,7 +728,7 @@ const fleetComponentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components
 // visibleText that did not decode -- are documented at the top of that file.
 // `escapeHtml` is still the shipped one; `visibleText` is now applied to markup
 // a real browser produced.
-const { visibleText, runComponent } = require('./fixtures/renderHarness');
+const { visibleText } = require('./fixtures/renderHarness');
 
 // THE PANEL IS REACT NOW (2026-08-26). `public/v2/js/components/research-advisor.js`
 // was deleted and `src/v2/panels/ResearchAdvisor.jsx` renders through the same
@@ -745,26 +743,31 @@ const {
   renderResearchAdvisorOnPage,
 } = require('./fixtures/researchAdvisorBrowser');
 
-after(async () => { await closeResearchAdvisorHarness(); });
+// THE FLEET PANEL IS REACT NOW TOO (2026-08-26), on the same wave.
+// `public/v2/js/components/fleet-procurement.js` was deleted and
+// `src/v2/panels/FleetProcurement.jsx` renders through the same
+// `window.MissionControlFleetProcurement` bridge. Two harnesses in one file
+// again, but they no longer disagree about what the browser does: both ARE the
+// browser.
+const {
+  getFleetProcurementHarnessPage,
+  closeFleetProcurementHarness,
+  renderFleetProcurementOnPage,
+} = require('./fixtures/fleetProcurementBrowser');
+
+after(async () => {
+  await closeResearchAdvisorHarness();
+  await closeFleetProcurementHarness();
+});
 
 async function renderToString(payload) {
   const page = await getResearchAdvisorHarnessPage();
   return renderResearchAdvisorOnPage(page, payload);
 }
 
-// This sandbox was still `{ window: {} }` after its sibling above was repaired,
-// so the fleet panel was rendering through the non-escaping fallback while the
-// research panel rendered through the real escaper. Half-fixed is its own trap:
-// two harnesses in one file that disagree about what the browser does.
-function loadFleetComponent() {
-  return runComponent(fleetComponentPath).window.MissionControlFleetProcurement;
-}
-
-function renderFleetToString(payload) {
-  const component = loadFleetComponent();
-  const root = { innerHTML: '', querySelector: () => null };
-  component.render(root, payload);
-  return root.innerHTML;
+async function renderFleetToString(payload) {
+  const page = await getFleetProcurementHarnessPage();
+  return renderFleetProcurementOnPage(page, payload);
 }
 
 const FORBIDDEN = ['null', 'undefined', 'NaN', '[object Object]'];
@@ -1483,7 +1486,7 @@ test('zero-cost rows do not render in research-advisor and render in fleet-procu
   assert.ok(!advisorHtml.includes('Dreadnought'), 'research advisor must not contain zero-cost items');
 
   // 2. Fleet procurement component renders the block
-  const fleetHtml = renderFleetToString(payload);
+  const fleetHtml = await renderFleetToString(payload);
   assertNoPlaceholderText(fleetHtml, 'fleet procurement payload');
   const fleetText = visibleText(fleetHtml);
 
@@ -1500,8 +1503,18 @@ test('fleet procurement is mounted in FLEET view and loaded by the shell', () =>
   const missionControl = fs.readFileSync(missionControlPath, 'utf8');
 
   assert.ok(html.includes('id="fleetProcurement"'), 'the mount element must exist');
-  assert.ok(html.includes('/v2/js/components/fleet-procurement.js'),
-    'fleet procurement script tag must exist');
+  // Flipped by the React migration (2026-08-26), following the same precedent as
+  // the research advisor twelve tests above: the vanilla component is deleted, so
+  // its <script> tag must be GONE and the bundle that now supplies
+  // `window.MissionControlFleetProcurement` must be loaded instead. The
+  // mission-control.js control below proves the missing-script assertion is not
+  // vacuously true — it names the shell itself, which outlives every component.
+  assert.ok(!html.includes('/v2/js/components/fleet-procurement.js'),
+    'the deleted classic fleet procurement panel must not be loaded');
+  assert.ok(html.includes('/v2/js/mission-control.js'),
+    'the shell controller is loaded, so a missing-script assertion is meaningful');
+  assert.ok(html.includes('/v2/app/bundle.js'),
+    'a component with no <script> tag renders nowhere — the React bundle is that tag now');
 
   const fleet = html.match(/<section[^>]*id="view-fleet"[\s\S]*?<\/section>/);
   assert.ok(fleet, '#view-fleet must exist');

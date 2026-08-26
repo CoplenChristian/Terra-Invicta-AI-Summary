@@ -26,7 +26,7 @@ save.
 > **The tally and the live list immediately below are the authoritative status.**
 > Use `git log` on the named commit to see what a fix actually changed.
 
-**Tally as of 2026-08-26: 19 entries — 13 fixed, 3 live, 3 conditional.**
+**Tally as of 2026-08-26: 20 entries — 14 fixed, 4 live, 2 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -43,7 +43,7 @@ was finally named: `paint()` rebuilt the panel with `innerHTML` and replaced
 measures overflow — lives in `mission-control.js` and was never called by the
 component at all.
 
-**Live right now: #17, #18, #19.** #17 is four fabricated fallbacks in the
+**Live right now: #17, #18, #19, #20.** #17 is four fabricated fallbacks in the
 directive board, carried across the React port **deliberately**, because "no
 figure may change" was that port's bar. They are recorded here so fixing them is
 a separate, reviewable change rather than a silent one.
@@ -53,7 +53,7 @@ reader on the current save. Each was verified by reverting its component with th
 new tests in place: 4, 1 and 1 tests failed respectively, so none is passing by
 construction.
 
-**Conditional:** #4 and #10 are real but need a specific input or width. With #6
+**Conditional:** #10 alone now. **#4 was fixed** in the fleet-procurement React port (2026-08-26), in BOTH directions — the register had recorded only the red "15.2x behind" half; the port found that an unrecognised RECOMMENDED armour produced 0.066, failed the `> 1.0` test, and rendered NO badge at all. With #6
 fixed, those two are the whole remaining conditional set.
 
 **Note on #2.** It produces no visible change on the current save, because every
@@ -941,6 +941,66 @@ The agent declined to add an `as` / render-prop escape hatch to `<Value>` becaus
 two other lanes were writing concurrently, which was the right call at the time.
 It remains the fix: one primitive, one contract, an escape hatch for hosts that
 cannot take a `<span>`.
+
+---
+
+## 20. The refit half vanishes on a dead endpoint, beside a procurement half that says so — **confirmed, live-reachable**
+
+`src/v2/panels/fleetProcurementUtils.mjs:500`, carried across verbatim from the
+vanilla during the 2026-08-26 port:
+
+```js
+const refitsRenderable = Boolean(refits) && refits.success !== false && refitItems.length > 0;
+```
+
+Three unrelated causes collapse into one falsy value, and `FleetProcurement.jsx:402`
+renders **nothing at all** for every one of them:
+
+1. the endpoint failed — `:705` does `refitRes.ok ? await refitRes.json() : null`
+2. the endpoint answered with `success: false`
+3. the faction genuinely has **no refit candidates**
+
+So a dead endpoint is indistinguishable from good news. And the asymmetry makes
+it worse: the **procurement half of the same panel** renders an explicit "the
+ranking endpoint did not answer" card in the equivalent situation, so a reader
+who has learned that this panel reports its own failures is actively misled by
+the half that does not.
+
+**Live-reachable, not latent.** `fetchProcurement` requests
+`/api/intel/research-ranking` and `/api/intel/refit-advisor` in one
+`Promise.all`, and each is independently `.ok`-gated. One endpoint 503-ing while
+the other succeeds — a save being written, a slow query, a worker restart — is an
+ordinary condition, and it produces a panel that looks complete.
+
+This is the register's "unknown is not the same as safe" rule in its purest form:
+**the check could not be evaluated, and the surface reported the reassuring
+answer.**
+
+### Two latent siblings in the same file, carried across and named in comments
+
+- **`procurementView`: `count = num(procurement.count) ?? items.length`.** An
+  unread total is replaced by the page length, which makes
+  `omittedCount = max(0, count − itemsShown)` exactly zero and suppresses the
+  truncation note — **a capped list reporting itself complete.** Latent:
+  `shared/intel/researchRanking.mjs:1249` always emits `count` beside `items`.
+- **`weaponModel`: `(rec.weapons || []).length`.** An absent weapons array reads
+  as zero upgrades and prints the confident claim **"Current armament optimal"**.
+  An unevaluated hardpoint is not an optimal one. Latent: `buildRefitAdvisor`
+  always emits the array.
+
+### #4's second half, which had never been recorded
+
+The register described #4 as an unrecognised armour scoring a fabricated `1.0`
+and driving a red **"15.2× behind"** badge. Measured during the port, that is
+only one direction. When the **recommended** armour is the unrecognised one, the
+fabricated `1.0` divides into a real fitted score of `15.1952` to give `0.066`,
+which fails the `> 1.0` test — so the vanilla rendered **no badge at all**,
+visually identical to "your armour is fine".
+
+**Silence produced by a fabricated number is the same defect wearing the opposite
+sign**, and it is the harder half to notice: there is nothing on screen to
+question. Both directions now render a neutral `protection ratio unmeasured`
+affordance naming the material.
 
 ---
 

@@ -2,10 +2,8 @@
 //
 // Purpose: Unit and non-vacuous integration tests for Validated Refit Advisor (Part B of fleet-procurement-spec.md).
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
-const fs = require('fs');
-const vm = require('vm');
 
 const {
   isCompletedOrUngated,
@@ -20,26 +18,47 @@ const { DESIGN_ROLES } = require('../shared/propulsion.mjs');
 const templateLoader = require('../server/templateLoader');
 const { loadFixtureFilteredSnapshot, queryFixtureIntel } = require('./fixtures/frozenSnapshots');
 
-// The shipped escaper, not a stub and not the component's non-escaping
-// fallback. This sandbox was `{ window: {} }`, so `MissionControlShared` was
-// undefined and the component escaped through
-// `value => String(value ?? '')` -- which does not escape. See
-// `tests/fixtures/renderHarness.js` for what that costs an assertion.
-const { MISSION_CONTROL_SHARED } = require('./fixtures/renderHarness');
+// THE PANEL IS REACT NOW (2026-08-26). `public/v2/js/components/fleet-procurement.js`
+// was deleted and `src/v2/panels/FleetProcurement.jsx` renders through the same
+// `window.MissionControlFleetProcurement` bridge mission-control.js already
+// called. `node --test` cannot render a React component out of the Vite bundle
+// -- three earlier migration runs died on `Minified React error #327` -- so
+// every assertion below now reads markup produced by a real browser driving
+// that bridge.
+//
+// EVERY ASSERTION IS UNCHANGED. Only the plumbing that produces `html` moved,
+// and each renderer became async. Two things about the old sandbox are worth
+// recording because the browser makes both moot: it passed the SHIPPED
+// `escapeHtml` out of `tests/fixtures/renderHarness.js` rather than the
+// component's non-escaping `value => String(value ?? '')` fallback (a sandbox
+// built as `{ window: {} }` silently took that fallback and the harness then
+// disagreed with the browser), and it stubbed `MissionControlDetailPanel` to
+// null. React escapes text nodes itself and the browser is now the browser, so
+// neither can drift again.
+//
+// `renderRefitDesignCard(design)` returned an HTML string; the React bridge
+// takes `(root, design)` and mounts, so the helper below mounts one card into
+// the harness and reads its markup back out. `render(container, ...)` likewise
+// renders into a real element instead of a `{ innerHTML }` mock.
+const {
+  getFleetProcurementHarnessPage,
+  closeFleetProcurementHarness,
+  renderFleetProcurementOnPage,
+  renderRefitCardOnPage,
+} = require('./fixtures/fleetProcurementBrowser');
 
-// Load client-side Fleet Procurement component in VM context
-function loadFleetProcurementComponent() {
-  const code = fs.readFileSync('./public/v2/js/components/fleet-procurement.js', 'utf8');
-  const sandbox = {
-    window: {},
-    MissionControlShared: MISSION_CONTROL_SHARED,
-    MissionControlDetailPanel: null,
-    console
-  };
-  sandbox.window = sandbox;
-  vm.createContext(sandbox);
-  vm.runInContext(code, sandbox);
-  return sandbox.window.MissionControlFleetProcurement;
+after(async () => { await closeFleetProcurementHarness(); });
+
+/** One refit card's markup, mounted alone — the vanilla's string return. */
+async function renderRefitDesignCard(design) {
+  const page = await getFleetProcurementHarnessPage();
+  return renderRefitCardOnPage(page, design);
+}
+
+/** The whole FLEET panel's markup, rendered through the production bridge. */
+async function renderFleetPanel(payload, refitPayload) {
+  const page = await getFleetProcurementHarnessPage();
+  return renderFleetProcurementOnPage(page, payload, refitPayload);
 }
 
 test('comma-safe parsing handles comma-formatted numbers in drive templates', () => {
@@ -317,8 +336,7 @@ test('non-vacuous live snapshot evaluation produces drive, weapon, armour and re
   assert.strictEqual(sampleArmor.performanceImpact, 'unknown');
 });
 
-test('fleet procurement frontend renders four distinct drive recommendation states non-vacuously', () => {
-  const { renderRefitDesignCard } = loadFleetProcurementComponent();
+test('fleet procurement frontend renders four distinct drive recommendation states non-vacuously', async () => {
 
   // State 1: Genuine improvement (clearsFloor === true && driveId !== fittedDriveId)
   const state1Design = {
@@ -342,7 +360,7 @@ test('fleet procurement frontend renders four distinct drive recommendation stat
       }
     }
   };
-  const html1 = renderRefitDesignCard(state1Design);
+  const html1 = await renderRefitDesignCard(state1Design);
   assert.match(html1, /Drive Refit:/, 'State 1 must render "Drive Refit:" label');
   assert.match(html1, /Advanced Nerva Drive x1/, 'State 1 must render candidate drive name');
   assert.match(html1, /ΔV:\s*15\.0\s*→\s*22\.5\s*km\/s/, 'State 1 must render improvement arrow for deltaV');
@@ -369,7 +387,7 @@ test('fleet procurement frontend renders four distinct drive recommendation stat
       }
     }
   };
-  const html2 = renderRefitDesignCard(state2Design);
+  const html2 = await renderRefitDesignCard(state2Design);
   assert.match(html2, /Best available drive already fitted \(Burner Drive x6\)\./, 'State 2 must explicitly state best drive already fitted');
   assert.ok(!html2.includes('14.06756 → 14.0676'), 'State 2 must NOT render misleading rounding arrows');
   assert.ok(!html2.includes('Drive Refit:'), 'State 2 must not label fitted drive as a refit');
@@ -395,7 +413,7 @@ test('fleet procurement frontend renders four distinct drive recommendation stat
       }
     }
   };
-  const html3 = renderRefitDesignCard(state3Design);
+  const html3 = await renderRefitDesignCard(state3Design);
   assert.match(html3, /No available drive improves this design without unacceptable ΔV loss\./, 'State 3 must state no available drive improves without loss');
   assert.match(html3, /<span class="ra-tag ra-tag--warn">fails floor<\/span>/, 'State 3 must carry fails floor badge');
   assert.match(html3, /Neutron Liquid Rocket x6/, 'State 3 must name the rejected alternative candidate');
@@ -422,7 +440,7 @@ test('fleet procurement frontend renders four distinct drive recommendation stat
       }
     }
   };
-  const html4 = renderRefitDesignCard(state4Design);
+  const html4 = await renderRefitDesignCard(state4Design);
   assert.match(html4, /Drive refit reach floor unknown \(baseline metrics unmeasured\)/, 'State 4 must report unknown floor');
   assert.ok(!html4.includes('recommended'), 'State 4 must never claim recommended');
   assert.ok(!html4.includes('fits'), 'State 4 must never claim fits');
@@ -435,7 +453,7 @@ test('fleet procurement frontend renders four distinct drive recommendation stat
   let state3Count = 0;
 
   for (const item of advisor.items) {
-    const cardHtml = renderRefitDesignCard(item);
+    const cardHtml = await renderRefitDesignCard(item);
     const driveSection = cardHtml.match(/<div class="fp-refit__drive[\s\S]*?<\/div>/)?.[0] || '';
     if (driveSection.includes('Best available drive already fitted')) {
       state2Count++;
@@ -751,8 +769,7 @@ test('redaction: whole-payload scan verifies enemy obsolete lists are not leaked
   }
 });
 
-test('fleet procurement frontend renders obsolete markers, demotes retired cards, and quiets armour alert', () => {
-  const { renderRefitDesignCard, render } = loadFleetProcurementComponent();
+test('fleet procurement frontend renders obsolete markers, demotes retired cards, and quiets armour alert', async () => {
 
   // 1. Active design card: no OBSOLETE badge
   const activeDesign = {
@@ -771,7 +788,7 @@ test('fleet procurement frontend renders obsolete markers, demotes retired cards
       armor: { recommendedMaterial: 'Nanotube Armor', threatBasis: 'threat-weighted', weighted: true }
     }
   };
-  const activeHtml = renderRefitDesignCard(activeDesign);
+  const activeHtml = await renderRefitDesignCard(activeDesign);
   assert.ok(!activeHtml.includes('OBSOLETE'), 'Active design must not render OBSOLETE badge');
   assert.ok(!activeHtml.includes('fp-refit-card--obsolete'), 'Active design must not have obsolete class');
 
@@ -792,7 +809,7 @@ test('fleet procurement frontend renders obsolete markers, demotes retired cards
       armor: { recommendedMaterial: 'Adamantane Armor', threatBasis: 'threat-weighted', weighted: true }
     }
   };
-  const obsoleteHtml = renderRefitDesignCard(obsoleteDesign);
+  const obsoleteHtml = await renderRefitDesignCard(obsoleteDesign);
   assert.match(obsoleteHtml, /<span class="ra-tag ra-tag--warn">OBSOLETE<\/span>/, 'Obsolete design must render OBSOLETE tag');
   assert.ok(obsoleteHtml.includes('fp-refit-card--obsolete'), 'Obsolete design must carry fp-refit-card--obsolete class');
   const armorSection = obsoleteHtml.match(/<div class="fp-refit__armor">[\s\S]*?<\/div>/)?.[0];
@@ -800,7 +817,6 @@ test('fleet procurement frontend renders obsolete markers, demotes retired cards
   assert.ok(!armorSection.includes('ra-tag--deficit'), 'Obsolete design armour must not raise red deficit tag');
 
   // 3. Sorting & demotion: render() places active items before obsolete items
-  const mockContainer = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
   const mockRefits = {
     success: true,
     items: [
@@ -808,16 +824,17 @@ test('fleet procurement frontend renders obsolete markers, demotes retired cards
       { ...activeDesign, designId: 'act-second' }
     ]
   };
-  render(mockContainer, { military: { procurement: { items: [], count: 0 } } }, mockRefits);
+  // Was a `{ innerHTML: '' }` mock object; the React bridge mounts into a real
+  // element, so this is the harness bench mount and its markup read back.
+  const panelHtml = await renderFleetPanel({ military: { procurement: { items: [], count: 0 } } }, mockRefits);
 
-  const actIndex = mockContainer.innerHTML.indexOf('act-second');
-  const obsIndex = mockContainer.innerHTML.indexOf('obs-first');
+  const actIndex = panelHtml.indexOf('act-second');
+  const obsIndex = panelHtml.indexOf('obs-first');
   assert.ok(actIndex !== -1 && obsIndex !== -1, 'Both cards must render');
   assert.ok(actIndex < obsIndex, 'Active design must sort before obsolete design in FLEET view grid');
 });
 
-test('armour mismatch indicator: renders fitted -> rec with graded severity badge and respects all constraints', () => {
-  const { renderRefitDesignCard } = loadFleetProcurementComponent();
+test('armour mismatch indicator: renders fitted -> rec with graded severity badge and respects all constraints', async () => {
 
   // 1. State 1: Fitted matches recommendation -> quiet confirmation, no alarm/badge
   const matchedDesign = {
@@ -836,7 +853,7 @@ test('armour mismatch indicator: renders fitted -> rec with graded severity badg
       }
     }
   };
-  const matchedHtml = renderRefitDesignCard(matchedDesign);
+  const matchedHtml = await renderRefitDesignCard(matchedDesign);
   const matchedArmor = matchedHtml.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
   assert.match(matchedArmor, /Best armour fitted \(Adamantane Armor\)/, 'State 1 must render best armour fitted text');
   assert.ok(!matchedArmor.includes('ra-tag--deficit'), 'State 1 must not render red deficit tag');
@@ -859,7 +876,7 @@ test('armour mismatch indicator: renders fitted -> rec with graded severity badg
       }
     }
   };
-  const warnHtml = renderRefitDesignCard(warnDesign);
+  const warnHtml = await renderRefitDesignCard(warnDesign);
   const warnArmor = warnHtml.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
   assert.match(warnArmor, /Nanotube Armor\s*→\s*Adamantane Armor/, 'State 2 must render fitted -> recommended transition');
   assert.match(warnArmor, /<span class="ra-tag ra-tag--warn">1\.6× behind<\/span>/, 'State 2 must render amber 1.6× behind tag');
@@ -882,7 +899,7 @@ test('armour mismatch indicator: renders fitted -> rec with graded severity badg
       }
     }
   };
-  const deficitHtml1 = renderRefitDesignCard(deficitDesign1);
+  const deficitHtml1 = await renderRefitDesignCard(deficitDesign1);
   const deficitArmor1 = deficitHtml1.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
   assert.match(deficitArmor1, /Foamed Metal Armor\s*→\s*Adamantane Armor/, 'State 3 must render fitted -> recommended transition');
   assert.match(deficitArmor1, /<span class="ra-tag ra-tag--deficit">3\.9× behind<\/span>/, 'State 3 must render red 3.9× behind tag');
@@ -904,7 +921,7 @@ test('armour mismatch indicator: renders fitted -> rec with graded severity badg
       }
     }
   };
-  const deficitHtml2 = renderRefitDesignCard(deficitDesign2);
+  const deficitHtml2 = await renderRefitDesignCard(deficitDesign2);
   const deficitArmor2 = deficitHtml2.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
   assert.match(deficitArmor2, /<span class="ra-tag ra-tag--deficit">5\.6× behind<\/span>/, 'State 3b must render red 5.6× behind tag');
 
@@ -913,7 +930,7 @@ test('armour mismatch indicator: renders fitted -> rec with graded severity badg
     ...deficitDesign1,
     isObsolete: true
   };
-  const obsHtml = renderRefitDesignCard(obsoleteDeficit);
+  const obsHtml = await renderRefitDesignCard(obsoleteDeficit);
   const obsArmor = obsHtml.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
   assert.match(obsArmor, /Foamed Metal Armor\s*→\s*Adamantane Armor/, 'Obsolete design must still render transition');
   assert.ok(!obsArmor.includes('ra-tag--deficit'), 'Obsolete design must not raise red deficit badge');
@@ -933,15 +950,14 @@ test('armour mismatch indicator: renders fitted -> rec with graded severity badg
       }
     }
   };
-  const unwHtml = renderRefitDesignCard(unweightedDeficit);
+  const unwHtml = await renderRefitDesignCard(unweightedDeficit);
   const unwArmor = unwHtml.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
   assert.match(unwArmor, /Foamed Metal Armor\s*→\s*Adamantane Armor/);
   assert.match(unwArmor, /unweighted/);
   assert.ok(!unwArmor.includes('ra-tag--deficit'), 'Unweighted comparison must never raise red deficit badge');
 });
 
-test('non-vacuous live save verification of armour indicator in player and omniscient modes', () => {
-  const { renderRefitDesignCard } = loadFleetProcurementComponent();
+test('non-vacuous live save verification of armour indicator in player and omniscient modes', async () => {
 
   for (const mode of ['player', 'omniscient']) {
     const snapshot = loadFixtureFilteredSnapshot({ observer: 4712, mode });
@@ -960,7 +976,7 @@ test('non-vacuous live save verification of armour indicator in player and omnis
     let activeAmberCount = 0;
 
     for (const item of activeItems) {
-      const html = renderRefitDesignCard(item);
+      const html = await renderRefitDesignCard(item);
       const armorSection = html.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
       if (armorSection.includes('Best armour fitted')) {
         activeOptimalCount++;
@@ -985,7 +1001,7 @@ test('non-vacuous live save verification of armour indicator in player and omnis
     let obsoleteQuietTransitionCount = 0;
 
     for (const item of obsoleteItems) {
-      const html = renderRefitDesignCard(item);
+      const html = await renderRefitDesignCard(item);
       const armorSection = html.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
       if (armorSection.includes('ra-tag--deficit')) obsoleteRedCount++;
       if (armorSection.includes('ra-tag--warn')) obsoleteAmberCount++;

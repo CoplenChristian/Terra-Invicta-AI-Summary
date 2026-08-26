@@ -502,9 +502,12 @@ test('research points render as points, and absence renders as absence', async (
 // 4. THE SHARED MODAL — one dialog, extended, not a second one
 // ---------------------------------------------------------------------------
 
+// The shared modal became src/v2/panels/DetailPanel.jsx on 2026-08-26. The path
+// moved; the two assertions below did not.
+const DETAIL_PANEL_SOURCE = path.join(__dirname, '..', 'src', 'v2', 'panels', 'DetailPanel.jsx');
+
 test('the sections and notes live on the one shared detail panel', () => {
-  const source = fs.readFileSync(
-    path.join(__dirname, '..', 'public', 'v2', 'js', 'components', 'detail-panel.js'), 'utf8');
+  const source = fs.readFileSync(DETAIL_PANEL_SOURCE, 'utf8');
   assert.match(source, /id="detailPanelSections"/, 'the shared panel renders the sections itself');
   assert.match(source, /id="detailPanelNotes"/, 'and the caveat notes');
 
@@ -517,8 +520,7 @@ test('the sections and notes live on the one shared detail panel', () => {
 });
 
 test('an empty section still renders and says so, rather than vanishing', () => {
-  const source = fs.readFileSync(
-    path.join(__dirname, '..', 'public', 'v2', 'js', 'components', 'detail-panel.js'), 'utf8');
+  const source = fs.readFileSync(DETAIL_PANEL_SOURCE, 'utf8');
   assert.match(source, /detail-panel__empty/,
     'a section with no rows must render its own empty text: a vanished section reads as "not applicable"');
 });
