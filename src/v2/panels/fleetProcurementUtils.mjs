@@ -99,7 +99,15 @@ export const PROCUREMENT_UNAVAILABLE_HEADLINE = 'PROCUREMENT DATA UNAVAILABLE';
 
 export const NO_ENDPOINT_ANSWER = 'The ranking endpoint did not answer for this snapshot.';
 
+export const REFIT_UNAVAILABLE_HEADLINE = 'REFIT DATA UNAVAILABLE';
+
+export const NO_REFIT_ENDPOINT_ANSWER = 'The refit-advisor endpoint did not answer for this snapshot.';
+
+export const REFIT_FAILURE_ANSWER = 'The refit-advisor endpoint reported a failure for this snapshot.';
+
 export const NOTHING_UNFIELDED = 'All researched components and ship hulls are currently in service across your fleet.';
+
+export const NO_REFIT_CANDIDATES = 'No fielded ship designs were available for refit evaluation in this snapshot.';
 
 export const NON_COMPOSABILITY_NOTICE = 'Drive performance numbers hold dry mass constant. Combining a drive '
   + 'swap with weapon or armour modifications changes ship dry mass, making combined performance uncomputable.';
@@ -487,6 +495,49 @@ export function sortRefitItems(refitItems) {
 }
 
 /**
+ * Three refit states the panel must keep apart — a dead endpoint, an explicit
+ * failure, and a measured-empty candidate list are not interchangeable.
+ *
+ * REGISTER DEFECT #20. The vanilla collapsed all three into `refitsRenderable`
+ * and rendered nothing for each, beside a procurement half that reported its own
+ * fetch failures. `unavailable` and `failed` now carry the same affordance
+ * vocabulary as `procurementView`'s `available: false` branch.
+ */
+export function refitView(refits) {
+  if (refits == null) {
+    return {
+      state: 'unavailable',
+      headline: REFIT_UNAVAILABLE_HEADLINE,
+      detail: NO_REFIT_ENDPOINT_ANSWER,
+    };
+  }
+
+  if (refits.success === false) {
+    const reason = typeof refits.error === 'string' ? refits.error.trim() : '';
+    return {
+      state: 'failed',
+      headline: REFIT_UNAVAILABLE_HEADLINE,
+      detail: reason || REFIT_FAILURE_ANSWER,
+    };
+  }
+
+  const refitItems = refits.items || [];
+  if (refitItems.length === 0) {
+    return {
+      state: 'empty',
+      count: num(refits.count) ?? 0,
+      refitItems,
+    };
+  }
+
+  return {
+    state: 'ready',
+    count: num(refits.count) ?? refitItems.length,
+    refitItems,
+  };
+}
+
+/**
  * Normalises the two shapes `render` is called with.
  *
  * mission-control.js hands over `{ procurement, refit, military }` from
@@ -495,10 +546,9 @@ export function sortRefitItems(refitItems) {
  */
 export function normalizePayload(payload, refitPayload = null) {
   const procurementPayload = payload?.procurement ? payload.procurement : payload;
-  const refits = refitPayload || payload?.refit || null;
-  const refitItems = refits?.items || [];
-  const refitsRenderable = Boolean(refits) && refits.success !== false && refitItems.length > 0;
-  return { procurementPayload, refits, refitItems, refitsRenderable };
+  const refits = refitPayload ?? payload?.refit ?? null;
+  const refit = refitView(refits);
+  return { procurementPayload, refits, refit };
 }
 
 // ---------------------------------------------------------------------------

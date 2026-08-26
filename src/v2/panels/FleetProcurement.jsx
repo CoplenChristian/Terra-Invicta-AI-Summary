@@ -13,6 +13,11 @@
  * ratio unmeasured" tag naming the material instead of a confident red
  * "15.2× behind". See the header of `fleetProcurementUtils.mjs`.
  *
+ * REGISTER DEFECT #20 IS FIXED, NOT PORTED. A dead refit endpoint, an explicit
+ * `success: false` answer and a measured-empty candidate list each render their
+ * own affordance beside a procurement half that already reported its failures.
+ * See `refitView` in `fleetProcurementUtils.mjs`.
+ *
  * WHY THE SEVERITY BADGE HOLDS A BARE TEXT NODE. `.fp-refit__armor` is
  * `display: flex; flex-direction: column` (public/v2/css/21-fleet-procurement.css:139)
  * and `.ra-row__meta` is `display: flex` with a 4px gap
@@ -40,8 +45,12 @@ import { TruncationNote } from '../components/TruncationNote.jsx';
 import {
   NOTHING_UNFIELDED,
   NO_ENDPOINT_ANSWER,
+  NO_REFIT_CANDIDATES,
+  NO_REFIT_ENDPOINT_ANSWER,
   PROCUREMENT_UNAVAILABLE_HEADLINE,
+  REFIT_FAILURE_ANSWER,
   REFIT_NOTICE,
+  REFIT_UNAVAILABLE_HEADLINE,
   int,
   normalizePayload,
   num,
@@ -356,15 +365,46 @@ export function RefitDesignCard({ design, onDetails }) {
   );
 }
 
-/**
- * The refit half.
- *
- * NOT FIXED HERE, AND NOT NEW: when the refit endpoint does not answer, this
- * half renders NOTHING — no unavailable affordance, unlike the procurement half
- * beside it. An unreachable endpoint is then indistinguishable from a faction
- * with no designs. Carried across because parity is this migration's
- * requirement; reported rather than silently changed.
- */
+/** The refit half when the endpoint did not answer or reported a failure. */
+function RefitUnavailableCard({ headline, detail }) {
+  return (
+    <div className="tech-card init-view__span fp-refit-section">
+      <div className="tech-card-header">
+        <div className="tech-card-title">VALIDATED REFIT ADVISOR</div>
+        <span>FIELDED DESIGNS</span>
+      </div>
+      <p className="research-advisor__empty">{headline}</p>
+      <p className="ra-census">{detail}</p>
+    </div>
+  );
+}
+
+/** The refit half when the endpoint answered with zero candidates. */
+function RefitEmptyCard() {
+  return (
+    <div className="tech-card init-view__span fp-refit-section">
+      <div className="tech-card-header">
+        <div className="tech-card-title">VALIDATED REFIT ADVISOR</div>
+        <span>0 FLEET DESIGNS EVALUATED</span>
+      </div>
+      <div className="tech-card-body">
+        <p className="ra-empty-group">{NO_REFIT_CANDIDATES}</p>
+      </div>
+    </div>
+  );
+}
+
+function RefitHalf({ refit }) {
+  if (refit.state === 'unavailable' || refit.state === 'failed') {
+    return <RefitUnavailableCard headline={refit.headline} detail={refit.detail} />;
+  }
+  if (refit.state === 'empty') {
+    return <RefitEmptyCard />;
+  }
+  return <RefitSection refitItems={refit.refitItems} />;
+}
+
+/** The refit half when candidates are present. */
 function RefitSection({ refitItems }) {
   const sorted = sortRefitItems(refitItems);
   return (
@@ -391,7 +431,7 @@ function RefitSection({ refitItems }) {
 }
 
 export function FleetProcurement({ payload, refitPayload = null }) {
-  const { procurementPayload, refitItems, refitsRenderable } = normalizePayload(payload, refitPayload);
+  const { procurementPayload, refit } = normalizePayload(payload, refitPayload);
 
   return (
     <div className="fleet-dashboard-layout">
@@ -399,7 +439,7 @@ export function FleetProcurement({ payload, refitPayload = null }) {
         payload={procurementPayload}
         onFullBreakdown={() => openProcurementDetails(procurementPayload)}
       />
-      {refitsRenderable ? <RefitSection refitItems={refitItems} /> : null}
+      <RefitHalf refit={refit} />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 //
 // Purpose: the thin browser proof that the React FLEET panel is real — it mounts
 //   at the production id, its honest unavailable states survive the port, and
-//   register defect #4's fabricated armour score stays fixed.
+//   register defects #4 and #20 stay fixed.
 //
 // DELIBERATELY THIN. `tests/refitAdvisor.test.js` (16) and
 // `tests/researchRanking.test.js` (63) are the safety net and both survived the
@@ -10,9 +10,14 @@
 // characterise the four drive states, the three armour states, the obsolete
 // demotion, the severity thresholds and the procurement row's null discipline
 // against the live fixture in both modes. Re-characterising that here would
-// double the test code for nothing. These six cover only what neither file can:
+// double the test code for nothing. These seven cover only what neither file can:
 // the mount is live, the bridge is the React one, the click handlers survived
-// `innerHTML` becoming a React tree, and the defect #4 fix holds.
+// `innerHTML` becoming a React tree, the defect #4 fix holds, and defect #20's
+// three refit states stay distinguishable.
+//
+// DEFECT #20 MUTATION CHECK (2026-08-26). Reverting `refitView` to the vanilla
+// `refitsRenderable` guard made the new test fail on all three states at once;
+// restoring the fix turned it green again.
 
 const { test, after } = require('node:test');
 const assert = require('node:assert');
@@ -147,6 +152,48 @@ test('an endpoint that did not answer renders the honest card, never a placehold
   assert.match(emptyText, /0 UNFIELDED/, 'a measured zero is stated as zero');
   assert.match(emptyText, /All researched components and ship hulls are currently in service/);
   assert.ok(!emptyText.includes('PROCUREMENT DATA UNAVAILABLE'), 'measured-empty is not reported as unavailable');
+});
+
+test('DEFECT #20: dead refit endpoint, explicit failure and measured-empty render distinct affordances', async () => {
+  const page = await getFleetProcurementHarnessPage();
+
+  const deadHtml = await renderFleetProcurementOnPage(page, PROCUREMENT_PAYLOAD, null);
+  const deadText = visibleText(deadHtml);
+  assert.match(deadText, /REFIT DATA UNAVAILABLE/, 'dead endpoint: states refit data is unavailable');
+  assert.match(deadText, /The refit-advisor endpoint did not answer for this snapshot\./,
+    'dead endpoint: names the missing answer');
+  assert.ok(!deadHtml.includes('fp-refit-grid'), 'dead endpoint: renders no design grid');
+  assert.ok(!/\b0 FLEET DESIGNS EVALUATED\b/.test(deadText),
+    'dead endpoint: is not reported as a measured zero');
+
+  const failHtml = await renderFleetProcurementOnPage(page, PROCUREMENT_PAYLOAD, {
+    success: false,
+    error: 'Snapshot fingerprint mismatch',
+  });
+  const failText = visibleText(failHtml);
+  assert.match(failText, /REFIT DATA UNAVAILABLE/, 'explicit failure: states refit data is unavailable');
+  assert.match(failText, /Snapshot fingerprint mismatch/,
+    'explicit failure: carries the endpoint reason');
+  assert.ok(!failText.includes('The refit-advisor endpoint did not answer'),
+    'explicit failure: is not reported as a dead endpoint');
+  assert.ok(!failHtml.includes('fp-refit-grid'), 'explicit failure: renders no design grid');
+  assert.ok(!/\b0 FLEET DESIGNS EVALUATED\b/.test(failText),
+    'explicit failure: is not reported as a measured zero');
+
+  const emptyHtml = await renderFleetProcurementOnPage(page, PROCUREMENT_PAYLOAD, {
+    success: true,
+    items: [],
+    count: 0,
+  });
+  const emptyText = visibleText(emptyHtml);
+  assert.match(emptyText, /0 FLEET DESIGNS EVALUATED/, 'measured-empty: states zero evaluated');
+  assert.match(emptyText, /No fielded ship designs were available for refit evaluation in this snapshot\./,
+    'measured-empty: names the empty candidate set');
+  assert.ok(!emptyText.includes('REFIT DATA UNAVAILABLE'),
+    'measured-empty: is not reported as unavailable');
+  assert.ok(!emptyText.includes('did not answer'),
+    'measured-empty: is not reported as a dead endpoint');
+  assert.ok(!emptyHtml.includes('fp-refit-grid'), 'measured-empty: renders no design grid');
 });
 
 test('DEFECT #4: an armour with no resistance figures yields no ratio, and the recognised pair beside it still does', async () => {
