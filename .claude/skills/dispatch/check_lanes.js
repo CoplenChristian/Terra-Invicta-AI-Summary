@@ -242,16 +242,41 @@ const LANES = {
     cli: 'codex',
     binName: 'codex',
     fallbackPath: 'F:\\Apps\\codex',
-    supportsModel: false,
+    supportsModel: true,
     trustFlags: null, // codex has no such flag; its sandbox posture lives in ~/.codex/config.toml
-    defaultModel: null, // taken from the user's ~/.codex/config.toml
+    // PINNED TO LUNA — and pinned as a REFUSAL, not as a default.
+    //
+    // Until 2026-08-26 this lane declared supportsModel: false and built no `-m`
+    // flag at all, so every dispatch inherited whatever `~/.codex/config.toml`
+    // happened to hold. Measured that day, that file reads
+    // `model = "gpt-5.6-sol"` with `model_reasoning_effort = "max"`, so
+    // mechanical work was being handed to a large model at maximum effort: one
+    // 618-line task ran 1,664 s and consumed the user's entire 5-hour quota.
+    // The user's instruction is to only ever use Luna on this lane, so the model
+    // is now named explicitly on EVERY dispatch, the `resume` subcommand
+    // included, and cannot be silently inherited.
+    //
+    // `defaultModel` alone would only be a default: it loses to any value in the
+    // policy file. `pinnedModel` is what makes a different configured model a
+    // hard refusal instead — the same rule, enforced the same way, as trustFlag.
+    // The two differ in which direction the failure falls, which is why the pin
+    // is the stricter of the two: an unrecognised trust flag would at least fail
+    // loudly as a bad argument to the CLI, whereas an unpinned model here would
+    // be cheerfully ACCEPTED by codex and quietly spend the quota on the wrong
+    // model. Verified 2026-08-26: "gpt-5.6-luna" appears 2,620 times across the
+    // user's own ~/.codex/sessions, so it is a slug this install really runs.
+    //
+    // NOTE `-m` overrides the model ONLY. `model_reasoning_effort = "max"` in
+    // that same config still applies, and nothing here changes it.
+    defaultModel: 'gpt-5.6-luna',
+    pinnedModel: 'gpt-5.6-luna',
     costClass: 'plan-included',
-    costNote: 'Included in the ChatGPT plan.',
+    costNote: 'Included in the ChatGPT plan. Pinned to gpt-5.6-luna; note that ~/.codex/config.toml still sets model_reasoning_effort = "max", which -m does not override.',
     routing: 'All-rounder — small model, punches above its size.',
     risk: 'HIGHEST RISK LANE. ~/.codex/config.toml sets sandbox_mode = "danger-full-access" and runs report approval: never, so this lane has full filesystem access with no prompts.',
     // stdin is closed rather than redirected from /dev/null: spawn() takes
     // stdio: ['ignore', ...], which is the portable form of `< /dev/null`.
-    buildArgs: ({ prompt, resume, outputFile }) => codexArgs(prompt, resume, outputFile),
+    buildArgs: ({ model, prompt, resume, outputFile }) => codexArgs(model, prompt, resume, outputFile),
     // codex writes its final message to a file, which beats parsing stdout.
     wantsOutputFile: true,
   },
@@ -369,10 +394,10 @@ function cursorArgs(model, prompt, resume, trustFlag) {
   return args;
 }
 
-function codexArgs(prompt, resume, outputFile) {
-  //   fresh : exec --skip-git-repo-check [-o FILE] <prompt>
-  //   last  : exec resume --last --skip-git-repo-check [-o FILE] <prompt>
-  //   id    : exec resume --skip-git-repo-check [-o FILE] <id> <prompt>
+function codexArgs(model, prompt, resume, outputFile) {
+  //   fresh : exec -m <model> --skip-git-repo-check [-o FILE] <prompt>
+  //   last  : exec resume -m <model> --last --skip-git-repo-check [-o FILE] <prompt>
+  //   id    : exec resume -m <model> --skip-git-repo-check [-o FILE] <id> <prompt>
   //
   // `codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]` — the id is a positional
   // that comes BEFORE the prompt, so appending a flag would malform the command.
@@ -381,6 +406,40 @@ function codexArgs(prompt, resume, outputFile) {
   // prompt from stdin..." rather than treating it as a missing session id.
   const args = ['exec'];
   if (resume.kind !== 'none') args.push('resume');
+
+  // The model is named on EVERY shape, pushed here — after the subcommand tokens
+  // and before every option and both positionals — so it binds to whichever
+  // subcommand was just built. Three things make this placement correct rather
+  // than merely convenient, and the resume shape is the one that needed proving:
+  //
+  //   1. `codex exec resume` declares its OWN `-m, --model <MODEL>`. Read from
+  //      `codex exec resume --help` on 2026-08-26, listed among its options
+  //      alongside `--last` and `--skip-git-repo-check`. The flag therefore does
+  //      NOT need hoisting onto `exec` ahead of the `resume` token, which is the
+  //      shape that would have been required had resume not accepted it.
+  //   2. `-m` takes exactly ONE value, so it consumes the slug and nothing else.
+  //      It cannot swallow the SESSION_ID or PROMPT positionals that follow —
+  //      the failure mode `--resume` has on cursor-agent, whose optional value
+  //      would eat the prompt.
+  //   3. Options precede positionals here, so the `[SESSION_ID] [PROMPT]`
+  //      ordering the resume grammar requires is untouched by the insertion.
+  //
+  // assertPinnedModelPlumbing() re-checks all three shapes at module load, so a
+  // future edit cannot quietly drop the flag from one of them.
+  //
+  // An absent model is a hard failure, never an omitted flag: dropping `-m`
+  // would silently inherit whatever ~/.codex/config.toml holds, which is the
+  // exact defect the pin exists to close. Absent stays absent — it does not
+  // become "use the CLI's default".
+  if (typeof model !== 'string' || model.trim() === '') {
+    throw new Error(
+      'Refusing to build a codex dispatch with no model. This lane is pinned, and omitting `-m` ' +
+        'would silently inherit the model from ~/.codex/config.toml — the exact behaviour the pin ' +
+        'exists to prevent, and how a mechanical task came to run on a large model at max reasoning effort.'
+    );
+  }
+  args.push('-m', model.trim());
+
   if (resume.kind === 'last') args.push('--last');
   args.push('--skip-git-repo-check');
   if (outputFile !== null) args.push('--output-last-message', outputFile);
@@ -431,6 +490,77 @@ function assertTrustFlagPlumbing() {
 }
 
 assertTrustFlagPlumbing();
+
+/**
+ * Startup integrity check on the pinned-model plumbing.
+ *
+ * The same silent, wrong-way-round failure assertTrustFlagPlumbing guards, and
+ * this lane is the one that already suffered it: codex declared no model and
+ * built no `-m`, so the CLI ran whatever its own config held while nothing on
+ * any surface said so. A pin the argv builder forgets is indistinguishable from
+ * a pin that works — the lane table would print the slug, the dry-run would
+ * print the slug, the approval card would print the slug, and the dispatch
+ * would still inherit a different model entirely.
+ *
+ * All three resume shapes are checked, not just the fresh one, because codex is
+ * the lane whose argv is RESTRUCTURED for a resume: a `resume` subcommand with
+ * the session id as a positional ahead of the prompt. "The flag is in argv" has
+ * to hold three times there, not once, and it has to be in a position where the
+ * flag actually binds — hence the check that the slug is preceded by -m/--model
+ * rather than merely present somewhere in the array.
+ *
+ * It runs at module load and throws, because the lane registry is code rather
+ * than config: a mismatch can only be introduced by editing this file.
+ */
+function assertPinnedModelPlumbing() {
+  const SHAPES = [
+    { kind: 'none', id: null },
+    { kind: 'last', id: null },
+    { kind: 'id', id: '00000000-0000-0000-0000-000000000000' },
+  ];
+  for (const key of LANE_KEYS) {
+    const lane = LANES[key];
+    const pin = lane.pinnedModel === undefined || lane.pinnedModel === null ? null : lane.pinnedModel;
+    if (pin === null) continue;
+
+    if (lane.supportsModel !== true) {
+      throw new Error(
+        `Lane registry is inconsistent: lane "${key}" pins model "${pin}" but declares supportsModel: false, ` +
+          `so no model flag would ever be built and the pin would be decorative. Set supportsModel: true, or remove the pin.`
+      );
+    }
+    if (lane.defaultModel !== pin) {
+      throw new Error(
+        `Lane registry is inconsistent: lane "${key}" pins model "${pin}" but its defaultModel is ` +
+          `${JSON.stringify(lane.defaultModel)}. A lane the config does not mention falls back to defaultModel, ` +
+          `so the two disagreeing means an unconfigured lane would dispatch a model the pin forbids.`
+      );
+    }
+
+    for (const resume of SHAPES) {
+      const argv = lane.buildArgs({
+        model: pin,
+        prompt: '<plumbing probe — never dispatched>',
+        promptPath: '<plumbing probe — never dispatched>',
+        resume,
+        outputFile: null,
+        trustFlag: null,
+        cwd: null,
+      });
+      const at = argv.indexOf(pin);
+      if (at < 1 || (argv[at - 1] !== '-m' && argv[at - 1] !== '--model')) {
+        throw new Error(
+          `Lane registry is inconsistent: lane "${key}" pins model "${pin}", but its buildArgs did not place ` +
+            `that slug immediately after a -m/--model flag for resume kind "${resume.kind}". ` +
+            `Built: ${JSON.stringify(argv)}. An unplumbed pin is invisible: every surface would name the model ` +
+            `while ${lane.cli} silently used its own configured default.`
+        );
+      }
+    }
+  }
+}
+
+assertPinnedModelPlumbing();
 
 // ---------------------------------------------------------------------------
 // Small helpers. Every one of these returns null rather than a stand-in value.
@@ -714,35 +844,83 @@ function resolveMode(laneKey, config) {
   };
 }
 
-/** Resolves the model slug for one lane and reports where it came from. */
+/**
+ * Resolves the model slug for one lane and reports where it came from.
+ *
+ * A lane may additionally be PINNED, which is a stronger thing than a default.
+ * A default merely fills a gap and loses to any configured value; a pin means
+ * the lane accepts exactly one model and REFUSES every other, the same way
+ * resolveTrustFlag refuses a literal its lane does not accept. Both exist for
+ * the same reason — the value is about to become an element of an argv array
+ * handed to a CLI, and a policy file is not a place to accept an arbitrary one.
+ *
+ * The pin is the stricter of the two because its failure falls the other way.
+ * An unrecognised trust flag would at least be rejected by the CLI as an unknown
+ * argument. An unpinned model would be ACCEPTED, and the dispatch would run —
+ * just on a model the user has forbidden, spending a quota they cannot get back.
+ * "Forward it and let the CLI complain" does not work when the CLI will not.
+ *
+ * Note which way this fails safe: on a refusal the returned `model` is still the
+ * PIN, not null and not the configured value. The dispatch path refuses before
+ * building anything, so nothing runs — but if some future path ever reads this
+ * without checking `error`, it gets the permitted model rather than a null that
+ * would drop the flag and re-inherit the CLI's own default.
+ */
 function resolveModel(laneKey, config) {
   const lane = LANES[laneKey];
   if (!lane.supportsModel) {
-    return {
-      model: null,
-      source: 'lane-takes-no-model-flag',
-      note:
-        laneKey === 'codex'
-          ? 'codex uses the model in ~/.codex/config.toml. This script does not change that file.'
-          : null,
-    };
+    return { model: null, configured: null, source: 'lane-takes-no-model-flag', note: null, error: null };
   }
+
   const entry = Object.prototype.hasOwnProperty.call(config.lanes, laneKey) ? config.lanes[laneKey] : null;
   const configured = entry === null ? undefined : entry.model;
+  const pin = lane.pinnedModel === undefined || lane.pinnedModel === null ? null : lane.pinnedModel;
+
+  if (pin !== null) {
+    if (configured === undefined || configured === null) {
+      return {
+        model: pin,
+        configured: null,
+        source: 'lane-pinned',
+        note: `Lane "${laneKey}" is pinned to ${pin} in the lane registry, and passes it explicitly on every dispatch. It is not inherited from the CLI's own configuration.`,
+        error: null,
+      };
+    }
+    if (typeof configured === 'string' && configured.trim() === pin) {
+      return { model: pin, configured, source: 'config-matches-pin', note: null, error: null };
+    }
+    return {
+      model: pin,
+      configured,
+      source: 'refused-model-not-permitted',
+      note: null,
+      error:
+        `Lane "${laneKey}" has model ${JSON.stringify(configured)} in ${config.path}, but that lane is PINNED to ` +
+        `${JSON.stringify(pin)} and accepts no other model. Refusing to dispatch rather than forwarding it: ` +
+        `${lane.cli} would ACCEPT the substitute and run it, so passing it through would spend the user's quota on ` +
+        `a model the pin exists to forbid — it would not fail loudly the way a bad flag does. ` +
+        `Set the value to ${JSON.stringify(pin)} in ${config.path}, or remove the key entirely to use the pin.`,
+    };
+  }
+
   if (typeof configured === 'string' && configured.trim() !== '') {
-    return { model: configured.trim(), source: 'config', note: null };
+    return { model: configured.trim(), configured, source: 'config', note: null, error: null };
   }
   if (configured !== undefined && configured !== null) {
     return {
       model: lane.defaultModel,
+      configured,
       source: 'built-in-default',
       note: `Config value ${JSON.stringify(configured)} is not a usable model slug; fell back to the built-in default.`,
+      error: null,
     };
   }
   return {
     model: lane.defaultModel,
+    configured: null,
     source: lane.defaultModel === null ? 'cli-default' : 'built-in-default',
     note: lane.defaultModel === null ? 'No model flag is passed; the CLI uses its own configured default.' : null,
+    error: null,
   };
 }
 
@@ -2133,8 +2311,11 @@ function buildLaneReport(laneKey, config, cwd) {
     modeSource: modeInfo.source,
     modeReason: modeInfo.reason,
     model: modelInfo.model,
+    modelConfigured: modelInfo.configured,
     modelSource: modelInfo.source,
     modelNote: modelInfo.note,
+    modelError: modelInfo.error,
+    modelPinned: lane.pinnedModel === undefined ? null : lane.pinnedModel,
     trustFlag: trustInfo.flag,
     trustFlagConfigured: trustInfo.configured,
     trustFlagSource: trustInfo.source,
@@ -2215,6 +2396,7 @@ async function main() {
         const notes = [];
         if (l.modeSource !== 'config') notes.push(`mode: ${l.modeReason}`);
         if (l.available !== true) notes.push(`${l.available === false ? 'unavailable' : 'UNKNOWN'}: ${l.reason || 'no reason recorded'}`);
+        if (l.modelError !== null) notes.push(`MODEL REFUSED: ${l.modelError}`);
         if (l.modelNote !== null) notes.push(`model: ${l.modelNote}`);
         if (l.trustFlagError !== null) notes.push(`TRUST FLAG INVALID: ${l.trustFlagError}`);
         if (l.trustFlagNote !== null) notes.push(`trust flag: ${l.trustFlagNote}`);
@@ -2304,6 +2486,41 @@ async function main() {
     );
   }
 
+  // GATE 0.6 — a PINNED lane's model must be the pinned one. Same place in the
+  // order, same exit code and same reasoning as the trust-flag gate above: a
+  // malformed policy value is a config error rather than a lane problem, so it
+  // is settled before the lane is probed or contacted, and it must fail
+  // identically under --dry-run — a preview that quietly swapped in the pinned
+  // model would show the user a command that is not the one a real run builds.
+  //
+  // This gate is what makes the pin a pin. Without it, `defaultModel` would only
+  // fill a gap and any configured model would win, which is the inheritance this
+  // whole change exists to close — just relocated from ~/.codex/config.toml to
+  // the policy file.
+  const earlyModel = resolveModel(opts.lane, config);
+  if (earlyModel.error !== null) {
+    if (!opts.json) process.stderr.write(`Config error: ${earlyModel.error}\n`);
+    emit(
+      {
+        ok: false,
+        action: 'model-not-permitted',
+        lane: opts.lane,
+        errors: [earlyModel.error],
+        model: null,
+        modelConfigured: earlyModel.configured,
+        modelSource: earlyModel.source,
+        modelPinned: LANES[opts.lane].pinnedModel,
+        configPath: config.path,
+        configFound: config.found,
+        promptFile: prompt.resolvedPath,
+        promptChars: prompt.text.length,
+        probed: false,
+      },
+      opts,
+      EXIT.USAGE_ERROR
+    );
+  }
+
   const report = buildLaneReport(opts.lane, config, opts.cwd);
   const lane = LANES[opts.lane];
   const resume = resumeIntent(opts);
@@ -2317,6 +2534,7 @@ async function main() {
     modeReason: report.modeReason,
     model: report.model,
     modelSource: report.modelSource,
+    modelPinned: report.modelPinned,
     trustFlag: report.trustFlag,
     trustFlagSource: report.trustFlagSource,
     trustFlagGrant: report.trustFlagGrant,
@@ -2446,6 +2664,10 @@ async function main() {
     say(`DRY RUN — nothing was executed.`);
     say(`  lane      ${opts.lane} (${report.label})`);
     say(`  mode      ${report.mode}  [${report.modeSource}]`);
+    // The model is shown on its own line, not left to be spotted inside the
+    // argv dump. This lane's defect was an unnamed model, and a preview that
+    // only implies which model runs is how that went unnoticed for so long.
+    say(`  model     ${report.model === null ? '(none passed — the CLI uses its own configured default)' : report.model}  [${report.modelSource}]${report.modelPinned === null ? '' : ` — PINNED, no other model is accepted on this lane`}`);
     say(`  session   ${describeResume(payload.resume)}`);
     say(`  cost      ${report.costClass} — ${report.costNote}`);
     if (report.risk !== null) say(`  RISK      ${report.risk}`);
@@ -2469,6 +2691,7 @@ async function main() {
     }
     complain(`APPROVAL REQUIRED — nothing was executed.`);
     complain(`  ${payload.reason}`);
+    complain(`  model: ${report.model === null ? '(none passed — the CLI uses its own configured default)' : report.model}${report.modelPinned === null ? '' : ' (PINNED)'}`);
     complain(`  session: ${describeResume(payload.resume)}`);
     complain(`  cost: ${report.costClass} — ${report.costNote}`);
     if (report.risk !== null) complain(`  RISK: ${report.risk}`);

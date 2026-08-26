@@ -213,7 +213,7 @@ From the working agreement in `CLAUDE.md`:
 | `minimax` | slow | review, critique, verification | implementation |
 | `composer` | moderate | **long multi-file implementation runs** | — |
 | `grok` | moderate | analysis, research, single-shot code (defaults to `cursor-grok-4.6-high`) | long autonomous agent runs — its agentic coding regressed against 4.5 |
-| `codex` | moderate | all-rounder; punches above its size | see the risk note below |
+| `codex` | moderate | all-rounder; punches above its size (pinned to `gpt-5.6-luna`) | see the risk note below |
 
 Composer for the long build, Grok for the thinking. Routing them the other way round
 is the mistake that table exists to prevent.
@@ -232,6 +232,14 @@ they can do faster. When they are away, dispatching is the point.
   anything the account can reach. Treat a codex dispatch as consequential and say so
   when asking. **Never change that config** — not to make it safer, not for a single
   run. It is the user's setting.
+- **`codex` only ever runs Luna.** The lane is pinned to `gpt-5.6-luna` in the lane
+  registry and passes `-m` explicitly on every dispatch. Before 2026-08-26 it passed
+  no model flag at all and inherited `model = "gpt-5.6-sol"` from that config, so
+  mechanical work went to a large model at `model_reasoning_effort = "max"`: one
+  618-line task ran 1,664 s and consumed the whole 5-hour quota. **`-m` overrides the
+  model only** — the `max` reasoning effort in `~/.codex/config.toml` still applies,
+  and nothing in this skill changes it. If a codex run is still slow and expensive,
+  that setting is why; raise it with the user rather than editing their config.
 - **`deepseek` is metered.** Real money per call. Say so before asking.
 - **`antigravity` has a ~16k input-token floor per call.** There is no cheap `agy`
   call, so batch small questions rather than making several.
@@ -320,6 +328,11 @@ input, output, total, cache and cost. Two things to know:
 6. A `trustFlag` value it does not recognise fails the dispatch (exit 5) instead
    of being passed to the CLI, and any flag it does accept is named — with what
    it grants — in every preview the user approves from.
+7. **`codex` is pinned to `gpt-5.6-luna`.** The model is passed explicitly as
+   `-m` on every dispatch — the `resume` subcommand included — so the lane can
+   never inherit one from `~/.codex/config.toml`. A `model` set to anything else
+   in the config fails the dispatch (exit 5) rather than being forwarded, because
+   codex would *accept* a substitute and run it. See the note below.
 
 It does **not** downgrade or override any mode. The config is authoritative.
 
