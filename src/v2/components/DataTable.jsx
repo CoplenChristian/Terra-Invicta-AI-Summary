@@ -106,16 +106,23 @@ export function DataTable({
   const tableBody = children ?? (
     <tbody>
       {(rows || []).map((row, rowIndex) => (
-        <tr key={row.key ?? rowIndex} className={rowClass}>
-          {(columns || []).map((col) => (
-            <td
-              key={col.key}
-              className={[cellClass, col.className].filter(Boolean).join(' ') || undefined}
-              style={col.align ? { textAlign: col.align } : undefined}
-            >
-              {row[col.key]}
-            </td>
-          ))}
+        <tr
+          key={row.key ?? rowIndex}
+          className={[rowClass, row.className].filter(Boolean).join(' ') || undefined}
+        >
+          {(columns || []).map((col, colIndex) => {
+            const CellTag = colIndex === 0 && row.rowHeader ? 'th' : 'td';
+            return (
+              <CellTag
+                key={col.key}
+                scope={CellTag === 'th' ? 'row' : undefined}
+                className={[cellClass, col.className].filter(Boolean).join(' ') || undefined}
+                style={col.align ? { textAlign: col.align } : undefined}
+              >
+                {row[col.key]}
+              </CellTag>
+            );
+          })}
         </tr>
       ))}
     </tbody>

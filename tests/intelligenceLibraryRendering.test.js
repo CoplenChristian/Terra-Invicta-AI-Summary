@@ -1,9 +1,9 @@
 // tests/intelligenceLibraryRendering.test.js
 //
 // Purpose: characterisation coverage for
-//   public/v2/js/components/intelligence-library.js. The library is a
-//   render-only overlay; these tests pin the visible records and navigation
-//   contract before the React migration.
+//   src/v2/panels/IntelligenceLibrary.jsx. The library is a render-only overlay;
+//   these tests pin the visible records and navigation contract after the React
+//   migration.
 //
 // ENTRY-POINT CONTRACT (confirmed against public/v2/index.html call sites):
 //   window.IntelligenceLibrary = { render }
@@ -11,6 +11,9 @@
 //     container with the shell, nav, and the section panel selected by
 //     options.section. options.spaceTab and options.spaceTheater narrow the
 //     space section; options.section defaults to 'overview'.
+//
+// Harness: real browser via tests/fixtures/intelligenceLibraryBrowser.js and
+//   public/v2/primitives-harness.html?scene=intelligenceLibrary.
 //
 // NULLABLE MAP (every no-data affordance, with the input that produces it):
 //   'UNAVAILABLE' (literal string):
@@ -75,103 +78,39 @@
 //     - When servantTargets is [] or absent, the priority panel does not mount.
 //
 // RED PROOF (2026-08-25): temporarily replaced the `'UNAVAILABLE'` token in
-//   the `topSkill` fallback (public/v2/js/components/intelligence-library.js
-//   line 69) with the em dash `'—'`. Running only this file went red with
-//   two failures — the per-metric councilor maskedAttributes test caught
-//   the missing UNAVAILABLE on the Lead skill cell, and the partial-render
-//   test caught the same regression inside the councilors section of its
-//   mixed measured/null render. The component line was restored immediately;
-//   there is no source-file change.
+//   the `topSkill` fallback (src/v2/panels/IntelligenceLibrary.jsx) with the
+//   em dash `'—'`. Running only this file went red with two failures — the
+//   per-metric councilor maskedAttributes test caught the missing UNAVAILABLE
+//   on the Lead skill cell, and the partial-render test caught the same
+//   regression inside the councilors section of its mixed measured/null render.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { runComponent, visibleText } = require('./fixtures/renderHarness');
+const {
+  withIntelligenceLibraryHarnessPage,
+  getHarnessHtml,
+  getHarnessText,
+  visibleText,
+} = require('./fixtures/intelligenceLibraryBrowser');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
-const { DOMNode, createMockEnvironment, serializeNode } = require('./fixtures/mockDom');
 
 const repoRoot = path.resolve(__dirname, '..');
-const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'intelligence-library.js');
 const shellPath = path.join(repoRoot, 'public', 'v2', 'index.html');
 
-// mockDom intentionally stays small. These are the browser properties this
-// component uses while binding its generated navigation controls; the shipped
-// shared bundle still comes from renderHarness, never from a test copy.
-function installComponentDomProperties() {
-  if (!Object.prototype.hasOwnProperty.call(DOMNode.prototype, 'nodeType')) {
-    Object.defineProperty(DOMNode.prototype, 'nodeType', {
-      configurable: true,
-      get() { return this.tagName === '#TEXT' ? 3 : 1; }
-    });
-  }
-
-  if (!Object.prototype.hasOwnProperty.call(DOMNode.prototype, 'dataset')) {
-    Object.defineProperty(DOMNode.prototype, 'dataset', {
-      configurable: true,
-      get() {
-        const node = this;
-        return new Proxy({}, {
-          get(target, property) {
-            const attribute = 'data-' + String(property).replace(/[A-Z]/g, letter => '-' + letter.toLowerCase());
-            return node.getAttribute(attribute) ?? undefined;
-          },
-          set(target, property, value) {
-            const attribute = 'data-' + String(property).replace(/[A-Z]/g, letter => '-' + letter.toLowerCase());
-            node.setAttribute(attribute, value);
-            return true;
-          }
-        });
-      }
-    });
-  }
-
-  if (!Object.prototype.hasOwnProperty.call(DOMNode.prototype, 'classList')) {
-    Object.defineProperty(DOMNode.prototype, 'classList', {
-      configurable: true,
-      get() {
-        const node = this;
-        const getClasses = () => new Set((node.getAttribute('class') || '').split(/\s+/).filter(Boolean));
-        const save = classes => node.setAttribute('class', [...classes].join(' '));
-        return {
-          contains(className) { return getClasses().has(className); },
-          add(...classNames) {
-            const classes = getClasses();
-            classNames.forEach(className => classes.add(className));
-            save(classes);
-          },
-          remove(...classNames) {
-            const classes = getClasses();
-            classNames.forEach(className => classes.delete(className));
-            save(classes);
-          },
-          toggle(className, force) {
-            const classes = getClasses();
-            const shouldHave = force === undefined ? !classes.has(className) : Boolean(force);
-            if (shouldHave) classes.add(className); else classes.delete(className);
-            save(classes);
-            return shouldHave;
-          }
-        };
-      }
-    });
-  }
-}
-
-installComponentDomProperties();
-
-function loadComponent() {
-  return runComponent(componentPath).window.IntelligenceLibrary;
-}
-
-function renderLibrary(snapshot, options = {}, briefing = null) {
-  const { document, window } = createMockEnvironment();
-  const component = runComponent(componentPath, { document, window }).window.IntelligenceLibrary;
-  const root = document.createElement('div');
-  component.render(root, snapshot, briefing, 4712, options);
-  const html = serializeNode(root);
-  return { component, document, root, html, text: visibleText(html) };
+async function renderLibrary(snapshot, options = {}, briefing = null, callbacks = {}) {
+  let result = { html: '', text: '' };
+  await withIntelligenceLibraryHarnessPage(
+    { snapshot, briefing, observerId: 4712, options },
+    async (page) => {
+      result.html = await getHarnessHtml(page);
+      result.text = visibleText(result.html);
+    },
+    callbacks,
+  );
+  return result;
 }
 
 function briefingFixture() {
@@ -459,9 +398,9 @@ function measuredLibrarySnapshot(overrides = {}) {
 // Normal render: both visibility modes and the complete overlay navigation.
 // ---------------------------------------------------------------------------
 
-test('intelligence library renders the normal player snapshot and its own nav sections', () => {
+test('intelligence library renders the normal player snapshot and its own nav sections', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
-  const { text, root } = renderLibrary(snapshot, {}, briefingFixture());
+  const { text, html } = await renderLibrary(snapshot, {}, briefingFixture());
 
   assert.ok(text.includes('Campaign intelligence library'));
   assert.ok(text.includes('PLAYER INTEL / FILTERED'));
@@ -469,18 +408,18 @@ test('intelligence library renders the normal player snapshot and its own nav se
   assert.ok(text.includes('ACTIVE COUNCILORS'));
   assert.ok(text.includes('QUICK ROUTES'));
 
-  const navigation = root.querySelector('nav');
-  assert.ok(navigation, 'the component owns an intelligence-library nav');
-  const sections = [...navigation.querySelectorAll('[data-library-section]')];
-  assert.strictEqual(sections.length, 8, 'all eight library sections must be reachable from the overlay nav');
+  const navMatch = html.match(/<nav class="intel-library-nav"[\s\S]*?<\/nav>/);
+  assert.ok(navMatch, 'the component owns an intelligence-library nav');
+  const sections = (navMatch[0].match(/data-library-section="/g) || []).length;
+  assert.strictEqual(sections, 8, 'all eight library sections must be reachable from the overlay nav');
   for (const label of ['Overview', 'Faction balance', 'Councilors', 'Nations', 'Space & mining', 'Technology', 'Alien intelligence', 'Exports']) {
     assert.ok(text.includes(label), `the nav must retain its ${label} section`);
   }
 });
 
-test('intelligence library renders the normal omniscient snapshot with full-save labeling', () => {
+test('intelligence library renders the normal omniscient snapshot with full-save labeling', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient' });
-  const { text } = renderLibrary(snapshot, {}, briefingFixture());
+  const { text } = await renderLibrary(snapshot, {}, briefingFixture());
 
   assert.ok(text.includes('Campaign intelligence library'));
   assert.ok(text.includes('OMNISCIENT / FULL SAVE STATE'));
@@ -492,34 +431,34 @@ test('intelligence library renders the normal omniscient snapshot with full-save
 // Player redaction and omniscient alien records.
 // ---------------------------------------------------------------------------
 
-test('player councilor rendering keeps an observed enemy whose attributes are masked', () => {
+test('player councilor rendering keeps an observed enemy whose attributes are masked', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
   const target = firstObservedEnemy(snapshot);
   assert.ok(target, 'the frozen player fixture must contain an observed enemy with maskedAttributes');
   assert.equal(target.attributes, undefined, 'the player fixture must not expose the enemy attributes field');
 
-  const { text } = renderLibrary(snapshot, { section: 'councilors' });
+  const { text } = await renderLibrary(snapshot, { section: 'councilors' });
   assert.ok(text.includes(target.displayName), 'a player-visible enemy councilor must not be dropped by an attributes-only filter');
   assert.ok(text.includes(expectedMaskedTopSkill(target)), 'the visible skill must come from maskedAttributes');
   assert.ok(text.includes('Hidden attributes are intentionally represented as unavailable'));
 });
 
-test('omniscient councilor and threat sections retain active alien councilors', () => {
+test('omniscient councilor and threat sections retain active alien councilors', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient' });
   const alien = firstAlien(snapshot);
   assert.ok(alien, 'the frozen omniscient fixture must contain an active alien councilor');
 
-  const council = renderLibrary(snapshot, { section: 'councilors' });
+  const council = await renderLibrary(snapshot, { section: 'councilors' });
   assert.ok(council.text.includes(alien.displayName));
   assert.ok(council.text.includes('ALIEN'));
   assert.ok(council.text.includes('OMNISCIENT / FULL SAVE STATE'));
 
-  const threats = renderLibrary(snapshot, { section: 'threats' });
+  const threats = await renderLibrary(snapshot, { section: 'threats' });
   assert.ok(threats.text.includes('ACTIVE ALIEN COUNCILORS'));
   assert.ok(threats.text.includes(alien.displayName));
 });
 
-test('intelligence library sections retain representative records and field labels', () => {
+test('intelligence library sections retain representative records and field labels', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
   const briefing = briefingFixture();
   const site = snapshot.habSites.find(item => item.displayName);
@@ -530,40 +469,40 @@ test('intelligence library sections retain representative records and field labe
   const faction = snapshot.factions.find(item => item.ID === 4712);
   const nation = snapshot.nations.find(item => item.displayName);
 
-  const factions = renderLibrary(snapshot, { section: 'factions' }, briefing);
+  const factions = await renderLibrary(snapshot, { section: 'factions' }, briefing);
   assert.ok(factions.text.includes(faction.displayName));
   assert.ok(factions.text.includes('Hate of us'));
   assert.ok(factions.text.includes('Strategic score (est.)'));
 
-  const nations = renderLibrary(snapshot, { section: 'nations' }, briefing);
+  const nations = await renderLibrary(snapshot, { section: 'nations' }, briefing);
   assert.ok(nations.text.includes(nation.displayName));
   assert.ok(nations.text.includes('PRIORITY TARGETS'));
   assert.ok(nations.text.includes('GDP'));
 
-  const mining = renderLibrary(snapshot, { section: 'space', spaceTab: 'mining' }, briefing);
+  const mining = await renderLibrary(snapshot, { section: 'space', spaceTab: 'mining' }, briefing);
   assert.ok(mining.text.includes(site.displayName));
   assert.ok(mining.text.includes('Water/day'));
   assert.ok(mining.text.includes('Mine tier'));
 
-  const habs = renderLibrary(snapshot, { section: 'space', spaceTab: 'habs' }, briefing);
+  const habs = await renderLibrary(snapshot, { section: 'space', spaceTab: 'habs' }, briefing);
   assert.ok(habs.text.includes(hab.displayName));
   assert.ok(habs.text.includes('Orbit / body'));
 
-  const fleets = renderLibrary(snapshot, { section: 'space', spaceTab: 'fleets' }, briefing);
+  const fleets = await renderLibrary(snapshot, { section: 'space', spaceTab: 'fleets' }, briefing);
   assert.ok(fleets.text.includes(fleet.displayName));
   assert.ok(fleets.text.includes('Loadout'));
   assert.ok(fleets.text.includes('Arrival'));
 
-  const ships = renderLibrary(snapshot, { section: 'space', spaceTab: 'ships' }, briefing);
+  const ships = await renderLibrary(snapshot, { section: 'space', spaceTab: 'ships' }, briefing);
   if (ship) assert.ok(ships.text.includes(ship.displayName));
   assert.ok(ships.text.includes('Equipped weapons'));
 
-  const research = renderLibrary(snapshot, { section: 'research' }, briefing);
+  const research = await renderLibrary(snapshot, { section: 'research' }, briefing);
   assert.ok(research.text.includes(project.displayName));
   assert.ok(research.text.includes('dataName'));
   assert.ok(research.text.includes('Observer status'));
 
-  const exports = renderLibrary(snapshot, { section: 'exports' }, briefing);
+  const exports = await renderLibrary(snapshot, { section: 'exports' }, briefing);
   assert.ok(exports.text.includes('EXPORT PACKAGE'));
   assert.ok(exports.text.includes('Copy compact snapshot'));
   assert.ok(exports.text.includes('PLAYER INTEL / FILTERED'));
@@ -603,12 +542,12 @@ function degradedSnapshot() {
   };
 }
 
-test('intelligence library renders UNAVAILABLE when faction telemetry is absent', () => {
-  const { text } = renderLibrary(degradedSnapshot(), { section: 'factions' });
+test('intelligence library renders UNAVAILABLE when faction telemetry is absent', async () => {
+  const { text } = await renderLibrary(degradedSnapshot(), { section: 'factions' });
   assert.ok(text.includes('UNAVAILABLE'), 'missing power, relationship, and space values must remain UNAVAILABLE');
 });
 
-test('intelligence library renders UNKNOWN as a distinct research status', () => {
+test('intelligence library renders UNKNOWN as a distinct research status', async () => {
   const snapshot = degradedSnapshot();
   snapshot.techMatrix = [{
     projectId: 'Project_Unknown',
@@ -617,12 +556,12 @@ test('intelligence library renders UNKNOWN as a distinct research status', () =>
     effects: [],
     factions: { '4712': { status: 'UNKNOWN' } }
   }];
-  const { text } = renderLibrary(snapshot, { section: 'research' });
+  const { text } = await renderLibrary(snapshot, { section: 'research' });
   assert.ok(text.includes('UNKNOWN'), 'an unknown project status must not collapse into UNAVAILABLE or a blank cell');
 });
 
-test('intelligence library renders an em dash for an explicitly unmeasured nation field', () => {
-  const { text } = renderLibrary(degradedSnapshot(), { section: 'nations' });
+test('intelligence library renders an em dash for an explicitly unmeasured nation field', async () => {
+  const { text } = await renderLibrary(degradedSnapshot(), { section: 'nations' });
   assert.ok(text.includes('—'), 'null display and numeric nation fields must remain em dashes');
 });
 
@@ -630,20 +569,20 @@ test('intelligence library renders an em dash for an explicitly unmeasured natio
 // Priority target truncation must announce omissions, not drop them silently.
 // ---------------------------------------------------------------------------
 
-test('priority targets announce how many records the 8-entry display cap omits', () => {
+test('priority targets announce how many records the 8-entry display cap omits', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
   const allTargets = snapshot.servantTargets;
   assert.ok(Array.isArray(allTargets) && allTargets.length > 8,
     'the frozen intel fixture must carry more than eight servant targets so truncation is exercised');
   const omitted = allTargets.length - 8;
-  const { html, text } = renderLibrary(snapshot, { section: 'nations' });
+  const { html, text } = await renderLibrary(snapshot, { section: 'nations' });
   const renderedTargets = (html.match(/class="intel-library-target"/g) || []).length;
   assert.strictEqual(renderedTargets, 8, 'only the first eight priority targets may render');
   assert.match(text, new RegExp(`Showing 8 of ${allTargets.length} targets`));
   assert.match(text, new RegExp(`${omitted} further targets are omitted from this view`));
 });
 
-test('priority targets stay hidden when servantTargets is absent or empty', () => {
+test('priority targets stay hidden when servantTargets is absent or empty', async () => {
   const base = {
     mode: 'player',
     observerFactionName: 'the Initiative',
@@ -653,7 +592,7 @@ test('priority targets stay hidden when servantTargets is absent or empty', () =
   };
   for (const label of ['absent', 'empty']) {
     const snapshot = label === 'absent' ? { ...base } : { ...base, servantTargets: [] };
-    const { text } = renderLibrary(snapshot, { section: 'nations' });
+    const { text } = await renderLibrary(snapshot, { section: 'nations' });
     assert.ok(!text.includes('PRIORITY TARGETS'), `${label} servantTargets must not mount the priority panel`);
     assert.ok(!text.includes('omitted from this view'), `${label} servantTargets must not claim omissions`);
     assert.ok(!text.includes('Showing 0 of'), `${label} servantTargets must not read as showing zero of zero`);
@@ -664,8 +603,8 @@ test('priority targets stay hidden when servantTargets is absent or empty', () =
 // Empty versus absent payload fields, section navigation, and overlay hooks.
 // ---------------------------------------------------------------------------
 
-test('intelligence library distinguishes empty collections from absent collections', () => {
-  const empty = renderLibrary({
+test('intelligence library distinguishes empty collections from absent collections', async () => {
+  const empty = await renderLibrary({
     mode: 'player',
     observerFactionName: 'the Initiative',
     metadata: { gameTimeString: 'EMPTY INPUT' },
@@ -679,42 +618,61 @@ test('intelligence library distinguishes empty collections from absent collectio
   assert.ok(empty.text.includes('EMPTY INPUT'));
   assert.ok(empty.text.includes('FACTIONS 0 factions'));
 
-  const absent = renderLibrary({ mode: 'player', observerFactionName: 'the Initiative' });
+  const absent = await renderLibrary({ mode: 'player', observerFactionName: 'the Initiative' });
   assert.ok(absent.text.includes('Campaign intelligence library'));
   assert.ok(absent.text.includes('Campaign date —'));
   assert.ok(absent.text.includes('FACTIONS 0 factions'));
   assert.ok(!absent.text.includes('EMPTY INPUT'));
 });
 
-test('intelligence library navigation re-renders sections and exposes dossier callbacks', () => {
+test('intelligence library navigation re-renders sections and exposes dossier callbacks', async () => {
   const snapshot = loadFixtureFilteredSnapshot({ mode: 'player' });
   let openedFaction = null;
-  const rendered = renderLibrary(snapshot, { onOpenFaction: id => { openedFaction = id; } });
-
-  const threatsButton = rendered.root.querySelector('[data-library-section="threats"]');
-  assert.ok(threatsButton && typeof threatsButton.onclick === 'function');
-  threatsButton.onclick();
-  assert.ok(visibleText(serializeNode(rendered.root)).includes('Threat and discovery record'));
-
-  const factions = renderLibrary(snapshot, { section: 'factions', onOpenFaction: id => { openedFaction = id; } });
   const faction = snapshot.factions.find(item => item.ID !== 4712);
-  const dossierButton = factions.root.querySelector(`[data-library-faction="${faction.ID}"]`);
-  assert.ok(dossierButton && typeof dossierButton.onclick === 'function');
-  dossierButton.onclick();
+
+  await withIntelligenceLibraryHarnessPage(
+    { snapshot, briefing: briefingFixture(), observerId: 4712, options: {} },
+    async (page) => {
+      await page.click('[data-library-section="threats"]');
+      const text = await getHarnessText(page);
+      assert.ok(text.includes('Threat and discovery record'));
+    },
+  );
+
+  await withIntelligenceLibraryHarnessPage(
+    { snapshot, observerId: 4712, options: { section: 'factions' } },
+    async (page) => {
+      await page.click(`[data-library-faction="${faction.ID}"]`);
+    },
+    { onOpenFaction: (id) => { openedFaction = id; } },
+  );
   assert.strictEqual(openedFaction, faction.ID);
 });
 
-test('intelligence library overlay has an open mount and close path in the shipped shell', () => {
+test('intelligence library overlay has an open mount and close path in the shipped shell', async () => {
   const shell = fs.readFileSync(shellPath, 'utf8');
   assert.match(shell, /id="openIntelligenceLibraryBtn"/);
   assert.match(shell, /id="closeIntelligenceLibraryBtn"/);
   assert.match(shell, /data-intelligence-library-close/);
   assert.match(shell, /id="intelligenceLibraryRoot"/);
 
-  const rendered = renderLibrary(loadFixtureFilteredSnapshot({ mode: 'player' }));
-  assert.ok(rendered.root.querySelector('nav'), 'opening the overlay must mount the component nav into its root');
-  rendered.root.innerHTML = '';
-  assert.strictEqual(rendered.root.innerHTML, '', 'closing the overlay must leave its mount empty for the next open');
+  await withIntelligenceLibraryHarnessPage(
+    { snapshot: loadFixtureFilteredSnapshot({ mode: 'player' }), observerId: 4712, options: {} },
+    async (page) => {
+      const hasNav = await page.evaluate(() => Boolean(
+        document.querySelector('[data-testid="intelligence-library-harness"] nav'),
+      ));
+      assert.ok(hasNav, 'opening the overlay must mount the component nav into its root');
+      await page.evaluate(() => {
+        const mount = document.querySelector('[data-testid="intelligence-library-harness"]');
+        if (mount) mount.innerHTML = '';
+      });
+      const cleared = await page.evaluate(() =>
+        document.querySelector('[data-testid="intelligence-library-harness"]')?.innerHTML || '',
+      );
+      assert.strictEqual(cleared, '', 'closing the overlay must leave its mount empty for the next open');
+    },
+  );
 });
 // ---------------------------------------------------------------------------
 // Per-metric nullable assertions.
@@ -733,10 +691,10 @@ test('intelligence library overlay has an open mount and close path in the shipp
 // localised.
 // ---------------------------------------------------------------------------
 
-test('per-metric: councilor maskedAttributes empty leaves Lead skill UNAVAILABLE while Total and Org / traits stay measured', () => {
+test('per-metric: councilor maskedAttributes empty leaves Lead skill UNAVAILABLE while Total and Org / traits stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.councilors[0].maskedAttributes = {};
-  const { text } = renderLibrary(snapshot, { section: 'councilors' });
+  const { text } = await renderLibrary(snapshot, { section: 'councilors' });
 
   assert.ok(text.includes('UNAVAILABLE'), 'a councilor with no measured skill must surface UNAVAILABLE in the Lead skill column');
   assert.ok(text.includes('18'), 'the measured totalSkills neighbour must still render as 18');
@@ -745,10 +703,10 @@ test('per-metric: councilor maskedAttributes empty leaves Lead skill UNAVAILABLE
   assertNoRuntimePlaceholders(text, 'councilor topSkill null');
 });
 
-test('per-metric: councilor totalSkills null leaves Total em dash while Lead skill and Org / traits stay measured', () => {
+test('per-metric: councilor totalSkills null leaves Total em dash while Lead skill and Org / traits stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.councilors[0].totalSkills = null;
-  const { text } = renderLibrary(snapshot, { section: 'councilors' });
+  const { text } = await renderLibrary(snapshot, { section: 'councilors' });
 
   // The councilor row is "Director Hayes ... 18 ADM 7 Cabinet · Cautious VISIBLE".
   // Nulling totalSkills replaces the 18 with an em dash, and leaves ADM 7 and
@@ -762,12 +720,12 @@ test('per-metric: councilor totalSkills null leaves Total em dash while Lead ski
   assertNoRuntimePlaceholders(text, 'councilor totalSkills null');
 });
 
-test('per-metric: councilor orgs and traits empty with non-raw visibility leaves Org / traits UNAVAILABLE while Total and Lead skill stay measured', () => {
+test('per-metric: councilor orgs and traits empty with non-raw visibility leaves Org / traits UNAVAILABLE while Total and Lead skill stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.councilors[0].orgs = [];
   snapshot.councilors[0].traits = [];
   snapshot.councilors[0].visibility = 'unknown';
-  const { text } = renderLibrary(snapshot, { section: 'councilors' });
+  const { text } = await renderLibrary(snapshot, { section: 'councilors' });
 
   // Row: "Director Hayes ... 18 ADM 7 Cabinet · Cautious VISIBLE" → UNAVAILABLE
   // replaces the Cabinet · Cautious cell; 18 and ADM 7 stay.
@@ -776,10 +734,10 @@ test('per-metric: councilor orgs and traits empty with non-raw visibility leaves
   assertNoRuntimePlaceholders(text, 'councilor profile null');
 });
 
-test('per-metric: faction powerScore null leaves Strategic score UNAVAILABLE while GDP, CPs, and Habs stay measured', () => {
+test('per-metric: faction powerScore null leaves Strategic score UNAVAILABLE while GDP, CPs, and Habs stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.factions[0].powerScore = null;
-  const { text } = renderLibrary(snapshot, { section: 'factions' });
+  const { text } = await renderLibrary(snapshot, { section: 'factions' });
 
   // Measured baseline for the Initiative row is
   // "the Initiative UNAVAILABLE UNAVAILABLE 70/100 12 $1.23T 4 18 ships 1 ...".
@@ -800,10 +758,10 @@ test('per-metric: faction powerScore null leaves Strategic score UNAVAILABLE whi
   assertNoRuntimePlaceholders(text, 'faction powerScore null');
 });
 
-test('per-metric: faction totalGdp null leaves GDP em dash while Strategic score, CPs, and Habs stay measured', () => {
+test('per-metric: faction totalGdp null leaves GDP em dash while Strategic score, CPs, and Habs stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.factions[0].totalGdp = null;
-  const { text } = renderLibrary(snapshot, { section: 'factions' });
+  const { text } = await renderLibrary(snapshot, { section: 'factions' });
 
   // Initiative row: "70/100 12 $1.23T 4 ..." → GDP cell becomes em dash:
   // "70/100 12 — 4 ...". Servants row keeps $987.7B.
@@ -812,10 +770,10 @@ test('per-metric: faction totalGdp null leaves GDP em dash while Strategic score
   assertNoRuntimePlaceholders(text, 'faction totalGdp null');
 });
 
-test('per-metric: nation GDP null leaves GDP em dash while Mil tech, Armies, Unrest, and Cohesion stay measured', () => {
+test('per-metric: nation GDP null leaves GDP em dash while Mil tech, Armies, Unrest, and Cohesion stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.nations[0].GDP = null;
-  const { text } = renderLibrary(snapshot, { section: 'nations' });
+  const { text } = await renderLibrary(snapshot, { section: 'nations' });
 
   // Measured nation row: "United States the Initiative 2 $22.00T 5.2 25 0 0.5 4.0 3.50 50"
   // → GDP cell becomes em dash: "United States the Initiative 2 — 5.2 25 0 0.5 4.0 3.50 50".
@@ -828,7 +786,7 @@ test('per-metric: nation GDP null leaves GDP em dash while Mil tech, Armies, Unr
   assertNoRuntimePlaceholders(text, 'nation GDP null');
 });
 
-test('per-metric: nation nukes null renders an em dash while a measured zero renders the danger chip', () => {
+test('per-metric: nation nukes null renders an em dash while a measured zero renders the danger chip', async () => {
   // The nation row used to read `nation.nukes ? statusChip(number(nation.nukes, 0), 'danger') : '0'`,
   // which collapsed both `nukes: 0` (measured) and `nukes: null` (unmeasured) into
   // the literal "0" token — a reader could not distinguish a confirmed zero
@@ -837,15 +795,15 @@ test('per-metric: nation nukes null renders an em dash while a measured zero ren
   // carries the danger chip. Two assertions keep the distinction explicit.
   const measuredZero = measuredLibrarySnapshot();
   measuredZero.nations[0].nukes = 0;
-  const { text: zeroText, html: zeroHtml } = renderLibrary(measuredZero, { section: 'nations' });
+  const { text: zeroText, html: zeroHtml } = await renderLibrary(measuredZero, { section: 'nations' });
 
   const nulled = measuredLibrarySnapshot();
   nulled.nations[0].nukes = null;
-  const { text: nullText, html: nullHtml } = renderLibrary(nulled, { section: 'nations' });
+  const { text: nullText, html: nullHtml } = await renderLibrary(nulled, { section: 'nations' });
 
   const measuredN = measuredLibrarySnapshot();
   measuredN.nations[0].nukes = 5;
-  const { text: fiveText, html: fiveHtml } = renderLibrary(measuredN, { section: 'nations' });
+  const { text: fiveText, html: fiveHtml } = await renderLibrary(measuredN, { section: 'nations' });
 
   // Measured zero: the danger chip wraps the literal 0 — and the cell carries
   // the chip class. The reader sees "this nation has zero nukes" as a claim.
@@ -898,10 +856,10 @@ test('per-metric: nation nukes null renders an em dash while a measured zero ren
   assertNoRuntimePlaceholders(fiveText, 'nation nukes five');
 });
 
-test('per-metric: metadata gameTimeString null leaves Campaign date em dash in DATA PROVENANCE while Last modified and Active save stay measured', () => {
+test('per-metric: metadata gameTimeString null leaves Campaign date em dash in DATA PROVENANCE while Last modified and Active save stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.metadata.gameTimeString = null;
-  const { text } = renderLibrary(snapshot, { section: 'overview' });
+  const { text } = await renderLibrary(snapshot, { section: 'overview' });
 
   // DATA PROVENANCE rows: Campaign date / Active save / Last modified /
   // Executive directives. Nulling gameTimeString replaces just the
@@ -919,10 +877,10 @@ test('per-metric: metadata gameTimeString null leaves Campaign date em dash in D
 // render that mixes affordances in one pass.
 // ---------------------------------------------------------------------------
 
-test('per-metric: faction shipsCount null with spaceVisibility visible leaves Ships UNAVAILABLE while Strategic score, GDP, and Habs stay measured', () => {
+test('per-metric: faction shipsCount null with spaceVisibility visible leaves Ships UNAVAILABLE while Strategic score, GDP, and Habs stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.factions[0].shipsCount = null;
-  const { text } = renderLibrary(snapshot, { section: 'factions' });
+  const { text } = await renderLibrary(snapshot, { section: 'factions' });
 
   // Initiative row measured: "... 70/100 12 $1.23T 4 18 ships 1 ..."
   // The "18 ships" pair is the Ships column. Nulling shipsCount replaces
@@ -935,11 +893,11 @@ test('per-metric: faction shipsCount null with spaceVisibility visible leaves Sh
   assertNoRuntimePlaceholders(text, 'faction shipsCount null');
 });
 
-test('per-metric: fleet combatPowerAvailable false leaves Combat power UNAVAILABLE while Ships, Loadout, and Mission stay measured', () => {
+test('per-metric: fleet combatPowerAvailable false leaves Combat power UNAVAILABLE while Ships, Loadout, and Mission stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.fleets[0].combatPowerAvailable = false;
   snapshot.fleets[0].combatPower = null;
-  const { text } = renderLibrary(snapshot, { section: 'space', spaceTab: 'fleets' });
+  const { text } = await renderLibrary(snapshot, { section: 'space', spaceTab: 'fleets' });
 
   // Measured: "First Fleet the Initiative 4 1,000 MISSILE x2 · PD x1 Earth Patrol Mars 2042-01-01"
   // → "First Fleet the Initiative 4 UNAVAILABLE MISSILE x2 · PD x1 Earth Patrol Mars 2042-01-01".
@@ -952,10 +910,10 @@ test('per-metric: fleet combatPowerAvailable false leaves Combat power UNAVAILAB
   assertNoRuntimePlaceholders(text, 'fleet combatPowerAvailable false');
 });
 
-test('per-metric: tech matrix observer status missing faction entry leaves Observer status UNAVAILABLE while Project, dataName, and Category stay measured', () => {
+test('per-metric: tech matrix observer status missing faction entry leaves Observer status UNAVAILABLE while Project, dataName, and Category stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.techMatrix[0].factions = {};
-  const { text } = renderLibrary(snapshot, { section: 'research' });
+  const { text } = await renderLibrary(snapshot, { section: 'research' });
 
   // Measured: "Cryogenic Liquid-Fuel Rockets Project_Cryogenic propulsion completed Effect_ChemAdv1"
   // → "Cryogenic Liquid-Fuel Rockets Project_Cryogenic propulsion UNAVAILABLE Effect_ChemAdv1".
@@ -982,7 +940,7 @@ test('per-metric: tech matrix observer status missing faction entry leaves Obser
 // a single degraded banner when only some inputs are absent.
 // ---------------------------------------------------------------------------
 
-test('partial render mixes UNAVAILABLE and em dash affordances alongside measured values in the overview and factions sections', () => {
+test('partial render mixes UNAVAILABLE and em dash affordances alongside measured values in the overview and factions sections', async () => {
   const snapshot = measuredLibrarySnapshot();
   // null these five distinct metrics across four sections
   snapshot.metadata.gameTimeString = null;       // overview header + Campaign date → em dash
@@ -993,7 +951,7 @@ test('partial render mixes UNAVAILABLE and em dash affordances alongside measure
                                                // fleets Combat power → UNAVAILABLE
 
   // ---- overview ----
-  const overview = renderLibrary(snapshot, { section: 'overview' });
+  const overview = await renderLibrary(snapshot, { section: 'overview' });
   assert.ok(overview.text.includes('Campaign date —'), 'overview must show em dash for nulled Campaign date');
   assert.ok(overview.text.includes('PLAYER INTEL / FILTERED —'), 'overview header strip must also carry the em dash');
   assert.ok(overview.text.includes('FACTIONS 2 factions'), 'measured overview stat (faction count) must remain unchanged');
@@ -1001,7 +959,7 @@ test('partial render mixes UNAVAILABLE and em dash affordances alongside measure
     'overview neighbours of the nulled metadata must stay measured');
 
   // ---- factions ----
-  const factions = renderLibrary(snapshot, { section: 'factions' });
+  const factions = await renderLibrary(snapshot, { section: 'factions' });
   assert.ok(factions.text.includes('UNAVAILABLE'), 'the nulled powerScore must surface UNAVAILABLE in factions');
   assert.ok(factions.text.includes('12 — 4'),
     'the nulled totalGdp must surface em dash between the unchanged CPs (12) and Habs (4)');
@@ -1009,7 +967,7 @@ test('partial render mixes UNAVAILABLE and em dash affordances alongside measure
     'the second faction row must stay measured — nulling the Initiative must not cascade to the Servants');
 
   // ---- councilors ----
-  const councilors = renderLibrary(snapshot, { section: 'councilors' });
+  const councilors = await renderLibrary(snapshot, { section: 'councilors' });
   assert.ok(councilors.text.includes('UNAVAILABLE'),
     'the nulled maskedAttributes must surface UNAVAILABLE in the Lead skill column');
   assert.ok(councilors.text.includes('18'),
@@ -1018,7 +976,7 @@ test('partial render mixes UNAVAILABLE and em dash affordances alongside measure
     'the Org / traits neighbour must stay measured even when Lead skill is UNAVAILABLE');
 
   // ---- fleets ----
-  const fleets = renderLibrary(snapshot, { section: 'space', spaceTab: 'fleets' });
+  const fleets = await renderLibrary(snapshot, { section: 'space', spaceTab: 'fleets' });
   assert.ok(fleets.text.includes('UNAVAILABLE'),
     'the nulled combatPowerAvailable must surface UNAVAILABLE in the Combat power column');
   assert.ok(fleets.text.includes('4'),
@@ -1034,7 +992,7 @@ test('partial render mixes UNAVAILABLE and em dash affordances alongside measure
 // Truncation boundary and distinct unavailable affordances.
 // ---------------------------------------------------------------------------
 
-test('priority targets at exactly the 8-entry cap mount the panel but emit NO omission note', () => {
+test('priority targets at exactly the 8-entry cap mount the panel but emit NO omission note', async () => {
   // Boundary check: at the cap, no records are omitted, so the omission
   // note must NOT appear. Pinning this so a future regression that always
   // emits the note (or never emits it) fails loud.
@@ -1045,7 +1003,7 @@ test('priority targets at exactly the 8-entry cap mount the panel but emit NO om
     score: index,
     reasons: ['boundary check']
   }));
-  const { html, text } = renderLibrary(snapshot, { section: 'nations' });
+  const { html, text } = await renderLibrary(snapshot, { section: 'nations' });
   const renderedTargets = (html.match(/class="intel-library-target"/g) || []).length;
   assert.strictEqual(renderedTargets, 8, 'all eight priority targets must render at the cap');
   assert.ok(text.includes('PRIORITY TARGETS'), 'the priority panel must mount when targets are present');
@@ -1053,7 +1011,7 @@ test('priority targets at exactly the 8-entry cap mount the panel but emit NO om
   assert.ok(!text.includes('Showing 8 of'), 'the omission summary line must not appear when no records are omitted');
 });
 
-test('councilor with visibility raw_save_only and empty orgs/traits renders "No attached profile" — distinct from UNAVAILABLE', () => {
+test('councilor with visibility raw_save_only and empty orgs/traits renders "No attached profile" — distinct from UNAVAILABLE', async () => {
   // Per the component's councilorProfile branch: a councilor that the save
   // exposes but the intel filter withholds (raw_save_only) gets the literal
   // string "No attached profile" rather than UNAVAILABLE. This is a distinct
@@ -1064,7 +1022,7 @@ test('councilor with visibility raw_save_only and empty orgs/traits renders "No 
   snapshot.councilors[0].orgs = [];
   snapshot.councilors[0].traits = [];
   snapshot.councilors[0].visibility = 'raw_save_only';
-  const { text } = renderLibrary(snapshot, { section: 'councilors' });
+  const { text } = await renderLibrary(snapshot, { section: 'councilors' });
 
   assert.ok(text.includes('No attached profile'), 'raw_save_only with empty orgs/traits must render "No attached profile"');
   assert.ok(!text.includes('UNAVAILABLE'),
@@ -1073,7 +1031,7 @@ test('councilor with visibility raw_save_only and empty orgs/traits renders "No 
   assertNoRuntimePlaceholders(text, 'councilor raw_save_only empty profile');
 });
 
-test('ship with empty weaponLoadout but dominantWeaponType set renders the dominant weapon in Equipped weapons — NOT UNAVAILABLE', () => {
+test('ship with empty weaponLoadout but dominantWeaponType set renders the dominant weapon in Equipped weapons — NOT UNAVAILABLE', async () => {
   // Per the component's renderShips branch:
   //   (loadout || []).map(...).join(' · ') || dominantWeaponType || 'UNAVAILABLE'
   // An empty loadout falls through to dominantWeaponType, not to
@@ -1083,17 +1041,17 @@ test('ship with empty weaponLoadout but dominantWeaponType set renders the domin
   const snapshot = measuredLibrarySnapshot();
   snapshot.fleets[0].ships[0].weaponLoadout = [];
   snapshot.fleets[0].ships[0].dominantWeaponType = 'LASER';
-  const { text } = renderLibrary(snapshot, { section: 'space', spaceTab: 'ships' });
+  const { text } = await renderLibrary(snapshot, { section: 'space', spaceTab: 'ships' });
 
   assert.ok(text.includes('LASER LASER'), 'empty loadout must surface dominantWeaponType in both Dominant and Equipped weapons cells');
   assert.ok(text.includes('50'), 'Combat power must stay measured at 50 for this ship');
   assertNoRuntimePlaceholders(text, 'ship empty loadout dominantWeaponType set');
 });
 
-test('habitat with inEarthLEO false leaves LEO em dash while Hab name, Type, Tier, and Status stay measured', () => {
+test('habitat with inEarthLEO false leaves LEO em dash while Hab name, Type, Tier, and Status stay measured', async () => {
   const snapshot = measuredLibrarySnapshot();
   snapshot.habs[0].inEarthLEO = false;
-  const { text } = renderLibrary(snapshot, { section: 'space', spaceTab: 'habs' });
+  const { text } = await renderLibrary(snapshot, { section: 'space', spaceTab: 'habs' });
 
   // Measured: "Orbital Hab Alpha the Initiative Stanford Torus 3 Earth LEO OPERATIONAL StanfordTorus"
   // → LEO cell becomes em dash. The other measured columns stay.

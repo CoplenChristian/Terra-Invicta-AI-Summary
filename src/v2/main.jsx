@@ -16,6 +16,8 @@ import Typography from '@mui/material/Typography';
 import { McBudget } from './panels/McBudget.jsx';
 import { StrategicCommentary } from './panels/StrategicCommentary.jsx';
 import { FleetEngagement } from './panels/FleetEngagement.jsx';
+import { AlienHateEconomics, renderHudAlienHateEconomics } from './panels/AlienHateEconomics.jsx';
+import { IntelligenceLibrary } from './panels/IntelligenceLibrary.jsx';
 
 /**
  * Throwaway Phase 0 Coexistence Proof Component.
@@ -160,6 +162,32 @@ export function renderFleetEngagement(root, data) {
   mountReactPanel(root, <FleetEngagement data={data} />);
 }
 
+/**
+ * Strangler bridge matching window.IntelligenceLibrary.render(container, snapshot, briefing, observerId, options).
+ */
+export function renderIntelligenceLibrary(container, snapshot, briefing, observerId, options = {}) {
+  if (!container) return;
+  mountReactPanel(
+    container,
+    <IntelligenceLibrary
+      snapshot={snapshot}
+      briefing={briefing}
+      observerId={observerId}
+      options={options}
+    />,
+  );
+}
+
+/**
+ * Strangler bridge matching window.MissionControlHateEconomics.render(root, economics).
+ */
+export function renderAlienHateEconomics(root, economics) {
+  if (!root) return;
+  mountReactPanel(root, <AlienHateEconomics economics={economics} />);
+}
+
+export { renderHudAlienHateEconomics };
+
 // Expose mounting registry on window for strangler migration interoperability
 if (typeof window !== 'undefined') {
   window.MissionControlMcBudget = { render: renderMcBudget };
@@ -168,6 +196,11 @@ if (typeof window !== 'undefined') {
     render: renderFleetEngagement,
     fetchFleetEngagement,
   };
+  window.MissionControlHateEconomics = {
+    render: renderAlienHateEconomics,
+    renderHud: renderHudAlienHateEconomics,
+  };
+  window.IntelligenceLibrary = { render: renderIntelligenceLibrary };
 
   window.MissionControlReact = {
     mountReactPanel,
@@ -176,11 +209,16 @@ if (typeof window !== 'undefined') {
     mountMcBudget: renderMcBudget,
     mountStrategicCommentary: renderStrategicCommentary,
     mountFleetEngagement: renderFleetEngagement,
+    mountAlienHateEconomics: renderAlienHateEconomics,
+    renderHudAlienHateEconomics,
+    mountIntelligenceLibrary: renderIntelligenceLibrary,
     fetchFleetEngagement,
     CoexistenceProof,
     McBudget,
     StrategicCommentary,
     FleetEngagement,
+    AlienHateEconomics,
+    IntelligenceLibrary,
   };
 
   const urlParams = new URLSearchParams(window.location.search);

@@ -18,6 +18,7 @@ function isFiniteCount(n) {
  * @param {number|null|undefined} [props.shownCount] — optional; derived when omitted is known
  * @param {string} [props.className]
  * @param {function} [props.formatCount] — locale formatter
+ * @param {function} [props.formatTruncated] — optional custom truncated message
  */
 export function TruncationNote({
   totalCount,
@@ -25,6 +26,7 @@ export function TruncationNote({
   shownCount,
   className,
   formatCount = (n) => n.toLocaleString('en-US'),
+  formatTruncated,
   unknownLabel = 'Truncation count not read — total may be incomplete.',
   allShownLabel = 'All entries shown.',
   ...rest
@@ -63,6 +65,17 @@ export function TruncationNote({
     ? shownCount
     : (hasTotal ? totalCount - omittedCount : null);
 
+  const truncatedMessage = formatTruncated
+    ? formatTruncated({
+      shown,
+      omitted: omittedCount,
+      total: hasTotal ? totalCount : null,
+      formatCount,
+    })
+    : `${shown != null
+      ? `${formatCount(shown)} shown · ${formatCount(omittedCount)} omitted`
+      : `${formatCount(omittedCount)} omitted`}${hasTotal ? ` (${formatCount(totalCount)} total)` : ''}`;
+
   return (
     <div
       className={['truncation-note truncation-note--truncated', className].filter(Boolean).join(' ') || undefined}
@@ -70,10 +83,7 @@ export function TruncationNote({
       data-truncation-state="truncated"
       {...rest}
     >
-      {shown != null
-        ? `${formatCount(shown)} shown · ${formatCount(omittedCount)} omitted`
-        : `${formatCount(omittedCount)} omitted`}
-      {hasTotal ? ` (${formatCount(totalCount)} total)` : ''}
+      {truncatedMessage}
     </div>
   );
 }

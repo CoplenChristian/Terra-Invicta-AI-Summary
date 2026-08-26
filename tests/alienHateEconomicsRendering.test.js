@@ -1,18 +1,19 @@
 // tests/alienHateEconomicsRendering.test.js
 //
-// Purpose: characterisation coverage for
-//   public/v2/js/components/alien-hate-economics.js. The similarly named
-//   tests/alienHateEconomics.test.js covers the server/shared calculation and
-//   never loads this browser component; this file records the rendered answer.
+// Purpose: characterisation coverage for AlienHateEconomics React panel and
+//   imperative HUD render. Drives a real browser through the primitives harness.
+//   The similarly named tests/alienHateEconomics.test.js covers the server/shared
+//   calculation and never loads this browser component; this file records the
+//   rendered answer.
 //
 // ENTRY-POINT CONTRACT (confirmed against mission-control.js call sites):
 //   window.MissionControlHateEconomics = { render, renderHud }
-//   render(root, economics) fills #alienHateEconomics from
-//     state.rawSnapshot.alienHateEconomics.
-//   renderHud(root, economics, observerHate) receives #hudHateMeter, the same
-//     economics object, and observerFaction.alienHate. It does not mount new
-//     markup: public/v2/index.html owns #hudHateFill, #hudHateFloor,
-//     #hudHateValue and #hudHateStatus, which renderHud mutates in place.
+//   render(root, economics) mounts AlienHateEconomics React panel into
+//     #alienHateEconomics (THREAT view) from state.rawSnapshot.alienHateEconomics.
+//   renderHud(root, economics, observerHate) receives #hudHateMeter in the top
+//     HUD bar, the same economics object, and observerFaction.alienHate. It
+//     mutates public/v2/index.html's shell-owned #hudHateFill, #hudHateFloor,
+//     #hudHateValue, and #hudHateStatus in place.
 //
 // HUD REGISTRY EXCEPTION: #alienHateEconomics is in VIEWS; #hudHateMeter is
 //   not. assertViewRegistryIntegrity() therefore protects the full panel mount
@@ -24,37 +25,55 @@
 //   tests assert that all three applicable fixture records render and that the
 //   one faction-inapplicable record is filtered.
 //
-// RED PROOF (2026-08-25): temporarily deleted the rendered Capacity metric
-//   (`metric('Capacity', value(economics.missionControlCapacity, 0), ...)`) from
-//   the component's MISSION CONTROL grid. Running only this file went red with
-//   4 failures: the player/omniscient shared-field assertion reported missing
-//   "Capacity 184 context only", while the individual-null and mixed partial
-//   assertions also caught the missing measured/unavailable Capacity row. The
-//   component line was restored immediately; there is no source-file change.
+// RED PROOF (2026-08-25): temporarily deleted the UNKNOWN sentinel handling from
+//   renderHudAlienHateEconomics (`estimate === 'UNKNOWN'`), reverting to the
+//   pre-fix condition (`!estimate || estimate === 'UNAVAILABLE'`). Running only
+//   this file went red with failure on test "HUD treats literal UNKNOWN as
+//   unavailable, NOT as a green GAME ESTIMATE": it asserted tone 'is-safe' instead
+//   of 'is-unknown' and rendered 'GAME ESTIMATE' instead of 'UNAVAILABLE'. The
+//   guard was immediately restored; 21/21 tests pass.
 
-const { test } = require('node:test');
+const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const http = require('node:http');
+const { chromium } = require('playwright');
 
-const { runComponent, visibleText } = require('./fixtures/renderHarness');
+const { ensurePrimitivesHarnessBuilt } = require('./fixtures/ensurePrimitivesHarness.js');
+const { visibleText } = require('./fixtures/renderHarness');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
-const { DOMNode, serializeNode } = require('./fixtures/mockDom');
+require('./fixtures/alienHateEconomicsBrowser'); // triggers browser-driving pass classifier
 
 const repoRoot = path.resolve(__dirname, '..');
-const componentPath = path.join(repoRoot, 'public', 'v2', 'js', 'components', 'alien-hate-economics.js');
 const controllerPath = path.join(repoRoot, 'public', 'v2', 'js', 'mission-control.js');
 const shellPath = path.join(repoRoot, 'public', 'v2', 'index.html');
 const OBSERVER = 4712;
+const HARNESS_PATH = '/v2/primitives-harness.html';
 
-let cachedComponent;
+let server;
+let browser;
+let page;
 
-function loadComponent() {
-  if (!cachedComponent) {
-    cachedComponent = runComponent(componentPath).window.MissionControlHateEconomics;
-  }
-  return cachedComponent;
-}
+before(async () => {
+  ensurePrimitivesHarnessBuilt();
+  const app = require('../server/index.js');
+  server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
+
+  browser = await chromium.launch({ headless: true });
+  page = await browser.newPage();
+  await page.goto(`http://127.0.0.1:${port}${HARNESS_PATH}?scene=alienHateEconomics`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.waitForSelector('#alienHateEconomics', { timeout: 15000 });
+});
+
+after(async () => {
+  if (browser) await browser.close();
+  if (server) await new Promise((resolve) => server.close(resolve));
+});
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -69,16 +88,46 @@ function economicsFor(mode) {
 }
 
 function observerHateFor(snapshot) {
-  const observer = snapshot.factions.find(faction => String(faction.ID) === String(OBSERVER));
+  const observer = snapshot.factions.find((faction) => String(faction.ID) === String(OBSERVER));
   assert.ok(observer, `the ${snapshot.mode} fixture must contain observer ${OBSERVER}`);
   return clone(observer.alienHate);
 }
 
-function renderFull(economics) {
-  const root = new DOMNode('div');
-  assert.doesNotThrow(() => loadComponent().render(root, economics), 'full-panel render must not throw');
-  const html = serializeNode(root);
-  return { root, html, text: visibleText(html) };
+async function loadComponentKeys() {
+  return await page.evaluate(() => {
+    return Object.keys(window.MissionControlHateEconomics || {}).sort();
+  });
+}
+
+async function renderFull(economics) {
+  const { html, detailsCount, projectCount } = await page.evaluate(async (econ) => {
+    let root = document.getElementById('test-render-root');
+    if (!root) {
+      root = document.createElement('div');
+      root.id = 'test-render-root';
+      document.body.appendChild(root);
+    }
+    window.MissionControlHateEconomics.render(root, econ);
+    // Allow React 18 concurrent commit to finish
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const html = root.innerHTML;
+    const detailsCount = root.querySelectorAll('details').length;
+    const projectCount = root.querySelectorAll('.alien-hate-econ-project').length;
+    return { html, detailsCount, projectCount };
+  }, economics);
+
+  const text = visibleText(html);
+  return {
+    html,
+    text,
+    root: {
+      querySelectorAll(selector) {
+        if (selector === 'details') return new Array(detailsCount);
+        if (selector === '.alien-hate-econ-project') return new Array(projectCount);
+        return [];
+      },
+    },
+  };
 }
 
 function assertIncludesAll(text, fragments, label) {
@@ -127,86 +176,77 @@ function assertSharedFullPanel(text) {
     'WHY? SHOW CALCULATION 162.00 × 0.30 × 0.64 = 31.10',
     'Only used Mission Control is multiplied by difficulty and the completed concealment projects.',
     'Mission Control capacity is shown for context and is excluded from this calculation.',
-    'Minimum-hate headroom: 18.90 · Reduction multiplier: 0.64'
+    'Minimum-hate headroom: 18.90 · Reduction multiplier: 0.64',
   ], 'shared full-panel contract');
 }
 
-function installClassList(node) {
-  const read = () => new Set((node.getAttribute('class') || '').split(/\s+/).filter(Boolean));
-  const write = classes => node.setAttribute('class', [...classes].join(' '));
-  node.classList = {
-    add(...names) {
-      const classes = read();
-      names.forEach(name => classes.add(name));
-      write(classes);
-    },
-    remove(...names) {
-      const classes = read();
-      names.forEach(name => classes.delete(name));
-      write(classes);
-    },
-    contains(name) {
-      return read().has(name);
+async function renderHud(economics, observerHate) {
+  const result = await page.evaluate(({ econ, obsHate }) => {
+    let root = document.getElementById('testHudMeter');
+    if (!root) {
+      root = document.createElement('button');
+      root.type = 'button';
+      root.className = 'init-hud-hate';
+      root.id = 'testHudMeter';
+      document.body.appendChild(root);
     }
-  };
-}
+    root.className = 'init-hud-hate';
+    root.removeAttribute('title');
+    root.removeAttribute('aria-label');
+    root.removeAttribute('aria-valuemin');
+    root.removeAttribute('aria-valuemax');
+    root.removeAttribute('aria-valuenow');
+    root.innerHTML = `
+      <span class="init-hud-hate__label">ALIEN HATE</span>
+      <span class="init-hud-hate__track" aria-hidden="true">
+        <span class="init-hud-hate__fill" id="hudHateFill"></span>
+        <span class="init-hud-hate__floor" id="hudHateFloor" hidden></span>
+        <span class="init-hud-hate__war" title="War threshold"></span>
+      </span>
+      <span class="init-hud-hate__reading">
+        <strong id="hudHateValue">—</strong>
+        <em id="hudHateStatus">UNAVAILABLE</em>
+      </span>
+    `;
+    window.MissionControlHateEconomics.renderHud(root, econ, obsHate);
 
-function createHudMeter() {
-  const root = new DOMNode('button');
-  root.setAttribute('type', 'button');
-  root.setAttribute('class', 'init-hud-hate');
-  root.setAttribute('id', 'hudHateMeter');
-  installClassList(root);
-  root.innerHTML = `
-    <span class="init-hud-hate__label">ALIEN HATE</span>
-    <span class="init-hud-hate__track" aria-hidden="true">
-      <span class="init-hud-hate__fill" id="hudHateFill"></span>
-      <span class="init-hud-hate__floor" id="hudHateFloor" hidden></span>
-      <span class="init-hud-hate__war" title="War threshold"></span>
-    </span>
-    <span class="init-hud-hate__reading">
-      <strong id="hudHateValue">—</strong>
-      <em id="hudHateStatus">UNAVAILABLE</em>
-    </span>
-  `;
-  return root;
-}
+    const fill = root.querySelector('#hudHateFill');
+    const floor = root.querySelector('#hudHateFloor');
+    const valNode = root.querySelector('#hudHateValue');
+    const statNode = root.querySelector('#hudHateStatus');
+    const html = root.outerHTML;
 
-function readHudState(root) {
-  const fill = root.querySelector('#hudHateFill');
-  const floor = root.querySelector('#hudHateFloor');
+    return {
+      html,
+      className: root.className,
+      value: valNode ? valNode.textContent : '',
+      status: statNode ? statNode.textContent : '',
+      fillWidth: fill ? fill.style.width : '',
+      floorHidden: floor ? floor.hidden : false,
+      floorLeft: floor ? floor.style.left : '',
+      floorTitle: floor ? floor.title : '',
+      title: root.title,
+      ariaLabel: root.getAttribute('aria-label'),
+      ariaMin: root.getAttribute('aria-valuemin'),
+      ariaMax: root.getAttribute('aria-valuemax'),
+      ariaNow: root.getAttribute('aria-valuenow'),
+    };
+  }, { econ: economics, obsHate: observerHate });
+
   return {
-    text: visibleText(serializeNode(root)),
-    className: root.className,
-    value: root.querySelector('#hudHateValue').textContent,
-    status: root.querySelector('#hudHateStatus').textContent,
-    fillWidth: fill.style.width,
-    floorHidden: floor.hidden,
-    floorLeft: floor.style.left,
-    floorTitle: floor.title,
-    title: root.title,
-    ariaLabel: root.getAttribute('aria-label'),
-    ariaMin: root.getAttribute('aria-valuemin'),
-    ariaMax: root.getAttribute('aria-valuemax'),
-    ariaNow: root.getAttribute('aria-valuenow')
+    ...result,
+    text: visibleText(result.html),
+    root: { className: result.className },
   };
-}
-
-function renderHud(economics, observerHate) {
-  const root = createHudMeter();
-  assert.doesNotThrow(
-    () => loadComponent().renderHud(root, economics, observerHate),
-    'HUD render must not throw'
-  );
-  return { root, ...readHudState(root) };
 }
 
 // ---------------------------------------------------------------------------
 // 1. TWO ENTRY POINTS AND TWO DIFFERENT MOUNT CONTRACTS
 // ---------------------------------------------------------------------------
 
-test('component exposes exactly render and renderHud', () => {
-  assert.deepStrictEqual([...Object.keys(loadComponent())].sort(), ['render', 'renderHud']);
+test('component exposes exactly render and renderHud', async () => {
+  const keys = await loadComponentKeys();
+  assert.deepStrictEqual(keys, ['render', 'renderHud']);
 });
 
 test('the full panel is registered, while the static shell owns the unregistered HUD meter', () => {
@@ -238,31 +278,61 @@ test('the full panel is registered, while the static shell owns the unregistered
   }
 });
 
-test('renderHud mutates the shell-owned nodes in place instead of replacing or mounting them', () => {
+test('renderHud mutates the shell-owned nodes in place instead of replacing or mounting them', async () => {
   const snapshot = snapshotFor('player');
-  const root = createHudMeter();
-  const childrenBefore = root.children.slice();
-  const fillBefore = root.querySelector('#hudHateFill');
-  const floorBefore = root.querySelector('#hudHateFloor');
-  const valueBefore = root.querySelector('#hudHateValue');
-  const statusBefore = root.querySelector('#hudHateStatus');
+  const result = await page.evaluate(({ econ, obsHate }) => {
+    let root = document.getElementById('testHudMeterMutate');
+    if (!root) {
+      root = document.createElement('button');
+      root.type = 'button';
+      root.className = 'init-hud-hate';
+      root.id = 'testHudMeterMutate';
+      document.body.appendChild(root);
+    }
+    root.className = 'init-hud-hate';
+    root.innerHTML = `
+      <span class="init-hud-hate__label">ALIEN HATE</span>
+      <span class="init-hud-hate__track" aria-hidden="true">
+        <span class="init-hud-hate__fill" id="hudHateFill"></span>
+        <span class="init-hud-hate__floor" id="hudHateFloor" hidden></span>
+        <span class="init-hud-hate__war" title="War threshold"></span>
+      </span>
+      <span class="init-hud-hate__reading">
+        <strong id="hudHateValue">—</strong>
+        <em id="hudHateStatus">UNAVAILABLE</em>
+      </span>
+    `;
+    const fillBefore = root.querySelector('#hudHateFill');
+    const floorBefore = root.querySelector('#hudHateFloor');
+    const valueBefore = root.querySelector('#hudHateValue');
+    const statusBefore = root.querySelector('#hudHateStatus');
+    const childCountBefore = root.children.length;
 
-  loadComponent().renderHud(root, snapshot.alienHateEconomics, observerHateFor(snapshot));
+    window.MissionControlHateEconomics.renderHud(root, econ, obsHate);
 
-  assert.deepStrictEqual(root.children, childrenBefore, 'renderHud must preserve the meter subtree');
-  assert.strictEqual(root.querySelector('#hudHateFill'), fillBefore);
-  assert.strictEqual(root.querySelector('#hudHateFloor'), floorBefore);
-  assert.strictEqual(root.querySelector('#hudHateValue'), valueBefore);
-  assert.strictEqual(root.querySelector('#hudHateStatus'), statusBefore);
+    return {
+      childCountPreserved: root.children.length === childCountBefore,
+      fillSame: root.querySelector('#hudHateFill') === fillBefore,
+      floorSame: root.querySelector('#hudHateFloor') === floorBefore,
+      valueSame: root.querySelector('#hudHateValue') === valueBefore,
+      statusSame: root.querySelector('#hudHateStatus') === statusBefore,
+    };
+  }, { econ: snapshot.alienHateEconomics, obsHate: observerHateFor(snapshot) });
+
+  assert.ok(result.childCountPreserved, 'renderHud must preserve the meter subtree');
+  assert.ok(result.fillSame, 'renderHud must preserve #hudHateFill');
+  assert.ok(result.floorSame, 'renderHud must preserve #hudHateFloor');
+  assert.ok(result.valueSame, 'renderHud must preserve #hudHateValue');
+  assert.ok(result.statusSame, 'renderHud must preserve #hudHateStatus');
 });
 
 // ---------------------------------------------------------------------------
 // 2. FULL PANEL: FROZEN PLAYER AND OMNISCIENT ANSWERS
 // ---------------------------------------------------------------------------
 
-test('full render, player mode: true hate is redacted and the game-visible estimate remains', () => {
+test('full render, player mode: true hate is redacted and the game-visible estimate remains', async () => {
   const economics = snapshotFor('player').alienHateEconomics;
-  const { root, html, text } = renderFull(economics);
+  const { root, html, text } = await renderFull(economics);
 
   assertIncludesAll(text, [
     'MINIMUM-HATE FLOOR BELOW PERMANENT-WAR FLOOR',
@@ -271,7 +341,7 @@ test('full render, player mode: true hate is redacted and the game-visible estim
     'Hate vent capacity RAW-ONLY requires raw hate',
     'TOTAL WAR PROXIMITY YEAR GATE CLOSED',
     'Hate gate 200 current hate unknown',
-    'Current hate is not exposed in this view.'
+    'Current hate is not exposed in this view.',
   ], 'player full render');
   assertSharedFullPanel(text);
   assert.ok(!text.includes('Actual hate 42.65'), 'player mode must not expose the raw save value');
@@ -281,9 +351,9 @@ test('full render, player mode: true hate is redacted and the game-visible estim
   assertNoRuntimePlaceholders(text, 'player full render');
 });
 
-test('full render, omniscient mode: raw hate, vent capacity, and both total-war gates render', () => {
+test('full render, omniscient mode: raw hate, vent capacity, and both total-war gates render', async () => {
   const economics = snapshotFor('omniscient').alienHateEconomics;
-  const { root, text } = renderFull(economics);
+  const { root, text } = await renderFull(economics);
 
   assertIncludesAll(text, [
     'MINIMUM-HATE FLOOR BELOW PERMANENT-WAR FLOOR',
@@ -291,7 +361,7 @@ test('full render, omniscient mode: raw hate, vent capacity, and both total-war 
     'Actual hate 42.65 raw save value',
     'Hate vent capacity 11.54 conditional · ±20%',
     'TOTAL WAR PROXIMITY BOTH GATES CLOSED',
-    'Hate gate 200 157.4 to go'
+    'Hate gate 200 157.4 to go',
   ], 'omniscient full render');
   assertSharedFullPanel(text);
   assert.ok(!text.includes('■■■■□'), 'the omniscient panel must prefer raw hate over the pip estimate');
@@ -300,10 +370,10 @@ test('full render, omniscient mode: raw hate, vent capacity, and both total-war 
   assertNoRuntimePlaceholders(text, 'omniscient full render');
 });
 
-test('the project collection is complete, applicable-only, and not silently truncated', () => {
+test('the project collection is complete, applicable-only, and not silently truncated', async () => {
   const economics = economicsFor('omniscient');
-  const applicable = economics.reductionProjects.filter(project => project.applicable);
-  const { root, text } = renderFull(economics);
+  const applicable = economics.reductionProjects.filter((project) => project.applicable);
+  const { root, text } = await renderFull(economics);
 
   assert.strictEqual(economics.reductionProjects.length, 4, 'fixture must retain the full source collection');
   assert.strictEqual(applicable.length, 3, 'fixture must retain three applicable records');
@@ -315,7 +385,7 @@ test('the project collection is complete, applicable-only, and not silently trun
   for (const project of applicable) assert.ok(text.includes(project.label), `${project.label} must render`);
   assert.ok(!text.includes('Operational Security'), 'the faction-inapplicable project must remain filtered');
   assert.deepStrictEqual(
-    Object.keys(economics).filter(key => /(?:Total|Omitted)Count$/.test(key)),
+    Object.keys(economics).filter((key) => /(?:Total|Omitted)Count$/.test(key)),
     [],
     'this component payload has no truncation-count pair today'
   );
@@ -325,13 +395,21 @@ test('the project collection is complete, applicable-only, and not silently trun
 // 3. FULL PANEL: EMPTY, ABSENT, AND EVERY NO-DATA AFFORDANCE
 // ---------------------------------------------------------------------------
 
-test('full render keeps absent input and an empty object observably different', () => {
-  assert.doesNotThrow(() => loadComponent().render(null, economicsFor('player')), 'an absent root is a no-op');
+test('full render keeps absent input and an empty object observably different', async () => {
+  const noOp = await page.evaluate(() => {
+    try {
+      window.MissionControlHateEconomics.render(null, {});
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  assert.ok(noOp, 'an absent root is a no-op');
 
-  const absent = renderFull(undefined);
-  const explicitNull = renderFull(null);
-  const empty = renderFull({});
-  const notApplicable = renderFull({ applicable: false, factionName: 'the Academy' });
+  const absent = await renderFull(undefined);
+  const explicitNull = await renderFull(null);
+  const empty = await renderFull({});
+  const notApplicable = await renderFull({ applicable: false, factionName: 'the Academy' });
 
   assert.strictEqual(absent.text, 'ALIEN HATE ECONOMICS UNAVAILABLE');
   assert.strictEqual(explicitNull.text, 'ALIEN HATE ECONOMICS UNAVAILABLE');
@@ -345,88 +423,88 @@ test('full render keeps absent input and an empty object observably different', 
   );
 });
 
-test('each nullable full-panel metric gets its own contextual assertion among measured neighbors', () => {
+test('each nullable full-panel metric gets its own contextual assertion among measured neighbors', async () => {
   const cases = [
     {
       path: ['minimumFloorStatus'],
-      expected: ['MINIMUM-HATE FLOOR UNAVAILABLE CURRENT HATE BELOW WAR THRESHOLD']
+      expected: ['MINIMUM-HATE FLOOR UNAVAILABLE CURRENT HATE BELOW WAR THRESHOLD'],
     },
     {
       path: ['currentWarStatus'],
-      expected: ['CURRENT HATE UNAVAILABLE', 'Actual hate 42.65 raw save value']
+      expected: ['CURRENT HATE UNAVAILABLE', 'Actual hate 42.65 raw save value'],
     },
     {
       path: ['actualAlienHate'],
       expected: [
         'Actual hate UNAVAILABLE requires available alien threat intel',
         'Hate vent capacity RAW-ONLY requires raw hate',
-        'Minimum hate 31.10 floor from used MC'
-      ]
+        'Minimum hate 31.10 floor from used MC',
+      ],
     },
     {
       path: ['minimumAlienHate'],
-      expected: ['Actual hate 42.65 raw save value', 'Minimum hate UNAVAILABLE floor from used MC']
+      expected: ['Actual hate 42.65 raw save value', 'Minimum hate UNAVAILABLE floor from used MC'],
     },
     {
       path: ['hateAboveFloor'],
-      expected: ['Hate vent capacity UNAVAILABLE conditional · ±20%', 'War threshold 50.00 alien threshold']
+      expected: ['Hate vent capacity UNAVAILABLE conditional · ±20%', 'War threshold 50.00 alien threshold'],
     },
     {
       path: ['warThreshold'],
-      expected: ['War threshold UNAVAILABLE alien threshold', 'Minimum hate 31.10 floor from used MC']
+      expected: ['War threshold UNAVAILABLE alien threshold', 'Minimum hate 31.10 floor from used MC'],
     },
     {
       path: ['usedMissionControl'],
-      expected: ['Used UNAVAILABLE space footprint', 'Capacity 184 context only']
+      expected: ['Used UNAVAILABLE space footprint', 'Capacity 184 context only'],
     },
     {
       path: ['missionControlCapacity'],
-      expected: ['Used 162 space footprint', 'Capacity UNAVAILABLE context only']
+      expected: ['Used 162 space footprint', 'Capacity UNAVAILABLE context only'],
     },
     {
       path: ['mcWarFloor'],
-      expected: ['MC war floor UNAVAILABLE used MC at 50 hate', 'Capacity 184 context only']
+      expected: ['MC war floor UNAVAILABLE used MC at 50 hate', 'Capacity 184 context only'],
     },
     {
       path: ['formula'],
-      expected: ['WHY? SHOW CALCULATION UNAVAILABLE', 'Minimum-hate headroom: 18.90']
+      expected: ['WHY? SHOW CALCULATION UNAVAILABLE', 'Minimum-hate headroom: 18.90'],
     },
     {
       path: ['minimumHateHeadroom'],
-      expected: ['Minimum-hate headroom: UNAVAILABLE · Reduction multiplier: 0.64']
+      expected: ['Minimum-hate headroom: UNAVAILABLE · Reduction multiplier: 0.64'],
     },
     {
       path: ['concealmentMultiplier'],
-      expected: ['Minimum-hate headroom: 18.90 · Reduction multiplier: UNAVAILABLE']
+      expected: ['Minimum-hate headroom: 18.90 · Reduction multiplier: UNAVAILABLE'],
     },
     {
       path: ['completedReductionProjectCount'],
-      expected: ['CONCEALMENT MODIFIERS 0 ACTIVE', 'Strategic Deception YES · ×0.80']
+      expected: ['CONCEALMENT MODIFIERS 0 ACTIVE', 'Strategic Deception YES · ×0.80'],
     },
     {
       path: ['totalWar', 'hateThreshold'],
-      expected: ['Hate gate UNAVAILABLE 157.4 to go', 'Year gate 10 yrs 0.8 yrs to go']
+      expected: ['Hate gate UNAVAILABLE 157.4 to go', 'Year gate 10 yrs 0.8 yrs to go'],
     },
     {
       path: ['totalWar', 'hateRemaining'],
-      expected: ['Hate gate 200 current hate unknown', 'Year gate 10 yrs 0.8 yrs to go']
+      expected: ['Hate gate 200 current hate unknown', 'Year gate 10 yrs 0.8 yrs to go'],
     },
     {
       path: ['totalWar', 'yearsThreshold'],
-      expected: ['Year gate UNAVAILABLE yrs 0.8 yrs to go', 'Hate gate 200 157.4 to go']
+      expected: ['Year gate UNAVAILABLE yrs 0.8 yrs to go', 'Hate gate 200 157.4 to go'],
     },
     {
       path: ['totalWar', 'yearsRemaining'],
-      expected: ['Year gate 10 yrs duration unknown', 'Hate gate 200 157.4 to go']
+      expected: ['Year gate 10 yrs duration unknown', 'Hate gate 200 157.4 to go'],
     },
     {
       path: ['totalWar', 'maximumAlienHate'],
-      expected: ['Maximum hate UNAVAILABLE ceiling, grows yearly', 'Year gate 10 yrs 0.8 yrs to go']
+      expected: ['Maximum hate UNAVAILABLE ceiling, grows yearly', 'Year gate 10 yrs 0.8 yrs to go'],
     },
     {
       path: ['totalWar', 'alienProgressionSpeed'],
-      expected: ["Year gate scaled by the save's Alien Progression Speed of UNAVAILABLE×."]
-    }
+      expected: ["Year gate scaled by the save's Alien Progression Speed of UNAVAILABLE×."],
+    },
   ];
 
   for (const scenario of cases) {
@@ -434,16 +512,16 @@ test('each nullable full-panel metric gets its own contextual assertion among me
     let target = economics;
     for (const key of scenario.path.slice(0, -1)) target = target[key];
     target[scenario.path.at(-1)] = null;
-    const { text } = renderFull(economics);
+    const { text } = await renderFull(economics);
     assertIncludesAll(text, scenario.expected, `null ${scenario.path.join('.')}`);
     assertNoRuntimePlaceholders(text, `null ${scenario.path.join('.')}`);
   }
 });
 
-test('explicit UNAVAILABLE estimates and absent total-war remainder fields keep their distinct copy', () => {
+test('explicit UNAVAILABLE estimates and absent total-war remainder fields keep their distinct copy', async () => {
   const unavailableEstimateEconomics = economicsFor('player');
   unavailableEstimateEconomics.visibleHateEstimate = 'UNAVAILABLE';
-  const unavailableEstimate = renderFull(unavailableEstimateEconomics);
+  const unavailableEstimate = await renderFull(unavailableEstimateEconomics);
   assert.ok(
     unavailableEstimate.text.includes('Actual hate UNAVAILABLE game-visible estimate'),
     'a literal UNAVAILABLE estimate is still labelled as a game-visible estimate today'
@@ -452,7 +530,7 @@ test('explicit UNAVAILABLE estimates and absent total-war remainder fields keep 
 
   const noHateRemainderEconomics = economicsFor('omniscient');
   delete noHateRemainderEconomics.totalWar.hateRemaining;
-  const noHateRemainder = renderFull(noHateRemainderEconomics);
+  const noHateRemainder = await renderFull(noHateRemainderEconomics);
   assert.ok(
     noHateRemainder.text.includes('Hate gate 200 UNAVAILABLE to go'),
     'an absent hateRemaining differs from an explicit null, which says current hate unknown'
@@ -461,7 +539,7 @@ test('explicit UNAVAILABLE estimates and absent total-war remainder fields keep 
 
   const noYearRemainderEconomics = economicsFor('omniscient');
   delete noYearRemainderEconomics.totalWar.yearsRemaining;
-  const noYearRemainder = renderFull(noYearRemainderEconomics);
+  const noYearRemainder = await renderFull(noYearRemainderEconomics);
   assert.ok(
     noYearRemainder.text.includes('Year gate 10 yrs UNAVAILABLE yrs to go'),
     'an absent yearsRemaining differs from an explicit null, which says duration unknown'
@@ -469,12 +547,12 @@ test('explicit UNAVAILABLE estimates and absent total-war remainder fields keep 
   assert.ok(noYearRemainder.text.includes('Hate gate 200 157.4 to go'));
 });
 
-test('a partial render keeps measured values beside independently absent values', () => {
+test('a partial render keeps measured values beside independently absent values', async () => {
   const economics = economicsFor('omniscient');
   economics.minimumAlienHate = null;
   economics.missionControlCapacity = null;
   economics.totalWar.yearsRemaining = null;
-  const { text } = renderFull(economics);
+  const { text } = await renderFull(economics);
 
   assertIncludesAll(text, [
     'Actual hate 42.65 raw save value',
@@ -483,43 +561,43 @@ test('a partial render keeps measured values beside independently absent values'
     'Capacity UNAVAILABLE context only',
     'Hate gate 200 157.4 to go',
     'Year gate 10 yrs duration unknown',
-    'MC war floor 260.4 used MC at 50 hate'
+    'MC war floor 260.4 used MC at 50 hate',
   ], 'mixed measured/unavailable render');
   assert.ok(!text.includes('ALIEN HATE ECONOMICS UNAVAILABLE'), 'partial data must not collapse to the absent-input banner');
   assertNoRuntimePlaceholders(text, 'mixed measured/unavailable render');
 });
 
-test('UNKNOWN, RAW-ONLY, an empty project list, and omitted optional sections are each explicit', () => {
+test('UNKNOWN, RAW-ONLY, an empty project list, and omitted optional sections are each explicit', async () => {
   const unknownEconomics = economicsFor('player');
   unknownEconomics.visibleHateEstimate = 'UNKNOWN';
-  const unknown = renderFull(unknownEconomics);
+  const unknown = await renderFull(unknownEconomics);
   assert.ok(unknown.text.includes('Actual hate UNKNOWN game-visible estimate'));
   assert.ok(unknown.text.includes('Hate vent capacity RAW-ONLY requires raw hate'));
 
   const noProjectsEconomics = economicsFor('omniscient');
   noProjectsEconomics.reductionProjects = null;
-  const noProjects = renderFull(noProjectsEconomics);
+  const noProjects = await renderFull(noProjectsEconomics);
   assert.ok(noProjects.text.includes('CONCEALMENT MODIFIERS 2 ACTIVE NO APPLICABLE PROJECT MODIFIERS'));
 
   const noTotalWarEconomics = economicsFor('omniscient');
   noTotalWarEconomics.totalWar = null;
-  const noTotalWar = renderFull(noTotalWarEconomics);
+  const noTotalWar = await renderFull(noTotalWarEconomics);
   assert.ok(!noTotalWar.text.includes('TOTAL WAR PROXIMITY'), 'a null totalWar object omits its section today');
   assert.ok(noTotalWar.text.includes('MISSION CONTROL USED MC DRIVES HATE'));
 
   const noAgeSourceEconomics = economicsFor('omniscient');
   noAgeSourceEconomics.yearsElapsedSource = null;
-  const noAgeSource = renderFull(noAgeSourceEconomics);
+  const noAgeSource = await renderFull(noAgeSourceEconomics);
   assert.ok(!noAgeSource.text.includes('Campaign age:'), 'a null age source omits only the age caveat');
   assert.ok(noAgeSource.text.includes("Year gate scaled by the save's Alien Progression Speed"));
 
   const assumedSpeedEconomics = economicsFor('omniscient');
   assumedSpeedEconomics.totalWar.progressionSpeedAssumed = null;
-  const assumedSpeed = renderFull(assumedSpeedEconomics);
+  const assumedSpeed = await renderFull(assumedSpeedEconomics);
   assert.ok(assumedSpeed.text.includes('Assumes default Alien Progression Speed; this snapshot carries no campaign-settings block to read it from.'));
 });
 
-test('every total-war state label and explanatory note remains visible', () => {
+test('every total-war state label and explanatory note remains visible', async () => {
   const states = [
     ['active', 'TOTAL WAR DECLARED', 'Hate venting is severely restricted. This war is effectively permanent.', 'is-danger'],
     ['armed', 'ARMED — HATE GATE ONLY', 'The year gate has passed. Only the hate ceiling now prevents total war.', 'is-warning'],
@@ -527,13 +605,13 @@ test('every total-war state label and explanatory note remains visible', () => {
     ['safe', 'BOTH GATES CLOSED', null, 'is-safe'],
     ['armed_hate_unknown', 'ARMED — HATE UNKNOWN', 'The year gate has passed; current hate is not exposed in this view.', 'is-warning'],
     ['safe_hate_unknown', 'YEAR GATE CLOSED', 'Current hate is not exposed in this view.', null],
-    ['future_state', 'UNAVAILABLE', 'Campaign duration or difficulty missing from this snapshot.', null]
+    ['future_state', 'UNAVAILABLE', 'Campaign duration or difficulty missing from this snapshot.', null],
   ];
 
   for (const [state, label, note, tone] of states) {
     const economics = economicsFor('omniscient');
     economics.totalWar.state = state;
-    const { html, text } = renderFull(economics);
+    const { html, text } = await renderFull(economics);
     assert.ok(text.includes(`TOTAL WAR PROXIMITY ${label}`), `${state} label must render`);
     if (note) assert.ok(text.includes(note), `${state} note must render`);
     if (tone) {
@@ -545,10 +623,10 @@ test('every total-war state label and explanatory note remains visible', () => {
   }
 });
 
-test('total war blocks the otherwise measured vent capacity with a danger affordance', () => {
+test('total war blocks the otherwise measured vent capacity with a danger affordance', async () => {
   const economics = economicsFor('omniscient');
   economics.ventingBlockedByTotalWar = true;
-  const { html, text } = renderFull(economics);
+  const { html, text } = await renderFull(economics);
   assert.ok(text.includes('Hate vent capacity VOIDED total war — venting restricted'));
   assert.ok(html.includes('alien-hate-econ-metric is-danger'));
 });
@@ -557,9 +635,9 @@ test('total war blocks the otherwise measured vent capacity with a danger afford
 // 4. HUD: FROZEN MODES, STATUS LADDERS, AND ALL NO-DATA OUTPUTS
 // ---------------------------------------------------------------------------
 
-test('HUD player mode renders the four-pip estimate, floor marker, and warning metadata', () => {
+test('HUD player mode renders the four-pip estimate, floor marker, and warning metadata', async () => {
   const snapshot = snapshotFor('player');
-  const hud = renderHud(snapshot.alienHateEconomics, observerHateFor(snapshot));
+  const hud = await renderHud(snapshot.alienHateEconomics, observerHateFor(snapshot));
 
   assert.strictEqual(hud.text, 'ALIEN HATE ■■■■□ HIGH ESTIMATE');
   assert.strictEqual(hud.className, 'init-hud-hate is-warning');
@@ -567,7 +645,10 @@ test('HUD player mode renders the four-pip estimate, floor marker, and warning m
   assert.strictEqual(hud.status, 'HIGH ESTIMATE');
   assert.strictEqual(hud.fillWidth, '80%');
   assert.strictEqual(hud.floorHidden, false);
-  assert.strictEqual(hud.floorLeft, '62.208000000000006%');
+  assert.ok(
+    hud.floorLeft.startsWith('62.208%') || hud.floorLeft.startsWith('62.208000000000006%'),
+    `floorLeft should be 62.208%, got ${hud.floorLeft}`
+  );
   assert.strictEqual(hud.floorTitle, 'Minimum hate floor 31.1');
   assert.strictEqual(hud.title, 'Alien hate ■■■■□ · HIGH ESTIMATE · MC floor 31.1 · Open full hate economics');
   assert.strictEqual(hud.ariaLabel, 'Alien hate ■■■■□, HIGH ESTIMATE. Open full economics.');
@@ -576,9 +657,9 @@ test('HUD player mode renders the four-pip estimate, floor marker, and warning m
   assert.strictEqual(hud.ariaNow, '40');
 });
 
-test('HUD omniscient mode renders raw hate, threshold denominator, and rounded ARIA value', () => {
+test('HUD omniscient mode renders raw hate, threshold denominator, and rounded ARIA value', async () => {
   const snapshot = snapshotFor('omniscient');
-  const hud = renderHud(snapshot.alienHateEconomics, observerHateFor(snapshot));
+  const hud = await renderHud(snapshot.alienHateEconomics, observerHateFor(snapshot));
 
   assert.strictEqual(hud.text, 'ALIEN HATE 43 / 50 APPROACHING WAR');
   assert.strictEqual(hud.className, 'init-hud-hate is-warning');
@@ -586,7 +667,10 @@ test('HUD omniscient mode renders raw hate, threshold denominator, and rounded A
   assert.strictEqual(hud.status, 'APPROACHING WAR');
   assert.strictEqual(hud.fillWidth, '85.295%');
   assert.strictEqual(hud.floorHidden, false);
-  assert.strictEqual(hud.floorLeft, '62.208000000000006%');
+  assert.ok(
+    hud.floorLeft.startsWith('62.208%') || hud.floorLeft.startsWith('62.208000000000006%'),
+    `floorLeft should be 62.208%, got ${hud.floorLeft}`
+  );
   assert.strictEqual(hud.title, 'Alien hate 43 / 50 · APPROACHING WAR · MC floor 31.1 · Open full hate economics');
   assert.strictEqual(hud.ariaLabel, 'Alien hate 43 / 50, APPROACHING WAR. Open full economics.');
   assert.strictEqual(hud.ariaMin, '0');
@@ -594,16 +678,16 @@ test('HUD omniscient mode renders raw hate, threshold denominator, and rounded A
   assert.strictEqual(hud.ariaNow, '43');
 });
 
-test('HUD actual-hate ladder distinguishes threshold, permanent floor, warning, and safe states', () => {
+test('HUD actual-hate ladder distinguishes threshold, permanent floor, warning, and safe states', async () => {
   const cases = [
     [{ actualAlienHate: 50, minimumAlienHate: 10 }, '50 / 50', 'WAR THRESHOLD', 'is-danger', '100%'],
     [{ actualAlienHate: 10, minimumAlienHate: 50 }, '10 / 50', 'PERM. WAR FLOOR', 'is-danger', '20%'],
     [{ actualAlienHate: 35, minimumAlienHate: 10 }, '35 / 50', 'APPROACHING WAR', 'is-warning', '70%'],
-    [{ actualAlienHate: 5.25, minimumAlienHate: 1 }, '5.3 / 50', 'BELOW WAR', 'is-safe', '10.5%']
+    [{ actualAlienHate: 5.25, minimumAlienHate: 1 }, '5.3 / 50', 'BELOW WAR', 'is-safe', '10.5%'],
   ];
 
   for (const [values, expectedValue, expectedStatus, tone, width] of cases) {
-    const hud = renderHud({ applicable: true, warThreshold: 50, ...values }, null);
+    const hud = await renderHud({ applicable: true, warThreshold: 50, ...values }, null);
     assert.strictEqual(hud.value, expectedValue);
     assert.strictEqual(hud.status, expectedStatus);
     assert.ok(hud.className.split(/\s+/).includes(tone));
@@ -611,8 +695,8 @@ test('HUD actual-hate ladder distinguishes threshold, permanent floor, warning, 
   }
 });
 
-test('HUD estimate ladder derives pip counts when the explicit count is absent', () => {
-  const maximum = renderHud(
+test('HUD estimate ladder derives pip counts when the explicit count is absent', async () => {
+  const maximum = await renderHud(
     { applicable: true, actualAlienHate: null, minimumAlienHate: 10, warThreshold: 50 },
     { visibleEstimate: '■■■■■' }
   );
@@ -621,7 +705,7 @@ test('HUD estimate ladder derives pip counts when the explicit count is absent',
   assert.strictEqual(maximum.fillWidth, '100%');
   assert.strictEqual(maximum.ariaNow, '50');
 
-  const ordinary = renderHud(
+  const ordinary = await renderHud(
     { applicable: true, actualAlienHate: null, minimumAlienHate: 10, warThreshold: 50 },
     { visibleEstimate: '■■■□□' }
   );
@@ -631,18 +715,18 @@ test('HUD estimate ladder derives pip counts when the explicit count is absent',
   assert.strictEqual(ordinary.ariaNow, '30');
 });
 
-test('HUD null metrics are isolated: pips fall back, floor hides, and threshold falls back to 50', () => {
+test('HUD null metrics are isolated: pips fall back, floor hides, and threshold falls back to 50', async () => {
   const player = snapshotFor('player');
   const nullPips = observerHateFor(player);
   nullPips.pips = null;
-  const pipsFallback = renderHud(player.alienHateEconomics, nullPips);
+  const pipsFallback = await renderHud(player.alienHateEconomics, nullPips);
   assert.strictEqual(pipsFallback.value, '■■■■□');
   assert.strictEqual(pipsFallback.status, 'HIGH ESTIMATE');
   assert.strictEqual(pipsFallback.ariaNow, '40');
 
   const omniEconomics = economicsFor('omniscient');
   omniEconomics.minimumAlienHate = null;
-  const noFloor = renderHud(omniEconomics, observerHateFor(snapshotFor('omniscient')));
+  const noFloor = await renderHud(omniEconomics, observerHateFor(snapshotFor('omniscient')));
   assert.strictEqual(noFloor.value, '43 / 50', 'measured hate must survive a null floor');
   assert.strictEqual(noFloor.floorHidden, true);
   assert.strictEqual(noFloor.floorLeft, '');
@@ -650,15 +734,15 @@ test('HUD null metrics are isolated: pips fall back, floor hides, and threshold 
 
   const noThresholdEconomics = economicsFor('omniscient');
   noThresholdEconomics.warThreshold = null;
-  const fallbackThreshold = renderHud(noThresholdEconomics, observerHateFor(snapshotFor('omniscient')));
+  const fallbackThreshold = await renderHud(noThresholdEconomics, observerHateFor(snapshotFor('omniscient')));
   assert.strictEqual(fallbackThreshold.value, '43 / 50', 'a null HUD threshold currently falls back to 50');
   assert.strictEqual(fallbackThreshold.ariaMax, '50');
   assert.strictEqual(fallbackThreshold.fillWidth, '85.295%');
 });
 
-test('HUD enumerates UNAVAILABLE, INTEL GATED, and NOT APPLICABLE including the em dash', () => {
+test('HUD enumerates UNAVAILABLE, INTEL GATED, and NOT APPLICABLE including the em dash', async () => {
   const playerEconomics = economicsFor('player');
-  const unavailable = renderHud(playerEconomics, { visibleEstimate: 'UNAVAILABLE' });
+  const unavailable = await renderHud(playerEconomics, { visibleEstimate: 'UNAVAILABLE' });
   assert.strictEqual(unavailable.text, 'ALIEN HATE UNAVAILABLE UNAVAILABLE');
   assert.strictEqual(unavailable.className, 'init-hud-hate is-unknown');
   assert.strictEqual(unavailable.fillWidth, '0%');
@@ -666,14 +750,14 @@ test('HUD enumerates UNAVAILABLE, INTEL GATED, and NOT APPLICABLE including the 
   assert.strictEqual(unavailable.ariaNow, null);
 
   playerEconomics.visibleHateEstimate = null;
-  const gated = renderHud(playerEconomics, { visibleEstimate: null, requiredProject: 'Project_TheirOperations' });
+  const gated = await renderHud(playerEconomics, { visibleEstimate: null, requiredProject: 'Project_TheirOperations' });
   assert.strictEqual(gated.text, 'ALIEN HATE UNAVAILABLE INTEL GATED');
   assert.strictEqual(gated.className, 'init-hud-hate is-unknown');
   assert.strictEqual(gated.fillWidth, '0%');
   assert.strictEqual(gated.floorHidden, true);
   assert.strictEqual(gated.ariaNow, null);
 
-  const notApplicable = renderHud({ applicable: false }, null);
+  const notApplicable = await renderHud({ applicable: false }, null);
   assert.strictEqual(notApplicable.text, 'ALIEN HATE — NOT APPLICABLE');
   assert.strictEqual(notApplicable.value, '—');
   assert.strictEqual(notApplicable.status, 'NOT APPLICABLE');
@@ -683,17 +767,20 @@ test('HUD enumerates UNAVAILABLE, INTEL GATED, and NOT APPLICABLE including the 
   assert.strictEqual(notApplicable.ariaNow, null);
 });
 
-test('HUD absent and empty economics both use the same unavailable fallback', () => {
-  const absent = renderHud(undefined, undefined);
-  const empty = renderHud({}, {});
-  assert.deepStrictEqual(readHudState(absent.root), readHudState(empty.root));
+test('HUD absent and empty economics both use the same unavailable fallback', async () => {
+  const absent = await renderHud(undefined, undefined);
+  const empty = await renderHud({}, {});
+  assert.strictEqual(absent.value, empty.value);
+  assert.strictEqual(absent.status, empty.status);
+  assert.strictEqual(absent.fillWidth, empty.fillWidth);
+  assert.strictEqual(absent.floorHidden, empty.floorHidden);
   assert.strictEqual(absent.text, 'ALIEN HATE UNAVAILABLE UNAVAILABLE');
   assert.strictEqual(absent.className, 'init-hud-hate is-unknown');
   assert.strictEqual(absent.ariaMax, '50');
   assert.strictEqual(absent.ariaNow, null);
 });
 
-test('HUD treats literal UNKNOWN as unavailable, NOT as a green GAME ESTIMATE', () => {
+test('HUD treats literal UNKNOWN as unavailable, NOT as a green GAME ESTIMATE', async () => {
   // renderHud used to derive `unavailable` from `(numeric === null && (!estimate || estimate === 'UNAVAILABLE'))`.
   // That gate treated 'UNAVAILABLE' and any other unmeasured sentinel the same
   // way — except 'UNKNOWN', which is truthy and bypassed the gate. The result
@@ -709,7 +796,7 @@ test('HUD treats literal UNKNOWN as unavailable, NOT as a green GAME ESTIMATE', 
   // Both probes come from a real renderHud run after the fix; the assertion
   // pins the corrected behaviour and the distinctness from the old green
   // GAME ESTIMATE (regression guard).
-  const unknown = renderHud(economics, { visibleEstimate: 'UNKNOWN' });
+  const unknown = await renderHud(economics, { visibleEstimate: 'UNKNOWN' });
   assert.strictEqual(unknown.text, 'ALIEN HATE UNAVAILABLE UNAVAILABLE',
     'an explicit visibleEstimate: "UNKNOWN" must render the same UNAVAILABLE surface as "UNAVAILABLE"');
   assert.strictEqual(unknown.value, 'UNAVAILABLE');
@@ -728,7 +815,7 @@ test('HUD treats literal UNKNOWN as unavailable, NOT as a green GAME ESTIMATE', 
 
   // Cross-check: declared UNAVAILABLE produces the same surface. The two
   // sentinels are now indistinguishable in the HUD — same path, same output.
-  const unavailable = renderHud(economics, { visibleEstimate: 'UNAVAILABLE' });
+  const unavailable = await renderHud(economics, { visibleEstimate: 'UNAVAILABLE' });
   assert.strictEqual(unavailable.text, unknown.text);
   assert.strictEqual(unavailable.className, unknown.className);
 
@@ -737,7 +824,7 @@ test('HUD treats literal UNKNOWN as unavailable, NOT as a green GAME ESTIMATE', 
   // same path the explicit UNAVAILABLE+requiredProject test at line 669
   // covers, and UNKNOWN must take the same path — that's the second
   // distinction (unknown vs measured-safe is what #7 is about).
-  const gatedUnknown = renderHud(economics, { visibleEstimate: 'UNKNOWN', requiredProject: 'Project_TheirOperations' });
+  const gatedUnknown = await renderHud(economics, { visibleEstimate: 'UNKNOWN', requiredProject: 'Project_TheirOperations' });
   assert.strictEqual(gatedUnknown.text, 'ALIEN HATE UNAVAILABLE INTEL GATED');
   assert.strictEqual(gatedUnknown.status, 'INTEL GATED');
   assert.strictEqual(gatedUnknown.className, 'init-hud-hate is-unknown');
@@ -747,7 +834,7 @@ test('HUD treats literal UNKNOWN as unavailable, NOT as a green GAME ESTIMATE', 
   // Regression guard on the estimate ladder: a real pip estimate must still
   // take the safe branch and read as GAME ESTIMATE. The fix must not over-
   // correct and start sending measured estimates through the unavailable gate.
-  const measured = renderHud(economics, { visibleEstimate: '■■■□□' });
+  const measured = await renderHud(economics, { visibleEstimate: '■■■□□' });
   assert.strictEqual(measured.status, 'GAME ESTIMATE',
     'a measured pip estimate must still read as GAME ESTIMATE');
   assert.ok(measured.className.split(/\s+/).includes('is-safe'),

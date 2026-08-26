@@ -58,7 +58,7 @@ const { browser, pure } = splitPasses();
 
 const pureStatus = runPass(pure, `pure-JS pass (${pure.length} files, parallel)`);
 const browserStatus = runPass(
-  browser,
+  [`--test-concurrency=${BROWSER_PASS_CONCURRENCY}`, ...browser],
   `browser pass (${browser.length} files, --test-concurrency=${BROWSER_PASS_CONCURRENCY})`
 );
 

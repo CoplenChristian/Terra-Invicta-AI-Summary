@@ -19,10 +19,14 @@ import {
 import { McBudget } from './panels/McBudget.jsx';
 import { StrategicCommentary } from './panels/StrategicCommentary.jsx';
 import { FleetEngagement } from './panels/FleetEngagement.jsx';
+import { IntelligenceLibrary } from './panels/IntelligenceLibrary.jsx';
+import { AlienHateEconomics, renderHudAlienHateEconomics } from './panels/AlienHateEconomics.jsx';
 import {
   renderMcBudget,
   renderStrategicCommentary,
   renderFleetEngagement,
+  renderAlienHateEconomics,
+  renderIntelligenceLibrary,
   fetchFleetEngagement,
 } from './main.jsx';
 
@@ -33,6 +37,11 @@ if (typeof window !== 'undefined') {
     render: renderFleetEngagement,
     fetchFleetEngagement,
   };
+  window.MissionControlHateEconomics = {
+    render: renderAlienHateEconomics,
+    renderHud: renderHudAlienHateEconomics,
+  };
+  window.IntelligenceLibrary = { render: renderIntelligenceLibrary };
 }
 
 const SCENES = {
@@ -48,6 +57,8 @@ const SCENES = {
   mcBudget: McBudgetScene,
   strategicCommentary: StrategicCommentaryScene,
   fleetEngagement: FleetEngagementScene,
+  intelligenceLibrary: IntelligenceLibraryScene,
+  alienHateEconomics: AlienHateEconomicsScene,
 };
 
 const PANEL_MODIFIERS = ['priority', 'alert', 'featured', 'quiet', 'dense', 'commentary'];
@@ -220,6 +231,33 @@ function FleetEngagementScene() {
   return (
     <div id="fleetEngagement" data-testid="fleet-engagement-harness" aria-live="polite">
       <FleetEngagement data={payload} />
+    </div>
+  );
+}
+
+function IntelligenceLibraryScene() {
+  const payload = window.__INTELLIGENCE_LIBRARY_PAYLOAD__ || {};
+  const options = { ...(payload.options || {}) };
+  if (typeof window.__testOnOpenFaction === 'function') {
+    options.onOpenFaction = window.__testOnOpenFaction;
+  }
+  return (
+    <div data-testid="intelligence-library-harness">
+      <IntelligenceLibrary
+        snapshot={payload.snapshot}
+        briefing={payload.briefing}
+        observerId={payload.observerId ?? 4712}
+        options={options}
+      />
+    </div>
+  );
+}
+
+function AlienHateEconomicsScene() {
+  const payload = window.__ALIEN_HATE_ECONOMICS_PAYLOAD__;
+  return (
+    <div id="alienHateEconomics" data-testid="alien-hate-economics-harness">
+      <AlienHateEconomics economics={payload} />
     </div>
   );
 }
