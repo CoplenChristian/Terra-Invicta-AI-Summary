@@ -26,7 +26,7 @@ save.
 > **The tally and the live list immediately below are the authoritative status.**
 > Use `git log` on the named commit to see what a fix actually changed.
 
-**Tally as of 2026-08-26: 20 entries — 14 fixed, 4 live, 2 conditional.**
+**Tally as of 2026-08-26: 22 entries — 20 fixed, 2 live, 0 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -43,18 +43,31 @@ was finally named: `paint()` rebuilt the panel with `innerHTML` and replaced
 measures overflow — lives in `mission-control.js` and was never called by the
 component at all.
 
-**Live right now: #17, #18, #19, #20.** #17 is four fabricated fallbacks in the
-directive board, carried across the React port **deliberately**, because "no
-figure may change" was that port's bar. They are recorded here so fixing them is
-a separate, reviewable change rather than a silent one.
+**#4 was fixed** in the `fleet-procurement` port, in **both** directions. The
+register had recorded only the red "15.2× behind" half; the port found that an
+unrecognised **recommended** armour produced `0.066`, failed the `> 1.0` test,
+and rendered **no badge at all** — silence from a fabricated number, the same
+defect wearing the opposite sign.
 
-#2, #5 and #15 were fixed in `a3f8487` — the last three that were visible to a
-reader on the current save. Each was verified by reverting its component with the
-new tests in place: 4, 1 and 1 tests failed respectively, so none is passing by
-construction.
+**#10 was fixed 2026-08-26** (`da8581e`). 462 renames applied from the game's own
+localisation files, 107 fallen back, 70 refused as ambiguous. The user's
+"Neutron Flux Lantern" now reads **"Poseidon Lantern"**, and a search for
+"Poseidon" — which previously returned *nothing* — returns 12 of 12.
 
-**Conditional:** #10 alone now. **#4 was fixed** in the fleet-procurement React port (2026-08-26), in BOTH directions — the register had recorded only the red "15.2x behind" half; the port found that an unrecognised RECOMMENDED armour produced 0.066, failed the `> 1.0` test, and rendered NO badge at all. With #6
-fixed, those two are the whole remaining conditional set.
+**#19 and #20 were fixed the same day** (`a0eabef`, `d71613e`), and **#18** and
+the `emptyOutDir` build race in `95eee95`.
+
+**Live right now: #17 and #21.**
+
+- **#17** — four fabricated fallbacks in the directive board, carried across the
+  React port **deliberately**, because "no figure may change" was that port's
+  bar. In progress.
+- **#21** — the em-dash affordance hand-written in eleven panels. Not urgent:
+  the rendered output is correct today, and the cost is that the rule holds by
+  convention rather than by structure.
+
+**Conditional: none.** #4, #6, #8 and #10 were the whole conditional set and all
+four are fixed.
 
 **Note on #2.** It produces no visible change on the current save, because every
 theater count there is measured. That is not the same as inert — the four tests
@@ -63,8 +76,8 @@ save simply does not exercise it today.
 
 One further candidate was investigated and **cleared** — see the end of #8.
 
-**The pattern across the fixed set is worth keeping.** Eight of the thirteen —
-#3, #7, #11, #12, #13, #14, #6 and, in effect, #2 and #5 — were corrected **as
+**The pattern across the fixed set is worth keeping.** Ten of the twenty —
+#3, #7, #11, #12, #13, #14, #6, #4, #8 and, in effect, #2 and #5 — were corrected **as
 part of a migration or a characterisation pass**, not as standalone defect work.
 That is the argument for fixing at the port rather than queuing defects
 separately: the person already reading the component closely enough to rewrite it
@@ -1001,6 +1014,76 @@ visually identical to "your armour is fine".
 sign**, and it is the harder half to notice: there is nothing on screen to
 question. Both directions now render a neutral `protection ratio unmeasured`
 affordance naming the material.
+
+---
+
+## 21. The em-dash affordance is hand-written in eleven panels, six of which never import `<Value>` — **confirmed**
+
+Found 2026-08-26 by the agent fixing #19, which was scoped to `world-map` and
+reported this on its way past.
+
+`<Value>` exists so that "absent stays null" is **structural** — one place that
+decides what an absent value looks like, and stamps `data-value-state` so a test
+can assert presence rather than guess from a glyph. #19 was one panel that
+*couldn't* use it. This is eleven panels that *don't*.
+
+Six never import it at all:
+
+```
+IntelligenceLibrary.jsx + intelligenceLibraryUtils.js
+ExecutiveBoards.jsx     + executiveBoardsUtils.js
+FleetEngagement.jsx
+driveExplorerUtils.mjs
+researchAdvisorUtils.mjs
+fleetProcurementUtils.mjs
+```
+
+`intelligenceLibraryUtils.js` is the clearest case: its own `EM_DASH`, its own
+`display`, `number` and `money`, and a `countLabel(value, noun)` returning the
+literal string `'UNAVAILABLE'` — **with no `data-value-state` anywhere**. So a
+reader sees the right word and a test cannot distinguish "we measured nothing"
+from "we rendered nothing", which is the whole property the primitive exists to
+provide.
+
+**None of these has world-map's excuse.** #19 was a genuine technical constraint
+— a `<span>` does not render inside `<svg>` — and it has since been solved with
+an `as` prop and an exported `resolveValue()`. These eleven are convention
+instead of structure, and convention drifts: the migration proved it, because
+each of the sixteen ports independently re-derived what an absent value should
+look like.
+
+This is not urgent — the rendered output is correct today. It is the difference
+between a rule that holds because it is enforced and one that holds because
+everyone remembered.
+
+---
+
+## 22. World-map's tests could not see whether its figures rendered at all — **demonstrated, now fixed**
+
+Found and fixed 2026-08-26 during #19, and reproduced independently before this
+entry was written.
+
+Strip `as="tspan"` from `WorldMap.jsx` and its figures become plain `<span>`s
+inside the `<svg>`. React creates them in the SVG namespace, where they **do not
+render** — the numbers vanish from the map. Every one of **21 tests
+(`world-map` 16 + `worldMap` 5) stayed green.**
+
+The mechanism is worth keeping: a `<span>` in the SVG namespace still holds its
+text in `innerHTML`. So `visibleText()` reads it, `text.includes('H 0 / OWN 1')`
+passes, and the suite cheerfully confirms figures that a reader cannot see.
+**Reading the DOM is not the same as seeing the page**, and for SVG the two
+diverge completely.
+
+The new guard measures `getBBox()` / `getComputedTextLength()` instead of reading
+text — geometry, not markup. Verified: with `as="tspan"` stripped,
+`reactPrimitivesValue.unit` goes 3 pass / 1 fail while all 21 world-map tests
+stay green; restored, everything is green.
+
+**A second lesson from the same fix.** The first version of that guard demanded
+only *one* `as="tspan"` in the file. With two call sites, dropping one still
+passed — a guard that would have shipped a silently blank figure. It now requires
+it on every `<Value>` in the file. **"Does this test fail for the right reason"
+is not the same question as "does this test fail."**
 
 ---
 
