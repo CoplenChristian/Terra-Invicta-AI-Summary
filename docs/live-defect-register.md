@@ -14,7 +14,19 @@ the cited lines. "Demonstrated" means executed. "Confirmed reachable" means the
 producer's own contract permits the input, but it does not occur on the current
 save.
 
-**Tally as of 2026-08-26: 17 entries — 13 fixed, 1 live, 3 conditional.**
+> **Read entry headings as historical, and this header as current.** Each entry
+> records the state *when it was found*, including its confidence word and its
+> file path. The React migration deleted every `public/v2/js/components/*.js`
+> file, so **every path cited below now points at a deleted file** — the code
+> lives in `src/v2/panels/` — and several entries still say "confirmed" for
+> defects since fixed. The per-entry text was left as written rather than
+> rewritten in place, because an entry that quietly changes its own history is
+> worth less than one that is out of date in a stated way.
+>
+> **The tally and the live list immediately below are the authoritative status.**
+> Use `git log` on the named commit to see what a fix actually changed.
+
+**Tally as of 2026-08-26: 19 entries — 13 fixed, 3 live, 3 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -31,7 +43,7 @@ was finally named: `paint()` rebuilt the panel with `innerHTML` and replaced
 measures overflow — lives in `mission-control.js` and was never called by the
 component at all.
 
-**Live on the dashboard right now: #17.** Four fabricated fallbacks in the
+**Live right now: #17, #18, #19.** #17 is four fabricated fallbacks in the
 directive board, carried across the React port **deliberately**, because "no
 figure may change" was that port's bar. They are recorded here so fixing them is
 a separate, reviewable change rather than a silent one.
@@ -867,6 +879,68 @@ measurement", the board shows the number and drops the qualifier. That is the
 same shape as **#13** (a Monte Carlo band rendered as the whole uncertainty) and
 **#15** (a non-ranking rendered as a ranking): not an absent value shown as
 present, but a **qualified** value shown as an unqualified one.
+
+---
+
+## 18. The type-scale guard stopped covering components when they became React — **confirmed, and now total**
+
+`tests/typeScale.test.js:176`, the test named *"no component script writes a
+font-size literal into an inline style"*. It walks `COMPONENT_DIR`, which is
+`public/v2/js`, and matches only `.js` files.
+
+That guard earned its keep the day it was written: it found **five** inline
+`font-size: 9px` in `strategic-commentary.js` and **three** in
+`mission-control.js`, including a `size < 48 ? '8.5px' : '9.5px'` conditional on
+the GDP bubbles — declarations the stylesheet could not see at all.
+
+**As of 2026-08-26 it covers no component.** `public/v2/js/components/` is empty;
+all sixteen are now `.jsx` under `src/v2/panels/`, which the walk never reaches.
+What remains in its path is `mission-control.js` and `shared.js` — the shell, not
+the components the test is named for.
+
+Checked today: **no React panel currently violates it.** The hole is that nothing
+would notice if one did.
+
+This is the shape `CLAUDE.md` already warns about, in its own words:
+
+> the `SERVICE_ROLE` test scanned one file, and a later split moved the
+> key-resolving code into a sibling it no longer covered. When code moves,
+> re-check what its tests still actually cover.
+
+A migration is exactly that kind of move, and this is the second instance in the
+same codebase. Worth a sweep rather than a single fix: **any guard that walks a
+directory rather than a manifest silently narrows as code relocates**, and it
+reports green the whole way down.
+
+Fixing it means walking `src/v2/` too, and matching `.jsx`. The SVG exemption in
+the existing comment still applies — `world-map` sets font sizes as SVG
+presentation attributes in user units, which are deliberately not on the page
+scale.
+
+---
+
+## 19. `<Value>` cannot be used inside SVG, so world-map restates the contract — **confirmed, by design**
+
+Found 2026-08-26 during the `world-map` port. `<Value>` — the primitive that
+exists to make "absent stays null" structural rather than conventional — emits a
+`<span>`. Inside `<svg>`, React creates children in the SVG namespace, so that
+span is a non-rendering element. **Every figure in `world-map` lives in an SVG
+`<text>`.**
+
+`docs/react-component-contracts-detail.md:2790` reached the same conclusion
+independently and says the choice must be stated rather than decided by whoever
+happens to write the JSX.
+
+The panel therefore restates the presence contract locally: `countLabel` and
+`valueState` in `worldMapUtils.js`, plus `data-hostile-state` /
+`data-own-state` / `data-summary-state` attributes so presence is still
+structural and still assertable — but it is **a second implementation of this
+repo's most defect-prone rule**, and the two can drift.
+
+The agent declined to add an `as` / render-prop escape hatch to `<Value>` because
+two other lanes were writing concurrently, which was the right call at the time.
+It remains the fix: one primitive, one contract, an escape hatch for hosts that
+cannot take a `<span>`.
 
 ---
 
