@@ -4,7 +4,7 @@
 
 `npm test` exits 0, both builds succeed, `verify_v2_navigation.js` reports 0
 console and 0 network errors, `verify_mobile_overflow.js` passes with 0
-unreachable content and COMMAND at 3.05 screens against a 3.25 budget.
+unreachable content and COMMAND at 3.02 screens against a 3.25 budget.
 
 **11 of 16 components migrated.**
 
@@ -22,6 +22,9 @@ unreachable content and COMMAND at 3.05 screens against a 3.25 budget.
 | `council-orders` | 348 | COMMAND | 14 + 6 | — |
 | `intelligence-library` | 594 | RECORDS | 29 | — (#12 guard preserved) |
 | `mining-expansion` | 618 | EXPANSION | 6 + 6 | **#8** literal `null` on 109 rows |
+| `directive-board` | 780 | COMMAND | 19 + 6 | — (#1, #15 guards preserved) |
+| `drive-explorer` | 1,186 | DRIVES | 46 + 18 + 5 | **#6** scroll hint died after first interaction |
+| `faction-intel` | 1,273 | RECORDS | 36 + 5 | — (#11 guard preserved) |
 
 ## Left, in suggested order
 
@@ -29,9 +32,6 @@ unreachable content and COMMAND at 3.05 screens against a 3.25 budget.
 | :-- | --: | --: | :-- |
 | `world-map` | 542 | 16 | **partial work exists** — see patch below |
 | `research-advisor` | 1,067 | 63 | **partial work exists** — see patch below |
-| `directive-board` | 780 | — | no dedicated test file |
-| `drive-explorer` | 1,186 | 46 | carries unfixed **defect #6** |
-| `faction-intel` | 1,273 | 36 | largest component in the app |
 | `unlocked-tech` | 371 | **none** | needs characterisation FIRST |
 | `fleet-procurement` | 607 | **none** | needs characterisation FIRST; unfixed **defect #4** |
 | `detail-panel` | 219 | none | **do last** — 7 external DOM reaches |
@@ -149,8 +149,23 @@ Recorded because each cost at least one wasted run.
   than the brief asked for on defect #16 and found a fetch site the brief missed.
   Metered.
 
-**Next session uses Claude Opus agents** rather than external lanes, giving the
-provider quotas time to reset.
+**Wave 6 ran on Claude Opus agents** and was the cleanest wave yet: three
+components, 3,239 lines, all three landing complete on the first attempt with
+parity proven against the deleted vanilla rather than asserted. Every agent could
+run its own tests, which is the difference that mattered.
+
+**A real tooling bug, diagnosed independently by all three:** `vite.config.mjs`
+sets `emptyOutDir: true` on `public/v2/app`, which the primitives harness also
+writes to — so ANY concurrent `npm run build` deletes `primitives-harness.js` and
+times out the other agents' browser tests with the exact signature of a broken
+harness scene. Pre-existing; has probably cost runs attributed to other causes.
+Still unfixed.
+
+**Definition-of-done item 3 needs rewording.** All three agents deliberately left
+`mission-control.js` untouched and justified it identically: the React bridge
+takes over the same global NAME, the established pattern since `ff34479`. With
+the vanilla file deleted the global can only come from the bundle. The real
+requirement is 'the vanilla file no longer supplies it', not 'the name is absent'.
 
 ---
 
