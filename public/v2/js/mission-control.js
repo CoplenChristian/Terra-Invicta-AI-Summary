@@ -260,6 +260,10 @@ const VIEWS = [
       // squarely "what is coming", so it lives here rather than in FLEET, which
       // answers "what do I build".
       'fleetEngagement',
+      // Hostile movement answers "what is moving toward us across the whole
+      // board", which is squarely the THREAT question ("what is coming"),
+      // sitting naturally beside per-fleet engagement and theater defence.
+      'hostileMovement',
       // The theater-defence board answers "what do I do about what is coming",
       // which is still the THREAT question -- FLEET answers "what do I build
       // in general", and this is a per-body race against a specific arrival.

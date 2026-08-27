@@ -20,7 +20,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/index.html` | — | Browser (legacy v1) | 535 | legacy v1 dashboard shell -- DO NOT EDIT | — | — |
 | `public/js/api.js` | BS | Browser (legacy, non-module) | 129 | the legacy v1 API client — runtime probe and the fetch wrapper the | — | — |
 | `public/js/app.js` | BS | Browser (legacy, non-module) | 1517 | the legacy v1 dashboard controller — renders the old UI and must not | — | — |
-| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2146 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2150 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (classic, global IIFE) | 328 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
@@ -252,8 +252,8 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/panels/fleetProcurementUtils.mjs` | E | Browser (React JSX) | 762 | the DOM-free half of the FLEET procurement + refit advisor panel — | `ARMOR_DATA, ARMOR_RATIO_UNMEASURED_TEXT, DELIVERY_FAILS_TITLE, DELIVERY_UNKNOWN_TITLE, DESIGN_ROLES, NON_COMPOSABILITY_NOTICE, NOTHING_UNFIELDED, NO_ENDPOINT_ANSWER, NO_REFIT_CANDIDATES, NO_REFIT_ENDPOINT_ANSWER, PROCUREMENT_UNAVAILABLE_HEADLINE, REFIT_FAILURE_ANSWER, …(+33)` | — |
 | `src/v2/panels/HostileMovementPanel.jsx` | E | Browser (React JSX) | 236 | read-only surface for `theaterBoardResource(...).hostileMovement`. | `HostileMovementPanel, renderHostileMovement, stateTokenFor` | — |
 | `src/v2/panels/hostileMovementPanelUtils.mjs` | E | Browser (React JSX) | 141 | testable render helpers behind src/v2/panels/HostileMovementPanel.jsx. | `STATE_BODY, STATE_LABEL, STATE_MODIFIER, describePanel, destinationRows, formatDays, stateTokenFor, summaryCells, truncationInfo` | — |
-| `src/v2/panels/IntelligenceLibrary.jsx` | E | Browser (React JSX) | 1206 | renders the intelligence library — the drillable intelligence surface | `IntelligenceLibrary` | — |
-| `src/v2/panels/intelligenceLibraryUtils.js` | E | Browser (React JSX) | 175 | pure formatters and selectors for the intelligence library React | `EM_DASH, activeCouncilors, councilorProfile, countLabel, displayText, factionColorById, factionLogoHtml, factionMap, factionNameById, matchesSpaceTheater, money, number, …(+6)` | — |
+| `src/v2/panels/IntelligenceLibrary.jsx` | E | Browser (React JSX) | 1364 | renders the intelligence library — the drillable intelligence surface | `IntelligenceLibrary` | — |
+| `src/v2/panels/intelligenceLibraryUtils.js` | E | Browser (React JSX) | 244 | pure formatters and selectors for the intelligence library React | `EM_DASH, activeCouncilors, councilorProfile, countLabel, displayText, factionColorById, factionLogoHtml, factionMap, factionNameById, formatCountLabel, formatMoney, formatNumber, …(+13)` | — |
 | `src/v2/panels/McBudget.jsx` | E | Browser (React JSX) | 275 | Mission Control budget planner — MC is the sole input to the alien | `McBudget` | — |
 | `src/v2/panels/MiningExpansion.jsx` | E | Browser (React JSX) | 1050 | render the mining expansion board in React with explicit presence | `MiningExpansion` | `tests/MiningExpansion.test.js` |
 | `src/v2/panels/ResearchAdvisor.jsx` | E | Browser (React JSX) | 368 | the COMMAND-view research advisor — what to research next, in two | `ResearchAdvisor` | — |
