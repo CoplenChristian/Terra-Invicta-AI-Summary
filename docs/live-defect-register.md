@@ -26,7 +26,7 @@ save.
 > **The tally and the live list immediately below are the authoritative status.**
 > Use `git log` on the named commit to see what a fix actually changed.
 
-**Tally as of 2026-08-27: 23 entries — 21 fixed, 2 live, 0 conditional.**
+**Tally as of 2026-08-27: 24 entries — 21 fixed, 3 live, 0 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -57,7 +57,7 @@ localisation files, 107 fallen back, 70 refused as ambiguous. The user's
 **#19 and #20 were fixed the same day** (`a0eabef`, `d71613e`), and **#18** and
 the `emptyOutDir` build race in `95eee95`.
 
-**Live right now: #17 and #21.**
+**Live right now: #17, #21 and #24.**
 
 - **#17** — four fabricated fallbacks in the directive board, carried across the
   React port **deliberately**, because "no figure may change" was that port's
@@ -68,6 +68,12 @@ the `emptyOutDir` build race in `95eee95`.
   2026-08-27: the lane converted one of the eleven and broke it, making per-metric
   measurement state cascade across rows, which is the exact property those tests
   exist to defend. The patch is kept, not discarded.
+- **#24** — the hostile-movement panel is **unregistered** in the VIEWS registry,
+  so `assertViewRegistryIntegrity()` cannot protect it, and it is styled against
+  **8 undefined custom properties**. Both faults are mine, from `fb2a6ab`. The CSS
+  half is the live-visible one: unresolved `color` falls through to inherited, so
+  text meant to be dimmed renders at full brightness.
+
 *(#23 was found and fixed the same day — `e76c212`. It is left in the list below
 because the two wrong diagnoses it produced are the useful part.)*
 
@@ -1164,6 +1170,63 @@ app was never racing; the test was under-waiting.
 waits on a *single* root after an interaction rather than a two-root mount race, so
 exposure is lower, but it is the same class and is recorded here rather than
 silently left as four copies of a pattern now known to be fragile.
+
+---
+
+## 24. The hostile-movement panel shipped unregistered, and styled against eight tokens that do not exist — **demonstrated, live**
+
+Found 2026-08-27 by the agent building the *sibling* panel, which is the useful
+part: both faults are in `fb2a6ab`, they are mine, and they survived that commit's
+own verification because nothing looks at either property.
+
+### It is not in the VIEWS registry
+
+`public/v2/js/mission-control.js` lists the THREAT view's panels as
+`dualAssetRings`, `alienHateEconomics`, `powerTrajectoryChart`, `fleetEngagement`,
+`theaterDefence`. **`hostileMovement` is absent.** The string appears exactly once
+in the whole file — a `getElementById` in the render path.
+
+So `assertViewRegistryIntegrity()` does not cover it, and that assertion exists for
+precisely this: the mining board once had a `<script>` tag and no mount element,
+rendered nowhere, and nobody noticed. The panel currently renders, so nothing is
+visibly wrong — which is the point. **The guard that would catch it moving is the
+thing that is missing**, and an unguarded panel fails silently by construction.
+
+### Eight of its thirteen custom properties are undefined
+
+Measured across all 26 stylesheets, which define 63 tokens between them:
+
+| file | `var()` names used | undefined |
+| :-- | --: | --: |
+| `25-hostile-movement.css` | 13 | **8** |
+| `26-theater-defence.css` | 22 | **0** |
+
+The eight: `--text-meta` ×6, `--rule-dim` ×6, `--surface-1`, `--surface-2`,
+`--rule-strong`, `--text-body` — none with a fallback, so each resolves to nothing —
+plus `--accent-warn` and `--accent-alert`, which do carry fallbacks and therefore
+render.
+
+The real vocabulary in `01-tokens-and-base.css` is `--text` / `--text-soft` /
+`--text-muted` / `--text-dim`, `--line` / `--line-strong`, `--surface` /
+`--surface-raised` / `--surface-inset`, `--warning`, `--danger`. Every invented name
+is a plausible-sounding neighbour of a real one.
+
+**The visible consequence is the dangerous kind: it is not blank, it is wrong.**
+An unresolved `color: var(--text-meta)` does not fail — it falls through to the
+inherited value, so `.hm-summary__item small` computes to `rgb(230, 238, 234)`,
+full body brightness, where the design called for dimmed secondary text. A reader
+sees confident, primary-weight text where the panel meant to whisper. Nothing
+errors, nothing logs, and no test asserts computed colour on that panel.
+
+**Why the sibling got it right and this did not:** the later brief named the
+primitives and pointed at the token file; the earlier one did not. The lane invented
+names that read correctly and never resolved. **A stylesheet is the one place where
+a typo neither throws nor blanks** — CSS is specified to skip declarations it cannot
+resolve, so the failure mode is inheritance, which always looks deliberate.
+
+Worth a guard rather than only a fix: a test asserting every `var(--x)` in
+`public/v2/css/` resolves to a defined token would have caught this at authoring
+time, and would cover all 26 files rather than the two examined here.
 
 ---
 
