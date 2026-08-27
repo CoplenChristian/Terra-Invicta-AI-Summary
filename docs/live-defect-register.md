@@ -26,7 +26,7 @@ save.
 > **The tally and the live list immediately below are the authoritative status.**
 > Use `git log` on the named commit to see what a fix actually changed.
 
-**Tally as of 2026-08-27: 25 entries — 22 fixed, 3 live, 0 conditional.**
+**Tally as of 2026-08-27: 26 entries — 23 fixed, 3 live, 0 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -57,24 +57,31 @@ localisation files, 107 fallen back, 70 refused as ambiguous. The user's
 **#19 and #20 were fixed the same day** (`a0eabef`, `d71613e`), and **#18** and
 the `emptyOutDir` build race in `95eee95`.
 
-**Live right now: #17, #21 and #24 (half).**
+**Live right now: #17, #21 and #26.**
 
 - **#17** — four fabricated fallbacks in the directive board, carried across the
   React port **deliberately**, because "no figure may change" was that port's
   bar. In progress.
 - **#21** — the em-dash affordance hand-written in eleven panels. Not urgent:
   the rendered output is correct today, and the cost is that the rule holds by
-  convention rather than by structure. A first attempt at this was reverted on
-  2026-08-27: the lane converted one of the eleven and broke it, making per-metric
-  measurement state cascade across rows, which is the exact property those tests
-  exist to defend. The patch is kept, not discarded.
-- **#24** — two faults from `fb2a6ab`, both mine. The **CSS half is fixed** and now
-  guarded by `tests/cssCustomProperties.test.js`; it turned out to be 12 undefined
-  names across four panels rather than 8 in one, and the damage was missing
-  geometry rather than only wrong colour. Six references in three other panels are
-  **pinned and still live**, each needing a visual decision. The **VIEWS registry
-  half is still open**: `hostileMovement` is absent, so
-  `assertViewRegistryIntegrity()` cannot protect it.
+  convention rather than by structure. **One of the eleven is done** (Intelligence
+  Library, `c52b9de`); ten remain, one at a time. A first attempt at that same
+  panel was reverted earlier the same day, having made per-metric measurement state
+  cascade across rows — the exact property those tests defend. What fixed it on the
+  retry was a sharper brief, not a better tool: one panel instead of eleven, the
+  failure named, and the catching tests pointed at.
+- **#26** — the guard that promises the unit suite never reads the live save is a
+  **scan of test-file source text**, so it cannot see a read reached through a
+  server or a helper. `missionControlLayout.test.js` requires `server/index.js` and
+  passes the guard. CLAUDE.md's "must pass identically with the game running" is
+  therefore unenforced, which matters because that is how the suite is almost
+  always run.
+
+*(#24 is closed — both halves. The CSS was 12 undefined names across four panels,
+not 8 in one, and cost missing geometry rather than only wrong colour; six
+references in three other panels remain **pinned** in
+`tests/cssCustomProperties.test.js`, each needing a visual decision rather than a
+guess. `hostileMovement` is now registered and the guard was proved to fire.)*
 
 *(#25 was found and fixed the same day. Six scripts carried the ingredient, four
 were armed; fixed at the chokepoint so the other two — and the next one written —
@@ -1381,6 +1388,58 @@ in-process purpose (`server/http/routes/runtime.js:29` reads `NODE_ENV`), the
 chokepoint makes them harmless, and `scripts/` is a `SOURCE_ROOT` in
 `docs/code-index.md`, which records line counts — deleting a line from each would
 stale the checked-in index.
+
+---
+
+## 26. The "no live save in the unit suite" guard is a text scan, and the suite reaches the save anyway — **partly confirmed, live**
+
+Found 2026-08-27 by an agent whose intermediate `npm test` runs failed three
+different ways while the user was playing, and who noticed that CLAUDE.md promises
+this cannot happen.
+
+CLAUDE.md states: *"`npm test` — unit suite only. **Reads committed fixtures, not
+the live save folder.** Must pass identically with the game running."*
+
+`tests/noLiveSaveInUnitSuite.test.js` is what enforces that. **It is a scan of test
+files' own source text** for three literal patterns — `loadFilteredSnapshot`,
+`loadSnapshot()` with no arguments, and `latest: true`. It reads each `.test.js`
+under `tests/` and greps it.
+
+**So it can only see a live-save read that is spelled out in the test file itself.**
+It cannot see one reached through a helper, a fixture, or — the case here — a
+server. Confirmed by inspection: `tests/missionControlLayout.test.js` requires
+`server/index.js`, which resolves and reads the **newest save in the configured
+folder**. Nothing in that test file matches any forbidden pattern, so the guard
+passes it.
+
+This is the same shape CLAUDE.md already records for a different guard: *"the
+`SERVICE_ROLE` test scanned one file, and a later split moved the key-resolving code
+into a sibling it no longer covered."* A source-text guard measures spelling, not
+behaviour, and behaviour is what the rule is about.
+
+**Reported but not reproduced by me**, so recorded as the finder's observation
+rather than as measurement: three transient failures during runs against a save the
+game was actively writing — `controlPointCap.test.js:972` throwing `EBUSY` on
+`Autosave.gz`, `markdownExports.test.js:694` getting a 500 where it expected 200,
+and `missionControlLayout.test.js:350` failing once on a missing grid with its log
+showing `CombatAutosave.gz` parsed on one run and `Autosave.gz` on the next. All
+three passed in isolation and in the final run. I could not trace the first two to
+a live-save read by inspection — both use fixtures and neither requires
+`server/index.js` — so either there is a second route I have not found, or those two
+have an unrelated cause.
+
+**Why it matters more than a flaky test.** Every "npm test green" in this repo's
+history is only as trustworthy as that promise, and the promise is what lets the
+suite be run while the game is open — which is how it is run almost every time. This
+is the second defect this week where the evidence for a claim was weaker than the
+claim (see #23), and the first where the weakness is in a guarantee the project
+documents about itself.
+
+**The fix is a behavioural check, not a longer pattern list.** Adding
+`require('server/index')` to `FORBIDDEN` would catch today's instance and miss the
+next route. Something that observes whether the save folder is *read* during a unit
+run — an `fs` hook, or a run against a deliberately absent/renamed save folder that
+must still pass — measures the actual rule.
 
 ---
 
