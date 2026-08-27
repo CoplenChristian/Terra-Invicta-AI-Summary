@@ -68,6 +68,50 @@ enemy is the dangerous direction for a threat display."*
 materially less trustworthy exactly where most readers will see it, and its error
 runs in the direction that tells you you are safer than you are.
 
+> ## CORRECTION, 2026-08-27 — the paragraph above is wrong, and backwards
+>
+> **The 5.5× belongs to a basis this codebase REJECTED.** `OPPONENT_RATING_BASIS`
+> in `shared/engagementModel.mjs` describes an **armour**-anchored player rating.
+> `shared/fleetEngagement.mjs` measured armour against combat value at a
+> correlation of **−0.077** — no signal — and chose **weapon systems** (+0.798)
+> instead. Its own comment: the armour anchor *"under-rated one fleet by 5.5x …
+> **where the weapon-system anchor never fell below 0.81x**."* I quoted the
+> failure of the rejected model as though it described the shipped one.
+>
+> **And the shipped basis errs the other way.** Measured on the live save at
+> 6/16/2045, player against omniscient opponent rating, per body:
+>
+> | body | player | omniscient | ratio |
+> | :-- | --: | --: | --: |
+> | Earth | 2,392,749 | 152,898 | **15.65×** |
+> | Luna | 3,349,849 | 263,974 | 12.69× |
+> | Mercury | 2,153,475 | 148,509 | 14.50× |
+> | Callisto | 3,828,399 | 424,894 | 9.01× |
+> | Titan | 1,674,925 | 138,383 | 12.10× |
+>
+> Player mode **over**-rates the enemy by 9–15×, on every body. It does not tell
+> you that you are safe; it tells you the sky is falling.
+>
+> **The refusal still stands, for a better reason.** "It errs toward reassurance"
+> was the wrong argument. The right one: the rating rests on an invented ×1.5
+> constant no game source states, and its error is **an order of magnitude with a
+> spread that is not even consistent between bodies** — 9.01× at Callisto against
+> 15.65× at Earth. A hull count derived from that is not a conservative estimate
+> that happens to be cautious; it is a number wrong by roughly 10× by an amount
+> nobody can predict per-body. That is not advice, and it is not made into advice
+> by a caption.
+>
+> Note also what the direction change does *not* license. An over-rating is not
+> "safe because it errs high": it would demand ten times the hulls actually needed,
+> which in a game about scarce boost and shipyard time is its own way of losing.
+>
+> **The lesson for me:** I read the basis constant that was easiest to find
+> (`engagementModel.mjs`, which the spec already cited for the p20–p80 band) and
+> assumed it described the code path in use. The file that actually composes these
+> ratings had measured the question, chosen differently, and written down why —
+> and I cited the loser as the incumbent. When two modules describe the same
+> quantity, the one doing the work is the authority.
+
 ---
 
 ## What this means for the design

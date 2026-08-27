@@ -20,12 +20,29 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const { buildMilitaryWorld } = require('../../server/engine/military');
+const { COMPOSITION_BASIS } = require('../../shared/fleetEngagement.mjs');
 
 const OBSERVER = 4712;
 
 function loadLive(mode) {
   const { loadFilteredSnapshot } = require('../../server/snapshotLoader');
   return loadFilteredSnapshot({ latest: true, mode, observer: OBSERVER });
+}
+
+/** Shared skip guard: no configured save, or the game mid-write, is not a failure. */
+function loadOrSkip(t, mode) {
+  try {
+    return loadLive(mode);
+  } catch (err) {
+    if (
+      err.code === 'EBUSY' || err.code === 'ENOENT' || err.code === 'EPERM'
+      || /EBUSY|locked|busy|No save path configured|Save folder not found|Save file not found|No \.gz or \.json save files found|No save files found/.test(err.message || '')
+    ) {
+      t.skip(`Skipping live save test: ${err.message}`);
+      return null;
+    }
+    throw err;
+  }
 }
 
 test('Live save: buildOptions rows carry a measured fastestDays, never null', (t) => {
@@ -64,5 +81,54 @@ test('Live save: buildOptions rows carry a measured fastestDays, never null', (t
     assert.ok('spaceTheaterKey' in option);
     assert.ok('shipyardId' in option);
     assert.ok('shipyardModuleTier' in option);
+  }
+});
+
+// -----------------------------------------------------------------------------
+// theaterForce: the positive half, which needs a campaign with fleets in it.
+//
+// `tests/engineTheaterForce.test.js` owns the shape and every refusal path
+// against the committed fixtures. What only the live save can show is that the
+// surface is still in contact with the current campaign: that the observer's
+// own hulls and the aliens' still land on the twelve-body board and compose a
+// rating there. A failure here means the campaign moved somewhere the model
+// does not cover -- information, not a broken build.
+// -----------------------------------------------------------------------------
+
+test('Live save: theaterForce composes a rated body in both modes', (t) => {
+  for (const mode of ['player', 'omniscient']) {
+    const snapshot = loadOrSkip(t, mode);
+    if (!snapshot) return;
+
+    const world = buildMilitaryWorld(snapshot, OBSERVER);
+    const rows = world.theaterForce;
+
+    assert.equal(rows.length, 12, `${mode}: one row per tracked body`);
+    assert.deepEqual(rows.map(r => r.body), world.theaters.map(t2 => t2.body),
+      `${mode}: theaterForce must stay row-for-row aligned with the board`);
+
+    const unavailable = rows.filter(r => !r.available);
+    assert.deepEqual(unavailable.map(r => `${r.body}: ${r.unavailableReason}`), [],
+      `${mode}: every unavailable row must be explainable; if this fires, read the reasons`);
+
+    assert.ok(rows.some(r => typeof r.own.rating === 'number' && r.own.rating > 0),
+      `${mode}: the current save must compose an own-force rating at at least one tracked body -- `
+      + 'if it does not, either the observer has no hull on the twelve-body board or the surface has '
+      + 'lost contact with the fleet-engagement resource');
+
+    for (const row of rows) {
+      assert.equal(row.isEstimate, true, `${mode}/${row.body}`);
+      assert.strictEqual(row.opponent.basis, COMPOSITION_BASIS[mode], `${mode}/${row.body}: basis verbatim`);
+      assert.equal(row.calibrated, mode === 'omniscient', `${mode}/${row.body}: calibrated`);
+      for (const side of ['own', 'opponent']) {
+        const { rating, ratedShips } = row[side];
+        if (rating === null) {
+          assert.equal(ratedShips, 0, `${mode}/${row.body}/${side}: a null rating rates no ships`);
+        } else {
+          assert.ok(Number.isFinite(rating) && rating > 0, `${mode}/${row.body}/${side}: finite positive`);
+          assert.ok(ratedShips > 0, `${mode}/${row.body}/${side}: a rating must be backed by ships`);
+        }
+      }
+    }
   }
 });
