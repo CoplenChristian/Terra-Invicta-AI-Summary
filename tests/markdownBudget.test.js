@@ -78,13 +78,18 @@ function growFleets(base, friendlyMultiple, hostileMultiple) {
   return grown;
 }
 
+// `number` may be a lettered section id ('1b', '1c') as well as a plain digit.
+// The terminator has to recognise those too: while it matched only `## \d+\.`,
+// `sectionText(rendered, 1)` silently returned sections 1, 1b AND 1c joined,
+// so an assertion aimed at the alien-threat block was really reading three
+// blocks and would have failed for something happening in a neighbour.
 function sectionText(markdown, number) {
   const lines = markdown.split('\n');
   const start = lines.findIndex(line => line.startsWith(`## ${number}.`));
   if (start < 0) return '';
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^## \d+\./.test(lines[i])) { end = i; break; }
+    if (/^## \d+[a-z]?\./.test(lines[i])) { end = i; break; }
   }
   return lines.slice(start, end).join('\n');
 }
@@ -294,6 +299,24 @@ for (const mode of MODES) {
           `section ${n} header missing at ${label} (${mode})`
         );
       }
+
+      // The lettered sections are headers like any other and must survive the
+      // same way. 1c in particular renders from ENGINE output this call does
+      // not hand in, so at every budget it must still print its header and say
+      // the value was not read -- never vanish, which would read as a quiet
+      // board rather than an unread one.
+      for (const letteredSection of ['1b', '1c']) {
+        assert.match(
+          rendered,
+          new RegExp(`^## ${letteredSection}\\. `, 'm'),
+          `section ${letteredSection} header missing at ${label} (${mode})`
+        );
+      }
+      assert.match(
+        sectionText(rendered, '1c'),
+        /UNAVAILABLE in this runtime/,
+        `section 1c dropped its "not read" statement at ${label} (${mode})`
+      );
 
       // Every section that lost its entries must say so in its own body.
       for (const n of [2, 3, 4, 6]) {
@@ -561,6 +584,90 @@ const MAX_CYCLE_PLAN = {
   totalExpectedValue: 66.13
 };
 
+// Section 1c at its widest: the engine's own cap of twelve findings, every one
+// of them CANNOT_ADVISE with both refusals populated (the longest row the block
+// can emit), a build race that ran, and a citation set larger than the shared
+// basis so every row also carries an "extra citations" line.
+//
+// The notes matter as much as the rows here: they are the part of the section
+// that does NOT degrade, so they set the block's irreducible floor. These are
+// the four the live engine emits, at the length it emits them.
+const MAX_THEATER_DEFENCE = {
+  available: true,
+  unavailableReason: null,
+  state: 'INBOUND_TO_TRACKED_THEATER',
+  findings: new Array(12).fill(null).map((_, index) => ({
+    id: `theater-defence:body-${index}`,
+    body: `Extended Body Designation ${index}`,
+    spaceTheaterKey: `theater-${index}`,
+    theaterStatus: 'THREAT_INBOUND_ARRIVAL_UNKNOWN',
+    posture: 'CANNOT_ADVISE',
+    threat: {
+      hostileShips: 105, hostileFleets: 14, presentHostileShips: 25, presentHostileFleets: 18,
+      nearestArrivalDays: 57.25, nearestArrivalDate: '2042-11-13T11:24:57.703Z', arrivalTimingKnown: true
+    },
+    friendly: {
+      ships: 30, shipyards: 12, habs: 3, mines: 2,
+      shipsCompletingBeforeThreatArrival: 0,
+      completionBasis: 'measured against the nearest inbound arrival'
+    },
+    buildRace: {
+      hullName: 'Constitution-class Heavy Line Battleship', shipyardId: 315317, available: true,
+      verdict: 'arrival-first', marginDays: -1183, buildDays: 1240, daysUntilArrival: 57, reason: null
+    },
+    refusals: [
+      { check: 'hostile-movement-counts',
+        reason: 'the toward/elsewhere/unresolved buckets do not partition the observed hostile '
+          + 'transfers, so no count taken from them is trustworthy' },
+      { check: 'build-race',
+        reason: 'the observer holds 12 yard(s) at this body but none produced a measured build time '
+          + 'for any hull (shipyard-tier-unmeasured, hull-tier-unmeasured); an unknown build time '
+          + 'makes the comparison unevaluable' }
+    ],
+    citations: [
+      { source: 'intel/theaters', field: 'incoming.hostileShips' },
+      { source: 'intel/theaters', field: 'incoming.hostileFleets' },
+      { source: 'intel/theaters', field: 'incoming.nearestArrivalDays' },
+      { source: 'intel/theaters', field: 'incoming.arrivalTimingKnown' },
+      { source: 'intel/theaters', field: 'hostile.ships' },
+      { source: 'intel/theaters', field: 'friendly.ships' },
+      { source: 'intel/theaters', field: 'friendly.shipyards' },
+      { source: 'intel/theaters', field: 'production.shipsCompletingBeforeThreatArrival' },
+      { source: 'intel/theaters', field: 'hostileMovement.reconciles' },
+      { source: 'engine/military', field: 'buildOptions[].fastestDays' },
+      { source: 'engine/military', field: 'buildOptions[].shipyardId' },
+      { source: 'engine/military', field: `buildRefusals[${index}].reason` },
+      { source: 'shared/shipBuildTime', field: 'buildBeatsArrival.verdict' }
+    ]
+  })),
+  findingsTotalCount: 31,
+  findingsOmittedCount: 19,
+  offBoardNote: '10 hostile transfer(s) carrying 42 ship(s) could not be resolved to a destination -- '
+    + 'with an unresolved destination in the set, "none of it is coming here" is not a claim this data '
+    + 'supports; 10 hostile transfer(s) carrying 42 ship(s) are aimed at bodies this twelve-body board '
+    + 'does not track; 6 off-board destination row(s) were omitted by the board\'s own cap.',
+  notes: [
+    'No force-strength comparison is made here. These postures rest on the production race and on what '
+      + 'is present at each body -- NOT on whether the force there could win. Converting an opposing '
+      + 'force into a required hull count is shared/engagementModel.mjs, whose answer is a p20-p80 band '
+      + 'and whose `winnable: false` means "above the ceiling I swept", never "cannot be won"; carrying '
+      + 'that band through is a separate task, and an absent comparison is honest where a confident one '
+      + 'that dropped its uncertainty is not (docs/live-defect-register.md #13).',
+    'No hate-based inference is made here. "Hate is low, so this fleet is probably not aimed at you" is '
+      + 'deliberately unimplemented: it is the one inference that can tell a player they are safe, and '
+      + 'it is a separate task. `world.military.hate` is read by nothing in this block.',
+    'The build race is run against the FASTEST hull each body\'s own yards can lay down, which is not '
+      + 'necessarily the most useful one. It answers "can production at this body change the board '
+      + 'before contact at all", and the hull it used is named on every race row.',
+    'The hostile-movement buckets do not partition the observed set '
+      + '(`hostileMovement.reconciles === false`), so no count derived from them is trustworthy and '
+      + 'every finding below carries that refusal.',
+    '20 of the observer\'s yards sit at bodies this twelve-body board does not track (1 at 34 Circe, '
+      + '18 at Earth Orbit, 1 at 2 Pallas). They are deliberately not folded into any theater\'s build '
+      + 'race: a yard the board did not count toward a body must not silently reinforce it.'
+  ]
+};
+
 const HANDED_IN = {
   cyclePlan: MAX_CYCLE_PLAN,
   primary: {
@@ -568,13 +675,15 @@ const HANDED_IN = {
     score: 68.74825331372958,
     assignment: { expectedValue: 45.93 }
   },
+  theaterDefence: MAX_THEATER_DEFENCE,
   strategicCommentary: MAX_COMMENTARY
 };
 
 for (const mode of MODES) {
-  test(`war room stays under the 30 KB cap with a full section 10 and section 11 at every growth level (${mode} mode)`, () => {
+  test(`war room stays under the 30 KB cap with a full section 1c, 10 and 11 at every growth level (${mode} mode)`, () => {
     const base = snapshotFor(mode);
     let sawUnbudgetedBreach = false;
+    let sawTheaterDefenceCut = false;
     const sectionElevenSizes = new Set();
 
     for (const [friendly, hostile] of GROWTH_LEVELS) {
@@ -583,7 +692,7 @@ for (const mode of MODES) {
       const size = utf8ByteLength(rendered);
       assert.ok(
         size < WAR_ROOM_BYTE_BUDGET,
-        `war room at friendly x${friendly} / hostile x${hostile} (${mode}) with a full section 10 and 11 `
+        `war room at friendly x${friendly} / hostile x${hostile} (${mode}) with a full section 1c, 10 and 11 `
         + `rendered ${size} bytes, which is not under the ${WAR_ROOM_BYTE_BUDGET}-byte cap`
       );
 
@@ -595,6 +704,21 @@ for (const mode of MODES) {
       if (!section.includes('Section body omitted')) {
         sectionElevenSizes.add(utf8ByteLength(section));
       }
+
+      // Section 1c degrades, but four things about it never do: the board
+      // state, the true finding total, the count of findings the block's own
+      // cap dropped, and the engine's caveats. A row cut for budget is
+      // reported as a budget cut and never folded into that cap count.
+      const defence = sectionText(rendered, '1c');
+      assert.ok(defence.length > 0, 'section 1c must be present at every growth level');
+      assert.match(defence, /\*\*Board state:\*\* INBOUND TO TRACKED THEATER/,
+        `section 1c lost its board state at friendly x${friendly} / hostile x${hostile} (${mode})`);
+      assert.match(defence, /of 31 threatened theater\(s\) carried, 19 omitted by the block's own cap/,
+        `section 1c lost its own cap counts at friendly x${friendly} / hostile x${hostile} (${mode})`);
+      assert.match(defence, /No force-strength comparison is made here/,
+        `section 1c dropped the caveat that stops a posture reading as a force verdict `
+        + `(friendly x${friendly} / hostile x${hostile}, ${mode})`);
+      if (lostEntriesToBudget(defence)) sawTheaterDefenceCut = true;
 
       const unbudgeted = utf8ByteLength(renderWarRoomMarkdown(grown, { ...HANDED_IN, ...NO_BUDGET }));
       if (unbudgeted >= WAR_ROOM_BYTE_BUDGET) {

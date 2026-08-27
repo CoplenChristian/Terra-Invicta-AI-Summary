@@ -32,7 +32,8 @@ const { makeMarkdownSnapshot, OBSERVER_ID } = require('./fixtures/syntheticMarkd
 const {
   renderThreatsMarkdown,
   renderWarRoomMarkdown,
-  renderCompactSnapshotMarkdown
+  renderCompactSnapshotMarkdown,
+  utf8ByteLength
 } = require('../shared/markdownExports.mjs');
 
 const FROZEN_PLAYER_PATH = path.join(__dirname, 'fixtures', 'frozen-snapshot-player.md');
@@ -1591,13 +1592,31 @@ test('section 11 is the FIRST body the budget suppresses, and its header and poi
   assert.ok(full.includes('Hulls needed for P(win)'), 'the unclamped document must carry the table');
   assert.strictEqual(suppressedIn(full).length, 0, 'nothing is clamped at the real ceiling');
 
-  // The tightest cap at which exactly ONE body gives way. If the priority
-  // claim in `clampOrder` is right, that one body is section 11.
-  const clamped = renderWarRoomMarkdown(snapshot, { ...opts, maxBytes: 6000 });
+  // The LARGEST cap that forces a clamp at all, FOUND rather than hard-coded.
+  // If the priority claim in `clampOrder` is right, the one body that gives way
+  // there is section 11.
+  //
+  // This probed a fixed 6,000 bytes until 2026-08-27, which made it a claim
+  // about a threshold rather than about priority — the same defect the sweep
+  // below already carries a paragraph about. Adding section 1c moved the
+  // document's irreducible floor by roughly 330 bytes (the block's "not read"
+  // statement, which this call does not hand a value to), so at 6,000 three
+  // bodies were clamped instead of one and the test failed for a change that
+  // did not touch clamp order at all.
+  const clampCountAt = (maxBytes) =>
+    suppressedIn(renderWarRoomMarkdown(snapshot, { ...opts, maxBytes })).length;
+  let coarse = utf8ByteLength(full);
+  while (coarse > 2500 && clampCountAt(coarse) === 0) coarse -= 100;
+  assert.ok(coarse > 2500, 'no cap above 2,500 bytes forced a clamp — the assertion would be vacuous');
+  let firstClampCap = coarse + 100;
+  while (firstClampCap > coarse && clampCountAt(firstClampCap) === 0) firstClampCap -= 1;
+
+  const clamped = renderWarRoomMarkdown(snapshot, { ...opts, maxBytes: firstClampCap });
   assert.deepStrictEqual(
     suppressedIn(clamped).map(h => h.replace(/^## /, '').split('.')[0]),
     ['11'],
-    'section 11 must be the ONLY body suppressed at the first cap that forces a clamp'
+    `section 11 must be the ONLY body suppressed at the first cap that forces a clamp `
+    + `(found at maxBytes=${firstClampCap})`
   );
   // The header survives so a reader knows the assessment exists.
   assert.ok(clamped.includes('## 11. Strategic Commentary'), 'the header always survives clamping');

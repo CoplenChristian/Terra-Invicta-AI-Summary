@@ -675,6 +675,14 @@ export function renderWithByteBudget(blocks, ladder, clampOrder, maxBytes) {
     const stage = ladder[stageIndex];
     const block = byKey.get(stage.block);
     if (!block) { stageIndex += 1; continue; }
+    // A ladder key does not guarantee a LIST block. Section 1c emits a fixed
+    // block on both of its unavailable paths -- there is nothing rankable in a
+    // statement that nothing was read -- and `reduce` / `drop` reach for
+    // `block.entries`, which a fixed block does not have. Skipping the stage is
+    // right rather than merely safe: a section already reduced to one "not
+    // read" line has nothing left to shed, and `clampOrder` below is where a
+    // fixed body gives way.
+    if (block.kind !== 'list') { stageIndex += 1; continue; }
 
     const needed = (bytes - maxBytes) + BUDGET_SLACK_BYTES;
     let acted = false;
@@ -1547,6 +1555,21 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   blocks.push(fixedBlock('hostile-movement', [`## 1b. Hostile Movement (Whole-Board)`, ``], hostileMovementBlock(filteredSnapshot, { headingLevel: '-', header: '', includeRows: true })));
 
   // -------------------------------------------------------------------------
+  // SECTION 1c: THEATER DEFENCE
+  //
+  // Section 1b says what is moving. This one says what to DO about it at each
+  // body -- build, reinforce, withdraw, hold, or an explicit refusal where the
+  // reading a verdict rests on is absent. It sits here, immediately after the
+  // movement picture it answers, because the two are one thought.
+  //
+  // It is ENGINE output, not snapshot data, so this module cannot compute it:
+  // `server/engine/theaterDefence.js` is Node CommonJS and this file also runs
+  // in the Cloudflare Worker. The serving runtime hands it in, exactly as it
+  // hands in the cycle plan for section 10 -- see `pushTheaterDefenceBlock`.
+  // -------------------------------------------------------------------------
+  pushTheaterDefenceBlock(blocks, filteredSnapshot, observerId, options);
+
+  // -------------------------------------------------------------------------
   // SECTION 2: FRIENDLY FLEETS
   // -------------------------------------------------------------------------
   const friendlyBlock = listBlock('friendly-fleets', {
@@ -2127,23 +2150,40 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   //                                       they describe plans not yet started,
   //                                       and their horizon and refusal counts
   //                                       survive in the block's trailing note.
-  //   4.    Friendly fleets (§2) → L1  -- shed the weapon/PD line. Cheap, and
+  //   4.    Theater defence (§1c) → L1 -- shed the citation line only. The
+  //                                       posture, the threat and the build
+  //                                       race all stay, and the block still
+  //                                       names where the full citation list
+  //                                       lives.
+  //   5.    Friendly fleets (§2) → L1  -- shed the weapon/PD line. Cheap, and
   //                                       every fleet stays listed.
-  //   5.    Hostile fleets (§3) → L1   -- shed the second detail line, same
+  //   6.    Hostile fleets (§3) → L1   -- shed the second detail line, same
   //                                       reasoning; every contact stays named.
-  //   6-7.  Construction (§5) modules, then stations.
-  //   8.    Friendly fleets (§2) → L2  -- shed the propulsion line.
-  //   9.    Key habs (§6)              -- a static inventory the JSON
+  //   7-8.  Construction (§5) modules, then stations.
+  //   9.    Theater defence (§1c) → L2 -- shed the friendly-holdings line; the
+  //                                       posture, the race and every refusal
+  //                                       survive.
+  //   10.   Friendly fleets (§2) → L2  -- shed the propulsion line.
+  //   11.   Key habs (§6)              -- a static inventory the JSON
   //                                       endpoints carry in full.
-  //   10.   Construction (§5) queues   -- last of §5: the only part that says
+  //   12.   Construction (§5) queues   -- last of §5: the only part that says
   //                                       when reinforcements actually arrive.
-  //   11.   Friendly fleets (§2) → L3  -- shed the design rollup; header only.
-  //   12.   Hostile fleets (§3) entries -- ranked by the relevance evaluator's
+  //   13.   Theater defence (§1c) → L3 -- posture header only. This is the
+  //                                       first step that costs a REFUSAL its
+  //                                       reason, which is why it sits this
+  //                                       late and below every cheaper cut.
+  //   14.   Friendly fleets (§2) → L3  -- shed the design rollup; header only.
+  //   15.   Hostile fleets (§3) entries -- ranked by the relevance evaluator's
   //                                       own criteria, least relevant first.
-  //   13.   Friendly fleets (§2) entries -- the observer's own picture is the
+  //   16.   Friendly fleets (§2) entries -- the observer's own picture is the
   //                                       last thing cut before threats.
-  //   14.   Incoming threats (§4)      -- cut only when nothing else remains,
-  //                                       latest ETA first.
+  //   17.   Theater defence (§1c) entries -- least urgent first, by the
+  //                                       engine's own emitted order.
+  //   18.   Incoming threats (§4)      -- cut only when nothing else remains,
+  //                                       latest ETA first. §4 is the raw
+  //                                       arrival measurement §1c reasons over,
+  //                                       so the measurement outlives the
+  //                                       derived posture.
   //
   // §1 (alien threat posture), §7 (logistics), §10 (council cycle plan) and §11
   // (strategic commentary) are fixed-size by construction and never degrade
@@ -2166,16 +2206,27 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     { block: 'research-category-bonuses', action: 'drop' },
     { block: 'research-projects', action: 'drop' },
     { block: 'research-slots', action: 'drop' },
+    // The cheapest cut in the operational half of the document: §1c keeps every
+    // posture, threat count and build race and sheds only the per-row citation
+    // list, whose full contents the block's own pointer still names.
+    { block: 'theater-defence', action: 'reduce', toLevel: 1 },
     { block: 'friendly-fleets', action: 'reduce', toLevel: 1 },
     { block: 'hostile-fleets', action: 'reduce', toLevel: 1 },
     { block: 'construction-modules', action: 'drop' },
     { block: 'construction-stations', action: 'drop' },
+    { block: 'theater-defence', action: 'reduce', toLevel: 2 },
     { block: 'friendly-fleets', action: 'reduce', toLevel: 2 },
     { block: 'habs', action: 'drop' },
     { block: 'construction-queues', action: 'drop' },
+    // L3 is the first §1c step that costs a CANNOT_ADVISE row the REASON it
+    // could not advise, so it sits below every cheaper cut in the document.
+    { block: 'theater-defence', action: 'reduce', toLevel: 3 },
     { block: 'friendly-fleets', action: 'reduce', toLevel: 3 },
     { block: 'hostile-fleets', action: 'drop' },
     { block: 'friendly-fleets', action: 'drop' },
+    // §1c before §4 deliberately: section 4 is the raw arrival measurement this
+    // block reasons over, and a measurement outlives the verdict derived from it.
+    { block: 'theater-defence', action: 'drop' },
     { block: 'incoming-threats', action: 'drop' }
   ];
 
@@ -2797,6 +2848,327 @@ function councilCyclePlanLines(filteredSnapshot, observerId, options = {}) {
   lines.push(`- Full plan, with each action's rules, odds and expected value: \`${endpoint}\``);
   lines.push(``);
   return lines;
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 1c: THEATER DEFENCE
+//
+// WHY IT IS IN THE EXPORT AT ALL
+//
+// `server/engine/theaterDefence.js` answers the one operational question the
+// rest of this document only sets up: a hostile force is inbound to Mercury in
+// 57 days, the observer holds twelve yards there, and the fastest hull those
+// yards can lay down lands 48 days before contact -- so BUILD. That verdict
+// existed on `/api/v2/briefing` and nowhere else, which under this repo's own
+// rule means it was invisible to every LLM reading the .md exports, and half
+// the point of these files is that agents read them.
+//
+// ENGINE OUTPUT IS HANDED IN, NEVER COMPUTED HERE
+//
+// This module also runs in the Cloudflare Worker, which is not Node, has no
+// CommonJS and cannot run the engine. So the block is resolved exactly the way
+// the cycle plan in section 10 is: `options.theaterDefence` from the serving
+// runtime first, then `snapshot.missionControlBriefing.engineDirectives
+// .theaterDefence` -- which the published rows already carry, so the hosted
+// worker needs no change -- and an explicit NOT READ if neither yielded one. A
+// runtime that could not supply it says so; it never renders an empty board.
+//
+// WHAT IT REFUSES TO COLLAPSE
+//
+//   * `threat.arrivalTimingKnown` is NULL, not false, when nothing is inbound:
+//     there is no timing to know. "Nothing inbound" and "arrival time unknown"
+//     are different claims and are rendered differently here.
+//   * A finding with no build race and no yards is a MEASURED absence of build
+//     capacity. A finding with yards and no measured build time is an ABSENT
+//     reading. The engine already separates them into distinct refusals; this
+//     renderer prints the refusal rather than flattening both to "no race".
+//   * Refusals are printed as content, not hidden as an empty state. A
+//     CANNOT_ADVISE row with its reason shown is the feature working.
+//   * Every count is `localeOr`, so an unread count renders UNAVAILABLE and
+//     never 0 -- `Number(null) === 0` is the failure this whole block guards.
+// ---------------------------------------------------------------------------
+
+/**
+ * One citation as two named halves, with neither allowed to become the string
+ * "undefined" -- an unresolvable identity is said out loud, never interpolated.
+ */
+const normalizeCitation = (citation) => ({
+  source: citation?.source ?? 'unrecorded source',
+  field: citation?.field ?? 'unrecorded field'
+});
+
+/**
+ * Identity of a citation, for set membership. Built from the halves and never
+ * parsed back, and SERIALISED rather than joined on a separator: a separator
+ * has to be a character no field name contains, which is an assumption about
+ * data this module does not own.
+ */
+const citationKey = (citation) => JSON.stringify([citation.source, citation.field]);
+
+/**
+ * Citations grouped by source and rendered as `source`: field, field.
+ * Keeps the audit trail readable at a fraction of one-line-per-citation.
+ */
+function citationGroupText(citations) {
+  const bySource = new Map();
+  for (const citation of citations) {
+    if (!bySource.has(citation.source)) bySource.set(citation.source, []);
+    bySource.get(citation.source).push(citation.field);
+  }
+  return [...bySource.entries()]
+    .map(([source, fields]) => `\`${source}\`: ${fields.join(', ')}`)
+    .join('; ');
+}
+
+/**
+ * The citation set every finding shares.
+ *
+ * Printed ONCE for the section rather than repeated on all eight rows: on the
+ * live save that is nine identical readings per row, and reproducing them
+ * eight times would spend most of the section's budget restating one list. The
+ * per-row line then carries the row's own total and only what it cites BEYOND
+ * the shared set, so no citation goes unstated and the two always reconcile.
+ *
+ * A genuine intersection, not an assumed prefix: a row that does not cite one
+ * of these keeps it off the shared list for everybody, so the shared line can
+ * never claim a citation some row lacks.
+ */
+function sharedCitations(findings) {
+  if (findings.length === 0) return [];
+  let shared = null;
+  for (const finding of findings) {
+    const keys = new Set(asArray(finding?.citations).map(c => citationKey(normalizeCitation(c))));
+    if (shared === null) {
+      // First row's own citations, deduplicated, keeping its declared order.
+      const seen = new Set();
+      shared = [];
+      for (const citation of asArray(finding?.citations).map(normalizeCitation)) {
+        const key = citationKey(citation);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        shared.push(citation);
+      }
+      continue;
+    }
+    shared = shared.filter(citation => keys.has(citationKey(citation)));
+  }
+  return shared ?? [];
+}
+
+/**
+ * The inbound clause. Three outcomes, never merged:
+ *   * count not on record -> UNAVAILABLE, said as such;
+ *   * count is zero -> "nothing inbound", which is what a null
+ *     `arrivalTimingKnown` means and is NOT "arrival time unknown";
+ *   * count above zero -> the counts, then the arrival clock or an explicit
+ *     statement that the clock is not on record.
+ */
+function theaterThreatClause(threat) {
+  const fleets = num(threat?.hostileFleets);
+  const ships = num(threat?.hostileShips);
+  if (fleets === null) {
+    return `inbound UNAVAILABLE — the inbound hostile fleet count is not on record (an unreadable count is not a zero)`;
+  }
+  if (fleets === 0) return `nothing inbound`;
+
+  const days = num(threat?.nearestArrivalDays);
+  const date = typeof threat?.nearestArrivalDate === 'string' && threat.nearestArrivalDate.includes('T')
+    ? threat.nearestArrivalDate.split('T')[0]
+    : null;
+  const arrival = days === null
+    ? `arrival NOT ON RECORD (an unknown arrival is not a distant one)`
+    : `nearest arrival ${localeOr(days)} day(s)${date ? ` (${date})` : ''}`;
+  return `inbound ${localeOr(fleets)} fleet(s) / ${localeOr(ships)} ship(s), ${arrival}`;
+}
+
+/** The force already in the theater, as opposed to the force under way to it. */
+function theaterPresentClause(threat) {
+  const fleets = num(threat?.presentHostileFleets);
+  const ships = num(threat?.presentHostileShips);
+  if (fleets === 0 && ships === 0) return `none present`;
+  return `present ${localeOr(fleets)} fleet(s) / ${localeOr(ships)} ship(s)`;
+}
+
+/**
+ * What the observer holds at the body, plus what lands before contact.
+ *
+ * The completion clause is omitted entirely where nothing is inbound. There is
+ * no contact to complete before, so "0 completing before contact" would be a
+ * measurement of a race that was never run -- and the headline has already said
+ * nothing is inbound. Where a force IS inbound the clause always renders, and
+ * an unread count says NOT MEASURED rather than 0.
+ */
+function theaterFriendlyLine(friendly, inboundKnownPositive) {
+  const completing = num(friendly?.shipsCompletingBeforeThreatArrival);
+  const basis = typeof friendly?.completionBasis === 'string' && friendly.completionBasis.trim() !== ''
+    ? friendly.completionBasis.trim()
+    : null;
+  const completion = !inboundKnownPositive
+    ? ''
+    : (completing === null
+      ? `; completions before contact NOT MEASURED (${basis ?? 'no basis recorded'})`
+      : `; ${localeOr(completing)} completing before contact (${basis ?? 'no basis recorded'})`);
+  return `  - Ours here: ${localeOr(friendly?.ships)} ship(s), ${localeOr(friendly?.shipyards)} yard(s), `
+    + `${localeOr(friendly?.habs)} hab(s), ${localeOr(friendly?.mines)} mine(s)${completion}`;
+}
+
+/**
+ * The production race, or nothing.
+ *
+ * Absent on a body with nothing inbound is not a gap -- no arrival clock means
+ * no race to run, and the headline already says nothing is inbound. Where a
+ * race WAS attempted and failed, the engine records a refusal carrying the
+ * reason, and that prints on its own line below.
+ */
+function theaterBuildRaceLine(race) {
+  if (!race) return null;
+  if (race.available !== true) {
+    return `  - **Build race NOT RUN** — ${race.reason ?? 'no reason recorded'}`
+      + (race.hullName ? ` (fastest hull considered: ${race.hullName})` : '');
+  }
+  const yard = race.shipyardId === null || race.shipyardId === undefined ? '' : ` at yard ${race.shipyardId}`;
+  return `  - **Build race: ${race.verdict ?? 'UNAVAILABLE (no verdict recorded)'}** — fastest hull `
+    + `${race.hullName ?? 'UNAVAILABLE'}${yard}, ${localeOr(race.buildDays)} build-day(s) vs `
+    + `${localeOr(race.daysUntilArrival)} day(s) to contact, margin ${localeOr(race.marginDays)} day(s)`;
+}
+
+/**
+ * Builds section 1c and appends it to `blocks`.
+ *
+ * Emitted as a LIST block so the byte-budget engine can thin it like any other
+ * ranked section; the two unavailable paths are fixed blocks because there is
+ * nothing rankable in a statement that nothing was read.
+ */
+function pushTheaterDefenceBlock(blocks, filteredSnapshot, observerId, options = {}) {
+  const heading = [`## 1c. Theater Defence (build / reinforce / withdraw)`, ``];
+  const mode = filteredSnapshot?.mode || filteredSnapshot?.intelMode || filteredSnapshot?.visibility || 'player';
+  const endpoint = `/api/v2/briefing?observer=${observerId}&mode=${mode}`;
+  const engineDirectives = filteredSnapshot?.missionControlBriefing?.engineDirectives;
+  const defence = options.theaterDefence
+    ?? engineDirectives?.theaterDefence
+    ?? null;
+
+  if (!defence) {
+    blocks.push(fixedBlock('theater-defence', heading, [
+      `- **Theater defence UNAVAILABLE in this runtime** — the posture at each threatened body is `
+      + `produced by the directive engine, not by the snapshot, so it reaches this brief only when the `
+      + `serving runtime hands it over. This is NOT an empty board and NOT a quiet one: nothing was `
+      + `read. Fetch it directly at \`${endpoint}\`.`,
+      ``
+    ]));
+    return;
+  }
+
+  // The notes are the engine's own caveats, carried verbatim rather than
+  // paraphrased so the export cannot drift from the block it describes. They
+  // are why a reader must not read a posture as a force-strength verdict, so
+  // they render on the unavailable path too -- and they never degrade.
+  const noteLines = asArray(defence.notes).map(note => `- *${note}*`);
+
+  if (defence.available !== true) {
+    blocks.push(fixedBlock('theater-defence', heading, [
+      `- **UNAVAILABLE** — ${defence.unavailableReason ?? 'no reason was recorded'}. No posture is `
+      + `advised at any body; that is an unread board, not a safe one.`,
+      ...noteLines,
+      ``
+    ]));
+    return;
+  }
+
+  const findings = asArray(defence.findings);
+  const shared = sharedCitations(findings);
+  const sharedKeys = new Set(shared.map(citationKey));
+
+  // The block's `state` IS `hostileMovement.state`, so it is spelled the way
+  // section 1b spells it rather than as a raw enum -- the two sit four lines
+  // apart and a reader must be able to see they are the same reading.
+  const stateLabel = defence.state
+    ? (HOSTILE_MOVEMENT_STATE_LABEL[defence.state] || defence.state)
+    : 'UNAVAILABLE (the block carries no hostile-movement state)';
+  const headingLines = [
+    ...heading,
+    `- **Board state:** ${stateLabel} — ${localeOr(findings.length)} of `
+      + `${localeOr(defence.findingsTotalCount)} threatened theater(s) carried, `
+      + `${localeOr(defence.findingsOmittedCount)} omitted by the block's own cap. A body absent from `
+      + `this list has no hostile force inbound and none present; it is not an unchecked one.`
+  ];
+  if (defence.offBoardNote) {
+    headingLines.push(`- **Off the board:** ${defence.offBoardNote}`);
+  }
+  if (shared.length > 0) {
+    headingLines.push(`- **Citation basis — cited by every row below (${shared.length}):** `
+      + `${citationGroupText(shared)}`);
+  }
+
+  const block = listBlock('theater-defence', {
+    headingLines,
+    // Two different empty boards, never merged. `findingsTotalCount === 0` is
+    // the measured quiet one; a positive total with nothing carried means the
+    // block's own cap took every row, and calling that "no theater is at issue"
+    // would report an omission as an all-clear.
+    emptyLines: [
+      num(defence.findingsTotalCount) === 0
+        ? `- No theater is at issue: every tracked body reports no hostile force inbound and none present.`
+        : `- **No findings carried** — all ${localeOr(defence.findingsTotalCount)} threatened theater(s) `
+          + `were omitted by the block's own cap. That is an omission, not an all-clear; the full set is `
+          + `at \`${endpoint}\`.`
+    ],
+    budgetEmptyLines: budgetEmptyNote('theater-defence findings', endpoint),
+    budgetNote: budgetOmissionNote('theater-defence findings', endpoint),
+    detailNote: (levelCounts, kept) => {
+      const shed = [];
+      if (levelCounts[0]) shed.push(`the citation line from ${levelCounts[0]} of ${kept} row(s)`);
+      if (levelCounts[1]) shed.push(`the friendly-holdings line from ${levelCounts[1]}`);
+      if (levelCounts[2]) shed.push(`the build race and every refusal reason from ${levelCounts[2]}`);
+      return [`*Detail suppressed to fit the size budget, least urgent row first: ${shed.join('; ')}. `
+        + `Full findings at ${endpoint}.*`];
+    },
+    trailingLines: [
+      ``,
+      ...noteLines,
+      `- Full findings, with every citation and refusal in full: \`${endpoint}\``,
+      ``
+    ]
+  });
+  blocks.push(block);
+
+  findings.forEach((finding, index) => {
+    const body = finding?.body ?? 'UNAVAILABLE (the finding carries no body name)';
+    const status = finding?.theaterStatus ?? 'status UNAVAILABLE';
+    const cites = asArray(finding?.citations);
+    const extra = cites.map(normalizeCitation).filter(c => !sharedKeys.has(citationKey(c)));
+    const inboundFleets = num(finding?.threat?.hostileFleets);
+
+    // The citation COUNT rides on the posture line, which never degrades below
+    // level 3, so budget pressure can shed WHICH readings a row cited but never
+    // the fact that it cited them -- a row whose audit trail silently became
+    // invisible would read as an asserted verdict.
+    const headLine = `- **${body} — ${finding?.posture ?? 'POSTURE UNAVAILABLE'}** · ${status} · `
+      + `${theaterThreatClause(finding?.threat)} · ${theaterPresentClause(finding?.threat)} · `
+      + `${localeOr(cites.length)} citation(s)`;
+    const friendlyLine = theaterFriendlyLine(finding?.friendly, inboundFleets !== null && inboundFleets > 0);
+    const raceLine = theaterBuildRaceLine(finding?.buildRace);
+    const refusalLines = asArray(finding?.refusals).map(refusal =>
+      `  - **Refused — ${refusal?.check ?? 'unnamed check'}:** ${refusal?.reason ?? 'no reason recorded'}`);
+    const citationLine = extra.length > 0
+      ? `  - Cites, beyond the ${shared.length} shared above: ${citationGroupText(extra)}`
+      : `  - Cites the ${shared.length} shared readings above and nothing further.`;
+
+    const core = [headLine, friendlyLine, ...(raceLine ? [raceLine] : []), ...refusalLines];
+    addEntry(block, {
+      // The engine emits findings in its own urgency order (status rank, then
+      // soonest measured arrival, nulls last), so position IS the ranking and
+      // budget pressure takes the least urgent row first. Re-sorting here would
+      // second-guess a comparator that is deliberately null-aware.
+      rank: [index],
+      variants: [
+        [...core, citationLine],
+        core,
+        [headLine, ...(raceLine ? [raceLine] : []), ...refusalLines],
+        [headLine]
+      ]
+    });
+  });
 }
 
 /**

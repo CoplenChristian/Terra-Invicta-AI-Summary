@@ -377,6 +377,15 @@ class BriefingGenerator {
         futureOpportunitiesOmittedCount: engineResult.futureOpportunitiesOmittedCount,
         droppedCandidates: engineResult.droppedCandidates,
         cyclePlan: engineResult.cyclePlan,
+        // The theater-defence block: build / reinforce / withdraw at each
+        // threatened body, with the refusal wherever a reading the verdict
+        // rests on is absent. A SIBLING of `cyclePlan`, not a candidate family
+        // (see server/engine/theaterDefence.js), and it is named here for the
+        // same reason every other field is: THIS OBJECT IS AN EXPLICIT
+        // ALLOW-LIST, NOT A SPREAD. A field omitted from it is not forwarded,
+        // and every downstream consumer -- the war-room export among them --
+        // then silently receives nothing, which reads as a rendering bug.
+        theaterDefence: engineResult.theaterDefence,
         decisionReasoning: engineResult.decisionReasoning
       },
       primaryDirective: directiveAdvisor.pickPrimaryDirective({

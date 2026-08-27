@@ -186,15 +186,24 @@ function registerReadOnlyExports(app) {
       // CommonJS and the shared renderer also runs in the Worker. It is a
       // sibling of `engineDirectives` on the briefing rather than a child of
       // it, so it is read from the briefing object itself.
+      //
+      // Section 1c (theater defence) arrives by the same route and off the same
+      // single briefing. `server/engine/theaterDefence.js` is Node CommonJS and
+      // reads `world.military`, so the shared renderer cannot build it in either
+      // runtime; it is a sibling of `cyclePlan` on `engineDirectives`, so the
+      // hosted worker's published `snapshot.missionControlBriefing` fallback
+      // finds it with no worker change, exactly as it finds the other two.
       const briefing = briefingGenerator
         .generateMissionControlBriefing(filtered, rawSnapshot, { riskFloorPercent }) ?? null;
       const engineDirectives = briefing?.engineDirectives ?? null;
       const cyclePlan = engineDirectives?.cyclePlan ?? null;
       const primary = engineDirectives?.primary ?? null;
+      const theaterDefence = engineDirectives?.theaterDefence ?? null;
       const strategicCommentary = briefing?.strategicCommentary ?? null;
       const markdown = exportGenerator.generateWarRoomMarkdown(filtered, {
         cyclePlan,
         primary,
+        theaterDefence,
         strategicCommentary
       });
       res.type('text/markdown; charset=utf-8').set('Cache-Control', 'no-store').send(markdown);
