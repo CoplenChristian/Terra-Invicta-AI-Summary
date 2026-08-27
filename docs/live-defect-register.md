@@ -26,7 +26,7 @@ save.
 > **The tally and the live list immediately below are the authoritative status.**
 > Use `git log` on the named commit to see what a fix actually changed.
 
-**Tally as of 2026-08-27: 24 entries — 21 fixed, 3 live, 0 conditional.**
+**Tally as of 2026-08-27: 25 entries — 21 fixed, 4 live, 0 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -57,7 +57,7 @@ localisation files, 107 fallen back, 70 refused as ambiguous. The user's
 **#19 and #20 were fixed the same day** (`a0eabef`, `d71613e`), and **#18** and
 the `emptyOutDir` build race in `95eee95`.
 
-**Live right now: #17, #21 and #24.**
+**Live right now: #17, #21, #24 (half) and #25.**
 
 - **#17** — four fabricated fallbacks in the directive board, carried across the
   React port **deliberately**, because "no figure may change" was that port's
@@ -75,6 +75,13 @@ the `emptyOutDir` build race in `95eee95`.
   **pinned and still live**, each needing a visual decision. The **VIEWS registry
   half is still open**: `hostileMovement` is absent, so
   `assertViewRegistryIntegrity()` cannot protect it.
+
+- **#25** — four verification scripts set `NODE_ENV=test` before triggering a
+  production build, so they can silently replace `public/v2/app/bundle.js` with one
+  containing 1,682 `jsxDEV` calls against a React runtime that has none. Fires only
+  when the bundle is stale, and the artefact is gitignored, so `git checkout`
+  cannot undo it. **The most recoverable-looking and least recoverable of the
+  four.**
 
 *(#23 was found and fixed the same day — `e76c212`. It is left in the list below
 because the two wrong diagnoses it produced are the useful part.)*
@@ -1282,6 +1289,61 @@ and the border above each now takes `--warning` / `--danger` while the tint behi
 stays on the older, more saturated hue. The sibling panel has no tint at all.
 
 **The half of #24 about the VIEWS registry is still open.**
+
+---
+
+## 25. Four verification scripts are armed to poison the bundle they verify — **demonstrated, live**
+
+Found 2026-08-27 by an agent that triggered it accidentally and reported it, then
+reproduced deliberately here.
+
+**The verification scripts can silently replace the production bundle with one that
+cannot run.** Four of them set `process.env.NODE_ENV = 'test'` at module scope,
+*before* calling `ensureBundleBuilt()`:
+
+| script | `NODE_ENV` set | `ensureBundleBuilt()` |
+| :-- | --: | --: |
+| `verify_v2_navigation.js` | 13 | 16 |
+| `verify_research_vs_procurement.js` | 13 | 61 |
+| `verify_mining_registers.js` | 25 | 128 |
+| `verify_drive_explorer.js` | 26 | 341 |
+
+`ensureBundleBuilt` shells out with `execSync('npm run build', { stdio: 'inherit' })`
+and **no `env` override**, so the child inherits the mutated value. Vite copies
+`NODE_ENV` into `VITE_USER_NODE_ENV` and treats anything but `production` as a dev
+build, so the React plugin emits `jsxDEV()`. Meanwhile `vite.config.mjs` declares
+`mode: 'production'` and `define`s `process.env.NODE_ENV` as `"production"`, which
+resolves React to the runtime that **does not export `jsxDEV`**. The two settings
+disagree, and the bundle loses.
+
+Measured directly, same command and env the scripts produce:
+
+| build | bytes | `jsxDEV` occurrences |
+| :-- | --: | --: |
+| `npm run build` | 1,352,202 | **0** |
+| `NODE_ENV=test npm run build` | 1,687,180 | **1,682** |
+
+The observed symptom when it fired was every React panel dying with
+`s.jsxDEV is not a function`.
+
+**Why this is worse than it sounds.** It only triggers when the bundle is *stale*,
+so it is invisible on any run where someone happened to build recently — the exact
+intermittency that made #23 take three attempts to diagnose. And
+`public/v2/app/bundle.js` is **gitignored**, so `git checkout` and `git stash`
+cannot restore it: once poisoned, the only recovery is knowing to rebuild with the
+variable unset. A contributor who does not know that sees a totally broken
+dashboard with a clean `git status`.
+
+**The fix belongs at the chokepoint, not the four call sites.** `ensureBundleBuilt`
+should pass an explicit environment to `execSync` rather than inheriting an
+ambient one — `vite.config.mjs` is unconditionally `mode: 'production'`, so there
+is no case where the caller's `NODE_ENV` should influence that build. Moving four
+assignments fixes today's four scripts and leaves the fifth one someone writes next
+month broken in the same way.
+
+Worth a guard as well as a fix, and a cheap one: assert the built bundle contains
+no `jsxDEV`. That is a single `grep -c` over an artefact the browser suite already
+depends on, and it turns a silent poisoning into a named failure.
 
 ---
 
