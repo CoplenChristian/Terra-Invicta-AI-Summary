@@ -16,7 +16,7 @@
   font-size: var(--fs-meta);
   letter-spacing: 0.04em;
   padding: 12px 14px;
-  color: var(--text-meta);
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
@@ -24,7 +24,7 @@
   display: grid;
   gap: 8px;
   padding: 10px 14px 12px;
-  border-bottom: 1px solid var(--rule-dim);
+  border-bottom: 1px solid var(--line);
 }
 
 .hm-banner__state {
@@ -33,8 +33,8 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 6px 10px;
-  border-left: 3px solid var(--rule-dim);
-  background: var(--surface-2);
+  border-left: 2px solid var(--line);
+  background: var(--surface-raised);
 }
 
 .hm-banner__state[data-state],
@@ -42,17 +42,17 @@
 .hm-banner__state--HOSTILE_MOVEMENT_NONE_TOWARD_TRACKED_THEATERS,
 .hm-banner__state--HOSTILE_MOVEMENT_DESTINATIONS_PARTLY_UNRESOLVED,
 .hm-banner__state--INBOUND_TO_TRACKED_THEATER {
-  border-left-color: var(--rule-strong);
+  border-left-color: var(--line-strong);
 }
 
 .hm-banner__state--HOSTILE_MOVEMENT_NONE_TOWARD_TRACKED_THEATERS,
 .hm-banner__state--HOSTILE_MOVEMENT_DESTINATIONS_PARTLY_UNRESOLVED {
-  border-left-color: var(--accent-warn, #d68a3a);
+  border-left-color: var(--warning);
   background: rgba(214, 138, 58, 0.08);
 }
 
 .hm-banner__state--INBOUND_TO_TRACKED_THEATER {
-  border-left-color: var(--accent-alert, #c43d3d);
+  border-left-color: var(--danger);
   background: rgba(196, 61, 61, 0.08);
 }
 
@@ -60,7 +60,7 @@
   margin: 0;
   font-family: var(--mono);
   font-size: var(--fs-row);
-  color: var(--text-body);
+  color: var(--text);
   letter-spacing: 0.01em;
 }
 
@@ -75,15 +75,15 @@
   display: grid;
   gap: 2px;
   padding: 8px 10px;
-  border: 1px solid var(--rule-dim);
-  background: var(--surface-1);
+  border: 1px solid var(--line);
+  background: var(--surface-inset);
 }
 
 .hm-summary__item small {
   font-family: var(--mono);
   font-size: var(--fs-meta);
   letter-spacing: 0.04em;
-  color: var(--text-meta);
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
@@ -114,17 +114,17 @@
   font-size: var(--fs-tag);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-meta);
+  color: var(--text-muted);
   text-align: left;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--rule-dim);
+  border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 
 .hm-scroll-hint {
   display: none;
   padding: var(--space-sm) 0 0;
-  color: var(--text-meta);
+  color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--fs-tag);
   letter-spacing: 0.06em;
@@ -140,7 +140,7 @@
   align-items: baseline;
   gap: 8px;
   padding: 6px 14px;
-  border-bottom: 1px solid var(--rule-dim);
+  border-bottom: 1px solid var(--line);
 }
 
 .hm-offboard__title {
@@ -153,7 +153,7 @@
 .hm-offboard__sub {
   font-family: var(--mono);
   font-size: var(--fs-meta);
-  color: var(--text-meta);
+  color: var(--text-muted);
 }
 
 .hm-cell {
@@ -161,7 +161,7 @@
   font-size: var(--fs-meta);
   letter-spacing: 0.02em;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--rule-dim);
+  border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
 
@@ -172,5 +172,5 @@
 .hm-cell__date {
   display: block;
   font-size: var(--fs-tag);
-  color: var(--text-meta);
+  color: var(--text-muted);
 }

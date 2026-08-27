@@ -68,11 +68,13 @@ the `emptyOutDir` build race in `95eee95`.
   2026-08-27: the lane converted one of the eleven and broke it, making per-metric
   measurement state cascade across rows, which is the exact property those tests
   exist to defend. The patch is kept, not discarded.
-- **#24** — the hostile-movement panel is **unregistered** in the VIEWS registry,
-  so `assertViewRegistryIntegrity()` cannot protect it, and it is styled against
-  **8 undefined custom properties**. Both faults are mine, from `fb2a6ab`. The CSS
-  half is the live-visible one: unresolved `color` falls through to inherited, so
-  text meant to be dimmed renders at full brightness.
+- **#24** — two faults from `fb2a6ab`, both mine. The **CSS half is fixed** and now
+  guarded by `tests/cssCustomProperties.test.js`; it turned out to be 12 undefined
+  names across four panels rather than 8 in one, and the damage was missing
+  geometry rather than only wrong colour. Six references in three other panels are
+  **pinned and still live**, each needing a visual decision. The **VIEWS registry
+  half is still open**: `hostileMovement` is absent, so
+  `assertViewRegistryIntegrity()` cannot protect it.
 
 *(#23 was found and fixed the same day — `e76c212`. It is left in the list below
 because the two wrong diagnoses it produced are the useful part.)*
@@ -1227,6 +1229,59 @@ resolve, so the failure mode is inheritance, which always looks deliberate.
 Worth a guard rather than only a fix: a test asserting every `var(--x)` in
 `public/v2/css/` resolves to a defined token would have caught this at authoring
 time, and would cover all 26 files rather than the two examined here.
+
+### The guard was built, and this entry was wrong twice
+
+`tests/cssCustomProperties.test.js` (2026-08-27). It measures **26 stylesheets, 63
+tokens, 1,980 `var()` references** — the 63 reproduces the count above
+independently. Written before the fix and seen to fail, which is the only reason
+it is worth anything.
+
+**Wrong the first time: 12 names, not 8.** The measurement above scanned *usage* in
+only the two files it was comparing. The guard scans all 26 and found **four more
+undefined names across three other panels**, live today:
+
+| file | name | visible effect |
+| :-- | :-- | :-- |
+| `07-hate-economics.css:89` | `--panel` | `.mc-budget-hulls` uses the grid-gap hairline pattern — container `background: var(--line)`, `gap: 1px`, opaque cells. With the cells transparent the block renders as **one solid `#263837` slab** instead of separated rows. |
+| `17-directive-board.css:44,103` | `--border` | chip has no border; row has no top rule |
+| `18-mining-expansion.css:31,375` | `--surface-subtle` | bordered boxes with no fill |
+| `18-mining-expansion.css:176` | `--surface-hover` | `:hover` does nothing, and the `transition: background` animates nothing |
+
+These are **pinned, not fixed** — `REGISTERED_GAPS`, keyed by file, property and
+exact count. The pin is a ratchet in both directions: a new unlisted reference
+fails, a count that moves fails, and a pin whose reference has been fixed fails
+until its entry is deleted. Each needs a visual design decision in a panel this
+work was not scoped to, so guessing a token would have been the fabrication this
+repo forbids.
+
+**Wrong the second time, and this is the more useful correction: the damage was
+missing GEOMETRY, not just wrong colour.** This entry described dimmed text
+rendering bright. Measured in a real browser, the before-state was far worse:
+
+`border: 1px solid var(--rule-dim)` is a **shorthand**, so an unresolvable value
+takes the *entire declaration* to `unset` — `border-style: none`, `border-width:
+0px`. Every summary card therefore had **no border and no background**, the banner
+had no bottom rule, and the state chip's severity accent bar — the panel's primary
+signal — was **0 px wide, entirely absent**. Only the separate `border-left-color`
+longhand survived, which is why it read `rgb(196,61,61)` at zero width. The
+`3px → 2px` correction was moot: the border was not rendering at all.
+
+Measured before → after: `.hm-summary__item small` `rgb(230,238,234)` →
+`rgb(145,162,155)`; `.hm-summary__item` border-top `none/0px` → `solid/1px
+rgb(38,56,55)`; background `rgba(0,0,0,0)` → `rgb(11,21,23)`; `.hm-banner__state`
+border-left `0px` → `2px rgb(212,125,118)`.
+
+One of the eight changed nothing visibly, correctly: `--text-body` had been
+inheriting `--text`, which is the value it wanted anyway.
+
+**Still open, and needing a decision:** lines 51 and 56 carry
+`background: rgba(214,138,58,0.08)` and `rgba(196,61,61,0.08)` — the *old* fallback
+hues in rgba form. They are not `var()` references, so the guard cannot see them,
+and the border above each now takes `--warning` / `--danger` while the tint behind
+stays on the older, more saturated hue. The sibling panel has no tint at all.
+
+**The half of #24 about the VIEWS registry is still open.**
 
 ---
 
