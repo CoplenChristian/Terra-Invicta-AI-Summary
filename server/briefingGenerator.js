@@ -58,6 +58,7 @@ const roster = require('./briefing/roster');
 const readers = require('./briefing/readers');
 const { buildExecutiveSitrep } = require('./briefing/sitrep');
 const { buildTheaterStatus } = require('./earthTheater');
+const { buildMilitaryWorld } = require('./engine/military');
 const directives = require('./directives');
 const strategicCommentary = require('./commentary');
 
@@ -187,7 +188,12 @@ class BriefingGenerator {
       // rule can be enforced. Every caller of this method -- the local briefing
       // route, the publisher, the static site build -- therefore gets the
       // configured floor without having to know about it.
-      riskFloorPercent: this.resolveRiskFloorPercent(options?.riskFloorPercent)
+      riskFloorPercent: this.resolveRiskFloorPercent(options?.riskFloorPercent),
+      // The military read-model: inbound hostile fleets, the observer's own
+      // shipyards, and the hulls those yards can field. Built once here from the
+      // same snapshot the engine already reads, so the engine can reason over a
+      // 105-ship alien fleet instead of being blind to it.
+      military: buildMilitaryWorld(snapshot, observerId)
     });
     const engineResult = directiveEngine.runEngine(engineWorld);
 

@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**221 JS modules** and **25 stylesheet parts** (246 indexed files).
+**222 JS modules** and **25 stylesheet parts** (247 indexed files).
 
 ## `public/`
 
@@ -63,7 +63,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/briefing/readers.js` | C | Node (CommonJS) | 412 | snapshot-shaped readers — the joins and roll-ups the briefing and | `buildAdvisableHabs, getControlledNationData, getFleetCombatPower, getMiningRateSummary, getResearchSlots, isFilteredDataAvailable, readObserverHateTrend` | — |
 | `server/briefing/roster.js` | C | Node (CommonJS) | 138 | reading the councilor roster — who is ours, who is free, what a | `NOTABLE_SKILL_THRESHOLD, buildOperativeRoster, eligibleOperatives, isIdleCouncilor, isOwnCouncilor, visibleSkill` | — |
 | `server/briefing/sitrep.js` | C | Node (CommonJS) | 264 | the Executive SITREP — four prose paragraphs, a DEFCON tone, three | `buildExecutiveSitrep` | — |
-| `server/briefingGenerator.js` | **B** C | Node (CommonJS) | 448 | the Mission Control briefing and SITREP synthesis entry point — the | `buildAdvisableHabs, buildCouncilDirectives, buildGeopoliticalDirectives, buildHoldGroundDirective, buildOperativeRoster, buildSpaceDirectives, buildTheaterStatus, eligibleOperatives, firstAvailableNumber, formatCount, formatFactionGdp, formatNumber, …(+14)` | — |
+| `server/briefingGenerator.js` | **B** C | Node (CommonJS) | 454 | the Mission Control briefing and SITREP synthesis entry point — the | `buildAdvisableHabs, buildCouncilDirectives, buildGeopoliticalDirectives, buildHoldGroundDirective, buildOperativeRoster, buildSpaceDirectives, buildTheaterStatus, eligibleOperatives, firstAvailableNumber, formatCount, formatFactionGdp, formatNumber, …(+14)` | — |
 | `server/capabilityResolver.js` | C | Node (CommonJS) | 212 | resolve which intelligence capabilities a faction has from the templates and config. | — | — |
 | `server/commentary/beats.js` | C | Node (CommonJS) | 162 | Layer 2 of the strategic commentary — deterministic narrative beats | `BEAT_DEFINITIONS, evaluateBeats, hasRequiredFacts, isStanceCoherentWithHoldGround` | — |
 | `server/commentary/facts.js` | C | Node (CommonJS) | 227 | Layer 1 of the strategic commentary — fact extraction and | `extractFacts, medianOf, resolveHullTier` | — |
@@ -73,7 +73,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/commentary/simulation.js` | C | Node (CommonJS) | 712 | Layer 3 of the strategic commentary — the opponent-tier builders, the | `BATTLE_TRIALS_PER_COUNT, MAX_SIMULATED_HULLS, OPPONENT_RATING_BASIS, SIMULATION_SEEDS_COUNT, TARGET_WIN_PROBABILITY, buildOmniscientOpponentTiers, buildPlayerOpponentTiers, buildRebuildProjection, describeBandUncertainty, findRequiredHullsForTier, guaranteedWinHullCount, runMonteCarloSimulation` | — |
 | `server/config.js` | C | Node (CommonJS) | 326 | resolve, validate and migrate the server's config from config.json and environment. | `DEFAULTS_PATH, DEFAULT_CONFIG_PATH, LEGACY_KEYS, PROJECT_ROOT, SCHEMA_PATH, envPresent, migrateLegacyConfig, parseIntegerEnv, readJson, resolveConfig, resolvePublishableKey, safeRuntimeConfig, …(+2)` | `tests/config.test.js` |
 | `server/directiveAdvisor.js` | C | Node (CommonJS) | 999 | campaign-aware ranking and posture assessment behind Mission Control | `ALIEN_CONTACT_PROJECT, CAPABILITY_AXES, CHEAPEST_HATE_ACTION, CHEAPEST_HATE_ACTION_LOW, DECISIVE_CAPABILITY_RATIO, FRAGILE_OWN_SHIPS, HATE_DELTA_VARIANCE, MISSION_SUCCESS_HATE, PROXY_ALIEN_HATE_SHARE, PROXY_OFFENSIVE_MISSIONS, TOTAL_WAR_APPROACH_HATE, assessCampaignPosture, …(+11)` | `tests/directiveAdvisor.test.js` |
-| `server/directiveEngine.js` | **B** C | Node (CommonJS) | 320 | the v2 directive rule engine orchestration and public entry point — | `RULES, WEIGHTS, applyRules, buildDecisionReasoning, buildWorld, generateCandidates, generateCouncilCandidates, generateDefendInterestsCandidates, generateIntelligenceCandidates, generateOpenControlPointCandidates, runEngine, scoreCandidates` | `tests/directiveEngine.test.js` |
+| `server/directiveEngine.js` | **B** C | Node (CommonJS) | 327 | the v2 directive rule engine orchestration and public entry point — | `RULES, WEIGHTS, applyRules, buildDecisionReasoning, buildWorld, generateCandidates, generateCouncilCandidates, generateDefendInterestsCandidates, generateIntelligenceCandidates, generateOpenControlPointCandidates, runEngine, scoreCandidates` | `tests/directiveEngine.test.js` |
 | `server/directives/council.js` | C | Node (CommonJS) | 80 | the council-department ladder — exploit an embedded mole, assign an | `buildCouncilDirectives` | — |
 | `server/directives/geopolitical.js` | C | Node (CommonJS) | 184 | the Earth-facing policyRank ladder — hold ground, the escalate-late | `attachHateEstimate, buildGeopoliticalDirectives` | — |
 | `server/directives/holdGround.js` | C | Node (CommonJS) | 64 | Hold Ground as a first-class directive. | `buildHoldGroundDirective` | `tests/holdGround.test.js` |
@@ -94,6 +94,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/engine/candidates/normalize.js` | C | Node (CommonJS) | 160 | one candidate schema for every candidate, whatever generator | `CANDIDATE_FAMILIES, hateEnvelopeFromSlots, looksUnresolved, normalizeCandidate` | — |
 | `server/engine/clocks.js` | C | Node (CommonJS) | 115 | computes strategic clocks, ward expirations, passive accrual rates, | `computeStrategicClocks, getUrgencyMultiplier` | — |
 | `server/engine/feasibility.js` | C | Node (CommonJS) | 164 | evaluates candidate-councilor pairing feasibility against | `evaluateCondition, evaluatePairingFeasibility, isCouncilorFree, isCouncilorHuman, isCouncilorOnEarth` | — |
+| `server/engine/military.js` | C | Node (CommonJS) | 250 | the military read-model — assemble the observer's military facts into | `MODULE_TIER_SOURCE_TABLE, MODULE_TIER_SOURCE_UNKNOWN, buildMilitaryWorld, resolveModuleTier` | — |
 | `server/engine/missionCatalogue.js` | C | Node (CommonJS) | 94 | structured query access to the MissionSpec objects baked into the | `MissionCatalogue` | — |
 | `server/engine/odds.js` | C | Node (CommonJS) | 221 | the Terra Invicta wiki roll success curve and the documented | `CAMPAIGN_ATTRIBUTE_MEDIANS, calculateRollChance, computeMissionOdds, getCouncilorAttribute, oddsUnavailable` | — |
 | `server/engine/pairing.js` | C | Node (CommonJS) | 247 | binds candidates to available councilors and computes success odds | `buildCandidatePairing, buildCouncilorSummary, generateAllPairings, resolveCouncilorId` | — |

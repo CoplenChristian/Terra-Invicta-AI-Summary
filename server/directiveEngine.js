@@ -144,7 +144,13 @@ function buildWorld({
   // two behave identically -- neither holds anything back -- but they are
   // reported differently, and collapsing them here would be exactly the
   // `Number(null) === 0` mistake this repo keeps re-fixing.
-  riskFloorPercent = null
+  riskFloorPercent = null,
+  // The military read-model (server/engine/military.js). The one view of
+  // inbound hostile fleets, the observer's own shipyards, and the hulls those
+  // yards can field that the engine could not see before -- the component that
+  // answers "what should I do this cycle" used to be blind to an incoming alien
+  // fleet. Built by the caller from the snapshot; this engine only freezes it.
+  military = null
 } = {}) {
   return Object.freeze({
     observerId,
@@ -166,7 +172,8 @@ function buildWorld({
     alienHateEconomics: alienHateEconomics || null,
     usedMC: usedMC === null || usedMC === undefined ? null : usedMC,
     mcCapacity: mcCapacity === null || mcCapacity === undefined ? null : mcCapacity,
-    riskFloorPercent: riskFloorPercent === null || riskFloorPercent === undefined ? null : riskFloorPercent
+    riskFloorPercent: riskFloorPercent === null || riskFloorPercent === undefined ? null : riskFloorPercent,
+    military: military || null
   });
 }
 
