@@ -35,7 +35,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: var(--space-sm) var(--space-lg);
-  border-left: 3px solid var(--line-strong);
+  border-left: 2px solid var(--line-strong);
   background: var(--surface-raised);
   color: var(--text-soft);
 }
