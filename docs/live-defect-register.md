@@ -26,7 +26,7 @@ save.
 > **The tally and the live list immediately below are the authoritative status.**
 > Use `git log` on the named commit to see what a fix actually changed.
 
-**Tally as of 2026-08-27: 25 entries — 21 fixed, 4 live, 0 conditional.**
+**Tally as of 2026-08-27: 25 entries — 22 fixed, 3 live, 0 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -57,7 +57,7 @@ localisation files, 107 fallen back, 70 refused as ambiguous. The user's
 **#19 and #20 were fixed the same day** (`a0eabef`, `d71613e`), and **#18** and
 the `emptyOutDir` build race in `95eee95`.
 
-**Live right now: #17, #21, #24 (half) and #25.**
+**Live right now: #17, #21 and #24 (half).**
 
 - **#17** — four fabricated fallbacks in the directive board, carried across the
   React port **deliberately**, because "no figure may change" was that port's
@@ -76,12 +76,9 @@ the `emptyOutDir` build race in `95eee95`.
   half is still open**: `hostileMovement` is absent, so
   `assertViewRegistryIntegrity()` cannot protect it.
 
-- **#25** — four verification scripts set `NODE_ENV=test` before triggering a
-  production build, so they can silently replace `public/v2/app/bundle.js` with one
-  containing 1,682 `jsxDEV` calls against a React runtime that has none. Fires only
-  when the bundle is stale, and the artefact is gitignored, so `git checkout`
-  cannot undo it. **The most recoverable-looking and least recoverable of the
-  four.**
+*(#25 was found and fixed the same day. Six scripts carried the ingredient, four
+were armed; fixed at the chokepoint so the other two — and the next one written —
+cannot arm themselves.)*
 
 *(#23 was found and fixed the same day — `e76c212`. It is left in the list below
 because the two wrong diagnoses it produced are the useful part.)*
@@ -1292,7 +1289,7 @@ stays on the older, more saturated hue. The sibling panel has no tint at all.
 
 ---
 
-## 25. Four verification scripts are armed to poison the bundle they verify — **demonstrated, live**
+## 25. Four verification scripts are armed to poison the bundle they verify — **demonstrated, now fixed**
 
 Found 2026-08-27 by an agent that triggered it accidentally and reported it, then
 reproduced deliberately here.
@@ -1344,6 +1341,46 @@ month broken in the same way.
 Worth a guard as well as a fix, and a cheap one: assert the built bundle contains
 no `jsxDEV`. That is a single `grep -c` over an artefact the browser suite already
 depends on, and it turns a silent poisoning into a named failure.
+
+### Fixed at the chokepoint, and this entry had two wrong numbers
+
+`ensureBundleBuilt` now passes an explicit environment to `execSync`: 93 of 94
+variables are forwarded unchanged — `PATH` included — with only `NODE_ENV` forced
+to `production` (the value `vite.config.mjs` already hard-codes into `define`) and
+`VITE_USER_NODE_ENV` deleted, since that is Vite's own carrier for a caller-supplied
+value and outranks the default. `tests/bundleNoDevJsx.test.js` is the guard, and it
+treats an **absent** bundle as its own failure rather than a pass.
+
+**Both figures above were wrong**, and the second is the instructive one:
+
+- The poisoned build is **1,687,870** bytes, not 1,687,180. That number was Vite's
+  rounded console line `1,687.18 kB` read as bytes.
+- **1,682 is a count of matching LINES, because `grep -c` counts lines and not
+  occurrences.** The real occurrence count is **1,836**. A line-count reported as a
+  call-count is the same shape as every other measurement error in this register:
+  the tool answered a narrower question than the one being asked, and the answer
+  looked plausible enough not to check.
+
+**And the exposure was larger than the table.** *Six* scripts set
+`process.env.NODE_ENV = 'test'`; the four listed are simply the ones that also call
+`ensureBundleBuilt` today. `verify_research_actionability.js:13` and
+`verify_drive_path_modal.js:31` are unarmed by accident, not by design — one added
+line each and they join the set. The "fifth script someone writes next month"
+argument for fixing the chokepoint was already half-materialised when it was made.
+
+**Verified independently, not from the diff.** Poisoned the bundle (1,836
+occurrences, 1,687,870 bytes), confirmed the guard fails naming all three figures,
+touched `src/v2/main.jsx` so `isBundleStale()` returned true, then ran
+`NODE_ENV=test node scripts/verify_v2_navigation.js` — the exact condition that
+fires the defect. It rebuilt the bundle **byte-identical to the known-good copy**
+(md5 `7e5abec4…`, 1,352,202 bytes, 0 occurrences) and passed with 0 console errors.
+Before the fix the same run died on `s.jsxDEV is not a function`.
+
+The four scripts were deliberately **not** edited. Their assignments have a real
+in-process purpose (`server/http/routes/runtime.js:29` reads `NODE_ENV`), the
+chokepoint makes them harmless, and `scripts/` is a `SOURCE_ROOT` in
+`docs/code-index.md`, which records line counts — deleting a line from each would
+stale the checked-in index.
 
 ---
 
