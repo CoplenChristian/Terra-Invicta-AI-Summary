@@ -259,7 +259,14 @@ const VIEWS = [
       // "How much force does THIS fleet cost, and can I even get there" is
       // squarely "what is coming", so it lives here rather than in FLEET, which
       // answers "what do I build".
-      'fleetEngagement'
+      'fleetEngagement',
+      // The theater-defence board answers "what do I do about what is coming",
+      // which is still the THREAT question -- FLEET answers "what do I build
+      // in general", and this is a per-body race against a specific arrival.
+      // Registered so assertViewRegistryIntegrity fails loudly if a layout pass
+      // ever moves its mount out of #view-threat, which is the mining board's
+      // failure mode: a panel that rendered nowhere and nobody noticed.
+      'theaterDefence'
     ]
   },
   {
@@ -306,7 +313,8 @@ function syncScrollHints(root = document) {
     ['.de-scroll-hint', '.de-table-wrap', 'after'],
     ['.fe-scroll-hint', '.fe-table-wrap', 'after'],
     ['.intel-library-table-scroll-hint', '.intel-library-table-wrap', 'inside'],
-    ['.hm-scroll-hint', '.hm-table-wrap', 'after']
+    ['.hm-scroll-hint', '.hm-table-wrap', 'after'],
+    ['.td-scroll-hint', '.td-table-wrap', 'after']
   ];
   for (const [hintSelector, wrapSelector, placement] of pairs) {
     root.querySelectorAll(hintSelector).forEach(hint => {
@@ -1281,6 +1289,17 @@ function renderDashboard() {
         riskFloorPreference: state.riskFloorPercent,
         onRiskFloorChange: setRiskFloorPercent
       }
+    );
+  }
+  if (window.MissionControlTheaterDefence?.render) {
+    // The theater-defence block rides on the SAME briefing already fetched
+    // above rather than on a second request. /api/v2/briefing runs the engine
+    // per call, so two calls would be two runs against one save with nothing
+    // guaranteeing they agree -- the reason server/http/routes/snapshot.js
+    // hands the war-room renderer the one briefing it already generated.
+    window.MissionControlTheaterDefence.render(
+      document.getElementById('theaterDefence'),
+      { engineDirectives: state.briefing?.engineDirectives }
     );
   }
   if (window.MissionControlMcBudget?.render) {

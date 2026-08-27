@@ -61,6 +61,10 @@ import {
   renderHostileMovement,
 } from './panels/HostileMovementPanel.jsx';
 import {
+  TheaterDefencePanel,
+  renderTheaterDefence,
+} from './panels/TheaterDefencePanel.jsx';
+import {
   CapabilityMatrixBoard,
   FactionLedgerBoard,
   LogisticsBoard,
@@ -442,6 +446,12 @@ if (typeof window !== 'undefined') {
     render: renderHostileMovement,
     fetch: fetchHostileMovement,
   };
+  // No `fetch` here on purpose: the block rides on the briefing the controller
+  // has already loaded, and a second /api/v2/briefing call is a second engine
+  // run against the same save.
+  window.MissionControlTheaterDefence = {
+    render: renderTheaterDefence,
+  };
   window.MissionControlMiningExpansion = {
     render: renderMiningExpansion,
     fetchMiningExpansion,
@@ -510,6 +520,7 @@ if (typeof window !== 'undefined') {
     mountFleetEngagement: renderFleetEngagement,
     mountMiningExpansion: renderMiningExpansion,
     mountHostileMovement: renderHostileMovement,
+    mountTheaterDefence: renderTheaterDefence,
     mountDirectiveBoard: renderDirectiveBoard,
     mountResearchAdvisor: renderResearchAdvisor,
     mountFleetProcurement: renderFleetProcurement,
@@ -548,6 +559,7 @@ if (typeof window !== 'undefined') {
     FactionIntel,
     DriveExplorer,
     HostileMovementPanel,
+    TheaterDefencePanel,
     DetailPanel,
     FactionLedgerBoard,
     LogisticsBoard,

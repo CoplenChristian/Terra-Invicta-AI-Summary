@@ -1,0 +1,319 @@
+/* ========================================================================
+   26-theater-defence.css
+
+   THREAT: the theater-defence board -- build, reinforce or withdraw.
+
+   The .td-* panel behind THEATER DEFENCE: the posture tally, the seven-column
+   findings table, the refusal and citation detail row under each finding, and
+   the shared-basis and notes blocks beneath the table.
+
+   Source: new part for the theater-defence browser panel (2026-08-27); not a
+   slice of mission-control.css.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+
+.td-empty,
+.td-empty-cell {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.04em;
+  padding: var(--space-xl) 14px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.td-banner {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg) 14px var(--space-xl);
+  border-bottom: 1px solid var(--line);
+}
+
+.td-banner__state {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: var(--space-sm) var(--space-lg);
+  border-left: 3px solid var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--text-soft);
+}
+
+.td-banner__state--INBOUND_TO_TRACKED_THEATER {
+  border-left-color: var(--danger);
+  color: var(--text);
+}
+
+.td-banner__state--HOSTILE_MOVEMENT_DESTINATIONS_PARTLY_UNRESOLVED,
+.td-banner__state--UNREAD {
+  border-left-color: var(--warning);
+}
+
+/* The posture tally. Colour is a modifier only -- the label is the claim. */
+.td-tally {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-md);
+}
+
+.td-tally__item {
+  display: grid;
+  gap: var(--space-2xs);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--line);
+  border-top-width: 2px;
+  background: var(--surface-inset);
+}
+
+.td-tally__item small {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.td-tally__item strong {
+  font-family: var(--mono);
+  font-size: var(--fs-kpi);
+  color: var(--text);
+}
+
+.td-tally__item--act { border-top-color: var(--accent); }
+.td-tally__item--urgent { border-top-color: var(--danger); }
+.td-tally__item--refused { border-top-color: var(--warning); }
+.td-tally__item--quiet { border-top-color: var(--line-strong); }
+
+/* The findings table: `theater-defence` variant of DataTable. The hint is
+   class-driven off measured overflow (scrollWidth > clientWidth), never off
+   viewport width -- see syncScrollHints in mission-control.js. */
+.td-table-wrap {
+  overflow-x: auto;
+}
+
+.td-table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+}
+
+.td-th {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.td-scroll-hint {
+  display: none;
+  padding: var(--space-sm) 0 0;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+
+.td-scroll-hint.is-scrollable {
+  display: block;
+}
+
+.td-cell {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.02em;
+  padding: var(--space-md);
+  color: var(--text-soft);
+  vertical-align: top;
+}
+
+/* The detail row carries the bottom rule for the pair, so a finding and its
+   refusals read as one block rather than as two rows that happen to adjoin. */
+.td-cell--detail {
+  border-bottom: 1px solid var(--line);
+  padding-top: 0;
+}
+
+.td-body {
+  display: block;
+  font-size: var(--fs-metric);
+  color: var(--text);
+}
+
+.td-status {
+  display: block;
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+
+.td-posture {
+  display: inline-block;
+  font-size: var(--fs-metric);
+  letter-spacing: 0.06em;
+  padding: var(--space-2xs) var(--space-sm);
+  border-left: 2px solid var(--line-strong);
+  background: var(--surface-inset);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.td-posture--act { border-left-color: var(--accent); }
+.td-posture--urgent { border-left-color: var(--danger); }
+.td-posture--refused { border-left-color: var(--warning); }
+
+.td-posture__body {
+  display: block;
+  margin-top: var(--space-2xs);
+  max-width: 26ch;
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.td-pair,
+.td-ours__line {
+  display: block;
+  white-space: nowrap;
+}
+
+.td-ours__line {
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.td-ours > .td-ours__line:first-child {
+  font-size: var(--fs-meta);
+  color: var(--text-soft);
+}
+
+.td-ours__completing {
+  white-space: normal;
+  max-width: 26ch;
+}
+
+.td-contact,
+.td-race {
+  display: block;
+}
+
+.td-contact {
+  white-space: nowrap;
+}
+
+.td-contact__date,
+.td-race__hull,
+.td-race__figures,
+.td-race__reason {
+  display: block;
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.td-race__reason {
+  white-space: normal;
+  max-width: 34ch;
+}
+
+.td-race__verdict {
+  display: block;
+  font-size: var(--fs-metric);
+  color: var(--text);
+  letter-spacing: 0.05em;
+}
+
+.td-race[data-verdict='build-lands-first'] .td-race__verdict { color: var(--success); }
+.td-race[data-verdict='arrival-first'] .td-race__verdict { color: var(--danger); }
+
+/* Refusals are content, not an error state: a CANNOT_ADVISE row with its
+   refused checks named is the block working. */
+.td-refusals {
+  list-style: none;
+  margin: 0 0 var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-left: 2px solid var(--warning);
+  background: var(--surface-inset);
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.td-refusals__item {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+.td-refusals__check {
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warning);
+}
+
+.td-refusals__reason {
+  font-size: var(--fs-tag);
+  color: var(--text-soft);
+}
+
+.td-citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-lg);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.td-citations__count {
+  color: var(--text-soft);
+  letter-spacing: 0.05em;
+}
+
+.td-citations__unreadable {
+  color: var(--warning);
+}
+
+.td-basis {
+  margin: var(--space-lg) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  color: var(--text-dim);
+}
+
+.td-basis__label {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.td-offboard {
+  margin: var(--space-md) 0 0;
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text-soft);
+}
+
+.td-notes {
+  list-style: none;
+  margin: var(--space-lg) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.td-notes__item {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  line-height: 1.5;
+  color: var(--text-dim);
+  padding-left: var(--space-lg);
+  border-left: 1px solid var(--line);
+}

@@ -19,15 +19,16 @@ const VARIANT_CONTRACT = {
   mining: { wrap: 'mining-table-wrap', hint: false },
   'intel-library': { wrap: 'intel-library-table-wrap', hint: true },
   'hostile-movement': { wrap: 'hm-table-wrap', hint: true },
+  'theater-defence': { wrap: 'td-table-wrap', hint: true },
   'commentary-sim': { wrap: null, hint: false },
 };
 
-test('DataTable variant map covers all seven table systems', () => {
+test('DataTable variant map covers all eight table systems', () => {
   const src = fs.readFileSync(
     path.resolve(__dirname, '../src/v2/components/tableVariants.js'),
     'utf8'
   );
-  const variants = ['de', 'mc-board', 'fe', 'mining', 'intel-library', 'hostile-movement', 'commentary-sim'];
+  const variants = ['de', 'mc-board', 'fe', 'mining', 'intel-library', 'hostile-movement', 'theater-defence', 'commentary-sim'];
   for (const v of variants) {
     assert.match(src, new RegExp(`['"]?${v}['"]?:`), `variant ${v} must be defined`);
   }

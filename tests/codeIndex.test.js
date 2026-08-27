@@ -68,7 +68,7 @@ test('every source module has a hand-written Purpose line', () => {
 
 test('every v2 stylesheet part has a parseable purpose from its header', () => {
   const { cssParts } = collect();
-  assert.ok(cssParts.length === 25, `expected 25 linked stylesheet parts, found ${cssParts.length}`);
+  assert.ok(cssParts.length === 26, `expected 26 linked stylesheet parts, found ${cssParts.length}`);
   const missing = cssParts.filter(m => !m.purpose).map(m => m.rel);
   assert.deepStrictEqual(
     missing,
@@ -84,7 +84,7 @@ test('stylesheet parts are listed in shell link (cascade) order', () => {
   assert.strictEqual(orders[0], 1);
   assert.strictEqual(orders[orders.length - 1], cssParts.length);
   assert.match(cssParts[0].rel, /public\/v2\/css\/01-tokens-and-base\.css$/);
-  assert.match(cssParts[cssParts.length - 1].rel, /public\/v2\/css\/25-hostile-movement\.css$/);
+  assert.match(cssParts[cssParts.length - 1].rel, /public\/v2\/css\/26-theater-defence\.css$/);
 });
 
 test('the four known barrels are classified as barrels', () => {

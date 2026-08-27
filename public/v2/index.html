@@ -53,6 +53,7 @@
   <link rel="stylesheet" href="/v2/css/23-unlocked-tech.css">
   <link rel="stylesheet" href="/v2/css/24-fleet-engagement.css">
   <link rel="stylesheet" href="/v2/css/25-hostile-movement.css">
+  <link rel="stylesheet" href="/v2/css/26-theater-defence.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⬢</text></svg>">
 </head>
 <body>
@@ -531,6 +532,23 @@
           <div class="tech-card-body">
             <div id="hostileMovement" aria-live="polite">
               <div class="hm-empty">LOADING HOSTILE MOVEMENT…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- The theater-defence board sits directly under hostile movement for
+             the same reason war-room §1c follows §1b: §1b says what is moving
+             and this says what to do about it. It renders from the briefing the
+             controller already holds, so unlike its neighbour it needs no lazy
+             fetch on view activation. -->
+        <div class="tech-card tech-card--quiet init-view__span">
+          <div class="tech-card-header">
+            <div class="tech-card-title">THEATER DEFENCE</div>
+            <span>BUILD / REINFORCE / WITHDRAW</span>
+          </div>
+          <div class="tech-card-body">
+            <div id="theaterDefence" aria-live="polite">
+              <div class="td-empty">LOADING THEATER DEFENCE…</div>
             </div>
           </div>
         </div>

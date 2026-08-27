@@ -1,7 +1,7 @@
 /**
  * src/v2/components/DataTable.jsx
  *
- * Purpose: one real `<table>` primitive for all six v2 table systems, with
+ * Purpose: one real `<table>` primitive for all eight v2 table systems, with
  * variant/sub-variant class names, the shared wrap where one exists, and scroll
  * hints driven by measured overflow (scrollWidth vs clientWidth), never viewport
  * width.
@@ -45,7 +45,7 @@ function syncOneScrollHint(hintEl, wrapSelector, placement) {
 
 /**
  * @param {object} props
- * @param {'de'|'mc-board'|'fe'|'mining'|'intel-library'|'hostile-movement'|'commentary-sim'} props.variant
+ * @param {'de'|'mc-board'|'fe'|'mining'|'intel-library'|'hostile-movement'|'theater-defence'|'commentary-sim'} props.variant
  * @param {string} [props.subVariant] — ledger | fleet | upgrades
  * @param {Array<{ key: string, label: React.ReactNode, align?: string, className?: string, headerClassName?: string }>} [props.columns]
  * @param {Array<Record<string, React.ReactNode>>} [props.rows]

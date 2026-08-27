@@ -26,6 +26,10 @@ import {
   fetchHostileMovement,
   renderHostileMovement,
 } from './panels/HostileMovementPanel.jsx';
+import {
+  TheaterDefencePanel,
+  renderTheaterDefence,
+} from './panels/TheaterDefencePanel.jsx';
 import { MiningExpansion } from './panels/MiningExpansion.jsx';
 import { CouncilOrders } from './panels/CouncilOrders.jsx';
 import { DirectiveBoard } from './panels/DirectiveBoard.jsx';
@@ -106,6 +110,7 @@ if (typeof window !== 'undefined') {
     render: renderHostileMovement,
     fetch: fetchHostileMovement,
   };
+  window.MissionControlTheaterDefence = { render: renderTheaterDefence };
   window.IntelligenceLibrary = { render: renderIntelligenceLibrary };
   window.FactionIntelScreen = { render: renderFactionIntel };
   window.MissionControlCouncilOrders = { render: renderCouncilOrders };
@@ -175,6 +180,7 @@ const SCENES = {
   intelligenceLibrary: IntelligenceLibraryScene,
   alienHateEconomics: AlienHateEconomicsScene,
   hostileMovement: HostileMovementScene,
+  theaterDefence: TheaterDefenceScene,
   executiveBoards: ExecutiveBoardsScene,
   factionIntel: FactionIntelScene,
   driveExplorer: DriveExplorerScene,
@@ -236,7 +242,7 @@ function DataTableFitsScene() {
 function DataTableVariantsScene() {
   const columns = [{ key: 'a', label: 'Alpha' }, { key: 'b', label: 'Beta' }];
   const rows = [{ key: '1', a: 'A', b: 'B' }];
-  const variants = ['de', 'mc-board', 'fe', 'mining', 'intel-library', 'hostile-movement', 'commentary-sim'];
+  const variants = ['de', 'mc-board', 'fe', 'mining', 'intel-library', 'hostile-movement', 'theater-defence', 'commentary-sim'];
   return (
     <div data-testid="harness-datatable-variants">
       {variants.map((v) => (
@@ -573,6 +579,22 @@ function HostileMovementScene() {
   return (
     <div id="hostileMovement" data-testid="hostile-movement-harness" aria-live="polite">
       <HostileMovementPanel data={payload} />
+    </div>
+  );
+}
+
+/**
+ * The theater-defence board. #theaterDefence is the id public/v2/index.html
+ * owns and mission-control.js drives through
+ * `window.MissionControlTheaterDefence.render(...)` on the THREAT view, so the
+ * real panel renders inside it here exactly as it does there. The payload is
+ * the `engineDirectives.theaterDefence` block the briefing carries.
+ */
+function TheaterDefenceScene() {
+  const payload = window.__THEATER_DEFENCE_PAYLOAD__;
+  return (
+    <div id="theaterDefence" data-testid="theater-defence-harness" aria-live="polite">
+      <TheaterDefencePanel data={payload} />
     </div>
   );
 }

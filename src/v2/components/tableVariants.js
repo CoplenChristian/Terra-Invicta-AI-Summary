@@ -1,7 +1,7 @@
 /**
  * src/v2/components/tableVariants.js
  *
- * Purpose: maps DataTable variant keys to the six real table systems in the v2
+ * Purpose: maps DataTable variant keys to the eight real table systems in the v2
  * stylesheet — wrap, table, scroll-hint classes and hint placement.
  */
 
@@ -67,6 +67,16 @@ export const TABLE_VARIANTS = {
     hint: 'hm-scroll-hint',
     hintPlacement: 'after',
     th: 'hm-th',
+    row: null,
+    cell: null,
+    subVariants: {},
+  },
+  'theater-defence': {
+    wrap: 'td-table-wrap',
+    table: 'td-table',
+    hint: 'td-scroll-hint',
+    hintPlacement: 'after',
+    th: 'td-th',
     row: null,
     cell: null,
     subVariants: {},

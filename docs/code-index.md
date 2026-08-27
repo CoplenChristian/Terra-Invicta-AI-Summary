@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**223 JS modules** and **25 stylesheet parts** (248 indexed files).
+**225 JS modules** and **26 stylesheet parts** (251 indexed files).
 
 ## `public/`
 
@@ -20,7 +20,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/index.html` | — | Browser (legacy v1) | 535 | legacy v1 dashboard shell -- DO NOT EDIT | — | — |
 | `public/js/api.js` | BS | Browser (legacy, non-module) | 129 | the legacy v1 API client — runtime probe and the fetch wrapper the | — | — |
 | `public/js/app.js` | BS | Browser (legacy, non-module) | 1517 | the legacy v1 dashboard controller — renders the old UI and must not | — | — |
-| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2127 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2146 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (classic, global IIFE) | 328 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
@@ -226,16 +226,16 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 
 | module | B/E/C | runtime | lines | purpose | exports | test |
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
-| `src/v2/components/DataTable.jsx` | E | Browser (React JSX) | 192 | one real `<table>` primitive for all six v2 table systems, with | `DataTable, measureScrollable, syncOneScrollHint` | — |
+| `src/v2/components/DataTable.jsx` | E | Browser (React JSX) | 192 | one real `<table>` primitive for all eight v2 table systems, with | `DataTable, measureScrollable, syncOneScrollHint` | — |
 | `src/v2/components/Estimated.jsx` | E | Browser (React JSX) | 67 | the estimated register — italic sans in the dimmer colour for modelled | `Estimated` | — |
 | `src/v2/components/index.js` | **B** E | Browser (React JSX) | 14 | barrel export for the five shared React primitives (Track E). | `ABSENT_LABEL, DEFAULT_SCROLL_HINT_TEXT, DataTable, Estimated, Measured, Panel, TABLE_VARIANTS, TruncationNote, UNAVAILABLE_LABEL, Value, measureScrollable, resolveValue, …(+1)` | — |
 | `src/v2/components/Measured.jsx` | E | Browser (React JSX) | 56 | the measured register — mono, upright, full-contrast text for values | `Measured` | — |
 | `src/v2/components/Panel.jsx` | E | Browser (React JSX) | 70 | React replacement for `.tech-card` — header, title, body, and all six | `Panel` | — |
 | `src/v2/components/parseNumeric.js` | E | Browser (React JSX) | 13 | shared numeric parse for <Value> — null/undefined/'' are absent, not | `parseNumeric` | — |
-| `src/v2/components/tableVariants.js` | E | Browser (React JSX) | 87 | maps DataTable variant keys to the six real table systems in the v2 | `DEFAULT_SCROLL_HINT_TEXT, TABLE_VARIANTS` | — |
+| `src/v2/components/tableVariants.js` | E | Browser (React JSX) | 97 | maps DataTable variant keys to the eight real table systems in the v2 | `DEFAULT_SCROLL_HINT_TEXT, TABLE_VARIANTS` | — |
 | `src/v2/components/TruncationNote.jsx` | E | Browser (React JSX) | 90 | announce capped lists with total and omitted counts. An absent omitted | `TruncationNote` | — |
 | `src/v2/components/Value.jsx` | E | Browser (React JSX) | 134 | render a numeric value or an explicit unavailable/absent state. Never | `ABSENT_LABEL, UNAVAILABLE_LABEL, Value, resolveValue` | — |
-| `src/v2/main.jsx` | E | Browser (React JSX) | 577 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderCapabilityMatrix, renderCouncilOrders, …(+20)` | — |
+| `src/v2/main.jsx` | E | Browser (React JSX) | 589 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderCapabilityMatrix, renderCouncilOrders, …(+20)` | — |
 | `src/v2/panels/AlienHateEconomics.jsx` | E | Browser (React JSX) | 499 | renders the save-derived Mission Control hate floor and Total War | `AlienHateEconomics, fmtNumber, renderHudAlienHateEconomics` | `tests/AlienHateEconomics.test.js` |
 | `src/v2/panels/CouncilOrders.jsx` | E | Browser (React JSX) | 388 | React port of public/v2/js/components/council-orders.js. Renders the | `CouncilOrders, focusDirectiveBoard` | `tests/CouncilOrders.test.js` |
 | `src/v2/panels/DetailPanel.jsx` | E | Browser (React JSX) | 326 | the shared detail surface every clickable Mission Control module | `DetailPanel, close, detailPanelInternals, open, syncPageInert` | `tests/DetailPanel.test.js` |
@@ -259,11 +259,13 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/panels/ResearchAdvisor.jsx` | E | Browser (React JSX) | 368 | the COMMAND-view research advisor — what to research next, in two | `ResearchAdvisor` | — |
 | `src/v2/panels/researchAdvisorUtils.mjs` | E | Browser (React JSX) | 1087 | the DOM-free half of the research advisor — every formatter, row | `ACTIONABLE_GROUPS, ASPIRATIONAL_GROUPS, BACKLOG_TITLE, BEYOND_HORIZON, CENSUS_TITLE, CHAIN_TITLE, DELIVERY_DEMOTED_TITLE, DELIVERY_FAILS_TITLE, DELIVERY_UNKNOWN_TITLE, ECONOMIC_CAPTION_TITLE, FOOT_TITLE_BASE, GROUPS_SHOWN, …(+50)` | — |
 | `src/v2/panels/StrategicCommentary.jsx` | E | Browser (React JSX) | 286 | renders the non-LLM four-layer Strategic Commentary Engine output | `StrategicCommentary` | `tests/StrategicCommentary.test.js` |
+| `src/v2/panels/TheaterDefencePanel.jsx` | E | Browser (React JSX) | 399 | read-only surface for `briefing.engineDirectives.theaterDefence`. | `TheaterDefencePanel, readTheaterDefencePayload, renderTheaterDefence, stateTokenFor` | — |
+| `src/v2/panels/theaterDefencePanelUtils.mjs` | E | Browser (React JSX) | 455 | testable render helpers behind src/v2/panels/TheaterDefencePanel.jsx. | `POSTURE_BODY, POSTURE_LABEL, POSTURE_MODIFIER, POSTURE_ORDER, STATE_LABEL, STATE_MODIFIER, VERDICT_LABEL, buildRaceReading, citationKey, contactReading, count, describePanel, …(+13)` | `tests/theaterDefencePanelUtils.test.js` |
 | `src/v2/panels/UnlockedTech.jsx` | E | Browser (React JSX) | 382 | the searchable list of the observer faction's unlocked research | `UnlockedTech` | — |
 | `src/v2/panels/unlockedTechUtils.js` | E | Browser (React JSX) | 167 | the pure reads behind the UNLOCKED TECHNOLOGY panel — census, | `DEBOUNCE_MS, RENDER_CAP, UNLOCK_CAP, applyScope, capSentence, categoryLabel, censusSentence, costLabel, isUnlocked, matchingUnlocks, normalise, readCensus, …(+5)` | — |
 | `src/v2/panels/WorldMap.jsx` | E | Browser (React JSX) | 471 | renders the interactive world/space theater map surface — six | `WorldMap, loadGeography, resetGeographyCache` | `tests/WorldMap.test.js` |
 | `src/v2/panels/worldMapUtils.js` | E | Browser (React JSX) | 496 | pure geometry, pairing and presence helpers for the WorldMap panel — | `COLORS, COUNTRY_THEATERS, GRATICULE_PATHS, HOSTILE_KEYS, ID_KEYS, LEGEND_ITEMS, NAME_KEYS, OWN_KEYS, STATUS_KEYS, THEATERS, TYPE, buildCountryPaths, …(+18)` | — |
-| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 730 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
+| `src/v2/primitivesHarness.jsx` | E | Browser (React JSX) | 752 | browser-test mount point for Track E primitives — not loaded by the | `HarnessApp, SCENES` | — |
 | `src/v2/theme.js` | E | Browser (React JSX) | 266 | MUI createTheme mirror of the v2 CSS custom-property vocabulary in | `cssParityExpectations, initiativeCategorical, initiativeSpace, initiativeTheme, initiativeTokens` | — |
 
 ## `public/v2/css/`
@@ -299,4 +301,5 @@ The v2 stylesheet in **cascade order** — the numeric prefix and the shell's
 | 23 | `public/v2/css/23-unlocked-tech.css` | 254 | The unlocked-technology panel on RECORDS. |
 | 24 | `public/v2/css/24-fleet-engagement.css` | 323 | THREAT: the per-fleet engagement estimates. |
 | 25 | `public/v2/css/25-hostile-movement.css` | 177 | THREAT: the whole-board hostile-movement summary beyond the twelve theaters. |
+| 26 | `public/v2/css/26-theater-defence.css` | 320 | THREAT: the theater-defence board -- build, reinforce or withdraw. |
 
