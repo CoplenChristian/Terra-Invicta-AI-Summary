@@ -1,18 +1,3 @@
 {
-  "description": "Shared project hooks. The dispatch approval gate makes the dispatch skill's `ask` and `reject` modes enforced by the harness rather than by Claude's own good behaviour. See .claude/skills/dispatch/HOOK-DESIGN.md.",
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/dispatch/approval_hook.js\"",
-            "timeout": 5,
-            "statusMessage": "Checking dispatch policy"
-          }
-        ]
-      }
-    ]
-  }
+  "description": "Shared project settings. The dispatch approval gate that used to live here as a PreToolUse hook was REMOVED on 2026-08-27, by the user's decision. cursor-agent reads this file and applies its PreToolUse hooks to its own shell tool: on Windows it wraps the command in PowerShell and then executes the result under bash, which rejects `& {`, so every shell command in the composer and grok lanes died before starting. The hook was written to gate Claude Code's Bash and PowerShell tools and had no business governing cursor-agent. See .claude/skills/dispatch/HOOK-DESIGN.md for what it did, and the dispatch SKILL.md for the rule it enforced -- that rule still stands on its own: the wrapper is the only way in, whether or not anything enforces it."
 }
