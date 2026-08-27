@@ -182,16 +182,24 @@ const LANES = {
   deepseek: {
     key: 'deepseek',
     label: 'DeepSeek v4 Flash',
-    cli: 'opencode',
-    binName: 'opencode',
-    fallbackPath: 'C:\\Users\\cople\\.opencode\\bin\\opencode.exe',
+    cli: 'omp',
+    binName: 'omp',
+    fallbackPath: 'C:\\Users\\cople\\AppData\\Local\\omp\\omp.exe',
     supportsModel: true,
-    trustFlags: null, // opencode has no such flag; passing one would be a bad argument
+    trustFlags: null, // omp has --auto-approve/--approval-mode, but no run has needed one and granting a standing permission is the user's call, not this file's
     defaultModel: 'opencode-go/deepseek-v4-flash',
+    // omp's `--model` is a FUZZY match, so a slug it does not recognise can
+    // resolve to a DIFFERENT model rather than failing. That would run a model
+    // the policy does not name, which is a policy bypass, so this lane requires
+    // its configured slug to be an exact entry in the live `omp models` catalogue.
+    requiresExactModelInCatalogue: true,
+    // The prompt is ATTACHED with `@<path>` rather than inlined as an argv
+    // element. The omp builder also carries the cwd and refuses bare --resume.
+    promptDelivery: 'attached-file',
     costClass: 'metered',
     costNote: 'METERED — real money per call, billed to OpenCode Go.',
-    routing: 'Backend implementation and review. NO VISION: never send a screenshot or a task needing one.',
-    buildArgs: ({ model, prompt, resume }) => opencodeArgs(model, prompt, resume),
+    routing: 'Backend implementation and review. The configured model has no vision: never send it a screenshot or a task needing one.',
+    buildArgs: ({ model, promptPath, resume, cwd }) => ompArgs(model, promptPath, resume, cwd),
   },
   antigravity: {
     key: 'antigravity',
