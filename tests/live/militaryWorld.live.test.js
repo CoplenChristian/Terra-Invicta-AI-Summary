@@ -20,7 +20,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const { buildMilitaryWorld } = require('../../server/engine/military');
-const { COMPOSITION_BASIS } = require('../../shared/fleetEngagement.mjs');
+const { COMPOSITION_BASIS, ENGAGEMENT_VERDICTS } = require('../../shared/fleetEngagement.mjs');
 
 const OBSERVER = 4712;
 
@@ -130,5 +130,89 @@ test('Live save: theaterForce composes a rated body in both modes', (t) => {
         }
       }
     }
+  }
+});
+
+// -----------------------------------------------------------------------------
+// The per-fleet hull requirements, against the current campaign.
+//
+// `tests/engineTheaterForce.test.js` owns the shape and every refusal branch on
+// the committed fixtures -- where all 57 fleets resolve `band`, so the
+// beyond-modelled-range and withheld branches can only be reached there by
+// hand-built objects. The live save is the one place those branches can turn up
+// for real, and the property that matters is the same in both: a requirement
+// past the sweep ceiling is a FLOOR, never a verdict that the engagement cannot
+// be won. A failure here means the campaign moved somewhere the model does not
+// cover -- information, not a broken build.
+// -----------------------------------------------------------------------------
+
+test('Live save: every hostile fleet at a tracked body carries a requirement, floors included', (t) => {
+  const VERDICTS = new Set(Object.values(ENGAGEMENT_VERDICTS));
+
+  for (const mode of ['player', 'omniscient']) {
+    const snapshot = loadOrSkip(t, mode);
+    if (!snapshot) return;
+
+    const world = buildMilitaryWorld(snapshot, OBSERVER);
+    let listed = 0;
+
+    for (const row of world.theaterForce) {
+      // A composed body-level total is refused on every row, in every mode.
+      assert.strictEqual(row.composedRequirement, null, `${mode}/${row.body}`);
+      assert.ok(row.composedRequirementReason, `${mode}/${row.body}`);
+
+      if (row.opponentFleets === null) {
+        // Only a whole-board refusal nulls the list, and then it must say so.
+        assert.equal(row.available, false, `${mode}/${row.body}`);
+        assert.strictEqual(row.opponentFleetsCount, null, `${mode}/${row.body}`);
+        assert.ok(row.opponentFleetsUnavailableReason, `${mode}/${row.body}`);
+        continue;
+      }
+
+      assert.equal(row.opponentFleetsCount, row.opponentFleets.length, `${mode}/${row.body}`);
+      listed += row.opponentFleets.length;
+
+      // The coupling that would catch a fleet list bucketed differently from
+      // the rating beside it: rated hostile hulls with no fleet listed means
+      // the two halves of this row disagree about what is here.
+      if (row.opponent.ratedShips > 0) {
+        assert.ok(row.opponentFleets.length > 0,
+          `${mode}/${row.body}: ${row.opponent.ratedShips} hostile hull(s) are rated here, so at least one `
+          + 'fleet must be listed with its requirement');
+      }
+
+      for (const fleet of row.opponentFleets) {
+        const where = `${mode}/${row.body}/${fleet.fleetId}`;
+        assert.ok(fleet.requirement, `${where}: the resource resolves one on every branch`);
+        assert.ok(VERDICTS.has(fleet.requirement.verdict), `${where}: ${fleet.requirement.verdict}`);
+
+        // Provenance rides on the row that carries the number.
+        assert.equal(fleet.calibrated, mode === 'omniscient', where);
+        assert.strictEqual(fleet.basis, COMPOSITION_BASIS[mode], `${where}: basis verbatim`);
+        assert.equal(fleet.calibrationCaveat === null, mode === 'omniscient', where);
+
+        if (fleet.requirement.verdict === ENGAGEMENT_VERDICTS.band) {
+          assert.ok(Number.isFinite(fleet.requirement.p20), `${where}: p20 must survive`);
+          assert.ok(Number.isFinite(fleet.requirement.p80), `${where}: p80 must survive`);
+        }
+
+        if (fleet.requirement.verdict === ENGAGEMENT_VERDICTS.beyondModelledRange) {
+          // The whole point: past the ceiling is a floor, not a defeat.
+          assert.equal(fleet.requirement.isLowerBound, true, where);
+          assert.ok(Number.isFinite(fleet.requirement.hullsAtLeast) && fleet.requirement.hullsAtLeast > 0,
+            `${where}: a floor must carry the count it is a floor of`);
+          assert.ok(fleet.requirement.bandLabel, `${where}: and the label that reads as a floor`);
+        }
+
+        assert.notEqual(fleet.requirement.verdict, ENGAGEMENT_VERDICTS.notWinnable,
+          `${where}: "not winnable" is emitted only if the exchange model stopped being monotone in hull `
+          + 'count -- if this fires, read shared/fleetEngagement.mjs rather than believing the campaign');
+      }
+    }
+
+    assert.ok(listed > 0,
+      `${mode}: the current save must list at least one hostile fleet at a tracked body -- if it does not, `
+      + 'either every alien fleet has left the twelve-body board or this surface has lost contact with the '
+      + 'fleet-engagement resource. Read the theaters block before believing the second.');
   }
 });

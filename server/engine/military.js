@@ -19,11 +19,13 @@
  *   * `hate` -- the alien-hate block: the actual reading when it is observable,
  *     the war threshold, and the measured minimum-hate floor.
  *   * `theaterForce` -- per body, the composed strength of the force PRESENT on
- *     each side, taken from `shared/fleetEngagement.mjs`. `world` is frozen and
- *     data-only and the engine never sees the raw snapshot, so a rating can
- *     only be composed HERE, where the snapshot still is. Nothing consumes it
- *     yet, by design: see docs/theater-defence-engagement-spec.md, which is
- *     also where the reason lives that no hull count is emitted from it.
+ *     each side, taken from `shared/fleetEngagement.mjs`, plus the HULL
+ *     REQUIREMENT of each hostile fleet present, carried through verbatim from
+ *     that same resource. `world` is frozen and data-only and the engine never
+ *     sees the raw snapshot, so a rating can only be composed HERE, where the
+ *     snapshot still is. Nothing consumes it yet, by design: see
+ *     docs/theater-defence-engagement-spec.md, which is also where the reason
+ *     lives that no hull count is turned into advice from it.
  *
  * The disciplines this repo enforces apply here exactly as everywhere else:
  *   * Absent stays null. An unmeasured build time is a refusal row, never a 0,
@@ -263,6 +265,109 @@ const OPPONENT_FORCE_SOURCE =
   + 'theaters[].incoming.';
 
 /**
+ * WHY THERE IS NO BODY-LEVEL HULL REQUIREMENT, AND WHY THAT IS SAID OUT LOUD.
+ *
+ * Several hostile fleets can orbit one body -- the committed omniscient fixture
+ * parks five at Earth and three at Ganymede. The exchange model in
+ * `shared/engagementModel.mjs` sizes a force against ONE opposing rating, and
+ * it does not compose several: neither the sum nor the maximum of the per-fleet
+ * requirements is a quantity it supports. So the requirements are carried per
+ * fleet and the total is refused BY NAME rather than by omission, because an
+ * absent field invites a consumer to add the rows up itself.
+ *
+ * The ratings ARE summed one field over, in `opponent.rating`, and that is not
+ * a contradiction: summing ratings is the arithmetic the composition model
+ * already does inside a single fleet, ship by ship. Turning a summed rating
+ * into a summed hull count is a different claim -- the sweep is not linear in
+ * the opposing rating -- and it is the one being refused here.
+ */
+const NO_COMPOSED_REQUIREMENT =
+  'no body-level hull requirement is offered, and none should be composed from the rows below. '
+  + 'shared/engagementModel.mjs sizes a force against ONE opposing rating; it does not compose several '
+  + 'fleets, and neither the sum nor the maximum of these per-fleet requirements is a quantity that model '
+  + 'supports. Each hostile fleet present carries its own requirement in opponentFleets[].requirement, '
+  + 'and opponentFleetsCount says how many there are. Three fleets here means three separate engagements, '
+  + 'not one with an addable price.';
+
+/**
+ * The requirement is READ, never re-derived -- so its absence is read too.
+ *
+ * `resolveRequirement` in `shared/fleetEngagement.mjs` never returns an empty
+ * band; every branch of it names a verdict, including the unreachable, the
+ * unrateable and the beyond-modelled-range ones. A row reaching here without
+ * one therefore means the resource's shape changed, and the honest answer is to
+ * say so. No hull count is invented to fill the hole.
+ */
+const NO_REQUIREMENT_EMITTED =
+  'the fleet-engagement resource emitted no requirement object for this fleet. shared/fleetEngagement.mjs '
+  + 'resolves one on every branch, so this is a shape change rather than an unrateable fleet -- and no '
+  + 'hull count is substituted for it.';
+
+/** A whole-board refusal has not established which fleets are where, either. */
+const REQUIREMENT_ROWS_NOT_ESTABLISHED =
+  'no per-fleet hull requirements were established for this body: the force reading it would be attached '
+  + 'to was itself refused, and an empty list here would read as "no hostile fleet is here" rather than '
+  + '"which fleets are here was never determined".';
+
+/**
+ * The caveat that travels with every hull count derived from an UNCALIBRATED
+ * opponent rating -- which is every mode but omniscient.
+ *
+ * Carried per fleet row rather than only per body, so a consumer that picks up
+ * one requirement cannot lose the provenance by detaching it from its body. The
+ * measured direction is the ALARMING one, not the reassuring one, and it is
+ * deliberately left uncorrected: see docs/theater-defence-engagement-spec.md's
+ * CORRECTION block, which records that the spec originally had this backwards.
+ */
+const UNCALIBRATED_REQUIREMENT_CAVEAT =
+  'UNCALIBRATED. The hull count on this row is derived from an opponent rating scaled off the observer\'s '
+  + 'own best hull by invented constants, not read from the aliens\' own designs. Measured on the live '
+  + 'save 2026-08-27, the player-mode opponent rating runs 9.01x (Callisto) to 15.65x (Earth) the '
+  + 'omniscient reading -- an order of magnitude, OVER-rating the enemy, by a factor that is not '
+  + 'consistent between bodies. It is deliberately NOT corrected by a constant: dividing by one would '
+  + 'fabricate a calibration nobody measured. Read this requirement as provenance-flagged, not as advice.';
+
+/**
+ * One hostile fleet's hull requirement, at the body it currently orbits.
+ *
+ * `requirement` is the resource's OWN object, carried by reference. That is the
+ * point: `resolveRequirement` already handles the unreachable fleet, the
+ * missing own rating, the missing opponent rating, the non-finite pair and the
+ * beyond-modelled-range case, and re-deriving any of it here would fork the
+ * rule a third time. Nothing is flattened out of it -- `p20`, `p80`,
+ * `hullsAtLeast`, `bandLabel`, `isLowerBound`, `guaranteedWinAt` and
+ * `maxHullsSwept` all travel intact.
+ *
+ * `verdict: 'beyond-modelled-range'` IS NOT `'not-winnable'`. The exchange
+ * model is monotone in hull count, so some count always wins; that verdict
+ * means "above the range this panel sweeps" and arrives with `isLowerBound:
+ * true` and a floor in `hullsAtLeast`. Collapsing the two is the defect
+ * `ENGAGEMENT_VERDICTS` splits them to prevent, and nothing here re-reads or
+ * re-labels the verdict.
+ */
+function opponentFleetRow(row, basis, calibrated) {
+  const requirement = row?.requirement ?? null;
+  return {
+    fleetId: row?.fleetId ?? null,
+    fleetName: row?.fleetName ?? null,
+    orbitBody: row?.orbitBody ?? null,
+    // Absent stays null on all four. A fleet whose complement is not carried is
+    // not a fleet of zero ships, and its rating is not a rating of zero.
+    shipsCount: toFiniteNumber(row?.shipsCount),
+    ratedShips: toFiniteNumber(row?.composition?.ratedShips),
+    unratedShips: toFiniteNumber(row?.composition?.unratedShips),
+    opponentRating: toFiniteNumber(row?.composition?.opponentRating),
+    // VERBATIM, by reference -- see above.
+    requirement,
+    requirementUnavailableReason: requirement === null ? NO_REQUIREMENT_EMITTED : null,
+    // Provenance rides ON the row carrying the number, not one level up.
+    calibrated,
+    basis,
+    calibrationCaveat: calibrated ? null : UNCALIBRATED_REQUIREMENT_CAVEAT
+  };
+}
+
+/**
  * Per-body force ratings, composed from the fleet-engagement resource.
  *
  * A PURE function of that resource's PUBLIC return value plus the board's body
@@ -298,6 +403,21 @@ const OPPONENT_FORCE_SOURCE =
  * NO DEFAULT RATING. A body whose rating cannot be composed reports null with a
  * named reason. `runMonteCarloSimulation`'s `ownRating = 5000` fallback is not
  * reintroduced here under any name, and an unrateable body is never a zero.
+ *
+ * THE HULL REQUIREMENTS, READ RATHER THAN COMPUTED. `opponentFleets` carries
+ * one row per hostile fleet present, each holding that fleet's `requirement`
+ * object exactly as `buildFleetEngagement` resolved it. Not one of
+ * `findRequiredHullsForTier`, `guaranteedWinHullCount`, `hullBandLabel` or
+ * `describeBandUncertainty` is called here; the sweep already ran, once, in the
+ * module that owns it. `composedRequirement` is ALWAYS null and says why in
+ * `composedRequirementReason` -- see `NO_COMPOSED_REQUIREMENT`.
+ *
+ * WHAT THE FLEET LIST DOES NOT COVER. It is a projection onto the board's own
+ * bodies, exactly as the ratings beside it are: a hostile fleet parked
+ * somewhere the twelve-body board does not track has no row to appear in, and
+ * on the committed omniscient fixture 46 of 57 alien fleets are in that
+ * position. That is the board's scope, not a cap -- nothing here truncates, and
+ * `readEngagement` requests every row precisely so nothing has to.
  */
 function buildTheaterForce(engagement, bodies) {
   const bodyList = asArray(bodies);
@@ -316,6 +436,15 @@ function buildTheaterForce(engagement, bodies) {
     body,
     own: { rating: null, ratedShips: 0, unratedShips: 0, source: null },
     opponent: { rating: null, ratedShips: 0, unratedShips: 0, source: null, basis },
+    // NULL, not []. A whole-board refusal never determined which hostile fleets
+    // are at this body, and an empty array would state that none is -- the same
+    // defect class as a confident zero. `opponentFleetsCount` is null with it,
+    // so a consumer cannot read a count out of a list that was never built.
+    opponentFleets: null,
+    opponentFleetsCount: null,
+    opponentFleetsUnavailableReason: REQUIREMENT_ROWS_NOT_ESTABLISHED,
+    composedRequirement: null,
+    composedRequirementReason: NO_COMPOSED_REQUIREMENT,
     calibrated,
     isEstimate: true,
     available: false,
@@ -369,8 +498,14 @@ function buildTheaterForce(engagement, bodies) {
     const key = theaterBodyKey(row?.orbitBody);
     if (!key) continue;
     const entry = opponentByBody.get(key)
-      ?? { fleets: 0, ratedFleets: 0, rating: 0, ratedShips: 0, unratedShips: 0, uncountableFleets: 0 };
+      ?? { fleets: 0, ratedFleets: 0, rating: 0, ratedShips: 0, unratedShips: 0, uncountableFleets: 0, rows: [] };
     entry.fleets += 1;
+    // Pushed BEFORE the countability check below, and unconditionally: a fleet
+    // whose complement cannot be counted still has a requirement the resource
+    // resolved for it -- `resolveRequirement` names a verdict on every branch --
+    // and dropping its row would hide the fleet entirely from the one surface
+    // that lists what is here. The rows keep the resource's own rank order.
+    entry.rows.push(opponentFleetRow(row, basis, calibrated));
     opponentByBody.set(key, entry);
 
     const declared = toFiniteNumber(row?.shipsCount);
@@ -399,7 +534,7 @@ function buildTheaterForce(engagement, bodies) {
     const key = theaterBodyKey(body);
     const own = ownByBody.get(key) ?? { ships: 0, uncountableFleets: 0 };
     const opponent = opponentByBody.get(key)
-      ?? { fleets: 0, ratedFleets: 0, rating: 0, ratedShips: 0, unratedShips: 0, uncountableFleets: 0 };
+      ?? { fleets: 0, ratedFleets: 0, rating: 0, ratedShips: 0, unratedShips: 0, uncountableFleets: 0, rows: [] };
 
     const reasons = [];
 
@@ -453,6 +588,18 @@ function buildTheaterForce(engagement, bodies) {
         // paraphrased is a rating whose provenance has been edited.
         basis
       },
+      // One row per hostile fleet PRESENT, each carrying the requirement the
+      // engagement resource already resolved for it. An empty list here is a
+      // reading -- no hostile fleet is observed at this body -- and
+      // `opponent.source` is the field that says an unobserved force is not an
+      // observed absence. The refusal paths above emit null instead.
+      opponentFleets: opponent.rows,
+      opponentFleetsCount: opponent.rows.length,
+      opponentFleetsUnavailableReason: null,
+      // ALWAYS null, on every row, in every mode. Named rather than omitted so
+      // the refusal is legible instead of looking like a field somebody forgot.
+      composedRequirement: null,
+      composedRequirementReason: NO_COMPOSED_REQUIREMENT,
       calibrated,
       // Carried from the source. The whole surface is an estimate and no
       // consumer may render it as a measurement.
