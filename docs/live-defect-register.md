@@ -26,7 +26,7 @@ save.
 > **The tally and the live list immediately below are the authoritative status.**
 > Use `git log` on the named commit to see what a fix actually changed.
 
-**Tally as of 2026-08-26: 22 entries — 20 fixed, 2 live, 0 conditional.**
+**Tally as of 2026-08-27: 23 entries — 20 fixed, 3 live, 0 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -57,14 +57,21 @@ localisation files, 107 fallen back, 70 refused as ambiguous. The user's
 **#19 and #20 were fixed the same day** (`a0eabef`, `d71613e`), and **#18** and
 the `emptyOutDir` build race in `95eee95`.
 
-**Live right now: #17 and #21.**
+**Live right now: #17, #21 and #23.**
 
 - **#17** — four fabricated fallbacks in the directive board, carried across the
   React port **deliberately**, because "no figure may change" was that port's
   bar. In progress.
 - **#21** — the em-dash affordance hand-written in eleven panels. Not urgent:
   the rendered output is correct today, and the cost is that the rule holds by
-  convention rather than by structure.
+  convention rather than by structure. A first attempt at this was reverted on
+  2026-08-27: the lane converted one of the eleven and broke it, making per-metric
+  measurement state cascade across rows, which is the exact property those tests
+  exist to defend. The patch is kept, not discarded.
+- **#23** — a **flaky** mount test in `worldMap.test.js`. The most urgent of the
+  three despite being a test rather than a product defect, because while it stands
+  a green browser pass is not evidence, and several verification claims made on
+  2026-08-26 rest on it. Fix in progress.
 
 **Conditional: none.** #4, #6, #8 and #10 were the whole conditional set and all
 four are fixed.
@@ -1084,6 +1091,54 @@ only *one* `as="tspan"` in the file. With two call sites, dropping one still
 passed — a guard that would have shipped a silently blank figure. It now requires
 it on every `<Value>` in the file. **"Does this test fail for the right reason"
 is not the same question as "does this test fail."**
+
+---
+
+## 23. A flaky mount test means a green browser pass is not evidence — **demonstrated, live**
+
+Found 2026-08-27 while verifying the theater-defence block, and it is the first
+entry here about **the suite itself** rather than about the product.
+
+`tests/worldMap.test.js:76` — "window.WorldTheaterMap.render mounts the React
+panel, by element and by selector" — passes or fails **on the same tree, from the
+same command**. Two back-to-back `npm test` runs: 492/492, then 491/492, failing
+on `selectorMounted`. It passes reliably in isolation (5/5, twice) and at
+concurrency 2 alongside one other file (38/38). It only fails inside the full
+40-file browser pass.
+
+The cause is a fixed-time wait. Inside `page.evaluate` the test mounts **two**
+React roots and then waits exactly two animation frames:
+
+```js
+window.WorldTheaterMap.render(byElement, [...], {});
+window.WorldTheaterMap.render('#probe-by-selector', [], {});
+await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+```
+
+Two frames is a guess about how long React needs to commit two roots. Under CPU
+contention from 40 concurrent browser files it is sometimes not enough, and the
+**second** mount is the one that loses — which is exactly the assertion that
+fails. Waiting for a condition would not have this property; waiting for a
+duration always will.
+
+**Why this outranks its apparent severity.** Every verification claim made
+against the browser pass on 2026-08-26 rests on a suite that reports green
+intermittently. That includes claims made in commit messages. A flake does not
+just cost a re-run — it silently converts "verified" into "observed once".
+
+**It also produced two wrong diagnoses before it was measured**, both mine. I
+first attributed the failure to a lane deleting the shared build directory —
+plausible, since `docs/react-migration-progress.md` records exactly that hazard —
+and rebuilt the harness, whereupon it passed. The rebuild had nothing to do with
+it; I had landed on the passing side of a coin flip and called it a cure. The two
+vite configs already write to **separate** directories, so that hazard is fixed
+and was never in play. The second wrong call was reading a single clean run as
+confirmation.
+
+**The rule this earns:** an intermittent failure is not diagnosed until it has
+been *reproduced and then made to stop* — a single passing run after a change is
+consistent with the change having done nothing. This is the same shape as
+"a test that only passes proves nothing", applied to the fix rather than the test.
 
 ---
 
