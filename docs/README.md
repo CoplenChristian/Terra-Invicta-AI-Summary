@@ -83,6 +83,17 @@ action, and `push:dry-run` exists to rehearse it.
 - ~~**The strategic commentary's throughput figure conflates queued SHIPS with shipyards.**~~
   **CLOSED 2026-08-22 — measured, and the dividend turned out to be wrong too.** See the Shipped
   table row "the shipyard throughput model".
+## In flight
+
+**[`cross-aware-advisor-spec.md`](cross-aware-advisor-spec.md)** — design, not built.
+The directive engine is councilor-facing and cannot see an incoming alien fleet:
+, ,  and  appear in ZERO files under
+. The spec covers the join (shipyards carry ,
+arrivals carry none), what is measured vs inferred in the hate reasoning, and the
+six-step phasing. Steps 1-3 are worth doing regardless of the advisor.
+
+---
+
 ## React migration status
 
 **COMPLETE — see [`react-migration-progress.md`](react-migration-progress.md).**
