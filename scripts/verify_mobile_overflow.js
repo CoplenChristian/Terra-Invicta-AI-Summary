@@ -229,7 +229,7 @@ async function runVerification() {
       } else {
         console.log(`\n[${mode}] COMMAND at 1920x1080: ${screens.toFixed(2)} screens (budget < 3.25)`);
         if (screens >= 3.25) {
-          failures.push(`[${mode}] COMMAND is ${screens.toFixed(2)} screens at 1920, budget is < 3.00`);
+          failures.push(`[${mode}] COMMAND is ${screens.toFixed(2)} screens at 1920, budget is < 3.25`);
         }
       }
     }

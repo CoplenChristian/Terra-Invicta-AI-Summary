@@ -19,8 +19,11 @@ const http = require('http');
 const assert = require('node:assert');
 
 async function runVerification() {
+  const { ensureBundleBuilt } = require('../tests/fixtures/ensureBundle.js');
+  ensureBundleBuilt();
   const app = require('../server/index.js');
   const server = http.createServer(app);
+
 
   await new Promise((resolve) => server.listen(0, resolve));
   const port = server.address().port;
