@@ -201,6 +201,40 @@ function buildSpaceMiningBonusEffects(rawEffects) {
   return byFaction;
 }
 
+/**
+ * The game's own per-faction `ShipConstructionTime` effect lists.
+ *
+ * Same source and same shape as `buildControlPointMaintenanceEffects` and
+ * `buildSpaceMiningBonusEffects` above, kept as a separate reader so neither
+ * can move the other's contract. This is the research half of the faction's
+ * ship-build-time multiplier consumed by `shared/shipBuildTime.mjs`, and it
+ * CANNOT be derived from a completed-project sweep: the Resistance holds
+ * `Effect_ShipConstructionTimeReduction5` (x0.95) granted by a NARRATIVE EVENT,
+ * not by any project that ships with the game (measured 2026-08-26 on the
+ * live save), so a project sweep would score it 1.25% short on every build.
+ *
+ * A faction with no row gets no entry, so a consumer can tell "this faction
+ * holds no such effect" (empty array) apart from "this snapshot does not carry
+ * the effect state" (absent) — the second must not read as a x1.0 build time.
+ */
+function buildShipConstructionTimeEffects(rawEffects) {
+  const byFaction = new Map();
+  const rows = Array.isArray(rawEffects) && rawEffects.length > 0
+    ? rawEffects[0]?.factionEffectsNames
+    : null;
+  if (!Array.isArray(rows)) return byFaction;
+
+  for (const row of rows) {
+    const factionId = row?.Key?.value ?? row?.Key ?? null;
+    if (factionId === null || factionId === undefined) continue;
+    const contexts = row?.Value;
+    if (!contexts || typeof contexts !== 'object') continue;
+    const list = contexts.ShipConstructionTime;
+    byFaction.set(factionId, Array.isArray(list) ? list.slice() : []);
+  }
+  return byFaction;
+}
+
 function buildFactions(rawFactions, {
   councilors,
   habs,
@@ -214,6 +248,7 @@ function buildFactions(rawFactions, {
   scoreNormalizers,
   controlPointMaintenanceEffectsByFaction = null,
   spaceMiningBonusEffectsByFaction = null,
+  shipConstructionTimeEffectsByFaction = null,
   gameTimeString,
   // The campaign research-cost scaler from `shared/researchCostScaling.mjs`.
   // Absent (an older caller, a hand-built test snapshot) degrades to the
@@ -500,6 +535,17 @@ function buildFactions(rawFactions, {
         && spaceMiningBonusEffectsByFaction.has(factionId)
         ? spaceMiningBonusEffectsByFaction.get(factionId)
         : null,
+      // The multiplicative `ShipConstructionTime` effects this faction holds,
+      // from the game's own effect state. The research half of the faction-wide
+      // ship-build-time multiplier in `shared/shipBuildTime.mjs`; the other
+      // half is the campaign's `shipConstructionSpeed` setting, which is
+      // campaign-global and lives on `metadata.campaignSettings`. Absent
+      // (rather than empty) when this snapshot carries no effect state, so the
+      // module reports the build time UNKNOWN instead of a confident figure.
+      shipConstructionTimeEffects: shipConstructionTimeEffectsByFaction
+        && shipConstructionTimeEffectsByFaction.has(factionId)
+        ? shipConstructionTimeEffectsByFaction.get(factionId)
+        : null,
       // `TIFactionState.history_CPCapOverageByDay` -- the game's OWN record of
       // this faction's control-point cap position.
       //
@@ -686,6 +732,7 @@ module.exports = {
   buildFactionRelationships,
   buildControlPointMaintenanceEffects,
   buildSpaceMiningBonusEffects,
+  buildShipConstructionTimeEffects,
   buildFactions,
   collectShipDesigns,
   buildActiveXenoforming,

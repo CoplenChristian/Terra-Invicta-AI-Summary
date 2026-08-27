@@ -152,11 +152,20 @@ function buildRawSnapshot(saveData) {
   const spaceMiningBonusEffectsByFaction =
     factionsModule.buildSpaceMiningBonusEffects(rawEffects);
 
+  // The multiplicative `ShipConstructionTime` effects, read from the same
+  // effect state. The research half of the ship-build-time multiplier in
+  // shared/shipBuildTime.mjs; it cannot come from a completed-project sweep
+  // either -- the Resistance holds `Effect_ShipConstructionTimeReduction5`
+  // from a narrative event, and a sweep would score it 1.25% short.
+  const shipConstructionTimeEffectsByFaction =
+    factionsModule.buildShipConstructionTimeEffects(rawEffects);
+
   const factions = factionsModule.buildFactions(rawFactions, {
     councilors, habs, fleets, nations, controlPointsById, shipyardCountByFaction,
     shipyardQueues, habResearchByFaction, scoreWeights, scoreNormalizers,
     controlPointMaintenanceEffectsByFaction,
     spaceMiningBonusEffectsByFaction,
+    shipConstructionTimeEffectsByFaction,
     gameTimeString: saveData.gameTimeString, researchCostScaling
   });
 
@@ -194,6 +203,34 @@ function buildRawSnapshot(saveData) {
   const controlPointMaintenanceFreebies = firstNumericOrNull(
     rawGlobalValuesRow.controlPointMaintenanceFreebies
   );
+  // `TIGlobalValuesState.scenarioCustomizations.shipConstructionSpeed{Player,
+  // HumanAI,Alien}` -- the campaign's ship-construction speed setting, and the
+  // CAMPAIGN-GLOBAL half of the faction build-time multiplier in
+  // shared/shipBuildTime.mjs. The game picks one of the three by whether the
+  // building faction is the active player, the aliens, or a human AI, so all
+  // three are carried and the module resolves the bucket.
+  //
+  // The setting lives in the SAVE, not in `TIMetadataState`: it is absent from
+  // the custom-difficulty block `shared/campaignSettings.mjs` parses, which is
+  // why it is carried here beside that block rather than inside its `settings`
+  // map. On the live save all three read 2.
+  //
+  // Absent stays null throughout. `1 / undefined` is NaN and `1 / 0` is
+  // Infinity, so an unread bucket must reach the module as null and make it
+  // refuse or calibrate, never compute.
+  const rawScenarioCustomizations = rawGlobalValuesRow.scenarioCustomizations || {};
+  const shipConstructionSpeed = {
+    Player: firstNumericOrNull(rawScenarioCustomizations.shipConstructionSpeedPlayer),
+    HumanAI: firstNumericOrNull(rawScenarioCustomizations.shipConstructionSpeedHumanAI),
+    Alien: firstNumericOrNull(rawScenarioCustomizations.shipConstructionSpeedAlien)
+  };
+  // The campaign-settings block the rest of the snapshot reads, extended with
+  // the save-side ship-construction speed reading. Frozen like the base block
+  // so no reducer can move a number the module treats as a reading.
+  const campaignSettingsWithShipSpeed = Object.freeze({
+    ...campaignSettings,
+    shipConstructionSpeed: Object.freeze(shipConstructionSpeed)
+  });
   // `TIGlobalValuesState.fixedPCGDPToRaiseBaseCPMaintenanceCostBy1` -- the GDP
   // normalizer inside the control-point cost formula.
   //
@@ -217,6 +254,11 @@ function buildRawSnapshot(saveData) {
 
   return {
     miningScarcityWeights: analysisConfig.miningScarcityWeights,
+    // The campaign-settings block, at the top level as well as under
+    // `metadata`, because shared/shipBuildTime.mjs reads `snapshot.campaignSettings`
+    // first and falls back to `snapshot.metadata.campaignSettings`. Both point
+    // at the same frozen block, so they cannot disagree.
+    campaignSettings: campaignSettingsWithShipSpeed,
     metadata: {
       fileName: saveData.fileName,
       fileSizeBytes: saveData.fileSizeBytes,
@@ -237,7 +279,13 @@ function buildRawSnapshot(saveData) {
       // hand-built test snapshot -- reports `available: false` and every
       // consumer falls back to the bare label, so behaviour with the settings
       // absent is unchanged.
-      campaignSettings,
+      //
+      // This is the block extended with `shipConstructionSpeed` from
+      // `TIGlobalValuesState.scenarioCustomizations` (see the reading above) --
+      // the campaign-global half of the ship-build-time multiplier. A stale
+      // snapshot predating the field simply lacks it, and shared/shipBuildTime.mjs
+      // then degrades to its calibration path unchanged.
+      campaignSettings: campaignSettingsWithShipSpeed,
       // `TIMetadataState.playerFactionName` -- which faction the human is
       // playing. Load-bearing for the control-point cap, because the campaign
       // options set a control-point capacity bonus for every faction AND a

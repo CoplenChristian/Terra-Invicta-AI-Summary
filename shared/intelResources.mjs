@@ -128,7 +128,15 @@ export {
   miningExpansionResource
 } from './intel/miningExpansion.mjs';
 
-export { theatersResource, bodyStatusResource } from './intel/theaters.mjs';
+export { HOSTILE_MOVEMENT_STATE, theaterBoardResource, theatersResource, bodyStatusResource } from './intel/theaters.mjs';
+
+export {
+  DESTINATION_RESOLUTION,
+  FLEET_CHAIN_MAX_HOPS,
+  buildDestinationIndex,
+  resolveDestinationBody,
+  resolveTransferDestination
+} from './intel/destinations.mjs';
 
 export { mobilityResource } from './intel/mobility.mjs';
 

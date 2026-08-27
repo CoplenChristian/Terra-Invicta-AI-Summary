@@ -80,7 +80,7 @@ import { buildResearchCategoryBonuses, categoryBonusSummary } from '../researchC
 import { allocationPricingSummary, buildResearchAllocationPricing } from '../researchAllocationPricing.mjs';
 import { deltaResource } from './delta.mjs';
 import { mobilityResource } from './mobility.mjs';
-import { bodyStatusResource, theatersResource } from './theaters.mjs';
+import { bodyStatusResource, theaterBoardResource } from './theaters.mjs';
 import { refitAdvisorResource } from './refitAdvisor.mjs';
 import { controlPointCapResource } from './controlPointCap.mjs';
 
@@ -310,7 +310,15 @@ const INTEL_ENDPOINTS = Object.freeze([
   {
     key: 'theaters',
     example: OMNISCIENT,
-    project: (snapshot, { observerId }) => rows(theatersResource(snapshot, observerId))
+    // `items` stays the twelve theater rows. `hostileMovement` rides alongside
+    // as a sibling top-level field (the `logistics` row below does the same),
+    // because every hostile fleet in the live save is bound for a body this
+    // board does not track -- so a consumer reading only `items` would see an
+    // empty threat picture with thirteen hostile fleets under way.
+    project: (snapshot, { observerId }) => {
+      const board = theaterBoardResource(snapshot, observerId);
+      return { ...rows(board.theaters), hostileMovement: board.hostileMovement };
+    }
   },
   {
     key: 'infrastructure',

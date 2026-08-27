@@ -21,6 +21,11 @@ import { StrategicCommentary } from './panels/StrategicCommentary.jsx';
 import { FleetEngagement } from './panels/FleetEngagement.jsx';
 import { IntelligenceLibrary } from './panels/IntelligenceLibrary.jsx';
 import { AlienHateEconomics, renderHudAlienHateEconomics } from './panels/AlienHateEconomics.jsx';
+import {
+  HostileMovementPanel,
+  fetchHostileMovement,
+  renderHostileMovement,
+} from './panels/HostileMovementPanel.jsx';
 import { MiningExpansion } from './panels/MiningExpansion.jsx';
 import { CouncilOrders } from './panels/CouncilOrders.jsx';
 import { DirectiveBoard } from './panels/DirectiveBoard.jsx';
@@ -97,6 +102,10 @@ if (typeof window !== 'undefined') {
     render: renderAlienHateEconomics,
     renderHud: renderHudAlienHateEconomics,
   };
+  window.MissionControlHostileMovement = {
+    render: renderHostileMovement,
+    fetch: fetchHostileMovement,
+  };
   window.IntelligenceLibrary = { render: renderIntelligenceLibrary };
   window.FactionIntelScreen = { render: renderFactionIntel };
   window.MissionControlCouncilOrders = { render: renderCouncilOrders };
@@ -165,6 +174,7 @@ const SCENES = {
   unlockedTech: UnlockedTechScene,
   intelligenceLibrary: IntelligenceLibraryScene,
   alienHateEconomics: AlienHateEconomicsScene,
+  hostileMovement: HostileMovementScene,
   executiveBoards: ExecutiveBoardsScene,
   factionIntel: FactionIntelScene,
   driveExplorer: DriveExplorerScene,
@@ -226,7 +236,7 @@ function DataTableFitsScene() {
 function DataTableVariantsScene() {
   const columns = [{ key: 'a', label: 'Alpha' }, { key: 'b', label: 'Beta' }];
   const rows = [{ key: '1', a: 'A', b: 'B' }];
-  const variants = ['de', 'mc-board', 'fe', 'mining', 'intel-library', 'commentary-sim'];
+  const variants = ['de', 'mc-board', 'fe', 'mining', 'intel-library', 'hostile-movement', 'commentary-sim'];
   return (
     <div data-testid="harness-datatable-variants">
       {variants.map((v) => (
@@ -547,6 +557,22 @@ function AlienHateEconomicsScene() {
   return (
     <div id="alienHateEconomics" data-testid="alien-hate-economics-harness">
       <AlienHateEconomics economics={payload} />
+    </div>
+  );
+}
+
+/**
+ * The whole-board hostile-movement panel. #hostileMovement is the id
+ * public/v2/index.html owns and mission-control.js drives through
+ * `window.MissionControlHostileMovement.render(...)` on the THREAT view, so the
+ * real panel renders inside it here exactly as it does there. The payload is
+ * the `hostileMovement` bucket the fetch hands the render call.
+ */
+function HostileMovementScene() {
+  const payload = window.__HOSTILE_MOVEMENT_PAYLOAD__;
+  return (
+    <div id="hostileMovement" data-testid="hostile-movement-harness" aria-live="polite">
+      <HostileMovementPanel data={payload} />
     </div>
   );
 }

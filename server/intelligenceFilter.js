@@ -379,6 +379,20 @@ class IntelligenceFilter {
         // effects", which would let a consumer compose a rival bonus that is
         // confidently 1.0 when it is simply unmeasured.
         spaceMiningBonusEffects: isEnhanced || isObserver ? f.spaceMiningBonusEffects : null,
+        // The effect half of a RIVAL's ship-build-time multiplier, and the
+        // same class as the two lists above: it names completed work -- and
+        // narrative-event grants, which a project sweep cannot see -- that the
+        // five-project truncation withholds, and it is the research input to
+        // `shared/shipBuildTime.mjs`. The campaign's `shipConstructionSpeed`
+        // setting stays visible (it is campaign-global, not intelligence), so a
+        // redacted rival's build time is refused -- the module sees this field
+        // ABSENT and refuses rather than computing from a speed it was allowed
+        // to read but an effect list it was not.
+        //
+        // Null, never []. An empty list reads as "this rival holds no build-time
+        // effects", which would let the module emit a confident x1.0 build time
+        // for a rival whose research state is simply unmeasured.
+        shipConstructionTimeEffects: isEnhanced || isObserver ? f.shipConstructionTimeEffects : null,
         // A RIVAL'S RECORDED CAP OVERAGE IS PUBLISHED IN PLAYER MODE.
         //
         // OWNER'S INTEL-MODEL DECISION, 2026-08-22 -- NOT A BUG FIX, AND NOT A
@@ -842,6 +856,16 @@ class IntelligenceFilter {
       if (Array.isArray(faction.spaceMiningBonusEffects)) {
         factionLeaks.push(
           `${faction.ID}:spaceMiningBonusEffects[${faction.spaceMiningBonusEffects.length}]`
+        );
+      }
+      // The effect half of a rival's ship-build-time multiplier, asserted for
+      // the same reason: it names completed work -- and narrative-event grants
+      // a project sweep cannot see -- and it is the research input to
+      // `shared/shipBuildTime.mjs`. A rival's build time is allowed to come out
+      // REFUSED; it is not allowed to come out of a list player mode withholds.
+      if (Array.isArray(faction.shipConstructionTimeEffects)) {
+        factionLeaks.push(
+          `${faction.ID}:shipConstructionTimeEffects[${faction.shipConstructionTimeEffects.length}]`
         );
       }
       // `recordedControlPointCapOverage`, `controlPointCapPenaltyToday`,

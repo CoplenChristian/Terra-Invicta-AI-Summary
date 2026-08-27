@@ -56,6 +56,11 @@ import {
   createFactionIntelController,
 } from './panels/FactionIntel.jsx';
 import {
+  HostileMovementPanel,
+  fetchHostileMovement,
+  renderHostileMovement,
+} from './panels/HostileMovementPanel.jsx';
+import {
   CapabilityMatrixBoard,
   FactionLedgerBoard,
   LogisticsBoard,
@@ -433,6 +438,10 @@ if (typeof window !== 'undefined') {
     render: renderFleetEngagement,
     fetchFleetEngagement,
   };
+  window.MissionControlHostileMovement = {
+    render: renderHostileMovement,
+    fetch: fetchHostileMovement,
+  };
   window.MissionControlMiningExpansion = {
     render: renderMiningExpansion,
     fetchMiningExpansion,
@@ -500,7 +509,7 @@ if (typeof window !== 'undefined') {
     mountStrategicCommentary: renderStrategicCommentary,
     mountFleetEngagement: renderFleetEngagement,
     mountMiningExpansion: renderMiningExpansion,
-    mountCouncilOrders: renderCouncilOrders,
+    mountHostileMovement: renderHostileMovement,
     mountDirectiveBoard: renderDirectiveBoard,
     mountResearchAdvisor: renderResearchAdvisor,
     mountFleetProcurement: renderFleetProcurement,
@@ -538,6 +547,7 @@ if (typeof window !== 'undefined') {
     IntelligenceLibrary,
     FactionIntel,
     DriveExplorer,
+    HostileMovementPanel,
     DetailPanel,
     FactionLedgerBoard,
     LogisticsBoard,

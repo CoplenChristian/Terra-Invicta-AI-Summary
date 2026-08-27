@@ -62,6 +62,16 @@ import {
   buildControlPointCapReport
 } from './controlPointCap.mjs';
 
+// The hostile-movement summary the whole-board endpoint already builds. We
+// re-evaluate it from filteredSnapshot rather than trust the filter pipeline
+// to publish it: the export runs in both Express and the Cloudflare Worker
+// from the same inputs, and computing here keeps the absent-from-payload path
+// explicit -- hostileMovement that fails to compute is "measurement was not
+// read", never "no movement observed".
+import {
+  HOSTILE_MOVEMENT_STATE,
+  theaterBoardResource
+} from './intel/theaters.mjs';
 // Absence-preserving formatting helpers
 export const isMeasured = (value) =>
   value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
@@ -704,6 +714,239 @@ export function renderWithByteBudget(blocks, ladder, clampOrder, maxBytes) {
 }
 
 // ---------------------------------------------------------------------------
+// HOSTILE MOVEMENT (PHASE 3)
+//
+// The whole-board hostile movement summary for /latest-threats.md and
+// /latest-war-room.md. Lives between the byte-budget engine and the two
+// renderers so both sections can reach it.
+//
+// The four states from HOSTILE_MOVEMENT_STATE encode the priority of the
+// claim, deliberately ordered so the UNRESOLVED branch outranks NONE_TOWARD:
+// with one destination the resolver cannot name, "none of this is coming to a
+// tracked theater" is not a statement the data supports. The lines render the
+// four states four different ways because the difference between
+// NO_HOSTILE_MOVEMENT_OBSERVED and HOSTILE_MOVEMENT_NONE_TOWARD_TRACKED_THEATERS
+// is the whole feature: the empty twelve-body theater table is the same in
+// both, and this is what separates them.
+//
+// 'absentFromPayload' is true when neither the snapshot nor a re-evaluation
+// yielded a summary -- the only path that should produce this is a malformed
+// snapshot or an unexpected throw from the projection. The caller prints the
+// "measurement was not read" line, never a zero.
+// ---------------------------------------------------------------------------
+
+const HOSTILE_MOVEMENT_STATE_LABEL = Object.freeze({
+  [HOSTILE_MOVEMENT_STATE.none]: 'NO HOSTILE MOVEMENT OBSERVED',
+  [HOSTILE_MOVEMENT_STATE.elsewhere]: 'HOSTILE MOVEMENT — NONE TOWARD TRACKED THEATERS',
+  [HOSTILE_MOVEMENT_STATE.partlyUnresolved]: 'HOSTILE MOVEMENT — DESTINATIONS PARTLY UNRESOLVED',
+  [HOSTILE_MOVEMENT_STATE.inbound]: 'INBOUND TO TRACKED THEATER'
+});
+
+function shipsShort(movement) {
+  return movement && movement.observed ? movement.observed.ships : null;
+}
+
+function transfersShort(movement) {
+  return movement && movement.observed ? movement.observed.transfers : null;
+}
+
+function nearestArrivalLabel(movement) {
+  if (!movement) return null;
+  const days = movement.nearestArrivalDays;
+  if (!Number.isFinite(days)) return null;
+  return `${Math.round(days)} day${days === 1 ? '' : 's'}`;
+}
+
+function readHostileMovement(filteredSnapshot) {
+  // Trust the filter pipeline first: the export accepts a hostileMovement
+  // already published on the payload. If absent or fails the shape check,
+  // re-evaluate against the filtered snapshot -- this is what makes both
+  // runtimes (Express and the Cloudflare Worker) agree without the worker
+  // needing the filter step to publish the same field.
+  const candidate = filteredSnapshot && filteredSnapshot.hostileMovement;
+  if (candidate && typeof candidate === 'object' && candidate.state
+      && Number.isFinite(candidate.observed?.transfers)) {
+    return { movement: candidate, source: 'payload' };
+  }
+
+  if (!filteredSnapshot) return { movement: null, source: 'absent' };
+  try {
+    const observerId = filteredSnapshot.observerFactionId;
+    const board = theaterBoardResource(filteredSnapshot, observerId);
+    if (board && board.hostileMovement && board.hostileMovement.state) {
+      return { movement: board.hostileMovement, source: 'computed' };
+    }
+    return { movement: null, source: 'absent' };
+  } catch (err) {
+    return { movement: null, source: 'absent', error: err };
+  }
+}
+
+/**
+ * Lines for an embedded hostile-movement block. Renders FOUR things distinctly:
+ *
+ *   1. measurement missing -- UNAVAILABLE, never "zero movement".
+ *   2. NO_HOSTILE_MOVEMENT_OBSERVED -- one line: observed=0 of 0.
+ *   3. HOSTILE_MOVEMENT_NONE_TOWARD_TRACKED_THEATERS -- observed > 0 but
+ *      toward = 0; in particular the off-board list ALWAYS renders because
+ *      today's case is fourteen fleets in transit and NONE of them toward a
+ *      tracked body. Collapsing this into the case (2) line is the bug.
+ *   4. HOSTILE_MOVEMENT_DESTINATIONS_PARTLY_UNRESOLVED -- observed > 0 and
+ *      unresolved > 0; the line carries an explicit unresolved count and a
+ *      short list of which destinations could not be resolved.
+ *   5. INBOUND_TO_TRACKED_THEATER -- observed > 0 and toward > 0; the toward
+ *      figure is the headline number.
+ *
+ * Always declares its source (payload | computed).
+ */
+export function hostileMovementBlock(filteredSnapshot, options = {}) {
+  const { headingLevel = '###', header = 'Hostile Movement (Whole-Board)', includeRows = true } = options;
+  const { movement, source, error } = readHostileMovement(filteredSnapshot);
+  const lines = [];
+
+  // A consumer that already printed a section heading suppresses this one.
+  const emitHeading = Boolean(header);
+  const headingLine = emitHeading ? `${headingLevel} ${header}` : null;
+
+  if (!movement) {
+    if (headingLine) lines.push(headingLine);
+    lines.push(``);
+    if (error) {
+      lines.push(`> UNAVAILABLE — hostile movement read failed: ${error.message || String(error)}`);
+    } else {
+      lines.push(`> UNAVAILABLE — hostile movement was not read from the payload and could not be computed`);
+    }
+    lines.push(``);
+    return lines;
+  }
+
+  if (headingLine) lines.push(headingLine);
+  lines.push(``);
+
+
+  const label = HOSTILE_MOVEMENT_STATE_LABEL[movement.state] || movement.state;
+  const observed = transfersShort(movement);
+  const observedShips = shipsShort(movement);
+  const towardShips = movement.towardTrackedTheaters?.ships;
+  const untrackedShips = movement.towardUntrackedBodies?.ships;
+  const unresolvedShips = movement.unresolvedDestinations?.ships;
+  const nearest = nearestArrivalLabel(movement);
+
+  // Headline line carries the state and the count breakdown. Distinct phrasing
+  // for the four states, on purpose -- see the module docblock.
+  let headline;
+  switch (movement.state) {
+    case HOSTILE_MOVEMENT_STATE.none:
+      headline = `- **State:** NO HOSTILE MOVEMENT OBSERVED — 0 of 0 hostile fleet transfer(s) in transit.`;
+      break;
+    case HOSTILE_MOVEMENT_STATE.elsewhere:
+      headline = `- **State:** HOSTILE MOVEMENT — NONE TOWARD TRACKED THEATERS — ${observed} hostile transfer(s) (${observedShips} ship(s)) in transit; 0 inbound to a tracked theater.`;
+      break;
+    case HOSTILE_MOVEMENT_STATE.partlyUnresolved:
+      headline = `- **State:** HOSTILE MOVEMENT — DESTINATIONS PARTLY UNRESOLVED — ${observed} hostile transfer(s) (${observedShips} ship(s)) in transit; the resolver could not pin down ${movement.unresolvedDestinations?.transfers || 0} of them, so the claim "none of this is aimed at a tracked theater" is not supportable.`;
+      break;
+    case HOSTILE_MOVEMENT_STATE.inbound:
+      headline = `- **State:** INBOUND TO TRACKED THEATER — ${movement.towardTrackedTheaters?.transfers || 0} of ${observed} hostile transfer(s) (${towardShips} of ${observedShips} ship(s)) are inbound to a tracked theater.`;
+      break;
+    default:
+      headline = `- **State:** ${label}`;
+  }
+  lines.push(headline);
+
+  // Count breakdown -- always render, even on the none state. Skipping them
+  // collapses "nothing moving" with "moving, none headed here" which is the
+  // exact collapse this block exists to prevent.
+  lines.push(`- **Toward tracked theaters:** ${movement.towardTrackedTheaters?.transfers || 0} transfer(s), ${towardShips ?? 0} ship(s)`);
+  lines.push(`- **Toward untracked bodies (off-board):** ${movement.towardUntrackedBodies?.transfers || 0} transfer(s), ${untrackedShips ?? 0} ship(s)`);
+  lines.push(`- **Unresolved destinations:** ${movement.unresolvedDestinations?.transfers || 0} transfer(s), ${unresolvedShips ?? 0} ship(s)`);
+
+  if (nearest !== null) {
+    lines.push(`- **Nearest arrival (measured):** ${nearest}`);
+  } else if (observed > 0) {
+    // The movement set has entries but none carries a measured arrival.
+    // Render this explicitly -- "soon" or "anywhere" would be a fabrication.
+    lines.push(`- **Nearest arrival:** ETA not measured for any of the ${observed} transfer(s)`);
+  }
+
+  lines.push(`- **Tracked bodies (12):** ${(movement.trackedBodies || []).join(', ')}`);
+  lines.push(`- **Source:** ${source} (` + (source === 'payload'
+    ? 'read from filtered snapshot as published'
+    : 'computed from /shared/intel/theaters.mjs because the snapshot did not carry it') + `)`);
+  lines.push(``);
+
+  if (includeRows && Array.isArray(movement.offBoardDestinations) && movement.offBoardDestinations.length > 0) {
+    const cap = 6;
+    const rows = movement.offBoardDestinations.slice(0, cap);
+    lines.push(`- **Off-board destinations (showing up to ${cap}):**`);
+    for (const row of rows) {
+      const faction = row.faction || 'Hostile';
+      const fleet = row.fleet || row.statedDestination || '—';
+      const ship = Number.isFinite(row.shipCount) ? `${row.shipCount} ship(s)` : 'ship count unavailable';
+      const dst = row.resolved === false
+        ? `unresolved (${row.unresolvedReason || 'reason not read'}; stated: ${row.statedDestination || 'n/a'})`
+        : `${row.resolvedBody || row.statedDestination || 'unknown body'}` + (row.trackedTheater ? ' (tracked)' : ' (untracked)');
+      const eta = Number.isFinite(row.daysRemaining) ? ` · ETA ${Math.round(row.daysRemaining)} day(s)` : '';
+      lines.push(`  - ${faction} · **${fleet}** — ${ship} → ${dst}${eta}`);
+    }
+    const total = Number.isFinite(movement.offBoardDestinationsTotalCount) ? movement.offBoardDestinationsTotalCount : movement.offBoardDestinations.length;
+    const shown = movement.offBoardDestinations.length;
+    const omitted = Number.isFinite(movement.offBoardDestinationsOmittedCount)
+      ? movement.offBoardDestinationsOmittedCount
+      : Math.max(0, total - shown);
+    if (omitted > 0) {
+      lines.push(`  - *${shown} shown of ${total} off-board destination(s) — ${omitted} further row(s) omitted here, full list at /api/intel/theaters.*`);
+    }
+    lines.push(``);
+  }
+
+  return lines;
+}
+
+/**
+ * A single-line summary for tight budgets. Three states read differently:
+ *   * NO_HOSTILE_MOVEMENT_OBSERVED -- "no hostile movement observed (0/0)".
+ *   * HOSTILE_MOVEMENT_NONE_TOWARD_TRACKED_THEATERS -- "X hostile transfer(s)
+ *     in transit, none toward a tracked theater".
+ *   * INBOUND_TO_TRACKED_THEATER -- "Y hostile transfer(s) inbound to tracked
+ *     theaters; Z further off-board transfer(s)".
+ *   * PARTLY_UNRESOLVED -- "X hostile transfer(s) in transit; N unresolved
+ *     destinations — the 'none coming here' claim is not supported".
+ *   * UNREAD -- "hostile-movement measurement was not read".
+ */
+export function hostileMovementLine(filteredSnapshot) {
+  const { movement, source } = readHostileMovement(filteredSnapshot);
+  if (!movement) {
+    return `**Hostile Movement (Whole-Board):** UNAVAILABLE — hostile movement was not read from the payload`;
+  }
+  const label = HOSTILE_MOVEMENT_STATE_LABEL[movement.state] || movement.state;
+  const observed = transfersShort(movement);
+  const observedShips = shipsShort(movement);
+  const toward = movement.towardTrackedTheaters?.transfers || 0;
+  const untracked = movement.towardUntrackedBodies?.transfers || 0;
+  const unresolved = movement.unresolvedDestinations?.transfers || 0;
+  const nearest = nearestArrivalLabel(movement);
+  let body;
+  switch (movement.state) {
+    case HOSTILE_MOVEMENT_STATE.none:
+      body = `0 of 0 hostile fleet transfer(s) in transit`;
+      break;
+    case HOSTILE_MOVEMENT_STATE.elsewhere:
+      body = `${observed} hostile transfer(s) / ${observedShips ?? 0} ship(s) in transit; 0 inbound to a tracked theater`;
+      break;
+    case HOSTILE_MOVEMENT_STATE.partlyUnresolved:
+      body = `${observed} hostile transfer(s) / ${observedShips ?? 0} ship(s) in transit; the resolver could not pin ${unresolved} destination(s), so "none of this is aimed at a tracked theater" is not supportable`;
+      break;
+    case HOSTILE_MOVEMENT_STATE.inbound:
+      body = `${toward} of ${observed} hostile transfer(s) / ${(movement.towardTrackedTheaters?.ships || 0)} of ${observedShips ?? 0} ship(s) inbound to tracked theaters; ${untracked} further off-board`;
+      break;
+    default:
+      body = label;
+  }
+  const eta = nearest !== null ? `; nearest arrival ${nearest}` : '';
+  return `**Hostile Movement (Whole-Board) — ${label}:** ${body}${eta}`;
+}
+
+// ---------------------------------------------------------------------------
 // 1. /latest-threats.md  (< 10 KB)
 // ---------------------------------------------------------------------------
 
@@ -819,6 +1062,11 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
     `**Intelligence Mode:** ${mode}`,
     `**Detection Status:** ${detectionLabel}`,
     totalWarLine,
+    // Whole-board hostile-movement headline -- printed under every threat
+    // assessment because the inbound-to-our-habs list alone collapses two
+    // completely different threat pictures. UNREAD renders as "was not read",
+    // never "no movement".
+    hostileMovementLine(filteredSnapshot),
     ``
   ]));
 
@@ -1284,6 +1532,19 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   }
   alienThreatLines.push(``);
   blocks.push(fixedBlock('alien-threat', [`## 1. Alien Threat Posture & Hate Economics`, ``], alienThreatLines));
+
+  // -------------------------------------------------------------------------
+  // SECTION 1b: HOSTILE MOVEMENT (WHOLE-BOARD)
+  //
+  // The theater table is twelve rows; today's hostile fleets are aimed at
+  // seven bodies the table does not track. A reader reading the war room
+  // expecting the threat picture would otherwise conclude "nothing is
+  // moving" -- this section is what stops that collapse. It does not
+  // participate in the byte-budget ladder: hostile movement is the reason
+  // the rest of the document exists, not a shedding target. The single-line
+  // headline also prints at the top of /latest-threats.md; here the embedded
+  // block carries the count breakdown + a short off-board destination list.
+  blocks.push(fixedBlock('hostile-movement', [`## 1b. Hostile Movement (Whole-Board)`, ``], hostileMovementBlock(filteredSnapshot, { headingLevel: '-', header: '', includeRows: true })));
 
   // -------------------------------------------------------------------------
   // SECTION 2: FRIENDLY FLEETS

@@ -61,6 +61,16 @@ export const TABLE_VARIANTS = {
     cell: null,
     subVariants: {},
   },
+  'hostile-movement': {
+    wrap: 'hm-table-wrap',
+    table: 'hm-table',
+    hint: 'hm-scroll-hint',
+    hintPlacement: 'after',
+    th: 'hm-th',
+    row: null,
+    cell: null,
+    subVariants: {},
+  },
   'commentary-sim': {
     wrap: null,
     table: 'commentary-sim-table',

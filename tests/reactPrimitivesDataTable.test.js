@@ -2,7 +2,7 @@
  * tests/reactPrimitivesDataTable.test.js
  *
  * Purpose: DataTable scroll hint driven by scrollWidth vs clientWidth, not viewport,
- * and the six variant contract — commentary-sim is bare (no wrap, no hint) while the
+ * and the variant contract — commentary-sim is bare (no wrap, no hint) while the
  * variants that define one keep theirs.
  */
 
@@ -18,15 +18,16 @@ const VARIANT_CONTRACT = {
   fe: { wrap: 'fe-table-wrap', hint: true },
   mining: { wrap: 'mining-table-wrap', hint: false },
   'intel-library': { wrap: 'intel-library-table-wrap', hint: true },
+  'hostile-movement': { wrap: 'hm-table-wrap', hint: true },
   'commentary-sim': { wrap: null, hint: false },
 };
 
-test('DataTable variant map covers all six table systems', () => {
+test('DataTable variant map covers all seven table systems', () => {
   const src = fs.readFileSync(
     path.resolve(__dirname, '../src/v2/components/tableVariants.js'),
     'utf8'
   );
-  const variants = ['de', 'mc-board', 'fe', 'mining', 'intel-library', 'commentary-sim'];
+  const variants = ['de', 'mc-board', 'fe', 'mining', 'intel-library', 'hostile-movement', 'commentary-sim'];
   for (const v of variants) {
     assert.match(src, new RegExp(`['"]?${v}['"]?:`), `variant ${v} must be defined`);
   }

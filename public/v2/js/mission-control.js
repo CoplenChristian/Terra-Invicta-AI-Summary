@@ -305,7 +305,8 @@ function syncScrollHints(root = document) {
     ['.mc-board-scroll-hint', '.mc-board-table-wrap', 'after'],
     ['.de-scroll-hint', '.de-table-wrap', 'after'],
     ['.fe-scroll-hint', '.fe-table-wrap', 'after'],
-    ['.intel-library-table-scroll-hint', '.intel-library-table-wrap', 'inside']
+    ['.intel-library-table-scroll-hint', '.intel-library-table-wrap', 'inside'],
+    ['.hm-scroll-hint', '.hm-table-wrap', 'after']
   ];
   for (const [hintSelector, wrapSelector, placement] of pairs) {
     root.querySelectorAll(hintSelector).forEach(hint => {
@@ -421,7 +422,6 @@ function loadLazyViewPanels(viewId) {
   // the server -- 57 fleets on the live save -- so the work is charged to
   // visitors who open THREAT rather than to everyone on load. Its table is
   // measured for overflow after it lands, because a table rendered while its
-  // view was hidden measures 0 and would leave a real overflow unannounced.
   if (viewId === 'threat') {
     const container = document.getElementById('fleetEngagement');
     if (!container || !window.MissionControlFleetEngagement?.fetchFleetEngagement) return;
@@ -432,6 +432,19 @@ function loadLazyViewPanels(viewId) {
         window.MissionControlFleetEngagement.render(container, data);
       })
       .finally?.(() => syncScrollHints());
+    // The hostile-movement panel reads the same whole-board summary
+    // /api/intel/theaters publishes, so it lazy-loads alongside the engagement
+    // table. The two never share component state but they share this trigger.
+    const hmContainer = document.getElementById('hostileMovement');
+    if (hmContainer && window.MissionControlHostileMovement?.fetch) {
+      window.MissionControlHostileMovement.fetch(state.observer, state.mode)
+        .then(movement => {
+          window.MissionControlHostileMovement.render(hmContainer, movement);
+        })
+        .catch(err => {
+          hmContainer.innerHTML = `<div class="hm-empty">HOSTILE MOVEMENT UNAVAILABLE — ${err.message}</div>`;
+        });
+    }
     return;
   }
 

@@ -45,7 +45,7 @@ function syncOneScrollHint(hintEl, wrapSelector, placement) {
 
 /**
  * @param {object} props
- * @param {'de'|'mc-board'|'fe'|'mining'|'intel-library'|'commentary-sim'} props.variant
+ * @param {'de'|'mc-board'|'fe'|'mining'|'intel-library'|'hostile-movement'|'commentary-sim'} props.variant
  * @param {string} [props.subVariant] — ledger | fleet | upgrades
  * @param {Array<{ key: string, label: React.ReactNode, align?: string, className?: string, headerClassName?: string }>} [props.columns]
  * @param {Array<Record<string, React.ReactNode>>} [props.rows]

@@ -1,0 +1,176 @@
+/* ========================================================================
+   25-hostile-movement.css
+
+   THREAT: the whole-board hostile-movement summary beyond the twelve theaters.
+
+   The .hm-* panel behind the HOSTILE MOVEMENT BEYOND THE TWELVE THEATERS card:
+   four distinct states, the count breakdown, the off-board destination list
+   and the absent-read guard.
+
+   Source: new part for Phase 3 (2026-08-26); not a slice of mission-control.css.
+   Loaded by public/v2/index.html in numeric order; the cascade depends on it.
+   ======================================================================== */
+.hm-empty,
+.hm-empty-cell {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.04em;
+  padding: 12px 14px;
+  color: var(--text-meta);
+  text-transform: uppercase;
+}
+
+.hm-banner {
+  display: grid;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--rule-dim);
+}
+
+.hm-banner__state {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-left: 3px solid var(--rule-dim);
+  background: var(--surface-2);
+}
+
+.hm-banner__state[data-state],
+.hm-banner__state--NO_HOSTILE_MOVEMENT_OBSERVED,
+.hm-banner__state--HOSTILE_MOVEMENT_NONE_TOWARD_TRACKED_THEATERS,
+.hm-banner__state--HOSTILE_MOVEMENT_DESTINATIONS_PARTLY_UNRESOLVED,
+.hm-banner__state--INBOUND_TO_TRACKED_THEATER {
+  border-left-color: var(--rule-strong);
+}
+
+.hm-banner__state--HOSTILE_MOVEMENT_NONE_TOWARD_TRACKED_THEATERS,
+.hm-banner__state--HOSTILE_MOVEMENT_DESTINATIONS_PARTLY_UNRESOLVED {
+  border-left-color: var(--accent-warn, #d68a3a);
+  background: rgba(214, 138, 58, 0.08);
+}
+
+.hm-banner__state--INBOUND_TO_TRACKED_THEATER {
+  border-left-color: var(--accent-alert, #c43d3d);
+  background: rgba(196, 61, 61, 0.08);
+}
+
+.hm-banner__body {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-row);
+  color: var(--text-body);
+  letter-spacing: 0.01em;
+}
+
+.hm-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.hm-summary__item {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule-dim);
+  background: var(--surface-1);
+}
+
+.hm-summary__item small {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.04em;
+  color: var(--text-meta);
+  text-transform: uppercase;
+}
+
+.hm-summary__item strong {
+  font-family: var(--mono);
+  font-size: var(--fs-row);
+}
+
+.hm-offboard {
+  margin-top: 12px;
+}
+
+/* The off-board destination table: `hostile-movement` variant of DataTable.
+   Class-driven scroll hint like .de-scroll-hint / .mc-board-scroll-hint — shown
+   only when the wrapper actually overflows (scrollWidth > clientWidth), never
+   on viewport width. */
+.hm-table-wrap {
+  overflow-x: auto;
+}
+
+.hm-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.hm-th {
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-meta);
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--rule-dim);
+  white-space: nowrap;
+}
+
+.hm-scroll-hint {
+  display: none;
+  padding: var(--space-sm) 0 0;
+  color: var(--text-meta);
+  font-family: var(--mono);
+  font-size: var(--fs-tag);
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+
+.hm-scroll-hint.is-scrollable {
+  display: block;
+}
+
+.hm-offboard__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--rule-dim);
+}
+
+.hm-offboard__title {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hm-offboard__sub {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  color: var(--text-meta);
+}
+
+.hm-cell {
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.02em;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--rule-dim);
+  vertical-align: top;
+}
+
+.hm-cell--arrival {
+  white-space: nowrap;
+}
+
+.hm-cell__date {
+  display: block;
+  font-size: var(--fs-tag);
+  color: var(--text-meta);
+}
