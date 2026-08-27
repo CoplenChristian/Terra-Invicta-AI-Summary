@@ -3,28 +3,40 @@
  *
  * Purpose: pure formatters and selectors for the intelligence library React
  *   panel — mirrors MissionControlShared null discipline without DOM coupling.
+ *
+ * Presence and absent/unavailable affordances route through resolveValue() from
+ * <Value>; this file keeps payload reads and formatters only.
  */
 
+import { ABSENT_LABEL, UNAVAILABLE_LABEL, resolveValue } from '../components/Value.jsx';
 import { parseNumeric } from '../components/parseNumeric.js';
 
-export const EM_DASH = '—';
+export const EM_DASH = ABSENT_LABEL;
 
 export function numberValue(value) {
   return parseNumeric(value);
 }
 
-export function number(value, decimals = 0) {
+export function isPresentNumeric(value) {
+  return numberValue(value) !== null;
+}
+
+export function isPresentText(value) {
+  return value !== null && value !== undefined && value !== '';
+}
+
+export function formatNumber(value, decimals = 0) {
   const parsed = numberValue(value);
-  if (parsed === null) return EM_DASH;
+  if (parsed === null) return ABSENT_LABEL;
   return parsed.toLocaleString(undefined, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
 }
 
-export function money(value) {
+export function formatMoney(value) {
   const parsed = numberValue(value);
-  if (parsed === null) return EM_DASH;
+  if (parsed === null) return ABSENT_LABEL;
   if (Math.abs(parsed) >= 1_000_000_000_000) {
     return `$${(parsed / 1_000_000_000_000).toFixed(2)}T`;
   }
@@ -34,12 +46,57 @@ export function money(value) {
   if (Math.abs(parsed) >= 1_000_000) {
     return `$${(parsed / 1_000_000).toFixed(1)}M`;
   }
-  return `$${number(parsed, 0)}`;
+  return `$${formatNumber(parsed, 0)}`;
 }
 
-export function displayText(value, fallback = EM_DASH) {
-  if (value === null || value === undefined || value === '') return fallback;
-  return String(value);
+function pluralNoun(noun, count) {
+  if (noun === 'capability') return 'capabilities';
+  if (noun === 'facility') return 'facilities';
+  return `${noun}s`;
+}
+
+export function formatCountLabel(value, noun) {
+  const parsed = numberValue(value);
+  if (parsed === null) return UNAVAILABLE_LABEL;
+  const plural = pluralNoun(noun, parsed);
+  return `${formatNumber(parsed, 0)} ${parsed === 1 ? noun : plural}`;
+}
+
+/** String form for non-JSX hosts (TruncationNote, search haystacks). */
+export function number(value, decimals = 0) {
+  return resolveValue({
+    value,
+    present: isPresentNumeric(value),
+    format: (raw) => formatNumber(raw, decimals),
+  }).text;
+}
+
+/** String form for non-JSX hosts. */
+export function money(value) {
+  return resolveValue({
+    value,
+    present: isPresentNumeric(value),
+    format: formatMoney,
+  }).text;
+}
+
+/** String form for non-JSX hosts. */
+export function displayText(value, fallback = ABSENT_LABEL) {
+  return resolveValue({
+    value,
+    present: isPresentText(value),
+    format: String,
+    absentLabel: fallback,
+  }).text;
+}
+
+/** String form for non-JSX hosts. */
+export function countLabel(value, noun) {
+  return resolveValue({
+    value,
+    present: true,
+    format: (raw) => formatCountLabel(raw, noun),
+  }).text;
 }
 
 export function factionMap(snapshot) {
@@ -79,33 +136,55 @@ export function visibleAttribute(councilor, key) {
   if (!field || field.visibility === 'unknown' || field.visibility === 'unavailable') {
     return EM_DASH;
   }
-  return field.visible === null || field.visible === undefined ? EM_DASH : field.visible;
+  if (field.visible === null || field.visible === undefined) return EM_DASH;
+  return field.visible;
 }
 
-export function topSkill(councilor) {
-  const keys = [
-    'Administration', 'Persuasion', 'Investigation', 'Espionage',
-    'Command', 'Science', 'Security', 'Loyalty',
-  ];
+const TOP_SKILL_KEYS = [
+  'Administration', 'Persuasion', 'Investigation', 'Espionage',
+  'Command', 'Science', 'Security', 'Loyalty',
+];
+
+export function resolveTopSkill(councilor) {
   let best = null;
-  keys.forEach((key) => {
+  TOP_SKILL_KEYS.forEach((key) => {
     const value = numberValue(visibleAttribute(councilor, key));
     if (value !== null && (!best || value > best.value)) {
       best = { key, value };
     }
   });
-  return best ? `${best.key.slice(0, 3).toUpperCase()} ${best.value}` : 'UNAVAILABLE';
+  if (!best) {
+    return resolveValue({ value: null, present: true, format: () => UNAVAILABLE_LABEL });
+  }
+  const abbrev = best.key.slice(0, 3).toUpperCase();
+  return resolveValue({
+    value: best.value,
+    present: true,
+    format: () => `${abbrev} ${best.value}`,
+  });
 }
 
-export function countLabel(value, noun) {
-  const parsed = numberValue(value);
-  if (parsed === null) return 'UNAVAILABLE';
-  const plural = noun === 'capability'
-    ? 'capabilities'
-    : noun === 'facility'
-      ? 'facilities'
-      : `${noun}s`;
-  return `${number(parsed, 0)} ${parsed === 1 ? noun : plural}`;
+export function topSkill(councilor) {
+  return resolveTopSkill(councilor).text;
+}
+
+export function resolveCouncilorProfile(councilor) {
+  const orgNames = Array.isArray(councilor?.orgs)
+    ? councilor.orgs.map((org) => org.displayName).filter(Boolean)
+    : [];
+  const traitNames = Array.isArray(councilor?.traits) ? councilor.traits.filter(Boolean) : [];
+  const profile = orgNames.concat(traitNames).slice(0, 4).join(' · ');
+  if (profile) {
+    return resolveValue({ value: profile, present: true, format: String });
+  }
+  if (councilor?.visibility === 'raw_save_only' || councilor?.visibility === 'confirmed') {
+    return resolveValue({ value: 'No attached profile', present: true, format: String });
+  }
+  return resolveValue({ value: null, present: true, format: () => UNAVAILABLE_LABEL });
+}
+
+export function councilorProfile(councilor) {
+  return resolveCouncilorProfile(councilor).text;
 }
 
 export function visibility(snapshot) {
@@ -124,21 +203,11 @@ export function relationFor(factionId, observerId, relationships) {
       && String(relation.targetFactionId) === String(factionId),
   );
   return {
-    hateOfUs: towardObserver ? number(towardObserver.hate, 2) : 'UNAVAILABLE',
-    ourHate: fromObserver ? number(fromObserver.hate, 2) : 'UNAVAILABLE',
+    hateOfUs: towardObserver?.hate ?? null,
+    hateOfUsKnown: Boolean(towardObserver),
+    ourHate: fromObserver?.hate ?? null,
+    ourHateKnown: Boolean(fromObserver),
   };
-}
-
-export function councilorProfile(councilor) {
-  const orgNames = Array.isArray(councilor?.orgs)
-    ? councilor.orgs.map((org) => org.displayName).filter(Boolean)
-    : [];
-  const traitNames = Array.isArray(councilor?.traits) ? councilor.traits.filter(Boolean) : [];
-  const profile = orgNames.concat(traitNames).slice(0, 4).join(' · ');
-  if (profile) return profile;
-  return councilor?.visibility === 'raw_save_only' || councilor?.visibility === 'confirmed'
-    ? 'No attached profile'
-    : 'UNAVAILABLE';
 }
 
 export function resourceCell(value) {

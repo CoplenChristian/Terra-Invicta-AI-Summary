@@ -8,23 +8,25 @@
 import React from 'react';
 import { DataTable } from '../components/DataTable.jsx';
 import { TruncationNote } from '../components/TruncationNote.jsx';
+import { ABSENT_LABEL, UNAVAILABLE_LABEL, Value } from '../components/Value.jsx';
 import {
-  EM_DASH,
   activeCouncilors,
-  countLabel,
   councilorProfile,
-  displayText,
   factionColorById,
   factionLogoHtml,
   factionMap,
   factionNameById,
+  formatCountLabel,
+  formatMoney,
+  formatNumber,
+  isPresentNumeric,
+  isPresentText,
   matchesSpaceTheater,
-  money,
   number,
   numberValue,
   relationFor,
-  resourceCell,
-  topSkill,
+  resolveCouncilorProfile,
+  resolveTopSkill,
   visibility,
 } from './intelligenceLibraryUtils.js';
 
@@ -58,10 +60,110 @@ const SPACE_TABS = [
 const PRIORITY_TARGET_CAP = 8;
 const TABLE_HINT = 'Swipe horizontally to inspect all columns';
 
+function Num({ value, decimals = 0, present, absentLabel = ABSENT_LABEL, className }) {
+  const resolvedPresent = present ?? isPresentNumeric(value);
+  return (
+    <Value
+      value={value}
+      present={resolvedPresent}
+      absentLabel={absentLabel}
+      format={(raw) => formatNumber(raw, decimals)}
+      className={className}
+    />
+  );
+}
+
+function Money({ value, className }) {
+  return (
+    <Value
+      value={value}
+      present={isPresentNumeric(value)}
+      format={formatMoney}
+      className={className}
+    />
+  );
+}
+
+function Txt({ value, fallback = ABSENT_LABEL, className }) {
+  return (
+    <Value
+      value={value}
+      present={isPresentText(value)}
+      format={String}
+      absentLabel={fallback}
+      className={className}
+    />
+  );
+}
+
+function CountLbl({ value, noun, className }) {
+  return (
+    <Value
+      value={value}
+      present
+      format={(raw) => formatCountLabel(raw, noun)}
+      className={className}
+    />
+  );
+}
+
+function RelationHate({ hate, known, className }) {
+  return (
+    <Value
+      value={hate}
+      present={known && isPresentNumeric(hate)}
+      absentLabel={known ? ABSENT_LABEL : UNAVAILABLE_LABEL}
+      format={(raw) => formatNumber(raw, 2)}
+      className={className}
+    />
+  );
+}
+
+function PowerScore({ power, className }) {
+  return (
+    <Value
+      value={power}
+      present={power !== null && power !== undefined}
+      absentLabel={UNAVAILABLE_LABEL}
+      format={(raw) => `${formatNumber(raw, 0)}/100`}
+      className={className}
+    />
+  );
+}
+
+function TopSkillCell({ councilor, className }) {
+  const resolved = resolveTopSkill(councilor);
+  return (
+    <span
+      className={[resolved.className, className].filter(Boolean).join(' ') || undefined}
+      data-primitive="value"
+      data-value-state={resolved.state}
+    >
+      {resolved.text}
+    </span>
+  );
+}
+
+function CouncilorProfileCell({ councilor, className }) {
+  const resolved = resolveCouncilorProfile(councilor);
+  return (
+    <span
+      className={[resolved.className, className].filter(Boolean).join(' ') || undefined}
+      data-primitive="value"
+      data-value-state={resolved.state}
+    >
+      {resolved.text}
+    </span>
+  );
+}
+
 function StatusChip({ value, tone = 'neutral' }) {
+  const text = value === null || value === undefined || value === ''
+    ? UNAVAILABLE_LABEL
+    : String(value);
   return (
     <span className={`intel-library-chip intel-library-chip--${tone}`}>
-      {displayText(value, 'UNAVAILABLE')}
+      {text}
     </span>
   );
 }
@@ -82,7 +184,7 @@ function FactionLabel({ factionOrId, factions, displayNameOverride }) {
       ) : (
         <i style={{ background: color }} />
       )}
-      {displayText(name)}
+      <Txt value={name} />
     </span>
   );
 }
@@ -139,13 +241,13 @@ function OverviewSection({ snapshot, briefing, observerId, factions, onNavigate 
     (faction) => String(faction.ID) === String(observerId),
   ) || {};
   const stats = [
-    ['FACTIONS', countLabel((snapshot.factions || []).length, 'faction')],
-    ['ACTIVE COUNCILORS', countLabel(councilors.length, 'councilor')],
-    ['ALIEN COUNCILORS', countLabel(councilors.filter((c) => c.isAlien).length, 'councilor')],
-    ['NATIONS', countLabel((snapshot.nations || []).length, 'nation')],
-    ['HABS', countLabel((snapshot.habs || []).length, 'hab')],
-    ['FLEETS', countLabel((snapshot.fleets || []).length, 'fleet')],
-    ['MINING SITES', countLabel((snapshot.habSites || []).length, 'site')],
+    ['FACTIONS', (snapshot.factions || []).length, 'faction'],
+    ['ACTIVE COUNCILORS', councilors.length, 'councilor'],
+    ['ALIEN COUNCILORS', councilors.filter((c) => c.isAlien).length, 'councilor'],
+    ['NATIONS', (snapshot.nations || []).length, 'nation'],
+    ['HABS', (snapshot.habs || []).length, 'hab'],
+    ['FLEETS', (snapshot.fleets || []).length, 'fleet'],
+    ['MINING SITES', (snapshot.habSites || []).length, 'site'],
   ];
   const directives = briefing?.directives || {};
   const directiveCount = ['geopolitical', 'council', 'space', 'research'].reduce(
@@ -168,14 +270,14 @@ function OverviewSection({ snapshot, briefing, observerId, factions, onNavigate 
           <span>VIEW</span>
           <strong>{visibility(snapshot)}</strong>
           <span>OBSERVER</span>
-          <strong>{displayText(snapshot.observerFactionName || observer.displayName)}</strong>
+          <strong><Txt value={snapshot.observerFactionName || observer.displayName} /></strong>
         </div>
       </div>
       <div className="intel-library-stat-grid">
-        {stats.map(([label, value]) => (
+        {stats.map(([label, count, noun]) => (
           <div key={label} className="intel-library-stat">
             <span>{label}</span>
-            <strong>{value}</strong>
+            <strong><CountLbl value={count} noun={noun} /></strong>
           </div>
         ))}
       </div>
@@ -188,25 +290,27 @@ function OverviewSection({ snapshot, briefing, observerId, factions, onNavigate 
           <dl className="intel-library-definition-list">
             <div>
               <dt>Campaign date</dt>
-              <dd>{displayText(metadata.gameTimeString)}</dd>
+              <dd><Txt value={metadata.gameTimeString} /></dd>
             </div>
             <div>
               <dt>Active save</dt>
-              <dd>{displayText(metadata.activeSaveFileName || metadata.fileName)}</dd>
+              <dd><Txt value={metadata.activeSaveFileName || metadata.fileName} /></dd>
             </div>
             <div>
               <dt>Last modified</dt>
               <dd>
-                {displayText(
-                  metadata.lastModified
-                    ? new Date(metadata.lastModified).toLocaleString()
-                    : null,
-                )}
+                <Txt
+                  value={
+                    metadata.lastModified
+                      ? new Date(metadata.lastModified).toLocaleString()
+                      : null
+                  }
+                />
               </dd>
             </div>
             <div>
               <dt>Executive directives</dt>
-              <dd>{countLabel(directiveCount, 'directive')}</dd>
+              <dd><CountLbl value={directiveCount} noun="directive" /></dd>
             </div>
           </dl>
         </section>
@@ -249,9 +353,6 @@ function FactionsSection({ snapshot, observerId, factions, onOpenFaction }) {
     const power = faction.powerScore && typeof faction.powerScore === 'object'
       ? faction.powerScore.overall
       : faction.powerScore;
-    const space = faction.spaceVisibility === 'unavailable'
-      ? 'UNAVAILABLE'
-      : countLabel(faction.shipsCount, 'ship');
     const factionCouncilors = councilors.filter(
       (councilor) => String(councilor.factionId) === String(faction.ID),
     );
@@ -260,14 +361,25 @@ function FactionsSection({ snapshot, observerId, factions, onOpenFaction }) {
       key: faction.ID,
       cells: [
         <FactionLabel key="faction" factionOrId={faction} factions={factions} />,
-        displayText(relation.hateOfUs, 'UNAVAILABLE'),
-        displayText(relation.ourHate, 'UNAVAILABLE'),
-        power === null || power === undefined ? 'UNAVAILABLE' : `${number(power, 0)}/100`,
-        number(faction.controlPointsCount, 0),
-        money(faction.totalGdp),
-        number(faction.habsCount, 0),
-        space,
-        `${number(factionCouncilors.length, 0)}${alienCouncilors ? ` / ${number(alienCouncilors, 0)} alien` : ''}`,
+        <RelationHate key="hateOfUs" hate={relation.hateOfUs} known={relation.hateOfUsKnown} />,
+        <RelationHate key="ourHate" hate={relation.ourHate} known={relation.ourHateKnown} />,
+        <PowerScore key="power" power={power} />,
+        <Num key="cps" value={faction.controlPointsCount} decimals={0} />,
+        <Money key="gdp" value={faction.totalGdp} />,
+        <Num key="habs" value={faction.habsCount} decimals={0} />,
+        faction.spaceVisibility === 'unavailable'
+          ? <Txt key="ships" value={null} fallback={UNAVAILABLE_LABEL} />
+          : <CountLbl key="ships" value={faction.shipsCount} noun="ship" />,
+        <>
+          <Num key="councilors-count" value={factionCouncilors.length} decimals={0} present />
+          {alienCouncilors ? (
+            <>
+              {' / '}
+              <Num value={alienCouncilors} decimals={0} present />
+              {' alien'}
+            </>
+          ) : null}
+        </>,
         <>
           <StatusChip
             value={faction.spaceVisibility === 'unavailable' ? 'LIMITED' : 'AVAILABLE'}
@@ -293,7 +405,7 @@ function FactionsSection({ snapshot, observerId, factions, onOpenFaction }) {
         kicker="STRATEGIC BALANCE / ALL FACTIONS"
         title="Faction operating picture"
         description="Directional hate is shown as “hate of us” and “our hate” when the filtered snapshot contains that relationship."
-        count={countLabel(rows.length, 'faction')}
+        count={<CountLbl value={rows.length} noun="faction" />}
       />
       <IntelLibraryTable
         headers={['Faction', 'Hate of us', 'Our hate', 'Strategic score (est.)', 'CPs', 'GDP', 'Habs', 'Ships', 'Councilors', 'Dossier']}
@@ -336,20 +448,23 @@ function CouncilorsSection({
     key: councilor.ID,
     className: councilor.isTurnedMole ? 'intel-library-row-highlight' : undefined,
     cells: [
-      displayText(councilor.displayName),
+      <Txt key="name" value={councilor.displayName} />,
       <FactionLabel
         key="faction"
         factionOrId={councilor.factionId}
         factions={factions}
         displayNameOverride={councilor.factionName || factionNameById(councilor.factionId, factions)}
       />,
-      displayText(councilor.typeTemplateName),
-      displayText(councilor.locationName),
-      displayText(councilor.isTurnedMole ? 'TURNED MOLE' : (councilor.status || 'ACTIVE')),
-      displayText(councilor.activeMissionName),
-      number(councilor.totalSkills, 0),
-      displayText(topSkill(councilor)),
-      displayText(councilorProfile(councilor)),
+      <Txt key="profession" value={councilor.typeTemplateName} />,
+      <Txt key="location" value={councilor.locationName} />,
+      <Txt
+        key="status"
+        value={councilor.isTurnedMole ? 'TURNED MOLE' : (councilor.status || 'ACTIVE')}
+      />,
+      <Txt key="mission" value={councilor.activeMissionName} />,
+      <Num key="total" value={councilor.totalSkills} decimals={0} />,
+      <TopSkillCell key="lead" councilor={councilor} />,
+      <CouncilorProfileCell key="profile" councilor={councilor} />,
       councilor.isAlien
         ? <StatusChip value="ALIEN" tone="danger" />
         : councilor.visibility === 'raw_save_only'
@@ -364,7 +479,7 @@ function CouncilorsSection({
         kicker="EARTH OPERATIONS / COUNCIL"
         title="Councilor intelligence"
         description="Skills use the filtered visible or masked values. Hidden attributes are intentionally represented as unavailable."
-        count={countLabel(rows.length, 'councilor')}
+        count={<CountLbl value={rows.length} noun="councilor" />}
       />
       <div className="intel-library-filter-bar">
         <label className="intel-library-filter-field">
@@ -417,9 +532,13 @@ function CouncilorsSection({
 
 function NationNukesCell({ nukes }) {
   if (numberValue(nukes) === null) {
-    return EM_DASH;
+    return <Value value={nukes} present={false} />;
   }
-  return <StatusChip value={number(nukes, 0)} tone="danger" />;
+  return (
+    <span className="intel-library-chip intel-library-chip--danger">
+      {formatNumber(nukes, 0)}
+    </span>
+  );
 }
 
 function NationsSection({ snapshot, factions }) {
@@ -429,17 +548,17 @@ function NationsSection({ snapshot, factions }) {
     return {
       key: nation.displayName || index,
       cells: [
-        displayText(nation.displayName),
-        <span key="exec" style={{ color: executiveColor }}>{displayText(executive)}</span>,
-        number((nation.controlPoints || []).length, 0),
-        money(nation.GDP),
-        number(nation.milTech, 1),
-        number(nation.armies, 0),
+        <Txt key="nation" value={nation.displayName} />,
+        <span key="exec" style={{ color: executiveColor }}><Txt value={executive} /></span>,
+        <Num key="cps" value={(nation.controlPoints || []).length} decimals={0} present />,
+        <Money key="gdp" value={nation.GDP} />,
+        <Num key="milTech" value={nation.milTech} decimals={1} />,
+        <Num key="armies" value={nation.armies} decimals={0} />,
         <NationNukesCell key="nukes" nukes={nation.nukes} />,
-        number(nation.unrest, 1),
-        number(nation.cohesion, 1),
-        number(nation.boost, 2),
-        number(nation.missionControl, 0),
+        <Num key="unrest" value={nation.unrest} decimals={1} />,
+        <Num key="cohesion" value={nation.cohesion} decimals={1} />,
+        <Num key="boost" value={nation.boost} decimals={2} />,
+        <Num key="mc" value={nation.missionControl} decimals={0} />,
       ],
     };
   });
@@ -454,7 +573,7 @@ function NationsSection({ snapshot, factions }) {
         kicker="EARTH OPERATIONS / NATIONS"
         title="Geopolitical holdings"
         description="Every nation in the filtered snapshot, including control points, GDP, military posture and launch capacity."
-        count={countLabel(rows.length, 'nation')}
+        count={<CountLbl value={rows.length} noun="nation" />}
       />
       <IntelLibraryTable
         headers={['Nation', 'Executive', 'CPs', 'GDP', 'Mil tech', 'Armies', 'Nukes', 'Unrest', 'Cohesion', 'Boost/mo', 'MC']}
@@ -470,13 +589,13 @@ function NationsSection({ snapshot, factions }) {
           <div className="intel-library-target-list">
             {shownTargets.map((target, index) => (
               <div key={`${target.nationName}-${index}`} className="intel-library-target">
-                <strong>{displayText(target.nationName)}</strong>
+                <strong><Txt value={target.nationName} /></strong>
                 <span>
-                  {displayText(target.targetFactionName)}
+                  <Txt value={target.targetFactionName} />
                   {' / score '}
-                  {displayText(target.score)}
+                  <Txt value={target.score} />
                 </span>
-                <small>{displayText((target.reasons || []).join(' · '))}</small>
+                <small><Txt value={(target.reasons || []).join(' · ')} /></small>
               </div>
             ))}
           </div>
@@ -509,18 +628,18 @@ function MiningSection({ snapshot, spaceTheater }) {
       return {
         key: site.displayName || index,
         cells: [
-          displayText(site.displayName),
-          displayText(site.parentBodyName),
-          displayText(site.factionName),
-          resourceCell(site.water),
-          resourceCell(site.volatiles),
-          resourceCell(site.metals),
-          resourceCell(site.nobleMetals),
-          resourceCell(site.fissiles),
-          displayText(site.mineTier),
-          displayText(construction),
-          displayText(site.daysRemaining),
-          displayText(site.habName),
+          <Txt key="site" value={site.displayName} />,
+          <Txt key="body" value={site.parentBodyName} />,
+          <Txt key="owner" value={site.factionName} />,
+          <Num key="water" value={site.water} decimals={2} />,
+          <Num key="volatiles" value={site.volatiles} decimals={2} />,
+          <Num key="metals" value={site.metals} decimals={2} />,
+          <Num key="nobles" value={site.nobleMetals} decimals={2} />,
+          <Num key="fissiles" value={site.fissiles} decimals={2} />,
+          <Txt key="tier" value={site.mineTier} />,
+          <Txt key="status" value={construction} />,
+          <Txt key="days" value={site.daysRemaining} />,
+          <Txt key="hab" value={site.habName} />,
         ],
       };
     });
@@ -531,7 +650,7 @@ function MiningSection({ snapshot, spaceTheater }) {
         kicker="SPACE LOGISTICS / RESOURCE YIELDS"
         title="Mining and construction sites"
         description="Yield fields are reported per day from the save. Unclaimed sites remain visible when the selected intelligence mode permits them."
-        count={countLabel(rows.length, 'site')}
+        count={<CountLbl value={rows.length} noun="site" />}
       />
       <IntelLibraryTable
         headers={['Site', 'Body', 'Owner', 'Water/day', 'Volatiles/day', 'Metals/day', 'Nobles/day', 'Fissiles/day', 'Mine tier', 'Status', 'Days left', 'Hab']}
@@ -552,14 +671,14 @@ function HabsSection({ snapshot, spaceTheater }) {
       return {
         key: hab.displayName || index,
         cells: [
-          displayText(hab.displayName),
-          displayText(hab.factionName),
-          displayText(hab.habType),
-          number(hab.tier, 0),
-          displayText(hab.orbitBody),
-          hab.inEarthLEO ? <StatusChip value="LEO" tone="good" /> : EM_DASH,
-          <StatusChip value={status} tone={status === 'OPERATIONAL' ? 'good' : 'danger'} />,
-          displayText(hab.templateName),
+          <Txt key="hab" value={hab.displayName} />,
+          <Txt key="faction" value={hab.factionName} />,
+          <Txt key="type" value={hab.habType} />,
+          <Num key="tier" value={hab.tier} decimals={0} />,
+          <Txt key="orbit" value={hab.orbitBody} />,
+          hab.inEarthLEO ? <StatusChip key="leo" value="LEO" tone="good" /> : <Value key="leo" value="" present={false} />,
+          <StatusChip key="status" value={status} tone={status === 'OPERATIONAL' ? 'good' : 'danger'} />,
+          <Txt key="template" value={hab.templateName} />,
         ],
       };
     });
@@ -570,7 +689,7 @@ function HabsSection({ snapshot, spaceTheater }) {
         kicker="SPACE LOGISTICS / STATIONS"
         title="Habitat and station registry"
         description="Orbital position, ownership, tier and current combat status for every visible installation."
-        count={countLabel(rows.length, 'hab')}
+        count={<CountLbl value={rows.length} noun="hab" />}
       />
       <IntelLibraryTable
         headers={['Hab', 'Faction', 'Type', 'Tier', 'Orbit / body', 'LEO', 'Status', 'Template']}
@@ -584,23 +703,26 @@ function HabsSection({ snapshot, spaceTheater }) {
 function FleetsSection({ snapshot, spaceTheater }) {
   const rows = (snapshot.fleets || [])
     .filter((fleet) => matchesSpaceTheater(fleet.orbitBody, spaceTheater, fleet.spaceTheaterKey))
-    .map((fleet, index) => {
-      const power = fleet.combatPowerAvailable ? number(fleet.combatPower, 0) : 'UNAVAILABLE';
-      return {
+    .map((fleet, index) => ({
         key: fleet.displayName || index,
         cells: [
-          displayText(fleet.displayName),
-          displayText(fleet.factionName),
-          number(fleet.shipsCount, 0),
-          power,
-          displayText(fleet.weaponSummary || fleet.dominantWeaponType),
-          displayText(fleet.orbitBody),
-          displayText(fleet.mission),
-          displayText(fleet.destination),
-          displayText(fleet.arrivalDate),
+          <Txt key="fleet" value={fleet.displayName} />,
+          <Txt key="faction" value={fleet.factionName} />,
+          <Num key="ships" value={fleet.shipsCount} decimals={0} />,
+          <Num
+            key="power"
+            value={fleet.combatPower}
+            decimals={0}
+            present={Boolean(fleet.combatPowerAvailable) && isPresentNumeric(fleet.combatPower)}
+            absentLabel={UNAVAILABLE_LABEL}
+          />,
+          <Txt key="loadout" value={fleet.weaponSummary || fleet.dominantWeaponType} />,
+          <Txt key="orbit" value={fleet.orbitBody} />,
+          <Txt key="mission" value={fleet.mission} />,
+          <Txt key="destination" value={fleet.destination} />,
+          <Txt key="arrival" value={fleet.arrivalDate} />,
         ],
-      };
-    });
+      }));
 
   return (
     <>
@@ -608,7 +730,7 @@ function FleetsSection({ snapshot, spaceTheater }) {
         kicker="SPACE LOGISTICS / FLEETS"
         title="Fleet posture"
         description="Combat power stays unavailable when the save does not provide a real value. Loadout grouping comes from equipped weapon systems."
-        count={countLabel(rows.length, 'fleet')}
+        count={<CountLbl value={rows.length} noun="fleet" />}
       />
       <IntelLibraryTable
         headers={['Fleet', 'Faction', 'Ships', 'Combat power', 'Loadout', 'Orbit / body', 'Mission', 'Destination', 'Arrival']}
@@ -627,19 +749,25 @@ function ShipsSection({ snapshot, spaceTheater }) {
       (fleet.ships || []).forEach((ship, index) => {
         const weaponSummary = (ship.weaponLoadout || []).map((item) => `${item.role} x${item.count}`).join(' · ')
           || ship.dominantWeaponType
-          || 'UNAVAILABLE';
+          || null;
         rows.push({
           key: `${fleet.displayName}-${ship.displayName}-${index}`,
           cells: [
-            displayText(ship.displayName),
-            displayText(fleet.factionName),
-            displayText(fleet.displayName),
-            displayText(ship.hullName),
-            displayText(ship.dominantWeaponType),
-            displayText(weaponSummary),
-            ship.combatPower === null || ship.combatPower === undefined
-              ? 'UNAVAILABLE'
-              : number(ship.combatPower, 0),
+            <Txt key="ship" value={ship.displayName} />,
+            <Txt key="faction" value={fleet.factionName} />,
+            <Txt key="fleet" value={fleet.displayName} />,
+            <Txt key="hull" value={ship.hullName} />,
+            <Txt key="dominant" value={ship.dominantWeaponType} />,
+            weaponSummary
+              ? <Txt key="weapons" value={weaponSummary} />
+              : <Txt key="weapons" value={null} fallback={UNAVAILABLE_LABEL} />,
+            <Num
+              key="power"
+              value={ship.combatPower}
+              decimals={0}
+              present={ship.combatPower !== null && ship.combatPower !== undefined}
+              absentLabel={UNAVAILABLE_LABEL}
+            />,
           ],
         });
       });
@@ -651,7 +779,7 @@ function ShipsSection({ snapshot, spaceTheater }) {
         kicker="SPACE LOGISTICS / SHIPS"
         title="Ship registry"
         description="Ships are expanded from their fleet records so weapon roles and dominant loadouts can be compared directly."
-        count={countLabel(rows.length, 'ship')}
+        count={<CountLbl value={rows.length} noun="ship" />}
       />
       <IntelLibraryTable
         headers={['Ship', 'Faction', 'Fleet', 'Hull', 'Dominant', 'Equipped weapons', 'Combat power']}
@@ -676,19 +804,37 @@ function SpaceTheatersBlock({ briefing, spaceTheater }) {
 
   const rows = theaters.map((theater, index) => {
     const weaponMix = (theater.weaponMix || []).slice(0, 3).map((item) => `${item.role} x${item.count}`).join(' · ')
-      || EM_DASH;
+      || null;
     return {
       key: theater.key || index,
       cells: [
-        displayText(theater.name),
-        `${number(theater.ownShips, 0)} / ${number(theater.ownFleets, 0)}`,
+        <Txt key="name" value={theater.name} />,
+        <>
+          <Num value={theater.ownShips} decimals={0} />
+          {' / '}
+          <Num value={theater.ownFleets} decimals={0} />
+        </>,
         theater.alienShips
-          ? <StatusChip value={`${number(theater.alienShips, 0)} / ${number(theater.alienFleets, 0)}`} tone="danger" />
-          : '0 / 0',
-        number(theater.ownHabs === undefined ? theater.habs : theater.ownHabs, 0),
-        number(theater.ownMiningSites === undefined ? theater.miningSites : theater.ownMiningSites, 0),
-        displayText(theater.status),
-        displayText(weaponMix),
+          ? (
+            <StatusChip
+              key="alien"
+              value={`${formatNumber(theater.alienShips, 0)} / ${formatNumber(theater.alienFleets, 0)}`}
+              tone="danger"
+            />
+          )
+          : <>0 / 0</>,
+        <Num
+          key="habs"
+          value={theater.ownHabs === undefined ? theater.habs : theater.ownHabs}
+          decimals={0}
+        />,
+        <Num
+          key="mining"
+          value={theater.ownMiningSites === undefined ? theater.miningSites : theater.ownMiningSites}
+          decimals={0}
+        />,
+        <Txt key="status" value={theater.status} />,
+        weaponMix ? <Txt key="mix" value={weaponMix} /> : <Value key="mix" value="" present={false} />,
       ],
     };
   });
@@ -765,13 +911,20 @@ function ResearchSection({ snapshot }) {
   const slots = (research.activeSlots || []).map((slot, index) => ({
     key: slot.slotNumber ?? index,
     cells: [
-      number(slot.slotNumber, 0),
-      displayText(slot.displayName),
-      displayText(slot.category),
-      `${number(slot.accumulatedResearch, 0)} / ${number(slot.totalCost, 0)}`,
-      `${number(slot.percent, 1)}%`,
-      displayText(slot.leadFactionName),
-      number(slot.leadContribution, 0),
+      <Num key="slot" value={slot.slotNumber} decimals={0} />,
+      <Txt key="project" value={slot.displayName} />,
+      <Txt key="category" value={slot.category} />,
+      <>
+        <Num value={slot.accumulatedResearch} decimals={0} />
+        {' / '}
+        <Num value={slot.totalCost} decimals={0} />
+      </>,
+      <>
+        <Num value={slot.percent} decimals={1} />
+        %
+      </>,
+      <Txt key="lead" value={slot.leadFactionName} />,
+      <Num key="points" value={slot.leadContribution} decimals={0} />,
     ],
   }));
   const matrix = (snapshot.techMatrix || []).map((project, index) => {
@@ -779,19 +932,20 @@ function ResearchSection({ snapshot }) {
     return {
       key: project.projectId || index,
       cells: [
-        displayText(project.displayName),
-        displayText(project.projectId),
-        displayText(project.category),
+        <Txt key="project" value={project.displayName} />,
+        <Txt key="id" value={project.projectId} />,
+        <Txt key="category" value={project.category} />,
         <StatusChip
+          key="status"
           value={observerStatus}
           tone={observerStatus === 'completed' ? 'good' : (observerStatus === 'locked' ? 'muted' : 'neutral')}
         />,
-        displayText((project.effects || []).join(' · ')),
+        <Txt key="effects" value={(project.effects || []).join(' · ')} />,
       ],
     };
   });
   const completed = (research.finishedTechsNames || []).map((tech, index) => (
-    <span key={`${tech}-${index}`} className="intel-library-tech-tag">{displayText(tech)}</span>
+    <span key={`${tech}-${index}`} className="intel-library-tech-tag"><Txt value={tech} /></span>
   ));
 
   return (
@@ -800,12 +954,12 @@ function ResearchSection({ snapshot }) {
         kicker="TECHNOLOGY / RESEARCH TREE"
         title="Research and capability record"
         description="Global slots, completed technologies and the observer’s project status are shown together with the exact internal project IDs."
-        count={countLabel((snapshot.techMatrix || []).length, 'project')}
+        count={<CountLbl value={(snapshot.techMatrix || []).length} noun="project" />}
       />
       <section className="intel-library-block">
         <div className="intel-library-block-heading">
           <span>ACTIVE GLOBAL SLOTS</span>
-          <small>{countLabel(slots.length, 'slot')}</small>
+          <small><CountLbl value={slots.length} noun="slot" /></small>
         </div>
         <IntelLibraryTable
           headers={['Slot', 'Project', 'Category', 'Progress', 'Complete', 'Lead faction', 'Lead points']}
@@ -827,7 +981,7 @@ function ResearchSection({ snapshot }) {
       <section className="intel-library-block">
         <div className="intel-library-block-heading">
           <span>COMPLETED GLOBAL TECHNOLOGIES</span>
-          <small>{countLabel((research.finishedTechsNames || []).length, 'technology')}</small>
+          <small><CountLbl value={(research.finishedTechsNames || []).length} noun="technology" /></small>
         </div>
         <div className="intel-library-tech-list">
           {completed.length
@@ -847,38 +1001,42 @@ function ThreatsSection({ snapshot }) {
     return {
       key,
       cells: [
-        displayText(detail.name || key),
+        <Txt key="name" value={detail.name || key} />,
         detail.active
-          ? <StatusChip value="ACTIVE" tone="good" />
-          : <StatusChip value="LOCKED / UNAVAILABLE" tone="muted" />,
-        displayText(detail.requiredDisplayName || detail.requiredProject || detail.requiredTech),
-        displayText(detail.requiredEffect),
-        displayText(detail.description),
+          ? <StatusChip key="state" value="ACTIVE" tone="good" />
+          : <StatusChip key="state" value="LOCKED / UNAVAILABLE" tone="muted" />,
+        <Txt key="unlock" value={detail.requiredDisplayName || detail.requiredProject || detail.requiredTech} />,
+        <Txt key="effect" value={detail.requiredEffect} />,
+        <Txt key="description" value={detail.description} />,
       ],
     };
   });
   const xenoRows = (snapshot.activeXenoforming || []).map((site, index) => ({
     key: site.regionId || index,
-    cells: [displayText(site.regionName), displayText(site.level), displayText(site.regionId)],
+    cells: [
+      <Txt key="region" value={site.regionName} />,
+      <Txt key="level" value={site.level} />,
+      <Txt key="id" value={site.regionId} />,
+    ],
   }));
   const facilityRows = (snapshot.builtAlienFacilities || []).map((facility, index) => ({
     key: facility.displayName || index,
     cells: [
-      displayText(facility.displayName || facility.name),
-      displayText(facility.regionName || facility.locationName),
-      displayText(facility.factionName),
-      displayText(facility.type || facility.templateName),
+      <Txt key="facility" value={facility.displayName || facility.name} />,
+      <Txt key="location" value={facility.regionName || facility.locationName} />,
+      <Txt key="faction" value={facility.factionName} />,
+      <Txt key="type" value={facility.type || facility.templateName} />,
     ],
   }));
   const alienCouncilorRows = alienCouncilors.map((councilor, index) => ({
     key: councilor.ID || index,
     cells: [
-      displayText(councilor.displayName),
-      displayText(councilor.locationName),
-      displayText(councilor.activeMissionName),
-      displayText(councilor.activeMissionTarget),
-      number(councilor.totalSkills, 0),
-      <StatusChip value={councilor.status || 'ACTIVE'} tone="danger" />,
+      <Txt key="name" value={councilor.displayName} />,
+      <Txt key="location" value={councilor.locationName} />,
+      <Txt key="mission" value={councilor.activeMissionName} />,
+      <Txt key="target" value={councilor.activeMissionTarget} />,
+      <Num key="skills" value={councilor.totalSkills} decimals={0} />,
+      <StatusChip key="status" value={councilor.status || 'ACTIVE'} tone="danger" />,
     ],
   }));
 
@@ -888,7 +1046,7 @@ function ThreatsSection({ snapshot }) {
         kicker="ALIEN INTELLIGENCE / CAPABILITY GATING"
         title="Threat and discovery record"
         description="Detection capabilities are separated from raw records so an unavailable panel is not mistaken for an empty world."
-        count={countLabel(Object.keys(details).length, 'capability')}
+        count={<CountLbl value={Object.keys(details).length} noun="capability" />}
       />
       <section className="intel-library-block">
         <div className="intel-library-block-heading">
@@ -904,7 +1062,7 @@ function ThreatsSection({ snapshot }) {
       <section className="intel-library-block">
         <div className="intel-library-block-heading">
           <span>ACTIVE ALIEN COUNCILORS</span>
-          <small>{countLabel(alienCouncilorRows.length, 'confirmed record')}</small>
+          <small><CountLbl value={alienCouncilorRows.length} noun="confirmed record" /></small>
         </div>
         <IntelLibraryTable
           headers={['Councilor', 'Location', 'Last mission', 'Target', 'Total skills', 'Status']}
@@ -919,7 +1077,7 @@ function ThreatsSection({ snapshot }) {
       <section className="intel-library-block">
         <div className="intel-library-block-heading">
           <span>XENOFORMING</span>
-          <small>{countLabel(xenoRows.length, 'visible site')}</small>
+          <small><CountLbl value={xenoRows.length} noun="visible site" /></small>
         </div>
         <IntelLibraryTable
           headers={['Region', 'Level', 'Region ID']}
@@ -930,7 +1088,7 @@ function ThreatsSection({ snapshot }) {
       <section className="intel-library-block">
         <div className="intel-library-block-heading">
           <span>ALIEN FACILITIES</span>
-          <small>{countLabel(facilityRows.length, 'facility')}</small>
+          <small><CountLbl value={facilityRows.length} noun="facility" /></small>
         </div>
         <IntelLibraryTable
           headers={['Facility', 'Location', 'Faction', 'Type']}
@@ -996,7 +1154,7 @@ function ExportsSection({ snapshot, onCopyExport }) {
         {' '}
         {visibility(snapshot)}
         {' / '}
-        {displayText(snapshot.observerFactionName)}
+        <Txt value={snapshot.observerFactionName} />
         . This keeps the visibility context attached when the report leaves Mission Control.
       </div>
     </>
@@ -1150,7 +1308,7 @@ export function IntelligenceLibrary({
         </div>
         <div className="intel-library-header-meta">
           <span>{visibility(snapshot || {})}</span>
-          <strong>{displayText(snapshot?.metadata?.gameTimeString)}</strong>
+          <strong><Txt value={snapshot?.metadata?.gameTimeString} /></strong>
         </div>
       </div>
       <div className="intel-library-layout">

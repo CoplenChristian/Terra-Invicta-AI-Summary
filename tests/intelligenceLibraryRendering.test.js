@@ -826,12 +826,10 @@ test('per-metric: nation nukes null renders an em dash while a measured zero ren
     'measured nonzero nukes must appear between Armies (25) and Unrest (0.5)'
   );
 
-  // Unmeasured: a plain em dash, identical to the affordance the neighbouring
-  // cells already use for missing values. No chip wrapper — an unmeasured
-  // value cannot carry the danger tone.
+  // Unmeasured: a Value primitive em dash inside the cell — not the danger chip.
   assert.ok(
-    nullHtml.includes('<td>—</td>'),
-    'null nukes must render a plain em dash cell, not the danger chip'
+    nullHtml.includes('data-value-state="absent"') && nullHtml.includes('>—</span>'),
+    'null nukes must render a Value absent affordance, not the danger chip'
   );
   assert.ok(
     !nullHtml.includes('intel-library-chip--danger'),
@@ -847,8 +845,8 @@ test('per-metric: nation nukes null renders an em dash while a measured zero ren
   // not just on token equality (a regression that flipped "0" to a non-chip
   // "—" would otherwise pass).
   assert.ok(
-    /<td>(?:<span class="intel-library-chip intel-library-chip--danger">0<\/span>|—)<\/td>/.test(nullHtml),
-    'the nukes cell must be either a chip-wrapped zero or an em dash — never the literal "0" outside a chip'
+    /<td>(?:<span class="intel-library-chip intel-library-chip--danger">0<\/span>|<span[^>]*data-value-state="absent"[^>]*>—<\/span>)<\/td>/.test(nullHtml),
+    'the nukes cell must be either a chip-wrapped zero or a Value absent em dash'
   );
 
   assertNoRuntimePlaceholders(nullText, 'nation nukes null');
