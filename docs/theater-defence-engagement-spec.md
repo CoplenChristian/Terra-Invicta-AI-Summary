@@ -83,6 +83,23 @@ as measured whatever label sits beside it, and this one is built from invented
 constants with a measured 5.5× error in the reassuring direction. Options, in order
 of preference:
 
+> **Refinement, 2026-08-27 — the refusal belongs at the OUTPUT, not the input.**
+> The first draft of this document said player mode should report the read-model
+> itself unavailable. That is wrong in two ways. It would duplicate a decision the
+> existing FLEET ENGAGEMENT surface already makes differently — that panel *does*
+> show player-mode ratings today, carrying `OPPONENT_RATING_BASIS.player` with
+> them — and two surfaces disagreeing about whether the same reading exists is
+> worse than either answer alone.
+>
+> So: **`theaterForce` is computed in both modes**, each row carrying its `basis`
+> string verbatim and an explicit `calibrated: boolean` (true only where ratings
+> are read from the aliens' own designs). The refusal then lives one layer up, in
+> whatever turns a rating into advice: **no hull count is emitted when
+> `calibrated === false`.** The rating is a reading with a known provenance; the
+> hull count is the claim that cannot be made. Putting the gate on the claim
+> rather than the reading also means a later consumer that only wants to *show*
+> relative strength is not blocked by a rule written for a different purpose.
+
 1. **Refuse, with the reason named** — "force-strength comparison unavailable in
    player mode: alien ratings here are an uncalibrated assumption, measured to
    under-rate by up to 5.5×." This matches how the rest of the engine treats an
