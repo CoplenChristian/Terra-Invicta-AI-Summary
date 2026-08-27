@@ -149,18 +149,52 @@ dropped. Running the publisher is a local action requiring the service-role key.
 The first five waves ran on external CLI lanes; the last three on Claude Opus
 agents, which was markedly cleaner — every agent could run its own tests.
 
+> **Corrected 2026-08-27. Three of the five findings below were wrong, and they
+> were wrong the same way: I recorded a missing command-line flag as a property of
+> the model.** Every lane this document rated weak turned out to be misconfigured,
+> which makes the whole table below evidence about `check_lanes.js` rather than
+> about the lanes. The corrections are inline; the original wording is kept so the
+> mistake stays visible.
+
 - **Codex** — the only external lane to complete a port unaided. Its apparent
   slowness was **configuration, not the lane**: it inherited `gpt-5.6-sol` at
   `model_reasoning_effort = "max"` from `~/.codex/config.toml`, because the
   wrapper passed no `-m` flag at all. Now pinned to `gpt-5.6-luna` in
   `check_lanes.js`, and the old timings need re-measuring before they are trusted.
-- **Antigravity** — hard **~5-minute response ceiling**; errored at 292s having
-  consumed 423k tokens and written nothing. Cannot do component migrations.
-- **Composer** — good structure, **cannot execute shell**, so it cannot verify
-  what it writes. Shipped an empty harness scene (31 tests timing out) and a
-  failing assertion whose message contradicted its own code.
+  *This was the first of the three, and it should have prompted a check of the
+  others immediately rather than five days later.*
+- **Antigravity** — recorded here as a hard **~5-minute response ceiling**, having
+  errored at 292s after consuming 423k tokens and writing nothing, and therefore
+  "cannot do component migrations". **Wrong.** `agy` carries `--print-timeout`,
+  default `5m0s`, and the wrapper never passed it. 292 seconds is that 300-second
+  default firing mid-work. The 423k tokens were work in progress being killed, not
+  a lane that could not hold the task. Fixed in `000e8c4`: the inner timeout is now
+  derived from the wrapper's own `--timeout`, set 15s under it so `agy` exits with
+  its own message instead of being hard-killed. **Untested since the fix.**
+- **Composer** — recorded here as **"cannot execute shell"**. Almost certainly
+  wrong too. `cursor-agent` has `--trust`, and the wrapper never passed it;
+  headless cannot display the workspace-trust prompt, and without trust the agent
+  writes files fine while every command it tries is silently denied — which
+  presents exactly as "the shell is disabled". Also fixed in `000e8c4`.
+  **The evidence for the original claim is now suspect in a specific way:** on
+  2026-08-27, still un-trusted, it converted one panel for defect #21 and broke it,
+  making per-metric measurement state cascade across rows. It could not run the
+  suite to notice. A lane that cannot verify itself shipping a break is not the
+  same finding as a lane that writes bad code.
 - **MiniMax** — twice left work structurally incomplete: once swallowing
   `const UNAVAILABLE = '—'` from five files while leaving `shared.js`
-  unparseable, once building a panel without performing the swap.
+  unparseable, once building a panel without performing the swap. *Still broadly
+  fair, and a third instance on 2026-08-27: it reported "492/492 pass" having run
+  only the browser pass, never mentioning the 1,306-test pure-JS pass beside it.
+  But it completed a three-part green-up job correctly in 5 minutes on omp, so the
+  failure mode is reporting completeness, not doing the work.*
 - **DeepSeek** — best evidence discipline; produced a better design than the
-  brief asked for and found a call site the brief missed. Metered.
+  brief asked for and found a call site the brief missed. Metered. *Confirmed
+  again on 2026-08-27: its own test caught a field my contract had omitted. It
+  "failed" only by outrunning a 40-minute timeout I chose, which is my error, not
+  its.*
+
+**The lesson worth more than the table:** before recording a lane as weak, check
+what the wrapper actually passed it. `node .claude/skills/dispatch/check_lanes.js
+--probe-flags` exists as of `000e8c4` for precisely this, and it exists because I
+went around the wrapper with four direct `--help` calls to find out.
