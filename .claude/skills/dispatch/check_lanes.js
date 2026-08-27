@@ -205,7 +205,7 @@ const LANES = {
     costClass: 'floor-per-call',
     costNote: '~16k input-token floor per call — a one-line question costs about what a long one does.',
     routing: 'Very fast. Frontend work.',
-    buildArgs: ({ model, prompt, resume, trustFlag }) => agyArgs(model, prompt, resume, trustFlag),
+    buildArgs: ({ model, prompt, resume, trustFlag, timeoutMs }) => agyArgs(model, prompt, resume, trustFlag, timeoutMs),
   },
   composer: {
     key: 'composer',
@@ -355,8 +355,34 @@ function ompArgs(model, promptPath, resume, cwd) {
   return args;
 }
 
-function agyArgs(model, prompt, resume, trustFlag) {
-  //   fresh : -p <prompt> --output-format json [--model <m>] [trust]
+function expandScientificDecimal(value) {
+  const raw = String(value);
+  if (!/[eE]/.test(raw)) return raw;
+  const match = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(raw);
+  if (match === null) return raw;
+  const sign = match[1];
+  const integer = match[2];
+  const fraction = match[3] || '';
+  const digits = integer + fraction;
+  const decimalAt = integer.length + Number(match[4]);
+  if (decimalAt <= 0) return `${sign}0.${'0'.repeat(-decimalAt)}${digits}`;
+  if (decimalAt >= digits.length) return `${sign}${digits}${'0'.repeat(decimalAt - digits.length)}`;
+  return `${sign}${digits.slice(0, decimalAt)}.${digits.slice(decimalAt)}`;
+}
+
+function agyPrintTimeout(timeoutMs) {
+  const outerMs = toFiniteNumber(timeoutMs);
+  if (outerMs === null || outerMs <= 0) {
+    throw new Error(
+      `Refusing to build an agy dispatch with an invalid outer timeout ${JSON.stringify(timeoutMs)}.`
+    );
+  }
+  const innerMs = outerMs > 15000 ? outerMs - 15000 : outerMs;
+  return `${expandScientificDecimal(innerMs / 1000)}s`;
+}
+
+function agyArgs(model, prompt, resume, trustFlag, timeoutMs = DEFAULT_DISPATCH_TIMEOUT_MS) {
+  //   fresh : -p <prompt> --output-format json [--model <m>] [trust] --print-timeout <duration>
   //   last  : ... --continue
   //   id    : ... --conversation <id>
   // `-p` takes the prompt as its VALUE, so the prompt is not a positional and the
@@ -369,6 +395,7 @@ function agyArgs(model, prompt, resume, trustFlag) {
   const args = ['-p', prompt, '--output-format', 'json'];
   if (model !== null) args.push('--model', model);
   if (typeof trustFlag === 'string' && trustFlag !== '') args.push(trustFlag);
+  args.push('--print-timeout', agyPrintTimeout(timeoutMs));
   if (resume.kind === 'last') args.push('--continue');
   else if (resume.kind === 'id') args.push('--conversation', resume.id);
   return args;
@@ -387,7 +414,14 @@ function cursorArgs(model, prompt, resume, trustFlag) {
   // here. `null` means no flag at all; the absent case must not become an
   // empty-string argv element.
   const args = ['-p', '--output-format', 'json', '--model', model];
-  if (typeof trustFlag === 'string' && trustFlag !== '') args.push(trustFlag);
+  if (typeof trustFlag === 'string' && trustFlag !== '') {
+    args.push(trustFlag);
+    // cursor-agent's --trust settles workspace trust. It is a separate,
+    // smaller grant from --yolo/-f, so a configured command-approval flag does
+    // not implicitly settle the headless workspace-trust prompt. Do not add it
+    // twice when the configured flag is already --trust.
+    if (trustFlag !== '--trust') args.push('--trust');
+  }
   if (resume.kind === 'last') args.push('--continue');
   else if (resume.kind === 'id') args.push('--resume', resume.id);
   args.push(prompt);
@@ -490,6 +524,58 @@ function assertTrustFlagPlumbing() {
 }
 
 assertTrustFlagPlumbing();
+
+/**
+ * Startup integrity check on agy's inner-timeout plumbing.
+ *
+ * The outer timeout is resolved by the wrapper, but agy has a second ceiling
+ * inside print mode. Keep the derived value in the argv path and prove that no
+ * other lane accidentally receives agy's CLI-specific flag.
+ */
+function assertAgyTimeoutPlumbing() {
+  const SENTINEL_TIMEOUT_MS = 2400000;
+  const expected = '2385s';
+  const antigravityArgv = LANES.antigravity.buildArgs({
+    model: LANES.antigravity.defaultModel,
+    prompt: '<plumbing probe — never dispatched>',
+    promptPath: '<plumbing probe — never dispatched>',
+    resume: { kind: 'none', id: null },
+    outputFile: null,
+    trustFlag: null,
+    cwd: null,
+    timeoutMs: SENTINEL_TIMEOUT_MS,
+  });
+  const timeoutAt = antigravityArgv.indexOf('--print-timeout');
+  if (timeoutAt === -1 || antigravityArgv[timeoutAt + 1] !== expected) {
+    throw new Error(
+      `Lane registry is inconsistent: antigravity must place --print-timeout ${expected} ` +
+        `in argv for an outer timeout of ${SENTINEL_TIMEOUT_MS} ms. Built: ${JSON.stringify(antigravityArgv)}.`
+    );
+  }
+
+  for (const key of LANE_KEYS) {
+    if (key === 'antigravity') continue;
+    const lane = LANES[key];
+    const argv = lane.buildArgs({
+      model: lane.defaultModel,
+      prompt: '<plumbing probe — never dispatched>',
+      promptPath: '<plumbing probe — never dispatched>',
+      resume: { kind: 'none', id: null },
+      outputFile: null,
+      trustFlag: null,
+      cwd: null,
+      timeoutMs: SENTINEL_TIMEOUT_MS,
+    });
+    if (argv.includes('--print-timeout')) {
+      throw new Error(
+        `Lane registry is inconsistent: lane "${key}" received agy's --print-timeout flag. ` +
+          `That option is only understood by agy and must not be invented for ${lane.cli}.`
+      );
+    }
+  }
+}
+
+assertAgyTimeoutPlumbing();
 
 /**
  * Startup integrity check on the pinned-model plumbing.
@@ -617,6 +703,7 @@ function parseArgs(argv) {
     promptFile: null,
     json: false,
     dryRun: false,
+    probeFlags: false,
     approve: false,
     configPath: DEFAULT_CONFIG_PATH,
     cwd: process.cwd(),
@@ -654,6 +741,7 @@ function parseArgs(argv) {
     }
     if (arg === '--json') out.json = true;
     else if (arg === '--dry-run') out.dryRun = true;
+    else if (arg === '--probe-flags') out.probeFlags = true;
     else if (arg === '--approve') out.approve = true;
     else if (arg === '--resume-last') out.resumeLast = true;
     else if (arg === '--help' || arg === '-h') out.help = true;
@@ -667,6 +755,10 @@ function parseArgs(argv) {
     out.errors.push(
       `--resume-last and --resume <id> are mutually exclusive. --resume-last continues that lane's most recent session; --resume names a specific one. Pass exactly one.`
     );
+  }
+
+  if (out.probeFlags && out.promptFile !== null) {
+    out.errors.push('--probe-flags cannot be combined with --prompt-file: flag probing never dispatches.');
   }
 
   return out;
@@ -687,6 +779,11 @@ check_lanes.js — probe and dispatch external agent CLI lanes.
 
   node check_lanes.js --lane <key>
       Probe one lane only.
+
+  node check_lanes.js --probe-flags [--lane <key>] [--json]
+      Run the READY lane's CLI with --help and report timeout-ish and
+      trust/approval-ish flags. Never dispatches. An unavailable or rejected
+      lane is reported without running its binary.
 
   node check_lanes.js --lane <key> --prompt-file <path>
       Build the command for that lane from the config's mode:
@@ -1022,6 +1119,32 @@ function resolveTrustFlag(laneKey, config) {
 function describeTrustFlag(trust) {
   if (trust.flag === null) return null;
   return `${trust.flag} — ${trust.grant}`;
+}
+
+/**
+ * Names every standing grant that will reach a cursor-agent invocation.
+ *
+ * A command-approval flag such as --yolo does not settle cursor-agent's
+ * separate workspace-trust prompt. When one is configured, cursorArgs adds
+ * --trust as well, so the preview and approval text must disclose both grants.
+ */
+function effectiveTrustFlags(laneKey, trust) {
+  if (trust.flag === null) return [];
+  const flags = [trust.flag];
+  if (LANES[laneKey].cli === 'cursor-agent' && trust.flag !== '--trust') flags.push('--trust');
+  return flags;
+}
+
+function describeTrustFlags(laneKey, trust) {
+  if (trust.flag === null) return null;
+  const displays = [describeTrustFlag(trust)];
+  if (LANES[laneKey].cli === 'cursor-agent' && trust.flag !== '--trust') {
+    displays.push(describeTrustFlag({
+      flag: '--trust',
+      grant: TRUST_FLAGS['cursor-agent']['--trust'].grant,
+    }));
+  }
+  return displays.join('; ');
 }
 
 // ---------------------------------------------------------------------------
@@ -2294,12 +2417,12 @@ function renderTable(rows) {
 // Main
 // ---------------------------------------------------------------------------
 
-function buildLaneReport(laneKey, config, cwd) {
+function buildLaneReport(laneKey, config, cwd, suppliedProbe) {
   const lane = LANES[laneKey];
   const modeInfo = resolveMode(laneKey, config);
   const modelInfo = resolveModel(laneKey, config);
   const trustInfo = resolveTrustFlag(laneKey, config);
-  const probe = probeLane(laneKey, config, cwd);
+  const probe = suppliedProbe === undefined ? probeLane(laneKey, config, cwd) : suppliedProbe;
   const fast = checkFastSlug(laneKey, modelInfo.model, probe.modelCatalogue);
 
   return {
@@ -2323,7 +2446,8 @@ function buildLaneReport(laneKey, config, cwd) {
     trustFlagAutoApprovesEveryCommand: trustInfo.autoApprovesEveryCommand,
     trustFlagNote: trustInfo.note,
     trustFlagError: trustInfo.error,
-    trustFlagDisplay: describeTrustFlag(trustInfo),
+    trustFlagDisplay: describeTrustFlags(laneKey, trustInfo),
+    trustFlagsInForce: effectiveTrustFlags(laneKey, trustInfo),
     available: probe.available,
     state: probe.state,
     reason: probe.reason,
@@ -2337,6 +2461,191 @@ function buildLaneReport(laneKey, config, cwd) {
     risk: lane.risk === undefined ? null : lane.risk,
     fastSlug: fast,
   };
+}
+
+/**
+ * Extracts only the help entries relevant to timeout or trust/approval
+ * discovery. A readable help page with no matching entries is different from
+ * a help command that failed or returned nothing, so callers can keep those
+ * states separate instead of calling both "none found".
+ */
+function parseFlagHelp(helpText) {
+  const clean = stripAnsi(String(helpText === null || helpText === undefined ? '' : helpText));
+  if (clean.trim() === '') {
+    return { readable: false, entries: [] };
+  }
+
+  const entries = new Map();
+  let sawOption = false;
+  for (const rawLine of clean.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line === '') continue;
+
+    const flags = [];
+    const flagPattern = /(^|[\s,(])(-{1,2}[A-Za-z][A-Za-z0-9-]*)\b/g;
+    let match = flagPattern.exec(line);
+    while (match !== null) {
+      if (!flags.includes(match[2])) flags.push(match[2]);
+      match = flagPattern.exec(line);
+    }
+    if (flags.length > 0) sawOption = true;
+
+    const categories = [];
+    const lower = line.toLowerCase();
+    if (/timeout|time-out|timed out/.test(lower)) categories.push('timeout');
+    if (/\b(?:trust|permissions?|approvals?|approve(?:s|d)?|force|yolo)\b/.test(lower)) categories.push('trust');
+    if (categories.length === 0) continue;
+
+    for (const flag of flags) {
+      const existing = entries.get(flag);
+      if (existing === undefined) {
+        entries.set(flag, { flag, categories: categories.slice(), helpLine: line });
+      } else {
+        for (const category of categories) {
+          if (!existing.categories.includes(category)) existing.categories.push(category);
+        }
+      }
+    }
+  }
+
+  return { readable: sawOption, entries: Array.from(entries.values()) };
+}
+
+function probeHelpCommand(transport, cwd) {
+  const args = transport.prefixArgs.concat(['--help']);
+  const result = runProbe(transport.command, args, cwd);
+  const helpText = `${result.stdout || ''}\n${result.stderr || ''}`;
+  const base = {
+    attempted: true,
+    state: null,
+    readable: false,
+    command: {
+      file: transport.command,
+      args,
+      cwd,
+      shell: false,
+    },
+    status: result.status,
+    timedOut: result.timedOut,
+    flags: null,
+    timeoutFlags: null,
+    trustFlags: null,
+    evidence: firstLines(helpText, 3),
+    reason: null,
+  };
+
+  if (!result.ok || result.timedOut || result.status !== 0 || helpText.trim() === '') {
+    base.state = result.timedOut ? 'help-timeout' : 'help-unreadable';
+    base.reason =
+      `Could not read and parse ${transport.command} --help ` +
+      `(${result.errorMessage || (result.status === null ? 'no exit status' : `exit ${result.status}`)}). ` +
+      'Timeout-ish and trust/approval-ish flags are UNKNOWN; no absence was inferred.';
+    return base;
+  }
+
+  const parsed = parseFlagHelp(helpText);
+  if (!parsed.readable) {
+    base.state = 'help-unreadable';
+    base.reason =
+      `Could not read and parse ${transport.command} --help. ` +
+      'Timeout-ish and trust/approval-ish flags are UNKNOWN; no absence was inferred.';
+    return base;
+  }
+
+  base.state = 'ready';
+  base.readable = true;
+  base.flags = parsed.entries;
+  base.timeoutFlags = parsed.entries.filter((entry) => entry.categories.includes('timeout'));
+  base.trustFlags = parsed.entries.filter((entry) => entry.categories.includes('trust'));
+  return base;
+}
+
+function rejectedProbeForLane(laneKey, config) {
+  return {
+    available: false,
+    state: 'rejected',
+    reason: `Lane "${laneKey}" is set to "reject" in ${config.path}. The config forbids the lane; its binary was not run.`,
+    evidence: null,
+    binaryPath: null,
+    binarySource: null,
+    transport: null,
+    modelCatalogue: null,
+    rejectedCandidates: [],
+  };
+}
+
+function probeFlagsForLane(laneKey, config, cwd) {
+  const modeInfo = resolveMode(laneKey, config);
+  if (modeInfo.mode === 'reject') {
+    const report = buildLaneReport(laneKey, config, cwd, rejectedProbeForLane(laneKey, config));
+    report.flagProbe = {
+      attempted: false,
+      state: 'rejected',
+      readable: null,
+      command: null,
+      status: null,
+      timedOut: null,
+      flags: null,
+      timeoutFlags: null,
+      trustFlags: null,
+      evidence: null,
+      reason: report.reason,
+    };
+    return report;
+  }
+
+  const report = buildLaneReport(laneKey, config, cwd);
+  if (report.available !== true || report.transport === null) {
+    report.flagProbe = {
+      attempted: false,
+      state: 'not-run-unavailable',
+      readable: null,
+      command: null,
+      status: null,
+      timedOut: null,
+      flags: null,
+      timeoutFlags: null,
+      trustFlags: null,
+      evidence: report.reason,
+      reason:
+        `The availability probe for lane "${laneKey}" was not READY ` +
+        `(state: ${report.state}); ${report.cli} --help was not run. ` +
+        'Flag presence is unavailable/unknown, not "none found".',
+    };
+    return report;
+  }
+
+  report.flagProbe = probeHelpCommand(report.transport, cwd);
+  return report;
+}
+
+function renderFlagEntries(entries) {
+  if (entries === null) return 'UNKNOWN — the --help output could not be read or parsed';
+  if (entries.length === 0) return '(none found in readable --help output)';
+  return entries.map((entry) => `    ${entry.flag} — ${entry.helpLine}`).join('\n');
+}
+
+function renderFlagProbeReport(report) {
+  const flagProbe = report.flagProbe;
+  const lines = [`[${report.lane}] ${report.cli} — availability ${availabilityLabel(report.available)}, state ${report.state}`];
+  if (flagProbe.state === 'rejected') {
+    lines.push(`  rejected: ${flagProbe.reason}`);
+    return lines.join('\n');
+  }
+  if (!flagProbe.attempted) {
+    lines.push(`  unavailable: ${flagProbe.reason}`);
+    return lines.join('\n');
+  }
+  lines.push(`  help: ${flagProbe.state}${flagProbe.command === null ? '' : ` — ${flagProbe.command.file} ${flagProbe.command.args.join(' ')}`}`);
+  if (flagProbe.readable === true) {
+    lines.push('  timeout-ish flags:');
+    lines.push(renderFlagEntries(flagProbe.timeoutFlags));
+    lines.push('  trust/approval-ish flags:');
+    lines.push(renderFlagEntries(flagProbe.trustFlags));
+  } else {
+    lines.push(`  flags: ${flagProbe.reason}`);
+  }
+  return lines.join('\n');
 }
 
 function emit(payload, opts, exitCode) {
@@ -2372,6 +2681,33 @@ async function main() {
   if (config.fatal !== null) {
     if (!opts.json) process.stderr.write(`Config error: ${config.fatal}\n`);
     emit({ ok: false, errors: [config.fatal], configPath: config.path }, opts, EXIT.USAGE_ERROR);
+  }
+
+  // ---- flag-probe-only path --------------------------------------------
+  // This is deliberately separate from the dispatch path. It has no prompt,
+  // never builds a dispatch command, and checks the existing availability
+  // probe before it invokes any CLI with --help.
+  if (opts.probeFlags) {
+    const keys = opts.lane === null ? LANE_KEYS : [opts.lane];
+    const lanes = keys.map((k) => probeFlagsForLane(k, config, opts.cwd));
+    const payload = {
+      ok: true,
+      action: 'probe-flags',
+      configPath: config.path,
+      configFound: config.found,
+      warnings: config.warnings,
+      generatedAt: new Date().toISOString(),
+      lanes,
+    };
+
+    if (!opts.json) {
+      process.stdout.write(`Dispatch CLI flag probes — policy: ${config.path}\n\n`);
+      for (const report of lanes) {
+        process.stdout.write(`${renderFlagProbeReport(report)}\n\n`);
+      }
+      process.stdout.write('This command never dispatches. It only runs --help after a lane is READY.\n');
+    }
+    emit(payload, opts, EXIT.OK);
   }
 
   // ---- probe-only paths -------------------------------------------------
@@ -2540,6 +2876,7 @@ async function main() {
     trustFlagGrant: report.trustFlagGrant,
     trustFlagAutoApprovesEveryCommand: report.trustFlagAutoApprovesEveryCommand,
     trustFlagDisplay: report.trustFlagDisplay,
+    trustFlagsInForce: report.trustFlagsInForce,
     available: report.available,
     state: report.state,
     reason: report.reason,
@@ -2632,6 +2969,7 @@ async function main() {
       outputFile,
       trustFlag: report.trustFlag,
       cwd: opts.cwd,
+      timeoutMs: opts.timeoutMs,
     });
   } catch (err) {
     const message = `Lane "${opts.lane}" could not build a command: ${err && err.message ? err.message : String(err)}`;
