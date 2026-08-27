@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**222 JS modules** and **25 stylesheet parts** (247 indexed files).
+**223 JS modules** and **25 stylesheet parts** (248 indexed files).
 
 ## `public/`
 
@@ -73,7 +73,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/commentary/simulation.js` | C | Node (CommonJS) | 712 | Layer 3 of the strategic commentary — the opponent-tier builders, the | `BATTLE_TRIALS_PER_COUNT, MAX_SIMULATED_HULLS, OPPONENT_RATING_BASIS, SIMULATION_SEEDS_COUNT, TARGET_WIN_PROBABILITY, buildOmniscientOpponentTiers, buildPlayerOpponentTiers, buildRebuildProjection, describeBandUncertainty, findRequiredHullsForTier, guaranteedWinHullCount, runMonteCarloSimulation` | — |
 | `server/config.js` | C | Node (CommonJS) | 326 | resolve, validate and migrate the server's config from config.json and environment. | `DEFAULTS_PATH, DEFAULT_CONFIG_PATH, LEGACY_KEYS, PROJECT_ROOT, SCHEMA_PATH, envPresent, migrateLegacyConfig, parseIntegerEnv, readJson, resolveConfig, resolvePublishableKey, safeRuntimeConfig, …(+2)` | `tests/config.test.js` |
 | `server/directiveAdvisor.js` | C | Node (CommonJS) | 999 | campaign-aware ranking and posture assessment behind Mission Control | `ALIEN_CONTACT_PROJECT, CAPABILITY_AXES, CHEAPEST_HATE_ACTION, CHEAPEST_HATE_ACTION_LOW, DECISIVE_CAPABILITY_RATIO, FRAGILE_OWN_SHIPS, HATE_DELTA_VARIANCE, MISSION_SUCCESS_HATE, PROXY_ALIEN_HATE_SHARE, PROXY_OFFENSIVE_MISSIONS, TOTAL_WAR_APPROACH_HATE, assessCampaignPosture, …(+11)` | `tests/directiveAdvisor.test.js` |
-| `server/directiveEngine.js` | **B** C | Node (CommonJS) | 327 | the v2 directive rule engine orchestration and public entry point — | `RULES, WEIGHTS, applyRules, buildDecisionReasoning, buildWorld, generateCandidates, generateCouncilCandidates, generateDefendInterestsCandidates, generateIntelligenceCandidates, generateOpenControlPointCandidates, runEngine, scoreCandidates` | `tests/directiveEngine.test.js` |
+| `server/directiveEngine.js` | **B** C | Node (CommonJS) | 336 | the v2 directive rule engine orchestration and public entry point — | `RULES, WEIGHTS, applyRules, buildDecisionReasoning, buildWorld, generateCandidates, generateCouncilCandidates, generateDefendInterestsCandidates, generateIntelligenceCandidates, generateOpenControlPointCandidates, runEngine, scoreCandidates` | `tests/directiveEngine.test.js` |
 | `server/directives/council.js` | C | Node (CommonJS) | 80 | the council-department ladder — exploit an embedded mole, assign an | `buildCouncilDirectives` | — |
 | `server/directives/geopolitical.js` | C | Node (CommonJS) | 184 | the Earth-facing policyRank ladder — hold ground, the escalate-late | `attachHateEstimate, buildGeopoliticalDirectives` | — |
 | `server/directives/holdGround.js` | C | Node (CommonJS) | 64 | Hold Ground as a first-class directive. | `buildHoldGroundDirective` | `tests/holdGround.test.js` |
@@ -106,6 +106,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/engine/rules/risk.js` | C | Node (CommonJS) | 271 | the configurable success-odds floor — the one veto that reads the | `MARGINAL_CLEARANCE_POINTS, assessRiskFloor, readBandLow, resolveRiskFloorPercent, riskFloorInForce, successFloor` | — |
 | `server/engine/rules/value.js` | C | Node (CommonJS) | 200 | the score rules that say what an action is worth. | `advisoryPotential, counterCouncilor, defendInterests, gdpPerCpCost, unblockAlienResponse` | — |
 | `server/engine/selection.js` | C | Node (CommonJS) | 257 | the middle two stages of the engine pipeline — applying the rules | `applyPairingRules, applyRules, buildDecisionReasoning, buildPreparationFallbackCandidate, computeResourceCost, evaluatePairingVetoes, evaluateVetoes, scoreCandidates` | — |
+| `server/engine/theaterDefence.js` | C | Node (CommonJS) | 512 | the theater-defence block — build, reinforce or withdraw at each | `DEFENCE_CHECKS, THEATER_DEFENCE_FINDING_LIMIT, THEATER_POSTURE, buildTheaterDefence` | `tests/theaterDefence.test.js` |
 | `server/engine/weights.js` | C | Node (CommonJS) | 186 | the engine's tunable weights, kept in one exported config object per | `WEIGHTS, getWeights` | — |
 | `server/exportGenerator.js` | C | Node (CommonJS) | 31 | CommonJS adapter exposing the shared markdown export renderers to the server. | — | — |
 | `server/http/publishControl.js` | C | Node (CommonJS) | 151 | the local-only, service-role-backed publish route and its | `handlePublish, isPublishAuthorized, publishToken, register` | — |

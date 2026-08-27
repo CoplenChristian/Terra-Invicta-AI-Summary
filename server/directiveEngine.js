@@ -92,6 +92,7 @@ const {
   buildPreparationFallbackCandidate,
   buildDecisionReasoning
 } = require('./engine/selection');
+const { buildTheaterDefence } = require('./engine/theaterDefence');
 
 /**
  * How many entries of each explanatory list (`rejected`, `uncertain`,
@@ -296,6 +297,14 @@ function runEngine(world) {
     // no key rather than a 0.
     heldHateBearingByMission,
     cyclePlan,
+    // A SIBLING BLOCK, not a sixth candidate family. Build/reinforce/withdraw at
+    // each threatened body, computed from the SAME frozen world the candidate
+    // pipeline just read. It stays outside that pipeline deliberately: a build
+    // order has no councilor for `allocateCyclePlan` to pair it with, every
+    // rule's `appliesTo` keys off the five councilor-facing CANDIDATE_FAMILIES,
+    // and the odds layer, hate envelope and missionSpec are all inapplicable to
+    // a hull. `holdGround` is the precedent. See server/engine/theaterDefence.js.
+    theaterDefence: buildTheaterDefence(world),
     decisionReasoning: buildDecisionReasoning(
       primary,
       alternatives,
