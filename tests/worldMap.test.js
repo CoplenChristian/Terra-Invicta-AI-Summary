@@ -40,6 +40,22 @@ const repoRoot = path.resolve(__dirname, '..');
 before(async () => { await startWorldMapHarness(); });
 after(async () => { await stopWorldMapHarness(); });
 
+/**
+ * How long the two React roots get to commit before this test calls it a failure.
+ *
+ * Deliberately a bound on a CONDITION, not a fixed number of animation frames.
+ * `mountReactPanel` calls `createRoot(container).render(...)`, and React 18
+ * commits a concurrent root through its own scheduler rather than on the next
+ * frame, so "await two rAFs" was a guess about how long two roots need. Under
+ * the full 40-file browser pass at --test-concurrency=2 the guess was sometimes
+ * wrong and the SECOND mount — the selector form — was the one that lost:
+ * measured 491/492 on 2026-08-26 with `selectorMounted` false, while the same
+ * file passed 5/5 in isolation. Raising the frame count would only move the
+ * flake; waiting on the condition removes it, and the bound keeps a genuinely
+ * broken mount path failing loudly instead of hanging.
+ */
+const MOUNT_TIMEOUT_MS = 20000;
+
 const SIX_MEASURED = [
   { key: 'nam', name: 'North America', hostileCount: 0, ownCount: 1 },
   { key: 'sam', name: 'South America', hostileCount: 2, ownCount: 0 },
@@ -76,9 +92,7 @@ test('the vanilla world-map component is deleted and the shell no longer loads i
 test('window.WorldTheaterMap.render mounts the React panel, by element and by selector, clearing the fallback', async () => {
   const view = await openWorldMap([], {});
 
-  const result = await view.page.evaluate(async () => {
-    const outcomes = {};
-
+  const requested = await view.page.evaluate(() => {
     const makeMount = (id) => {
       const host = document.createElement('div');
       host.id = id;
@@ -91,23 +105,54 @@ test('window.WorldTheaterMap.render mounts the React panel, by element and by se
       return host;
     };
 
-    outcomes.globalIsFunction = typeof window.WorldTheaterMap?.render === 'function';
+    const globalIsFunction = typeof window.WorldTheaterMap?.render === 'function';
 
     const byElement = makeMount('probe-by-element');
     window.WorldTheaterMap.render(byElement, [{ id: 'nam', name: 'North America', hostileCount: 0, ownCount: 1 }], {});
 
-    const bySelector = makeMount('probe-by-selector');
+    makeMount('probe-by-selector');
     window.WorldTheaterMap.render('#probe-by-selector', [], {});
 
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-    outcomes.elementMounted = !!byElement.querySelector('.world-map');
-    outcomes.selectorMounted = !!bySelector.querySelector('.world-map');
-    outcomes.elementFallbackGone = !byElement.querySelector('.world-map-fallback');
-    outcomes.selectorFallbackGone = !bySelector.querySelector('.world-map-fallback');
-    outcomes.elementHeading = byElement.querySelector('.world-map-heading')?.textContent ?? null;
-    return outcomes;
+    return { globalIsFunction };
   });
+
+  // Wait for BOTH roots to have committed, not for a fixed number of frames.
+  // A timeout here is a failure with a named cause — never a fall-through to a
+  // pass, and never a quietly-slow mount reported as a fast one.
+  try {
+    await view.page.waitForFunction(
+      () => !!document.querySelector('#probe-by-element .world-map')
+        && !!document.querySelector('#probe-by-selector .world-map'),
+      undefined,
+      { timeout: MOUNT_TIMEOUT_MS },
+    );
+  } catch (cause) {
+    const seen = await view.page.evaluate(() => ({
+      element: !!document.querySelector('#probe-by-element .world-map'),
+      selector: !!document.querySelector('#probe-by-selector .world-map'),
+    }));
+    throw new Error(
+      `window.WorldTheaterMap.render did not commit both React roots within ${MOUNT_TIMEOUT_MS}ms — `
+      + `render(element, ...) mounted: ${seen.element}, render(selectorString, ...) mounted: ${seen.selector}. `
+      + 'This is a mount failure, not a slow machine: the wait is on the condition, not on a frame count.',
+      { cause },
+    );
+  }
+
+  const result = {
+    ...requested,
+    ...await view.page.evaluate(() => {
+      const byElement = document.getElementById('probe-by-element');
+      const bySelector = document.getElementById('probe-by-selector');
+      return {
+        elementMounted: !!byElement.querySelector('.world-map'),
+        selectorMounted: !!bySelector.querySelector('.world-map'),
+        elementFallbackGone: !byElement.querySelector('.world-map-fallback'),
+        selectorFallbackGone: !bySelector.querySelector('.world-map-fallback'),
+        elementHeading: byElement.querySelector('.world-map-heading')?.textContent ?? null,
+      };
+    }),
+  };
 
   assert.equal(result.globalIsFunction, true, 'window.WorldTheaterMap.render must come from the React bundle');
   assert.equal(result.elementMounted, true, 'render(element, ...) must mount the panel');
