@@ -26,7 +26,7 @@ save.
 > **The tally and the live list immediately below are the authoritative status.**
 > Use `git log` on the named commit to see what a fix actually changed.
 
-**Tally as of 2026-08-27: 23 entries — 20 fixed, 3 live, 0 conditional.**
+**Tally as of 2026-08-27: 23 entries — 21 fixed, 2 live, 0 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -57,7 +57,7 @@ localisation files, 107 fallen back, 70 refused as ambiguous. The user's
 **#19 and #20 were fixed the same day** (`a0eabef`, `d71613e`), and **#18** and
 the `emptyOutDir` build race in `95eee95`.
 
-**Live right now: #17, #21 and #23.**
+**Live right now: #17 and #21.**
 
 - **#17** — four fabricated fallbacks in the directive board, carried across the
   React port **deliberately**, because "no figure may change" was that port's
@@ -68,10 +68,8 @@ the `emptyOutDir` build race in `95eee95`.
   2026-08-27: the lane converted one of the eleven and broke it, making per-metric
   measurement state cascade across rows, which is the exact property those tests
   exist to defend. The patch is kept, not discarded.
-- **#23** — a **flaky** mount test in `worldMap.test.js`. The most urgent of the
-  three despite being a test rather than a product defect, because while it stands
-  a green browser pass is not evidence, and several verification claims made on
-  2026-08-26 rest on it. Fix in progress.
+*(#23 was found and fixed the same day — `e76c212`. It is left in the list below
+because the two wrong diagnoses it produced are the useful part.)*
 
 **Conditional: none.** #4, #6, #8 and #10 were the whole conditional set and all
 four are fixed.
@@ -1094,7 +1092,7 @@ is not the same question as "does this test fail."**
 
 ---
 
-## 23. A flaky mount test means a green browser pass is not evidence — **demonstrated, live**
+## 23. A flaky mount test means a green browser pass is not evidence — **demonstrated, now fixed**
 
 Found 2026-08-27 while verifying the theater-defence block, and it is the first
 entry here about **the suite itself** rather than about the product.
@@ -1139,6 +1137,33 @@ confirmation.
 been *reproduced and then made to stop* — a single passing run after a change is
 consistent with the change having done nothing. This is the same shape as
 "a test that only passes proves nothing", applied to the fix rather than the test.
+
+**Fixed same day, `e76c212`**, and the rule above is what makes that fix
+trustworthy where the earlier attempt was not. Baseline on the unmodified tree
+reproduced the failure on run 1, at the exact reported assertion. After the change
+— `page.waitForFunction` on the condition, bounded at 20s, a timeout throwing a
+named failure rather than passing — **ten consecutive clean full runs**, five from
+each of two measurements that overlapped, so most ran while a second full suite
+competed for CPU. Contention is the cause, so surviving doubled load is stronger
+evidence than a quiet machine. The target test settles in ~280–320 ms against the
+20-second bound, so the bound is not doing the work.
+
+Proven still able to fail: forcing `renderWorldMap`'s container resolution to null
+(`src/v2/main.jsx:317`) kills only the selector form and produces the new named
+diagnostic instead of a hang. Restored md5-identical; no application source
+changed.
+
+**Not a product race.** `renderWorldMap` resolves the container and removes the
+fallback synchronously. Only `createRoot().render()` is async, and React 18 commits
+a concurrent root through its own scheduler rather than on a frame boundary. The
+app was never racing; the test was under-waiting.
+
+**The same fixed double-`requestAnimationFrame` survives in four other files** —
+`tests/driveExplorerReactPanel.test.js`, `tests/faction-intel.test.js`,
+`tests/fixtures/factionIntelBrowser.js`, `tests/fixtures/worldMapBrowser.js`. Each
+waits on a *single* root after an interaction rather than a two-root mount race, so
+exposure is lower, but it is the same class and is recorded here rather than
+silently left as four copies of a pattern now known to be fragile.
 
 ---
 
