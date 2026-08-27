@@ -171,16 +171,35 @@ agents, which was markedly cleaner — every agent could run its own tests.
   a lane that could not hold the task. Fixed in `000e8c4`: the inner timeout is now
   derived from the wrapper's own `--timeout`, set 15s under it so `agy` exits with
   its own message instead of being hard-killed. **Untested since the fix.**
-- **Composer** — recorded here as **"cannot execute shell"**. Almost certainly
-  wrong too. `cursor-agent` has `--trust`, and the wrapper never passed it;
-  headless cannot display the workspace-trust prompt, and without trust the agent
-  writes files fine while every command it tries is silently denied — which
-  presents exactly as "the shell is disabled". Also fixed in `000e8c4`.
-  **The evidence for the original claim is now suspect in a specific way:** on
-  2026-08-27, still un-trusted, it converted one panel for defect #21 and broke it,
-  making per-metric measurement state cascade across rows. It could not run the
-  suite to notice. A lane that cannot verify itself shipping a break is not the
-  same finding as a lane that writes bad code.
+- **Composer** — recorded here as **"cannot execute shell"**. **The observation was
+  right, my explanation was wrong twice, and Composer's own explanation was right
+  all along.** Established 2026-08-27 by making it run four commands and report the
+  errors verbatim:
+
+  ```
+  Hook blocked with message: --: eval: line 1: syntax error near unexpected token `&'
+  `$OutputEncoding = [System.Text.Encoding]::UTF8; Get-Content -LiteralPath
+   '…\payload.json' -Raw | & { $input | node "${CLAUDE_PROJECT_DIR}/.claude/skills/dispatch/approval_hook.js" }'
+  ```
+
+  **`cursor-agent` reads Claude Code's `.claude/settings.json` and applies its
+  `PreToolUse` hooks to its own shell tool.** This repo registers one there —
+  the dispatch skill's approval gate, matching `Bash|PowerShell`. On Windows
+  cursor-agent wraps the command in PowerShell and then executes the result with
+  **bash**, which rejects `& {`. Every shell invocation dies before it starts.
+  `${CLAUDE_PROJECT_DIR}` is not even set in that environment, so the path would be
+  wrong regardless.
+
+  So the lane was blocked by **this repo's own policy hook**, applied to a tool it
+  was never written to govern. Neither `--trust` (`000e8c4`) nor setting Cursor's
+  `approvalMode` to `unrestricted` changed anything, because neither was the cause.
+
+  **This entry previously said Composer's account of why its shell failed "is not
+  to be trusted either."** That was wrong. It named a PreToolUse hook injecting
+  PowerShell into bash on the first attempt, and I dismissed it because I reasoned
+  that Claude Code hooks cannot reach cursor-agent. They can. **I substituted a
+  plausible mechanism for a measurement, twice, against a source that was telling
+  me the answer.**
 - **MiniMax** — twice left work structurally incomplete: once swallowing
   `const UNAVAILABLE = '—'` from five files while leaving `shared.js`
   unparseable, once building a panel without performing the swap. *Still broadly
