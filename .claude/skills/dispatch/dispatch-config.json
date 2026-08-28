@@ -112,9 +112,9 @@
       "note": "Reviewing and verification, not implementation. Slow but more powerful. Runs on omp (Oh My Pi), NOT opencode, as of 2026-08-25 — the slug is the omp provider id `minimax-code`, and it must be an EXACT entry in `omp models --json` or the dispatch is refused."
     },
     "deepseek": {
-      "mode": "auto",
+      "mode": "reject",
       "model": "opencode-go/deepseek-v4-flash",
-      "note": "METERED — real money. Backend implementation and review. No vision: never send it a screenshot or a task that needs one."
+      "note": "OFF as of 2026-08-27 at the owner's instruction: three dispatches in one day consumed 6% of the monthly quota. METERED — real money per call, billed to OpenCode Go, and the cost is per-token so a long job is expensive even when it succeeds. Set back to \"auto\" (or \"ask\") to re-enable. Backend implementation and review; strongest lane at noticing what the brief did not ask for. The configured model has no vision: never send it a screenshot or a task that needs one."
     },
     "antigravity": {
       "mode": "ask",
