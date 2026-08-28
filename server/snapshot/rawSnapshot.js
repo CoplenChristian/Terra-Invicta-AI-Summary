@@ -53,7 +53,7 @@ const {
 // shared/campaignElapsed.mjs.
 const ASSUMED_CAMPAIGN_START_YEAR = 2022;
 
-function buildRawSnapshot(saveData) {
+function buildRawSnapshot(saveData, { observerId = null } = {}) {
   const gamestates = saveData.gamestates || {};
   const raw = lookups.readRawCollections(gamestates);
   const {
@@ -91,7 +91,7 @@ function buildRawSnapshot(saveData) {
   // Process Space Fleets
   const fleets = space.buildFleets(rawFleets, {
     factionsById, shipsById, shipModuleRefs, fleetsById, habsById, bodiesById,
-    orbitsById, bodyDistanceAUById, saturnOrbitDistanceAU
+    orbitsById, bodyDistanceAUById, saturnOrbitDistanceAU, observerId
   });
 
   // Process Habs

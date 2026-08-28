@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const snapshotBuilder = require('../server/snapshotBuilder');
 const saveParser = require('../server/saveParser');
 const templateLoader = require('../server/templateLoader');
+const intelligenceFilter = require('../server/intelligenceFilter');
 const { makeSaveData } = require('./fixtures/syntheticSave');
 
 test('buildRawSnapshot builds factions with derived power metrics', () => {
@@ -85,6 +86,65 @@ test('buildRawSnapshot resolves space assets and theater classification', () => 
   assert.strictEqual(site.parentBodyName, 'Ceres');
   assert.strictEqual(site.water, 10);
   assert.strictEqual(site.factionName, 'the Initiative');
+});
+
+test('fleet names and fleet destinations resolve for the observing faction', () => {
+  const save = makeSaveData();
+  const fleetState = save.gamestates['PavonisInteractive.TerraInvicta.TISpaceFleetState'];
+  const fleet = fleetState[0].Value;
+  fleet.displayName = '';
+  fleet.displayNameByFaction = [
+    { Key: { value: 4712 }, Value: 'Mars Defense' },
+    { Key: { value: 4717 }, Value: 'Initiative-private-name' }
+  ];
+  fleet.trajectory = { destinationFleet: { value: 601 } };
+  fleetState.push({
+    Value: {
+      ID: { value: 601 },
+      displayName: '',
+      displayNameByFaction: [
+        { Key: { value: 4712 }, Value: 'Victor-8' },
+        { Key: { value: 4717 }, Value: 'Alien-private-name' }
+      ],
+      faction: { value: 4717 },
+      ships: [],
+      orbitState: { value: 500 },
+      inCombat: false
+    }
+  });
+
+  // Build once for a different observer to prove filtering does not inherit
+  // the name that happened to be present when the shared raw snapshot ran.
+  const raw = snapshotBuilder.buildRawSnapshot(save, { observerId: 4717 });
+  assert.strictEqual(raw.fleets[0].displayName, 'Initiative-private-name');
+  assert.strictEqual(raw.fleets[0].destination, 'Alien-private-name');
+
+  for (const mode of ['player', 'omniscient']) {
+    const filtered = intelligenceFilter.applyFilter(raw, mode, 4712);
+    const ownFleet = filtered.fleets.find(item => item.ID === 600);
+    assert.ok(ownFleet, `${mode} includes the observer fleet`);
+    assert.strictEqual(ownFleet.displayName, 'Mars Defense');
+    assert.strictEqual(ownFleet.destination, 'Victor-8');
+    assert.strictEqual(ownFleet.currentOrders.destination, 'Victor-8');
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(ownFleet, 'displayNameByFaction'), false);
+    assert.ok(!JSON.stringify(filtered).includes('Alien-private-name'),
+      `${mode} must not leak another faction's private fleet name`);
+  }
+
+  const absentSave = makeSaveData();
+  const absentFleet = absentSave.gamestates['PavonisInteractive.TerraInvicta.TISpaceFleetState'][0].Value;
+  delete absentFleet.displayName;
+  absentFleet.displayNameByFaction = [{ Key: { value: 4717 }, Value: 'Not-visible-to-observer' }];
+  const absent = snapshotBuilder.buildRawSnapshot(absentSave, { observerId: 4712 });
+  assert.strictEqual(absent.fleets[0].displayName, null);
+  assert.strictEqual(
+    intelligenceFilter.applyFilter(absent, 'omniscient', 4712).fleets[0].displayName,
+    null
+  );
+
+  absentFleet.displayName = 'Auto Designation';
+  const fallback = snapshotBuilder.buildRawSnapshot(absentSave, { observerId: 4712 });
+  assert.strictEqual(fallback.fleets[0].displayName, 'Auto Designation');
 });
 
 test('buildRawSnapshot builds faction relationships from factionHate maps', () => {

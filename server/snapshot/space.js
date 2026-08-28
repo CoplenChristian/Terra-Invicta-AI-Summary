@@ -17,7 +17,7 @@
 const templateLoader = require('../templateLoader');
 const { templateDisplayName } = require('../localization');
 const spaceTheater = require('../spaceTheater');
-const { MS_PER_DAY } = require('../../shared/util.mjs');
+const { MS_PER_DAY, sameId } = require('../../shared/util.mjs');
 const {
   roundNumber,
   firstNumericOrNull,
@@ -137,12 +137,38 @@ function medianArmor(armor) {
   return roundNumber(values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2, 2);
 }
 
-function resolveFleetDestination(trajectory, fleetsById, habsById, bodiesById, orbitsById) {
+// A raw snapshot is shared by every observer, but fleet names are not. Keep
+// the raw source associated with each normalized fleet without putting the
+// save's other faction names on the row that can reach a filtered response.
+const fleetSourceByRow = new WeakMap();
+
+function nonEmptyDisplayName(value) {
+  return typeof value === 'string' && value.trim() !== '' ? value : null;
+}
+
+/**
+ * Resolve the name a particular observer sees for a fleet.
+ *
+ * The game stores a display name for each observing faction. A missing entry
+ * is not permission to borrow the fleet owner's name: the top-level value is
+ * only the explicit fallback, and an empty/missing value remains null.
+ */
+function resolveFleetDisplayName(fleet, observerId) {
+  const source = fleetSourceByRow.get(fleet)?.rawFleet || fleet;
+  const observerEntry = Array.isArray(source?.displayNameByFaction)
+    ? source.displayNameByFaction.find(entry => sameId(entry?.Key?.value, observerId))
+    : null;
+  const observerName = nonEmptyDisplayName(observerEntry?.Value);
+  if (observerName !== null) return observerName;
+  return nonEmptyDisplayName(source?.displayName);
+}
+
+function resolveFleetDestination(trajectory, fleetsById, habsById, bodiesById, orbitsById, observerId = null) {
   if (!trajectory) return { type: 'stationary', id: null, name: null };
   const fleetId = trajectory.destinationFleet?.value || null;
   if (fleetId) {
     const fleet = fleetsById.get(fleetId);
-    return { type: 'fleet', id: fleetId, name: fleet?.displayName || `Fleet ${fleetId}` };
+    return { type: 'fleet', id: fleetId, name: resolveFleetDisplayName(fleet, observerId) };
   }
   const stationId = trajectory.destinationStation?.value || null;
   if (stationId) {
@@ -157,6 +183,26 @@ function resolveFleetDestination(trajectory, fleetsById, habsById, bodiesById, o
     return { type: 'orbit', id: orbitId, name: body ? `${body.displayName} orbit` : `Orbit ${orbitId}` };
   }
   return { type: 'transfer', id: null, name: 'In Transit' };
+}
+
+/** Resolve a normalized fleet's destination again for a different observer. */
+function resolveFleetDestinationForObserver(fleet, observerId) {
+  const source = fleetSourceByRow.get(fleet);
+  if (!source) {
+    return {
+      type: fleet?.destinationType ?? null,
+      id: fleet?.destinationId ?? null,
+      name: nonEmptyDisplayName(fleet?.destination)
+    };
+  }
+  return resolveFleetDestination(
+    source.rawFleet?.trajectory || null,
+    source.fleetsById,
+    source.habsById,
+    source.bodiesById,
+    source.orbitsById,
+    observerId
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -250,7 +296,8 @@ function buildFleets(rawFleets, {
   bodiesById,
   orbitsById,
   bodyDistanceAUById,
-  saturnOrbitDistanceAU
+  saturnOrbitDistanceAU,
+  observerId = null
 }) {
   const fleets = [];
   for (const f of rawFleets) {
@@ -306,15 +353,22 @@ function buildFleets(rawFleets, {
     const orbitBodyDistanceAU = resolveOrbitBodyDistanceAU(f, bodiesById, orbitsById, bodyDistanceAUById);
     const trajectory = f.trajectory || null;
     const fleetWeaponBreakdown = summarizeWeaponCounts(fleetWeaponCounts);
-    const destination = resolveFleetDestination(trajectory, fleetsById, habsById, bodiesById, orbitsById);
+    const destination = resolveFleetDestination(
+      trajectory,
+      fleetsById,
+      habsById,
+      bodiesById,
+      orbitsById,
+      observerId
+    );
     const arrivalDate = dateValueToIso(trajectory?.arrivalTime || null);
     const shipDeltaVs = shipList.map(ship => ship.currentDeltaVKps).filter(value => value !== null);
     const shipCombatAccelerations = shipList.map(ship => ship.combatAccelerationMps2).filter(value => value !== null);
     const shipArmorMedians = shipList.map(ship => ship.armorMedian).filter(value => value !== null);
 
-    fleets.push({
+    const fleet = {
       ID: fleetId,
-      displayName: f.displayName,
+      displayName: resolveFleetDisplayName(f, observerId),
       factionId,
       factionName,
       shipsCount: shipRefs.length,
@@ -347,7 +401,15 @@ function buildFleets(rawFleets, {
       lowestCombatAccelerationMps2: shipCombatAccelerations.length ? Math.min(...shipCombatAccelerations) : null,
       armorMedian: shipArmorMedians.length ? roundNumber(shipArmorMedians.reduce((sum, value) => sum + value, 0) / shipArmorMedians.length, 2) : null,
       inCombat: !!f.inCombat
+    };
+    fleetSourceByRow.set(fleet, {
+      rawFleet: f,
+      fleetsById,
+      habsById,
+      bodiesById,
+      orbitsById
     });
+    fleets.push(fleet);
   }
   return fleets;
 }
@@ -719,7 +781,9 @@ module.exports = {
   formatWeaponSummary,
   normalizeArmor,
   medianArmor,
+  resolveFleetDisplayName,
   resolveFleetDestination,
+  resolveFleetDestinationForObserver,
   habModuleResearchIncome,
   moduleConstructionStatus,
   daysRemainingForStatus,

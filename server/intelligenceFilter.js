@@ -5,6 +5,7 @@
 const capabilityResolver = require('./capabilityResolver');
 const opportunityScorer = require('./opportunityScorer');
 const snapshotIdentity = require('./snapshotIdentity');
+const space = require('./snapshot/space');
 const { resolveConfig } = require('./config');
 const { buildAlienHateEconomics } = require('./alienHateEconomics');
 const {
@@ -166,7 +167,8 @@ class IntelligenceFilter {
             Object.entries(c.attributes).map(([k, v]) => [k, { actual: v, visible: v, visibility: 'raw_save_only' }])
           )
         })),
-        fleets: rawSnapshot.fleets,
+        fleets: (rawSnapshot.fleets || []).map(fleet =>
+          this.projectFleetForObserver(fleet, actualObserverId)),
         habs: rawSnapshot.habs,
         habSites: rawSnapshot.habSites,
         habModules: rawSnapshot.habModules,
@@ -950,7 +952,11 @@ class IntelligenceFilter {
     const fleets = rawSnapshot.fleets
       .map(asset => ({ asset, visibility: visibilityForAsset(asset, 'TISpaceFleetState') }))
       .filter(item => item.visibility.visible)
-      .map(item => ({ ...item.asset, visibility: item.visibility.source }));
+      .map(item => this.projectFleetForObserver(
+        item.asset,
+        observerFactionId,
+        item.visibility.source
+      ));
 
     const habs = rawSnapshot.habs
       .map(asset => ({ asset, visibility: visibilityForAsset(asset, 'TIHabState') }))
@@ -976,6 +982,28 @@ class IntelligenceFilter {
       .map(item => ({ ...item.site, visibility: item.source }));
 
     return { fleets, habs, habSites };
+  }
+
+  /**
+   * Apply observer-scoped fleet names at the redaction boundary. The raw
+   * builder is reused for multiple observers, so the name and fleet
+   * destination must both be resolved here from the associated raw record.
+   */
+  projectFleetForObserver(fleet, observerFactionId, visibility = null) {
+    const { displayNameByFaction: _displayNameByFaction, ...safeFleet } = fleet || {};
+    const destination = space.resolveFleetDestinationForObserver(fleet, observerFactionId);
+    const currentOrders = safeFleet.currentOrders && typeof safeFleet.currentOrders === 'object'
+      ? { ...safeFleet.currentOrders, destination: destination.name }
+      : safeFleet.currentOrders;
+    return {
+      ...safeFleet,
+      displayName: space.resolveFleetDisplayName(fleet, observerFactionId),
+      destination: destination.name,
+      destinationType: destination.type,
+      destinationId: destination.id,
+      currentOrders,
+      ...(visibility ? { visibility } : {})
+    };
   }
 
   filterFactionSpaceMetrics(factions, rawSnapshot, visibleAssets, observerFactionId, capabilities, isEnhanced) {
