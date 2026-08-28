@@ -103,6 +103,7 @@ export function BattlePanel({ data }) {
           <FleetPicker
             sideLabel={`${observerName} — your fleet`}
             fleets={fleets}
+            shipDesigns={snapshot.shipDesigns}
             factionId={observerId}
             fleetId={leftFleetId}
             selectedShipIds={leftSelectedShipIds}
@@ -114,6 +115,7 @@ export function BattlePanel({ data }) {
           <FleetPicker
             sideLabel="Opponent"
             fleets={fleets}
+            shipDesigns={snapshot.shipDesigns}
             factionOptions={opponentFactions}
             factionId={rightFactionId}
             fleetId={rightFleetId}

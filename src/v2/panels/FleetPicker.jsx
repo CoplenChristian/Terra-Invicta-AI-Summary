@@ -19,10 +19,12 @@ import { Value } from '../components/Value.jsx';
 import {
   BATTLE_SHIP_CAP_ATTRIBUTION,
   BATTLE_SHIP_CAP_PER_SIDE,
+  buildShipDesignLookup,
   deploymentSummary,
   fleetsForFaction,
   overCapNotice,
   presentCount,
+  resolveShipDesignSubtitle,
   selectionBlocked,
   shipId,
   toggleShipSelection,
@@ -42,9 +44,73 @@ function fleetLabel(fleet) {
   return `${name}${body}${count}`;
 }
 
-function ShipRow({ ship, checked, disabled, onToggle }) {
+function ShipSubtitle({ subtitle }) {
+  const parts = [];
+  if (subtitle.resolved) {
+    if (subtitle.designName) {
+      parts.push(
+        <Typography key="design" component="span" variant="metric" sx={{ color: 'text.secondary' }}>
+          {subtitle.designName}
+        </Typography>,
+      );
+    }
+    if (subtitle.hullClass) {
+      parts.push(
+        <Typography key="hull" component="span" variant="metric" sx={{ color: 'text.secondary' }}>
+          {subtitle.hullClass}
+        </Typography>,
+      );
+    }
+  } else {
+    parts.push(
+      <Value
+        key="design"
+        as={Typography}
+        variant="metric"
+        sx={{ color: 'text.secondary' }}
+        value={null}
+        present={false}
+        absentLabel="design not identified"
+      />,
+    );
+  }
+  if (subtitle.weaponType) {
+    parts.push(
+      <Typography key="weapon" component="span" variant="metric" sx={{ color: 'text.secondary' }}>
+        {subtitle.weaponType}
+      </Typography>,
+    );
+  }
+
+  if (parts.length === 0) {
+    return (
+      <Value
+        as={Typography}
+        variant="metric"
+        sx={{ color: 'text.secondary' }}
+        value={null}
+        present={false}
+        absentLabel="design not identified"
+      />
+    );
+  }
+
+  return (
+    <Typography component="span" variant="metric" sx={{ display: 'block', color: 'text.secondary' }}>
+      {parts.map((part, index) => (
+        <React.Fragment key={part.key}>
+          {index > 0 ? ' · ' : null}
+          {part}
+        </React.Fragment>
+      ))}
+    </Typography>
+  );
+}
+
+function ShipRow({ ship, designLookup, checked, disabled, onToggle }) {
   const id = shipId(ship);
   if (id == null) return null;
+  const subtitle = resolveShipDesignSubtitle(ship, designLookup);
   return (
     <FormControlLabel
       sx={{
@@ -68,10 +134,7 @@ function ShipRow({ ship, checked, disabled, onToggle }) {
           <Typography component="span" variant="row" sx={{ display: 'block', color: 'text.primary' }}>
             {ship.displayName || 'Unnamed ship'}
           </Typography>
-          <Typography component="span" variant="metric" sx={{ display: 'block', color: 'text.secondary' }}>
-            {ship.hullName || 'hull unknown'}
-            {ship.dominantWeaponType ? ` · ${ship.dominantWeaponType}` : ''}
-          </Typography>
+          <ShipSubtitle subtitle={subtitle} />
         </Box>
       )}
     />
@@ -89,6 +152,7 @@ function ShipRow({ ship, checked, disabled, onToggle }) {
  * @param {(factionId: string|number|null) => void} [props.onFactionChange]
  * @param {(fleetId: string|number|null) => void} props.onFleetChange
  * @param {(shipIds: string[]) => void} props.onSelectedShipIdsChange
+ * @param {Array} [props.shipDesigns] — snapshot ship designs for subtitle joins
  * @param {number} [props.cap]
  */
 export function FleetPicker({
@@ -101,9 +165,14 @@ export function FleetPicker({
   onFactionChange,
   onFleetChange,
   onSelectedShipIdsChange,
+  shipDesigns = [],
   cap = BATTLE_SHIP_CAP_PER_SIDE,
 }) {
   const theme = useTheme();
+  const designLookup = React.useMemo(
+    () => buildShipDesignLookup(shipDesigns),
+    [shipDesigns],
+  );
   const t = theme.initiative?.tokens ?? {};
   const showFactionPicker = Array.isArray(factionOptions);
   const scopedFleets = showFactionPicker
@@ -269,6 +338,7 @@ export function FleetPicker({
                 <ShipRow
                   key={id}
                   ship={ship}
+                  designLookup={designLookup}
                   checked={checked}
                   disabled={!checked && atCap}
                   onToggle={handleToggle}

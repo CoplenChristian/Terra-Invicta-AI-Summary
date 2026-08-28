@@ -104,3 +104,60 @@ export function overCapNotice(summary) {
     + `${reinforcementCount} would arrive as reinforcements.`
   );
 }
+
+/**
+ * Maps ship-design template ids (`dataName`, e.g. `playerShipTemplate1121`) to
+ * human-readable design and hull-class labels from `snapshot.shipDesigns`.
+ *
+ * @param {Array} shipDesigns
+ * @returns {Map<string, { displayName: string, hullClass: string }>}
+ */
+export function buildShipDesignLookup(shipDesigns) {
+  const lookup = new Map();
+  for (const design of Array.isArray(shipDesigns) ? shipDesigns : []) {
+    if (!design?.dataName) continue;
+    const displayName = design._displayName || design.displayName || design.friendlyName || null;
+    const hullClass = typeof design.hullName === 'string' && design.hullName.trim() !== ''
+      ? design.hullName
+      : null;
+    if (displayName == null && hullClass == null) continue;
+    lookup.set(design.dataName, {
+      displayName: displayName ?? null,
+      hullClass,
+    });
+  }
+  return lookup;
+}
+
+/**
+ * Joins a fleet ship's `hullName` (template id) against `buildShipDesignLookup`.
+ * Never falls back to the raw template id — an unresolved join stays null.
+ *
+ * @param {object} ship
+ * @param {Map<string, { displayName: string|null, hullClass: string|null }>} lookup
+ * @returns {{ designName: string|null, hullClass: string|null, weaponType: string|null, resolved: boolean }}
+ */
+export function resolveShipDesignSubtitle(ship, lookup) {
+  const templateKey = typeof ship?.hullName === 'string' && ship.hullName.trim() !== ''
+    ? ship.hullName
+    : null;
+  const weaponType = typeof ship?.dominantWeaponType === 'string' && ship.dominantWeaponType.trim() !== ''
+    ? ship.dominantWeaponType
+    : null;
+
+  if (templateKey == null || !(lookup instanceof Map)) {
+    return { designName: null, hullClass: null, weaponType, resolved: false };
+  }
+
+  const design = lookup.get(templateKey);
+  if (!design) {
+    return { designName: null, hullClass: null, weaponType, resolved: false };
+  }
+
+  return {
+    designName: design.displayName ?? null,
+    hullClass: design.hullClass ?? null,
+    weaponType,
+    resolved: true,
+  };
+}
