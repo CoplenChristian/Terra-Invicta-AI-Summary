@@ -65,6 +65,10 @@ import {
   renderTheaterDefence,
 } from './panels/TheaterDefencePanel.jsx';
 import {
+  BattlePanel,
+  renderBattlePanel,
+} from './panels/BattlePanel.jsx';
+import {
   CapabilityMatrixBoard,
   FactionLedgerBoard,
   LogisticsBoard,
@@ -427,6 +431,14 @@ export function renderResearchWatchlist(container, snapshot) {
   mountReactPanel(container, <ResearchWatchlistBoard snapshot={snapshot} />);
 }
 
+/**
+ * Strangler bridge matching window.MissionControlBattlePanel.render(root, payload).
+ *
+ * Reads `state.rawSnapshot` from the controller — fleet rows are present in
+ * player mode and the panel does not need a second intel fetch.
+ */
+export { renderBattlePanel };
+
 // The DRIVES panel owns a module-level store (scripts/verify_drive_explorer.js
 // reads it), so it mounts itself rather than being handed a fresh element on
 // every change. It only needs the mount function.
@@ -451,6 +463,9 @@ if (typeof window !== 'undefined') {
   // run against the same save.
   window.MissionControlTheaterDefence = {
     render: renderTheaterDefence,
+  };
+  window.MissionControlBattlePanel = {
+    render: renderBattlePanel,
   };
   window.MissionControlMiningExpansion = {
     render: renderMiningExpansion,
@@ -521,6 +536,7 @@ if (typeof window !== 'undefined') {
     mountMiningExpansion: renderMiningExpansion,
     mountHostileMovement: renderHostileMovement,
     mountTheaterDefence: renderTheaterDefence,
+    mountBattlePanel: renderBattlePanel,
     mountDirectiveBoard: renderDirectiveBoard,
     mountResearchAdvisor: renderResearchAdvisor,
     mountFleetProcurement: renderFleetProcurement,
@@ -560,6 +576,7 @@ if (typeof window !== 'undefined') {
     DriveExplorer,
     HostileMovementPanel,
     TheaterDefencePanel,
+    BattlePanel,
     DetailPanel,
     FactionLedgerBoard,
     LogisticsBoard,

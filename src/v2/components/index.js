@@ -11,3 +11,4 @@ export { Measured } from './Measured.jsx';
 export { Estimated } from './Estimated.jsx';
 export { Value, resolveValue, ABSENT_LABEL, UNAVAILABLE_LABEL } from './Value.jsx';
 export { TruncationNote } from './TruncationNote.jsx';
+export { TwoColumnGrid, TwoColumnGridItem } from './TwoColumnGrid.jsx';

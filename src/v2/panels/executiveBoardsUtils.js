@@ -5,9 +5,10 @@
  * mirrors MissionControlShared null discipline without DOM coupling.
  */
 
+import { ABSENT_LABEL, UNAVAILABLE_LABEL, resolveValue } from '../components/Value.jsx';
 import { parseNumeric } from '../components/parseNumeric.js';
 
-export const EM_DASH = '—';
+export const EM_DASH = ABSENT_LABEL;
 export const BOARD_SCROLL_HINT = 'SWIPE HORIZONTALLY TO VIEW ALL COLUMNS';
 
 const BODY_THEATER_MAP = {
@@ -22,9 +23,17 @@ export function numberValue(value) {
   return parseNumeric(value);
 }
 
+export function isPresentNumeric(value) {
+  return numberValue(value) !== null;
+}
+
+export function isPresentText(value) {
+  return value !== null && value !== undefined && value !== '';
+}
+
 export function formatNumber(value, decimals) {
   const parsed = numberValue(value);
-  if (parsed === null) return 'UNAVAILABLE';
+  if (parsed === null) return UNAVAILABLE_LABEL;
   return parsed.toLocaleString(undefined, {
     maximumFractionDigits: decimals === undefined ? 0 : decimals,
     minimumFractionDigits: decimals || 0,
@@ -33,7 +42,8 @@ export function formatNumber(value, decimals) {
 
 export function formatGdp(value) {
   const parsed = numberValue(value);
-  return parsed === null ? 'UNAVAILABLE' : `$${(parsed / 1e12).toFixed(1)}T`;
+  if (parsed === null) return UNAVAILABLE_LABEL;
+  return `$${(parsed / 1e12).toFixed(1)}T`;
 }
 
 export function formatDelta(change) {
@@ -43,6 +53,37 @@ export function formatDelta(change) {
   if (Math.abs(delta) >= 1e9) return `${delta > 0 ? '+' : ''}${(delta / 1e9).toFixed(1)}B`;
   if (Math.abs(delta) >= 1e6) return `${delta > 0 ? '+' : ''}${(delta / 1e6).toFixed(1)}M`;
   return `${delta > 0 ? '+' : ''}${formatNumber(delta, Math.abs(delta) < 10 && !Number.isInteger(delta) ? 1 : 0)}`;
+}
+
+/** String form for non-JSX hosts. */
+export function number(value, decimals = 0) {
+  return resolveValue({
+    value,
+    present: isPresentNumeric(value),
+    absentLabel: UNAVAILABLE_LABEL,
+    format: (raw) => formatNumber(raw, decimals),
+  }).text;
+}
+
+/** String form for non-JSX hosts. */
+export function gdp(value) {
+  return resolveValue({
+    value,
+    present: isPresentNumeric(value),
+    absentLabel: UNAVAILABLE_LABEL,
+    format: formatGdp,
+  }).text;
+}
+
+/** String form for non-JSX hosts. */
+export function delta(change) {
+  const parsed = change ? numberValue(change.delta) : null;
+  return resolveValue({
+    value: change?.delta,
+    present: change && parsed !== null,
+    absentLabel: ABSENT_LABEL,
+    format: () => formatDelta(change),
+  }).text;
 }
 
 export function bodyKey(body, explicitKey) {
@@ -90,7 +131,14 @@ export function factionStatus(faction, factions) {
 export function rankLabel(factions, faction, key, filter) {
   const ranked = factions.filter(filter || (() => true)).slice().sort((a, b) => (numberValue(b[key]) || 0) - (numberValue(a[key]) || 0));
   const index = ranked.findIndex((item) => String(item.ID) === String(faction?.ID));
-  return index < 0 ? 'UNAVAILABLE' : `#${index + 1} / ${ranked.length}`;
+  if (index < 0) {
+    return resolveValue({ present: false, absentLabel: UNAVAILABLE_LABEL }).text;
+  }
+  return resolveValue({
+    value: index + 1,
+    present: true,
+    format: () => `#${index + 1} / ${ranked.length}`,
+  }).text;
 }
 
 export function ownWeaponMix(snapshot, observerId) {
@@ -106,9 +154,12 @@ export function ownWeaponMix(snapshot, observerId) {
 export function completedProjectSignal(faction, expression, labels) {
   const projects = (faction?.completedProjects || []).map(String);
   const match = projects.find((project) => expression.test(project));
-  if (!match) return 'UNAVAILABLE';
+  if (!match) {
+    return resolveValue({ present: false, absentLabel: UNAVAILABLE_LABEL }).text;
+  }
   const known = labels.find((item) => item.test.test(match));
-  return known?.label || match.replace(/^Project_/, '').replace(/([a-z])([A-Z])/g, '$1 $2');
+  const label = known?.label || match.replace(/^Project_/, '').replace(/([a-z])([A-Z])/g, '$1 $2');
+  return resolveValue({ value: label, present: true, format: () => label }).text;
 }
 
 export function weaponCount(fleet, role) {
@@ -130,8 +181,15 @@ export function shipLoadoutText(ship) {
 }
 
 export function shipCountLabel(value) {
-  const count = numberValue(value);
-  return count === null ? 'UNAVAILABLE' : `${formatNumber(count)} ship${count === 1 ? '' : 's'}`;
+  const parsed = numberValue(value);
+  if (parsed === null) {
+    return resolveValue({ present: false, absentLabel: UNAVAILABLE_LABEL }).text;
+  }
+  return resolveValue({
+    value: parsed,
+    present: true,
+    format: () => `${formatNumber(parsed)} ship${parsed === 1 ? '' : 's'}`,
+  }).text;
 }
 
 export function alienForceSummary(aliens) {
@@ -140,7 +198,7 @@ export function alienForceSummary(aliens) {
   const solShips = solFleets.reduce((sum, fleet) => sum + (numberValue(fleet.shipsCount) || 0), 0);
   const averageSolFleet = solFleets.length ? solShips / solFleets.length : null;
   const fragmentation = averageSolFleet === null
-    ? 'UNAVAILABLE'
+    ? UNAVAILABLE_LABEL
     : averageSolFleet <= 2 ? 'HIGH' : averageSolFleet <= 4 ? 'MODERATE' : 'LOW';
   const bodyGroups = new Map();
   aliens.forEach((fleet) => {
@@ -203,9 +261,13 @@ export function visibleSkill(councilor, skill) {
 
 export function operativeRole(councilor) {
   const skills = ['Persuasion', 'Investigation', 'Espionage', 'Command', 'Administration', 'Science', 'Security'];
-  return skills.map((skill) => ({ skill, value: visibleSkill(councilor, skill) }))
+  const best = skills.map((skill) => ({ skill, value: visibleSkill(councilor, skill) }))
     .filter((entry) => entry.value !== null)
-    .sort((a, b) => b.value - a.value)[0]?.skill || 'UNAVAILABLE';
+    .sort((a, b) => b.value - a.value)[0];
+  if (!best) {
+    return resolveValue({ present: true, format: () => UNAVAILABLE_LABEL }).text;
+  }
+  return best.skill;
 }
 
 export function nationPosture(nation, observerId, priorityFactionId) {

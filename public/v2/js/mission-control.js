@@ -236,6 +236,17 @@ const VIEWS = [
     ]
   },
   {
+    // "Which 40 ships fight in the first wave" is a fleet-composition decision
+    // distinct from procurement or per-fleet threat math, so it gets its own
+    // view. Registered so assertViewRegistryIntegrity fails if the mount moves.
+    id: 'battle',
+    label: 'BATTLE',
+    sectionId: 'view-battle',
+    panels: [
+      'battlePlanner'
+    ]
+  },
+  {
     // "Which drive should this hull carry" is its own question and its own
     // 541-row surface, so it gets its own view rather than being nested inside
     // FLEET, which is already dense. Its panel is lazily loaded on first
@@ -1304,6 +1315,12 @@ function renderDashboard() {
     window.MissionControlTheaterDefence.render(
       document.getElementById('theaterDefence'),
       { engineDirectives: state.briefing?.engineDirectives }
+    );
+  }
+  if (window.MissionControlBattlePanel?.render) {
+    window.MissionControlBattlePanel.render(
+      document.getElementById('battlePlanner'),
+      { rawSnapshot: state.rawSnapshot, observer: state.observer }
     );
   }
   if (window.MissionControlMcBudget?.render) {

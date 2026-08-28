@@ -2,7 +2,7 @@
  * Automated tests for v2 Dashboard Grouped View Navigation.
  * Pins:
  *  1. Single source of truth VIEWS registry and startup integrity assertion.
- *  2. HTML structure: 6 named view sections, topbar nav buttons, and zero <details class="init-records">.
+ *  2. HTML structure: 7 named view sections, topbar nav buttons, and zero <details class="init-records">.
  *  3. Inactive views maintain hidden and inert attributes.
  *  4. DetailPanel syncPageInert() correctly handles .init-view sections and topbar.
  *
@@ -32,7 +32,7 @@ const missionControlJsPath = path.join(repoRoot, 'public', 'v2', 'js', 'mission-
 const detailPanelUtilsPath = path.join(repoRoot, 'src', 'v2', 'panels', 'detailPanelUtils.mjs');
 const detailPanelUtils = () => import(url.pathToFileURL(detailPanelUtilsPath).href);
 
-test('public/v2/index.html defines 6 view sections and topbar navigation without init-records accordion', () => {
+test('public/v2/index.html defines 7 view sections and topbar navigation without init-records accordion', () => {
   const html = fs.readFileSync(v2IndexHtmlPath, 'utf8');
 
   // No old accordion
@@ -43,17 +43,20 @@ test('public/v2/index.html defines 6 view sections and topbar navigation without
   assert.ok(html.includes('data-view="command"'), 'navigation must include command view button');
   assert.ok(html.includes('data-view="expansion"'), 'navigation must include expansion view button');
   assert.ok(html.includes('data-view="fleet"'), 'navigation must include fleet view button');
+  assert.ok(html.includes('data-view="battle"'), 'navigation must include battle view button');
   assert.ok(html.includes('data-view="drives"'), 'navigation must include drives view button');
   assert.ok(html.includes('data-view="threat"'), 'navigation must include threat view button');
   assert.ok(html.includes('data-view="records"'), 'navigation must include records view button');
 
-  // 6 View sections
+  // 7 View sections
   assert.ok(html.includes('id="view-command"'), 'must contain #view-command');
   assert.ok(html.includes('id="view-expansion"'), 'must contain #view-expansion');
   assert.ok(html.includes('id="view-fleet"'), 'must contain #view-fleet');
+  assert.ok(html.includes('id="view-battle"'), 'must contain #view-battle');
   assert.ok(html.includes('id="view-drives"'), 'must contain #view-drives');
   assert.ok(html.includes('id="view-threat"'), 'must contain #view-threat');
   assert.ok(html.includes('id="view-records"'), 'must contain #view-records');
+  assert.ok(html.includes('id="battlePlanner"'), 'must contain the #battlePlanner mount element');
 
   // The DRIVES panel needs a mount element as well as something that loads it:
   // the mining board once had the script and no element and rendered nowhere.
@@ -65,18 +68,19 @@ test('public/v2/index.html defines 6 view sections and topbar navigation without
   // Initial inactive view attributes
   assert.ok(/id="view-expansion"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-expansion must be initially hidden and inert');
   assert.ok(/id="view-fleet"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-fleet must be initially hidden and inert');
+  assert.ok(/id="view-battle"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-battle must be initially hidden and inert');
   assert.ok(/id="view-drives"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-drives must be initially hidden and inert');
   assert.ok(/id="view-threat"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-threat must be initially hidden and inert');
   assert.ok(/id="view-records"\s+hidden\s+inert\s+aria-hidden="true"/.test(html), '#view-records must be initially hidden and inert');
 });
 
-test('VIEWS registry in mission-control.js defines exactly the 6 required views and passes integrity assertion', () => {
+test('VIEWS registry in mission-control.js defines exactly the 7 required views and passes integrity assertion', () => {
   const html = fs.readFileSync(v2IndexHtmlPath, 'utf8');
   const js = fs.readFileSync(missionControlJsPath, 'utf8');
 
   // Parse DOM elements from index.html
   const idToSection = new Map();
-  const sectionIds = ['view-command', 'view-expansion', 'view-fleet', 'view-drives', 'view-threat', 'view-records'];
+  const sectionIds = ['view-command', 'view-expansion', 'view-fleet', 'view-battle', 'view-drives', 'view-threat', 'view-records'];
 
   for (const sId of sectionIds) {
     const sectionMatch = html.match(new RegExp(`<section[^>]*id="${sId}"[\\s\\S]*?<\\/section>`));
@@ -126,10 +130,10 @@ test('VIEWS registry in mission-control.js defines exactly the 6 required views 
 
   const { VIEWS, assertViewRegistryIntegrity } = sandbox.window.MissionControlViews || {};
   assert.ok(Array.isArray(VIEWS), 'VIEWS must be exported as an array');
-  assert.strictEqual(VIEWS.length, 6, 'VIEWS must contain exactly 6 views');
+  assert.strictEqual(VIEWS.length, 7, 'VIEWS must contain exactly 7 views');
 
   const viewIds = [...VIEWS.map(v => v.id)];
-  assert.deepStrictEqual(viewIds, ['command', 'expansion', 'fleet', 'drives', 'threat', 'records']);
+  assert.deepStrictEqual(viewIds, ['command', 'expansion', 'fleet', 'battle', 'drives', 'threat', 'records']);
 
   // Assert integrity with valid DOM
   assert.doesNotThrow(() => {
@@ -160,6 +164,7 @@ test('detail-panel syncPageInert manages inert across topbar and all .init-view 
     { id: 'view-command', hidden: false, inert: false },
     { id: 'view-expansion', hidden: true, inert: true },
     { id: 'view-fleet', hidden: true, inert: true },
+    { id: 'view-battle', hidden: true, inert: true },
     { id: 'view-drives', hidden: true, inert: true },
     { id: 'view-threat', hidden: true, inert: true },
     { id: 'view-records', hidden: true, inert: true }

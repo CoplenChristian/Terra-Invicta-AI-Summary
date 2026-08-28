@@ -28,7 +28,7 @@ const http = require('http');
 // Going through express.static keeps this script runnable from either location.
 const SHELL_PATH = '/v2/index.html';
 
-const VIEWS = ['command', 'expansion', 'fleet', 'drives', 'threat', 'records'];
+const VIEWS = ['command', 'expansion', 'fleet', 'battle', 'drives', 'threat', 'records'];
 const MODES = ['player', 'omniscient'];
 const NARROW_VIEWPORTS = [
   { width: 375, height: 812 },

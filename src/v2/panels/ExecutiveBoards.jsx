@@ -7,9 +7,9 @@
 
 import React from 'react';
 import { DataTable } from '../components/DataTable.jsx';
+import { ABSENT_LABEL, UNAVAILABLE_LABEL, Value } from '../components/Value.jsx';
 import {
   BOARD_SCROLL_HINT,
-  EM_DASH,
   alienForceSummary,
   availabilityByProjectId,
   bodyKey,
@@ -23,7 +23,11 @@ import {
   formatDelta,
   formatGdp,
   formatNumber,
+  gdp,
+  isPresentNumeric,
+  isPresentText,
   nationPosture,
+  number,
   numberValue,
   operativeRole,
   ownWeaponMix,
@@ -33,6 +37,71 @@ import {
   skillDetail,
   weaponCount,
 } from './executiveBoardsUtils.js';
+
+function Num({ value, decimals, present, format, className }) {
+  return (
+    <Value
+      value={value}
+      present={present ?? isPresentNumeric(value)}
+      absentLabel={UNAVAILABLE_LABEL}
+      format={format ?? ((raw) => formatNumber(raw, decimals))}
+      className={className}
+    />
+  );
+}
+
+function Gdp({ value, className }) {
+  return (
+    <Value
+      value={value}
+      present={isPresentNumeric(value)}
+      absentLabel={UNAVAILABLE_LABEL}
+      format={formatGdp}
+      className={className}
+    />
+  );
+}
+
+function Delta({ change, className }) {
+  const parsed = change ? numberValue(change.delta) : null;
+  return (
+    <Value
+      value={change?.delta}
+      present={change && parsed !== null}
+      absentLabel={ABSENT_LABEL}
+      format={() => formatDelta(change)}
+      className={className}
+    />
+  );
+}
+
+function Dash({ className }) {
+  return <Value value={null} present={false} className={className} />;
+}
+
+function Txt({ value, fallback = UNAVAILABLE_LABEL, className }) {
+  return (
+    <Value
+      value={value}
+      present={isPresentText(value)}
+      absentLabel={fallback}
+      format={String}
+      className={className}
+    />
+  );
+}
+
+function HateValue({ hate, className }) {
+  return (
+    <Value
+      value={hate}
+      present={hate !== null && hate !== undefined}
+      absentLabel={UNAVAILABLE_LABEL}
+      format={(raw) => formatNumber(raw, 1)}
+      className={className}
+    />
+  );
+}
 
 function BoardNote({ title, children }) {
   return (
@@ -75,7 +144,7 @@ function FactionLogoHead({ faction, displayName, subtitle }) {
 
 function SkillCell({ councilor, skill }) {
   const detail = skillDetail(councilor, skill);
-  if (detail.value === null) return <td>{EM_DASH}</td>;
+  if (detail.value === null) return <td><Dash /></td>;
   const total = detail.bonus || 0;
   const parts = [`${detail.base} base`];
   if (detail.orgBonus) parts.push(`${detail.orgBonus > 0 ? '+' : ''}${detail.orgBonus} orgs`);
@@ -93,7 +162,7 @@ function SkillCell({ councilor, skill }) {
     : null;
   return (
     <td className="mc-skill-cell">
-      {formatNumber(detail.value)}
+      <Num value={detail.value} />
       {bonus}
     </td>
   );
@@ -172,7 +241,6 @@ export function FactionLedgerBoard({ snapshot }) {
             const gdpDelta = factionDelta(snapshot, faction.ID, 'GDP');
             const hate = faction.alienHate?.visibleEstimate ?? faction.assessedAlienHateOfMe;
             const isObserver = String(faction.ID) === String(snapshot?.observerFactionId);
-            const hateLabel = hate === undefined || hate === null ? 'UNAVAILABLE' : formatNumber(hate, 1);
             const shipDeltaClass = shipDelta?.delta > 0 ? 'is-positive' : shipDelta?.delta < 0 ? 'is-negative' : '';
             return (
               <tr
@@ -184,18 +252,22 @@ export function FactionLedgerBoard({ snapshot }) {
                   <FactionLogoHead
                     faction={faction}
                     displayName={faction.displayName}
-                    subtitle={`R&D ${formatNumber(faction.totalResearch)} · HATE ${hateLabel}`}
+                    subtitle={
+                      <>
+                        R&D <Num value={faction.totalResearch} /> · HATE <HateValue hate={hate} />
+                      </>
+                    }
                   />
                 </th>
-                <td>{formatNumber(faction.controlPointsCount)}</td>
+                <td><Num value={faction.controlPointsCount} /></td>
                 <td>
-                  {formatGdp(faction.totalGdp)}
-                  <small className="mc-board-secondary">GDP Δ {formatDelta(gdpDelta)}</small>
+                  <Gdp value={faction.totalGdp} />
+                  <small className="mc-board-secondary">GDP Δ <Delta change={gdpDelta} /></small>
                 </td>
                 <td>
-                  {formatNumber(faction.habsCount)} / {formatNumber(faction.shipsCount)}
+                  <Num value={faction.habsCount} /> / <Num value={faction.shipsCount} />
                   <small className={`mc-board-secondary${shipDeltaClass ? ` ${shipDeltaClass}` : ''}`}>
-                    Δ ships {formatDelta(shipDelta)}
+                    Δ ships <Delta change={shipDelta} />
                   </small>
                 </td>
                 <td><StatusChip>{factionStatus(faction, factions)}</StatusChip></td>
@@ -236,19 +308,19 @@ export function LogisticsBoard({ snapshot, strategic }) {
           {resources.map((resource) => {
             const queue = resource.underConstruction || [];
             const queueText = queue.length
-              ? `${queue.length} queued · ${queue.slice(0, 2).map((item) => `${item.body || item.site || 'site'}${numberValue(item.daysRemaining) === null ? '' : ` / ${formatNumber(item.daysRemaining, 1)}d`}`).join(', ')}`
+              ? `${queue.length} queued · ${queue.slice(0, 2).map((item) => `${item.body || item.site || 'site'}${numberValue(item.daysRemaining) === null ? '' : ` / ${number(item.daysRemaining, 1)}d`}`).join(', ')}`
               : 'No visible queue';
             const source = resource.topProducers?.[0]
-              ? `${resource.topProducers[0].site || 'site'} · +${formatNumber(resource.topProducers[0].monthly, 1)}`
+              ? `${resource.topProducers[0].site || 'site'} · +${number(resource.topProducers[0].monthly, 1)}`
               : 'No active producer';
             return (
               <tr key={resource.label || resource.id}>
                 <th scope="row">{resource.label}</th>
-                <td>{formatNumber(resource.stock, 0)}</td>
-                <td>+{formatNumber(resource.grossPerMonth, 1)}</td>
-                <td>{resource.spendPerMonth === null ? 'UNAVAILABLE' : formatNumber(resource.spendPerMonth, 1)}</td>
+                <td><Num value={resource.stock} decimals={0} /></td>
+                <td><Num value={resource.grossPerMonth} decimals={1} format={(raw) => `+${formatNumber(raw, 1)}`} /></td>
+                <td><Num value={resource.spendPerMonth} decimals={1} present={resource.spendPerMonth !== null} /></td>
                 <td>{queueText}</td>
-                <td>{resource.runwayDays === null ? 'UNAVAILABLE' : `${formatNumber(resource.runwayDays, 1)}d`}</td>
+                <td><Num value={resource.runwayDays} decimals={1} present={resource.runwayDays !== null} format={(raw) => `${formatNumber(raw, 1)}d`} /></td>
                 <td>{source}</td>
               </tr>
             );
@@ -288,14 +360,14 @@ export function CapabilityMatrixBoard({ snapshot, briefing }) {
     .map((key) => intelDetails[key])
     .filter(Boolean)
     .map((detail) => `${detail.requiredDisplayName}: ${detail.active ? 'ONLINE' : 'LOCKED'}`)
-    .join(' · ') || 'UNAVAILABLE';
+    .join(' · ') || UNAVAILABLE_LABEL;
 
   const matrixRows = [
-    ['Earth GDP rank', rankLabel(factions, observer, 'totalGdp'), formatGdp(observer.totalGdp)],
-    ['Research output rank', rankLabel(factions, observer, 'totalResearch'), `${formatNumber(observer.totalResearch, 0)} / month`],
-    ['Human ship rank', rankLabel(humans, observer, 'shipsCount'), `${formatNumber(observer.shipsCount)} ships`],
-    ['Space hab rank', rankLabel(factions, observer, 'habsCount'), `${formatNumber(observer.habsCount)} habs`],
-    ['Dominant loadout', mix[0] ? `${mix[0][0]} × ${formatNumber(mix[0][1])}` : 'UNAVAILABLE', mix.length ? mix.map((entry) => `${entry[0]} ${entry[1]}`).join(' · ') : 'No fleet loadout visible'],
+    ['Earth GDP rank', rankLabel(factions, observer, 'totalGdp'), gdp(observer.totalGdp)],
+    ['Research output rank', rankLabel(factions, observer, 'totalResearch'), `${number(observer.totalResearch, 0)} / month`],
+    ['Human ship rank', rankLabel(humans, observer, 'shipsCount'), `${number(observer.shipsCount)} ships`],
+    ['Space hab rank', rankLabel(factions, observer, 'habsCount'), `${number(observer.habsCount)} habs`],
+    ['Dominant loadout', mix[0] ? `${mix[0][0]} × ${number(mix[0][1])}` : UNAVAILABLE_LABEL, mix.length ? mix.map((entry) => `${entry[0]} ${entry[1]}`).join(' · ') : 'No fleet loadout visible'],
     ['Best drive signal', completed, 'Derived from completed ship / propulsion projects'],
     ['Best kinetic signal', kinetic, 'Derived from completed weapon projects'],
     ['Best missile signal', missile, 'Derived from completed weapon projects'],
@@ -374,8 +446,8 @@ function OwnFleetBreakdown({ snapshot, fleets }) {
             <tr key={fleet.ID || fleet.displayName}>
               <th scope="row">{fleet.displayName || 'Unnamed fleet'}</th>
               <td>{bodyLabel(fleet.orbitBody)}</td>
-              <td>{formatNumber(fleet.shipsCount)}</td>
-              <td><StatusChip>{fleet.dominantWeaponType || 'UNAVAILABLE'}</StatusChip></td>
+              <td><Num value={fleet.shipsCount} /></td>
+              <td><StatusChip><Txt value={fleet.dominantWeaponType} /></StatusChip></td>
               <td>{fleet.weaponSummary || 'Loadout unavailable'}</td>
             </tr>
           ))}
@@ -443,11 +515,11 @@ export function TheaterBoard({ snapshot, strategic }) {
           <div className="mc-space-scope">
             <span>
               <strong>{posture.scope?.totalLabel || 'ALL TRACKED BODIES'}</strong>
-              <b>{formatNumber(posture.total?.fleets)} fleets / {formatNumber(posture.total?.ships)} ships</b>
+              <b><Num value={posture.total?.fleets} /> fleets / <Num value={posture.total?.ships} /> ships</b>
             </span>
             <span>
               <strong>{posture.scope?.solLabel || 'ORBIT BODY: SOL'}</strong>
-              <b>{formatNumber(posture.sol?.fleets)} fleets / {formatNumber(posture.sol?.ships)} ships</b>
+              <b><Num value={posture.sol?.fleets} /> fleets / <Num value={posture.sol?.ships} /> ships</b>
             </span>
           </div>
           <div className="mc-board-scope-note">{posture.scope?.note || 'Sol is a specific orbit-body value, not the whole system.'}</div>
@@ -455,19 +527,19 @@ export function TheaterBoard({ snapshot, strategic }) {
       ) : null}
       <div className="mc-space-force-summary">
         <div>
-          <strong>{formatNumber(force.totalShips)}</strong>
+          <strong><Num value={force.totalShips} /></strong>
           <span>ALIEN SHIPS / ALL TRACKED BODIES</span>
         </div>
         <div>
-          <strong>{formatNumber(force.totalFleets)}</strong>
+          <strong><Num value={force.totalFleets} /></strong>
           <span>ALIEN FLEETS</span>
         </div>
         <div>
-          <strong>{formatNumber(force.solShips)} / {formatNumber(force.solFleets)}</strong>
+          <strong><Num value={force.solShips} /> / <Num value={force.solFleets} /></strong>
           <span>SOL SHIPS / FLEETS</span>
         </div>
         <div>
-          <strong>{force.averageSolFleet === null ? 'UNAVAILABLE' : formatNumber(force.averageSolFleet, 1)}</strong>
+          <strong><Num value={force.averageSolFleet} decimals={1} present={force.averageSolFleet !== null} /></strong>
           <span>AVERAGE SOL FLEET</span>
         </div>
         <div>
@@ -480,7 +552,7 @@ export function TheaterBoard({ snapshot, strategic }) {
         {force.bodies.length ? force.bodies.map(([body, group]) => (
           <div key={body} className="mc-space-body-row">
             <strong>{body}</strong>
-            <span>{formatNumber(group.ships)} ships / {formatNumber(group.fleets)} fleets</span>
+            <span><Num value={group.ships} /> ships / <Num value={group.fleets} /> fleets</span>
           </div>
         )) : (
           <BoardEmpty>Alien force posture is unavailable in this intelligence mode.</BoardEmpty>
@@ -505,12 +577,12 @@ export function TheaterBoard({ snapshot, strategic }) {
                     {theater.name}
                   </button>
                 </th>
-                <td>{formatNumber(theater.ownShips)} / {formatNumber(theater.ownFleets)}</td>
-                <td>{formatNumber(theater.alienShips)} / {formatNumber(theater.alienFleets)}</td>
-                <td>{formatNumber(theater.ownHabs ?? theater.habs)}</td>
-                <td>{formatNumber(theater.ownMiningSites ?? theater.miningSites)}</td>
-                <td>{largest ? `${largest.displayName} · ${formatNumber(largest.shipsCount)} ships` : EM_DASH}</td>
-                <td>{inbound ? formatNumber(inbound) : EM_DASH}</td>
+                <td><Num value={theater.ownShips} /> / <Num value={theater.ownFleets} /></td>
+                <td><Num value={theater.alienShips} /> / <Num value={theater.alienFleets} /></td>
+                <td><Num value={theater.ownHabs ?? theater.habs} /></td>
+                <td><Num value={theater.ownMiningSites ?? theater.miningSites} /></td>
+                <td>{largest ? `${largest.displayName} · ${number(largest.shipsCount)} ships` : <Dash />}</td>
+                <td>{inbound ? <Num value={inbound} /> : <Dash />}</td>
                 <td><StatusChip className={hostile.length ? 'is-danger' : ''}>{status}</StatusChip></td>
               </tr>
             );
@@ -525,15 +597,15 @@ export function TheaterBoard({ snapshot, strategic }) {
               {contacts.map((fleet) => (
                 <tr key={fleet.ID || fleet.displayName}>
                   <th scope="row">{fleet.displayName}</th>
-                  <td>{formatNumber(fleet.shipsCount)}</td>
+                  <td><Num value={fleet.shipsCount} /></td>
                   <td>{bodyLabel(fleet.orbitBody)}</td>
-                  <td>{formatNumber(weaponCount(fleet, 'point defense'))}</td>
-                  <td>{formatNumber(weaponCount(fleet, 'missile'))}</td>
-                  <td>{formatNumber(weaponCount(fleet, 'laser'))}</td>
-                  <td>{formatNumber(weaponCount(fleet, 'kinetic'))}</td>
-                  <td>{fleet.mission || 'UNAVAILABLE'}</td>
+                  <td><Num value={weaponCount(fleet, 'point defense')} /></td>
+                  <td><Num value={weaponCount(fleet, 'missile')} /></td>
+                  <td><Num value={weaponCount(fleet, 'laser')} /></td>
+                  <td><Num value={weaponCount(fleet, 'kinetic')} /></td>
+                  <td><Txt value={fleet.mission} /></td>
                   <td>{bodyLabel(fleet.destination || fleet.orbitBody)}</td>
-                  <td>{fleet.arrivalDate || EM_DASH}</td>
+                  <td><Txt value={fleet.arrivalDate} fallback={ABSENT_LABEL} /></td>
                 </tr>
               ))}
             </tbody>
@@ -591,11 +663,14 @@ export function OperationsBoard({ snapshot, strategic }) {
             {roles.map((role) => (
               <div key={role.mission} className="mc-coverage-row">
                 <span>{role.mission}</span>
-                <strong>{role.best?.name || 'UNAVAILABLE'}</strong>
+                <strong><Txt value={role.best?.name} /></strong>
                 <em>
-                  {role.best?.value === null || role.best?.value === undefined
-                    ? EM_DASH
-                    : `${formatNumber(role.best.value)} ${role.skill.slice(0, 3).toUpperCase()}`}
+                  <Value
+                    value={role.best?.value}
+                    present={role.best?.value !== null && role.best?.value !== undefined}
+                    absentLabel={ABSENT_LABEL}
+                    format={(raw) => `${formatNumber(raw)} ${role.skill.slice(0, 3).toUpperCase()}`}
+                  />
                 </em>
               </div>
             ))}
@@ -647,14 +722,14 @@ export function NationQueueBoard({ snapshot, briefing }) {
                 <th scope="row">{nation.displayName}</th>
                 <td>{nation.executiveFactionName || 'Independent'}</td>
                 <td>{cpText}</td>
-                <td>{formatGdp(nation.GDP)}</td>
-                <td>{formatNumber(nation.research, 0)}</td>
-                <td>{formatNumber(nation.cohesion, 1)}</td>
-                <td>{formatNumber(nation.unrest, 1)}</td>
-                <td>{formatNumber(nation.armies)}</td>
+                <td><Gdp value={nation.GDP} /></td>
+                <td><Num value={nation.research} decimals={0} /></td>
+                <td><Num value={nation.cohesion} decimals={1} /></td>
+                <td><Num value={nation.unrest} decimals={1} /></td>
+                <td><Num value={nation.armies} /></td>
                 <td>
                   <StatusChip>{nationPosture(nation, observerId, priorityId)}</StatusChip>
-                  <small className="mc-board-secondary">{`${formatNumber(nation.nukes)} nukes${risk}`}</small>
+                  <small className="mc-board-secondary"><Num value={nation.nukes} /> nukes{risk}</small>
                 </td>
               </tr>
             );
@@ -700,9 +775,9 @@ export function ResearchWatchlistBoard({ snapshot }) {
             {slots.map((slot) => (
               <tr key={slot.techId || slot.displayName}>
                 <th scope="row">{slot.displayName || slot.techId}</th>
-                <td>{formatNumber(slot.percent, 1)}%</td>
-                <td>{slot.leadFactionName || 'UNAVAILABLE'}</td>
-                <td>{formatNumber(slot.leadContribution, 0)}</td>
+                <td><Num value={slot.percent} decimals={1} format={(raw) => `${formatNumber(raw, 1)}%`} /></td>
+                <td><Txt value={slot.leadFactionName} /></td>
+                <td><Num value={slot.leadContribution} decimals={0} /></td>
               </tr>
             ))}
           </tbody>
@@ -715,8 +790,8 @@ export function ResearchWatchlistBoard({ snapshot }) {
             {projects.map((project) => (
               <tr key={project.projectId || project.displayName}>
                 <th scope="row">{project.displayName || project.projectId}</th>
-                <td>{formatNumber(project.percent, 1)}%</td>
-                <td>{formatNumber(project.accumulatedResearch, 0)} / {formatNumber(project.totalCost, 0)}</td>
+                <td><Num value={project.percent} decimals={1} format={(raw) => `${formatNumber(raw, 1)}%`} /></td>
+                <td><Num value={project.accumulatedResearch} decimals={0} /> / <Num value={project.totalCost} decimals={0} /></td>
                 <td><AvailabilityChip node={availability.get(project.projectId)} /></td>
               </tr>
             ))}

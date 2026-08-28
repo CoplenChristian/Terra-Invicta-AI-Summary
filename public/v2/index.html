@@ -130,6 +130,7 @@
         <button class="init-btn init-nav-btn init-btn-cyan" type="button" data-view="command" aria-pressed="true">COMMAND</button>
         <button class="init-btn init-nav-btn" type="button" data-view="expansion" aria-pressed="false">EXPANSION</button>
         <button class="init-btn init-nav-btn" type="button" data-view="fleet" aria-pressed="false">FLEET</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="battle" aria-pressed="false">BATTLE</button>
         <button class="init-btn init-nav-btn" type="button" data-view="drives" aria-pressed="false">DRIVES</button>
         <button class="init-btn init-nav-btn" type="button" data-view="threat" aria-pressed="false">THREAT</button>
         <button class="init-btn init-nav-btn" type="button" data-view="records" aria-pressed="false">RECORDS</button>
@@ -468,7 +469,12 @@
       </div>
     </section>
 
-    <!-- View 4: DRIVES -->
+    <!-- View 4: BATTLE -->
+    <section class="init-view" id="view-battle" hidden inert aria-hidden="true" aria-label="Battle view">
+      <div id="battlePlanner" aria-live="polite"></div>
+    </section>
+
+    <!-- View 5: DRIVES -->
     <section class="init-view" id="view-drives" hidden inert aria-hidden="true" aria-label="Drives view">
       <div class="init-view__grid">
         <div class="init-view__span">
