@@ -176,10 +176,39 @@ git -C <worktree-path> diff
 git -C <worktree-path> diff --cached
 ```
 
+### composer and grok do NOT honour `--cwd` for file edits — always `--no-worktree`
+
+**`cursor-agent` isolates its SHELL to `--cwd` but writes files against the
+workspace root it detects, which is the main checkout.** Measured 2026-08-27: a
+composer dispatch given a worktree returned `WORKTREE REMOVED — unchanged` while
+`src/v2/components/Panel.jsx` and `src/v2/panels/BattleSuggestion.jsx` were modified
+in **main**. The worktree was genuinely untouched; the edits went somewhere else.
+
+So worktree isolation is a no-op for these two lanes, and worse than a no-op if you
+believe it: the wrapper reports an unchanged tree and removes it while real work
+sits in main, unannounced.
+
+**Always pass `--no-worktree` for `composer` and `grok`,** and treat the main
+checkout as *their* worktree. The repo owner's framing, 2026-08-28: *"It's okay if
+composer isn't worktree isolated, just consider the main worktree another worktree
+(just please don't delete it)."* Git will not remove a primary checkout in any case
+— `git worktree remove --force` on one fails with `fatal: … is a main working tree`,
+verified in a scratch repo.
+
+Two consequences that follow, and they are the whole point of isolation:
+
+- **Never dispatch a second lane into the main checkout while composer is working.**
+  Every other lane gets its own worktree, so parallelism is still safe — but only
+  one lane may be in main at a time.
+- **Never run `npm test` in main while composer is mid-flight.** Three phantom
+  failures on 2026-08-27 came from exactly that, including a `REQUIREMENT_WITHHELD
+  is not defined` reported as pre-existing breakage when it was a half-written file.
+
 `--dry-run` and an unapproved `ask` request only show the prospective path; they
 create no worktree. `--no-worktree` is the explicit opt-out for work that must
 edit the main checkout or another deliberately named directory — in particular
-changes to `.claude/skills/dispatch/` itself. It runs in the requested `--cwd`,
+changes to `.claude/skills/dispatch/` itself, and every `composer`/`grok` dispatch
+per the section above. It runs in the requested `--cwd`,
 skips dependency/build preparation, the save-path handoff, and all worktree
 cleanup. The main checkout's existing config and environment behavior is left
 unchanged, so use it only when that shared-tree behavior is intentional.
