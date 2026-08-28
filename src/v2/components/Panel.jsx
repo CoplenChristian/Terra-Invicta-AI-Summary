@@ -34,6 +34,7 @@ function modifierClasses(modifiers) {
  * @param {string|string[]} [props.modifier] — priority | alert | featured | quiet | dense | commentary
  * @param {boolean} [props.span=false] — full-width row in `.init-view__grid` / {@link TwoColumnGrid}
  * @param {string} [props.className]
+ * @param {object} [props.bodyStyle] — inline style on `.tech-card-body`
  * @param {React.ReactNode} props.children — body content
  */
 export function Panel({
@@ -43,6 +44,7 @@ export function Panel({
   modifiers,
   span = false,
   className,
+  bodyStyle,
   children,
   ...rest
 }) {
@@ -66,7 +68,7 @@ export function Panel({
           {headerAside != null && <span>{headerAside}</span>}
         </div>
       )}
-      <div className="tech-card-body">{children}</div>
+      <div className="tech-card-body" style={bodyStyle}>{children}</div>
     </section>
   );
 }

@@ -14,6 +14,7 @@ const path = require('node:path');
 const repoRoot = path.resolve(__dirname, '..');
 const v2ShellPath = path.join(repoRoot, 'public', 'v2', 'index.html');
 const v1ShellPath = path.join(repoRoot, 'public', 'index.html');
+const expansionPanelPath = path.join(repoRoot, 'src', 'v2', 'panels', 'ExpansionPanel.jsx');
 
 const ASSET_EXTENSIONS = /\.(html|css|js|mjs|json|geojson|png|svg|webp|woff2?)$/i;
 
@@ -58,8 +59,11 @@ test('the v2 shell mounts mining expansion through the React bundle, not a legac
   assert.ok(html.includes('/v2/js/mission-control.js'),
     'the shell controller is loaded, so a missing-script assertion is meaningful');
   assert.ok(html.includes('/v2/app/bundle.js'), 'the React bundle must be loaded');
-  assert.ok(/id="miningExpansion"/.test(html),
-    'the mining board needs its #miningExpansion mount element');
+  assert.ok(/id="expansionPlanner"/.test(html),
+    'the expansion view needs its #expansionPlanner mount element');
+  const expansionPanel = fs.readFileSync(expansionPanelPath, 'utf8');
+  assert.ok(/id="miningExpansion"/.test(expansionPanel),
+    'the mining board mount id must live in the React expansion shell');
 
   const missionControl = fs.readFileSync(
     path.join(repoRoot, 'public', 'v2', 'js', 'mission-control.js'),

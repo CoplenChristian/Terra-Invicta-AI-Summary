@@ -77,6 +77,10 @@ import {
   renderCommandPanel,
 } from './panels/CommandPanel.jsx';
 import {
+  ExpansionPanel,
+  renderExpansionPanel,
+} from './panels/ExpansionPanel.jsx';
+import {
   CapabilityMatrixBoard,
   FactionLedgerBoard,
   LogisticsBoard,
@@ -448,6 +452,7 @@ export function renderResearchWatchlist(container, snapshot) {
 export { renderBattlePanel };
 export { renderThreatPanel };
 export { renderCommandPanel };
+export { renderExpansionPanel };
 
 // The DRIVES panel owns a module-level store (scripts/verify_drive_explorer.js
 // reads it), so it mounts itself rather than being handed a fresh element on
@@ -482,6 +487,9 @@ if (typeof window !== 'undefined') {
   };
   window.MissionControlCommandPanel = {
     render: renderCommandPanel,
+  };
+  window.MissionControlExpansionPanel = {
+    render: renderExpansionPanel,
   };
   window.MissionControlMiningExpansion = {
     render: renderMiningExpansion,
@@ -542,7 +550,7 @@ if (typeof window !== 'undefined') {
   // instead of being silently skipped.
   syncDetailPanelPageInert();
 
-  // THREAT and COMMAND panel mount ids live in the React shell, not static HTML.
+  // THREAT, COMMAND, and EXPANSION panel mount ids live in the React shell, not static HTML.
   // Mounting here — before the briefing fetch — keeps assertViewRegistryIntegrity
   // honest on first paint.
   const commandPlannerEl = document.getElementById('commandPlanner');
@@ -553,6 +561,11 @@ if (typeof window !== 'undefined') {
   const threatPlannerEl = document.getElementById('threatPlanner');
   if (threatPlannerEl) {
     renderThreatPanel(threatPlannerEl);
+  }
+
+  const expansionPlannerEl = document.getElementById('expansionPlanner');
+  if (expansionPlannerEl) {
+    renderExpansionPanel(expansionPlannerEl);
   }
 
   if (window.MissionControlViews?.assertViewRegistryIntegrity) {
@@ -572,6 +585,7 @@ if (typeof window !== 'undefined') {
     mountBattlePanel: renderBattlePanel,
     mountThreatPanel: renderThreatPanel,
     mountCommandPanel: renderCommandPanel,
+    mountExpansionPanel: renderExpansionPanel,
     mountDirectiveBoard: renderDirectiveBoard,
     mountResearchAdvisor: renderResearchAdvisor,
     mountFleetProcurement: renderFleetProcurement,
@@ -614,6 +628,7 @@ if (typeof window !== 'undefined') {
     BattlePanel,
     ThreatPanel,
     CommandPanel,
+    ExpansionPanel,
     DetailPanel,
     FactionLedgerBoard,
     LogisticsBoard,

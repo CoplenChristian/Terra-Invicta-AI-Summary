@@ -1,0 +1,741 @@
+{
+  "capturedAt": "2026-08-28T21:28:51.991Z",
+  "modes": {
+    "player": {
+      "viewports": {
+        "375": {
+          "text": "MINING EXPANSION BOARD CAPACITY, RUNWAYS & SITE VALUE PER UNIT OF HATE MINING CAPACITY 26 / 37 MINES 11 mine(s) headroom remaining before quadratic MC penalty. RUNWAYS: Water: 2823mo Volatiles: 104.2mo Metals: 32.5mo NobleMetals: 29mo Fissiles: 32.4mo War Floor: 0.0 MC away Yields include completed-project mine bonuses: water ×1.3225 (Project_WaterPurificationTechniques + Project_ThermalMiningTechniques), volatiles ×1.15 (Project_RapidDistillationTechniques), metals ×1.3225 (Project_DeepSpaceMetallurgy + Project_PlasmaExtractionTechniques), nobleMetals ×1.3225 (Project_MolecularBenefication + Project_SlagValorization), fissiles ×1.3225 (Project_RapidFissileEnrichment + Project_SubsurfaceRadiatonAnalysis). They also include the faction-wide space-mining bonus of +10% (Effect_SpaceMiningBonus10 +10%), which is additive and applied after the multipliers above. ESTIMATE — a built mine multiplies these deposit rates by ×1 to ×2 (Outpost Mining Complex to Colony Mining Complex, the tiers the observer has researched). It is deliberately NOT in the utility score: every site here is unowned, so the tier is a decision rather than a reading, and the score saturates — a uniform assumed multiplier reorders this board rather than scaling it. MINE UPGRADES — 19 AVAILABLE Measured: the observer's own operational mines Upgrading multiplies a site already held and costs 0 against the mine limit, where a new claim costs one of the 11 remaining. Total measured gain: W: +695.2 · V: +661.8 · M: +660.2 · N: +149.3 · F: +10.9 per month. SITE & BODY MULTIPLIER MONTHLY GAIN COST Kimberly Catena 409 Aspasia ×1.00 → ×1.50 W: +43.8 · V: +43.2 · M: +60.9 · N: +25.9 0 MINE SLOTS Hellas Planitia Mars ×1.50 → ×2.00 W: +44.2 · V: +42.2 · M: +65.6 · N: +11.7 · F: +2.9 0 MINE SLOTS Arcadia Planitia Mars ×1.50 → ×2.00 W: +88.4 · V: +24.3 · M: +42.1 · F: +0.4 0 MINE SLOTS Fortuna's Song 19 Fortuna ×1.00 → ×1.50 W: +51.5 · V: +90.9 0 MINE SLOTS Temptress Chasma 34 Circe ×1.00 → ×1.50 W: +56.1 · V: +62.5 · M: +18.8 0 MINE SLOTS Top 5 of 19 available upgrades shown. Excluded: 7 at their template ceiling (nothing upgrades from that module). AVAILABLE EXPANSION SITES (230) Top 8 of 230, ranked by saturating utility per unit of alien hate SITE & BODY RESOURCE YIELDS UTILITY VALUE COST Moytyra Regio Europa (JUPITER) W: +297.2 · V: +97.9 · M: +35.6 · N: +5.8 EST ×1–×2 once mined Density: 3.01x 0.32 NET UTILITY +0.19 hate 1 MC · build n/a Tara Regio Europa (JUPITER) W: +275.9 · V: +83.8 · M: +28.5 · N: +14.3 · F: +0.2 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Annwn Regio Europa (JUPITER) W: +276.1 · V: +95.6 · M: +29.7 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Argadnel Regio Europa (JUPITER) W: +219.8 · V: +28.5 · M: +65.0 · N: +12.5 EST ×1–×2 once mined Density: 3.01x 0.24 NET UTILITY +0.19 hate 1 MC · build n/a Rathmore Chaos Europa (JUPITER) W: +205.0 · V: +55.9 · M: +205.4 · N: +32.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Falga Regio Europa (JUPITER) W: +203.6 · V: +66.0 · M: +63.5 · N: +31.8 · F: +0.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Xibalba Sulcus Ganymede (JUPITER) W: +280.9 · V: +92.2 · M: +17.7 · F: +0.2 EST ×1–×2 once mined Density: 1.94x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a Lodurr Crater Callisto (JUPITER) W: +296.8 · V: +81.1 · M: +55.3 EST ×1–×2 once mined Density: 1.83x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a No outer system / unprobed sites are currently unreachable. MC BUDGET PLANNER FLEET COST VS HATE FLOOR MISSION CONTROL BUDGET CROSSES PERMANENT-WAR FLOOR PROJECTED FLOOR 61.8 USED NOW 322 of 444 capacity HEADROOM TO CAP 122 hard build limit HEADROOM TO WAR FLOOR -62 used MC at 50 hate STAGED BUILD +0 0 ship(s) Used MC would push the minimum hate floor past 50 — peace becomes impossible. STAGE A BUILD PER-HULL MC FROM GAME TEMPLATES Escort 1 MC · 90d − 0 + Frigate 2 MC · 120d − 0 + Monitor 2 MC · 120d − 0 + Destroyer 2 MC · 135d − 0 + Cruiser 3 MC · 180d − 0 + Battlecruiser 3 MC · 180d − 0 + Battleship 3 MC · 200d − 0 + Lancer 4 MC · 240d − 0 + WHY DOES BUILDING RAISE ALIEN HATE? WARTIME LOGISTICS STOCKPILE + OUTPUT LOGISTICS / STOCKPILE + OUTPUT Gross production is save-derived. Burn, committed spend, and runway remain UNAVAILABLE until those values are present in the save. RESOURCE STOCKPILE GROSS/MO SPENT / COMMITTED QUEUED / NEXT RUNWAY INCOMING PRODUCTION Water 200,041 +1,433.0 UNAVAILABLE No visible queue UNAVAILABLE Mare Salvatore · +132.2 Volatiles 117,900 +1,500.0 UNAVAILABLE No visible queue UNAVAILABLE Fortuna's Song · +143.6 Metals 64,235 +1,237.9 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +152.7 Noble metals 18,941 +328.3 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +74.6 Fissiles 1,979 +18.3 UNAVAILABLE No visible queue UNAVAILABLE Valles Fidelis · +8.5 NATION ACTION QUEUE EARTH HOLDINGS EARTH / ACTION QUEUE Postures are triage labels derived from executive control, unrest, and the selected priority faction. They are not completed operations. NATION EXECUTIVE CP COMPOSITION GDP RESEARCH COHESION UNREST ARMIES RECOMMENDED POSTURE United States of North America the Initiative Initiative 6 $24.1T 2,073 5.2 0.5 16 CONSOLIDATE 0 nukes India the Initiative Initiative 6 $21.0T 1,323 4.3 2.1 16 DEFEND 0 nukes · unrest watch European Union the Initiative Initiative 5 $14.6T 841 7.4 0.0 11 CONSOLIDATE 0 nukes West African Community the Initiative Initiative 3 · Servants 1 $4.3T 198 2.9 2.0 1 CONSOLIDATE 0 nukes Yemen the Initiative Initiative 3 $0.6T 33 5.8 3.4 0 DEFEND 0 nukes · unrest watch Qatar-Bahrain the Servants Servants 3 $0.5T 33 6.2 0.0 1 CRACKDOWN 0 nukes Switzerland the Initiative Initiative 3 $0.4T 50 1.4 2.1 1 DEFEND 0 nukes · unrest watch Kenya the Servants Servants 3 $0.4T 30 2.4 4.8 0 CRACKDOWN 0 nukes · unrest watch Panama the Servants Servants 3 $0.4T 50 7.4 0.0 0 CRACKDOWN 0 nukes Armenia the Servants Servants 3 $0.3T 20 8.6 0.0 0 CRACKDOWN 0 nukes Lebanon the Servants Servants 2 $0.3T 21 8.1 0.0 0 CRACKDOWN 0 nukes Latvia the Servants Humanity First 1 · Servants 1 $0.2T 19 10.0 0.0 0 CRACKDOWN 0 nukes",
+          "mounts": {
+            "miningExpansion": {
+              "rect": {
+                "x": 32,
+                "y": 494.6,
+                "width": 311,
+                "height": 2128.6
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 422.8,
+                "width": 345,
+                "height": 2217.3
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "1 / -1"
+            },
+            "mcBudget": {
+              "rect": {
+                "x": 32,
+                "y": 2735.9,
+                "width": 311,
+                "height": 651.3
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2664.2,
+                "width": 345,
+                "height": 740
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "auto"
+            },
+            "resourceFlowChart": {
+              "rect": {
+                "x": 32,
+                "y": 3499.9,
+                "width": 311,
+                "height": 618.7
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 3428.2,
+                "width": 345,
+                "height": 707.4
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "holdingsBubbleMatrix": {
+              "rect": {
+                "x": 16,
+                "y": 4215.4,
+                "width": 343,
+                "height": 2279.7
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 4159.6,
+                "width": 345,
+                "height": 2336.4
+              },
+              "display": "flex",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(11, 21, 23)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "scrollWidth": 375,
+          "innerWidth": 375
+        },
+        "414": {
+          "text": "MINING EXPANSION BOARD CAPACITY, RUNWAYS & SITE VALUE PER UNIT OF HATE MINING CAPACITY 26 / 37 MINES 11 mine(s) headroom remaining before quadratic MC penalty. RUNWAYS: Water: 2823mo Volatiles: 104.2mo Metals: 32.5mo NobleMetals: 29mo Fissiles: 32.4mo War Floor: 0.0 MC away Yields include completed-project mine bonuses: water ×1.3225 (Project_WaterPurificationTechniques + Project_ThermalMiningTechniques), volatiles ×1.15 (Project_RapidDistillationTechniques), metals ×1.3225 (Project_DeepSpaceMetallurgy + Project_PlasmaExtractionTechniques), nobleMetals ×1.3225 (Project_MolecularBenefication + Project_SlagValorization), fissiles ×1.3225 (Project_RapidFissileEnrichment + Project_SubsurfaceRadiatonAnalysis). They also include the faction-wide space-mining bonus of +10% (Effect_SpaceMiningBonus10 +10%), which is additive and applied after the multipliers above. ESTIMATE — a built mine multiplies these deposit rates by ×1 to ×2 (Outpost Mining Complex to Colony Mining Complex, the tiers the observer has researched). It is deliberately NOT in the utility score: every site here is unowned, so the tier is a decision rather than a reading, and the score saturates — a uniform assumed multiplier reorders this board rather than scaling it. MINE UPGRADES — 19 AVAILABLE Measured: the observer's own operational mines Upgrading multiplies a site already held and costs 0 against the mine limit, where a new claim costs one of the 11 remaining. Total measured gain: W: +695.2 · V: +661.8 · M: +660.2 · N: +149.3 · F: +10.9 per month. SITE & BODY MULTIPLIER MONTHLY GAIN COST Kimberly Catena 409 Aspasia ×1.00 → ×1.50 W: +43.8 · V: +43.2 · M: +60.9 · N: +25.9 0 MINE SLOTS Hellas Planitia Mars ×1.50 → ×2.00 W: +44.2 · V: +42.2 · M: +65.6 · N: +11.7 · F: +2.9 0 MINE SLOTS Arcadia Planitia Mars ×1.50 → ×2.00 W: +88.4 · V: +24.3 · M: +42.1 · F: +0.4 0 MINE SLOTS Fortuna's Song 19 Fortuna ×1.00 → ×1.50 W: +51.5 · V: +90.9 0 MINE SLOTS Temptress Chasma 34 Circe ×1.00 → ×1.50 W: +56.1 · V: +62.5 · M: +18.8 0 MINE SLOTS Top 5 of 19 available upgrades shown. Excluded: 7 at their template ceiling (nothing upgrades from that module). AVAILABLE EXPANSION SITES (230) Top 8 of 230, ranked by saturating utility per unit of alien hate SITE & BODY RESOURCE YIELDS UTILITY VALUE COST Moytyra Regio Europa (JUPITER) W: +297.2 · V: +97.9 · M: +35.6 · N: +5.8 EST ×1–×2 once mined Density: 3.01x 0.32 NET UTILITY +0.19 hate 1 MC · build n/a Tara Regio Europa (JUPITER) W: +275.9 · V: +83.8 · M: +28.5 · N: +14.3 · F: +0.2 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Annwn Regio Europa (JUPITER) W: +276.1 · V: +95.6 · M: +29.7 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Argadnel Regio Europa (JUPITER) W: +219.8 · V: +28.5 · M: +65.0 · N: +12.5 EST ×1–×2 once mined Density: 3.01x 0.24 NET UTILITY +0.19 hate 1 MC · build n/a Rathmore Chaos Europa (JUPITER) W: +205.0 · V: +55.9 · M: +205.4 · N: +32.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Falga Regio Europa (JUPITER) W: +203.6 · V: +66.0 · M: +63.5 · N: +31.8 · F: +0.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Xibalba Sulcus Ganymede (JUPITER) W: +280.9 · V: +92.2 · M: +17.7 · F: +0.2 EST ×1–×2 once mined Density: 1.94x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a Lodurr Crater Callisto (JUPITER) W: +296.8 · V: +81.1 · M: +55.3 EST ×1–×2 once mined Density: 1.83x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a No outer system / unprobed sites are currently unreachable. MC BUDGET PLANNER FLEET COST VS HATE FLOOR MISSION CONTROL BUDGET CROSSES PERMANENT-WAR FLOOR PROJECTED FLOOR 61.8 USED NOW 322 of 444 capacity HEADROOM TO CAP 122 hard build limit HEADROOM TO WAR FLOOR -62 used MC at 50 hate STAGED BUILD +0 0 ship(s) Used MC would push the minimum hate floor past 50 — peace becomes impossible. STAGE A BUILD PER-HULL MC FROM GAME TEMPLATES Escort 1 MC · 90d − 0 + Frigate 2 MC · 120d − 0 + Monitor 2 MC · 120d − 0 + Destroyer 2 MC · 135d − 0 + Cruiser 3 MC · 180d − 0 + Battlecruiser 3 MC · 180d − 0 + Battleship 3 MC · 200d − 0 + Lancer 4 MC · 240d − 0 + WHY DOES BUILDING RAISE ALIEN HATE? WARTIME LOGISTICS STOCKPILE + OUTPUT LOGISTICS / STOCKPILE + OUTPUT Gross production is save-derived. Burn, committed spend, and runway remain UNAVAILABLE until those values are present in the save. RESOURCE STOCKPILE GROSS/MO SPENT / COMMITTED QUEUED / NEXT RUNWAY INCOMING PRODUCTION Water 200,041 +1,433.0 UNAVAILABLE No visible queue UNAVAILABLE Mare Salvatore · +132.2 Volatiles 117,900 +1,500.0 UNAVAILABLE No visible queue UNAVAILABLE Fortuna's Song · +143.6 Metals 64,235 +1,237.9 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +152.7 Noble metals 18,941 +328.3 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +74.6 Fissiles 1,979 +18.3 UNAVAILABLE No visible queue UNAVAILABLE Valles Fidelis · +8.5 NATION ACTION QUEUE EARTH HOLDINGS EARTH / ACTION QUEUE Postures are triage labels derived from executive control, unrest, and the selected priority faction. They are not completed operations. NATION EXECUTIVE CP COMPOSITION GDP RESEARCH COHESION UNREST ARMIES RECOMMENDED POSTURE United States of North America the Initiative Initiative 6 $24.1T 2,073 5.2 0.5 16 CONSOLIDATE 0 nukes India the Initiative Initiative 6 $21.0T 1,323 4.3 2.1 16 DEFEND 0 nukes · unrest watch European Union the Initiative Initiative 5 $14.6T 841 7.4 0.0 11 CONSOLIDATE 0 nukes West African Community the Initiative Initiative 3 · Servants 1 $4.3T 198 2.9 2.0 1 CONSOLIDATE 0 nukes Yemen the Initiative Initiative 3 $0.6T 33 5.8 3.4 0 DEFEND 0 nukes · unrest watch Qatar-Bahrain the Servants Servants 3 $0.5T 33 6.2 0.0 1 CRACKDOWN 0 nukes Switzerland the Initiative Initiative 3 $0.4T 50 1.4 2.1 1 DEFEND 0 nukes · unrest watch Kenya the Servants Servants 3 $0.4T 30 2.4 4.8 0 CRACKDOWN 0 nukes · unrest watch Panama the Servants Servants 3 $0.4T 50 7.4 0.0 0 CRACKDOWN 0 nukes Armenia the Servants Servants 3 $0.3T 20 8.6 0.0 0 CRACKDOWN 0 nukes Lebanon the Servants Servants 2 $0.3T 21 8.1 0.0 0 CRACKDOWN 0 nukes Latvia the Servants Humanity First 1 · Servants 1 $0.2T 19 10.0 0.0 0 CRACKDOWN 0 nukes",
+          "mounts": {
+            "miningExpansion": {
+              "rect": {
+                "x": 32,
+                "y": 494.6,
+                "width": 350,
+                "height": 1823.2
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 422.8,
+                "width": 384,
+                "height": 1912
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "1 / -1"
+            },
+            "mcBudget": {
+              "rect": {
+                "x": 32,
+                "y": 2430.6,
+                "width": 350,
+                "height": 645
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2358.8,
+                "width": 384,
+                "height": 733.8
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "auto"
+            },
+            "resourceFlowChart": {
+              "rect": {
+                "x": 32,
+                "y": 3188.3,
+                "width": 350,
+                "height": 511.1
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 3116.6,
+                "width": 384,
+                "height": 599.9
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "holdingsBubbleMatrix": {
+              "rect": {
+                "x": 16,
+                "y": 3796.2,
+                "width": 382,
+                "height": 2212.6
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 3740.5,
+                "width": 384,
+                "height": 2269.4
+              },
+              "display": "flex",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(11, 21, 23)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "scrollWidth": 414,
+          "innerWidth": 414
+        },
+        "768": {
+          "text": "MINING EXPANSION BOARD CAPACITY, RUNWAYS & SITE VALUE PER UNIT OF HATE MINING CAPACITY 26 / 37 MINES 11 mine(s) headroom remaining before quadratic MC penalty. RUNWAYS: Water: 2823mo Volatiles: 104.2mo Metals: 32.5mo NobleMetals: 29mo Fissiles: 32.4mo War Floor: 0.0 MC away Yields include completed-project mine bonuses: water ×1.3225 (Project_WaterPurificationTechniques + Project_ThermalMiningTechniques), volatiles ×1.15 (Project_RapidDistillationTechniques), metals ×1.3225 (Project_DeepSpaceMetallurgy + Project_PlasmaExtractionTechniques), nobleMetals ×1.3225 (Project_MolecularBenefication + Project_SlagValorization), fissiles ×1.3225 (Project_RapidFissileEnrichment + Project_SubsurfaceRadiatonAnalysis). They also include the faction-wide space-mining bonus of +10% (Effect_SpaceMiningBonus10 +10%), which is additive and applied after the multipliers above. ESTIMATE — a built mine multiplies these deposit rates by ×1 to ×2 (Outpost Mining Complex to Colony Mining Complex, the tiers the observer has researched). It is deliberately NOT in the utility score: every site here is unowned, so the tier is a decision rather than a reading, and the score saturates — a uniform assumed multiplier reorders this board rather than scaling it. MINE UPGRADES — 19 AVAILABLE Measured: the observer's own operational mines Upgrading multiplies a site already held and costs 0 against the mine limit, where a new claim costs one of the 11 remaining. Total measured gain: W: +695.2 · V: +661.8 · M: +660.2 · N: +149.3 · F: +10.9 per month. SITE & BODY MULTIPLIER MONTHLY GAIN COST Kimberly Catena 409 Aspasia ×1.00 → ×1.50 W: +43.8 · V: +43.2 · M: +60.9 · N: +25.9 0 MINE SLOTS Hellas Planitia Mars ×1.50 → ×2.00 W: +44.2 · V: +42.2 · M: +65.6 · N: +11.7 · F: +2.9 0 MINE SLOTS Arcadia Planitia Mars ×1.50 → ×2.00 W: +88.4 · V: +24.3 · M: +42.1 · F: +0.4 0 MINE SLOTS Fortuna's Song 19 Fortuna ×1.00 → ×1.50 W: +51.5 · V: +90.9 0 MINE SLOTS Temptress Chasma 34 Circe ×1.00 → ×1.50 W: +56.1 · V: +62.5 · M: +18.8 0 MINE SLOTS Top 5 of 19 available upgrades shown. Excluded: 7 at their template ceiling (nothing upgrades from that module). AVAILABLE EXPANSION SITES (230) Top 8 of 230, ranked by saturating utility per unit of alien hate SITE & BODY RESOURCE YIELDS UTILITY VALUE COST Moytyra Regio Europa (JUPITER) W: +297.2 · V: +97.9 · M: +35.6 · N: +5.8 EST ×1–×2 once mined Density: 3.01x 0.32 NET UTILITY +0.19 hate 1 MC · build n/a Tara Regio Europa (JUPITER) W: +275.9 · V: +83.8 · M: +28.5 · N: +14.3 · F: +0.2 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Annwn Regio Europa (JUPITER) W: +276.1 · V: +95.6 · M: +29.7 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Argadnel Regio Europa (JUPITER) W: +219.8 · V: +28.5 · M: +65.0 · N: +12.5 EST ×1–×2 once mined Density: 3.01x 0.24 NET UTILITY +0.19 hate 1 MC · build n/a Rathmore Chaos Europa (JUPITER) W: +205.0 · V: +55.9 · M: +205.4 · N: +32.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Falga Regio Europa (JUPITER) W: +203.6 · V: +66.0 · M: +63.5 · N: +31.8 · F: +0.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Xibalba Sulcus Ganymede (JUPITER) W: +280.9 · V: +92.2 · M: +17.7 · F: +0.2 EST ×1–×2 once mined Density: 1.94x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a Lodurr Crater Callisto (JUPITER) W: +296.8 · V: +81.1 · M: +55.3 EST ×1–×2 once mined Density: 1.83x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a No outer system / unprobed sites are currently unreachable. MC BUDGET PLANNER FLEET COST VS HATE FLOOR MISSION CONTROL BUDGET CROSSES PERMANENT-WAR FLOOR PROJECTED FLOOR 61.8 USED NOW 322 of 444 capacity HEADROOM TO CAP 122 hard build limit HEADROOM TO WAR FLOOR -62 used MC at 50 hate STAGED BUILD +0 0 ship(s) Used MC would push the minimum hate floor past 50 — peace becomes impossible. STAGE A BUILD PER-HULL MC FROM GAME TEMPLATES Escort 1 MC · 90d − 0 + Frigate 2 MC · 120d − 0 + Monitor 2 MC · 120d − 0 + Destroyer 2 MC · 135d − 0 + Cruiser 3 MC · 180d − 0 + Battlecruiser 3 MC · 180d − 0 + Battleship 3 MC · 200d − 0 + Lancer 4 MC · 240d − 0 + WHY DOES BUILDING RAISE ALIEN HATE? WARTIME LOGISTICS STOCKPILE + OUTPUT LOGISTICS / STOCKPILE + OUTPUT Gross production is save-derived. Burn, committed spend, and runway remain UNAVAILABLE until those values are present in the save. RESOURCE STOCKPILE GROSS/MO SPENT / COMMITTED QUEUED / NEXT RUNWAY INCOMING PRODUCTION Water 200,041 +1,433.0 UNAVAILABLE No visible queue UNAVAILABLE Mare Salvatore · +132.2 Volatiles 117,900 +1,500.0 UNAVAILABLE No visible queue UNAVAILABLE Fortuna's Song · +143.6 Metals 64,235 +1,237.9 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +152.7 Noble metals 18,941 +328.3 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +74.6 Fissiles 1,979 +18.3 UNAVAILABLE No visible queue UNAVAILABLE Valles Fidelis · +8.5 NATION ACTION QUEUE EARTH HOLDINGS EARTH / ACTION QUEUE Postures are triage labels derived from executive control, unrest, and the selected priority faction. They are not completed operations. NATION EXECUTIVE CP COMPOSITION GDP RESEARCH COHESION UNREST ARMIES RECOMMENDED POSTURE United States of North America the Initiative Initiative 6 $24.1T 2,073 5.2 0.5 16 CONSOLIDATE 0 nukes India the Initiative Initiative 6 $21.0T 1,323 4.3 2.1 16 DEFEND 0 nukes · unrest watch European Union the Initiative Initiative 5 $14.6T 841 7.4 0.0 11 CONSOLIDATE 0 nukes West African Community the Initiative Initiative 3 · Servants 1 $4.3T 198 2.9 2.0 1 CONSOLIDATE 0 nukes Yemen the Initiative Initiative 3 $0.6T 33 5.8 3.4 0 DEFEND 0 nukes · unrest watch Qatar-Bahrain the Servants Servants 3 $0.5T 33 6.2 0.0 1 CRACKDOWN 0 nukes Switzerland the Initiative Initiative 3 $0.4T 50 1.4 2.1 1 DEFEND 0 nukes · unrest watch Kenya the Servants Servants 3 $0.4T 30 2.4 4.8 0 CRACKDOWN 0 nukes · unrest watch Panama the Servants Servants 3 $0.4T 50 7.4 0.0 0 CRACKDOWN 0 nukes Armenia the Servants Servants 3 $0.3T 20 8.6 0.0 0 CRACKDOWN 0 nukes Lebanon the Servants Servants 2 $0.3T 21 8.1 0.0 0 CRACKDOWN 0 nukes Latvia the Servants Humanity First 1 · Servants 1 $0.2T 19 10.0 0.0 0 CRACKDOWN 0 nukes",
+          "mounts": {
+            "miningExpansion": {
+              "rect": {
+                "x": 32,
+                "y": 446.8,
+                "width": 704,
+                "height": 1252.7
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 385.8,
+                "width": 738,
+                "height": 1330.7
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "1 / -1"
+            },
+            "mcBudget": {
+              "rect": {
+                "x": 32,
+                "y": 1801.5,
+                "width": 704,
+                "height": 575
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 1740.5,
+                "width": 738,
+                "height": 653
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "auto"
+            },
+            "resourceFlowChart": {
+              "rect": {
+                "x": 32,
+                "y": 2478.5,
+                "width": 704,
+                "height": 309.1
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2417.5,
+                "width": 738,
+                "height": 387.1
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "holdingsBubbleMatrix": {
+              "rect": {
+                "x": 16,
+                "y": 2873.6,
+                "width": 736,
+                "height": 912.1
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2828.6,
+                "width": 738,
+                "height": 958.1
+              },
+              "display": "flex",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(11, 21, 23)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "scrollWidth": 768,
+          "innerWidth": 768
+        },
+        "desktop": {
+          "text": "MINING EXPANSION BOARD CAPACITY, RUNWAYS & SITE VALUE PER UNIT OF HATE MINING CAPACITY 26 / 37 MINES 11 mine(s) headroom remaining before quadratic MC penalty. RUNWAYS: Water: 2823mo Volatiles: 104.2mo Metals: 32.5mo NobleMetals: 29mo Fissiles: 32.4mo War Floor: 0.0 MC away Yields include completed-project mine bonuses: water ×1.3225 (Project_WaterPurificationTechniques + Project_ThermalMiningTechniques), volatiles ×1.15 (Project_RapidDistillationTechniques), metals ×1.3225 (Project_DeepSpaceMetallurgy + Project_PlasmaExtractionTechniques), nobleMetals ×1.3225 (Project_MolecularBenefication + Project_SlagValorization), fissiles ×1.3225 (Project_RapidFissileEnrichment + Project_SubsurfaceRadiatonAnalysis). They also include the faction-wide space-mining bonus of +10% (Effect_SpaceMiningBonus10 +10%), which is additive and applied after the multipliers above. ESTIMATE — a built mine multiplies these deposit rates by ×1 to ×2 (Outpost Mining Complex to Colony Mining Complex, the tiers the observer has researched). It is deliberately NOT in the utility score: every site here is unowned, so the tier is a decision rather than a reading, and the score saturates — a uniform assumed multiplier reorders this board rather than scaling it. MINE UPGRADES — 19 AVAILABLE Measured: the observer's own operational mines Upgrading multiplies a site already held and costs 0 against the mine limit, where a new claim costs one of the 11 remaining. Total measured gain: W: +695.2 · V: +661.8 · M: +660.2 · N: +149.3 · F: +10.9 per month. SITE & BODY MULTIPLIER MONTHLY GAIN COST Kimberly Catena 409 Aspasia ×1.00 → ×1.50 W: +43.8 · V: +43.2 · M: +60.9 · N: +25.9 0 MINE SLOTS Hellas Planitia Mars ×1.50 → ×2.00 W: +44.2 · V: +42.2 · M: +65.6 · N: +11.7 · F: +2.9 0 MINE SLOTS Arcadia Planitia Mars ×1.50 → ×2.00 W: +88.4 · V: +24.3 · M: +42.1 · F: +0.4 0 MINE SLOTS Fortuna's Song 19 Fortuna ×1.00 → ×1.50 W: +51.5 · V: +90.9 0 MINE SLOTS Temptress Chasma 34 Circe ×1.00 → ×1.50 W: +56.1 · V: +62.5 · M: +18.8 0 MINE SLOTS Top 5 of 19 available upgrades shown. Excluded: 7 at their template ceiling (nothing upgrades from that module). AVAILABLE EXPANSION SITES (230) Top 8 of 230, ranked by saturating utility per unit of alien hate SITE & BODY RESOURCE YIELDS UTILITY VALUE COST Moytyra Regio Europa (JUPITER) W: +297.2 · V: +97.9 · M: +35.6 · N: +5.8 EST ×1–×2 once mined Density: 3.01x 0.32 NET UTILITY +0.19 hate 1 MC · build n/a Tara Regio Europa (JUPITER) W: +275.9 · V: +83.8 · M: +28.5 · N: +14.3 · F: +0.2 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Annwn Regio Europa (JUPITER) W: +276.1 · V: +95.6 · M: +29.7 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Argadnel Regio Europa (JUPITER) W: +219.8 · V: +28.5 · M: +65.0 · N: +12.5 EST ×1–×2 once mined Density: 3.01x 0.24 NET UTILITY +0.19 hate 1 MC · build n/a Rathmore Chaos Europa (JUPITER) W: +205.0 · V: +55.9 · M: +205.4 · N: +32.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Falga Regio Europa (JUPITER) W: +203.6 · V: +66.0 · M: +63.5 · N: +31.8 · F: +0.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Xibalba Sulcus Ganymede (JUPITER) W: +280.9 · V: +92.2 · M: +17.7 · F: +0.2 EST ×1–×2 once mined Density: 1.94x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a Lodurr Crater Callisto (JUPITER) W: +296.8 · V: +81.1 · M: +55.3 EST ×1–×2 once mined Density: 1.83x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a No outer system / unprobed sites are currently unreachable. MC BUDGET PLANNER FLEET COST VS HATE FLOOR MISSION CONTROL BUDGET CROSSES PERMANENT-WAR FLOOR PROJECTED FLOOR 61.8 USED NOW 322 of 444 capacity HEADROOM TO CAP 122 hard build limit HEADROOM TO WAR FLOOR -62 used MC at 50 hate STAGED BUILD +0 0 ship(s) Used MC would push the minimum hate floor past 50 — peace becomes impossible. STAGE A BUILD PER-HULL MC FROM GAME TEMPLATES Escort 1 MC · 90d − 0 + Frigate 2 MC · 120d − 0 + Monitor 2 MC · 120d − 0 + Destroyer 2 MC · 135d − 0 + Cruiser 3 MC · 180d − 0 + Battlecruiser 3 MC · 180d − 0 + Battleship 3 MC · 200d − 0 + Lancer 4 MC · 240d − 0 + WHY DOES BUILDING RAISE ALIEN HATE? WARTIME LOGISTICS STOCKPILE + OUTPUT LOGISTICS / STOCKPILE + OUTPUT Gross production is save-derived. Burn, committed spend, and runway remain UNAVAILABLE until those values are present in the save. RESOURCE STOCKPILE GROSS/MO SPENT / COMMITTED QUEUED / NEXT RUNWAY INCOMING PRODUCTION Water 200,041 +1,433.0 UNAVAILABLE No visible queue UNAVAILABLE Mare Salvatore · +132.2 Volatiles 117,900 +1,500.0 UNAVAILABLE No visible queue UNAVAILABLE Fortuna's Song · +143.6 Metals 64,235 +1,237.9 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +152.7 Noble metals 18,941 +328.3 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +74.6 Fissiles 1,979 +18.3 UNAVAILABLE No visible queue UNAVAILABLE Valles Fidelis · +8.5 NATION ACTION QUEUE EARTH HOLDINGS EARTH / ACTION QUEUE Postures are triage labels derived from executive control, unrest, and the selected priority faction. They are not completed operations. NATION EXECUTIVE CP COMPOSITION GDP RESEARCH COHESION UNREST ARMIES RECOMMENDED POSTURE United States of North America the Initiative Initiative 6 $24.1T 2,073 5.2 0.5 16 CONSOLIDATE 0 nukes India the Initiative Initiative 6 $21.0T 1,323 4.3 2.1 16 DEFEND 0 nukes · unrest watch European Union the Initiative Initiative 5 $14.6T 841 7.4 0.0 11 CONSOLIDATE 0 nukes West African Community the Initiative Initiative 3 · Servants 1 $4.3T 198 2.9 2.0 1 CONSOLIDATE 0 nukes Yemen the Initiative Initiative 3 $0.6T 33 5.8 3.4 0 DEFEND 0 nukes · unrest watch Qatar-Bahrain the Servants Servants 3 $0.5T 33 6.2 0.0 1 CRACKDOWN 0 nukes Switzerland the Initiative Initiative 3 $0.4T 50 1.4 2.1 1 DEFEND 0 nukes · unrest watch Kenya the Servants Servants 3 $0.4T 30 2.4 4.8 0 CRACKDOWN 0 nukes · unrest watch Panama the Servants Servants 3 $0.4T 50 7.4 0.0 0 CRACKDOWN 0 nukes Armenia the Servants Servants 3 $0.3T 20 8.6 0.0 0 CRACKDOWN 0 nukes Lebanon the Servants Servants 2 $0.3T 21 8.1 0.0 0 CRACKDOWN 0 nukes Latvia the Servants Humanity First 1 · Servants 1 $0.2T 19 10.0 0.0 0 CRACKDOWN 0 nukes",
+          "mounts": {
+            "miningExpansion": {
+              "rect": {
+                "x": 41,
+                "y": 272.8,
+                "width": 1578,
+                "height": 1151.4
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 211.8,
+                "width": 1612,
+                "height": 1229.4
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "1 / -1"
+            },
+            "mcBudget": {
+              "rect": {
+                "x": 41,
+                "y": 1526.3,
+                "width": 760,
+                "height": 575
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 1465.3,
+                "width": 794,
+                "height": 653
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "auto"
+            },
+            "resourceFlowChart": {
+              "rect": {
+                "x": 859,
+                "y": 1526.3,
+                "width": 760,
+                "height": 228.1
+              },
+              "cardRect": {
+                "x": 842,
+                "y": 1465.3,
+                "width": 794,
+                "height": 306.1
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "holdingsBubbleMatrix": {
+              "rect": {
+                "x": 25,
+                "y": 2187.3,
+                "width": 1610,
+                "height": 720.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 2142.3,
+                "width": 1612,
+                "height": 766.5
+              },
+              "display": "flex",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(11, 21, 23)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "scrollWidth": 1660,
+          "innerWidth": 1660
+        }
+      }
+    },
+    "omniscient": {
+      "viewports": {
+        "375": {
+          "text": "MINING EXPANSION BOARD CAPACITY, RUNWAYS & SITE VALUE PER UNIT OF HATE MINING CAPACITY 26 / 37 MINES 11 mine(s) headroom remaining before quadratic MC penalty. RUNWAYS: Water: 2823mo Volatiles: 104.2mo Metals: 32.5mo NobleMetals: 29mo Fissiles: 32.4mo War Floor: 0.0 MC away Yields include completed-project mine bonuses: water ×1.3225 (Project_WaterPurificationTechniques + Project_ThermalMiningTechniques), volatiles ×1.15 (Project_RapidDistillationTechniques), metals ×1.3225 (Project_DeepSpaceMetallurgy + Project_PlasmaExtractionTechniques), nobleMetals ×1.3225 (Project_MolecularBenefication + Project_SlagValorization), fissiles ×1.3225 (Project_RapidFissileEnrichment + Project_SubsurfaceRadiatonAnalysis). They also include the faction-wide space-mining bonus of +10% (Effect_SpaceMiningBonus10 +10%), which is additive and applied after the multipliers above. ESTIMATE — a built mine multiplies these deposit rates by ×1 to ×2 (Outpost Mining Complex to Colony Mining Complex, the tiers the observer has researched). It is deliberately NOT in the utility score: every site here is unowned, so the tier is a decision rather than a reading, and the score saturates — a uniform assumed multiplier reorders this board rather than scaling it. MINE UPGRADES — 19 AVAILABLE Measured: the observer's own operational mines Upgrading multiplies a site already held and costs 0 against the mine limit, where a new claim costs one of the 11 remaining. Total measured gain: W: +695.2 · V: +661.8 · M: +660.2 · N: +149.3 · F: +10.9 per month. SITE & BODY MULTIPLIER MONTHLY GAIN COST Kimberly Catena 409 Aspasia ×1.00 → ×1.50 W: +43.8 · V: +43.2 · M: +60.9 · N: +25.9 0 MINE SLOTS Hellas Planitia Mars ×1.50 → ×2.00 W: +44.2 · V: +42.2 · M: +65.6 · N: +11.7 · F: +2.9 0 MINE SLOTS Arcadia Planitia Mars ×1.50 → ×2.00 W: +88.4 · V: +24.3 · M: +42.1 · F: +0.4 0 MINE SLOTS Fortuna's Song 19 Fortuna ×1.00 → ×1.50 W: +51.5 · V: +90.9 0 MINE SLOTS Temptress Chasma 34 Circe ×1.00 → ×1.50 W: +56.1 · V: +62.5 · M: +18.8 0 MINE SLOTS Top 5 of 19 available upgrades shown. Excluded: 7 at their template ceiling (nothing upgrades from that module). AVAILABLE EXPANSION SITES (230) Top 8 of 230, ranked by saturating utility per unit of alien hate SITE & BODY RESOURCE YIELDS UTILITY VALUE COST Moytyra Regio Europa (JUPITER) W: +297.2 · V: +97.9 · M: +35.6 · N: +5.8 EST ×1–×2 once mined Density: 3.01x 0.32 NET UTILITY +0.19 hate 1 MC · build n/a Tara Regio Europa (JUPITER) W: +275.9 · V: +83.8 · M: +28.5 · N: +14.3 · F: +0.2 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Annwn Regio Europa (JUPITER) W: +276.1 · V: +95.6 · M: +29.7 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Argadnel Regio Europa (JUPITER) W: +219.8 · V: +28.5 · M: +65.0 · N: +12.5 EST ×1–×2 once mined Density: 3.01x 0.24 NET UTILITY +0.19 hate 1 MC · build n/a Rathmore Chaos Europa (JUPITER) W: +205.0 · V: +55.9 · M: +205.4 · N: +32.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Falga Regio Europa (JUPITER) W: +203.6 · V: +66.0 · M: +63.5 · N: +31.8 · F: +0.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Xibalba Sulcus Ganymede (JUPITER) W: +280.9 · V: +92.2 · M: +17.7 · F: +0.2 EST ×1–×2 once mined Density: 1.94x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a Lodurr Crater Callisto (JUPITER) W: +296.8 · V: +81.1 · M: +55.3 EST ×1–×2 once mined Density: 1.83x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a No outer system / unprobed sites are currently unreachable. MC BUDGET PLANNER FLEET COST VS HATE FLOOR MISSION CONTROL BUDGET CROSSES PERMANENT-WAR FLOOR PROJECTED FLOOR 61.8 USED NOW 322 of 444 capacity HEADROOM TO CAP 122 hard build limit HEADROOM TO WAR FLOOR -62 used MC at 50 hate STAGED BUILD +0 0 ship(s) Used MC would push the minimum hate floor past 50 — peace becomes impossible. STAGE A BUILD PER-HULL MC FROM GAME TEMPLATES Escort 1 MC · 90d − 0 + Frigate 2 MC · 120d − 0 + Monitor 2 MC · 120d − 0 + Destroyer 2 MC · 135d − 0 + Cruiser 3 MC · 180d − 0 + Battlecruiser 3 MC · 180d − 0 + Battleship 3 MC · 200d − 0 + Lancer 4 MC · 240d − 0 + WHY DOES BUILDING RAISE ALIEN HATE? WARTIME LOGISTICS STOCKPILE + OUTPUT LOGISTICS / STOCKPILE + OUTPUT Gross production is save-derived. Burn, committed spend, and runway remain UNAVAILABLE until those values are present in the save. RESOURCE STOCKPILE GROSS/MO SPENT / COMMITTED QUEUED / NEXT RUNWAY INCOMING PRODUCTION Water 200,041 +1,433.0 UNAVAILABLE No visible queue UNAVAILABLE Mare Salvatore · +132.2 Volatiles 117,900 +1,500.0 UNAVAILABLE No visible queue UNAVAILABLE Fortuna's Song · +143.6 Metals 64,235 +1,237.9 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +152.7 Noble metals 18,941 +328.3 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +74.6 Fissiles 1,979 +18.3 UNAVAILABLE No visible queue UNAVAILABLE Valles Fidelis · +8.5 NATION ACTION QUEUE EARTH HOLDINGS EARTH / ACTION QUEUE Postures are triage labels derived from executive control, unrest, and the selected priority faction. They are not completed operations. NATION EXECUTIVE CP COMPOSITION GDP RESEARCH COHESION UNREST ARMIES RECOMMENDED POSTURE United States of North America the Initiative Initiative 6 $24.1T 2,073 5.2 0.5 16 CONSOLIDATE 0 nukes India the Initiative Initiative 6 $21.0T 1,323 4.3 2.1 16 DEFEND 0 nukes · unrest watch European Union the Initiative Initiative 5 $14.6T 841 7.4 0.0 11 CONSOLIDATE 0 nukes West African Community the Initiative Initiative 3 · Servants 1 $4.3T 198 2.9 2.0 1 CONSOLIDATE 0 nukes Yemen the Initiative Initiative 3 $0.6T 33 5.8 3.4 0 DEFEND 0 nukes · unrest watch Qatar-Bahrain the Servants Servants 3 $0.5T 33 6.2 0.0 1 CRACKDOWN 0 nukes Switzerland the Initiative Initiative 3 $0.4T 50 1.4 2.1 1 DEFEND 0 nukes · unrest watch Kenya the Servants Servants 3 $0.4T 30 2.4 4.8 0 CRACKDOWN 0 nukes · unrest watch Panama the Servants Servants 3 $0.4T 50 7.4 0.0 0 CRACKDOWN 0 nukes Armenia the Servants Servants 3 $0.3T 20 8.6 0.0 0 CRACKDOWN 0 nukes Lebanon the Servants Servants 2 $0.3T 21 8.1 0.0 0 CRACKDOWN 0 nukes Latvia the Servants Humanity First 1 · Servants 1 $0.2T 19 10.0 0.0 0 CRACKDOWN 0 nukes",
+          "mounts": {
+            "miningExpansion": {
+              "rect": {
+                "x": 32,
+                "y": 494.6,
+                "width": 311,
+                "height": 2128.6
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 422.8,
+                "width": 345,
+                "height": 2217.3
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "1 / -1"
+            },
+            "mcBudget": {
+              "rect": {
+                "x": 32,
+                "y": 2735.9,
+                "width": 311,
+                "height": 651.3
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2664.2,
+                "width": 345,
+                "height": 740
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "auto"
+            },
+            "resourceFlowChart": {
+              "rect": {
+                "x": 32,
+                "y": 3499.9,
+                "width": 311,
+                "height": 618.7
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 3428.2,
+                "width": 345,
+                "height": 707.4
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "holdingsBubbleMatrix": {
+              "rect": {
+                "x": 16,
+                "y": 4215.4,
+                "width": 343,
+                "height": 2279.7
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 4159.6,
+                "width": 345,
+                "height": 2336.4
+              },
+              "display": "flex",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(11, 21, 23)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "scrollWidth": 375,
+          "innerWidth": 375
+        },
+        "414": {
+          "text": "MINING EXPANSION BOARD CAPACITY, RUNWAYS & SITE VALUE PER UNIT OF HATE MINING CAPACITY 26 / 37 MINES 11 mine(s) headroom remaining before quadratic MC penalty. RUNWAYS: Water: 2823mo Volatiles: 104.2mo Metals: 32.5mo NobleMetals: 29mo Fissiles: 32.4mo War Floor: 0.0 MC away Yields include completed-project mine bonuses: water ×1.3225 (Project_WaterPurificationTechniques + Project_ThermalMiningTechniques), volatiles ×1.15 (Project_RapidDistillationTechniques), metals ×1.3225 (Project_DeepSpaceMetallurgy + Project_PlasmaExtractionTechniques), nobleMetals ×1.3225 (Project_MolecularBenefication + Project_SlagValorization), fissiles ×1.3225 (Project_RapidFissileEnrichment + Project_SubsurfaceRadiatonAnalysis). They also include the faction-wide space-mining bonus of +10% (Effect_SpaceMiningBonus10 +10%), which is additive and applied after the multipliers above. ESTIMATE — a built mine multiplies these deposit rates by ×1 to ×2 (Outpost Mining Complex to Colony Mining Complex, the tiers the observer has researched). It is deliberately NOT in the utility score: every site here is unowned, so the tier is a decision rather than a reading, and the score saturates — a uniform assumed multiplier reorders this board rather than scaling it. MINE UPGRADES — 19 AVAILABLE Measured: the observer's own operational mines Upgrading multiplies a site already held and costs 0 against the mine limit, where a new claim costs one of the 11 remaining. Total measured gain: W: +695.2 · V: +661.8 · M: +660.2 · N: +149.3 · F: +10.9 per month. SITE & BODY MULTIPLIER MONTHLY GAIN COST Kimberly Catena 409 Aspasia ×1.00 → ×1.50 W: +43.8 · V: +43.2 · M: +60.9 · N: +25.9 0 MINE SLOTS Hellas Planitia Mars ×1.50 → ×2.00 W: +44.2 · V: +42.2 · M: +65.6 · N: +11.7 · F: +2.9 0 MINE SLOTS Arcadia Planitia Mars ×1.50 → ×2.00 W: +88.4 · V: +24.3 · M: +42.1 · F: +0.4 0 MINE SLOTS Fortuna's Song 19 Fortuna ×1.00 → ×1.50 W: +51.5 · V: +90.9 0 MINE SLOTS Temptress Chasma 34 Circe ×1.00 → ×1.50 W: +56.1 · V: +62.5 · M: +18.8 0 MINE SLOTS Top 5 of 19 available upgrades shown. Excluded: 7 at their template ceiling (nothing upgrades from that module). AVAILABLE EXPANSION SITES (230) Top 8 of 230, ranked by saturating utility per unit of alien hate SITE & BODY RESOURCE YIELDS UTILITY VALUE COST Moytyra Regio Europa (JUPITER) W: +297.2 · V: +97.9 · M: +35.6 · N: +5.8 EST ×1–×2 once mined Density: 3.01x 0.32 NET UTILITY +0.19 hate 1 MC · build n/a Tara Regio Europa (JUPITER) W: +275.9 · V: +83.8 · M: +28.5 · N: +14.3 · F: +0.2 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Annwn Regio Europa (JUPITER) W: +276.1 · V: +95.6 · M: +29.7 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Argadnel Regio Europa (JUPITER) W: +219.8 · V: +28.5 · M: +65.0 · N: +12.5 EST ×1–×2 once mined Density: 3.01x 0.24 NET UTILITY +0.19 hate 1 MC · build n/a Rathmore Chaos Europa (JUPITER) W: +205.0 · V: +55.9 · M: +205.4 · N: +32.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Falga Regio Europa (JUPITER) W: +203.6 · V: +66.0 · M: +63.5 · N: +31.8 · F: +0.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Xibalba Sulcus Ganymede (JUPITER) W: +280.9 · V: +92.2 · M: +17.7 · F: +0.2 EST ×1–×2 once mined Density: 1.94x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a Lodurr Crater Callisto (JUPITER) W: +296.8 · V: +81.1 · M: +55.3 EST ×1–×2 once mined Density: 1.83x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a No outer system / unprobed sites are currently unreachable. MC BUDGET PLANNER FLEET COST VS HATE FLOOR MISSION CONTROL BUDGET CROSSES PERMANENT-WAR FLOOR PROJECTED FLOOR 61.8 USED NOW 322 of 444 capacity HEADROOM TO CAP 122 hard build limit HEADROOM TO WAR FLOOR -62 used MC at 50 hate STAGED BUILD +0 0 ship(s) Used MC would push the minimum hate floor past 50 — peace becomes impossible. STAGE A BUILD PER-HULL MC FROM GAME TEMPLATES Escort 1 MC · 90d − 0 + Frigate 2 MC · 120d − 0 + Monitor 2 MC · 120d − 0 + Destroyer 2 MC · 135d − 0 + Cruiser 3 MC · 180d − 0 + Battlecruiser 3 MC · 180d − 0 + Battleship 3 MC · 200d − 0 + Lancer 4 MC · 240d − 0 + WHY DOES BUILDING RAISE ALIEN HATE? WARTIME LOGISTICS STOCKPILE + OUTPUT LOGISTICS / STOCKPILE + OUTPUT Gross production is save-derived. Burn, committed spend, and runway remain UNAVAILABLE until those values are present in the save. RESOURCE STOCKPILE GROSS/MO SPENT / COMMITTED QUEUED / NEXT RUNWAY INCOMING PRODUCTION Water 200,041 +1,433.0 UNAVAILABLE No visible queue UNAVAILABLE Mare Salvatore · +132.2 Volatiles 117,900 +1,500.0 UNAVAILABLE No visible queue UNAVAILABLE Fortuna's Song · +143.6 Metals 64,235 +1,237.9 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +152.7 Noble metals 18,941 +328.3 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +74.6 Fissiles 1,979 +18.3 UNAVAILABLE No visible queue UNAVAILABLE Valles Fidelis · +8.5 NATION ACTION QUEUE EARTH HOLDINGS EARTH / ACTION QUEUE Postures are triage labels derived from executive control, unrest, and the selected priority faction. They are not completed operations. NATION EXECUTIVE CP COMPOSITION GDP RESEARCH COHESION UNREST ARMIES RECOMMENDED POSTURE United States of North America the Initiative Initiative 6 $24.1T 2,073 5.2 0.5 16 CONSOLIDATE 0 nukes India the Initiative Initiative 6 $21.0T 1,323 4.3 2.1 16 DEFEND 0 nukes · unrest watch European Union the Initiative Initiative 5 $14.6T 841 7.4 0.0 11 CONSOLIDATE 0 nukes West African Community the Initiative Initiative 3 · Servants 1 $4.3T 198 2.9 2.0 1 CONSOLIDATE 0 nukes Yemen the Initiative Initiative 3 $0.6T 33 5.8 3.4 0 DEFEND 0 nukes · unrest watch Qatar-Bahrain the Servants Servants 3 $0.5T 33 6.2 0.0 1 CRACKDOWN 0 nukes Switzerland the Initiative Initiative 3 $0.4T 50 1.4 2.1 1 DEFEND 0 nukes · unrest watch Kenya the Servants Servants 3 $0.4T 30 2.4 4.8 0 CRACKDOWN 0 nukes · unrest watch Panama the Servants Servants 3 $0.4T 50 7.4 0.0 0 CRACKDOWN 0 nukes Armenia the Servants Servants 3 $0.3T 20 8.6 0.0 0 CRACKDOWN 0 nukes Lebanon the Servants Servants 2 $0.3T 21 8.1 0.0 0 CRACKDOWN 0 nukes Latvia the Servants Humanity First 1 · Servants 1 $0.2T 19 10.0 0.0 0 CRACKDOWN 0 nukes",
+          "mounts": {
+            "miningExpansion": {
+              "rect": {
+                "x": 32,
+                "y": 494.6,
+                "width": 350,
+                "height": 1823.2
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 422.8,
+                "width": 384,
+                "height": 1912
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "1 / -1"
+            },
+            "mcBudget": {
+              "rect": {
+                "x": 32,
+                "y": 2430.6,
+                "width": 350,
+                "height": 645
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2358.8,
+                "width": 384,
+                "height": 733.8
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "auto"
+            },
+            "resourceFlowChart": {
+              "rect": {
+                "x": 32,
+                "y": 3188.3,
+                "width": 350,
+                "height": 511.1
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 3116.6,
+                "width": 384,
+                "height": 599.9
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "holdingsBubbleMatrix": {
+              "rect": {
+                "x": 16,
+                "y": 3796.2,
+                "width": 382,
+                "height": 2212.6
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 3740.5,
+                "width": 384,
+                "height": 2269.4
+              },
+              "display": "flex",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(11, 21, 23)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "scrollWidth": 414,
+          "innerWidth": 414
+        },
+        "768": {
+          "text": "MINING EXPANSION BOARD CAPACITY, RUNWAYS & SITE VALUE PER UNIT OF HATE MINING CAPACITY 26 / 37 MINES 11 mine(s) headroom remaining before quadratic MC penalty. RUNWAYS: Water: 2823mo Volatiles: 104.2mo Metals: 32.5mo NobleMetals: 29mo Fissiles: 32.4mo War Floor: 0.0 MC away Yields include completed-project mine bonuses: water ×1.3225 (Project_WaterPurificationTechniques + Project_ThermalMiningTechniques), volatiles ×1.15 (Project_RapidDistillationTechniques), metals ×1.3225 (Project_DeepSpaceMetallurgy + Project_PlasmaExtractionTechniques), nobleMetals ×1.3225 (Project_MolecularBenefication + Project_SlagValorization), fissiles ×1.3225 (Project_RapidFissileEnrichment + Project_SubsurfaceRadiatonAnalysis). They also include the faction-wide space-mining bonus of +10% (Effect_SpaceMiningBonus10 +10%), which is additive and applied after the multipliers above. ESTIMATE — a built mine multiplies these deposit rates by ×1 to ×2 (Outpost Mining Complex to Colony Mining Complex, the tiers the observer has researched). It is deliberately NOT in the utility score: every site here is unowned, so the tier is a decision rather than a reading, and the score saturates — a uniform assumed multiplier reorders this board rather than scaling it. MINE UPGRADES — 19 AVAILABLE Measured: the observer's own operational mines Upgrading multiplies a site already held and costs 0 against the mine limit, where a new claim costs one of the 11 remaining. Total measured gain: W: +695.2 · V: +661.8 · M: +660.2 · N: +149.3 · F: +10.9 per month. SITE & BODY MULTIPLIER MONTHLY GAIN COST Kimberly Catena 409 Aspasia ×1.00 → ×1.50 W: +43.8 · V: +43.2 · M: +60.9 · N: +25.9 0 MINE SLOTS Hellas Planitia Mars ×1.50 → ×2.00 W: +44.2 · V: +42.2 · M: +65.6 · N: +11.7 · F: +2.9 0 MINE SLOTS Arcadia Planitia Mars ×1.50 → ×2.00 W: +88.4 · V: +24.3 · M: +42.1 · F: +0.4 0 MINE SLOTS Fortuna's Song 19 Fortuna ×1.00 → ×1.50 W: +51.5 · V: +90.9 0 MINE SLOTS Temptress Chasma 34 Circe ×1.00 → ×1.50 W: +56.1 · V: +62.5 · M: +18.8 0 MINE SLOTS Top 5 of 19 available upgrades shown. Excluded: 7 at their template ceiling (nothing upgrades from that module). AVAILABLE EXPANSION SITES (230) Top 8 of 230, ranked by saturating utility per unit of alien hate SITE & BODY RESOURCE YIELDS UTILITY VALUE COST Moytyra Regio Europa (JUPITER) W: +297.2 · V: +97.9 · M: +35.6 · N: +5.8 EST ×1–×2 once mined Density: 3.01x 0.32 NET UTILITY +0.19 hate 1 MC · build n/a Tara Regio Europa (JUPITER) W: +275.9 · V: +83.8 · M: +28.5 · N: +14.3 · F: +0.2 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Annwn Regio Europa (JUPITER) W: +276.1 · V: +95.6 · M: +29.7 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Argadnel Regio Europa (JUPITER) W: +219.8 · V: +28.5 · M: +65.0 · N: +12.5 EST ×1–×2 once mined Density: 3.01x 0.24 NET UTILITY +0.19 hate 1 MC · build n/a Rathmore Chaos Europa (JUPITER) W: +205.0 · V: +55.9 · M: +205.4 · N: +32.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Falga Regio Europa (JUPITER) W: +203.6 · V: +66.0 · M: +63.5 · N: +31.8 · F: +0.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Xibalba Sulcus Ganymede (JUPITER) W: +280.9 · V: +92.2 · M: +17.7 · F: +0.2 EST ×1–×2 once mined Density: 1.94x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a Lodurr Crater Callisto (JUPITER) W: +296.8 · V: +81.1 · M: +55.3 EST ×1–×2 once mined Density: 1.83x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a No outer system / unprobed sites are currently unreachable. MC BUDGET PLANNER FLEET COST VS HATE FLOOR MISSION CONTROL BUDGET CROSSES PERMANENT-WAR FLOOR PROJECTED FLOOR 61.8 USED NOW 322 of 444 capacity HEADROOM TO CAP 122 hard build limit HEADROOM TO WAR FLOOR -62 used MC at 50 hate STAGED BUILD +0 0 ship(s) Used MC would push the minimum hate floor past 50 — peace becomes impossible. STAGE A BUILD PER-HULL MC FROM GAME TEMPLATES Escort 1 MC · 90d − 0 + Frigate 2 MC · 120d − 0 + Monitor 2 MC · 120d − 0 + Destroyer 2 MC · 135d − 0 + Cruiser 3 MC · 180d − 0 + Battlecruiser 3 MC · 180d − 0 + Battleship 3 MC · 200d − 0 + Lancer 4 MC · 240d − 0 + WHY DOES BUILDING RAISE ALIEN HATE? WARTIME LOGISTICS STOCKPILE + OUTPUT LOGISTICS / STOCKPILE + OUTPUT Gross production is save-derived. Burn, committed spend, and runway remain UNAVAILABLE until those values are present in the save. RESOURCE STOCKPILE GROSS/MO SPENT / COMMITTED QUEUED / NEXT RUNWAY INCOMING PRODUCTION Water 200,041 +1,433.0 UNAVAILABLE No visible queue UNAVAILABLE Mare Salvatore · +132.2 Volatiles 117,900 +1,500.0 UNAVAILABLE No visible queue UNAVAILABLE Fortuna's Song · +143.6 Metals 64,235 +1,237.9 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +152.7 Noble metals 18,941 +328.3 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +74.6 Fissiles 1,979 +18.3 UNAVAILABLE No visible queue UNAVAILABLE Valles Fidelis · +8.5 NATION ACTION QUEUE EARTH HOLDINGS EARTH / ACTION QUEUE Postures are triage labels derived from executive control, unrest, and the selected priority faction. They are not completed operations. NATION EXECUTIVE CP COMPOSITION GDP RESEARCH COHESION UNREST ARMIES RECOMMENDED POSTURE United States of North America the Initiative Initiative 6 $24.1T 2,073 5.2 0.5 16 CONSOLIDATE 0 nukes India the Initiative Initiative 6 $21.0T 1,323 4.3 2.1 16 DEFEND 0 nukes · unrest watch European Union the Initiative Initiative 5 $14.6T 841 7.4 0.0 11 CONSOLIDATE 0 nukes West African Community the Initiative Initiative 3 · Servants 1 $4.3T 198 2.9 2.0 1 CONSOLIDATE 0 nukes Yemen the Initiative Initiative 3 $0.6T 33 5.8 3.4 0 DEFEND 0 nukes · unrest watch Qatar-Bahrain the Servants Servants 3 $0.5T 33 6.2 0.0 1 CRACKDOWN 0 nukes Switzerland the Initiative Initiative 3 $0.4T 50 1.4 2.1 1 DEFEND 0 nukes · unrest watch Kenya the Servants Servants 3 $0.4T 30 2.4 4.8 0 CRACKDOWN 0 nukes · unrest watch Panama the Servants Servants 3 $0.4T 50 7.4 0.0 0 CRACKDOWN 0 nukes Armenia the Servants Servants 3 $0.3T 20 8.6 0.0 0 CRACKDOWN 0 nukes Lebanon the Servants Servants 2 $0.3T 21 8.1 0.0 0 CRACKDOWN 0 nukes Latvia the Servants Humanity First 1 · Servants 1 $0.2T 19 10.0 0.0 0 CRACKDOWN 0 nukes",
+          "mounts": {
+            "miningExpansion": {
+              "rect": {
+                "x": 32,
+                "y": 446.8,
+                "width": 704,
+                "height": 1252.7
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 385.8,
+                "width": 738,
+                "height": 1330.7
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "1 / -1"
+            },
+            "mcBudget": {
+              "rect": {
+                "x": 32,
+                "y": 1801.5,
+                "width": 704,
+                "height": 575
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 1740.5,
+                "width": 738,
+                "height": 653
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "auto"
+            },
+            "resourceFlowChart": {
+              "rect": {
+                "x": 32,
+                "y": 2478.5,
+                "width": 704,
+                "height": 309.1
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2417.5,
+                "width": 738,
+                "height": 387.1
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "holdingsBubbleMatrix": {
+              "rect": {
+                "x": 16,
+                "y": 2873.6,
+                "width": 736,
+                "height": 912.1
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2828.6,
+                "width": 738,
+                "height": 958.1
+              },
+              "display": "flex",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(11, 21, 23)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "scrollWidth": 768,
+          "innerWidth": 768
+        },
+        "desktop": {
+          "text": "MINING EXPANSION BOARD CAPACITY, RUNWAYS & SITE VALUE PER UNIT OF HATE MINING CAPACITY 26 / 37 MINES 11 mine(s) headroom remaining before quadratic MC penalty. RUNWAYS: Water: 2823mo Volatiles: 104.2mo Metals: 32.5mo NobleMetals: 29mo Fissiles: 32.4mo War Floor: 0.0 MC away Yields include completed-project mine bonuses: water ×1.3225 (Project_WaterPurificationTechniques + Project_ThermalMiningTechniques), volatiles ×1.15 (Project_RapidDistillationTechniques), metals ×1.3225 (Project_DeepSpaceMetallurgy + Project_PlasmaExtractionTechniques), nobleMetals ×1.3225 (Project_MolecularBenefication + Project_SlagValorization), fissiles ×1.3225 (Project_RapidFissileEnrichment + Project_SubsurfaceRadiatonAnalysis). They also include the faction-wide space-mining bonus of +10% (Effect_SpaceMiningBonus10 +10%), which is additive and applied after the multipliers above. ESTIMATE — a built mine multiplies these deposit rates by ×1 to ×2 (Outpost Mining Complex to Colony Mining Complex, the tiers the observer has researched). It is deliberately NOT in the utility score: every site here is unowned, so the tier is a decision rather than a reading, and the score saturates — a uniform assumed multiplier reorders this board rather than scaling it. MINE UPGRADES — 19 AVAILABLE Measured: the observer's own operational mines Upgrading multiplies a site already held and costs 0 against the mine limit, where a new claim costs one of the 11 remaining. Total measured gain: W: +695.2 · V: +661.8 · M: +660.2 · N: +149.3 · F: +10.9 per month. SITE & BODY MULTIPLIER MONTHLY GAIN COST Kimberly Catena 409 Aspasia ×1.00 → ×1.50 W: +43.8 · V: +43.2 · M: +60.9 · N: +25.9 0 MINE SLOTS Hellas Planitia Mars ×1.50 → ×2.00 W: +44.2 · V: +42.2 · M: +65.6 · N: +11.7 · F: +2.9 0 MINE SLOTS Arcadia Planitia Mars ×1.50 → ×2.00 W: +88.4 · V: +24.3 · M: +42.1 · F: +0.4 0 MINE SLOTS Fortuna's Song 19 Fortuna ×1.00 → ×1.50 W: +51.5 · V: +90.9 0 MINE SLOTS Temptress Chasma 34 Circe ×1.00 → ×1.50 W: +56.1 · V: +62.5 · M: +18.8 0 MINE SLOTS Top 5 of 19 available upgrades shown. Excluded: 7 at their template ceiling (nothing upgrades from that module). AVAILABLE EXPANSION SITES (230) Top 8 of 230, ranked by saturating utility per unit of alien hate SITE & BODY RESOURCE YIELDS UTILITY VALUE COST Moytyra Regio Europa (JUPITER) W: +297.2 · V: +97.9 · M: +35.6 · N: +5.8 EST ×1–×2 once mined Density: 3.01x 0.32 NET UTILITY +0.19 hate 1 MC · build n/a Tara Regio Europa (JUPITER) W: +275.9 · V: +83.8 · M: +28.5 · N: +14.3 · F: +0.2 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Annwn Regio Europa (JUPITER) W: +276.1 · V: +95.6 · M: +29.7 EST ×1–×2 once mined Density: 3.01x 0.30 NET UTILITY +0.19 hate 1 MC · build n/a Argadnel Regio Europa (JUPITER) W: +219.8 · V: +28.5 · M: +65.0 · N: +12.5 EST ×1–×2 once mined Density: 3.01x 0.24 NET UTILITY +0.19 hate 1 MC · build n/a Rathmore Chaos Europa (JUPITER) W: +205.0 · V: +55.9 · M: +205.4 · N: +32.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Falga Regio Europa (JUPITER) W: +203.6 · V: +66.0 · M: +63.5 · N: +31.8 · F: +0.8 EST ×1–×2 once mined Density: 3.01x 0.23 NET UTILITY +0.19 hate 1 MC · build n/a Xibalba Sulcus Ganymede (JUPITER) W: +280.9 · V: +92.2 · M: +17.7 · F: +0.2 EST ×1–×2 once mined Density: 1.94x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a Lodurr Crater Callisto (JUPITER) W: +296.8 · V: +81.1 · M: +55.3 EST ×1–×2 once mined Density: 1.83x 0.20 NET UTILITY +0.19 hate 1 MC · build n/a No outer system / unprobed sites are currently unreachable. MC BUDGET PLANNER FLEET COST VS HATE FLOOR MISSION CONTROL BUDGET CROSSES PERMANENT-WAR FLOOR PROJECTED FLOOR 61.8 USED NOW 322 of 444 capacity HEADROOM TO CAP 122 hard build limit HEADROOM TO WAR FLOOR -62 used MC at 50 hate STAGED BUILD +0 0 ship(s) Used MC would push the minimum hate floor past 50 — peace becomes impossible. STAGE A BUILD PER-HULL MC FROM GAME TEMPLATES Escort 1 MC · 90d − 0 + Frigate 2 MC · 120d − 0 + Monitor 2 MC · 120d − 0 + Destroyer 2 MC · 135d − 0 + Cruiser 3 MC · 180d − 0 + Battlecruiser 3 MC · 180d − 0 + Battleship 3 MC · 200d − 0 + Lancer 4 MC · 240d − 0 + WHY DOES BUILDING RAISE ALIEN HATE? WARTIME LOGISTICS STOCKPILE + OUTPUT LOGISTICS / STOCKPILE + OUTPUT Gross production is save-derived. Burn, committed spend, and runway remain UNAVAILABLE until those values are present in the save. RESOURCE STOCKPILE GROSS/MO SPENT / COMMITTED QUEUED / NEXT RUNWAY INCOMING PRODUCTION Water 200,041 +1,433.0 UNAVAILABLE No visible queue UNAVAILABLE Mare Salvatore · +132.2 Volatiles 117,900 +1,500.0 UNAVAILABLE No visible queue UNAVAILABLE Fortuna's Song · +143.6 Metals 64,235 +1,237.9 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +152.7 Noble metals 18,941 +328.3 UNAVAILABLE No visible queue UNAVAILABLE Zephyr's Reach · +74.6 Fissiles 1,979 +18.3 UNAVAILABLE No visible queue UNAVAILABLE Valles Fidelis · +8.5 NATION ACTION QUEUE EARTH HOLDINGS EARTH / ACTION QUEUE Postures are triage labels derived from executive control, unrest, and the selected priority faction. They are not completed operations. NATION EXECUTIVE CP COMPOSITION GDP RESEARCH COHESION UNREST ARMIES RECOMMENDED POSTURE United States of North America the Initiative Initiative 6 $24.1T 2,073 5.2 0.5 16 CONSOLIDATE 0 nukes India the Initiative Initiative 6 $21.0T 1,323 4.3 2.1 16 DEFEND 0 nukes · unrest watch European Union the Initiative Initiative 5 $14.6T 841 7.4 0.0 11 CONSOLIDATE 0 nukes West African Community the Initiative Initiative 3 · Servants 1 $4.3T 198 2.9 2.0 1 CONSOLIDATE 0 nukes Yemen the Initiative Initiative 3 $0.6T 33 5.8 3.4 0 DEFEND 0 nukes · unrest watch Qatar-Bahrain the Servants Servants 3 $0.5T 33 6.2 0.0 1 CRACKDOWN 0 nukes Switzerland the Initiative Initiative 3 $0.4T 50 1.4 2.1 1 DEFEND 0 nukes · unrest watch Kenya the Servants Servants 3 $0.4T 30 2.4 4.8 0 CRACKDOWN 0 nukes · unrest watch Panama the Servants Servants 3 $0.4T 50 7.4 0.0 0 CRACKDOWN 0 nukes Armenia the Servants Servants 3 $0.3T 20 8.6 0.0 0 CRACKDOWN 0 nukes Lebanon the Servants Servants 2 $0.3T 21 8.1 0.0 0 CRACKDOWN 0 nukes Latvia the Servants Humanity First 1 · Servants 1 $0.2T 19 10.0 0.0 0 CRACKDOWN 0 nukes",
+          "mounts": {
+            "miningExpansion": {
+              "rect": {
+                "x": 41,
+                "y": 272.8,
+                "width": 1578,
+                "height": 1151.4
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 211.8,
+                "width": 1612,
+                "height": 1229.4
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "1 / -1"
+            },
+            "mcBudget": {
+              "rect": {
+                "x": 41,
+                "y": 1526.3,
+                "width": 760,
+                "height": 575
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 1465.3,
+                "width": 794,
+                "height": 653
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgb(16, 27, 29)",
+              "cardGridColumn": "auto"
+            },
+            "resourceFlowChart": {
+              "rect": {
+                "x": 859,
+                "y": 1526.3,
+                "width": 760,
+                "height": 228.1
+              },
+              "cardRect": {
+                "x": 842,
+                "y": 1465.3,
+                "width": 794,
+                "height": 306.1
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "holdingsBubbleMatrix": {
+              "rect": {
+                "x": 25,
+                "y": 2187.3,
+                "width": 1610,
+                "height": 720.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 2142.3,
+                "width": 1612,
+                "height": 766.5
+              },
+              "display": "flex",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(11, 21, 23)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "scrollWidth": 1660,
+          "innerWidth": 1660
+        }
+      }
+    }
+  }
+}
