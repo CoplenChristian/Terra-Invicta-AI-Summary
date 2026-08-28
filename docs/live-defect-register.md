@@ -26,7 +26,7 @@ save.
 > **The tally and the live list immediately below are the authoritative status.**
 > Use `git log` on the named commit to see what a fix actually changed.
 
-**Tally as of 2026-08-27: 26 entries — 23 fixed, 3 live, 0 conditional.**
+**Tally as of 2026-08-27: 26 entries — 24 fixed, 2 live, 0 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -57,7 +57,14 @@ localisation files, 107 fallen back, 70 refused as ambiguous. The user's
 **#19 and #20 were fixed the same day** (`a0eabef`, `d71613e`), and **#18** and
 the `emptyOutDir` build race in `95eee95`.
 
-**Live right now: #17, #21 and #26.**
+**#26 was fixed 2026-08-27** — the live-save guard is now behavioural, and the
+fix named five live-save readers the source scan had missed (see the #26 entry
+below). Three were the same shape as the defect itself: tests that read the save
+through a server or helper, invisible to any source-text scan. The guard that
+found them is now the enforcement: it runs the suite against a folder that is
+not there, so the next reader of any shape fails loudly and names itself.
+
+**Live right now: #17 and #21.**
 
 - **#17** — four fabricated fallbacks in the directive board, carried across the
   React port **deliberately**, because "no figure may change" was that port's
@@ -70,12 +77,34 @@ the `emptyOutDir` build race in `95eee95`.
   cascade across rows — the exact property those tests defend. What fixed it on the
   retry was a sharper brief, not a better tool: one panel instead of eleven, the
   failure named, and the catching tests pointed at.
-- **#26** — the guard that promises the unit suite never reads the live save is a
-  **scan of test-file source text**, so it cannot see a read reached through a
-  server or a helper. `missionControlLayout.test.js` requires `server/index.js` and
-  passes the guard. CLAUDE.md's "must pass identically with the game running" is
-  therefore unenforced, which matters because that is how the suite is almost
-  always run.
+- **#26** — **FIXED 2026-08-27.** The guard that promised the unit suite never
+  reads the live save was a **scan of test-file source text**, so it could not see
+  a read reached through a server or a helper. `missionControlLayout.test.js`
+  required `server/index.js` and passed the scan. CLAUDE.md's "must pass
+  identically with the game running" was therefore unenforced — which mattered,
+  because that is how the suite is almost always run.
+  Replaced with a **behavioural guard** (`tests/noLiveSaveInUnitSuite.test.js`):
+  it re-runs the whole suite with `TI_SAVE_PATH` pointed at a folder that does
+  not exist (anything reaching for the newest save 500s and names itself), plus a
+  fs watch on the real configured folder for code that bypasses the override. On
+  the tree as it stood, the guard named **six** failing files the source scan had
+  missed. Five were live-save readers and are fixed: `missionControlLayout`,
+  `commandLayout` and `markdownExports` now serve a committed synthetic save
+  (`tests/fixtures/syntheticSave.js`); `controlPointCap` reads the committed
+  fixture via `queryFixtureIntel`; `driveExplorer` is **pinned** with a two-way
+  ratchet until a save carrying ship designs with rated drive figures exists
+  (its route test needs the server to answer with real drive measurements). The
+  sixth (`codeIndex.test.js`) was a stale `docs/code-index.md`, unrelated to the
+  save folder, regenerated.
+  **Correction to this entry's earlier reasoning:** the register's note that the
+  `controlPointCap` (EBUSY on `Autosave.gz`) and `markdownExports` (500) failures
+  "use committed fixtures and do not require `server/index.js`" was wrong on
+  both. `controlPointCap.test.js:974` called `queryIntel` **without a snapshot**,
+  which falls through to `loadSnapshot()` → the newest save in the configured
+  folder (the EBUSY, mid-write); `markdownExports`' HTTP smoke test drove the
+  real server's save-backed routes (the 500, mid-write). The behavioural guard
+  found both; it cannot see a read the suite tolerates, which is exactly why the
+  fs watch is part of it.
 
 *(#24 is closed — both halves. The CSS was 12 undefined names across four panels,
 not 8 in one, and cost missing geometry rather than only wrong colour; six

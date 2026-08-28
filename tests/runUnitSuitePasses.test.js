@@ -14,6 +14,11 @@
 //   3. The classifier catches a NEW browser test file, so someone adding one
 //      cannot silently land it in the parallel pass and reintroduce the
 //      contention this split exists to prevent.
+//   4. The behavioural live-save guard (tests/noLiveSaveInUnitSuite.test.js)
+//      is in its own `guard` bucket, in neither pass. It spawns the whole
+//      suite again under a save-folder override, so running it inside a pass
+//      would double the Chromium count mid-run and recreate the exact
+//      contention the split exists to prevent.
 //
 // The classifier lives in tests/fixtures/unitTestPasses.js, the single source of
 // truth shared with the runner, so the two cannot drift.
@@ -24,7 +29,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const { isBrowserDriving, splitPasses, BROWSER_PASS_CONCURRENCY } = require('./fixtures/unitTestPasses');
+const { isBrowserDriving, splitPasses, BROWSER_PASS_CONCURRENCY, GUARD_FILENAME } = require('./fixtures/unitTestPasses');
 
 test('browser/pure split: every browser-pass file drives a browser, every pure-pass file does not', () => {
   const { browser, pure, all } = splitPasses();
@@ -56,6 +61,31 @@ test('browser/pure split: every browser-pass file drives a browser, every pure-p
       `${file}: routed to the browser pass but has no chromium.launch and no browser fixture require`
     );
   }
+});
+
+test('the live-save guard file is in its own bucket, in neither pass', () => {
+  const { browser, pure, guard, all } = splitPasses();
+
+  // Keyed tightly: exactly the one named file, and no other file may hide in
+  // the guard bucket or slip into a pass.
+  assert.deepStrictEqual(
+    guard.map((f) => path.basename(f)),
+    [GUARD_FILENAME],
+    `the guard bucket must contain exactly ${GUARD_FILENAME}`
+  );
+  assert.ok(
+    !browser.some((f) => path.basename(f) === GUARD_FILENAME)
+    && !pure.some((f) => path.basename(f) === GUARD_FILENAME),
+    `${GUARD_FILENAME} must never run inside a pass: it spawns the whole suite`
+  );
+
+  // The three buckets together are the whole suite, no file lost or doubled.
+  const combined = [...guard, ...browser, ...pure].map((f) => path.resolve(f)).sort();
+  assert.deepStrictEqual(
+    combined,
+    all.map((f) => path.resolve(f)).sort(),
+    'guard + browser + pure must equal the full file list'
+  );
 });
 
 test('browser/pure split catches a NEW browser test file', () => {

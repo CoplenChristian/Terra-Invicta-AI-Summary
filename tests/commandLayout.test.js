@@ -62,10 +62,23 @@
  * failure this repo has been bitten by before.
  */
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { chromium } = require('playwright');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const { useSyntheticSaveDir } = require('./fixtures/syntheticSave');
+
+// The shell fetches save-backed routes, so the server must serve a committed
+// synthetic save rather than the live save folder (enforced behaviourally by
+// tests/noLiveSaveInUnitSuite.test.js). The synthetic save carries measured
+// research so the hero KPIs print figures -- at 375px the word UNAVAILABLE is
+// wider than its box and would trip the clipping assertion for the wrong
+// reason. Point TI_SAVE_PATH at a throwaway dir BEFORE the server is required.
+const SYNTHETIC_SAVE_DIR = useSyntheticSaveDir('ti-command-layout-save-');
+after(() => fs.rmSync(SYNTHETIC_SAVE_DIR, { recursive: true, force: true }));
 
 // `/v2/` goes through `res.sendFile`, which 404s from a checkout under a dot
 // directory (every agent worktree). `/v2/index.html` is served by

@@ -35,6 +35,20 @@
 // does). A NEW browser test file is routed to the capped pass with no runner
 // edit, and tests/runUnitSuitePasses.test.js asserts the split stays accurate
 // rather than drifting.
+//
+// THE THIRD PASS: THE LIVE-SAVE GUARD
+// -----------------------------------
+// After both passes, the runner runs tests/noLiveSaveInUnitSuite.test.js alone.
+// That file spawns THIS runner again with TI_SAVE_PATH pointed at a folder that
+// does not exist and a fs watch on the real configured save folder; the suite
+// must pass identically. It cannot run inside a pass -- it spawns the whole
+// suite, so inside a pass it would double the Chromium count mid-run and
+// recreate the contention this file exists to prevent (hence the `guard`
+// bucket in tests/fixtures/unitTestPasses.js). The guard pass is skipped when
+// TI_GUARDED_UNIT_RUN=1, which is the env the guard file itself sets on the run
+// it spawns: that inner run must not spawn the guard again, or nothing would
+// terminate. Both the normal run and the guarded run therefore run the suite
+// exactly once each.
 const { spawnSync } = require('node:child_process');
 
 const {
@@ -54,7 +68,7 @@ function runPass(args, label) {
   return status;
 }
 
-const { browser, pure } = splitPasses();
+const { browser, pure, guard } = splitPasses();
 
 const pureStatus = runPass(pure, `pure-JS pass (${pure.length} files, parallel)`);
 const browserStatus = runPass(
@@ -62,4 +76,13 @@ const browserStatus = runPass(
   `browser pass (${browser.length} files, --test-concurrency=${BROWSER_PASS_CONCURRENCY})`
 );
 
-process.exit(pureStatus || browserStatus);
+// The behavioural live-save guard, alone, after both passes. Skipped inside
+// the guarded run this file spawns (see the header).
+let guardStatus = 0;
+if (process.env.TI_GUARDED_UNIT_RUN === '1') {
+  console.log('[run_unit_tests] guarded run: skipping the live-save guard pass');
+} else {
+  guardStatus = runPass(guard, `live-save guard (${guard.length} file)`);
+}
+
+process.exit(pureStatus || browserStatus || guardStatus);

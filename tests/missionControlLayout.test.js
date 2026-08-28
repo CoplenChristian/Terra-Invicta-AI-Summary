@@ -29,10 +29,22 @@
  * one that does not.
  */
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
 const { chromium } = require('playwright');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const { useSyntheticSaveDir } = require('./fixtures/syntheticSave');
+
+// The shell fetches save-backed routes, so the server must serve a committed
+// synthetic save rather than the live save folder (enforced behaviourally by
+// tests/noLiveSaveInUnitSuite.test.js). Point TI_SAVE_PATH at a throwaway dir
+// BEFORE the server is required: server/index.js's module-level config
+// resolution reads it, and its dotenv load only fills unset variables.
+const SYNTHETIC_SAVE_DIR = useSyntheticSaveDir('ti-mc-layout-save-');
+after(() => fs.rmSync(SYNTHETIC_SAVE_DIR, { recursive: true, force: true }));
 
 // `/v2/index.html`, never `/v2/`. `res.sendFile` defaults to
 // `dotfiles: 'ignore'`, so the `/v2` route 404s whenever the repo is checked out

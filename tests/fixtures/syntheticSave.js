@@ -1,8 +1,20 @@
 // Synthetic Terra Invicta save-data fixture used by the unit tests. It mirrors
 // the shape produced by server/saveParser.readSaveJson() so the snapshot
 // pipeline can be exercised without depending on a real game save.
+//
+// `useSyntheticSaveDir` is the shared bridge for tests that drive the real
+// server (missionControlLayout, commandLayout, markdownExports): it writes the
+// synthetic save to a throwaway temp dir and points TI_SAVE_PATH at it, so the
+// server serves committed, deterministic content instead of the live save
+// folder. The observer's research is measured (cachedYearlyRevenue.Research /
+// 12 = 800 pts) because the dashboard's hero KPIs otherwise render the word
+// UNAVAILABLE, which at 375px is wider than its box.
 
 const ref = (value) => ({ value });
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 function makeFaction(id, displayName, options = {}) {
   return {
@@ -332,4 +344,25 @@ function makeSaveData({
   };
 }
 
-module.exports = { makeSaveData };
+/**
+ * Point the server at a throwaway synthetic save: create a temp dir, write the
+ * synthetic save, and set TI_SAVE_PATH so the server's module-level config
+ * resolution sees it. Returns the dir so the caller can clean it up. Must run
+ * before any require of the server.
+ */
+function useSyntheticSaveDir(prefix = 'ti-synthetic-save-', options = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const data = makeSaveData({
+    // A module-bearing hab, and the observer's research measured, so the
+    // dashboard renders real content: habs on EXPANSION, and hero KPIs that
+    // print figures instead of the word UNAVAILABLE.
+    habModules: [{ id: 'mod1', templateName: 'TILabModuleTemplate' }],
+    factionOptions: { 4712: { cachedYearlyRevenue: { Research: 9600 } } },
+    ...options
+  });
+  fs.writeFileSync(path.join(dir, 'synthetic.json'), JSON.stringify({ gamestates: data.gamestates }));
+  process.env.TI_SAVE_PATH = dir;
+  return dir;
+}
+
+module.exports = { makeSaveData, useSyntheticSaveDir };

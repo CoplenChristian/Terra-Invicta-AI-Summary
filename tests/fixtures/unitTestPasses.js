@@ -12,6 +12,19 @@
 // This module owns the classifier so the runner and the honesty test
 // (tests/runUnitSuitePasses.test.js) can never drift: the test asserts that a
 // NEW browser-driving file is detected, and the runner uses the same function.
+//
+// The guard file (tests/noLiveSaveInUnitSuite.test.js) is split OUT of both
+// passes into its own `guard` bucket. It cannot live in a pass: it spawns the
+// whole suite again (under a save-folder override), so running it inside the
+// suite would double the Chromium count mid-run and recreate the contention
+// this split exists to prevent. The runner runs it alone, after both passes,
+// and runUnitSuitePasses.test.js asserts it never migrates back into one.
+//
+// The guard file is also why the browser/pure classification must stay
+// source-based: a file that only requires the server (and reads the save
+// through a route) is not "browser-driving" and would land in the pure pass,
+// where the behavioural guard catches it by running the suite with the save
+// folder absent.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,6 +38,10 @@ const testsRoot = path.resolve(__dirname, '..');
 // inherent settle-waits still overlap without the oversubscription that trips
 // the most time-sensitive layout sweep (missionControlLayout.test.js:350).
 const BROWSER_PASS_CONCURRENCY = 2;
+
+// The one file that may never run inside a pass. Keyed by basename so a rename
+// fails loudly in the honesty test rather than silently landing in a pass.
+const GUARD_FILENAME = 'noLiveSaveInUnitSuite.test.js';
 
 /** Every tests/**&#47;*.test.js file except tests/live/, sorted. */
 function listUnitTestFiles(dir = testsRoot, out = []) {
@@ -53,17 +70,26 @@ function isBrowserDriving(filePath) {
     || /require\([^)]*fixtures\/\w+Browser/.test(src);
 }
 
-/** The browser-driving files and the rest, both sorted. */
+/** True for the behavioural live-save guard, which must never run inside a pass. */
+function isGuardFile(filePath) {
+  return path.basename(filePath) === GUARD_FILENAME;
+}
+
+/** The browser-driving files, the rest, and the guard file, all sorted. */
 function splitPasses() {
   const all = listUnitTestFiles();
-  const browser = all.filter(isBrowserDriving);
-  const pure = all.filter(file => !isBrowserDriving(file));
-  return { all, browser, pure };
+  const guard = all.filter(isGuardFile);
+  const rest = all.filter(file => !isGuardFile(file));
+  const browser = rest.filter(isBrowserDriving);
+  const pure = rest.filter(file => !isBrowserDriving(file));
+  return { all, browser, pure, guard };
 }
 
 module.exports = {
   BROWSER_PASS_CONCURRENCY,
+  GUARD_FILENAME,
   listUnitTestFiles,
   isBrowserDriving,
+  isGuardFile,
   splitPasses
 };

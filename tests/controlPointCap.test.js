@@ -971,7 +971,7 @@ test('the endpoint is a registry row, with a route and a discovery entry', () =>
 
 test('the endpoint answers in both modes and states the recording semantics at the top', () => {
   for (const mode of ['player', 'omniscient']) {
-    const res = queryIntel({
+    const res = queryFixtureIntel({
       endpoint: 'control-point-cap', mode, observer: OBSERVER, queryOptions: { factionId: OBSERVER }
     });
     assert.equal(res.count, 1);
@@ -1076,7 +1076,7 @@ test('a narrowed payload headlines the faction it is about, and names which one'
     t.skip('fixture has no faction recorded over cap');
     return;
   }
-  const rival = queryIntel({
+  const rival = queryFixtureIntel({
     endpoint: 'control-point-cap', mode: 'omniscient', observer: OBSERVER, queryOptions: { factionId: overCap.factionId }
   });
   assert.equal(rival.count, 1);

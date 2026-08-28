@@ -16,14 +16,28 @@
 //     (tests/fixtures/syntheticMarkdownSnapshot.js) whose volume is grown by
 //     cloning fleets. A bound is not a value, so synthetic data is safe here,
 //     and it states its own preconditions.
-//   * The one remaining HTTP smoke test reads the live save but skips cleanly
-//     when no save is available; it must never fail on live-save state.
+//   * The one HTTP smoke test drives the real Express server but points it at
+//     a committed synthetic save (tests/fixtures/syntheticSave.js), never the
+//     live save folder -- the unit suite's live-save independence is enforced
+//     behaviourally by tests/noLiveSaveInUnitSuite.test.js. The server is the
+//     thing under test there (routes, content types, the engine's primary
+//     handoff), not the save; serving the synthetic save keeps it deterministic
+//     and game-write immune.
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const os = require('os');
+const { useSyntheticSaveDir } = require('./fixtures/syntheticSave');
+
+// The HTTP smoke test serves /latest-threats.md and /latest-war-room.md
+// through the real server, whose routes read the configured save folder.
+// Point TI_SAVE_PATH at a committed synthetic save (never the live save
+// folder) BEFORE the server is required.
+const SYNTHETIC_SAVE_DIR = useSyntheticSaveDir('ti-markdown-save-');
+after(() => fs.rmSync(SYNTHETIC_SAVE_DIR, { recursive: true, force: true }));
 
 const { loadFixtureFilteredSnapshot, PLAYER_PATH, OMNI_PATH } = require('./fixtures/frozenSnapshots');
 const exportGenerator = require('../server/exportGenerator');
@@ -687,13 +701,19 @@ test('compact snapshot output is byte-identical to frozen baseline captured from
 // ---------------------------------------------------------------------------
 // 9. HTTP ENDPOINTS ON EPHEMERAL PORT (smoke -- skips cleanly without a save)
 // ---------------------------------------------------------------------------
+// Named for its legacy role ("is there a live save to exercise?"); today it
+// checks the committed fixture snapshots, which is what the section 8/9
+// property tests read. The HTTP smoke test gates on the synthetic save instead.
 function hasLiveSave() {
   return fs.existsSync(PLAYER_PATH) && fs.existsSync(OMNI_PATH);
 }
 
 test('Express server serves /latest-threats.md and /latest-war-room.md on ephemeral port', async (t) => {
-  if (!hasLiveSave()) {
-    t.skip('Skipping HTTP smoke test: no live save available');
+  // The gate checks the synthetic save this file wrote (the server now serves
+  // it, never the live folder); the two section 8/9 tests below keep the
+  // fixture-existence gate, which is what they actually read.
+  if (!fs.existsSync(path.join(SYNTHETIC_SAVE_DIR, 'synthetic.json'))) {
+    t.skip('Skipping HTTP smoke test: the synthetic save could not be written');
     return;
   }
 
