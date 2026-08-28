@@ -2,7 +2,8 @@
  * src/v2/panels/BattlePanel.jsx
  *
  * Purpose: two-column battle planner shell — observer fleet vs picked opponent fleet,
- *   with per-side ship selection capped at BATTLE_SHIP_CAP_PER_SIDE.
+ *   with per-side ship selection capped at BATTLE_SHIP_CAP_PER_SIDE and a full-width
+ *   matchup verdict below.
  */
 
 import React from 'react';
@@ -11,10 +12,12 @@ import { ThemeProvider } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import { Panel } from '../components/Panel.jsx';
 import { FleetPicker } from './FleetPicker.jsx';
+import { BattleSuggestion } from './BattleSuggestion.jsx';
 import { TwoColumnGrid, TwoColumnGridItem } from '../components/TwoColumnGrid.jsx';
 import initiativeTheme from '../theme.js';
 import {
   factionsWithFleets,
+  fleetById,
   fleetsForFaction,
 } from './battlePanelUtils.mjs';
 
@@ -88,6 +91,11 @@ export function BattlePanel({ data }) {
     || snapshot.observerFactionName
     || 'Your faction';
 
+  const opponentFleet = fleetById(fleets, rightFleetId);
+  const opponentName = opponentFleet?.factionName
+    || opponentFactions.find((f) => String(f.id) === String(rightFactionId))?.name
+    || 'Opponent';
+
   return (
     <ThemeProvider theme={initiativeTheme}>
       <TwoColumnGrid data-view="battle-planner">
@@ -113,6 +121,18 @@ export function BattlePanel({ data }) {
             onFactionChange={handleRightFactionChange}
             onFleetChange={handleRightFleetChange}
             onSelectedShipIdsChange={setRightSelectedShipIds}
+          />
+        </TwoColumnGridItem>
+        <TwoColumnGridItem span>
+          <BattleSuggestion
+            fleets={fleets}
+            leftFleetId={leftFleetId}
+            leftSelectedShipIds={leftSelectedShipIds}
+            rightFleetId={rightFleetId}
+            rightSelectedShipIds={rightSelectedShipIds}
+            componentStats={snapshot.componentStats}
+            observerLabel={observerName}
+            opponentLabel={opponentName}
           />
         </TwoColumnGridItem>
       </TwoColumnGrid>

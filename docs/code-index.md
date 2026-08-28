@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**231 JS modules** and **26 stylesheet parts** (257 indexed files).
+**233 JS modules** and **26 stylesheet parts** (259 indexed files).
 
 ## `public/`
 
@@ -107,7 +107,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `server/engine/rules/risk.js` | C | Node (CommonJS) | 271 | the configurable success-odds floor — the one veto that reads the | `MARGINAL_CLEARANCE_POINTS, assessRiskFloor, readBandLow, resolveRiskFloorPercent, riskFloorInForce, successFloor` | — |
 | `server/engine/rules/value.js` | C | Node (CommonJS) | 200 | the score rules that say what an action is worth. | `advisoryPotential, counterCouncilor, defendInterests, gdpPerCpCost, unblockAlienResponse` | — |
 | `server/engine/selection.js` | C | Node (CommonJS) | 257 | the middle two stages of the engine pipeline — applying the rules | `applyPairingRules, applyRules, buildDecisionReasoning, buildPreparationFallbackCandidate, computeResourceCost, evaluatePairingVetoes, evaluateVetoes, scoreCandidates` | — |
-| `server/engine/theaterDefence.js` | C | Node (CommonJS) | 1207 | the theater-defence block — build, reinforce or withdraw at each | `DEFENCE_CHECKS, DELIVERY_VERDICTS, RECOMMENDATION_CHECKS, THEATER_DEFENCE_FINDING_LIMIT, THEATER_POSTURE, buildTheaterDefence` | `tests/theaterDefence.test.js` |
+| `server/engine/theaterDefence.js` | C | Node (CommonJS) | 1069 | the theater-defence block — build, reinforce or withdraw at each | `DEFENCE_CHECKS, DELIVERY_VERDICTS, RECOMMENDATION_CHECKS, THEATER_DEFENCE_FINDING_LIMIT, THEATER_POSTURE, buildTheaterDefence` | `tests/theaterDefence.test.js` |
 | `server/engine/weights.js` | C | Node (CommonJS) | 186 | the engine's tunable weights, kept in one exported config object per | `WEIGHTS, getWeights` | — |
 | `server/exportGenerator.js` | C | Node (CommonJS) | 31 | CommonJS adapter exposing the shared markdown export renderers to the server. | — | — |
 | `server/http/publishControl.js` | C | Node (CommonJS) | 151 | the local-only, service-role-backed publish route and its | `handlePublish, isPublishAuthorized, publishToken, register` | — |
@@ -240,8 +240,10 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/Value.jsx` | E | Browser (React JSX) | 134 | render a numeric value or an explicit unavailable/absent state. Never | `ABSENT_LABEL, UNAVAILABLE_LABEL, Value, resolveValue` | — |
 | `src/v2/main.jsx` | E | Browser (React JSX) | 606 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderBattlePanel, renderCapabilityMatrix, …(+21)` | — |
 | `src/v2/panels/AlienHateEconomics.jsx` | E | Browser (React JSX) | 499 | renders the save-derived Mission Control hate floor and Total War | `AlienHateEconomics, fmtNumber, renderHudAlienHateEconomics` | `tests/AlienHateEconomics.test.js` |
-| `src/v2/panels/BattlePanel.jsx` | E | Browser (React JSX) | 140 | two-column battle planner shell — observer fleet vs picked opponent fleet, | `BattlePanel, renderBattlePanel` | — |
+| `src/v2/panels/BattlePanel.jsx` | E | Browser (React JSX) | 160 | two-column battle planner shell — observer fleet vs picked opponent fleet, | `BattlePanel, renderBattlePanel` | — |
 | `src/v2/panels/battlePanelUtils.mjs` | E | Browser (React JSX) | 107 | testable fleet-picker and battle-cap logic behind BattlePanel.jsx. | `BATTLE_SHIP_CAP_ATTRIBUTION, BATTLE_SHIP_CAP_PER_SIDE, deploymentSummary, factionsWithFleets, fleetById, fleetsForFaction, overCapNotice, presentCount, sameId, selectionBlocked, shipId, toggleShipSelection` | `tests/battlePanelUtils.test.js` |
+| `src/v2/panels/BattleSuggestion.jsx` | E | Browser (React JSX) | 379 | battle matchup verdict for the selected ships on each side — per-side | `BattleSuggestion` | — |
+| `src/v2/panels/battleSuggestionUtils.mjs` | E | Browser (React JSX) | 300 | testable battle-matchup helpers behind BattleSuggestion.jsx — weapon | `WEAPON_FAMILIES, buildBattleMatchup, changeAdvice, formatCount, formatRatio, interceptionCaveatText, joinRatePercent, mountEquivalentAdvice, mountUnitLabel, saturationHeadline, selectionPhase, shipsForSelection, …(+1)` | `tests/battleSuggestionUtils.test.js` |
 | `src/v2/panels/CouncilOrders.jsx` | E | Browser (React JSX) | 388 | React port of public/v2/js/components/council-orders.js. Renders the | `CouncilOrders, focusDirectiveBoard` | `tests/CouncilOrders.test.js` |
 | `src/v2/panels/DetailPanel.jsx` | E | Browser (React JSX) | 326 | the shared detail surface every clickable Mission Control module | `DetailPanel, close, detailPanelInternals, open, syncPageInert` | `tests/DetailPanel.test.js` |
 | `src/v2/panels/detailPanelUtils.mjs` | E | Browser (React JSX) | 153 | the page-wide inert bookkeeping, the focusable-node scan and the | `OVERLAY_SELECTOR, STATUS_TONES, focusableIn, isRenderableRow, normaliseActions, normaliseFacts, normaliseNotes, normaliseRows, normaliseSections, resolveTone, syncPageInert, text` | — |
