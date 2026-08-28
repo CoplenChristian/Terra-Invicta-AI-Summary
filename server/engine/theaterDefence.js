@@ -1,9 +1,9 @@
 /**
  * server/engine/theaterDefence.js
  * Purpose: the theater-defence block — build, reinforce or withdraw at each
- *   threatened body, how many of the observer's best design production there
- *   could land before contact, and an explicit refusal wherever a reading the
- *   verdict depends on is absent.
+ *   threatened body, whether production there could land a hull before contact,
+ *   and an explicit refusal wherever a reading the verdict depends on is
+ *   absent.
  *
  * The advisor could recommend councilor missions and nothing else. It could not
  * say "a 105-ship alien fleet reaches Mercury in 57 days, you have 30 ships
@@ -32,28 +32,48 @@
  * WHAT THIS BLOCK DOES NOT CLAIM
  * ------------------------------
  * The five POSTURES rest on the production race and on what is present at each
- * body -- never on whether the force there could win. That is unchanged by the
- * recommendation block below, which hangs beside a posture and never feeds it.
+ * body -- never on whether the force there could win. They are also independent
+ * of any hull count: BUILD means the fastest hull this body can lay down lands
+ * before contact, not "build N of design X". A posture survives the absence of
+ * a hull recommendation.
  *
  * It also makes NO hate-based inference. "Hate is 25, so this fleet is probably
  * not aimed at you" is deliberately unimplemented and recorded in `notes`: it is
  * the one inference that can tell a player they are safe.
  *
- * THE BUILD RECOMMENDATION, AND THE FIVE THINGS THAT MUST HOLD FIRST
- * -----------------------------------------------------------------
- * "You have a 50-ship alien fleet inbound and 30 ships, so build X or retreat"
- * is the sentence this whole feature was asked for. It is emitted as
- * `recommendation` -- and on every finding where it is not, `recommendationRefusal`
- * names WHICH precondition was absent. Exactly one of the two is non-null on
- * every finding, in every mode: silence is not an answer here, and neither is a
- * partial that reads as complete.
+ * NO HULL COUNT, IN EITHER MODE
+ * -----------------------------
+ * A hull count is not emitted anywhere in this block. Not in `recommendation`,
+ * which is null on every finding in both modes; not in `force`, where each
+ * fleet's `requirement` is nulled with `requirementWithheldReason` naming the
+ * gate. The reasoning is in `docs/engagement-matchup-spec.md`: a scalar combat
+ * value cannot express a matchup, the own-force rating is the observer's best
+ * design applied to every hull present, and the player-mode bridge is an
+ * invented constant. All three faults apply in omniscient mode as well as
+ * player mode -- "5-6 hulls" is precise-looking and rests on the same broken
+ * currency. The number must be removed, not captioned: two numbers where one
+ * is known to be wrong is worse than one, because the reader believes
+ * whichever agrees with them.
  *
- * A recommendation is emitted only where ALL of these hold, each checked
- * separately so the refusal can name the one that failed:
+ * The band still lives where it was read: on
+ * `world.military.theaterForce[].opponentFleets[].requirement`, with its own
+ * provenance and its own calibration caveat. This block withholds the CLAIM;
+ * it does not destroy the READING. A consumer that wants the raw number goes
+ * to `world.military` directly and inherits the same caveat.
+ *
+ * THE GATES THAT MUST HOLD BEFORE A HULL COUNT CAN BE SPOKEN
+ * ----------------------------------------------------------
+ * For context only -- these checks are no longer reachable from this file,
+ * since the universal refusal sits before all of them. They are documented
+ * here because a future model that fixes the underlying currency will need
+ * them back, and removing them would lose the rationale. Two are exercised
+ * today: `forceReading` (no force row) and one of `ratingCalibration` (player
+ * mode) or `forceComparisonUnmodelled` (omniscient).
  *
  *   0. A force row exists for this body and reports itself available, with its
  *      hostile-fleet list established (`opponentFleets !== null`).
- *   1. `calibrated === true`. See THE PLAYER-MODE REFUSAL below.
+ *   1. `calibrated === true` AND a model exists that can express a matchup.
+ *      See THE PLAYER-MODE REFUSAL and THE OMNISCIENT-MODE REFUSAL below.
  *   2. A requirement band exists -- a fleet whose `requirement.verdict` is
  *      `band` or `beyond-modelled-range` -- AND the design that band counts is
  *      named. A hull count with no unit is not a hull count.
@@ -62,28 +82,8 @@
  *   5. The arithmetic completes: a positive build time, and a finite count of
  *      hulls that a production line here could land before contact.
  *
- * The readings all five rest on are emitted EITHER WAY, in `force` and
- * `requiredDesignBuild`. A refusal that hides its inputs is an empty panel.
- *
- * THE REQUIREMENT IS DENOMINATED IN ONE NAMED DESIGN
- * -------------------------------------------------
- * `shared/engagementModel.mjs` sizes an engagement in copies of the observer's
- * single best-rated design. "5-6 hulls" therefore means 5-6 of THAT design, and
- * the only body that can answer it is one whose yards can lay down that
- * design's own hull class. NO CONVERSION BETWEEN HULL TYPES IS ATTEMPTED: the
- * snapshot carries no combat value for a design that does not exist, so
- * "a Gunship is worth 0.4 of a Battlecruiser" would be a number this codebase
- * invented. A body that can build something, but not this, refuses at check 4.
- *
- * Build TIME, though, is legitimately hull-level and not design-level:
- * `TIShipHullTemplate.constructionTime_Days` is `baseConstructionTime_days` --
- * a hull-template field -- scaled by the yard's tier gap, the campaign speed
- * setting and faction effects, with no module term anywhere in it (decompiled
- * game code, cited in shared/shipBuildTime.mjs). So the days for the design are
- * the days for its hull, and that is a reading rather than an assumption.
- *
- * THE PLAYER-MODE REFUSAL IS THE COMMON PATH, NOT A CORNER
- * -------------------------------------------------------
+ * THE PLAYER-MODE REFUSAL
+ * -----------------------
  * Player mode is what the dashboard defaults to, and in player mode every force
  * row is `calibrated: false`. Measured on the live save 2026-08-27, the same
  * fleets under the same model:
@@ -97,22 +97,23 @@
  * hulls for Callisto" when six would do is campaign-ruining in a game about
  * scarce boost and shipyard time, and it is not made into advice by a caption.
  *
- * So NO HULL COUNT IS EMITTED ANYWHERE IN THIS BLOCK when `calibrated` is
+ * So no hull count is emitted anywhere in this block when `calibrated` is
  * false -- not in `recommendation`, and not in `force`, where each fleet's
- * `requirement` is nulled with `requirementWithheldReason` naming the gate and
- * pointing at `world.military.theaterForce`, which still carries the band with
- * its own provenance. The reading is not withdrawn; the CLAIM is refused. That
- * is the split docs/theater-defence-engagement-spec.md's refinement asks for,
- * and it keeps this block from contradicting the FLEET ENGAGEMENT surface,
- * which shows player-mode ratings today.
+ * `requirement` is nulled with `requirementWithheldReason` naming the gate
+ * and pointing at `world.military.theaterForce`, which still carries the band
+ * with its own provenance. The reading is not withdrawn; the CLAIM is refused.
  *
- * `winnable: false` IS NEVER SYNTHESISED, and `isLowerBound` rows stay floors:
- * `beyond-modelled-range` means "above the ceiling I swept", so a delivery that
- * clears a floor is reported INDETERMINATE, never "sufficient". Defect #13 in
- * docs/live-defect-register.md exists because a consumer flattened a band; the
- * `requirement` object is carried through BY REFERENCE, with `p20`, `p80`,
- * `hullsAtLeast`, `bandLabel`, `isLowerBound`, `guaranteedWinAt` and
- * `maxHullsSwept` all intact and none of them recomputed here.
+ * THE OMNISCIENT-MODE REFUSAL HAS THE SAME SHAPE
+ * ----------------------------------------------
+ * Combat value is broken as a model in BOTH modes. Three independent faults
+ * (docs/engagement-matchup-spec.md) -- a scalar cannot express a matchup, the
+ * own-force rating is the observer's best design applied to every hull
+ * present, and the player-mode bridge is invented -- are all properties of
+ * the currency itself, not of the mode. So a calibrated row receives the same
+ * refusal, with a reason that points at the spec rather than restating the
+ * argument. Two refusal CHECKS, one underlying cause: the field that says
+ * WHICH was tested is preserved so a future fix can tell them apart, but the
+ * conclusion is the same.
  *
  * THE REFUSALS ARE THE POINT, NOT THE EDGE CASE
  * ---------------------------------------------
@@ -159,7 +160,10 @@
 const { HOSTILE_MOVEMENT_STATE } = require('../../shared/intel/theaters.mjs');
 const { normalizeBody } = require('../../shared/intel/common.mjs');
 const { buildBeatsArrival, SHIP_BUILD_EXCLUDED_TERMS } = require('../../shared/shipBuildTime.mjs');
-const { ENGAGEMENT_VERDICTS } = require('../../shared/fleetEngagement.mjs');
+// ENGAGEMENT_VERDICTS was only consumed by the now-deleted `compareDelivery` --
+// the verdicts catalogue was a string lookup over that enum. The export
+// `DELIVERY_VERDICTS` survives as a string catalogue; nothing in this file
+// still needs the enum.
 const { asArray, toFiniteNumber } = require('../../shared/util.mjs');
 
 /**
@@ -183,11 +187,15 @@ const DEFENCE_CHECKS = Object.freeze({
 
 /**
  * Named checks for the BUILD RECOMMENDATION, kept separate from
- * `DEFENCE_CHECKS` because they gate a different claim. Those five decide a
- * posture from the production race; these six decide whether a hull count may
- * be spoken at all. Order is the order they are taken in, and that order is the
- * discipline: every unevaluable check runs before any check that could produce
- * a number.
+ * `DEFENCE_CHECKS` because they gate a different claim. Those decide a posture
+ * from the production race; these decide whether a hull count may be spoken
+ * at all. Today only two are reachable -- `forceReading` (no force row) and
+ * one of `ratingCalibration` (player mode) or `forceComparisonUnmodelled`
+ * (omniscient) -- because the universal hull-count removal (see header and
+ * `docs/engagement-matchup-spec.md`) sits before the rest. The remaining
+ * four are retained as named gates a future model that fixes the currency
+ * can route back through; they are not currently exercised and exporting them
+ * unchanged is part of the contract.
  */
 const RECOMMENDATION_CHECKS = Object.freeze({
   forceReading: 'force-reading',
@@ -195,7 +203,8 @@ const RECOMMENDATION_CHECKS = Object.freeze({
   hullRequirement: 'hull-requirement',
   arrivalClock: 'arrival-clock',
   buildCapacity: 'required-design-build-capacity',
-  buildArithmetic: 'build-arithmetic'
+  buildArithmetic: 'build-arithmetic',
+  forceComparisonUnmodelled: 'force-comparison-unmodelled'
 });
 
 /**
@@ -203,10 +212,17 @@ const RECOMMENDATION_CHECKS = Object.freeze({
  *
  * `indeterminate` is not a soft "probably fine". It is the answer wherever the
  * requirement is a FLOOR -- `beyond-modelled-range`, or a band composed from
- * part of a fleet -- because clearing a floor says nothing about clearing the
- * true requirement above it. Reporting that as `meets-band` is exactly the
- * flattening defect #13 exists for, so the floor cases can only ever resolve to
- * `falls-short` or `indeterminate`, never to a pass.
+/**
+ * What a body's production says about ONE fleet's requirement.
+ *
+ * RETAINED AS A STRING CATALOGUE: it is still exported in case a consumer
+ * outside this file matches on the verdict strings (the panel utils do not),
+ * but the only internal caller -- the deleted `compareDelivery` -- is gone.
+ * The verdicts themselves are no longer emitted anywhere in this block: the
+ * universal hull-count removal (see header) sits before any delivery
+ * comparison can run, so the corresponding `recommendation.perFleet[].delivery`
+ * object is no longer in the output. `indeterminate`'s rationale survives in
+ * the refusal text on the recommendation itself.
  */
 const DELIVERY_VERDICTS = Object.freeze({
   fallsShort: 'falls-short-of-requirement',
@@ -239,11 +255,12 @@ const STATUS_RANK = Object.freeze({
 
 const NOTE_NO_FORCE_COMPARISON =
   'No force-strength comparison is made here. These postures rest on the production race and on '
-  + 'what is present at each body -- NOT on whether the force there could win. Converting an '
-  + 'opposing force into a required hull count is shared/engagementModel.mjs, whose answer is a '
-  + 'p20-p80 band and whose `winnable: false` means "above the ceiling I swept", never "cannot be '
-  + 'won"; carrying that band through is a separate task, and an absent comparison is honest where '
-  + 'a confident one that dropped its uncertainty is not (docs/live-defect-register.md #13).';
+  + 'what is present at each body -- NOT on whether the force there could win. The block does not '
+  + 'emit a hull count in either mode: combat value is broken as a model in BOTH modes, not just '
+  + 'player mode (docs/engagement-matchup-spec.md), and an honest absent comparison is preferred to a '
+  + 'confident number derived from a broken currency. The reading still lives on '
+  + '`world.military.theaterForce[].opponentFleets[].requirement`, with its own provenance and its own '
+  + 'calibration caveat.';
 
 const NOTE_NO_HATE_INFERENCE =
   'No hate-based inference is made here. "Hate is low, so this fleet is probably not aimed at you" '
@@ -271,34 +288,52 @@ const NOTE_FORCE_COMPARISON_CARRIED =
   + '`p80` and `isLowerBound` travel intact, `beyond-modelled-range` means "above the ceiling I swept" '
   + 'and never "cannot be won", and a delivery that clears a floor is reported indeterminate rather than '
   + 'sufficient (docs/live-defect-register.md #13).';
-
 /*
- * TWO NOTES DELIBERATELY NOT ADDED, and why the reason is bytes rather than
- * taste. `notes` is rendered into war-room section 1c by
- * shared/markdownExports.mjs, and that document was measured on 2026-08-22 at
- * 94.6% of its 30,720-byte ceiling: a block-level note saying "no hull count is
- * emitted here, because the ratings are uncalibrated" would have cost ~607
- * player-mode bytes and forced announced degradation somewhere else in a
- * document this task was told not to touch. The same sentence is already
- * carried per finding, on `recommendationRefusal.reason`, where a consumer of
- * the recommendation cannot miss it; likewise the serial-production model,
- * which rides on `recommendation.production.model` and `.excludes`. The one
- * note that DID have to change is the first one, because it was about to be
- * false rather than merely absent.
+ * NOTES DELIBERATELY NOT ADDED. After the universal hull-count removal the
+ * notes budget reasons have shifted: every finding now carries the same
+ * `recommendationRefusal.reason`, and the per-finding refusal text already
+ * points at `docs/engagement-matchup-spec.md` -- so a block-level note saying
+ * "no hull count is emitted here" would just repeat what the consumer of the
+ * panel cannot miss. The original budget argument still stands: `notes` is
+ * rendered into war-room section 1c by `shared/markdownExports.mjs`, and
+ * that document was measured on 2026-08-22 at 94.6% of its 30,720-byte
+ * ceiling. Per-byte, the new first note (`NOTE_NO_FORCE_COMPARISON`) does the
+ * job and nothing extra needs to ride on `notes`.
  */
 
 /**
- * Why a hull count is not repeated into this block when the rating behind it is
- * uncalibrated -- and where the number still lives, so withholding it here is
- * not mistaken for the reading having been destroyed.
+ * Two reason strings, one per mode. The hull requirement is WITHHELD in BOTH
+ * modes today -- the block never emits a count -- and the reason a consumer
+ * sees depends on which gate fired: in player mode the rating is scaled off
+ * the observer's own best hull by an invented x1.5 constant; in omniscient
+ * mode the rating is calibrated but the underlying currency is still broken
+ * (docs/engagement-matchup-spec.md). Both name `world.military.theaterForce`,
+ * the surface the band still lives on with its own provenance, so the
+ * withholding is never mistaken for the reading having been destroyed.
  */
-const REQUIREMENT_WITHHELD =
+const REQUIREMENT_WITHHELD_UNCALIBRATED =
   'the hull requirement for this fleet is WITHHELD from the advice block: this body\'s force row reports '
   + '`calibrated: false`, so the count rests on an opponent rating scaled off the observer\'s own best '
   + 'hull by invented constants. It is not deleted -- the band, its p20/p80, its verdict and its own '
   + 'calibration caveat are carried unchanged on '
   + '`world.military.theaterForce[].opponentFleets[].requirement`, where they are a reading with a stated '
   + 'provenance rather than a recommendation.';
+
+const REQUIREMENT_WITHHELD_UNMODELLED =
+  'the hull requirement for this fleet is WITHHELD from the advice block: a calibrated rating is not the '
+  + 'same as a model that can answer the question. Combat value is a scalar and a scalar cannot express a '
+  + 'matchup (the player\'s example: a missile monitor at ~1,900 loses to a laser lancer at ~80, on '
+  + 'loadout), the own-force rating applies the observer\'s best design to every hull present, and the '
+  + 'player-mode bridge that an omniscient path would have to share with player mode is an invented '
+  + 'constant -- three independent faults detailed in `docs/engagement-matchup-spec.md`. The reading is '
+  + 'not destroyed; the band, its p20/p80, its verdict and its calibration caveat are carried unchanged '
+  + 'on `world.military.theaterForce[].opponentFleets[].requirement`, where they are a reading with a '
+  + 'stated provenance rather than a recommendation.';
+
+// Legacy alias. Tests and external callers that imported the old single
+// constant still resolve; the uncalibrated (player-mode) text was the only
+// path that ever used it.
+const REQUIREMENT_WITHHELD = REQUIREMENT_WITHHELD_UNCALIBRATED;
 
 /**
  * The board's hostile counts and the force model's fleet rows are DIFFERENT
@@ -323,23 +358,13 @@ const COVERAGE_NOT_COMPARABLE =
   + 'own row and for nothing else.';
 
 /**
- * The exclusions this block adds on top of the ones `shared/shipBuildTime.mjs`
- * already names. Parallel yards push the real figure UP and an occupied queue
- * pushes it DOWN, so the count is bracketed on both sides and is not a floor.
+ * RECOMMENDATION_EXCLUDED_TERMS lived here: a list of caveats attached to the
+ * deleted `recommendation.production.excludes` field (parallel yards,
+ * resource cost). The field is no longer emitted and the only call site
+ * (`recommendation.production.excludes = [...SHIP_BUILD_EXCLUDED_TERMS,
+ * ...RECOMMENDATION_EXCLUDED_TERMS]`) is gone. The SHIP_BUILD_EXCLUDED_TERMS
+ * import is still used by `buildRace` for the verdict, so that stays.
  */
-const RECOMMENDATION_EXCLUDED_TERMS = Object.freeze([
-  Object.freeze({
-    term: 'parallel-yards-at-this-body',
-    detail: 'The count is one serial line at the single fastest qualifying yard. The body\'s other yards '
-      + 'could run in parallel, which would raise it; how many are free to is not modelled here. '
-      + '`yardsConsidered` says how many yards the build option was taken over.'
-  }),
-  Object.freeze({
-    term: 'resource-cost-and-affordability',
-    detail: 'Whether the observer can pay for these hulls is not evaluated anywhere in this block. A hull '
-      + 'that cannot be paid for is not laid down, so the count is a capacity figure, not a plan.'
-  })
-]);
 
 /** Absent stays null: a count is a number or it is nothing. Never `Number(x)`. */
 const countOrNull = (value) => toFiniteNumber(value);
@@ -395,14 +420,18 @@ function forceRowAt(theaterForce, body) {
 /**
  * One hostile fleet, projected into the advice block.
  *
- * The `requirement` object is passed through BY REFERENCE where it may be
- * spoken and replaced by null with a named reason where it may not. Nothing is
- * flattened, re-labelled or recomputed on either path -- `resolveRequirement`
- * ran once, in the module that owns it.
+ * The `requirement` is WITHHELD in both modes: this block never emits a hull
+ * count, so the count is replaced by null with a named reason. The reason
+ * depends on which gate fired -- `calibrated === false` (player mode) gets
+ * the uncalibrated text that names the x1.5 invented constant; a calibrated
+ * row gets the unmodelled text that points at `docs/engagement-matchup-spec.md`.
+ * Both name `world.military.theaterForce`, the surface the band still lives
+ * on with its own provenance, so the withholding is never mistaken for the
+ * reading having been destroyed.
  */
 function projectFleetRow(row, calibrated) {
   const requirement = row?.requirement ?? null;
-  const withheld = calibrated !== true && requirement !== null;
+  const withheld = requirement !== null;
   return {
     fleetId: row?.fleetId ?? null,
     fleetName: row?.fleetName ?? null,
@@ -418,7 +447,9 @@ function projectFleetRow(row, calibrated) {
     // `requirementWithheldReason` is this block's: one exists and may not be
     // repeated here. Collapsing them would lose which of the two happened.
     requirementUnavailableReason: row?.requirementUnavailableReason ?? null,
-    requirementWithheldReason: withheld ? REQUIREMENT_WITHHELD : null,
+    requirementWithheldReason: withheld
+      ? (calibrated ? REQUIREMENT_WITHHELD_UNMODELLED : REQUIREMENT_WITHHELD_UNCALIBRATED)
+      : null,
     calibrated: row?.calibrated ?? null,
     basis: row?.basis ?? null,
     calibrationCaveat: row?.calibrationCaveat ?? null
@@ -429,8 +460,9 @@ function projectFleetRow(row, calibrated) {
  * The force readings for one body, emitted whether or not advice follows.
  *
  * A refusal that hides its inputs is an empty panel, so this is built on every
- * finding in every mode. The only thing the calibration gate removes is the
- * hull count itself.
+ * finding in every mode. The calibration gate no longer filters anything here:
+ * `requirement` is withheld in both modes by `projectFleetRow` (see above).
+ * `calibrated` is carried so a consumer can still tell which mode it is.
  */
 function projectForce(row, theater) {
   const hostile = theater?.hostile ?? {};
@@ -583,103 +615,35 @@ function requiredDesignBuildAt(model, body, hullName, yards) {
 }
 
 /**
- * Hulls one serial line at this yard lands before contact.
- *
- * Zero is a real answer and the most useful one this block produces: it is the
- * "or retreat" half of the sentence. Null is the refusal -- a build time that
- * is not a positive number cannot be divided into a deadline, and dividing by
- * it anyway is how a confident Infinity gets rendered as a plan.
+ * `serialDeliverable` and `compareDelivery` lived here: the former divided the
+ * deadline by the build time for one serial line, the latter translated a
+ * delivery count into one of `falls-short / within-band / meets-band /
+ * indeterminate`. Both are DEAD CODE after the universal hull-count removal:
+ * `buildRecommendation` always refuses before either could be reached, and
+ * `recommendation.production.serialDeliverableBeforeContact` /
+ * `recommendation.perFleet[].delivery` are no longer emitted. They were the
+ * only callers of `ENGAGEMENT_VERDICTS` and `DELIVERY_VERDICTS` (other than
+ * the export), so the imports are dropped and the verdicts constant is now
+ * a string catalogue with no internal users.
  */
-function serialDeliverable(buildDays, daysUntilArrival) {
-  if (buildDays === null || daysUntilArrival === null) return null;
-  if (!(buildDays > 0)) return null;
-  const count = Math.floor(daysUntilArrival / buildDays);
-  if (!Number.isFinite(count)) return null;
-  return count < 0 ? 0 : count;
-}
-
-/**
- * What a delivery of N hulls says about one fleet's requirement.
- *
- * THE ASYMMETRY IS THE POINT. Falling short of the band's low end is a safe
- * conclusion whether or not the requirement is a floor -- a floor only ever
- * moves the true figure up. MEETING it is not: where `isLowerBound` is true the
- * real requirement sits somewhere above the number shown, so clearing that
- * number proves nothing and the answer is `indeterminate`. `winnable: false` is
- * never synthesised and no verdict is re-labelled; anything that is not a
- * swept band or a modelled floor resolves to `indeterminate` carrying the
- * resource's own reason.
- */
-function compareDelivery(requirement, deliverable) {
-  const verdict = requirement?.verdict ?? null;
-  const isLowerBound = requirement?.isLowerBound === true;
-  const indeterminate = (reason) => ({
-    verdict: DELIVERY_VERDICTS.indeterminate,
-    reason,
-    shortfallAtLeast: null,
-    requirementIsLowerBound: isLowerBound
-  });
-
-  if (verdict !== ENGAGEMENT_VERDICTS.band && verdict !== ENGAGEMENT_VERDICTS.beyondModelledRange) {
-    return indeterminate(`this fleet's requirement resolved to '${verdict ?? 'no verdict'}' rather than a `
-      + `hull count: ${requirement?.reason ?? 'no reason recorded'}`);
-  }
-
-  const low = countOrNull(requirement.p20) ?? countOrNull(requirement.hullsAtLeast);
-  const high = countOrNull(requirement.p80);
-  if (low === null) {
-    return indeterminate('this fleet\'s requirement carries neither a p20 nor a floor, so there is no '
-      + 'figure for the delivery to be compared against');
-  }
-
-  if (deliverable < low) {
-    return {
-      verdict: DELIVERY_VERDICTS.fallsShort,
-      reason: `production here lands ${deliverable} before contact against a requirement whose lowest `
-        + `figure is ${low}${isLowerBound ? ' and which is itself a floor' : ''}`,
-      // Named "at least" because the requirement can only move up from here.
-      shortfallAtLeast: low - deliverable,
-      requirementIsLowerBound: isLowerBound
-    };
-  }
-
-  if (isLowerBound) {
-    return indeterminate(`production here lands ${deliverable} before contact, which clears the FLOOR of `
-      + `${low} -- but a floor is not the requirement. The true figure sits somewhere above it, so `
-      + 'clearing the floor is not evidence of meeting the requirement and no sufficiency is claimed');
-  }
-  if (high === null) {
-    return indeterminate('this fleet\'s requirement carries no p80, so the top of the band it would have '
-      + 'to be cleared against is not on record');
-  }
-  if (deliverable >= high) {
-    return {
-      verdict: DELIVERY_VERDICTS.meetsBand,
-      reason: `production here lands ${deliverable} before contact, at or above the top of the ${low}-${high} `
-        + 'band. The band is an estimate from a simulated exchange, not a guarantee',
-      shortfallAtLeast: null,
-      requirementIsLowerBound: false
-    };
-  }
-  return {
-    verdict: DELIVERY_VERDICTS.withinBand,
-    reason: `production here lands ${deliverable} before contact, inside the ${low}-${high} band -- above `
-      + 'its low end and below its high one, so whether it suffices is exactly what the band is uncertain '
-      + 'about',
-    shortfallAtLeast: null,
-    requirementIsLowerBound: false
-  };
-}
 
 /**
  * The build recommendation for one finding, or the named refusal in its place.
  *
- * Returns both keys every time, exactly one of them non-null. The checks run in
- * the order listed in this file's header and stop at the first that cannot be
- * evaluated: a later check often cannot be read at all once an earlier one has
- * failed, and reporting a guess about it would be worse than reporting the
- * failure that actually happened. Everything the checks read is emitted beside
- * them in `force` and `requiredDesignBuild` either way.
+ * Returns both keys every time, exactly one of them non-null. Two refusal
+ * paths remain reachable after the universal hull-count removal:
+ *
+ *   - `forceReading`: no force row OR no fleet list at this body. The reading
+ *     itself is absent, so the refusal names what was missing.
+ *   - `ratingCalibration` (player mode) OR `forceComparisonUnmodelled`
+ *     (omniscient): the force row exists, but a hull count would be derived
+ *     from combat value, which is broken in both modes (see header and
+ *     `docs/engagement-matchup-spec.md`). Player mode gets the uncalibrated
+ *     reason; omniscient gets the unmodelled reason. Two checks, one outcome.
+ *
+ * The remaining gates in this file's header are documented but no longer
+ * reached; a future model that fixes the currency can route back through them
+ * by replacing the universal refusal with a per-check return.
  */
 function buildRecommendation({ body, force, build, inbound, inboundFleets, arrivalDays, arrivalDate }) {
   const refuse = (check, reason) => ({
@@ -699,134 +663,31 @@ function buildRecommendation({ body, force, build, inbound, inboundFleets, arriv
       + `production against: ${force.fleetsUnavailableReason ?? 'no reason recorded'}`);
   }
 
-  // 1. Is the opponent rating calibrated? THE COMMON PATH -- see the header.
-  if (force.calibrated !== true) {
-    return refuse(RECOMMENDATION_CHECKS.ratingCalibration,
-      'no hull count is recommended: this body\'s opponent rating is scaled off the observer\'s own best '
-      + 'hull by invented constants rather than read from the aliens\' designs, and measured on the live '
-      + 'save 2026-08-27 that runs 9.01x to 15.65x the omniscient reading -- an order of magnitude, '
-      + 'OVER-rating the enemy, by a factor that is not consistent between bodies. A count derived from it '
-      + 'would be wrong by roughly ten times, in a direction that spends boost and shipyard time the '
-      + 'campaign does not have. The readings it would rest on are still carried in `force` and '
-      + '`requiredDesignBuild`, and each fleet\'s band remains on world.military.theaterForce.');
+  // 1. Universal hull-count refusal. A calibrated row is not the same as a
+  // model that can answer the question; an uncalibrated row is worse. Both are
+  // refused here. The check name preserves which gate fired; the conclusion is
+  // the same and points at the spec rather than restating the argument.
+  if (force.calibrated === true) {
+    return refuse(RECOMMENDATION_CHECKS.forceComparisonUnmodelled,
+      'no hull count is recommended at this body: combat value is broken as a model in OMINISCIENT mode '
+      + 'too, not just player mode. A calibrated rating does not say how many hulls to build. The reasoning '
+      + 'is in `docs/engagement-matchup-spec.md` -- a scalar cannot express a matchup, the own-force '
+      + 'rating applies the observer\'s best design to every hull present, and the player-mode bridge '
+      + 'any path would have to share is an invented constant. A count derived from it would be wrong in '
+      + 'a direction that spends boost and shipyard time the campaign does not have. The readings still '
+      + 'live in `force` (sans the band itself) and on `world.military.theaterForce`, with their own '
+      + 'provenance. The CLAIM is refused; the READING is not destroyed.');
   }
-
-  // 2. Is there a requirement, and is the design it counts named?
-  const designName = force.own?.bestDesignName ?? null;
-  const hullName = force.own?.bestHullName ?? null;
-  if (!designName || !hullName) {
-    return refuse(RECOMMENDATION_CHECKS.hullRequirement,
-      'the hull requirement is denominated in the observer\'s single best-rated design and this force '
-      + 'reading names none, so a count taken from it would have no unit. It is NOT read as "N hulls of '
-      + 'whatever this body can build" -- that reads a Gunship as a Battlecruiser.');
-  }
-  if (force.fleets.length === 0) {
-    return refuse(RECOMMENDATION_CHECKS.hullRequirement,
-      `no hostile fleet at ${body} carries a hull requirement, so there is nothing here for production to `
-      + 'be sized against. That is NOT "nothing is needed here": '
-      + `${force.opponent?.source ?? 'the opposing force at this body was not composed'}`);
-  }
-  const sizable = force.fleets.filter(fleet => {
-    const verdict = fleet.requirement?.verdict ?? null;
-    return verdict === ENGAGEMENT_VERDICTS.band || verdict === ENGAGEMENT_VERDICTS.beyondModelledRange;
-  });
-  if (sizable.length === 0) {
-    const reasons = force.fleets.map(fleet => `${fleet.fleetName ?? fleet.fleetId ?? 'an unnamed fleet'}: `
-      + `${fleet.requirement?.verdict ?? 'no requirement object'}`).join('; ');
-    return refuse(RECOMMENDATION_CHECKS.hullRequirement,
-      `none of the ${force.fleets.length} hostile fleet(s) at ${body} resolved to a hull count (${reasons}), `
-      + 'so there is no figure to size production against. An unresolved requirement is not a small one.');
-  }
-
-  // 3. Is there a deadline?
-  if (arrivalDays === null) {
-    const reason = inbound === null
-      ? `the inbound hostile fleet count at ${body} is not on record, so whether a deadline exists here `
-        + 'could not be established -- an unreadable count is not a zero'
-      : inbound === false
-        ? `nothing is inbound to ${body}, so there is no arrival clock to race production against. The `
-          + 'hostile force here is already present; a deadline is not invented for it, and "contact is '
-          + 'now" is a claim this board does not make'
-        : `${inboundFleets} inbound hostile fleet(s) at ${body} carry no arrival date on record, so there `
-          + 'is no deadline to build against -- an unknown arrival is not a distant one';
-    return refuse(RECOMMENDATION_CHECKS.arrivalClock, reason);
-  }
-
-  // 4. Can this body lay down THAT design's hull?
-  if (build === null || build.available !== true) {
-    return refuse(RECOMMENDATION_CHECKS.buildCapacity,
-      `${designName} cannot be laid down at ${body}: `
-      + `${build?.unavailableReason ?? 'no build reading was taken for this body'}`);
-  }
-
-  // 5. Does the arithmetic complete?
-  const race = buildBeatsArrival({ buildDays: build.fastestDays, daysUntilArrival: arrivalDays });
-  const deliverable = serialDeliverable(build.fastestDays, arrivalDays);
-  if (race.available !== true || deliverable === null) {
-    return refuse(RECOMMENDATION_CHECKS.buildArithmetic,
-      `the production arithmetic for ${designName} at ${body} did not complete: `
-      + `${race.reason ?? `a build time of ${build.fastestDays} day(s) is not a positive number the `
-        + 'deadline can be divided by'}`);
-  }
-
-  return {
-    recommendation: {
-      design: {
-        name: designName,
-        hullName,
-        ratingSource: force.own?.source ?? null,
-        note: 'every hull count below is a count of THIS design. No conversion between hull types is '
-          + 'attempted, because the snapshot carries no exchange rate between them.'
-      },
-      deadline: {
-        nearestArrivalDays: arrivalDays,
-        nearestArrivalDate: arrivalDate,
-        source: 'the nearest measured arrival among the hostile fleets INBOUND to this body '
-          + '(theaters[].incoming). The requirements below belong to fleets ALREADY PRESENT here -- the '
-          + 'clock and the requirement are different objects, and an inbound fleet is rated where it '
-          + 'currently orbits, so no requirement for the inbound force itself is available at this body.'
-      },
-      production: {
-        hullName,
-        fastestDays: build.fastestDays,
-        shipyardId: build.shipyardId,
-        shipyardModuleTier: build.shipyardModuleTier,
-        yardsConsidered: build.yardsConsidered,
-        landsBeforeContact: race.verdict === 'build-lands-first',
-        verdict: race.verdict,
-        marginDays: race.marginDays,
-        serialDeliverableBeforeContact: deliverable,
-        model: `one serial production line at yard ${build.shipyardId}: floor(${arrivalDays} days to `
-          + `contact / ${build.fastestDays} days per hull). Yards build serially -- at most one entry per `
-          + 'yard is ever paid -- so this is one line, not this body\'s whole capacity.',
-        excludes: [...SHIP_BUILD_EXCLUDED_TERMS, ...RECOMMENDATION_EXCLUDED_TERMS]
-      },
-      perFleet: sizable.map(fleet => ({
-        fleetId: fleet.fleetId,
-        fleetName: fleet.fleetName,
-        shipsCount: fleet.shipsCount,
-        ratedShips: fleet.ratedShips,
-        unratedShips: fleet.unratedShips,
-        // BY REFERENCE, the same object `projectFleetRow` carried, which is the
-        // same object `buildFleetEngagement` resolved. Nothing between here and
-        // the sweep copies a field out of it.
-        requirement: fleet.requirement,
-        delivery: compareDelivery(fleet.requirement, deliverable)
-      })),
-      perFleetTotalCount: force.fleets.length,
-      perFleetOmittedCount: force.fleets.length - sizable.length,
-      perFleetOmittedReason: force.fleets.length === sizable.length
-        ? null
-        : 'fleets whose requirement did not resolve to a hull count are listed in `force.fleets` with '
-          + 'their own verdict and reason, and are omitted here rather than sized against a substituted '
-          + 'figure',
-      composedRequirement: null,
-      composedRequirementReason: force.composedRequirementReason,
-      coverage: force.coverage,
-      isEstimate: true
-    },
-    recommendationRefusal: null
-  };
+  return refuse(RECOMMENDATION_CHECKS.ratingCalibration,
+    'no hull count is recommended: this body\'s opponent rating is scaled off the observer\'s own best '
+    + 'hull by invented constants rather than read from the aliens\' designs, and measured on the live '
+    + 'save 2026-08-27 that runs 9.01x to 15.65x the omniscient reading -- an order of magnitude, '
+    + 'OVER-rating the enemy, by a factor that is not consistent between bodies. A count derived from it '
+    + 'would be wrong by roughly ten times, in a direction that spends boost and shipyard time the '
+    + 'campaign does not have. The readings it would rest on are still carried in `force` and '
+    + '`requiredDesignBuild`, and each fleet\'s band remains on world.military.theaterForce. '
+    + 'Combat value is broken in omniscient mode too (docs/engagement-matchup-spec.md) -- the reason '
+    + 'player mode is refused is a special case of why any path through combat value is refused.');
 }
 
 /**
@@ -1149,13 +1010,14 @@ function buildTheaterDefence(world) {
   const findings = all.slice(0, THEATER_DEFENCE_FINDING_LIMIT);
 
   // The first note states what the block does NOT claim, so it has to track
-  // what it actually did. Leaving "no force-strength comparison is made here"
-  // standing beside a carried requirement band would be a false statement in
-  // the output -- worse than the absent comparison it was written to excuse.
-  const carriedABand = findings.some(finding => finding.recommendation !== null
-    || asArray(finding.force?.fleets).some(fleet => fleet.requirement !== null));
+  // what it actually did. After the universal hull-count removal, the block
+  // never carries a band: `recommendation` is always null and `requirement` is
+  // always null in `force.fleets[]`. The first note is therefore always
+  // `NOTE_NO_FORCE_COMPARISON`, and the conditional that used to switch to
+  // `NOTE_FORCE_COMPARISON_CARRIED` is dead -- the constant is kept as a
+  // backward-compat export but no longer has a call site.
   const notes = [
-    carriedABand ? NOTE_FORCE_COMPARISON_CARRIED : NOTE_NO_FORCE_COMPARISON,
+    NOTE_NO_FORCE_COMPARISON,
     NOTE_NO_HATE_INFERENCE
   ];
   if (findings.some(finding => finding.buildRace !== null)) notes.push(NOTE_FASTEST_HULL);

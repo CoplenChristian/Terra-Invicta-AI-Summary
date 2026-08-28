@@ -179,25 +179,30 @@ test('Live save: a body with no yard reads as a MEASURED ABSENCE, not an unmeasu
   }
 });
 
-test('Live save: a requirement carried into the block is the resource\'s OWN object', (t) => {
-  // Carried BY REFERENCE all the way from `resolveRequirement`. If a copy ever
-  // creeps in, `p20`/`p80` can be flattened somewhere downstream without a
-  // single test noticing -- which is defect #13.
-  const live = liveBlock(t, 'omniscient');
-  if (!live) return;
-  const { military, block } = live;
+test('Live save: every fleet has its requirement WITHHELD with a named reason, in both modes', (t) => {
+  // After the universal hull-count removal, the block never carries a
+  // requirement -- the reading still lives on `world.military.theaterForce`
+  // with its own provenance, but this block withholds the CLAIM. This test
+  // owns the withholding: in BOTH modes, every fleet on every finding has a
+  // null `requirement` and a non-null `requirementWithheldReason` that
+  // names the gate which fired.
+  for (const mode of ['player', 'omniscient']) {
+    const live = liveBlock(t, mode);
+    if (!live) return;
+    const { block } = live;
 
-  let checked = 0;
-  for (const finding of block.findings) {
-    const row = military.theaterForce.find(r => r.body === finding.body);
-    if (!row || !Array.isArray(row.opponentFleets) || !Array.isArray(finding.force.fleets)) continue;
-    for (const [index, fleet] of finding.force.fleets.entries()) {
-      if (!fleet.requirement) continue;
-      assert.strictEqual(fleet.requirement, row.opponentFleets[index].requirement,
-        `${finding.body} fleet ${index}: the requirement was copied rather than carried`);
-      checked += 1;
+    let checked = 0;
+    for (const finding of block.findings) {
+      if (!Array.isArray(finding.force.fleets)) continue;
+      for (const [index, fleet] of finding.force.fleets.entries()) {
+        assert.strictEqual(fleet.requirement, null,
+          `${mode}: ${finding.body} fleet ${index}: requirement must be withheld`);
+        assert.ok(fleet.requirementWithheldReason,
+          `${mode}: ${finding.body} fleet ${index}: a withheld reading must say why`);
+        checked += 1;
+      }
     }
+    assert.ok(checked > 0,
+      `the ${mode} live save must carry at least one fleet into the block, or this proves nothing`);
   }
-  assert.ok(checked > 0,
-    'the omniscient live save must carry at least one requirement into the block, or this proves nothing');
 });

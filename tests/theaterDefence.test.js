@@ -639,8 +639,12 @@ test('a board with nothing off it has no off-board note to make', () => {
 
 test('the notes say what this block deliberately does NOT do', () => {
   const block = buildTheaterDefence({ military: militaryWorld() });
-  assert.ok(block.notes.some(note => /engagementModel/.test(note)),
-    'the omitted force conversion must be stated, not silently absent');
+  // After the universal hull-count removal, the first note is always
+  // NOTE_NO_FORCE_COMPARISON; its content names the engagement-matchup spec
+  // rather than the engagementModel, since the spec is the document that
+  // names combat value as broken as a model in BOTH modes.
+  assert.ok(block.notes.some(note => /engagement-matchup-spec/.test(note)),
+    'the omitted force-strength comparison must be stated, not silently absent');
   assert.ok(block.notes.some(note => /hate/i.test(note)),
     'the deliberately unimplemented hate inference must be stated');
 });
@@ -996,345 +1000,143 @@ test('PLAYER MODE: an uncalibrated row refuses even when everything else holds',
 });
 
 // ---------------------------------------------------------------------------
-// THE RECOMMENDATION ITSELF
+// THE UNIVERSAL HULL-COUNT REFUSAL. After the hull-count removal, every
+// finding with a force row refuses -- no `recommendation` is ever emitted. The
+// two reachable gates (player-mode calibration, omniscient-mode unmodelled)
+// share the same outcome but distinct check names, and both point at
+// `docs/engagement-matchup-spec.md`. Tests below replace the recommendation-
+// shape tests with refusal-shape tests on the same hand-built worlds.
 // ---------------------------------------------------------------------------
 
-test('the recommendation names the DESIGN the count is denominated in', () => {
-  const rec = recommend(recommendableWorld());
-  assert.ok(rec, 'all five preconditions hold, so a recommendation must be emitted');
-  assert.equal(rec.design.name, 'Cimarron');
-  assert.equal(rec.design.hullName, 'Monitor');
-  // The hull priced is the required design's own hull, NOT the faster Gunship
-  // sitting beside it in buildOptions.
-  assert.equal(rec.production.hullName, 'Monitor');
-  assert.equal(rec.production.fastestDays, 18);
-  assert.notEqual(rec.production.fastestDays, 9);
-});
-
-test('the arithmetic is the deadline over the build time, and 0 is a real answer', () => {
-  const rec = recommend(recommendableWorld());
-  // 57 days to contact, 18 days a hull, one serial line: 3.
-  assert.equal(rec.deadline.nearestArrivalDays, 57);
-  assert.equal(rec.production.serialDeliverableBeforeContact, 3);
-  assert.equal(rec.production.landsBeforeContact, true);
-  assert.equal(rec.production.marginDays, 39);
-
-  // A hull slower than the deadline delivers NONE -- and that is the "or
-  // retreat" half of the sentence, so it is a recommendation, not a refusal.
-  const slow = recommendableWorld({
-    buildOptions: [{
-      body: 'Mercury', spaceTheaterKey: 'inner', hullName: 'Monitor',
-      fastestDays: 90, shipyardId: 315317, shipyardModuleTier: 3, yardsConsidered: 12
-    }]
-  });
-  const slowRec = recommend(slow);
-  assert.ok(slowRec, 'nothing landing in time is an answer, not a missing reading');
-  assert.equal(slowRec.production.serialDeliverableBeforeContact, 0);
-  assert.equal(slowRec.production.landsBeforeContact, false);
-  assert.equal(slowRec.perFleet[0].delivery.verdict, DELIVERY_VERDICTS.fallsShort);
-});
-
-test('a non-positive build time refuses rather than dividing by it', () => {
-  const world = recommendableWorld({
-    buildOptions: [{
-      body: 'Mercury', spaceTheaterKey: 'inner', hullName: 'Monitor',
-      fastestDays: 0, shipyardId: 315317, shipyardModuleTier: 3, yardsConsidered: 12
-    }]
-  });
-  assert.equal(recommend(world), null);
-  assert.equal(refusal(world).check, RECOMMENDATION_CHECKS.buildArithmetic);
-});
-
-test('the requirement is carried BY REFERENCE, never copied or recomputed', () => {
+test('no hull count is ever emitted: a calibrated world refuses on force-comparison-unmodelled', () => {
+  // The recommendableWorld fixture used to produce a recommendation with a
+  // hull count; now it refuses. The check name preserves which gate fired
+  // (omniscient/calibrated) so a future fix can route back through the
+  // previous checks.
   const world = recommendableWorld();
-  const source = world.theaterForce[0].opponentFleets[0].requirement;
   const finding = only(buildTheaterDefence({ military: world }));
-  assert.strictEqual(finding.force.fleets[0].requirement, source,
-    'the readings row must hand back the resource\'s own object');
-  assert.strictEqual(finding.recommendation.perFleet[0].requirement, source,
-    'the recommendation must hand back the resource\'s own object');
-  // Register #13: nothing is flattened out of it on the way through.
-  for (const key of ['p20', 'p80', 'bandLabel', 'isLowerBound', 'guaranteedWinAt', 'maxHullsSwept',
-    'hullsAtLeast', 'verdict']) {
-    assert.ok(key in finding.recommendation.perFleet[0].requirement, `${key} was dropped`);
-  }
+  assert.equal(recommend(world), null, 'a hull count is no longer emitted in any mode');
+  assert.equal(refusal(world).check, RECOMMENDATION_CHECKS.forceComparisonUnmodelled,
+    'an omniscient-mode (calibrated) row refuses on the unmodelled gate');
+  assert.match(refusal(world).reason, /engagement-matchup-spec\.md/,
+    'the refusal must point at the spec rather than restating the argument');
 });
 
-test('no body-level total is composed, and the refusal is carried with it', () => {
-  const world = recommendableWorld({
-    theaterForce: [forceRow({
-      opponentFleets: [
-        forceFleet({ fleetId: 1, fleetName: 'Alpha' }),
-        forceFleet({ fleetId: 2, fleetName: 'Beta', requirement: requirementRow({ p20: 1, p80: 1 }) })
-      ],
-      opponentFleetsCount: 2
-    })]
-  });
-  const rec = recommend(world);
-  assert.strictEqual(rec.composedRequirement, null);
-  assert.match(rec.composedRequirementReason, /does not compose/);
-  assert.equal(rec.perFleet.length, 2, 'two fleets means two engagements, each priced on its own row');
-});
-
-// ---------------------------------------------------------------------------
-// THE BAND ASYMMETRY. Falling short is safe to conclude; meeting is not.
-// ---------------------------------------------------------------------------
-
-test('a delivery below the band falls short, with a shortfall named "at least"', () => {
-  const rec = recommend(recommendableWorld());          // 3 delivered against 5-6
-  const delivery = rec.perFleet[0].delivery;
-  assert.equal(delivery.verdict, DELIVERY_VERDICTS.fallsShort);
-  assert.equal(delivery.shortfallAtLeast, 2);
-  assert.equal(delivery.requirementIsLowerBound, false);
-});
-
-test('a FLOOR that the delivery clears is INDETERMINATE, never "meets"', () => {
-  // This is register #13 in its most dangerous form: `beyond-modelled-range`
-  // and an `isLowerBound` band both report a number the true requirement sits
-  // ABOVE. Clearing it proves nothing, and reporting sufficiency would be the
-  // exact flattening the split verdicts exist to prevent.
-  for (const requirement of [
-    requirementRow({
-      verdict: 'beyond-modelled-range',
-      reason: 'this fleet rates above what 24 of the observer\'s best hull can be modelled against',
-      p20: null, p80: null, bandLabel: 'more than 24 hulls', hullsAtLeast: 2,
-      maxHullsSwept: null, guaranteedWinAt: 400, isLowerBound: true
-    }),
-    requirementRow({ p20: 1, p80: 2, hullsAtLeast: 1, isLowerBound: true, bandLabel: 'at least 1-2 hulls' })
-  ]) {
-    const world = recommendableWorld({
-      theaterForce: [forceRow({ opponentFleets: [forceFleet({ requirement })] })]
-    });
-    const delivery = recommend(world).perFleet[0].delivery;   // 3 delivered
-    assert.equal(delivery.verdict, DELIVERY_VERDICTS.indeterminate,
-      `a cleared floor must not read as sufficient (verdict ${requirement.verdict})`);
-    assert.notEqual(delivery.verdict, DELIVERY_VERDICTS.meetsBand);
-    assert.equal(delivery.requirementIsLowerBound, true);
-    assert.match(delivery.reason, /floor/);
-  }
-});
-
-test('a floor the delivery does NOT clear still falls short -- a floor only moves up', () => {
-  const world = recommendableWorld({
-    theaterForce: [forceRow({
-      opponentFleets: [forceFleet({
-        requirement: requirementRow({
-          verdict: 'beyond-modelled-range', p20: null, p80: null,
-          bandLabel: 'more than 24 hulls', hullsAtLeast: 25, isLowerBound: true, guaranteedWinAt: 400
-        })
-      })]
-    })]
-  });
-  const delivery = recommend(world).perFleet[0].delivery;
-  assert.equal(delivery.verdict, DELIVERY_VERDICTS.fallsShort);
-  assert.equal(delivery.shortfallAtLeast, 22);
-});
-
-test('`winnable: false` is never synthesised and no verdict is re-labelled', () => {
-  const world = recommendableWorld({
-    theaterForce: [forceRow({
-      opponentFleets: [forceFleet({
-        requirement: requirementRow({
-          verdict: 'beyond-modelled-range', p20: null, p80: null,
-          bandLabel: 'more than 24 hulls', hullsAtLeast: 25, isLowerBound: true, guaranteedWinAt: 400
-        })
-      })]
-    })]
-  });
+test('OMNISCIENT MODE: a calibrated row refuses even when every other reading holds', () => {
+  // The hand-built world is calibrated, has a band, a measured arrival, a
+  // yard here that can lay down the required design's own hull. All five of
+  // the legacy preconditions hold -- and the recommendation is still null.
+  const world = recommendableWorld();
   const json = JSON.stringify(buildTheaterDefence({ military: world }));
-  assert.equal(json.includes('"winnable"'), false);
-  assert.equal(json.includes('not-winnable'), false);
-  assert.equal(recommend(world).perFleet[0].requirement.verdict, 'beyond-modelled-range');
+  for (const key of ['p20', 'p80', 'hullsAtLeast', 'bandLabel', 'guaranteedWinAt', 'maxHullsSwept',
+    'serialDeliverableBeforeContact', 'shortfallAtLeast']) {
+    assert.equal(json.includes(`"${key}"`), false,
+      `omniscient mode leaked the hull-count field ${key}`);
+  }
+  // And the band-label VALUES, not just the field names -- a copy that
+  // happened to agree today is still a leak.
+  const labels = new Set();
+  for (const row of world.theaterForce) {
+    for (const fleet of row.opponentFleets ?? []) {
+      if (fleet.requirement?.bandLabel) labels.add(fleet.requirement.bandLabel);
+    }
+  }
+  assert.ok(labels.size > 0,
+    'the hand-built world must carry a band on its read-model, or this test proves nothing');
+  for (const label of labels) {
+    assert.equal(json.includes(label), false, `omniscient mode leaked the band label ${label}`);
+  }
+  // Nothing shaped like a hull count in prose either.
+  assert.deepEqual(json.match(/[0-9]+[^"]{0,3}hulls?/gi) ?? [], []);
 });
 
-test('a delivery at or above the band top meets it, and says the band is an estimate', () => {
-  const world = recommendableWorld({
-    theaterForce: [forceRow({
-      opponentFleets: [forceFleet({ requirement: requirementRow({ p20: 1, p80: 2, bandLabel: '1-2 hulls' }) })]
-    })]
-  });
-  const delivery = recommend(world).perFleet[0].delivery;   // 3 delivered against 1-2
-  assert.equal(delivery.verdict, DELIVERY_VERDICTS.meetsBand);
-  assert.match(delivery.reason, /not a guarantee/);
+test('the recommendation always refuses once a force row exists, in both modes', () => {
+  // Run the same shape in both modes: the player-mode fixture and an
+  // omniscient-shaped hand-built world both refuse, but on different checks.
+  const player = buildTheaterDefence({ military: fixtureMilitary('player') });
+  for (const finding of player.findings) {
+    assert.equal(finding.recommendation, null);
+    assert.ok(finding.recommendationRefusal,
+      `${finding.body}: every finding must carry exactly one of recommendation / recommendationRefusal`);
+    // Player-mode fixture: every row is calibrated: false.
+    assert.equal(finding.recommendationRefusal.check, RECOMMENDATION_CHECKS.ratingCalibration,
+      `${finding.body}: player-mode refusal is on the calibration gate`);
+  }
+
+  const omni = recommendableWorld();
+  const omniFinding = only(buildTheaterDefence({ military: omni }));
+  assert.equal(omniFinding.recommendation, null);
+  assert.equal(omniFinding.recommendationRefusal.check,
+    RECOMMENDATION_CHECKS.forceComparisonUnmodelled,
+    'omniscient-mode refusal is on the unmodelled gate');
 });
 
-test('a delivery inside the band says the band is exactly what is uncertain', () => {
-  const world = recommendableWorld({
-    theaterForce: [forceRow({
-      opponentFleets: [forceFleet({ requirement: requirementRow({ p20: 2, p80: 5, bandLabel: '2-5 hulls' }) })]
-    })]
-  });
-  const delivery = recommend(world).perFleet[0].delivery;   // 3 delivered against 2-5
-  assert.equal(delivery.verdict, DELIVERY_VERDICTS.withinBand);
+test('force.fleets[].requirement is withheld in BOTH modes', () => {
+  // The withdrawal in this block now applies to both modes; the reason text
+  // varies so a consumer can tell which gate fired.
+  const player = buildTheaterDefence({ military: fixtureMilitary('player') });
+  for (const finding of player.findings) {
+    if (!finding.force.fleets) continue;
+    for (const fleet of finding.force.fleets) {
+      assert.equal(fleet.requirement, null,
+        `${finding.body} (player): requirement must be withheld`);
+      assert.ok(fleet.requirementWithheldReason,
+        `${finding.body} (player): a withheld reading must say why`);
+      assert.match(fleet.requirementWithheldReason, /invented constants/,
+        `${finding.body} (player): the player-mode reason names the x1.5 invented constant`);
+    }
+  }
+
+  const omni = buildTheaterDefence({ military: recommendableWorld() });
+  const omniFinding = only(omni);
+  for (const fleet of omniFinding.force.fleets) {
+    assert.equal(fleet.requirement, null,
+      `${omniFinding.body} (omniscient): requirement must be withheld`);
+    assert.ok(fleet.requirementWithheldReason,
+      `${omniFinding.body} (omniscient): a withheld reading must say why`);
+    assert.match(fleet.requirementWithheldReason, /engagement-matchup-spec\.md/,
+      `${omniFinding.body} (omniscient): the omniscient-mode reason points at the spec`);
+  }
 });
 
-test('fleets whose requirement resolved to no count are OMITTED WITH A COUNT, not dropped', () => {
-  const world = recommendableWorld({
-    theaterForce: [forceRow({
-      opponentFleets: [
-        forceFleet({ fleetId: 1, fleetName: 'Alpha' }),
-        forceFleet({
-          fleetId: 2,
-          fleetName: 'Beta',
-          requirement: requirementRow({
-            verdict: 'withheld-unreachable', reason: 'the observer cannot reach this engagement',
-            p20: null, p80: null, bandLabel: null, guaranteedWinAt: null, maxHullsSwept: null
-          })
-        })
-      ],
-      opponentFleetsCount: 2
-    })]
-  });
-  const rec = recommend(world);
-  assert.equal(rec.perFleet.length, 1);
-  assert.equal(rec.perFleetTotalCount, 2);
-  assert.equal(rec.perFleetOmittedCount, 1);
-  assert.ok(rec.perFleetOmittedReason, 'a capped list must announce exactly what it dropped');
-  // The omitted fleet is still visible in the readings with its own verdict.
-  const finding = only(buildTheaterDefence({ military: world }));
-  assert.equal(finding.force.fleets.length, 2);
-  assert.equal(finding.force.fleets[1].requirement.verdict, 'withheld-unreachable');
+test('a hand-built world with no force row still refuses on forceReading', () => {
+  // The pre-existing forceReading path is the only one that survives
+  // alongside the new universal refusal; it must still fire when there is
+  // genuinely no reading to refuse.
+  const finding = only(buildTheaterDefence({ military: militaryWorld() }));
+  assert.equal(finding.recommendation, null);
+  assert.equal(finding.recommendationRefusal.check, RECOMMENDATION_CHECKS.forceReading);
+  assert.match(finding.recommendationRefusal.reason, /no force row/);
 });
-
-test('a body where NO fleet resolved a count refuses -- an unresolved need is not a small one', () => {
-  const world = recommendableWorld({
-    theaterForce: [forceRow({
-      opponentFleets: [forceFleet({
-        requirement: requirementRow({ verdict: 'unknown', reason: 'no opponent rating', p20: null, p80: null })
-      })]
-    })]
-  });
-  assert.equal(recommend(world), null);
-  assert.equal(refusal(world).check, RECOMMENDATION_CHECKS.hullRequirement);
-  assert.match(refusal(world).reason, /not a small one/);
-});
-
-test('a body with NO rated hostile fleet refuses, and says that is not "nothing is needed"', () => {
-  const world = recommendableWorld({
-    theaterForce: [forceRow({ opponentFleets: [], opponentFleetsCount: 0 })]
-  });
-  assert.equal(recommend(world), null);
-  const check = refusal(world);
-  assert.equal(check.check, RECOMMENDATION_CHECKS.hullRequirement);
-  assert.match(check.reason, /NOT "nothing is needed here"/);
-});
-
-test('an unnamed design refuses: a hull count with no unit is not a hull count', () => {
-  const world = recommendableWorld({
-    theaterForce: [forceRow({ own: { bestDesignName: null, bestHullName: null } })]
-  });
-  assert.equal(recommend(world), null);
-  assert.equal(refusal(world).check, RECOMMENDATION_CHECKS.hullRequirement);
-  assert.match(refusal(world).reason, /Gunship as a Battlecruiser/);
-});
-
 // ---------------------------------------------------------------------------
-// THE DOMINANT REAL CASE: no yard here. Measured on the live save 2026-08-27 --
-// buildOptions is EMPTY for Callisto, the body with the largest requirement on
-// the board.
-// ---------------------------------------------------------------------------
-
-test('NO YARD HERE is a measured absence of capacity, not an unmeasured build time', () => {
-  const world = recommendableWorld({ shipyards: [], buildOptions: [], buildRefusals: [] });
-  const check = refusal(world);
-  assert.equal(check.check, RECOMMENDATION_CHECKS.buildCapacity);
-  assert.match(check.reason, /measured absence of build capacity, not an unmeasured build time/);
-});
-
-test('NO YARD HERE never points at another body\'s shipyard', () => {
-  // Reinforcement from elsewhere is a transit problem and nothing in this
-  // system models transit time, so naming a yard at Mars for a threat at
-  // Mercury would imply a delivery this model cannot promise.
-  const world = recommendableWorld({
-    shipyards: [{ id: 88, orbitBody: 'Mars', spaceTheaterKey: 'mars', moduleTier: 4 }],
-    buildOptions: [{
-      body: 'Mars', spaceTheaterKey: 'mars', hullName: 'Monitor',
-      fastestDays: 4, shipyardId: 88, shipyardModuleTier: 4, yardsConsidered: 6
-    }]
-  });
-  const finding = only(buildTheaterDefence({ military: world }));
-  assert.equal(finding.recommendation, null, 'a yard at Mars must not answer for a threat at Mercury');
-  assert.equal(finding.recommendationRefusal.check, RECOMMENDATION_CHECKS.buildCapacity);
-  assert.equal(finding.recommendationRefusal.reason.includes('Mars'), false,
-    'the refusal must not name another body\'s yard');
-  assert.match(finding.recommendationRefusal.reason, /transit/);
-  assert.equal(finding.requiredDesignBuild.available, false);
-  assert.strictEqual(finding.requiredDesignBuild.fastestDays, null);
-  assert.notStrictEqual(finding.requiredDesignBuild.fastestDays, 0);
-});
-
-test('a body that can build SOMETHING but not the required hull refuses, without substituting', () => {
-  const world = recommendableWorld({
-    buildOptions: [{
-      body: 'Mercury', spaceTheaterKey: 'inner', hullName: 'Gunship',
-      fastestDays: 9, shipyardId: 315317, shipyardModuleTier: 3, yardsConsidered: 12
-    }],
-    buildRefusals: [{ body: 'Mercury', hullName: 'Monitor', reason: 'hull-not-shipyard-buildable' }]
-  });
-  const check = refusal(world);
-  assert.equal(check.check, RECOMMENDATION_CHECKS.buildCapacity);
-  assert.match(check.reason, /hull-not-shipyard-buildable/);
-  assert.match(check.reason, /no exchange rate between hull types/);
-  assert.equal(check.reason.includes('Gunship'), false,
-    'the hull the body CAN build must never be offered in place of the one it cannot');
-});
-
-// ---------------------------------------------------------------------------
-// The deadline
-// ---------------------------------------------------------------------------
-
-test('the three no-deadline cases are three DIFFERENT refusals', () => {
-  const nothingInbound = recommendableWorld({
-    theaters: [theaterRow({
-      hostile: { ships: 5, fleets: 2, factions: ['the Aliens'] },
-      incoming: { hostileFleets: 0, hostileShips: 0, nearestArrivalDays: null,
-        nearestArrivalDate: null, arrivalTimingKnown: null }
-    })]
-  });
-  assert.match(refusal(nothingInbound).reason, /nothing is inbound/);
-  assert.equal(refusal(nothingInbound).check, RECOMMENDATION_CHECKS.arrivalClock);
-  // "contact is now" is a deadline this board does not invent.
-  assert.equal(recommend(nothingInbound), null);
-
-  const inboundUnknownDate = recommendableWorld({
-    theaters: [theaterRow({
-      hostile: { ships: 5, fleets: 2, factions: ['the Aliens'] },
-      incoming: { nearestArrivalDays: null, nearestArrivalDate: null, arrivalTimingKnown: false }
-    })]
-  });
-  assert.match(refusal(inboundUnknownDate).reason, /an unknown arrival is not a distant one/);
-
-  const unreadableCount = recommendableWorld({
-    theaters: [theaterRow({
-      hostile: { ships: 5, fleets: 2, factions: ['the Aliens'] },
-      incoming: { hostileFleets: null, nearestArrivalDays: null, nearestArrivalDate: null }
-    })]
-  });
-  assert.match(refusal(unreadableCount).reason, /an unreadable count is not a zero/);
-});
-
-test('the deadline says which force it belongs to, and it is not the one being sized', () => {
-  // The clock comes from the fleets INBOUND to this body; the requirements come
-  // from fleets already HERE. Two different objects, and conflating them would
-  // read as "these hulls beat the thing that is coming".
-  const rec = recommend(recommendableWorld());
-  assert.match(rec.deadline.source, /INBOUND/);
-  assert.match(rec.deadline.source, /ALREADY PRESENT/);
-});
+// REFUSAL TESTS REMOVED BECAUSE THEY ASSERT NOW-DEAD CHECKS. The universal
+// hull-count removal (docs/engagement-matchup-spec.md) collapses the legacy
+// `buildCapacity`, `arrivalClock`, `buildArithmetic`, and `hullRequirement`
+// checks into one outcome: `forceComparisonUnmodelled` (omniscient) or
+// `ratingCalibration` (player). The previous tests asserted detailed
+// per-gate wording (e.g. "measured absence of build capacity, not an
+// unmeasured build time" for `buildCapacity`, "an unknown arrival is not a
+// distant one" for `arrivalClock`). Those gates are documented in the
+// header but no longer reached; a future model that fixes the underlying
+// currency can route back through them by replacing the universal refusal
+// with per-check returns. The universal-refusal tests higher in this file
+// assert the new behaviour on the same hand-built worlds.
 
 // ---------------------------------------------------------------------------
 // Coverage: two counts that must never be subtracted
 // ---------------------------------------------------------------------------
 
 test('the board\'s hostile count and the rated fleet count are carried, never differenced', () => {
-  const rec = recommend(recommendableWorld());
-  assert.equal(rec.coverage.ratedHostileFleets, 1);
-  assert.equal(rec.coverage.boardHostileFleetsPresent, 2);
-  assert.equal(rec.coverage.countsAreComparable, false);
-  assert.deepEqual(rec.coverage.boardHostileFactions, ['the Aliens', 'the Servants']);
-  assert.match(rec.coverage.note, /must not be subtracted/);
+  // Coverage now lives on `force.coverage`; the deleted `recommendation.coverage`
+  // mirror is gone with the recommendation itself.
+  const finding = only(buildTheaterDefence({ military: recommendableWorld() }));
+  assert.equal(finding.force.coverage.ratedHostileFleets, 1);
+  assert.equal(finding.force.coverage.boardHostileFleetsPresent, 2);
+  assert.equal(finding.force.coverage.countsAreComparable, false);
+  assert.deepEqual(finding.force.coverage.boardHostileFactions, ['the Aliens', 'the Servants']);
+  assert.match(finding.force.coverage.note, /must not be subtracted/);
   // No field anywhere holds the difference.
-  assert.equal(JSON.stringify(rec.coverage).includes('unrated'), false);
+  assert.equal(JSON.stringify(finding.force.coverage).includes('unrated'), false);
 });
 
 test('the omniscient fixture measures the coverage gap it warns about', () => {
@@ -1369,14 +1171,18 @@ test('the recommendation layer never changes a posture', () => {
   }
 });
 
-test('the first note tracks whether a band was actually carried', () => {
-  // Leaving "no force-strength comparison is made here" standing beside a
-  // carried band would be a false statement in the output.
+test('the first note is always NOTE_NO_FORCE_COMPARISON in both modes', () => {
+  // After the universal hull-count removal, the block never carries a band:
+  // the first note is therefore always NOTE_NO_FORCE_COMPARISON. A board that
+  // still carried a band would say so -- the deleted NOTE_FORCE_COMPARISON_CARRIED
+  // existed for that case, and the test below would catch a regression where
+  // the band-carried note reappears.
   const player = buildTheaterDefence({ military: fixtureMilitary('player') });
   const omniscient = buildTheaterDefence({ military: fixtureMilitary('omniscient') });
   assert.match(player.notes[0], /^No force-strength comparison is made here/);
-  assert.match(omniscient.notes[0], /^The POSTURES rest on the production race/);
-  assert.match(omniscient.notes[0], /never "cannot be won"/);
+  assert.match(omniscient.notes[0], /^No force-strength comparison is made here/);
+  // The new first note names the engagement-matchup spec as the reason.
+  assert.match(omniscient.notes[0], /engagement-matchup-spec\.md/);
 });
 
 // -----------------------------------------------------------------------------
