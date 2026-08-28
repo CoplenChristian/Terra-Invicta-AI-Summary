@@ -1,7 +1,7 @@
 ---
 name: dispatch
 description: Use when work should be handed to one of the external agent CLIs rather than done inline — delegating an implementation pass, farming out a long multi-file build, getting a second opinion or independent review of a plan or diff, running a fast frontend change, or asking another model to analyse something. Also covers continuing or resuming an earlier conversation with one of those tools, and collecting the output file a dispatch left behind. Covers the lanes minimax, deepseek, antigravity, composer, grok and codex, reached through opencode, agy, cursor-agent and codex. Also use when the user asks which tool should get a job, whether a lane is available or authenticated, what a dispatch would cost, or why a dispatch was refused. Not for work Claude should simply do itself.
-version: 1.1.0
+version: 1.4.0
 user-invocable: true
 argument-hint: "[check | <lane> <what to delegate>]"
 allowed-tools:
@@ -113,6 +113,101 @@ never overrides an unavailable lane.
 
 Use `--dry-run` whenever you want to show the user what would happen. It never
 executes, whatever the mode says.
+
+## Worktree isolation (default)
+
+Every real dispatch gets a fresh detached Git worktree under
+`.claude/worktrees/`, created from the repository's current `HEAD`. The wrapper
+uses that path as the dispatched process's working directory and includes the
+same path in omp's explicit `--cwd` argument. The destination is checked with
+`git check-ignore` before creation; if the repository, index, ignore rule,
+worktree inventory, disk path, or `git worktree add` result cannot be verified,
+the dispatch is refused (exit 6) and never falls back to the main tree.
+
+The output prominently names the worktree path, the source `HEAD`, the verified
+ignore rule, and the effective `cwd`. It also reports the pre-existing worktree
+count; those worktrees are inventory-only and are never deleted by this skill.
+
+After the process exits, the wrapper runs:
+
+```bash
+git -C <worktree-path> status --short
+```
+
+An unchanged worktree is removed. A worktree with changes is kept and announced
+loudly with its path and a one-line status summary. Nothing is merged, rebased,
+or copied back. Before the dispatch runs, the wrapper prepares the fresh tree:
+it uses `npm ci` when `npm-shrinkwrap.json` or `package-lock.json` is present,
+otherwise `npm install`, then runs `npm run build` and verifies both
+`node_modules` and `public/v2/app/bundle.js`. Install and build timing plus the
+measured dependency size (the existing checkout was estimated at about 288 MB;
+each run reports its actual size) are reported. If install, build,
+or any verification is failed or unknown, the dispatch is refused (exit 6),
+the worktree is kept for diagnosis, and no cleanup is attempted.
+
+For a successful preparation, an unchanged worktree is removed, including its
+dependencies. A worktree with changes is kept, but only its generated
+`node_modules` is removed to reclaim the roughly 288 MB while preserving every
+harvestable worktree file. The actual freed size is reported. The path, status
+summary, dependency cleanup result, and timing are announced. If dependency
+cleanup is unknown, the worktree is retained and the uncertainty is reported.
+
+The fresh worktree does not inherit the main checkout's untracked `config.json`.
+Before the lane starts, the wrapper reads only `paths.savePath` (or the legacy
+top-level `SavePath`) from the main checkout's local `config.json`, resolves a
+relative value against that checkout, and passes the resulting value as
+`TI_SAVE_PATH`. It does not copy `config.json`, a config directory, credentials,
+or any other config key. The child still receives the ordinary process
+environment it would otherwise have received; the only config-derived addition
+is this save-path override. The output identifies the source and the exact
+handoff without exposing unrelated config values. If the local config is absent,
+malformed, unreadable, or has no usable save path, the wrapper reports
+`UNAVAILABLE` or `UNKNOWN` and continues; pure-JS work can still run, while a
+save-dependent check may report its own missing-path error. If an existing
+`TI_SAVE_PATH` is already present in the wrapper environment, it is retained as
+a fallback and still normalized outside the fresh worktree.
+
+Harvest a kept result yourself, for
+example:
+
+```bash
+git -C <worktree-path> status --short
+git -C <worktree-path> diff
+git -C <worktree-path> diff --cached
+```
+
+`--dry-run` and an unapproved `ask` request only show the prospective path; they
+create no worktree. `--no-worktree` is the explicit opt-out for work that must
+edit the main checkout or another deliberately named directory — in particular
+changes to `.claude/skills/dispatch/` itself. It runs in the requested `--cwd`,
+skips dependency/build preparation, the save-path handoff, and all worktree
+cleanup. The main checkout's existing config and environment behavior is left
+unchanged, so use it only when that shared-tree behavior is intentional.
+
+### Resume behavior
+
+By default, `--resume-last` and `--resume <id>` are refused (exit 5) when
+worktree isolation is enabled. A resumed session may be bound to the old
+worktree, and silently creating a new one or reusing another process's dirty one
+would change the session's working directory. Inspect `git worktree list`, then
+resume explicitly with `--no-worktree --cwd <the prior worktree>` if continuing
+that session is what you intend. The output always states this policy. With
+`--no-worktree`, the existing provider-specific session verification and exit 7
+rule still apply.
+
+### Running the suite in a fresh worktree
+
+A pristine worktree has no own `node_modules` and no ignored
+`public/v2/app/bundle.js`. A measured first `npm test` in one such worktree was
+not reliable: it auto-built the bundle, but still reported one missing-bundle
+asset failure in the parallel pure-JS pass and one browser-route failure before
+the harness was interrupted after it stopped making progress. Do not report a
+bare-worktree suite as green. The wrapper now performs the dependency install
+and build before dispatch, and passes the main checkout's save path as
+`TI_SAVE_PATH`, so a lane may run `npm test` in the prepared tree, including
+save-dependent browser/server checks. The worktree still does not inherit other
+untracked local files or configuration; a lane that needs those must use an
+explicit, reviewed arrangement such as `--no-worktree`.
 
 ## Continuing an earlier conversation
 

@@ -26,6 +26,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { randomUUID } = require('crypto');
 const { spawnSync, spawn } = require('child_process');
 const { collectOutput } = require('./collect_output.js');
 
@@ -34,6 +35,11 @@ const SKILL_DIR = __dirname;
 // invoked from wherever a dispatch happens to be running, and a policy file that
 // resolved differently per working directory would be a silent policy change.
 const DEFAULT_CONFIG_PATH = path.resolve(SKILL_DIR, 'dispatch-config.json');
+// The runtime config is deliberately resolved from the checkout containing this
+// wrapper, not from the prospective worktree. config.json is local-only and is
+// absent from a fresh worktree; only its save-path value is handed to the lane.
+const MAIN_CHECKOUT_ROOT = path.resolve(SKILL_DIR, '..', '..', '..');
+const MAIN_RUNTIME_CONFIG_PATH = path.join(MAIN_CHECKOUT_ROOT, 'config.json');
 
 const VALID_MODES = ['auto', 'ask', 'reject'];
 
@@ -146,6 +152,11 @@ const EXIT = {
 
 const PROBE_TIMEOUT_MS = 90000;
 const DEFAULT_DISPATCH_TIMEOUT_MS = 900000; // 15 minutes
+const WORKTREE_ROOT_RELATIVE = path.join('.claude', 'worktrees');
+const WORKTREE_GIT_TIMEOUT_MS = 90000;
+const WORKTREE_PREPARATION_TIMEOUT_MS = 900000; // 15 minutes
+const WORKTREE_DEPENDENCIES_RELATIVE = 'node_modules';
+const WORKTREE_BUNDLE_RELATIVE = path.join('public', 'v2', 'app', 'bundle.js');
 
 // ---------------------------------------------------------------------------
 // Lane registry — how each lane is invoked. Not user-editable on purpose.
@@ -713,6 +724,7 @@ function parseArgs(argv) {
     dryRun: false,
     probeFlags: false,
     approve: false,
+    noWorktree: false,
     configPath: DEFAULT_CONFIG_PATH,
     cwd: process.cwd(),
     timeoutMs: DEFAULT_DISPATCH_TIMEOUT_MS,
@@ -751,6 +763,7 @@ function parseArgs(argv) {
     else if (arg === '--dry-run') out.dryRun = true;
     else if (arg === '--probe-flags') out.probeFlags = true;
     else if (arg === '--approve') out.approve = true;
+    else if (arg === '--no-worktree') out.noWorktree = true;
     else if (arg === '--resume-last') out.resumeLast = true;
     else if (arg === '--help' || arg === '-h') out.help = true;
     else out.errors.push(`unrecognised argument "${arg}"`);
@@ -777,6 +790,26 @@ function resumeIntent(opts) {
   if (opts.resumeLast) return { kind: 'last', id: null, label: 'most recent session' };
   if (opts.resumeId !== null) return { kind: 'id', id: opts.resumeId, label: `session ${opts.resumeId}` };
   return { kind: 'none', id: null, label: 'new session' };
+}
+
+/**
+ * A fresh worktree and a resumed conversation are not interchangeable. The
+ * provider session may be bound to the directory in which it was created, and
+ * the old directory may contain the very edits the caller wants to continue.
+ * Reusing one implicitly would also let this wrapper touch another process's
+ * uncommitted work. The safe default is therefore an explicit refusal; the
+ * caller can name the old directory with --no-worktree --cwd.
+ */
+function resumeWorktreePolicy(opts, resume) {
+  if (resume.kind === 'none') {
+    return opts.noWorktree
+      ? `--no-worktree is active: a new session will run in ${path.resolve(opts.cwd)} and no worktree will be created.`
+      : 'A new session will run in a fresh worktree created from the current HEAD.';
+  }
+  if (opts.noWorktree) {
+    return `--no-worktree is active: ${resume.label} will stay in the requested directory ${path.resolve(opts.cwd)}; no worktree will be created.`;
+  }
+  return `RESUME REFUSED under default worktree isolation: ${resume.label} belongs to its earlier working directory, and this wrapper will not silently create or reuse a different directory. Re-run with --no-worktree --cwd <the prior worktree> after inspecting git worktree list.`;
 }
 
 const HELP = `
@@ -815,6 +848,7 @@ check_lanes.js — probe and dispatch external agent CLI lanes.
                         Never overrides reject, and never overrides unavailable.
     --config <path>     policy file (default: ${DEFAULT_CONFIG_PATH})
     --cwd <path>        working directory for the dispatched process
+    --no-worktree       explicit opt-out; run in --cwd with no isolation
     --timeout <ms>      dispatch timeout (default ${DEFAULT_DISPATCH_TIMEOUT_MS})
 
   Lanes: ${LANE_KEYS.join(', ')}
@@ -1476,6 +1510,1152 @@ function runProbe(command, args, cwd) {
   } catch (err) {
     return { ok: false, timedOut: false, status: null, stdout: '', stderr: '', errorMessage: err.message };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch worktrees
+//
+// A dispatch is deliberately based on the repository's committed HEAD, not on
+// the caller's uncommitted working tree. Every check below is read-only until
+// the one explicit `git worktree add` that starts an approved dispatch. Any
+// state that cannot be established is a refusal; falling back to opts.cwd
+// would recreate the shared-working-tree bug this wrapper exists to prevent.
+// ---------------------------------------------------------------------------
+
+function runGit(args, cwd) {
+  try {
+    const res = spawnSync('git', args, {
+      cwd,
+      timeout: WORKTREE_GIT_TIMEOUT_MS,
+      encoding: 'utf8',
+      windowsHide: true,
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (res.error) {
+      return {
+        status: null,
+        stdout: '',
+        stderr: '',
+        errorMessage: res.error.message,
+      };
+    }
+    return {
+      status: res.status,
+      stdout: res.stdout === null || res.stdout === undefined ? '' : res.stdout,
+      stderr: res.stderr === null || res.stderr === undefined ? '' : res.stderr,
+      errorMessage: null,
+    };
+  } catch (err) {
+    return { status: null, stdout: '', stderr: '', errorMessage: err.message };
+  }
+}
+
+function runCommand(command, args, cwd, timeoutMs, shell = false) {
+  const startedAt = Date.now();
+  try {
+    const res = spawnSync(command, args, {
+      cwd,
+      timeout: timeoutMs,
+      encoding: 'utf8',
+      windowsHide: true,
+      shell,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const errorMessage = res.error && res.error.message ? res.error.message : null;
+    const timedOut = Boolean(res.error && res.error.code === 'ETIMEDOUT');
+    return {
+      command,
+      args,
+      cwd,
+      shell,
+      spawned: res.error ? timedOut : true,
+      status: res.status,
+      stdout: res.stdout === null || res.stdout === undefined ? '' : res.stdout,
+      stderr: res.stderr === null || res.stderr === undefined ? '' : res.stderr,
+      timedOut,
+      errorMessage,
+      elapsedMs: Date.now() - startedAt,
+    };
+  } catch (err) {
+    return {
+      command,
+      args,
+      cwd,
+      shell,
+      spawned: false,
+      status: null,
+      stdout: '',
+      stderr: '',
+      timedOut: false,
+      errorMessage: err && err.message ? err.message : String(err),
+      elapsedMs: Date.now() - startedAt,
+    };
+  }
+}
+
+function commandReport(result) {
+  return {
+    command: result.command,
+    args: result.args,
+    cwd: result.cwd,
+    shell: result.shell,
+    spawned: result.spawned,
+    status: result.status,
+    timedOut: result.timedOut,
+    elapsedMs: result.elapsedMs,
+    stdoutPreview: firstLines(result.stdout, 3),
+    stderrPreview: firstLines(result.stderr, 3),
+    error: result.errorMessage,
+  };
+}
+
+function formatByteSize(bytes) {
+  if (!Number.isFinite(bytes)) return 'UNKNOWN';
+  const mib = bytes / (1024 * 1024);
+  const mb = bytes / 1000000;
+  return `${mib.toFixed(1)} MiB (${mb.toFixed(1)} MB)`;
+}
+
+function formatElapsed(ms) {
+  if (!Number.isFinite(ms)) return 'UNKNOWN';
+  return `${ms} ms (${(ms / 1000).toFixed(1)} s)`;
+}
+
+/**
+ * Measures a dependency tree without following symlinks. A size that cannot
+ * be measured is UNKNOWN, not zero; cleanup must not claim to have freed a
+ * number it could not establish.
+ */
+function measureDirectoryBytes(target) {
+  const initial = inspectPath(target);
+  if (initial.exists === null) {
+    return { known: false, exists: null, bytes: null, reason: `The dependency directory ${target} could not be inspected (${initial.error}).` };
+  }
+  if (initial.exists === false) return { known: true, exists: false, bytes: 0, reason: null };
+  if (initial.isDirectory !== true) {
+    return { known: false, exists: true, bytes: null, reason: `The dependency path ${target} exists but is not a directory.` };
+  }
+
+  let bytes = 0;
+  const pending = [target];
+  try {
+    while (pending.length > 0) {
+      const current = pending.pop();
+      for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+        const entryPath = path.join(current, entry.name);
+        const stat = fs.lstatSync(entryPath);
+        if (stat.isDirectory() && !stat.isSymbolicLink()) pending.push(entryPath);
+        else bytes += stat.size;
+      }
+    }
+  } catch (err) {
+    return {
+      known: false,
+      exists: true,
+      bytes: null,
+      reason: `The dependency directory ${target} could not be fully measured (${err.message}).`,
+    };
+  }
+  return { known: true, exists: true, bytes, reason: null };
+}
+
+function dependencyInstallPlan(worktreePath) {
+  // npm gives npm-shrinkwrap.json precedence when both lock formats exist.
+  for (const filename of ['npm-shrinkwrap.json', 'package-lock.json']) {
+    const lockPath = path.join(worktreePath, filename);
+    const state = inspectPath(lockPath);
+    if (state.exists === null) {
+      return {
+        known: false,
+        method: null,
+        lockfile: lockPath,
+        reason: `The lockfile candidate ${lockPath} could not be inspected (${state.error}).`,
+      };
+    }
+    if (state.exists === true && state.isFile !== true) {
+      return {
+        known: false,
+        method: null,
+        lockfile: lockPath,
+        reason: `${lockPath} exists but is not a regular file; refusing to guess whether npm ci is safe.`,
+      };
+    }
+    if (state.exists === true) {
+      return { known: true, method: 'ci', lockfile: lockPath, reason: null };
+    }
+  }
+  return { known: true, method: 'install', lockfile: null, reason: null };
+}
+
+function resolveNpmInvocation() {
+  if (process.platform !== 'win32') return { command: 'npm', prefixArgs: [], shell: false };
+
+  // Windows cannot spawn a .cmd file with shell:false on this installation
+  // (it returns EINVAL). Invoke npm's CLI JS directly with the running Node
+  // executable, preserving the no-shell property for all package arguments.
+  const nodeDir = path.dirname(process.execPath);
+  const candidates = [
+    path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    path.join(nodeDir, 'npm', 'bin', 'npm-cli.js'),
+  ];
+  const pathValue = process.env.PATH || process.env.Path || '';
+  for (const rawDir of pathValue.split(path.delimiter)) {
+    if (rawDir.trim() === '') continue;
+    const dir = rawDir.trim();
+    candidates.push(path.join(dir, 'node_modules', 'npm', 'bin', 'npm-cli.js'));
+  }
+  for (const npmCli of candidates) {
+    if (fileExists(npmCli)) return { command: process.execPath, prefixArgs: [npmCli], shell: false };
+  }
+
+  // This fallback is still limited to npm.cmd and generated, non-prompt
+  // arguments. If the direct CLI could not be located, shell execution gives
+  // the install a chance to produce a useful error instead of assuming npm is
+  // available; a failure is still a hard preparation refusal.
+  return { command: 'npm.cmd', prefixArgs: [], shell: true };
+}
+
+function inspectSavePathTarget(resolvedPath) {
+  const target = inspectPath(resolvedPath);
+  if (target.exists === null) {
+    return {
+      state: 'unknown',
+      reason: `The configured save path ${resolvedPath} could not be inspected (${target.error}).`,
+    };
+  }
+  if (target.exists === true) {
+    return {
+      state: target.isDirectory === true ? 'directory' : target.isFile === true ? 'file' : 'present',
+      reason: null,
+    };
+  }
+
+  const parent = inspectPath(path.dirname(resolvedPath));
+  if (parent.exists === null) {
+    return {
+      state: 'unknown',
+      reason: `The configured save path ${resolvedPath} is absent and its parent could not be inspected (${parent.error}).`,
+    };
+  }
+  if (parent.exists === true && parent.isDirectory === true) {
+    return {
+      state: 'parent-directory',
+      reason: `The configured save path ${resolvedPath} is not present, but its parent directory exists.`,
+    };
+  }
+  return {
+    state: 'missing',
+    reason: `The configured save path ${resolvedPath} and its parent directory are not present.`,
+  };
+}
+
+function savePathResultForValue(value, source, configNote = null) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (trimmed === '') return null;
+
+  let resolvedPath;
+  try {
+    // A relative path in the main config must not become relative to the
+    // isolated worktree when SaveParser later calls path.resolve().
+    resolvedPath = path.isAbsolute(trimmed)
+      ? path.normalize(trimmed)
+      : path.resolve(MAIN_CHECKOUT_ROOT, trimmed);
+  } catch (err) {
+    return {
+      state: 'unknown',
+      source,
+      configPath: MAIN_RUNTIME_CONFIG_PATH,
+      path: null,
+      passedToChild: false,
+      targetState: null,
+      reason: `${source} contained a save path that could not be resolved (${err.message}).`,
+    };
+  }
+
+  const target = inspectSavePathTarget(resolvedPath);
+  const reasons = [];
+  if (configNote !== null) reasons.push(configNote);
+  if (target.reason !== null) reasons.push(target.reason);
+  return {
+    state: target.state === 'unknown' ? 'unknown' : target.state === 'missing' ? 'unavailable' : 'resolved',
+    source,
+    configPath: MAIN_RUNTIME_CONFIG_PATH,
+    path: resolvedPath,
+    // A configured path is useful information even when the target is not
+    // present yet; the server can give the lane the authoritative error.
+    passedToChild: true,
+    targetState: target.state,
+    reason: reasons.length === 0 ? null : reasons.join(' '),
+  };
+}
+
+function unresolvedSavePathResult(state, reason) {
+  return {
+    state,
+    source: 'main config.json',
+    configPath: MAIN_RUNTIME_CONFIG_PATH,
+    path: null,
+    passedToChild: false,
+    targetState: null,
+    reason,
+  };
+}
+
+/**
+ * Read only paths.savePath / legacy SavePath from the main checkout's local
+ * config. No other config values are returned or copied into the worktree.
+ * An absent or unreadable save path is a warning, not a dispatch refusal.
+ */
+function resolveDispatchSavePath() {
+  const existingEnvironment = typeof process.env.TI_SAVE_PATH === 'string'
+    ? process.env.TI_SAVE_PATH.trim()
+    : '';
+  const configState = inspectPath(MAIN_RUNTIME_CONFIG_PATH);
+  let configIssue = null;
+  let configIssueState = 'unavailable';
+  let configuredValue;
+  let source = null;
+
+  if (configState.exists === null) {
+    configIssueState = 'unknown';
+    configIssue = `The main ${MAIN_RUNTIME_CONFIG_PATH} could not be inspected (${configState.error}).`;
+  } else if (configState.exists === false) {
+    configIssue = `The main ${MAIN_RUNTIME_CONFIG_PATH} is not present.`;
+  } else if (configState.isFile !== true) {
+    configIssueState = 'unknown';
+    configIssue = `The main ${MAIN_RUNTIME_CONFIG_PATH} exists but is not a regular file.`;
+  } else {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(MAIN_RUNTIME_CONFIG_PATH, 'utf8').replace(/^\uFEFF/, ''));
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        configIssueState = 'unknown';
+        configIssue = `The main ${MAIN_RUNTIME_CONFIG_PATH} did not contain a JSON object.`;
+      } else {
+        const pathsConfig = parsed.paths;
+        if (pathsConfig !== null && typeof pathsConfig === 'object' && !Array.isArray(pathsConfig) && Object.prototype.hasOwnProperty.call(pathsConfig, 'savePath')) {
+          configuredValue = pathsConfig.savePath;
+          source = 'main config.json paths.savePath';
+        } else if (Object.prototype.hasOwnProperty.call(parsed, 'SavePath')) {
+          configuredValue = parsed.SavePath;
+          source = 'main config.json legacy SavePath';
+        }
+
+        if (typeof configuredValue === 'string' && configuredValue.trim() !== '') {
+          const configuredResult = savePathResultForValue(configuredValue, source);
+          if (configuredResult !== null) return configuredResult;
+        } else if (configuredValue !== undefined) {
+          configIssue = `The main ${MAIN_RUNTIME_CONFIG_PATH} save path is not a non-empty string.`;
+        } else {
+          configIssue = `The main ${MAIN_RUNTIME_CONFIG_PATH} has neither paths.savePath nor legacy SavePath.`;
+        }
+      }
+    } catch (err) {
+      configIssueState = 'unknown';
+      configIssue = `The main ${MAIN_RUNTIME_CONFIG_PATH} could not be parsed (${err.message}).`;
+    }
+  }
+
+  // Preserve an explicitly supplied environment value as a useful fallback,
+  // but normalize a relative value against the main checkout so it does not
+  // silently point into the fresh worktree.
+  if (existingEnvironment !== '') {
+    const fallback = savePathResultForValue(
+      existingEnvironment,
+      'existing TI_SAVE_PATH environment',
+      configIssue === null ? null : `${configIssue} Using the existing environment value.`
+    );
+    if (fallback !== null) return fallback;
+  }
+
+  return unresolvedSavePathResult(
+    configIssueState,
+    `${configIssue || `No save path was found in ${MAIN_RUNTIME_CONFIG_PATH}.`} Continuing without a TI_SAVE_PATH override; pure-JS work may still run, while save-dependent checks may report their own configuration error.`
+  );
+}
+
+function buildDispatchEnvironment(savePath) {
+  const environment = { ...process.env };
+  if (savePath !== null && savePath.passedToChild === true && savePath.path !== null) {
+    environment.TI_SAVE_PATH = savePath.path;
+  }
+  return environment;
+}
+
+function savePathHumanLine(savePath, action = 'passes') {
+  if (savePath === null) return 'save path: NOT CHECKED — no environment handoff was prepared.';
+  if (savePath.passedToChild === true) {
+    const state = savePath.state.toUpperCase();
+    const reason = savePath.reason === null ? '' : ` — ${savePath.reason}`;
+    return `save path: ${state} — ${action} TI_SAVE_PATH=${savePath.path} to the lane (source: ${savePath.source}; config.json was not copied; no other config keys or secrets were propagated)${reason}`;
+  }
+  return `save path: ${savePath.state.toUpperCase()} — ${savePath.reason} No TI_SAVE_PATH override was ${action === 'passes' ? 'passed' : 'planned'}; continuing without refusing the dispatch.`;
+}
+
+function baseWorktreePreparation(plan) {
+  return {
+    state: 'not-started',
+    ok: null,
+    known: null,
+    installMethod: null,
+    lockfile: null,
+    install: null,
+    build: null,
+    nodeModulesPath: plan.path === null ? null : path.join(plan.path, WORKTREE_DEPENDENCIES_RELATIVE),
+    nodeModulesPresent: null,
+    nodeModulesBytes: null,
+    nodeModulesSize: null,
+    bundlePath: plan.path === null ? null : path.join(plan.path, WORKTREE_BUNDLE_RELATIVE),
+    bundleVerified: null,
+    savePath: plan.savePath === undefined ? null : plan.savePath,
+    totalElapsedMs: null,
+    reason: null,
+  };
+}
+
+function prepareWorktree(plan) {
+  const startedAt = Date.now();
+  const preparation = baseWorktreePreparation(plan);
+  const fail = (state, known, reason) => {
+    preparation.state = state;
+    preparation.ok = false;
+    preparation.known = known;
+    preparation.totalElapsedMs = Date.now() - startedAt;
+    preparation.reason = reason;
+    plan.preparation = preparation;
+    return { ok: false, known, reason, preparation };
+  };
+
+  if (plan.mode !== 'isolated' || plan.created !== true) {
+    return fail('not-applicable', false, 'Dependencies can only be prepared in a created isolated worktree.');
+  }
+
+  const installPlan = dependencyInstallPlan(plan.path);
+  if (!installPlan.known) return fail('preparation-unknown', false, installPlan.reason);
+  preparation.installMethod = installPlan.method;
+  preparation.lockfile = installPlan.lockfile;
+
+  const npm = resolveNpmInvocation();
+  const installArgs = [installPlan.method];
+  const installResult = runCommand(
+    npm.command,
+    npm.prefixArgs.concat(installArgs),
+    plan.path,
+    WORKTREE_PREPARATION_TIMEOUT_MS,
+    npm.shell
+  );
+  preparation.install = commandReport(installResult);
+  if (installResult.timedOut || installResult.status === null) {
+    const detail = installResult.timedOut
+      ? `npm ${installPlan.method} timed out after ${formatElapsed(installResult.elapsedMs)}`
+      : `npm ${installPlan.method} could not be verified (${installResult.errorMessage || 'no exit status'})`;
+    return fail('preparation-unknown', false, `${detail}. Dependency installation is UNKNOWN; the worktree is retained.`);
+  }
+  if (installResult.status !== 0) {
+    return fail(
+      'install-failed',
+      true,
+      `npm ${installPlan.method} exited ${installResult.status} after ${formatElapsed(installResult.elapsedMs)}. ` +
+        `${firstLines(installResult.stderr || installResult.stdout, 3) || 'No npm failure detail was emitted.'}`
+    );
+  }
+
+  const nodeModulesPath = preparation.nodeModulesPath;
+  const afterInstall = inspectPath(nodeModulesPath);
+  if (afterInstall.exists === null) {
+    return fail('preparation-unknown', false, `npm ${installPlan.method} exited 0, but ${nodeModulesPath} could not be inspected (${afterInstall.error}).`);
+  }
+  if (afterInstall.exists !== true || afterInstall.isDirectory !== true) {
+    preparation.nodeModulesPresent = false;
+    return fail('install-failed', true, `npm ${installPlan.method} exited 0, but ${nodeModulesPath} is not an installed dependency directory.`);
+  }
+  const size = measureDirectoryBytes(nodeModulesPath);
+  preparation.nodeModulesPresent = size.exists;
+  if (!size.known) return fail('preparation-unknown', false, size.reason);
+  preparation.nodeModulesBytes = size.bytes;
+  preparation.nodeModulesSize = formatByteSize(size.bytes);
+
+  const buildResult = runCommand(
+    npm.command,
+    npm.prefixArgs.concat(['run', 'build']),
+    plan.path,
+    WORKTREE_PREPARATION_TIMEOUT_MS,
+    npm.shell
+  );
+  preparation.build = commandReport(buildResult);
+  if (buildResult.timedOut || buildResult.status === null) {
+    const detail = buildResult.timedOut
+      ? `npm run build timed out after ${formatElapsed(buildResult.elapsedMs)}`
+      : `npm run build could not be verified (${buildResult.errorMessage || 'no exit status'})`;
+    return fail('preparation-unknown', false, `${detail}. Build success is UNKNOWN; the worktree is retained.`);
+  }
+  if (buildResult.status !== 0) {
+    return fail(
+      'build-failed',
+      true,
+      `npm run build exited ${buildResult.status} after ${formatElapsed(buildResult.elapsedMs)}. ` +
+        `${firstLines(buildResult.stderr || buildResult.stdout, 3) || 'No build failure detail was emitted.'}`
+    );
+  }
+
+  const bundleState = inspectPath(preparation.bundlePath);
+  if (bundleState.exists === null) {
+    return fail('preparation-unknown', false, `npm run build exited 0, but the required bundle ${preparation.bundlePath} could not be inspected (${bundleState.error}).`);
+  }
+  if (bundleState.exists !== true || bundleState.isFile !== true) {
+    preparation.bundleVerified = false;
+    return fail('build-failed', true, `npm run build exited 0, but the required bundle ${preparation.bundlePath} was not produced.`);
+  }
+  preparation.bundleVerified = true;
+
+  const afterBuild = inspectPath(nodeModulesPath);
+  if (afterBuild.exists === null) return fail('preparation-unknown', false, `The prepared dependency directory ${nodeModulesPath} could not be rechecked after the build (${afterBuild.error}).`);
+  if (afterBuild.exists !== true || afterBuild.isDirectory !== true) {
+    preparation.nodeModulesPresent = false;
+    return fail('build-failed', true, `The build completed, but ${nodeModulesPath} is no longer present; refusing to dispatch into an unprepared tree.`);
+  }
+
+  preparation.state = 'ready';
+  preparation.ok = true;
+  preparation.known = true;
+  preparation.totalElapsedMs = Date.now() - startedAt;
+  plan.preparation = preparation;
+  plan.prepared = true;
+  return { ok: true, known: true, reason: null, preparation };
+}
+
+function preparationCommandOutcome(report) {
+  if (report === null || report === undefined) return 'not run';
+  if (report.timedOut) return `TIMED OUT after ${formatElapsed(report.elapsedMs)}`;
+  if (report.status === null) return `UNKNOWN (${report.error || 'no exit status'}) after ${formatElapsed(report.elapsedMs)}`;
+  return `exit ${report.status} in ${formatElapsed(report.elapsedMs)}`;
+}
+
+function preparationHumanLines(preparation) {
+  const lines = [];
+  lines.push(savePathHumanLine(preparation.savePath));
+  if (preparation.install !== null) {
+    const lock = preparation.lockfile === null ? 'no lockfile — npm install' : `lockfile ${preparation.lockfile} — npm ci`;
+    lines.push(`dependencies: ${lock}; ${preparationCommandOutcome(preparation.install)}`);
+  } else {
+    lines.push('dependencies: not run — lockfile/install decision was not reached');
+  }
+  if (preparation.nodeModulesPresent === true) {
+    lines.push(`node_modules: ${preparation.nodeModulesSize || 'UNKNOWN size'}`);
+  } else if (preparation.nodeModulesPresent === false) {
+    lines.push('node_modules: NOT PRESENT');
+  }
+  if (preparation.build !== null) {
+    lines.push(`build: npm run build; ${preparationCommandOutcome(preparation.build)}`);
+  } else {
+    lines.push('build: not run');
+  }
+  if (preparation.bundleVerified === true) lines.push(`bundle: verified at ${preparation.bundlePath}`);
+  else if (preparation.bundleVerified === false) lines.push(`bundle: NOT VERIFIED at ${preparation.bundlePath}`);
+  lines.push(`preparation total: ${formatElapsed(preparation.totalElapsedMs)}`);
+  return lines;
+}
+
+function dependencyCleanupHumanLine(cleanup) {
+  if (cleanup === null || cleanup === undefined) return null;
+  if (cleanup.removed) {
+    return `DEPENDENCIES REMOVED: ${cleanup.target} — ${formatByteSize(cleanup.bytesFreed)} freed in ${formatElapsed(cleanup.elapsedMs)}`;
+  }
+  if (cleanup.alreadyAbsent) return `DEPENDENCIES ALREADY ABSENT: ${cleanup.target}`;
+  return `DEPENDENCY CLEANUP UNKNOWN: ${cleanup.target} — ${cleanup.reason}`;
+}
+
+function gitFailureDetail(result) {
+  if (result.errorMessage !== null && result.errorMessage !== undefined) return result.errorMessage;
+  const output = `${result.stderr || ''}\n${result.stdout || ''}`.trim();
+  if (output !== '') return firstLines(output, 3).replace(/\r?\n/g, ' | ');
+  return result.status === null ? 'no exit status' : `exit ${result.status}`;
+}
+
+function inspectPath(target) {
+  try {
+    const stat = fs.lstatSync(target);
+    return { exists: true, isDirectory: stat.isDirectory(), isFile: stat.isFile(), error: null };
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { exists: false, isDirectory: false, isFile: false, error: null };
+    return { exists: null, isDirectory: null, isFile: null, error: err && err.message ? err.message : String(err) };
+  }
+}
+
+function samePath(left, right) {
+  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
+}
+
+function isPathWithin(parent, candidate) {
+  const relative = path.relative(path.resolve(parent), path.resolve(candidate));
+  return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function listGitWorktrees(repoRoot) {
+  const result = runGit(['worktree', 'list', '--porcelain'], repoRoot);
+  if (result.status !== 0) {
+    return {
+      known: false,
+      paths: [],
+      reason: `git worktree list --porcelain could not be read (${gitFailureDetail(result)}).`,
+    };
+  }
+
+  const paths = [];
+  for (const line of String(result.stdout).split(/\r?\n/)) {
+    if (!line.startsWith('worktree ')) continue;
+    const raw = line.slice('worktree '.length).trim();
+    if (raw !== '') paths.push(path.resolve(raw));
+  }
+  if (paths.length === 0) {
+    return {
+      known: false,
+      paths: [],
+      reason: 'git worktree list --porcelain returned no parseable worktree paths.',
+    };
+  }
+  return { known: true, paths, reason: null };
+}
+
+function checkGitIgnored(repoRoot, target) {
+  const relative = path.relative(repoRoot, target);
+  const result = runGit(['check-ignore', '--no-index', '--quiet', '--', relative], repoRoot);
+  if (result.status === 0) {
+    return { known: true, ignored: true, reason: null };
+  }
+  if (result.status === 1) {
+    return { known: true, ignored: false, reason: `${target} is not git-ignored.` };
+  }
+  return {
+    known: false,
+    ignored: null,
+    reason: `git check-ignore could not verify ${target} (${gitFailureDetail(result)}).`,
+  };
+}
+
+function emptyWorktreePlan(requestedCwd, reason) {
+  return {
+    ok: false,
+    mode: 'isolated',
+    requestedCwd,
+    effectiveCwd: null,
+    repoRoot: null,
+    worktreeRoot: null,
+    path: null,
+    head: null,
+    ignored: null,
+    existingWorktreeCount: null,
+    existingNestedWorktreeCount: null,
+    created: false,
+    prepared: false,
+    preparation: null,
+    reason,
+  };
+}
+
+/** Read-only preflight for the worktree that an approved dispatch will use. */
+function planWorktree(laneKey, requestedCwd, noWorktree) {
+  const resolvedCwd = path.resolve(requestedCwd);
+  if (noWorktree) {
+    return {
+      ok: true,
+      mode: 'no-worktree',
+      requestedCwd: resolvedCwd,
+      effectiveCwd: resolvedCwd,
+      repoRoot: null,
+      worktreeRoot: null,
+      path: null,
+      head: null,
+      ignored: null,
+      existingWorktreeCount: null,
+      existingNestedWorktreeCount: null,
+      created: false,
+      prepared: false,
+      preparation: null,
+      reason: 'Explicit --no-worktree opt-out; the dispatch will run in the requested directory.',
+    };
+  }
+
+  const cwdState = inspectPath(resolvedCwd);
+  if (cwdState.exists !== true || cwdState.isDirectory !== true) {
+    return emptyWorktreePlan(
+      resolvedCwd,
+      cwdState.exists === null
+        ? `The requested cwd ${resolvedCwd} could not be inspected (${cwdState.error}).`
+        : `The requested cwd ${resolvedCwd} is not an existing directory.`
+    );
+  }
+
+  const rootResult = runGit(['rev-parse', '--show-toplevel'], resolvedCwd);
+  if (rootResult.status !== 0 || String(rootResult.stdout).trim() === '') {
+    return emptyWorktreePlan(
+      resolvedCwd,
+      `Could not resolve a Git repository from ${resolvedCwd} (${gitFailureDetail(rootResult)}). Refusing to dispatch without an isolated repository.`
+    );
+  }
+  const repoRoot = path.resolve(String(rootResult.stdout).trim());
+  const worktreeRoot = path.join(repoRoot, WORKTREE_ROOT_RELATIVE);
+  const rootState = inspectPath(worktreeRoot);
+  if (rootState.exists !== true || rootState.isDirectory !== true) {
+    return {
+      ...emptyWorktreePlan(
+        resolvedCwd,
+        rootState.exists === null
+          ? `The worktree root ${worktreeRoot} could not be inspected (${rootState.error}).`
+          : `The required worktree root ${worktreeRoot} is not an existing directory. Refusing to create a worktree elsewhere.`
+      ),
+      repoRoot,
+      worktreeRoot,
+    };
+  }
+
+  const headResult = runGit(['rev-parse', '--verify', 'HEAD'], repoRoot);
+  const head = String(headResult.stdout).trim();
+  if (headResult.status !== 0 || head === '') {
+    return {
+      ...emptyWorktreePlan(
+        resolvedCwd,
+        `Could not determine the repository HEAD from ${repoRoot} (${gitFailureDetail(headResult)}). Refusing to create an unpinned worktree.`
+      ),
+      repoRoot,
+      worktreeRoot,
+    };
+  }
+
+  // A staged change means the index is not a stable source state. Do not ask
+  // git worktree to proceed and do not silently treat that state as clean.
+  const indexResult = runGit(['diff', '--cached', '--quiet'], repoRoot);
+  if (indexResult.status !== 0) {
+    return {
+      ...emptyWorktreePlan(
+        resolvedCwd,
+        indexResult.status === 1
+          ? `The repository index at ${repoRoot} has staged changes. Refusing the dispatch rather than creating from a dirty index.`
+          : `The repository index at ${repoRoot} could not be checked (${gitFailureDetail(indexResult)}). Refusing to assume it is clean.`
+      ),
+      repoRoot,
+      worktreeRoot,
+      head,
+    };
+  }
+
+  const inventory = listGitWorktrees(repoRoot);
+  if (!inventory.known) {
+    return {
+      ...emptyWorktreePlan(resolvedCwd, `${inventory.reason} Refusing to create a worktree without a collision-safe inventory.`),
+      repoRoot,
+      worktreeRoot,
+      head,
+    };
+  }
+
+  const rootIgnored = checkGitIgnored(repoRoot, worktreeRoot);
+  if (rootIgnored.ignored !== true) {
+    return {
+      ...emptyWorktreePlan(
+        resolvedCwd,
+        `${rootIgnored.reason} Refusing to create a worktree where its files could appear in git status.`
+      ),
+      repoRoot,
+      worktreeRoot,
+      head,
+      existingWorktreeCount: inventory.paths.length,
+      existingNestedWorktreeCount: inventory.paths.filter((p) => isPathWithin(worktreeRoot, p)).length,
+    };
+  }
+
+  let name;
+  try {
+    name = `${laneKey}-${Date.now()}-${process.pid}-${randomUUID()}`;
+  } catch (err) {
+    return {
+      ...emptyWorktreePlan(resolvedCwd, `Could not allocate a unique worktree name (${err.message}). Refusing to reuse a name.`),
+      repoRoot,
+      worktreeRoot,
+      head,
+      ignored: true,
+      existingWorktreeCount: inventory.paths.length,
+      existingNestedWorktreeCount: inventory.paths.filter((p) => isPathWithin(worktreeRoot, p)).length,
+    };
+  }
+  const worktreePath = path.join(worktreeRoot, name);
+
+  const targetIgnored = checkGitIgnored(repoRoot, worktreePath);
+  if (targetIgnored.ignored !== true) {
+    return {
+      ...emptyWorktreePlan(
+        resolvedCwd,
+        `${targetIgnored.reason} Refusing to create the candidate worktree path.`
+      ),
+      repoRoot,
+      worktreeRoot,
+      path: worktreePath,
+      effectiveCwd: worktreePath,
+      head,
+      ignored: targetIgnored.ignored,
+      existingWorktreeCount: inventory.paths.length,
+      existingNestedWorktreeCount: inventory.paths.filter((p) => isPathWithin(worktreeRoot, p)).length,
+    };
+  }
+
+  const targetState = inspectPath(worktreePath);
+  if (targetState.exists !== false) {
+    return {
+      ...emptyWorktreePlan(
+        resolvedCwd,
+        targetState.exists === null
+          ? `The candidate worktree path ${worktreePath} could not be inspected (${targetState.error}). Refusing to assume it is unused.`
+          : `The candidate worktree path ${worktreePath} already exists. Refusing a name collision; no existing worktree will be reused.`
+      ),
+      repoRoot,
+      worktreeRoot,
+      path: worktreePath,
+      effectiveCwd: worktreePath,
+      head,
+      ignored: true,
+      existingWorktreeCount: inventory.paths.length,
+      existingNestedWorktreeCount: inventory.paths.filter((p) => isPathWithin(worktreeRoot, p)).length,
+    };
+  }
+  if (inventory.paths.some((p) => samePath(p, worktreePath))) {
+    return {
+      ...emptyWorktreePlan(
+        resolvedCwd,
+        `git worktree list already contains ${worktreePath}. Refusing a name collision; no existing worktree will be reused.`
+      ),
+      repoRoot,
+      worktreeRoot,
+      path: worktreePath,
+      effectiveCwd: worktreePath,
+      head,
+      ignored: true,
+      existingWorktreeCount: inventory.paths.length,
+      existingNestedWorktreeCount: inventory.paths.filter((p) => isPathWithin(worktreeRoot, p)).length,
+    };
+  }
+
+  return {
+    ok: true,
+    mode: 'isolated',
+    requestedCwd: resolvedCwd,
+    effectiveCwd: worktreePath,
+    repoRoot,
+    worktreeRoot,
+    path: worktreePath,
+    head,
+    ignored: true,
+    existingWorktreeCount: inventory.paths.length,
+    existingNestedWorktreeCount: inventory.paths.filter((p) => isPathWithin(worktreeRoot, p)).length,
+    created: false,
+    prepared: false,
+    preparation: null,
+    reason: null,
+  };
+}
+
+function readWorktreeStatus(worktreePath, repoRoot) {
+  const result = runGit(['-C', worktreePath, 'status', '--short'], repoRoot);
+  if (result.status !== 0) {
+    return {
+      known: false,
+      changed: null,
+      short: null,
+      reason: `git -C ${worktreePath} status --short could not be read (${gitFailureDetail(result)}).`,
+    };
+  }
+  const short = String(result.stdout).replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimEnd();
+  return { known: true, changed: short !== '', short, reason: null };
+}
+
+function statusSummary(short) {
+  if (typeof short !== 'string' || short === '') return '(clean)';
+  return short.split('\n').filter((line) => line !== '').join(' | ');
+}
+
+function createWorktree(plan) {
+  const result = runGit(['worktree', 'add', '--detach', plan.path, plan.head], plan.repoRoot);
+  if (result.status !== 0) {
+    const pathState = inspectPath(plan.path);
+    return {
+      ok: false,
+      reason: `git worktree add failed (${gitFailureDetail(result)}). Refusing the dispatch and never falling back to ${plan.requestedCwd}.`,
+      pathState,
+    };
+  }
+
+  plan.created = true;
+
+  const headResult = runGit(['-C', plan.path, 'rev-parse', '--verify', 'HEAD'], plan.repoRoot);
+  const createdHead = String(headResult.stdout).trim();
+  if (headResult.status !== 0 || createdHead === '') {
+    return {
+      ok: false,
+      reason: `The new worktree's HEAD could not be verified (${gitFailureDetail(headResult)}). It will be kept for inspection; no main-tree fallback is allowed.`,
+    };
+  }
+  if (createdHead.toLowerCase() !== plan.head.toLowerCase()) {
+    return {
+      ok: false,
+      reason: `The new worktree resolved HEAD ${createdHead}, not the planned current HEAD ${plan.head}. It will be kept; no dispatch ran.`,
+    };
+  }
+
+  const baseline = readWorktreeStatus(plan.path, plan.repoRoot);
+  if (!baseline.known) {
+    return { ok: false, reason: `The new worktree could not be proven clean before dispatch (${baseline.reason}). It will be kept; no dispatch ran.` };
+  }
+  if (baseline.changed) {
+    return {
+      ok: false,
+      reason: `The new worktree was not clean immediately after creation (${statusSummary(baseline.short)}). It will be kept; no dispatch ran.`,
+    };
+  }
+  return { ok: true, reason: null };
+}
+
+function cleanupNodeModules(plan) {
+  const startedAt = Date.now();
+  const target = path.join(plan.path, WORKTREE_DEPENDENCIES_RELATIVE);
+  const base = {
+    target,
+    attempted: false,
+    known: false,
+    removed: false,
+    alreadyAbsent: false,
+    bytesFreed: null,
+    elapsedMs: null,
+    reason: null,
+  };
+  const fail = (reason) => ({ ...base, elapsedMs: Date.now() - startedAt, reason });
+
+  if (!isPathWithin(plan.path, target) || path.basename(target) !== WORKTREE_DEPENDENCIES_RELATIVE) {
+    return fail(`Refusing dependency cleanup because the target ${target} is not a child of the created worktree.`);
+  }
+
+  const state = inspectPath(target);
+  if (state.exists === null) return fail(`The dependency directory ${target} could not be inspected (${state.error}).`);
+  if (state.exists === false) {
+    return {
+      ...base,
+      attempted: true,
+      known: true,
+      removed: false,
+      alreadyAbsent: true,
+      bytesFreed: 0,
+      elapsedMs: Date.now() - startedAt,
+      reason: 'node_modules was already absent.',
+    };
+  }
+  if (state.isDirectory !== true) return fail(`${target} exists but is not a directory; it was not removed.`);
+
+  // The dependency tree is expected to be disposable, but never delete it if
+  // this repository actually tracks files there. That would turn cleanup into
+  // data loss for a repository whose layout differs from the usual npm one.
+  const tracked = runGit(['-C', plan.path, 'ls-files', '--', WORKTREE_DEPENDENCIES_RELATIVE], plan.repoRoot);
+  if (tracked.status !== 0) return fail(`Could not determine whether ${target} contains tracked files (${gitFailureDetail(tracked)}).`);
+  if (String(tracked.stdout).trim() !== '') return fail(`${target} contains tracked files; dependency cleanup was refused to preserve uncommitted work.`);
+
+  const size = measureDirectoryBytes(target);
+  if (!size.known) return fail(size.reason);
+  base.bytesFreed = size.bytes;
+  base.attempted = true;
+  try {
+    fs.rmSync(target, { recursive: true, force: true });
+  } catch (err) {
+    return fail(`Removing ${target} failed (${err.message}); the dependency tree was retained.`);
+  }
+
+  const after = inspectPath(target);
+  if (after.exists === null) return fail(`The dependency cleanup ran, but ${target} could not be rechecked (${after.error}).`);
+  if (after.exists === true) return fail(`The dependency cleanup ran, but ${target} still exists; removal is UNKNOWN.`);
+  return {
+    ...base,
+    known: true,
+    removed: true,
+    elapsedMs: Date.now() - startedAt,
+    reason: `Removed node_modules after measuring ${formatByteSize(size.bytes)}.`,
+  };
+}
+
+function finishWorktree(plan) {
+  if (plan.mode !== 'isolated') {
+    return {
+      state: 'not-applicable',
+      known: true,
+      removed: false,
+      dependenciesRemoved: false,
+      dependencyCleanup: null,
+      statusShort: null,
+      summary: 'No worktree was requested (--no-worktree).',
+      reason: null,
+    };
+  }
+  if (plan.created !== true) {
+    return {
+      state: 'not-created',
+      known: true,
+      removed: false,
+      dependenciesRemoved: false,
+      dependencyCleanup: null,
+      statusShort: null,
+      summary: 'No worktree was created.',
+      reason: plan.reason || 'Worktree creation did not complete.',
+    };
+  }
+  if (plan.prepared !== true) {
+    return {
+      state: 'not-prepared-kept',
+      known: false,
+      removed: false,
+      dependenciesRemoved: false,
+      dependencyCleanup: null,
+      statusShort: null,
+      summary: 'Preparation did not complete; worktree retained.',
+      reason: 'The worktree was not cleaned because dependency/build preparation did not complete.',
+    };
+  }
+
+  const status = readWorktreeStatus(plan.path, plan.repoRoot);
+  if (!status.known) {
+    return {
+      state: 'unknown-kept',
+      known: false,
+      removed: false,
+      dependenciesRemoved: false,
+      dependencyCleanup: null,
+      statusShort: null,
+      summary: 'UNKNOWN — worktree retained for safety.',
+      reason: status.reason,
+    };
+  }
+  if (status.changed) {
+    const dependencyCleanup = cleanupNodeModules(plan);
+    return {
+      state: dependencyCleanup.known ? 'kept-changes-dependencies-removed' : 'kept-changes-dependency-cleanup-unknown',
+      known: dependencyCleanup.known,
+      removed: false,
+      dependenciesRemoved: dependencyCleanup.removed,
+      dependencyCleanup,
+      statusShort: status.short,
+      summary: statusSummary(status.short),
+      reason: dependencyCleanup.known
+        ? `Changes detected by git -C ${plan.path} status --short; node_modules was removed and the caller must harvest this worktree.`
+        : `Changes detected by git -C ${plan.path} status --short, but dependency cleanup is UNKNOWN; the worktree was retained. ${dependencyCleanup.reason}`,
+    };
+  }
+
+  // There is no user work to preserve, so the whole unchanged worktree can be
+  // removed. Remove node_modules first so the output records the explicit
+  // space-reclamation decision and a failed/unknown cleanup never gets hidden
+  // behind a successful-looking worktree removal.
+  const dependencyCleanup = cleanupNodeModules(plan);
+  if (!dependencyCleanup.known) {
+    return {
+      state: 'cleanup-unknown-kept',
+      known: false,
+      removed: false,
+      dependenciesRemoved: dependencyCleanup.removed,
+      dependencyCleanup,
+      statusShort: status.short,
+      summary: 'CLEAN STATUS, BUT dependency cleanup is UNKNOWN — worktree retained.',
+      reason: dependencyCleanup.reason,
+    };
+  }
+  const remove = runGit(['worktree', 'remove', '--force', plan.path], plan.repoRoot);
+  if (remove.status !== 0) {
+    return {
+      state: 'cleanup-unknown-kept',
+      known: false,
+      removed: false,
+      dependenciesRemoved: dependencyCleanup.removed,
+      dependencyCleanup,
+      statusShort: '',
+      summary: 'CLEAN STATUS, BUT worktree removal failed — worktree retained.',
+      reason: `git worktree remove failed (${gitFailureDetail(remove)}). The worktree was not assumed removed.`,
+    };
+  }
+
+  const pathAfterRemove = inspectPath(plan.path);
+  if (pathAfterRemove.exists === null) {
+    return {
+      state: 'cleanup-unknown-kept',
+      known: false,
+      removed: false,
+      dependenciesRemoved: dependencyCleanup.removed,
+      dependencyCleanup,
+      statusShort: '',
+      summary: 'CLEAN STATUS, BUT worktree removal cannot be verified.',
+      reason: `git worktree remove exited 0, but ${plan.path} could not be inspected (${pathAfterRemove.error}).`,
+    };
+  }
+  if (pathAfterRemove.exists === true) {
+    return {
+      state: 'cleanup-unknown-kept',
+      known: false,
+      removed: false,
+      dependenciesRemoved: dependencyCleanup.removed,
+      dependencyCleanup,
+      statusShort: '',
+      summary: 'CLEAN STATUS, BUT worktree path still exists — retained.',
+      reason: `git worktree remove exited 0, but ${plan.path} still exists.`,
+    };
+  }
+  const inventory = listGitWorktrees(plan.repoRoot);
+  if (!inventory.known) {
+    return {
+      state: 'cleanup-unknown-kept',
+      known: false,
+      removed: false,
+      dependenciesRemoved: dependencyCleanup.removed,
+      dependencyCleanup,
+      statusShort: '',
+      summary: 'CLEAN STATUS, BUT worktree registration cannot be verified.',
+      reason: `git worktree remove exited 0 and the path is gone, but the remaining worktree inventory is UNKNOWN (${inventory.reason}).`,
+    };
+  }
+  if (inventory.paths.some((p) => samePath(p, plan.path))) {
+    return {
+      state: 'cleanup-unknown-kept',
+      known: false,
+      removed: false,
+      dependenciesRemoved: dependencyCleanup.removed,
+      dependencyCleanup,
+      statusShort: '',
+      summary: 'CLEAN STATUS, BUT worktree remains registered — cleanup UNKNOWN.',
+      reason: `git worktree remove exited 0 and the path is gone, but git worktree list still reports ${plan.path}.`,
+    };
+  }
+  return {
+    state: 'removed-unchanged',
+    known: true,
+    removed: true,
+    dependenciesRemoved: dependencyCleanup.removed,
+    dependencyCleanup,
+    statusShort: '',
+    summary: '(clean)',
+    reason: 'The worktree was unchanged, node_modules was removed, and the worktree removal was verified.',
+  };
+}
+
+function worktreeInfo(plan, lifecycle) {
+  return {
+    mode: plan.mode,
+    path: plan.path,
+    requestedCwd: plan.requestedCwd,
+    dispatchCwd: plan.effectiveCwd,
+    repositoryRoot: plan.repoRoot,
+    worktreeRoot: plan.worktreeRoot,
+    sourceHead: plan.head,
+    gitIgnoreVerified: plan.ignored,
+    preExistingWorktreeCount: plan.existingWorktreeCount,
+    preExistingNestedWorktreeCount: plan.existingNestedWorktreeCount,
+    created: plan.created === true,
+    prepared: plan.prepared === true,
+    preparation: plan.preparation,
+    savePath: plan.savePath === undefined ? null : plan.savePath,
+    lifecycle,
+    reason: plan.reason || null,
+  };
 }
 
 /**
@@ -2340,12 +3520,13 @@ function renderCommand(transport, args, promptText, promptPath) {
     .reduce((acc, a) => `${acc} ${a}`, transport.command);
 }
 
-function dispatch(transport, args, cwd, timeoutMs) {
+function dispatch(transport, args, cwd, timeoutMs, environment = process.env) {
   return new Promise((resolve) => {
     let child;
     try {
       child = spawn(transport.command, transport.prefixArgs.concat(args), {
         cwd,
+        env: environment,
         windowsHide: true,
         shell: false, // never a shell: the prompt must not be re-parsed
         stdio: ['ignore', 'pipe', 'pipe'], // portable form of `< /dev/null`
@@ -2868,6 +4049,7 @@ async function main() {
   const report = buildLaneReport(opts.lane, config, opts.cwd);
   const lane = LANES[opts.lane];
   const resume = resumeIntent(opts);
+  const resumePolicy = resumeWorktreePolicy(opts, resume);
 
   const payload = {
     ok: false,
@@ -2894,6 +4076,22 @@ async function main() {
     fastSlug: report.fastSlug,
     promptFile: prompt.resolvedPath,
     promptChars: prompt.text.length,
+    requestedCwd: path.resolve(opts.cwd),
+    noWorktree: opts.noWorktree,
+    worktreePath: null,
+    savePath: null,
+    worktree: null,
+    worktreePreparation: null,
+    worktreeLifecycle: null,
+    resume: {
+      kind: resume.kind,
+      id: resume.id,
+      label: resume.label,
+      worktreePolicy: resumePolicy,
+      verified: null,
+      verifiedReason: null,
+      detail: null,
+    },
     configPath: config.path,
     configFound: config.found,
     warnings: config.warnings.slice(),
@@ -2919,6 +4117,31 @@ async function main() {
     complain(`\nTRUST FLAG IGNORED — ${report.trustFlagNote}\n`);
   }
 
+  // A resumed provider session belongs to the directory in which it started.
+  // Creating a fresh worktree here would be a silent cwd change; reusing one
+  // would touch another process's uncommitted work. Make the safe choice
+  // explicit and leave the --no-worktree escape for a caller that has located
+  // the old worktree and can name it with --cwd.
+  if (resume.kind !== 'none' && !opts.noWorktree) {
+    const refusedPlan = emptyWorktreePlan(path.resolve(opts.cwd), resumePolicy);
+    payload.action = 'resume-worktree-refused';
+    payload.reason = `${resumePolicy} Nothing was executed.`;
+    payload.resume.verifiedReason = 'Session verification was skipped because isolated resume is refused.';
+    payload.worktree = worktreeInfo(refusedPlan, {
+      state: 'not-created',
+      known: true,
+      removed: false,
+      statusShort: null,
+      summary: 'No worktree was created.',
+      reason: payload.reason,
+    });
+    if (!opts.json) {
+      process.stderr.write(`RESUME REFUSED — ${payload.reason}\n`);
+      process.stderr.write('  Use --no-worktree --cwd <the prior worktree> after inspecting git worktree list.\n');
+    }
+    emit(payload, opts, EXIT.USAGE_ERROR);
+  }
+
   // GATE 1 — availability. Only a proven-ready lane may be dispatched.
   // available === null means the probe could not decide; unknown is not usable.
   if (report.available !== true) {
@@ -2937,6 +4160,7 @@ async function main() {
     kind: resume.kind,
     id: resume.id,
     label: resume.label,
+    worktreePolicy: resumePolicy,
     verified: sessionCheck.verified,
     verifiedReason: sessionCheck.reason === undefined ? null : sessionCheck.reason,
     detail: sessionCheck.detail === undefined ? null : sessionCheck.detail,
@@ -2955,6 +4179,50 @@ async function main() {
     payload.warnings.push(`Session NOT verified: ${sessionCheck.reason}`);
     complain(`\nSESSION NOT VERIFIED — ${sessionCheck.reason}\n`);
   }
+
+  // Plan the destination after all non-spending gates. Planning is read-only;
+  // the actual `git worktree add` waits until after the dry-run and approval
+  // gates below. The effective cwd is the worktree root, and is passed to both
+  // spawn() and any lane builder (notably omp's explicit --cwd flag).
+  const worktreePlan = planWorktree(opts.lane, opts.cwd, opts.noWorktree);
+  const savePath = worktreePlan.mode === 'isolated' ? resolveDispatchSavePath() : null;
+  worktreePlan.savePath = savePath;
+  payload.savePath = savePath;
+  if (savePath !== null && savePath.reason !== null) payload.warnings.push(`Save-path handoff: ${savePath.reason}`);
+  payload.worktreePath = worktreePlan.path;
+  payload.worktree = worktreeInfo(
+    worktreePlan,
+    worktreePlan.ok
+      ? {
+          state: 'planned',
+          known: true,
+          removed: false,
+          statusShort: null,
+          summary: worktreePlan.mode === 'isolated'
+            ? 'Fresh worktree planned; no worktree has been created yet.'
+            : 'No worktree will be created (--no-worktree).',
+          reason: null,
+        }
+      : {
+          state: 'refused-before-creation',
+          known: false,
+          removed: false,
+          statusShort: null,
+          summary: 'Worktree creation was refused; no fallback cwd is allowed.',
+          reason: worktreePlan.reason,
+        }
+  );
+
+  if (!worktreePlan.ok) {
+    payload.action = 'worktree-refused';
+    payload.reason = `Refusing to dispatch: ${worktreePlan.reason}`;
+    if (!opts.json) {
+      process.stderr.write(`WORKTREE REFUSED — ${payload.reason}\n`);
+      process.stderr.write('  No fallback to the main/requested working tree was attempted.\n');
+    }
+    emit(payload, opts, EXIT.DISPATCH_FAILED);
+  }
+  const dispatchCwd = worktreePlan.effectiveCwd;
 
   // codex writes its final message to a file, which is far more reliable than
   // scraping stdout. Only lanes that support it get one.
@@ -2976,7 +4244,7 @@ async function main() {
       resume,
       outputFile,
       trustFlag: report.trustFlag,
-      cwd: opts.cwd,
+      cwd: dispatchCwd,
       timeoutMs: opts.timeoutMs,
     });
   } catch (err) {
@@ -2998,7 +4266,14 @@ async function main() {
     transport: report.transport.kind,
     shell: false,
     stdin: 'closed (portable equivalent of < /dev/null)',
-    cwd: opts.cwd,
+    cwd: dispatchCwd,
+    environmentOverrides: savePath === null
+      ? null
+      : {
+          TI_SAVE_PATH: savePath.passedToChild === true ? savePath.path : null,
+          configCopied: false,
+          note: 'Only TI_SAVE_PATH is derived from the main config; the local config.json and all other config keys remain out of the worktree.',
+        },
   };
   payload.commandDisplay = renderCommand(report.transport, args, prompt.text, prompt.resolvedPath);
 
@@ -3007,9 +4282,29 @@ async function main() {
     payload.ok = true;
     payload.action = 'dry-run';
     payload.wouldExecute = report.mode === 'auto' || opts.approve;
+    payload.worktree.lifecycle = {
+      state: 'not-created-dry-run',
+      known: true,
+      removed: false,
+      statusShort: null,
+      summary: worktreePlan.mode === 'isolated'
+        ? 'No worktree was created; dry-run never creates one.'
+        : 'No worktree was created (--no-worktree).',
+      reason: null,
+    };
+    payload.worktreeLifecycle = payload.worktree.lifecycle;
     say(`DRY RUN — nothing was executed.`);
     say(`  lane      ${opts.lane} (${report.label})`);
     say(`  mode      ${report.mode}  [${report.modeSource}]`);
+    if (worktreePlan.mode === 'isolated') {
+      say(`  WORKTREE  NOT CREATED (dry-run) — would create fresh from HEAD ${worktreePlan.head}: ${worktreePlan.path}`);
+      say(`  git-ignore VERIFIED — ${worktreePlan.worktreeRoot}`);
+      say(`  pre-existing worktrees left untouched: ${worktreePlan.existingWorktreeCount} registered (${worktreePlan.existingNestedWorktreeCount} under ${worktreePlan.worktreeRoot})`);
+    } else {
+      say(`  WORKTREE  DISABLED (--no-worktree) — no worktree will be created; cwd ${worktreePlan.effectiveCwd}`);
+    }
+    say(`  dispatch cwd / --cwd: ${worktreePlan.effectiveCwd}`);
+    say(`  ${savePathHumanLine(savePath, 'would pass')} (dry-run: no environment was changed)`);
     // The model is shown on its own line, not left to be spotted inside the
     // argv dump. This lane's defect was an unnamed model, and a preview that
     // only implies which model runs is how that went unnoticed for so long.
@@ -3042,6 +4337,15 @@ async function main() {
     complain(`  cost: ${report.costClass} — ${report.costNote}`);
     if (report.risk !== null) complain(`  RISK: ${report.risk}`);
     if (report.trustFlagDisplay !== null) complain(`  TRUST: ${report.trustFlagDisplay}`);
+    if (worktreePlan.mode === 'isolated') {
+      complain(`  WORKTREE: would create fresh from HEAD ${worktreePlan.head} at ${worktreePlan.path}; nothing created pending approval.`);
+      complain(`  git-ignore: VERIFIED — ${worktreePlan.worktreeRoot}`);
+      complain(`  pre-existing worktrees left untouched: ${worktreePlan.existingWorktreeCount} registered (${worktreePlan.existingNestedWorktreeCount} under ${worktreePlan.worktreeRoot})`);
+    } else {
+      complain(`  WORKTREE: DISABLED (--no-worktree); no worktree will be created; cwd ${worktreePlan.effectiveCwd}`);
+    }
+    complain(`  dispatch cwd / --cwd: ${worktreePlan.effectiveCwd}`);
+    complain(`  ${savePathHumanLine(savePath, 'would pass')}`);
     complain(`  prompt: ${describePromptDelivery(payload.command, prompt)}`);
     complain(`  command that would run:`);
     complain(`    ${payload.commandDisplay}`);
@@ -3049,11 +4353,126 @@ async function main() {
     emit(payload, opts, EXIT.APPROVAL_REQUIRED);
   }
 
+  // GATE 4 — create and prepare the isolated checkout only now. Ask and
+  // dry-run paths above never reach this block. A failed add, post-add
+  // verification, dependency install, or build is a hard refusal; the
+  // requested cwd is never used as a fallback.
+  if (worktreePlan.mode === 'isolated') {
+    const creation = createWorktree(worktreePlan);
+    if (!creation.ok) {
+      worktreePlan.reason = creation.reason;
+      const lifecycle = {
+        state: worktreePlan.created ? 'creation-failed-kept' : 'creation-failed',
+        known: false,
+        removed: false,
+        statusShort: null,
+        summary: worktreePlan.created
+          ? 'Worktree creation/verification failed; the path was retained for inspection.'
+          : 'Worktree creation did not complete; no path was assumed safe to remove.',
+        reason: creation.reason,
+      };
+      payload.action = 'worktree-creation-failed';
+      payload.reason = `Refusing to dispatch: ${creation.reason}`;
+      payload.worktree = worktreeInfo(worktreePlan, lifecycle);
+      payload.worktreeLifecycle = lifecycle;
+      if (!opts.json) {
+        process.stderr.write(`WORKTREE CREATION FAILED — ${payload.reason}\n`);
+        process.stderr.write(`  candidate path: ${worktreePlan.path}\n`);
+        process.stderr.write('  No fallback to the main/requested working tree was attempted.\n');
+        if (worktreePlan.created) process.stderr.write('  The partially-created worktree was kept; inspect it before any cleanup.\n');
+      }
+      emit(payload, opts, EXIT.DISPATCH_FAILED);
+    }
+    payload.worktree = worktreeInfo(worktreePlan, {
+      state: 'created',
+      known: true,
+      removed: false,
+      statusShort: '',
+      summary: 'Fresh worktree created and verified at the planned HEAD.',
+      reason: null,
+    });
+    say(`WORKTREE CREATED: ${worktreePlan.path}`);
+    say(`  source HEAD: ${worktreePlan.head}`);
+    say(`  git-ignore VERIFIED: ${worktreePlan.worktreeRoot}`);
+    say(`  dispatch cwd / --cwd: ${worktreePlan.effectiveCwd}`);
+    say(`  pre-existing worktrees left untouched: ${worktreePlan.existingWorktreeCount} registered (${worktreePlan.existingNestedWorktreeCount} under ${worktreePlan.worktreeRoot})`);
+    say(`PREPARING WORKTREE: installing dependencies and building the suite entrypoint...`);
+    const preparationResult = prepareWorktree(worktreePlan);
+    payload.worktreePreparation = preparationResult.preparation;
+    if (!preparationResult.ok) {
+      worktreePlan.reason = preparationResult.reason;
+      const lifecycle = {
+        state: preparationResult.known ? 'preparation-failed-kept' : 'preparation-unknown-kept',
+        known: true,
+        removed: false,
+        dependenciesRemoved: false,
+        dependencyCleanup: null,
+        statusShort: null,
+        summary: 'Dependency/build preparation did not complete; worktree retained for diagnosis.',
+        reason: preparationResult.reason,
+      };
+      payload.action = 'worktree-preparation-failed';
+      payload.reason = `Refusing to dispatch: ${preparationResult.reason}`;
+      payload.worktree = worktreeInfo(worktreePlan, lifecycle);
+      payload.worktreeLifecycle = lifecycle;
+      if (!opts.json) {
+        process.stderr.write(`WORKTREE PREPARATION FAILED — ${payload.reason}\n`);
+        for (const line of preparationHumanLines(preparationResult.preparation)) process.stderr.write(`  ${line}\n`);
+        process.stderr.write(`  WORKTREE KEPT for diagnosis: ${worktreePlan.path}\n`);
+        process.stderr.write('  Nothing was dispatched and no cleanup was attempted.\n');
+      }
+      emit(payload, opts, EXIT.DISPATCH_FAILED);
+    }
+    payload.worktree = worktreeInfo(worktreePlan, {
+      state: 'prepared',
+      known: true,
+      removed: false,
+      dependenciesRemoved: false,
+      dependencyCleanup: null,
+      statusShort: '',
+      summary: 'Dependencies installed and the required build artifact was verified.',
+      reason: null,
+    });
+    payload.worktreeLifecycle = payload.worktree.lifecycle;
+    say(`WORKTREE PREPARED: ${worktreePlan.path}`);
+    for (const line of preparationHumanLines(preparationResult.preparation)) say(`  ${line}`);
+  } else {
+    worktreePlan.preparation = {
+      state: 'not-applicable',
+      ok: null,
+      known: true,
+      installMethod: null,
+      lockfile: null,
+      install: null,
+      build: null,
+      nodeModulesPath: null,
+      nodeModulesPresent: null,
+      nodeModulesBytes: null,
+      nodeModulesSize: null,
+      bundlePath: null,
+      bundleVerified: null,
+      savePath,
+      totalElapsedMs: 0,
+      reason: 'Explicit --no-worktree opt-out; dependency/build preparation is skipped.',
+    };
+    payload.worktreePreparation = worktreePlan.preparation;
+    payload.worktree = worktreeInfo(worktreePlan, payload.worktree.lifecycle);
+    payload.worktreeLifecycle = payload.worktree.lifecycle;
+    say(`WORKTREE DISABLED (--no-worktree): no worktree created; dispatch cwd ${worktreePlan.effectiveCwd}`);
+    say('  dependency/build preparation skipped');
+  }
+
   // Execute.
   payload.approvalUsed = opts.approve && report.mode === 'ask';
   say(`Dispatching to ${opts.lane} (${report.label}) — mode ${report.mode}${payload.approvalUsed ? ', approved for this request' : ''}...`);
   const started = Date.now();
-  const result = await dispatch(report.transport, args, opts.cwd, opts.timeoutMs);
+  const result = await dispatch(
+    report.transport,
+    args,
+    dispatchCwd,
+    opts.timeoutMs,
+    savePath === null ? process.env : buildDispatchEnvironment(savePath)
+  );
   const elapsedMs = Date.now() - started;
 
   payload.action = 'dispatched';
@@ -3064,10 +4483,7 @@ async function main() {
   payload.stderr = result.stderr;
 
   if (!result.spawned) {
-    payload.ok = false;
     payload.reason = `Lane "${opts.lane}" failed to start: ${result.error}`;
-    complain(`DISPATCH FAILED: ${payload.reason}`);
-    emit(payload, opts, EXIT.DISPATCH_FAILED);
   }
 
   // codex's --output-last-message file: a far more reliable final answer than
@@ -3090,7 +4506,24 @@ async function main() {
   payload.usageReason = usage.reason;
   payload.usageDocumentsParsed = usage.documentsParsed;
 
-  payload.ok = result.status === 0 && !result.timedOut;
+  const lifecycle = finishWorktree(worktreePlan);
+  payload.worktree = worktreeInfo(worktreePlan, lifecycle);
+  payload.worktreeLifecycle = lifecycle;
+
+  if (result.spawned && result.timedOut) {
+    payload.reason = `Lane "${opts.lane}" timed out after ${elapsedMs} ms.`;
+  } else if (result.spawned && result.status !== 0) {
+    payload.reason = `Lane "${opts.lane}" exited with status ${result.status}.`;
+  }
+  if (lifecycle.known !== true) {
+    const lifecycleReason = `Worktree lifecycle is UNKNOWN and the worktree was retained: ${lifecycle.reason}`;
+    payload.reason = payload.reason === null ? lifecycleReason : `${payload.reason} ${lifecycleReason}`;
+  }
+
+  // A successful lane with changes is still a successful dispatch: the
+  // changed worktree is the caller's harvestable result. An unknown lifecycle,
+  // however, is never treated as a clean removal.
+  payload.ok = result.spawned && result.status === 0 && !result.timedOut && lifecycle.known === true;
 
   if (!opts.json) {
     say(`\n--- ${opts.lane} stdout ---`);
@@ -3112,6 +4545,30 @@ async function main() {
       }
       if (u.costUsd !== null) say(`  cost:   ${u.costUsd}`);
       say(`  usage read from: ${u.fieldsFound.join(', ')}`);
+    }
+
+    if (worktreePlan.mode === 'isolated') {
+      if (lifecycle.state === 'removed-unchanged') {
+        const cleanupLine = dependencyCleanupHumanLine(lifecycle.dependencyCleanup);
+        if (cleanupLine !== null) say(cleanupLine);
+        say(`WORKTREE REMOVED — unchanged: ${worktreePlan.path}`);
+      } else if (lifecycle.state.startsWith('kept-changes')) {
+        say(`WORKTREE KEPT — CHANGES DETECTED: ${worktreePlan.path}`);
+        say(`  git -C ${worktreePlan.path} status --short: ${lifecycle.summary}`);
+        const cleanupLine = dependencyCleanupHumanLine(lifecycle.dependencyCleanup);
+        if (cleanupLine !== null) {
+          if (lifecycle.dependencyCleanup.known) say(`  ${cleanupLine}`);
+          else complain(`  ${cleanupLine}`);
+        }
+        say('  Harvest this worktree manually; nothing was merged, rebased, or copied back.');
+      } else {
+        complain(`WORKTREE LIFECYCLE UNKNOWN — retained for safety: ${worktreePlan.path}`);
+        complain(`  ${lifecycle.reason}`);
+        const cleanupLine = dependencyCleanupHumanLine(lifecycle.dependencyCleanup);
+        if (cleanupLine !== null) complain(`  ${cleanupLine}`);
+      }
+    } else {
+      say(`WORKTREE DISABLED (--no-worktree) — no lifecycle cleanup; cwd was ${worktreePlan.effectiveCwd}`);
     }
   }
 
