@@ -74,18 +74,26 @@ test('the vanilla world-map component is deleted and the shell no longer loads i
   );
 
   const shell = fs.readFileSync(path.join(repoRoot, 'public', 'v2', 'index.html'), 'utf8');
+  const commandPanel = fs.readFileSync(
+    path.join(repoRoot, 'src', 'v2', 'panels', 'CommandPanel.jsx'),
+    'utf8',
+  );
   assert.equal(
     shell.includes('components/world-map.js'),
     false,
     'the shell must not carry a <script> tag for the deleted component',
   );
   assert.ok(
-    shell.includes('<div class="init-map-container">'),
-    'the mount the controller resolves must still exist in the shell',
+    shell.includes('id="commandPlanner"'),
+    'the COMMAND shell mount must exist in index.html',
   );
   assert.ok(
-    shell.includes('world-map-fallback'),
-    'the controller-owned absent-data fallback must still be in the shell',
+    commandPanel.includes('className="init-map-container"'),
+    'the mount the controller resolves must still exist in the COMMAND React shell',
+  );
+  assert.ok(
+    commandPanel.includes('world-map-fallback'),
+    'the controller-owned absent-data fallback must still be in the COMMAND shell',
   );
 });
 

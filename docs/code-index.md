@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**235 JS modules** and **26 stylesheet parts** (261 indexed files).
+**239 JS modules** and **26 stylesheet parts** (265 indexed files).
 
 ## `public/`
 
@@ -29,6 +29,8 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
 | `scripts/backfill_strategic_history.js` | C | Node (CommonJS) | 196 | backfill the strategic-history table from full snapshots already | `main` | — |
 | `scripts/build_static_snapshot.js` | C | Node (CommonJS) | 253 | build the static snapshot bundle — flatten the worker entry point, | — | — |
+| `scripts/capture_command_screenshots.js` | C | Node (CommonJS) | 53 | full-page COMMAND view screenshots for grid2 migration review. | — | — |
+| `scripts/capture_command_view_proof.js` | C | Node (CommonJS) | 148 | capture COMMAND view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, runCapture` | — |
 | `scripts/capture_threat_view_proof.js` | C | Node (CommonJS) | 199 | capture THREAT view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, captureThreatView, runCapture` | — |
 | `scripts/derive_intel_fixtures.js` | C | Node (CommonJS) | 91 | derive committed full filtered-snapshot fixtures for the unit test | — | — |
 | `scripts/derive_snapshot_fixtures.js` | C | Node (CommonJS) | 165 | derive the committed filtered-snapshot fixtures the markdown export | — | — |
@@ -45,6 +47,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/set_initiative_alien_hate.js` | C | Node (CommonJS) | 378 | safely edit the Initiative's assessed alien hate in a local save. | `finiteOrNull, main, parseArgs` | — |
 | `scripts/verify_battle_composition.js` | C | Node (CommonJS) | 213 | compose both battle sides from the LIVE save and print the | — | — |
 | `scripts/verify_bundle_size.js` | C | Node (CommonJS) | 144 | measures the raw and gzipped byte sizes of the bundled React + MUI | `BUDGET, isBuildArtifact, measureBundle` | — |
+| `scripts/verify_command_grid2.js` | C | Node (CommonJS) | 211 | six post-conversion checks for COMMAND TwoColumnGrid migration. | — | — |
 | `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 442 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates, getActiveSaveFingerprint` | — |
 | `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 384 | browser verification that the Drive Explorer renders the measured | — | — |
 | `scripts/verify_drive_path_modal.js` | C | Node (CommonJS) | 304 | browser verification that clicking a drive row actually opens the | — | — |
@@ -239,12 +242,13 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/TruncationNote.jsx` | E | Browser (React JSX) | 90 | announce capped lists with total and omitted counts. An absent omitted | `TruncationNote` | — |
 | `src/v2/components/TwoColumnGrid.jsx` | E | Browser (React JSX) | 63 | reusable two-column layout primitive — MUI Grid2 container with | `TwoColumnGrid, TwoColumnGridItem` | — |
 | `src/v2/components/Value.jsx` | E | Browser (React JSX) | 134 | render a numeric value or an explicit unavailable/absent state. Never | `ABSENT_LABEL, UNAVAILABLE_LABEL, Value, resolveValue` | — |
-| `src/v2/main.jsx` | E | Browser (React JSX) | 628 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderBattlePanel, renderCapabilityMatrix, …(+22)` | — |
+| `src/v2/main.jsx` | E | Browser (React JSX) | 643 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderBattlePanel, renderCapabilityMatrix, …(+23)` | — |
 | `src/v2/panels/AlienHateEconomics.jsx` | E | Browser (React JSX) | 499 | renders the save-derived Mission Control hate floor and Total War | `AlienHateEconomics, fmtNumber, renderHudAlienHateEconomics` | `tests/AlienHateEconomics.test.js` |
 | `src/v2/panels/BattlePanel.jsx` | E | Browser (React JSX) | 160 | two-column battle planner shell — observer fleet vs picked opponent fleet, | `BattlePanel, renderBattlePanel` | — |
 | `src/v2/panels/battlePanelUtils.mjs` | E | Browser (React JSX) | 107 | testable fleet-picker and battle-cap logic behind BattlePanel.jsx. | `BATTLE_SHIP_CAP_ATTRIBUTION, BATTLE_SHIP_CAP_PER_SIDE, deploymentSummary, factionsWithFleets, fleetById, fleetsForFaction, overCapNotice, presentCount, sameId, selectionBlocked, shipId, toggleShipSelection` | `tests/battlePanelUtils.test.js` |
 | `src/v2/panels/BattleSuggestion.jsx` | E | Browser (React JSX) | 380 | battle matchup verdict for the selected ships on each side — per-side | `BattleSuggestion` | — |
 | `src/v2/panels/battleSuggestionUtils.mjs` | E | Browser (React JSX) | 300 | testable battle-matchup helpers behind BattleSuggestion.jsx — weapon | `WEAPON_FAMILIES, buildBattleMatchup, changeAdvice, formatCount, formatRatio, interceptionCaveatText, joinRatePercent, mountEquivalentAdvice, mountUnitLabel, saturationHeadline, selectionPhase, shipsForSelection, …(+1)` | `tests/battleSuggestionUtils.test.js` |
+| `src/v2/panels/CommandPanel.jsx` | E | Browser (React JSX) | 192 | COMMAND view shell — two-column MUI grid with static mount points for | `CommandPanel, renderCommandPanel` | — |
 | `src/v2/panels/CouncilOrders.jsx` | E | Browser (React JSX) | 388 | React port of public/v2/js/components/council-orders.js. Renders the | `CouncilOrders, focusDirectiveBoard` | `tests/CouncilOrders.test.js` |
 | `src/v2/panels/DetailPanel.jsx` | E | Browser (React JSX) | 326 | the shared detail surface every clickable Mission Control module | `DetailPanel, close, detailPanelInternals, open, syncPageInert` | `tests/DetailPanel.test.js` |
 | `src/v2/panels/detailPanelUtils.mjs` | E | Browser (React JSX) | 153 | the page-wide inert bookkeeping, the focusable-node scan and the | `OVERLAY_SELECTOR, STATUS_TONES, focusableIn, isRenderableRow, normaliseActions, normaliseFacts, normaliseNotes, normaliseRows, normaliseSections, resolveTone, syncPageInert, text` | — |

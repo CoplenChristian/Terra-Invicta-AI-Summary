@@ -499,8 +499,8 @@ function initViewNavigation() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // assertViewRegistryIntegrity() runs from the React bundle after the THREAT
-  // shell mounts — the six THREAT panel ids are no longer in static HTML.
+  // assertViewRegistryIntegrity() runs from the React bundle after the COMMAND
+  // and THREAT shells mount — their panel ids are no longer in static HTML.
   initViewNavigation();
   // A table's overflow depends on the viewport, so the hints are re-measured
   // when it changes rather than assumed from the width they were rendered at.

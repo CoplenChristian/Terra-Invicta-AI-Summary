@@ -893,8 +893,12 @@ test('the render harness reports what a browser shows, not the markup, for a sub
 test('the panel is mounted in the COMMAND view and loaded by the shell', () => {
   const html = fs.readFileSync(v2ShellPath, 'utf8');
   const missionControl = fs.readFileSync(missionControlPath, 'utf8');
+  const commandPanel = fs.readFileSync(
+    path.join(repoRoot, 'src', 'v2', 'panels', 'CommandPanel.jsx'),
+    'utf8',
+  );
 
-  assert.ok(html.includes('id="researchAdvisor"'), 'the mount element must exist');
+  assert.ok(commandPanel.includes('id="researchAdvisor"'), 'the mount element must exist');
   // Flipped by the React migration (2026-08-26), following the precedent
   // tests/miningBoardRendering.test.js:48 set: the vanilla component is deleted,
   // so its <script> tag must be GONE and the bundle that now supplies
@@ -907,10 +911,9 @@ test('the panel is mounted in the COMMAND view and loaded by the shell', () => {
     'the shell controller is loaded, so a missing-script assertion is meaningful');
   assert.ok(html.includes('/v2/app/bundle.js'),
     'a component with no <script> tag renders nowhere — the React bundle is that tag now');
-
-  const command = html.match(/<section[^>]*id="view-command"[\s\S]*?<\/section>/);
-  assert.ok(command, '#view-command must exist');
-  assert.ok(command[0].includes('id="researchAdvisor"'),
+  assert.ok(html.includes('id="commandPlanner"'),
+    'the COMMAND React shell mount must exist in index.html');
+  assert.ok(commandPanel.includes('id="researchAdvisor"'),
     'the panel must live inside the view its registry entry claims');
 
   assert.ok(/panels: \[[\s\S]*?'researchAdvisor'[\s\S]*?\]/.test(missionControl),
