@@ -11,6 +11,7 @@ import {
   buildWeaponIndex,
   composeBattleSide,
   saturationVerdict,
+  weaponTemplatesFromComponentStats,
   PD_OVERWHELM_MULTIPLE,
   INTERCEPTION_ASSUMPTION,
 } from '../../../shared/battleComposition.mjs';
@@ -20,53 +21,15 @@ import {
   shipId,
 } from './battlePanelUtils.mjs';
 
-/** The six weapon families baked under snapshot.componentStats. */
-export const WEAPON_FAMILIES = Object.freeze([
-  'laser_weapon', 'magnetic_gun', 'gun', 'particle_weapon', 'plasma_weapon', 'missile',
-]);
-
-const FAMILY_CATEGORY = Object.freeze({
-  laser_weapon: 'Laser',
-  magnetic_gun: 'Kinetic',
-  gun: 'Kinetic',
-  particle_weapon: 'Particle',
-  plasma_weapon: 'Plasma',
-  missile: 'Missile',
-});
-
-/**
- * Convert snapshot.componentStats weapon entries into the records
- * buildWeaponIndex expects (the shape server/templateLoader.js produces).
- */
-export function weaponTemplatesFromComponentStats(componentStats) {
-  const templates = [];
-  if (!componentStats || typeof componentStats !== 'object') return templates;
-
-  for (const family of WEAPON_FAMILIES) {
-    const entries = componentStats[family];
-    if (!entries || typeof entries !== 'object') continue;
-    const category = FAMILY_CATEGORY[family];
-    for (const [dataName, stats] of Object.entries(entries)) {
-      if (!stats || typeof stats !== 'object') continue;
-      const displayName = stats.displayName ?? dataName;
-      const attackMode = stats.attackMode === true;
-      const defenseMode = stats.defenseMode === true;
-      const isPointDefense = defenseMode && !attackMode;
-      const salvo = stats.salvoShots;
-      templates.push({
-        dataName,
-        friendlyName: displayName,
-        displayName,
-        templateFamily: family,
-        category,
-        role: isPointDefense ? 'Point Defense' : category,
-        salvo_shots: typeof salvo === 'number' && Number.isFinite(salvo) ? salvo : null,
-        isPointDefenseTargetable: stats.pointDefenseTargetable === true,
-      });
-    }
-  }
-  return templates;
-}
+// The weapon-family list and the componentStats -> template-record adapter now
+// live beside the join they feed, in shared/battleComposition.mjs, because
+// war-room section 1d needs the same two and a second copy of a join that took
+// two rounds to get right would drift. Re-exported as the SAME function
+// objects, so every existing importer of this module is unchanged.
+export {
+  WEAPON_FAMILIES,
+  weaponTemplatesFromComponentStats,
+} from '../../../shared/battleComposition.mjs';
 
 /** Ships from one fleet whose ids are in the selection list. */
 export function shipsForSelection(fleet, selectedShipIds) {

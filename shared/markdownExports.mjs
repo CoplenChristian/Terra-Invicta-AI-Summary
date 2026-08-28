@@ -61,6 +61,23 @@ import {
   RECORDED_POSITION,
   buildControlPointCapReport
 } from './controlPointCap.mjs';
+// Section 1d. Unlike sections 1c, 10 and 11 this needs NO hand-in from the
+// serving runtime: `componentStats` and each ship's `weaponLoadout` both travel
+// on the filtered snapshot (and therefore on every published Supabase row), and
+// this module is pure ESM, so the Cloudflare worker composes exactly what the
+// local server does.
+import {
+  INTERCEPTION_ASSUMPTION,
+  MAX_BATTLE_SIDE_SHIPS,
+  MAX_BATTLE_SIDE_SHIPS_ATTRIBUTION,
+  PD_OVERWHELM_MULTIPLE,
+  PD_OVERWHELM_RULE_ATTRIBUTION,
+  SALVO_SHOTS_WHEN_ABSENT,
+  buildWeaponIndex,
+  composeBattleSide,
+  saturationVerdict,
+  weaponTemplatesFromComponentStats
+} from './battleComposition.mjs';
 
 // The hostile-movement summary the whole-board endpoint already builds. We
 // re-evaluate it from filteredSnapshot rather than trust the filter pipeline
@@ -1570,6 +1587,18 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   pushTheaterDefenceBlock(blocks, filteredSnapshot, observerId, options);
 
   // -------------------------------------------------------------------------
+  // SECTION 1d: BATTLE COMPOSITION & SATURATION
+  //
+  // 1b says what is moving, 1c says what to do about it, and this says whether
+  // the force can fight -- in composition rather than in combat value, which
+  // docs/engagement-matchup-spec.md abandoned. Unlike its two neighbours it
+  // needs no hand-in from the serving runtime; see the block above
+  // `pushBattleCompositionBlock` for why, and for the four properties that
+  // would each have made this section lie.
+  // -------------------------------------------------------------------------
+  pushBattleCompositionBlock(blocks, filteredSnapshot, observerId);
+
+  // -------------------------------------------------------------------------
   // SECTION 2: FRIENDLY FLEETS
   // -------------------------------------------------------------------------
   const friendlyBlock = listBlock('friendly-fleets', {
@@ -2105,11 +2134,37 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   // reader to know which is which, and it states that only nine destinations
   // are modelled.
   // -------------------------------------------------------------------------
-  blocks.push(fixedBlock(
-    'drive-explorer',
-    [`## 9. Drive Explorer (refit options for one design)`, ``],
-    driveExplorerLines(filteredSnapshot, observerId)
-  ));
+  // A LIST BLOCK WITH ONE ENTRY, and that is the whole point of the shape.
+  //
+  // Until 2026-08-28 this was a fixed block with no ladder position, so the
+  // ONLY mechanism that could shed it was `clampOrder` -- which runs after the
+  // entire ladder is exhausted. In practice that never happens, so a refit
+  // what-if for ONE design printed in full while the document shed measured
+  // threat readings around it: on the committed fixtures the ladder had already
+  // emptied every research entry in section 8 and stripped the weapon, armour
+  // and propulsion line from 11 of 21 hostile contacts in section 3, and it was
+  // still 406 bytes from the ceiling. This block's own `clampOrder` comment
+  // already ranked it "the last thing anyone needs in a war-room brief cut to
+  // the bone"; only the mechanism to act on that was missing.
+  //
+  // ONE entry rather than one per line: half a refit study is not a useful
+  // half. It gives way whole, and `budgetEmptyLines` names the endpoint that
+  // carries all 541 drives -- the same relationship section 10 has to
+  // /api/v2/briefing.
+  const driveExplorerBlock = listBlock('drive-explorer', {
+    headingLines: [`## 9. Drive Explorer (refit options for one design)`, ``],
+    // Deliberately NOT the words `clampOrder` uses ("Section body omitted"):
+    // this is a LADDER drop, which happens routinely and early, and the
+    // last-resort clamp is a different event a reader must be able to tell it
+    // from.
+    budgetEmptyLines: () => [
+      `*Refit study omitted to fit the size budget — a what-if for one design, carried whole at `
+      + `/api/intel/drive-explorer?observer=${observerId}&detail=full&limit=1000.*`,
+      ``
+    ]
+  });
+  blocks.push(driveExplorerBlock);
+  addEntry(driveExplorerBlock, { rank: [0], variants: [driveExplorerLines(filteredSnapshot, observerId)] });
 
   // -------------------------------------------------------------------------
   // SECTION 10: COUNCIL CYCLE PLAN -- THE RISK FLOOR AND THE BENCH
@@ -2150,36 +2205,57 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   //                                       they describe plans not yet started,
   //                                       and their horizon and refusal counts
   //                                       survive in the block's trailing note.
-  //   4.    Theater defence (§1c) → L1 -- shed the citation line only. The
+  //   4.    Drive explorer (§9)        -- the last of the reference material and
+  //                                       the first thing above the measured
+  //                                       half: a refit what-if for ONE design,
+  //                                       carried whole at
+  //                                       /api/intel/drive-explorer. It had NO
+  //                                       ladder position until 2026-08-28 and
+  //                                       so printed in full while §3 lost the
+  //                                       weapon and armour line from half its
+  //                                       contacts; see its block for the
+  //                                       measurement.
+  //   5.    Theater defence (§1c) → L1 -- shed the citation line only. The
   //                                       posture, the threat and the build
   //                                       race all stay, and the block still
   //                                       names where the full citation list
   //                                       lives.
-  //   5.    Friendly fleets (§2) → L1  -- shed the weapon/PD line. Cheap, and
+  //   6.    Friendly fleets (§2) → L1  -- shed the weapon/PD line. Cheap, and
   //                                       every fleet stays listed.
-  //   6.    Hostile fleets (§3) → L1   -- shed the second detail line, same
+  //   7.    Hostile fleets (§3) → L1   -- shed the second detail line, same
   //                                       reasoning; every contact stays named.
-  //   7-8.  Construction (§5) modules, then stations.
-  //   9.    Theater defence (§1c) → L2 -- shed the friendly-holdings line; the
+  //   8-9.  Construction (§5) modules, then stations.
+  //   10.   Theater defence (§1c) → L2 -- shed the friendly-holdings line; the
   //                                       posture, the race and every refusal
   //                                       survive.
-  //   10.   Friendly fleets (§2) → L2  -- shed the propulsion line.
-  //   11.   Key habs (§6)              -- a static inventory the JSON
+  //   11.   Friendly fleets (§2) → L2  -- shed the propulsion line.
+  //   12.   Key habs (§6)              -- a static inventory the JSON
   //                                       endpoints carry in full.
-  //   12.   Construction (§5) queues   -- last of §5: the only part that says
+  //   13.   Construction (§5) queues   -- last of §5: the only part that says
   //                                       when reinforcements actually arrive.
-  //   13.   Theater defence (§1c) → L3 -- posture header only. This is the
+  //   14.   Theater defence (§1c) → L3 -- posture header only. This is the
   //                                       first step that costs a REFUSAL its
   //                                       reason, which is why it sits this
   //                                       late and below every cheaper cut.
-  //   14.   Friendly fleets (§2) → L3  -- shed the design rollup; header only.
-  //   15.   Hostile fleets (§3) entries -- ranked by the relevance evaluator's
+  //   15.   Friendly fleets (§2) → L3  -- shed the design rollup; header only.
+  //   16.   Battle composition (§1d) → L1 -- per-body contact rows compact to a
+  //                                       body, a hull count a side and one
+  //                                       verdict; the mount breakdown behind
+  //                                       them is at /api/intel/fleets.
+  //   17.   Hostile fleets (§3) entries -- ranked by the relevance evaluator's
   //                                       own criteria, least relevant first.
-  //   16.   Friendly fleets (§2) entries -- the observer's own picture is the
+  //   18.   Friendly fleets (§2) entries -- the observer's own picture is the
   //                                       last thing cut before threats.
-  //   17.   Theater defence (§1c) entries -- least urgent first, by the
+  //   19.   Battle composition (§1d) entries -- a contact row is a body where
+  //                                       the shooting can start this turn, so
+  //                                       the rows outlive both fleet
+  //                                       inventories. The whole-board
+  //                                       composition and both saturation
+  //                                       verdicts are in the block's HEADING
+  //                                       and never degrade at all.
+  //   20.   Theater defence (§1c) entries -- least urgent first, by the
   //                                       engine's own emitted order.
-  //   18.   Incoming threats (§4)      -- cut only when nothing else remains,
+  //   21.   Incoming threats (§4)      -- cut only when nothing else remains,
   //                                       latest ETA first. §4 is the raw
   //                                       arrival measurement §1c reasons over,
   //                                       so the measurement outlives the
@@ -2206,6 +2282,14 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     { block: 'research-category-bonuses', action: 'drop' },
     { block: 'research-projects', action: 'drop' },
     { block: 'research-slots', action: 'drop' },
+    // §9 -- the LAST reference material, and the first operational-half saving.
+    // It is a refit what-if for ONE design, reproduced whole at
+    // /api/intel/drive-explorer, and it had no ladder position at all until
+    // 2026-08-28: the only thing that could shed it was `clampOrder`, which the
+    // ladder never reaches, so it printed in full while §3 lost the weapon and
+    // armour line from half its contacts. It gives way as one entry, above every
+    // measured threat reading and below only the research background.
+    { block: 'drive-explorer', action: 'drop' },
     // The cheapest cut in the operational half of the document: §1c keeps every
     // posture, threat count and build race and sheds only the per-row citation
     // list, whose full contents the block's own pointer still names.
@@ -2222,8 +2306,18 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     // could not advise, so it sits below every cheaper cut in the document.
     { block: 'theater-defence', action: 'reduce', toLevel: 3 },
     { block: 'friendly-fleets', action: 'reduce', toLevel: 3 },
+    // §1d's per-body contact rows compact to a one-line verdict before any of
+    // them is dropped: which body is in contact and whether the screen holds
+    // there is the irreducible part, and the mount breakdown behind it is
+    // recoverable from /api/intel/fleets.
+    { block: 'battle-composition', action: 'reduce', toLevel: 1 },
     { block: 'hostile-fleets', action: 'drop' },
     { block: 'friendly-fleets', action: 'drop' },
+    // Dropped only below the two fleet inventories, and never before them: a
+    // contact row is a body where the shooting can start this turn. The
+    // whole-board composition and both saturation verdicts are in this block's
+    // heading and never degrade at all -- they are the section's point.
+    { block: 'battle-composition', action: 'drop' },
     // §1c before §4 deliberately: section 4 is the raw arrival measurement this
     // block reasons over, and a measurement outlives the verdict derived from it.
     { block: 'theater-defence', action: 'drop' },
@@ -2242,9 +2336,12 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     // whole body goes before anything measured is touched, and the surviving
     // header still names /api/v2/briefing.
     'strategic-commentary',
-    // Reference material and a what-if, so it is the next body to give way and
-    // the last thing anyone needs in a war-room brief cut to the bone.
-    'drive-explorer',
+    // §9 (drive explorer) used to sit here, and it no longer needs to: it is a
+    // LIST block now with a ladder position of its own, so the ladder sheds it
+    // long before any clamp is reached, and `clampOrder` skips list blocks. It
+    // is named here only so a reader looking for it is not left wondering --
+    // see the ladder entry above, which carries the reason it moved.
+    //
     // A summary of a plan that lives in full at /api/v2/briefing, in the same
     // relationship to that endpoint as section 9 is to the drive explorer.
     'council-cycle-plan',
@@ -3169,6 +3266,314 @@ function pushTheaterDefenceBlock(blocks, filteredSnapshot, observerId, options =
       ]
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 1d: BATTLE COMPOSITION & SATURATION
+//
+// Section 1c says what to DO at each threatened body. This one says whether the
+// force there can fight, and it is deliberately NOT a combat-value score:
+// `docs/engagement-matchup-spec.md` abandoned that currency for three separate
+// reasons, any one disqualifying, and the hull count derived from it was
+// removed from 1c in d0a671d rather than captioned. What replaces it is
+// composition -- can one side's salvo get through the other's point defence --
+// answered from readings the observer legitimately holds in BOTH modes.
+//
+// FOUR THINGS HERE ARE LOAD-BEARING, and each one is a way this section could
+// have lied:
+//
+//   * PD-IMMUNE WEAPONS ARE THEIR OWN FIGURE. Beams bypass point defence
+//     entirely. Measured on the committed omniscient fixture the hostile side
+//     fields 661 of them against the observer's 21, and no quantity of screen
+//     answers any of them. Folding that into a saturation ratio would average
+//     away exactly the number that decides the fight, so it is reported beside
+//     the two verdicts and never inside them -- which is also what
+//     `saturationVerdict` itself enforces via `pdImmuneExcludedFromSaturation`.
+//   * KINETICS SATURATE LIKE MISSILES. The game marks all 57 missiles AND all
+//     70 magnetic guns `isPointDefenseTargetable`, so a throw-weight figure
+//     counting missiles alone understates it by about a third. Mounts the game
+//     marks NOT targetable (the observer's 40mm Autocannon, an unguided slug)
+//     are excluded from the shot count and reported apart rather than dropped.
+//   * THE INTERCEPTION RULE IS AN ASSUMPTION AND SAYS SO. One mount neutralising
+//     roughly one shot, and 2x the mounts overwhelming the screen, are the
+//     player's rules of thumb (stated 2026-08-27), not measured mechanics --
+//     `TISpaceCombatTemplate.json` is a single RedBlueSpaceCombat test scenario
+//     with `active: false`, so the resolution rules were never read. The
+//     attributions travel from `shared/battleComposition.mjs` rather than being
+//     restated here, so the constant and the caveat cannot drift apart.
+//   * A WHOLE-BOARD TOTAL IS NOT ONE ENGAGEMENT. Max battle size is 40 ships a
+//     side, so 534 hostile hulls do not arrive at once. Printing a board-wide
+//     shot count without that sentence would invite a reader to treat a
+//     campaign aggregate as a single exchange.
+//
+// AND IT NEEDS NO HAND-IN. Unlike sections 1c, 10 and 11 -- all engine output
+// this module may not compute -- both inputs travel on the filtered snapshot:
+// `componentStats` (baked by `server/snapshot/templates.js`, written onto every
+// published row by `scripts/publish/rows.js`) and each ship's `weaponLoadout`.
+// So the Cloudflare worker composes the same numbers the local server does.
+// A snapshot carrying neither says the composition was NOT READ; it never
+// prints a zero, because a side whose weapons were not read is not a side
+// without weapons.
+//
+// PLAYER MODE IS NOT BLIND HERE, and that is the finding that makes the section
+// possible: `weaponLoadout` is carried on every observed hostile ship in player
+// mode as well as omniscient (measured 2026-08-27, docs/engagement-matchup-spec
+// .md: 497 of 497 alien ships in both). The two modes therefore render the same
+// readings -- which is the opposite of the combat-value ratings elsewhere in
+// this brief, where player mode over-rates the opponent 9-15x per body.
+// ---------------------------------------------------------------------------
+
+/** A mount or shot count. Proportional attribution can make it fractional. */
+const battleCount = (value) => localeOr(round(value, 1));
+
+/** `join` as a percentage, or a statement that the side fields no systems. */
+function joinClause(side) {
+  const rate = num(side?.join?.rate);
+  const unresolved = num(side?.join?.unresolved);
+  if (rate === null) return 'no weapon system carried by this side';
+  return `weapon join ${(rate * 100).toFixed(1)}% (${localeOr(unresolved)} unresolved)`;
+}
+
+/** One side's composition, as one line. */
+function battleSideLine(label, side, factionClause, noLoadoutShips) {
+  const missile = round(side.missileShots, 1);
+  const kinetic = round(Math.max(0, side.kineticMounts - side.notPdTargetableMounts), 1);
+  // NOT coerced. `composeBattleSide` initialises this to 0 and only ever adds to
+  // it, so on a composed side it is a measured count -- but a null would mean
+  // the composition's shape changed, and `null > 0` correctly declines to print
+  // a clause about a reading that does not exist rather than printing "0".
+  const notTargetable = num(side.notPdTargetableMounts);
+  return `- **${label} — whole board, ${battleCount(side.ships)} ship(s)${factionClause}:** `
+    + `${battleCount(side.pointDefenceMounts)} PD mount(s) · `
+    + `${battleCount(side.pdTargetableShots)} PD-targetable shot(s) `
+    + `(${battleCount(missile)} missile + ${battleCount(kinetic)} kinetic`
+    + `${notTargetable !== null && notTargetable > 0 ? `; ${battleCount(notTargetable)} mount(s) the game marks NOT interceptable, excluded` : ''}) · `
+    + `${battleCount(side.pdImmuneWeapons)} PD-immune weapon(s) · `
+    + `median armour ${side.armorMedian === null ? 'NOT MEASURED' : `${fixedOr(side.armorMedian, 1)} cm`} · `
+    + `${joinClause(side)}`
+    + `${noLoadoutShips > 0 ? ` · ${localeOr(noLoadoutShips)} ship(s) carry NO weapon loadout in this snapshot and contribute nothing above — an unread loadout is not an unarmed hull` : ''}`;
+}
+
+/**
+ * One saturation direction, as one line.
+ *
+ * A refused verdict prints its reasons and NO numbers: an incomplete weapon
+ * join means the shot count under-states the salvo, and averaging over it is
+ * the defect `shared/battleComposition.mjs` exists to prevent.
+ */
+function saturationLine(verdict, attackerLabel, defenderLabel) {
+  if (!verdict) {
+    return `- **${attackerLabel} salvo vs ${defenderLabel} screen: NOT EVALUATED** — one of the two sides `
+      + `fields no ships in this reading, so there is no exchange to compose. That is not a verdict that the `
+      + `screen holds.`;
+  }
+  if (verdict.refused) {
+    return `- **${attackerLabel} salvo vs ${defenderLabel} screen: REFUSED** — `
+      + `${asArray(verdict.refusalReasons).join('; ') || 'no reason was recorded'}. No shot count is `
+      + `substituted for an incomplete join.`;
+  }
+  const shots = battleCount(verdict.attackerPdTargetableShots);
+  const mounts = battleCount(verdict.defenderPdMounts);
+  const capacity = battleCount(verdict.interceptionCapacity);
+  const diff = num(verdict.difference);
+  if (verdict.ratioUnavailableReason) {
+    return `- **${attackerLabel} salvo vs ${defenderLabel} screen: EVERY SHOT ARRIVES** — ${shots} targetable `
+      + `shot(s) against no screen at all (${verdict.ratioUnavailableReason})`;
+  }
+  const tail = diff === null
+    ? ''
+    : (verdict.saturated ? `; surplus ${battleCount(diff)}` : `; shortfall ${battleCount(Math.abs(diff))}`);
+  return `- **${attackerLabel} salvo vs ${defenderLabel} screen: ${verdict.saturated ? 'SATURATED' : 'SCREEN HOLDS'}** — `
+    + `${shots} targetable shot(s) vs ${capacity} interception(s) `
+    + `(${mounts} mount(s) × ${localeOr(verdict.pdShotsPerMount)}/mount)${tail}`;
+}
+
+/** Ships in a fleet list whose weapon loadout is absent or empty. */
+function shipsWithoutLoadout(ships) {
+  let count = 0;
+  for (const ship of ships) {
+    if (!Array.isArray(ship?.weaponLoadout) || ship.weaponLoadout.length === 0) count += 1;
+  }
+  return count;
+}
+
+/**
+ * Builds section 1d and appends it to `blocks`.
+ *
+ * A LIST block: the whole-board reading lives in `headingLines` because it is
+ * fixed-size by construction and it is the point of the section, while the
+ * per-body contact rows grow with the save and are what the budget ladder may
+ * thin. The two unavailable paths are fixed blocks -- there is nothing rankable
+ * in a statement that nothing was read.
+ */
+function pushBattleCompositionBlock(blocks, filteredSnapshot, observerId) {
+  const heading = [`## 1d. Battle Composition & Saturation (readings, not a combat-value score)`, ``];
+  const pointer = `/api/intel/fleets`;
+
+  const templates = weaponTemplatesFromComponentStats(filteredSnapshot?.componentStats);
+  if (templates.length === 0) {
+    blocks.push(fixedBlock('battle-composition', heading, [
+      `- **Composition NOT READ** — this snapshot carries no \`componentStats\` weapon catalogue, so no `
+      + `weapon name could be joined to a template and neither side's point defence, throw weight or `
+      + `PD-immune count could be composed. This is NOT a report that neither side fields weapons, and it `
+      + `is NOT a zero: re-publish the snapshot after upgrading. Per-fleet weapon tallies remain at `
+      + `\`${pointer}\`.`,
+      ``
+    ]));
+    return;
+  }
+  const weaponIndex = buildWeaponIndex(templates);
+
+  // The same hostility rule sections 3 and 4 use, so a fleet counted as a
+  // threat there is counted as one here. Human rivals are not folded in: this
+  // section answers the alien matchup the spec was written for.
+  const ourShips = [];
+  const theirShips = [];
+  const hostileFactions = new Set();
+  const byBody = new Map();
+  for (const fleet of asArray(filteredSnapshot?.fleets)) {
+    const mine = sameId(fleet.factionId, observerId);
+    const hostile = !mine && isGenuinelyHostileFaction(fleet.factionId, fleet.factionName, filteredSnapshot);
+    if (!mine && !hostile) continue;
+    const ships = asArray(fleet.ships);
+    if (mine) ourShips.push(...ships); else { theirShips.push(...ships); hostileFactions.add(fleet.factionName || 'unnamed hostile faction'); }
+
+    const key = normalizeBody(fleet.orbitBody);
+    if (!key || key === 'sol' || key === 'deep space') continue;
+    if (!byBody.has(key)) byBody.set(key, { body: fleet.orbitBody, ours: [], theirs: [] });
+    const entry = byBody.get(key);
+    (mine ? entry.ours : entry.theirs).push(...ships);
+  }
+
+  const ours = ourShips.length > 0 ? composeBattleSide(ourShips, { weaponIndex }) : null;
+  const theirs = theirShips.length > 0 ? composeBattleSide(theirShips, { weaponIndex }) : null;
+  const theirsVsOurs = ours && theirs ? saturationVerdict({ attacker: theirs, defender: ours }) : null;
+  const oursVsTheirs = ours && theirs ? saturationVerdict({ attacker: ours, defender: theirs }) : null;
+
+  const factionClause = hostileFactions.size > 0 ? `, ${[...hostileFactions].sort().join(' + ')}` : '';
+  const headingLines = [...heading];
+  headingLines.push(ours
+    ? battleSideLine('YOURS', ours, '', shipsWithoutLoadout(ourShips))
+    : `- **YOURS:** no observer ship is carried in this snapshot's fleet list, so no own-side composition `
+      + `was formed. That is an absent reading, not a fleet of zero hulls.`);
+  headingLines.push(theirs
+    ? battleSideLine('THEIRS', theirs, factionClause, shipsWithoutLoadout(theirShips))
+    : `- **THEIRS:** no genuinely hostile fleet is carried in this snapshot, so no opposing composition was `
+      + `formed. Unobserved space is not empty.`);
+  headingLines.push(saturationLine(theirsVsOurs, 'Their', 'your'));
+  headingLines.push(saturationLine(oursVsTheirs, 'Your', 'their'));
+
+  // THE FIGURE NO SCREEN ANSWERS, on its own line and never inside a ratio.
+  headingLines.push(`- **PD-immune weapons — the figure no screen answers: theirs `
+    + `${theirs ? battleCount(theirs.pdImmuneWeapons) : 'NOT READ'}, yours `
+    + `${ours ? battleCount(ours.pdImmuneWeapons) : 'NOT READ'}.** Beams the game marks non-interceptable, `
+    + `deliberately NOT folded into either verdict: averaging them in would hide the case that decides the `
+    + `fight.`);
+
+  headingLines.push(`- *Kinetics saturate like missiles — every missile and every magnetic gun is `
+    + `\`isPointDefenseTargetable\`, so a missile-only count understates throw weight by about a third.*`);
+  // Claim, attribution and ERROR DIRECTION, all carried from the constants in
+  // shared/battleComposition.mjs rather than restated, so the number and its
+  // caveat cannot drift apart. `whyNotVerified` (the templates hold no
+  // interception rule) is the one part left to that module -- what a reader
+  // must not miss is that it is unverified and which way it is wrong.
+  headingLines.push(`- *ASSUMPTION, NOT MEASURED: ${INTERCEPTION_ASSUMPTION.claim}, and `
+    + `${PD_OVERWHELM_RULE_ATTRIBUTION.claim} — ${PD_OVERWHELM_RULE_ATTRIBUTION.source}, `
+    + `${PD_OVERWHELM_RULE_ATTRIBUTION.stated}. Not verified: ${INTERCEPTION_ASSUMPTION.consequence}.*`);
+  headingLines.push(`- *A whole-board total is NOT one engagement: ${MAX_BATTLE_SIDE_SHIPS} ships a side is the `
+    + `battle cap (${MAX_BATTLE_SIDE_SHIPS_ATTRIBUTION.source}, ${MAX_BATTLE_SIDE_SHIPS_ATTRIBUTION.stated}; `
+    + `not in the templates), so a larger contact resolves in waves.*`);
+  // The one line that stops a reader holding two answers and believing
+  // whichever agrees with them -- the failure docs/engagement-matchup-spec.md
+  // names under "what would make this wrong". Section 11's hull thresholds and
+  // `world.military.theaterForce`'s per-fleet requirements are still computed
+  // and still published at /api/v2/briefing; what this says is which of the two
+  // rests on readings.
+  headingLines.push(`- *The force comparison §1c declines to make. §11's hull counts answer it in the currency `
+    + `docs/engagement-matchup-spec.md abandons — these readings come from the game's own fields; that table `
+    + `does not.*`);
+
+  // Interpretations applied to the counts, printed only where they were used.
+  //
+  // Summed WITHOUT coercion: a side that was never composed is SKIPPED (it
+  // fields no mounts, so it took no default), while a composed side whose count
+  // is unreadable makes the total unknown and says so rather than being read as
+  // a zero. `SALVO_SHOTS_WHEN_ABSENT` is the one place an absent template field
+  // is read as a game default, so how many mounts took it must be visible.
+  let assumedSalvo = 0;
+  let assumedSalvoUnread = false;
+  for (const side of [ours, theirs]) {
+    if (!side) continue;
+    const mounts = num(side.salvoShotsAssumedMounts);
+    if (mounts === null) assumedSalvoUnread = true;
+    else assumedSalvo += mounts;
+  }
+  if (assumedSalvoUnread) {
+    headingLines.push(`- *An unknown number of missile mount(s) state no \`salvo_shots\`; the count that took the `
+      + `assumed ${SALVO_SHOTS_WHEN_ABSENT} shot each was not read, so the shot totals above rest on an `
+      + `interpretation of unmeasured size.*`);
+  } else if (assumedSalvo > 0) {
+    headingLines.push(`- *${battleCount(assumedSalvo)} missile mount(s) state no \`salvo_shots\` and were counted `
+      + `at ${SALVO_SHOTS_WHEN_ABSENT} shot each — the one field the game means as a default when absent.*`);
+  }
+  if (ours?.proportionalAttribution || theirs?.proportionalAttribution) {
+    headingLines.push(`- *Loadout groups naming several systems are split evenly across them.*`);
+  }
+  if (ours?.tableFallbackUsed || theirs?.tableFallbackUsed) {
+    headingLines.push(`- *A system did not resolve to a template and was classified by family instead of by the `
+      + `game's own \`isPointDefenseTargetable\` field.*`);
+  }
+
+  const contact = [...byBody.values()].filter(e => e.ours.length > 0 && e.theirs.length > 0);
+  const block = listBlock('battle-composition', {
+    headingLines: [
+      ...headingLines,
+      ``,
+      `### Bodies where both sides have ships present (${localeOr(contact.length)} of `
+        + `${localeOr(byBody.size)} occupied)`,
+      // ALWAYS printed, not only when the list is empty. On the live board the
+      // most threatened body -- Ganymede, 28 hostile hulls present and 45 more
+      // arriving -- has no row here because the observer holds nothing there,
+      // and a reader scanning a populated list would otherwise read its absence
+      // as safety. An unopposed body is the dangerous kind, not the quiet one.
+      `*Listed only where BOTH sides have hulls. A body with hostiles present or inbound and NONE of yours `
+        + `is in §1c — its absence here is an absence of YOUR ships, not of theirs.*`
+    ],
+    emptyLines: [
+      `- No body carries ships from both sides, so no contact can begin this turn.`,
+      ``
+    ],
+    budgetEmptyLines: budgetEmptyNote('contact bodies', pointer),
+    budgetNote: budgetOmissionNote('contact bodies', pointer),
+    trailingLines: [``]
+  });
+  blocks.push(block);
+
+  for (const entry of contact) {
+    const l = composeBattleSide(entry.ours, { weaponIndex });
+    const r = composeBattleSide(entry.theirs, { weaponIndex });
+    const theirsHere = saturationVerdict({ attacker: r, defender: l });
+    const oursHere = saturationVerdict({ attacker: l, defender: r });
+    const verdictClause = (v, who) => (v.refused
+      ? `${who} REFUSED (join incomplete)`
+      : `${who} ${v.saturated ? 'SATURATES' : 'held'} (${battleCount(v.attackerPdTargetableShots)} vs `
+        + `${battleCount(v.interceptionCapacity)})`);
+    addEntry(block, {
+      // Most hostile hulls first: the body where the largest opposing force is
+      // already in contact is the one a reader must not lose to the budget.
+      rank: [-r.ships, -l.ships, String(entry.body || '')],
+      variants: [
+        [`- **${entry.body || 'UNAVAILABLE'}** — yours ${battleCount(l.ships)} ship(s) / `
+          + `${battleCount(l.pointDefenceMounts)} PD / ${battleCount(l.pdTargetableShots)} shot(s) / `
+          + `${battleCount(l.pdImmuneWeapons)} immune · theirs ${battleCount(r.ships)} / `
+          + `${battleCount(r.pointDefenceMounts)} PD / ${battleCount(r.pdTargetableShots)} shot(s) / `
+          + `${battleCount(r.pdImmuneWeapons)} immune · ${verdictClause(theirsHere, 'theirs')} · `
+          + `${verdictClause(oursHere, 'yours')}`],
+        [`- **${entry.body || 'UNAVAILABLE'}** — yours ${battleCount(l.ships)} ship(s), theirs `
+          + `${battleCount(r.ships)} · ${verdictClause(theirsHere, 'theirs')}`]
+      ]
+    });
+  }
 }
 
 /**

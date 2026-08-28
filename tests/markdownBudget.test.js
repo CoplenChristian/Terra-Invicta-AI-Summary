@@ -305,7 +305,7 @@ for (const mode of MODES) {
       // not hand in, so at every budget it must still print its header and say
       // the value was not read -- never vanish, which would read as a quiet
       // board rather than an unread one.
-      for (const letteredSection of ['1b', '1c']) {
+      for (const letteredSection of ['1b', '1c', '1d']) {
         assert.match(
           rendered,
           new RegExp(`^## ${letteredSection}\\. `, 'm'),

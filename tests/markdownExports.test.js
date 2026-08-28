@@ -1660,13 +1660,316 @@ test('section 11 is the FIRST body the budget suppresses, and its header and poi
       .map(h => h.replace(/^## /, '').split('.')[0]);
     for (const section of at) if (!ladder.includes(section)) ladder.push(section);
   }
-  assert.deepStrictEqual(ladder, ['11', '9', '10', '7', '1'],
-    'the clamp order is section 11, then the two other endpoint-backed sections, then section 7, then section 1');
+  // Section 9 is deliberately NOT in this list any more, and its absence is the
+  // point rather than a gap. Until 2026-08-28 it was a fixed block with no
+  // ladder position, so the ONLY thing that could shed a refit what-if for one
+  // design was this last-resort clamp -- which meant it printed in full while
+  // the ladder stripped measured threat detail from sections 3 and 8 to make
+  // room. It is a list block now with a ladder entry of its own, so it gives
+  // way through the LADDER long before any clamp is reached, and `clampOrder`
+  // skips list blocks. The assertion below is checked against the ladder half
+  // of that claim immediately after this one.
+  assert.deepStrictEqual(ladder, ['11', '10', '7', '1'],
+    'the clamp order is section 11, then the other endpoint-backed section, then section 7, then section 1');
   // Sections 2 to 6 are the fleet, threat, construction and hab inventories:
   // they are never reached, at any cap this ladder walks.
   for (const measured of ['2', '3', '4', '5', '6']) {
     assert.ok(!ladder.includes(measured), `section ${measured} must never be clamped before the modelled sections`);
   }
+});
+
+test('section 9 gives way through the LADDER, above every measured threat reading', () => {
+  // The half of the claim above that the clamp walk cannot see. Section 9 is a
+  // refit what-if for ONE design, carried whole at /api/intel/drive-explorer,
+  // and until 2026-08-28 it had no ladder position at all -- so on the
+  // committed fixtures it printed in full while the ladder had already emptied
+  // every research entry in section 8 and stripped the weapon, armour and
+  // propulsion line from 11 of 21 hostile contacts in section 3.
+  //
+  // Asserted as an ORDER at a cap that binds, not at a magic byte count: the
+  // research background gives way first (it is more speculative still), then
+  // section 9, and section 4 -- the raw arrival measurement -- is untouched
+  // while both are being shed.
+  const snapshot = makeMarkdownSnapshot('player');
+  const sectionNine = (markdown) => {
+    const lines = markdown.split('\n');
+    const start = lines.findIndex(l => l.startsWith('## 9. '));
+    let end = start + 1;
+    while (end < lines.length && !lines[end].startsWith('## ')) end += 1;
+    return lines.slice(start, end).join('\n');
+  };
+
+  const full = renderWarRoomMarkdown(snapshot);
+  assert.match(sectionNine(full), /^## 9\. /, 'section 9 must exist unclamped');
+
+  // The largest cap at which section 9's body has given way, FOUND not pinned.
+  let cap = utf8ByteLength(full);
+  let shedAt = null;
+  while (cap > 4000) {
+    const text = sectionNine(renderWarRoomMarkdown(snapshot, { maxBytes: cap }));
+    if (/Refit study omitted to fit the size budget/.test(text)) { shedAt = cap; break; }
+    cap -= 100;
+  }
+  assert.ok(shedAt !== null, 'no cap above 4,000 bytes shed section 9 — it has no reachable ladder position');
+
+  const rendered = renderWarRoomMarkdown(snapshot, { maxBytes: shedAt });
+  // Its header survives and names where the whole catalogue lives, exactly as
+  // an emptied list block must.
+  assert.match(rendered, /^## 9\. Drive Explorer/m, 'the header always survives');
+  assert.match(sectionNine(rendered), /\/api\/intel\/drive-explorer\?observer=\d+&detail=full&limit=1000/,
+    'an omitted refit study must name the endpoint that carries it whole');
+  // NOT the last-resort clamp's wording: a routine ladder drop and a
+  // whole-body clamp are different events and must read differently.
+  assert.ok(!sectionNine(rendered).includes('Section body omitted to fit the size budget'),
+    'a ladder drop must not borrow the clamp notice, which means something else');
+
+  // Section 4 is the raw arrival measurement. It must still be whole at the
+  // cap that costs section 9 its body.
+  assert.ok(!/omitted to fit the size budget/.test(
+    rendered.split('\n## 5.')[0].split('## 4. ')[1] || ''
+  ), 'section 4 must not have been touched while section 9 was still sheddable');
+});
+
+// ---------------------------------------------------------------------------
+// WAR-ROOM SECTION 1d: BATTLE COMPOSITION & SATURATION
+//
+// docs/engagement-matchup-spec.md abandoned combat value, and d0a671d removed
+// the hull count derived from it rather than captioning it. This section is the
+// replacement, and every assertion below is one of the ways it could have lied.
+// It runs against the COMMITTED intel fixtures because the property under test
+// is a set of values (PD-immune counted apart, kinetics counted with missiles),
+// not a bound -- the synthetic snapshot carries no componentStats and no
+// weaponLoadout, and it exercises the refusal path instead.
+// ---------------------------------------------------------------------------
+const sectionOneD = (markdown) => {
+  const lines = markdown.split('\n');
+  const start = lines.findIndex(l => l.startsWith('## 1d. '));
+  if (start < 0) return '';
+  let end = start + 1;
+  while (end < lines.length && !lines[end].startsWith('## ')) end += 1;
+  return lines.slice(start, end).join('\n');
+};
+
+/** The per-body contact rows only -- not the whole-board lines above them. */
+const contactRows = (section) => section.split('\n')
+  .filter(l => /^- \*\*[A-Z]/.test(l) && !/whole board|PD-immune|salvo vs/.test(l));
+
+for (const mode of ['player', 'omniscient']) {
+  test(`section 1d composes both sides from the snapshot's own readings (${mode} mode)`, () => {
+    const snapshot = loadFixtureFilteredSnapshot({ mode });
+    const section = sectionOneD(renderWarRoomMarkdown(snapshot));
+
+    assert.match(section, /^## 1d\. Battle Composition & Saturation/, 'section 1d must exist');
+    assert.ok(!/Composition NOT READ/.test(section),
+      'the committed fixture carries componentStats, so nothing may report it unread');
+
+    // Both sides, each with the four counts that make the matchup answerable.
+    assert.match(section, /- \*\*YOURS — whole board, [\d,]+ ship\(s\):\*\* [\d,]+ PD mount\(s\)/);
+    assert.match(section, /- \*\*THEIRS — whole board, [\d,]+ ship\(s\)/);
+    // The join rate is reported as information, per the spec's phase 0.
+    assert.match(section, /weapon join \d+\.\d% \(\d+ unresolved\)/);
+    // Both directions, never one.
+    assert.match(section, /\*\*Their salvo vs your screen: (SATURATED|SCREEN HOLDS|EVERY SHOT ARRIVES)\*\*/);
+    assert.match(section, /\*\*Your salvo vs their screen: (SATURATED|SCREEN HOLDS|EVERY SHOT ARRIVES)\*\*/);
+    // NO QUANTITY DENOMINATED IN HULLS, in either mode. That is the number
+    // d0a671d removed and the spec forbids reintroducing "in any form". The
+    // word itself may appear -- one line names section 11's hull counts in
+    // order to say which of the two rests on readings -- but no figure here is
+    // ever "N hulls".
+    assert.ok(!/\d[\d,]*(?:\s*[–-]\s*\d[\d,]*)?\s+hulls?\b/i.test(section),
+      `section 1d must state no quantity in hulls — got:\n${section}`);
+  });
+
+  test(`section 1d keeps PD-immune weapons OUT of the saturation ratio (${mode} mode)`, () => {
+    // The property the whole section exists for. On the live board the aliens
+    // field hundreds of beam weapons that no quantity of point defence answers;
+    // folding them into a ratio would average away the number that decides the
+    // fight.
+    const snapshot = loadFixtureFilteredSnapshot({ mode });
+    const section = sectionOneD(renderWarRoomMarkdown(snapshot));
+
+    const immune = section.match(
+      /\*\*PD-immune weapons — the figure no screen answers: theirs ([\d,]+), yours ([\d,]+)\.\*\*/);
+    assert.ok(immune, 'PD-immune weapons must be their own named figure, on their own line');
+    assert.match(section, /NOT folded into either verdict/,
+      'the exclusion must be stated, not left for the reader to infer');
+
+    // And the arithmetic on the verdict line must be the screen's, cross-checked
+    // against the composition line it came from. Asserting only that the verdict
+    // differs from "verdict + immune" would be a tautology: it has to be pinned
+    // to the COMPOSED shot count, which is the number folding would change.
+    const n = (s) => Number(String(s).replace(/,/g, ''));
+    const composition = section.split('\n').find(l => l.startsWith('- **THEIRS'));
+    assert.ok(composition, 'the hostile composition line must render');
+    const composedShots = n(composition.match(/([\d,]+) PD-targetable shot\(s\)/)[1]);
+    const composedImmune = n(composition.match(/([\d,]+) PD-immune weapon\(s\)/)[1]);
+    assert.ok(composedImmune > 0,
+      'the hostile side fields PD-immune weapons on this fixture, or this test proves nothing');
+    assert.strictEqual(composedImmune, n(immune[1]),
+      'the named PD-immune figure must be the same reading as the composition line');
+
+    const theirs = section.match(
+      /Their salvo vs your screen: [A-Z ]+\*\* — ([\d,]+) targetable shot\(s\) vs ([\d,]+) interception\(s\) \(([\d,]+) mount\(s\) × ([\d.]+)\/mount\)/);
+    assert.ok(theirs, 'the saturation line must show shots, capacity and the mounts it came from');
+    assert.strictEqual(n(theirs[2]), n(theirs[3]) * n(theirs[4]),
+      'interception capacity must be mounts x the stated multiple and nothing else');
+    assert.strictEqual(n(theirs[1]), composedShots,
+      'the verdict must use the composed PD-targetable shot count, unchanged');
+    assert.notStrictEqual(n(theirs[1]), composedShots + composedImmune,
+      'the targetable shot count must not have absorbed the PD-immune weapons');
+  });
+
+  test(`section 1d states the interception assumption and its error direction (${mode} mode)`, () => {
+    // "One PD mount stops one shot" and "2x overwhelms the screen" are the
+    // player's rules of thumb, not measured mechanics -- the interception rule
+    // is not in the shipped templates. An unstated assumption reads as a
+    // measurement.
+    const snapshot = loadFixtureFilteredSnapshot({ mode });
+    const section = sectionOneD(renderWarRoomMarkdown(snapshot));
+
+    assert.match(section, /ASSUMPTION, NOT MEASURED/);
+    assert.match(section, /one point-defence mount neutralises roughly one incoming shot per exchange/);
+    assert.match(section, /the user, who plays the game, 2026-08-27/,
+      'the heuristic must carry its attribution and date, never read as measured');
+    assert.match(section, /Not verified: if a mount intercepts more than one shot, every shortfall .* understated/,
+      'the DIRECTION of the error must be stated');
+    // And the 40-ship cap, so a board-wide aggregate is not read as one battle.
+    assert.match(section, /A whole-board total is NOT one engagement: 40 ships a side is the battle cap/);
+  });
+}
+
+test('section 1d renders the same readings in player mode as in omniscient', () => {
+  // The finding that makes the section possible, and the opposite of every
+  // combat-value figure in this brief: weaponLoadout is not redacted, so
+  // player mode is not blind here (docs/engagement-matchup-spec.md, measured
+  // 2026-08-27 -- 497 of 497 alien ships carry one in both modes). If this ever
+  // diverges, one of the two modes has started guessing.
+  const player = sectionOneD(renderWarRoomMarkdown(loadFixtureFilteredSnapshot({ mode: 'player' })));
+  const omni = sectionOneD(renderWarRoomMarkdown(loadFixtureFilteredSnapshot({ mode: 'omniscient' })));
+  assert.ok(player.length > 0 && omni.length > 0, 'both modes must render section 1d');
+  assert.strictEqual(player, omni,
+    'section 1d is composed from unredacted readings and must not differ between modes');
+});
+
+test('section 1d counts kinetics with missiles, never missiles alone', () => {
+  // The game marks every missile AND every magnetic gun isPointDefenseTargetable
+  // (docs/engagement-matchup-spec.md), so a screen's workload counted from
+  // missiles alone under-states throw weight by about a third. Mounts the game
+  // marks NOT targetable are excluded and reported apart rather than dropped.
+  const snapshot = loadFixtureFilteredSnapshot({ mode: 'omniscient' });
+  const section = sectionOneD(renderWarRoomMarkdown(snapshot));
+
+  const line = section.split('\n').find(l => l.startsWith('- **THEIRS'));
+  assert.ok(line, 'the hostile composition line must render');
+  const m = line.match(/([\d,]+) PD-targetable shot\(s\) \(([\d,]+) missile \+ ([\d,]+) kinetic/);
+  assert.ok(m, `the shot count must break out missile and kinetic — got: ${line}`);
+  const n = (s) => Number(String(s).replace(/,/g, ''));
+  assert.ok(n(m[3]) > 0, 'the hostile side fields kinetic mounts on this fixture');
+  assert.strictEqual(n(m[1]), n(m[2]) + n(m[3]),
+    'targetable shots must be the missile shots PLUS the targetable kinetic mounts');
+  assert.match(section, /Kinetics saturate like missiles/);
+});
+
+test('section 1d stays inside the byte budget as the board grows, and announces what it cut', () => {
+  // The growth ladder in markdownBudget.test.js runs on the synthetic snapshot,
+  // which carries no componentStats -- so it exercises section 1d's refusal path
+  // and never its populated one. This is the missing half: the per-body contact
+  // rows are the part that grows with the save, and they have to give way
+  // through the ladder like any other list, announcing the omission.
+  const base = loadFixtureFilteredSnapshot({ mode: 'omniscient' });
+  const observerId = base.observerFactionId;
+
+  for (const multiple of [1, 5, 20]) {
+    const grown = JSON.parse(JSON.stringify(base));
+    const fleets = [];
+    for (let copy = 0; copy < multiple; copy += 1) {
+      for (const fleet of base.fleets) {
+        fleets.push(copy === 0 ? JSON.parse(JSON.stringify(fleet)) : {
+          ...JSON.parse(JSON.stringify(fleet)),
+          ID: Number(fleet.ID) + (copy * 100000),
+          displayName: `${fleet.displayName} #${copy + 1}`,
+          // Spread the clones across distinct bodies so the CONTACT ROW list
+          // grows -- cloning onto the same twelve bodies would leave the row
+          // count fixed and the test would prove nothing about growth.
+          orbitBody: `${fleet.orbitBody} C${copy}`
+        });
+      }
+    }
+    grown.fleets = fleets;
+
+    const rendered = renderWarRoomMarkdown(grown);
+    assert.ok(utf8ByteLength(rendered) < WAR_ROOM_BYTE_BUDGET,
+      `war room at x${multiple} rendered ${utf8ByteLength(rendered)} bytes, over the ${WAR_ROOM_BYTE_BUDGET} cap`);
+
+    const section = sectionOneD(rendered);
+    assert.match(section, /^## 1d\. /, `section 1d header missing at x${multiple}`);
+    // The whole-board reading and both verdicts live in the heading and never
+    // degrade -- they are the section's point, and a brief that sheds them to
+    // keep a per-body row has shed the answer to keep the footnote.
+    assert.match(section, /- \*\*YOURS — whole board/, `the own-side composition vanished at x${multiple}`);
+    assert.match(section, /Their salvo vs your screen:/, `the saturation verdict vanished at x${multiple}`);
+    assert.match(section, /PD-immune weapons — the figure no screen answers/,
+      `the PD-immune figure vanished at x${multiple}`);
+
+    const rows = contactRows(section);
+    const declared = section.match(/both sides have ships present \(([\d,]+) of/);
+    assert.ok(declared, `section 1d must state how many contact bodies there are at x${multiple}`);
+    const total = Number(declared[1].replace(/,/g, ''));
+    // One body carries both sides on this fixture (Mercury); each clone adds
+    // one more. The DECLARED total must track the board, never the surviving
+    // list -- a count that shrank with the ladder would report an omission as
+    // an absence.
+    assert.strictEqual(total, multiple,
+      `the contact-body count must track the board, not the ladder, at x${multiple}`);
+    if (rows.length < total) {
+      assert.match(section, /omitted to fit the size budget/,
+        `section 1d listed ${rows.length} of ${total} contact bodies at x${multiple} and said nothing about it`);
+    }
+    assert.ok(observerId != null, 'the fixture must carry an observer id');
+  }
+
+  // FORCED, because compaction alone absorbs a 20x board -- the branch above is
+  // conditional and at the real ceiling it never fires, which would leave the
+  // "a capped list announces its cap" claim untested. A tight cap makes the
+  // ladder DROP rows, and the announcement must appear with a true total.
+  const COPIES = 20;
+  const grown = JSON.parse(JSON.stringify(base));
+  grown.fleets = base.fleets.flatMap(fleet =>
+    Array.from({ length: COPIES }, (_, copy) => (copy === 0
+      ? JSON.parse(JSON.stringify(fleet))
+      : {
+        ...JSON.parse(JSON.stringify(fleet)),
+        ID: Number(fleet.ID) + (copy * 100000),
+        displayName: `${fleet.displayName} #${copy + 1}`,
+        orbitBody: `${fleet.orbitBody} C${copy}`
+      })));
+  const tight = renderWarRoomMarkdown(grown, { maxBytes: 12000 });
+  const tightSection = sectionOneD(tight);
+  const kept = contactRows(tightSection).length;
+  assert.ok(kept < COPIES, `the tight cap must actually drop contact rows — kept ${kept} of ${COPIES}`);
+  assert.match(tightSection,
+    /(\d+) further entr(?:y|ies) omitted to fit the size budget|All (\d+) contact bodies omitted to fit the size budget/,
+    `dropped contact rows must announce themselves — got:\n${tightSection}`);
+  // And the answer survives the cut: the whole-board reading and both verdicts
+  // are in the heading, which the ladder cannot reach.
+  assert.match(tightSection, /- \*\*THEIRS — whole board/,
+    'the hostile composition must outlive every per-body row');
+  assert.match(tightSection, /Their salvo vs your screen:/,
+    'the saturation verdict must outlive every per-body row');
+});
+
+test('section 1d says the composition was NOT READ rather than printing zeros', () => {
+  // The synthetic snapshot carries no componentStats, so no weapon name can be
+  // joined. A side whose weapons were not read is not a side without weapons,
+  // and 0 PD mounts would read as "no screen" -- the reassuring direction.
+  const section = sectionOneD(renderWarRoomMarkdown(makeMarkdownSnapshot('player')));
+
+  assert.match(section, /^## 1d\. Battle Composition & Saturation/, 'the header always survives');
+  assert.match(section, /\*\*Composition NOT READ\*\*/);
+  assert.match(section, /NOT a report that neither side fields weapons/);
+  assert.ok(!/\b0 PD mount\(s\)/.test(section), 'an unread screen must never render as zero mounts');
+  assert.ok(!/SATURATED|SCREEN HOLDS/.test(section),
+    'no verdict may be reached from a composition that was never formed');
 });
 
 test('section 11 does not grow with the size of the save, at any fleet multiple', () => {

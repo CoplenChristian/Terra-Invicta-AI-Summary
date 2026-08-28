@@ -1,13 +1,16 @@
 // shared/battleComposition.mjs
 //
 // Purpose: phase 0 + phase 1 of docs/engagement-matchup-spec.md — the weapon
-//   template join and the per-side battle composition the Battle tab reasons
-//   over. The spec abandons combat value: the matchup question is whether one
-//   side's salvo overwhelms the other side's point defence, and everything here
-//   is a reading that makes that question answerable. Pure ESM, no Node
-//   built-ins — this runs in the Cloudflare worker like its siblings under
-//   `shared/`, so template data is PASSED IN (`buildWeaponIndex`) rather than
-//   read from disk.
+//   template join and the per-side battle composition the Battle tab and
+//   war-room section 1d reason over. The spec abandons combat value: the
+//   matchup question is whether one side's salvo overwhelms the other side's
+//   point defence, and everything here is a reading that makes that question
+//   answerable. Pure ESM, no Node built-ins — this runs in the Cloudflare
+//   worker like its siblings under `shared/`, so template data is PASSED IN
+//   (`buildWeaponIndex`) rather than read from disk;
+//   `weaponTemplatesFromComponentStats` is the adapter that turns a snapshot's
+//   own baked `componentStats` into those records, which is what lets both
+//   runtimes compose a side without a hand-in.
 //
 // ---------------------------------------------------------------------------
 // THE JOIN — TWO FAULTS, BOTH MEASURED 2026-08-27 ON ExitSave.gz
@@ -303,6 +306,82 @@ export function buildWeaponIndex(templates) {
     ambiguousNormalizedNames,
     unclassifiedTemplates
   };
+}
+
+/**
+ * The six weapon families baked under `snapshot.componentStats`.
+ *
+ * The keys are the unlock-index family keys `server/snapshot/templates.js`
+ * writes; `componentStats[family][dataName]` is one component's stat block.
+ */
+export const WEAPON_FAMILIES = Object.freeze([
+  'laser_weapon', 'magnetic_gun', 'gun', 'particle_weapon', 'plasma_weapon', 'missile'
+]);
+
+const FAMILY_CATEGORY = Object.freeze({
+  laser_weapon: 'Laser',
+  magnetic_gun: 'Kinetic',
+  gun: 'Kinetic',
+  particle_weapon: 'Particle',
+  plasma_weapon: 'Plasma',
+  missile: 'Missile'
+});
+
+/**
+ * Convert `snapshot.componentStats` weapon entries into the records
+ * `buildWeaponIndex` expects (the shape `server/templateLoader.js` produces).
+ *
+ * THIS LIVES HERE, NOT IN THE PANEL, because the weapon join now has two
+ * consumers: the BATTLE tab and war-room section 1d in
+ * `shared/markdownExports.mjs`. The join took two rounds to get right (see the
+ * header of this file) and a second copy would drift; the panel re-exports this
+ * function object rather than keeping its own.
+ *
+ * It reads the SNAPSHOT, not the installed templates, which is what lets both
+ * runtimes compose a side: `componentStats` travels on every published row, so
+ * the Cloudflare worker resolves the same names the local server does with no
+ * hand-in from the serving runtime.
+ *
+ * POINT DEFENCE IS `defenseMode && !attackMode`. A laser that can do both is an
+ * attack weapon that happens to be able to shoot down a missile, not a screen
+ * mount, and counting it as a screen would over-state interception capacity --
+ * the reassuring direction.
+ *
+ * `salvo_shots` keeps its ABSENCE: a non-numeric value becomes null so
+ * `SALVO_SHOTS_WHEN_ABSENT` is applied at composition time with a visible
+ * count, never silently here.
+ *
+ * @param {object|null|undefined} componentStats — `snapshot.componentStats`.
+ * @returns {object[]} template records; empty when the snapshot carries none.
+ */
+export function weaponTemplatesFromComponentStats(componentStats) {
+  const templates = [];
+  if (!componentStats || typeof componentStats !== 'object') return templates;
+
+  for (const family of WEAPON_FAMILIES) {
+    const entries = componentStats[family];
+    if (!entries || typeof entries !== 'object') continue;
+    const category = FAMILY_CATEGORY[family];
+    for (const [dataName, stats] of Object.entries(entries)) {
+      if (!stats || typeof stats !== 'object') continue;
+      const displayName = stats.displayName ?? dataName;
+      const attackMode = stats.attackMode === true;
+      const defenseMode = stats.defenseMode === true;
+      const isPointDefense = defenseMode && !attackMode;
+      const salvo = stats.salvoShots;
+      templates.push({
+        dataName,
+        friendlyName: displayName,
+        displayName,
+        templateFamily: family,
+        category,
+        role: isPointDefense ? 'Point Defense' : category,
+        salvo_shots: typeof salvo === 'number' && Number.isFinite(salvo) ? salvo : null,
+        isPointDefenseTargetable: stats.pointDefenseTargetable === true
+      });
+    }
+  }
+  return templates;
 }
 
 /** Median of a numeric array; null when empty. Absent stays null. */
