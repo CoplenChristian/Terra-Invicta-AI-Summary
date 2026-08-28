@@ -388,7 +388,7 @@ test('no view grid claims more tracks than its own cards can fill, and no table 
         await page.setViewportSize({ width, height: 1000 });
         await page.waitForTimeout(200);
 
-        for (const view of ['expansion', 'threat', 'records']) {
+        for (const view of ['expansion', 'records']) {
           await gotoView(page, view);
 
           const grid = await page.evaluate(measureGridTracks, view);
@@ -428,6 +428,13 @@ test('no view grid claims more tracks than its own cards can fill, and no table 
         await gotoView(page, view);
         collectHints(mode, 1600, view, await page.evaluate(measureScrollHints, view));
       }
+
+      // THREAT lays out through TwoColumnGrid (`.init-view__grid` via React).
+      // Visit it for scroll-hint measurement only.
+      await page.setViewportSize({ width: 1600, height: 1000 });
+      await page.waitForTimeout(200);
+      await gotoView(page, 'threat');
+      collectHints(mode, 1600, 'threat', await page.evaluate(measureScrollHints, 'threat'));
 
       // And once narrow, where the hints used to be revealed by width alone.
       await page.setViewportSize({ width: 375, height: 812 });

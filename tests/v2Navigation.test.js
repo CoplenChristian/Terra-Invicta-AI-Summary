@@ -25,6 +25,7 @@ const vm = require('node:vm');
 const repoRoot = path.resolve(__dirname, '..');
 const v2IndexHtmlPath = path.join(repoRoot, 'public', 'v2', 'index.html');
 const missionControlJsPath = path.join(repoRoot, 'public', 'v2', 'js', 'mission-control.js');
+const threatPanelJsPath = path.join(repoRoot, 'src', 'v2', 'panels', 'ThreatPanel.jsx');
 // syncPageInert moved to src/v2/panels/detailPanelUtils.mjs when the shared
 // detail panel became React (2026-08-26). It is loaded as a module and handed a
 // fake document rather than being run through `vm` against a sandboxed global;
@@ -57,6 +58,7 @@ test('public/v2/index.html defines 7 view sections and topbar navigation without
   assert.ok(html.includes('id="view-threat"'), 'must contain #view-threat');
   assert.ok(html.includes('id="view-records"'), 'must contain #view-records');
   assert.ok(html.includes('id="battlePlanner"'), 'must contain the #battlePlanner mount element');
+  assert.ok(html.includes('id="threatPlanner"'), 'must contain the #threatPlanner mount element');
 
   // The DRIVES panel needs a mount element as well as something that loads it:
   // the mining board once had the script and no element and rendered nowhere.
@@ -91,6 +93,12 @@ test('VIEWS registry in mission-control.js defines exactly the 7 required views 
     for (const elId of elementIds) {
       idToSection.set(elId, sId);
     }
+  }
+
+  // THREAT panel mounts live in ThreatPanel.jsx (React), not static HTML.
+  const threatPanelJs = fs.readFileSync(threatPanelJsPath, 'utf8');
+  for (const match of threatPanelJs.matchAll(/\bid="([^"]+)"/g)) {
+    idToSection.set(match[1], 'view-threat');
   }
 
   // Load MissionControlViews from mission-control.js

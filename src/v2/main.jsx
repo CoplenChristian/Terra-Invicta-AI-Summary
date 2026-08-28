@@ -69,6 +69,10 @@ import {
   renderBattlePanel,
 } from './panels/BattlePanel.jsx';
 import {
+  ThreatPanel,
+  renderThreatPanel,
+} from './panels/ThreatPanel.jsx';
+import {
   CapabilityMatrixBoard,
   FactionLedgerBoard,
   LogisticsBoard,
@@ -438,6 +442,7 @@ export function renderResearchWatchlist(container, snapshot) {
  * player mode and the panel does not need a second intel fetch.
  */
 export { renderBattlePanel };
+export { renderThreatPanel };
 
 // The DRIVES panel owns a module-level store (scripts/verify_drive_explorer.js
 // reads it), so it mounts itself rather than being handed a fresh element on
@@ -466,6 +471,9 @@ if (typeof window !== 'undefined') {
   };
   window.MissionControlBattlePanel = {
     render: renderBattlePanel,
+  };
+  window.MissionControlThreatPanel = {
+    render: renderThreatPanel,
   };
   window.MissionControlMiningExpansion = {
     render: renderMiningExpansion,
@@ -526,6 +534,18 @@ if (typeof window !== 'undefined') {
   // instead of being silently skipped.
   syncDetailPanelPageInert();
 
+  // THREAT panel mount ids live in the React shell, not static HTML. Mounting
+  // here — before the briefing fetch — keeps assertViewRegistryIntegrity honest
+  // on first paint, the same way battlePlanner is present from static HTML.
+  const threatPlannerEl = document.getElementById('threatPlanner');
+  if (threatPlannerEl) {
+    renderThreatPanel(threatPlannerEl);
+  }
+
+  if (window.MissionControlViews?.assertViewRegistryIntegrity) {
+    window.MissionControlViews.assertViewRegistryIntegrity();
+  }
+
   window.MissionControlReact = {
     mountReactPanel,
     unmountReactPanel,
@@ -537,6 +557,7 @@ if (typeof window !== 'undefined') {
     mountHostileMovement: renderHostileMovement,
     mountTheaterDefence: renderTheaterDefence,
     mountBattlePanel: renderBattlePanel,
+    mountThreatPanel: renderThreatPanel,
     mountDirectiveBoard: renderDirectiveBoard,
     mountResearchAdvisor: renderResearchAdvisor,
     mountFleetProcurement: renderFleetProcurement,
@@ -577,6 +598,7 @@ if (typeof window !== 'undefined') {
     HostileMovementPanel,
     TheaterDefencePanel,
     BattlePanel,
+    ThreatPanel,
     DetailPanel,
     FactionLedgerBoard,
     LogisticsBoard,

@@ -253,6 +253,7 @@ export function BattleSuggestion({
   componentStats,
   observerLabel,
   opponentLabel = 'Opponent',
+  span = false,
 }) {
   const theme = useTheme();
   const t = theme.initiative?.tokens ?? {};
@@ -369,7 +370,7 @@ export function BattleSuggestion({
   }
 
   return (
-    <Panel title="MATCHUP VERDICT" modifier="quiet" data-primitive="battle-suggestion">
+    <Panel title="MATCHUP VERDICT" modifier="quiet" span={span} data-primitive="battle-suggestion">
       {body}
     </Panel>
   );

@@ -1,34 +1,27 @@
 /**
  * src/v2/components/TwoColumnGrid.jsx
  *
- * Purpose: reusable MUI Grid2 layout primitive mirroring `.init-view__grid` —
- * two columns, optional full-width span children, one column on narrow viewports.
+ * Purpose: reusable layout primitive using `.init-view__grid` — two columns,
+ * optional full-width span children via `init-view__span` on panel cards.
  */
 
 import React from 'react';
 import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid2';
-import { initiativeSpace } from '../theme.js';
-
-const GRID_MAX_WIDTH_PX = 1660;
 
 /**
  * @param {object} props
  * @param {boolean} [props.span=false] — full-width row spanning both columns
- * @param {React.ReactNode} props.children
+ * @param {React.ReactNode} props.children — usually a {@link Panel} or a panel that forwards `span`
  */
-export function TwoColumnGridItem({ span = false, children, sx, ...rest }) {
-  return (
-    <Grid
-      size={span ? 12 : { xs: 12, lg: 6 }}
-      sx={{ minWidth: 0, ...sx }}
-      data-primitive="two-column-grid-item"
-      data-grid-span={span ? 'true' : 'false'}
-      {...rest}
-    >
-      {children}
-    </Grid>
-  );
+export function TwoColumnGridItem({ span = false, children }) {
+  const child = React.Children.only(children);
+  if (!span) {
+    return child;
+  }
+  if (child.props?.span) {
+    return child;
+  }
+  return React.cloneElement(child, { span: true });
 }
 
 /**
@@ -37,34 +30,15 @@ export function TwoColumnGridItem({ span = false, children, sx, ...rest }) {
  * @param {object} [props.sx]
  */
 export function TwoColumnGrid({ children, sx, ...rest }) {
-  const gutter = initiativeSpace['4xl'];
-
   return (
     <Box
       component="div"
+      className="init-view__grid"
       data-primitive="two-column-grid"
-      sx={{
-        maxWidth: GRID_MAX_WIDTH_PX,
-        mx: 'auto',
-        width: '100%',
-        boxSizing: 'border-box',
-        ...sx,
-      }}
+      sx={sx}
       {...rest}
     >
-      <Grid
-        container
-        columns={12}
-        sx={{
-          gap: gutter,
-          pt: gutter,
-          px: gutter,
-          pb: `calc(${gutter} * 2)`,
-          alignItems: 'start',
-        }}
-      >
-        {children}
-      </Grid>
+      {children}
     </Box>
   );
 }

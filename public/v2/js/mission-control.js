@@ -499,7 +499,8 @@ function initViewNavigation() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  assertViewRegistryIntegrity();
+  // assertViewRegistryIntegrity() runs from the React bundle after the THREAT
+  // shell mounts — the six THREAT panel ids are no longer in static HTML.
   initViewNavigation();
   // A table's overflow depends on the viewport, so the hints are re-measured
   // when it changes rather than assumed from the width they were rendered at.
@@ -1261,6 +1262,12 @@ function populateObserverSelect(factions) {
 
 function renderDashboard() {
   if (!state.briefing || !state.rawSnapshot) return;
+
+  if (window.MissionControlThreatPanel?.render) {
+    // The THREAT shell mounts once and owns the grid; imperative panel renders
+    // below fill the mount ids inside it. Must run before any THREAT mount lookup.
+    window.MissionControlThreatPanel.render(document.getElementById('threatPlanner'));
+  }
 
   renderTopHUD();
   renderHeroKPIs();

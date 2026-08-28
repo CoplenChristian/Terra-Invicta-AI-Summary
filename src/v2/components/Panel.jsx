@@ -32,6 +32,7 @@ function modifierClasses(modifiers) {
  * @param {string|React.ReactNode} [props.title]
  * @param {React.ReactNode} [props.headerAside] — right side of `.tech-card-header`
  * @param {string|string[]} [props.modifier] — priority | alert | featured | quiet | dense | commentary
+ * @param {boolean} [props.span=false] — full-width row in `.init-view__grid` / {@link TwoColumnGrid}
  * @param {string} [props.className]
  * @param {React.ReactNode} props.children — body content
  */
@@ -40,6 +41,7 @@ export function Panel({
   headerAside,
   modifier,
   modifiers,
+  span = false,
   className,
   children,
   ...rest
@@ -48,6 +50,7 @@ export function Panel({
   const classes = [
     'tech-card',
     ...modifierClasses(modifierList),
+    span ? 'init-view__span' : null,
     className,
   ].filter(Boolean).join(' ');
 
