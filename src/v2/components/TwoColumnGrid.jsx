@@ -1,27 +1,28 @@
 /**
  * src/v2/components/TwoColumnGrid.jsx
  *
- * Purpose: reusable layout primitive using `.init-view__grid` — two columns,
- * optional full-width span children via `init-view__span` on panel cards.
+ * Purpose: reusable two-column layout primitive — MUI Grid2 container with
+ * responsive half-width items and optional full-width span rows.
  */
 
 import React from 'react';
-import Box from '@mui/material/Box';
+import Grid2 from '@mui/material/Grid2';
+import { useTheme } from '@mui/material/styles';
 
 /**
  * @param {object} props
  * @param {boolean} [props.span=false] — full-width row spanning both columns
- * @param {React.ReactNode} props.children — usually a {@link Panel} or a panel that forwards `span`
+ * @param {React.ReactNode} props.children — usually a {@link Panel}
  */
 export function TwoColumnGridItem({ span = false, children }) {
-  const child = React.Children.only(children);
-  if (!span) {
-    return child;
-  }
-  if (child.props?.span) {
-    return child;
-  }
-  return React.cloneElement(child, { span: true });
+  return (
+    <Grid2
+      size={span ? 12 : { xs: 12, md: 6 }}
+      sx={{ minWidth: 0, maxWidth: '100%' }}
+    >
+      {children}
+    </Grid2>
+  );
 }
 
 /**
@@ -30,16 +31,31 @@ export function TwoColumnGridItem({ span = false, children }) {
  * @param {object} [props.sx]
  */
 export function TwoColumnGrid({ children, sx, ...rest }) {
+  const theme = useTheme();
+  const pad = theme.initiative?.space?.['4xl'] ?? '24px';
+  const padMobile = theme.initiative?.space?.['3xl'] ?? '20px';
+
   return (
-    <Box
-      component="div"
-      className="init-view__grid"
+    <Grid2
+      container
+      spacing={3}
       data-primitive="two-column-grid"
-      sx={sx}
+      sx={{
+        maxWidth: '1660px',
+        margin: '0 auto',
+        width: '100%',
+        boxSizing: 'border-box',
+        alignItems: 'start',
+        padding: {
+          xs: `${padMobile} 15px calc(${padMobile} * 2)`,
+          md: `${pad} ${pad} calc(${pad} * 2)`,
+        },
+        ...sx,
+      }}
       {...rest}
     >
       {children}
-    </Box>
+    </Grid2>
   );
 }
 
