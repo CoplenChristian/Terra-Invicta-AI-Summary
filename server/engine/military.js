@@ -412,6 +412,12 @@ function opponentFleetRow(row, basis, calibrated) {
  * module that owns it. `composedRequirement` is ALWAYS null and says why in
  * `composedRequirementReason` -- see `NO_COMPOSED_REQUIREMENT`.
  *
+ * AND THE UNIT THOSE COUNTS ARE IN. `own.bestDesignName` / `own.bestHullName`
+ * name the single design every hull requirement is denominated in. A count with
+ * no unit invites a consumer to read "5-6 hulls" as five to six of whatever the
+ * threatened body happens to be able to build, which rates a Gunship as a
+ * Battlecruiser without a line of code saying so.
+ *
  * WHAT THE FLEET LIST DOES NOT COVER. It is a projection onto the board's own
  * bodies, exactly as the ratings beside it are: a hostile fleet parked
  * somewhere the twelve-body board does not track has no row to appear in, and
@@ -432,9 +438,26 @@ function buildTheaterForce(engagement, bodies) {
   // so `calibrated` cannot drift away from the string printed beside it.
   const calibrated = basis === COMPOSITION_BASIS.omniscient;
 
+  // WHICH DESIGN THE REQUIREMENT IS DENOMINATED IN, carried verbatim.
+  //
+  // `findRequiredHullsForTier` sizes an engagement in copies of ONE hull -- the
+  // observer's highest-combat-value design, which is what `ownForce.rating` is.
+  // So "5-6 hulls" means five to six of THAT design, not five to six of
+  // anything. Without the name on the row a consumer has a count with no unit,
+  // and the obvious repair -- reading it as "5-6 of whatever this body can
+  // build" -- silently rates a Gunship as a Battlecruiser. Read from the
+  // resource, never re-derived: `readOwnForce` is private to
+  // shared/fleetEngagement.mjs and a second copy of "which design is best"
+  // would be the same fork this file already refuses for ratings.
+  //
+  // Null where the resource carried no reading, on every refusal path. An
+  // unnamed design is not a default one.
+  const bestDesignName = engagement?.ownForce?.bestDesignName ?? null;
+  const bestHullName = engagement?.ownForce?.bestHullName ?? null;
+
   const unavailableRow = (body, reason) => ({
     body,
-    own: { rating: null, ratedShips: 0, unratedShips: 0, source: null },
+    own: { rating: null, ratedShips: 0, unratedShips: 0, source: null, bestDesignName, bestHullName },
     opponent: { rating: null, ratedShips: 0, unratedShips: 0, source: null, basis },
     // NULL, not []. A whole-board refusal never determined which hostile fleets
     // are at this body, and an empty array would state that none is -- the same
@@ -575,7 +598,13 @@ function buildTheaterForce(engagement, bodies) {
         // than credited to a number that does not exist.
         ratedShips: ownRating === null ? 0 : own.ships,
         unratedShips: ownRating === null ? own.ships : 0,
-        source: ownSource
+        source: ownSource,
+        // The unit the hull requirements beside this row are denominated in --
+        // see the note above `bestDesignName`. Carried on every row, including
+        // bodies where no own force is present: the design the requirement
+        // counts is a property of the observer, not of this body.
+        bestDesignName,
+        bestHullName
       },
       opponent: {
         rating: opponentRating,
