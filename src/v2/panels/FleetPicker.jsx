@@ -6,6 +6,7 @@
 
 import React from 'react';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import FormControl from '@mui/material/FormControl';
 import FormControlLabel from '@mui/material/FormControlLabel';
@@ -17,6 +18,7 @@ import { useTheme } from '@mui/material/styles';
 import { Panel } from '../components/Panel.jsx';
 import { Value } from '../components/Value.jsx';
 import {
+  BATTLE_SHIP_AUTO_SELECT_COUNT,
   BATTLE_SHIP_CAP_ATTRIBUTION,
   BATTLE_SHIP_CAP_PER_SIDE,
   buildShipDesignLookup,
@@ -25,6 +27,7 @@ import {
   overCapNotice,
   presentCount,
   resolveShipDesignSubtitle,
+  selectTopShips,
   selectionBlocked,
   shipId,
   toggleShipSelection,
@@ -193,6 +196,10 @@ export function FleetPicker({
     onSelectedShipIdsChange(toggleShipSelection(selectedShipIds, id, cap));
   };
 
+  const handleAutoSelect = () => {
+    onSelectedShipIdsChange(selectTopShips(ships, BATTLE_SHIP_AUTO_SELECT_COUNT, cap));
+  };
+
   const selectSx = {
     fontFamily: theme.typography.fontFamily,
     fontSize: t.fsRow || theme.typography.row?.fontSize,
@@ -254,6 +261,32 @@ export function FleetPicker({
           ))}
         </Select>
       </FormControl>
+
+      {factionId && scopedFleets.length > 0 ? (
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={!selectedFleet}
+          onClick={handleAutoSelect}
+          sx={{
+            mb: 2,
+            fontFamily: theme.typography.fontFamily,
+            fontSize: t.fsRow || theme.typography.row?.fontSize,
+            borderColor: t.line || theme.palette.divider,
+            color: t.accent || theme.palette.primary.main,
+            '&:hover': {
+              borderColor: t.lineStrong || theme.palette.divider,
+              backgroundColor: t.accentSoft || theme.palette.action.hover,
+            },
+            '&.Mui-disabled': {
+              borderColor: t.line || theme.palette.divider,
+              color: t.textDim || theme.palette.text.disabled,
+            },
+          }}
+        >
+          {`Select first ${BATTLE_SHIP_AUTO_SELECT_COUNT}`}
+        </Button>
+      ) : null}
 
       {!factionId && showFactionPicker ? (
         <Typography variant="metric" sx={{ color: 'text.secondary' }}>

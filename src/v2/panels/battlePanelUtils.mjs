@@ -7,6 +7,9 @@
 /** Max ships per side in a single battle wave — stated by the player (2026-08-27), not measured from templates. */
 export const BATTLE_SHIP_CAP_PER_SIDE = 40;
 
+/** Ships to select when the fleet picker auto-select button is pressed — half the per-side cap (2026-08-28). */
+export const BATTLE_SHIP_AUTO_SELECT_COUNT = 20;
+
 export const BATTLE_SHIP_CAP_ATTRIBUTION =
   'player-stated cap (2026-08-27); not measured from game templates';
 
@@ -50,6 +53,32 @@ export function fleetById(fleets, fleetId) {
 
 export function presentCount(value) {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+/**
+ * Selects the first `count` ships with resolvable ids in list order, capped at `cap`.
+ * Replaces any prior selection — callers assign the returned array directly.
+ *
+ * @param {Array} ships
+ * @param {number} [count]
+ * @param {number} [cap]
+ * @returns {string[]}
+ */
+export function selectTopShips(
+  ships,
+  count = BATTLE_SHIP_AUTO_SELECT_COUNT,
+  cap = BATTLE_SHIP_CAP_PER_SIDE,
+) {
+  const target = presentCount(count) ? count : BATTLE_SHIP_AUTO_SELECT_COUNT;
+  const limit = Math.min(target, cap);
+  const result = [];
+  for (const ship of Array.isArray(ships) ? ships : []) {
+    if (result.length >= limit) break;
+    const id = shipId(ship);
+    if (id == null) continue;
+    result.push(id);
+  }
+  return result;
 }
 
 export function toggleShipSelection(selectedIds, nextShipId, cap = BATTLE_SHIP_CAP_PER_SIDE) {
