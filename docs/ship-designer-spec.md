@@ -238,19 +238,47 @@ shown as % of the radiator's required mass, based on its tons per GW and the shi
 heat output"* — confirming that radiator cost follows derived mass, and noting that
 **crew cost is FLAT and separate**, not folded into that percentage.
 
-### Earth-built and space-built ships are paid for in different currencies
+### Boost and Money SUBSTITUTE for missing space resources — a per-shipyard toggle
 
-Not merely different amounts. From the wiki:
+**Corrected 2026-08-29.** An earlier draft of this section read the wiki's scuttling
+note as "Earth-built ships are bought with boost and money, space-built ones with
+space resources." **That is wrong.** The owner challenged it — *"you can't build ships
+with boost and money as far as I know"* — and the game's own UI strings settle it in a
+third way that neither of us had:
 
-> *"this resource cost is always calculated in terms of space resources (water,
-> volatiles, metals, nobles, fissiles, exotics, antimatter), even if the ship was
-> originally constructed using **boost** and **money**."*
+> `UI.Objectives.FleetScreenCanvas.ConstructBoostToggle.Desc` — *"Toggle this
+> checkbox to enable this **Shipyard's construction queue** to use **Boost and
+> Money** to transport any missing space resources it requires from Earth."*
 
-So a ship built at Earth is bought with **boost and money**; one built in space with
-the seven space resources. That is what `earthResourceConstructionCost` and
-`_spaceResourceConstructionCost` are, and a designer quoting one bill regardless of
-where you build is answering the wrong question. Scuttling at a construction module
-refunds **25% of the space cost**, excluding fuel.
+> `UI.Fleets.ConstructionCostTab.Description` — *"Resources required to build the
+> ship. **Boost and Money can be substituted for any resource that is lacking. This
+> may increase build time** as materials are delivered from Earth."*
+
+So it is **not** a location-based currency and **not** an alternative price list. It
+is a **per-shipyard toggle** that tops up whatever space resources you are **short
+of**, paying in boost and money, at the cost of **longer build time**. The ship's
+cost is still denominated in the seven space resources — which is exactly why the
+scuttling refund is *"always calculated in terms of space resources… even if the ship
+was originally constructed using boost and money"*. That sentence is about the refund
+basis, not about an Earth currency.
+
+**This matters to the designer's output, not just its prose.** The bill should show:
+
+1. the seven-resource cost,
+2. **the shortfall against the faction's current stockpile**, and
+3. **what that shortfall would cost in boost and money** if the toggle is on.
+
+A faction with a wrecked mining network and a healthy treasury is exactly the case
+where "you cannot afford this" is the wrong answer and "you are short 40 volatiles,
+which boost can cover, at some build-time cost" is the right one.
+
+**Unquantified:** how much boost and money a unit of each resource costs, and how much
+build time the substitution adds. `earthResourceConstructionCost` and
+`_spaceResourceConstructionCost` in the assembly are presumably the two sides of this,
+but the exchange rate is not in the templates I have read. **Report the shortfall and
+say the conversion is unmeasured** rather than inventing a rate.
+
+Scuttling at a construction module refunds **25% of the space cost**, excluding fuel.
 
 One further wrinkle worth carrying: **if the drive uses He3 and the faction has an
 active Helium-3 Mine, every fissile cost for propellant becomes water instead.** A
