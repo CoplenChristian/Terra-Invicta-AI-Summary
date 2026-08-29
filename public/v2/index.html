@@ -54,6 +54,34 @@
   <link rel="stylesheet" href="/v2/css/24-fleet-engagement.css">
   <link rel="stylesheet" href="/v2/css/25-hostile-movement.css">
   <link rel="stylesheet" href="/v2/css/26-theater-defence.css">
+  <!-- Eight view-nav buttons need a tighter step below 900px so the row still
+       fits a 375px viewport. Lives here, not in /v2/css/, so the shell change
+       does not alter the split stylesheet cascade. -->
+  <style>
+    @media (max-width: 1400px) {
+      .init-view-nav .init-nav-btn {
+        font-size: 8px !important;
+        letter-spacing: 0.03em !important;
+        padding: 0 2px !important;
+      }
+    }
+    /* Eight buttons must wrap at 1000px like seven did; restore default sizing. */
+    @media (max-width: 1080px) and (min-width: 901px) {
+      .init-view-nav .init-nav-btn {
+        font-size: var(--fs-meta) !important;
+        letter-spacing: 0.06em !important;
+        padding: 0 11px !important;
+      }
+    }
+    /* …but stay on one row at 1100px. */
+    @media (max-width: 1240px) and (min-width: 1081px) {
+      .init-view-nav .init-nav-btn {
+        font-size: 7.5px !important;
+        letter-spacing: 0.02em !important;
+        padding: 0 1px !important;
+      }
+    }
+  </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⬢</text></svg>">
 </head>
 <body>
@@ -134,6 +162,7 @@
         <button class="init-btn init-nav-btn" type="button" data-view="drives" aria-pressed="false">DRIVES</button>
         <button class="init-btn init-nav-btn" type="button" data-view="threat" aria-pressed="false">THREAT</button>
         <button class="init-btn init-nav-btn" type="button" data-view="records" aria-pressed="false">RECORDS</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="designer" aria-pressed="false">DESIGNER</button>
       </nav>
 
       <button id="openFactionIntelBtn" class="init-btn" type="button">
@@ -223,6 +252,11 @@
     <!-- View 4: RECORDS -->
     <section class="init-view" id="view-records" hidden inert aria-hidden="true" aria-label="Records view">
       <div id="recordsPlanner" aria-live="polite"></div>
+    </section>
+
+    <!-- View 8: DESIGNER -->
+    <section class="init-view" id="view-designer" hidden inert aria-hidden="true" aria-label="Designer view">
+      <div id="designerPlanner" aria-live="polite"></div>
     </section>
   </main>
 

@@ -52,11 +52,11 @@ async function verifyMode(page, mode, port) {
     sectionVisible: !document.getElementById('view-drives').hidden,
     registryIds: (window.MissionControlViews?.VIEWS || []).map(v => v.id)
   }));
-  check(nav.buttons.length === 7, 'seven nav buttons are rendered', nav.buttons);
+  check(nav.buttons.length === 8, 'eight nav buttons are rendered', nav.buttons);
   check(nav.buttons.includes('drives'), 'the DRIVES nav button exists');
   check(nav.sectionVisible, '#view-drives is visible on #/drives');
-  check(JSON.stringify(nav.registryIds) === JSON.stringify(['command', 'expansion', 'fleet', 'battle', 'drives', 'threat', 'records']),
-    'the VIEWS registry lists exactly the seven views in order', nav.registryIds);
+  check(JSON.stringify(nav.registryIds) === JSON.stringify(['command', 'expansion', 'fleet', 'battle', 'drives', 'threat', 'records', 'designer']),
+    'the VIEWS registry lists exactly the eight views in order', nav.registryIds);
 
   // --- 2. the two registers COMPUTE differently ---------------------------
   const styles = await page.evaluate(() => {

@@ -93,6 +93,10 @@ import {
   renderRecordsPanel,
 } from './panels/RecordsPanel.jsx';
 import {
+  DesignerPanel,
+  renderDesignerPanel,
+} from './panels/DesignerPanel.jsx';
+import {
   CapabilityMatrixBoard,
   FactionLedgerBoard,
   LogisticsBoard,
@@ -468,6 +472,7 @@ export { renderExpansionPanel };
 export { renderFleetPanel };
 export { renderDrivesPanel };
 export { renderRecordsPanel };
+export { renderDesignerPanel };
 
 // The DRIVES panel owns a module-level store (scripts/verify_drive_explorer.js
 // reads it), so it mounts itself rather than being handed a fresh element on
@@ -514,6 +519,9 @@ if (typeof window !== 'undefined') {
   };
   window.MissionControlRecordsPanel = {
     render: renderRecordsPanel,
+  };
+  window.MissionControlDesignerPanel = {
+    render: renderDesignerPanel,
   };
   window.MissionControlMiningExpansion = {
     render: renderMiningExpansion,
@@ -574,7 +582,8 @@ if (typeof window !== 'undefined') {
   // instead of being silently skipped.
   syncDetailPanelPageInert();
 
-  // THREAT, COMMAND, EXPANSION, FLEET, DRIVES, and RECORDS panel mount ids live in the React shell, not static HTML.
+  // THREAT, COMMAND, EXPANSION, FLEET, DRIVES, RECORDS, and DESIGNER panel mount
+  // ids live in the React shell, not static HTML.
   // Mounting here — before the briefing fetch — keeps assertViewRegistryIntegrity
   // honest on first paint.
   const commandPlannerEl = document.getElementById('commandPlanner');
@@ -607,6 +616,11 @@ if (typeof window !== 'undefined') {
     renderRecordsPanel(recordsPlannerEl);
   }
 
+  const designerPlannerEl = document.getElementById('designerPlanner');
+  if (designerPlannerEl) {
+    renderDesignerPanel(designerPlannerEl);
+  }
+
   if (window.MissionControlViews?.assertViewRegistryIntegrity) {
     window.MissionControlViews.assertViewRegistryIntegrity();
   }
@@ -628,6 +642,7 @@ if (typeof window !== 'undefined') {
     mountFleetPanel: renderFleetPanel,
     mountDrivesPanel: renderDrivesPanel,
     mountRecordsPanel: renderRecordsPanel,
+    mountDesignerPanel: renderDesignerPanel,
     mountDirectiveBoard: renderDirectiveBoard,
     mountResearchAdvisor: renderResearchAdvisor,
     mountFleetProcurement: renderFleetProcurement,
@@ -679,6 +694,7 @@ if (typeof window !== 'undefined') {
     OperationsBoard,
     NationQueueBoard,
     ResearchWatchlistBoard,
+    DesignerPanel,
   };
 
   const urlParams = new URLSearchParams(window.location.search);

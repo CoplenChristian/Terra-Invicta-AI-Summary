@@ -297,6 +297,20 @@ const VIEWS = [
       'unlockedTech',
       'sinceLastSave'
     ]
+  },
+  {
+    // "What if I put this drive on this hull" is a composition experiment, not a
+    // procurement or refit decision, so it gets its own calculator view rather
+    // than nesting inside FLEET or DRIVES. No persistence — page state only.
+    id: 'designer',
+    label: 'DESIGNER',
+    sectionId: 'view-designer',
+    panels: [
+      'designerComponents',
+      'designerPerformance',
+      'designerMassHeat',
+      'designerCost'
+    ]
   }
 ];
 

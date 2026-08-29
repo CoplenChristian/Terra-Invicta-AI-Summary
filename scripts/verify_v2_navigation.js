@@ -50,7 +50,7 @@ async function runVerification() {
       // on 2026-08-21 (docs/drive-explorer-spec.md). The same list is repeated
       // inside the page.evaluate below, which runs in the browser and cannot
       // close over this one.
-      const viewIds = ['command', 'expansion', 'fleet', 'battle', 'drives', 'threat', 'records'];
+      const viewIds = ['command', 'expansion', 'fleet', 'battle', 'drives', 'threat', 'records', 'designer'];
 
       // `/v2/` is the real entry point and is what this verifies. It 404s in a
       // checkout living under a dot-directory, because `res.sendFile` defaults
@@ -111,7 +111,7 @@ async function runVerification() {
 
           // Check other sections are hidden & inert
           const otherInactive = await page.evaluate((vId) => {
-            const others = ['command', 'expansion', 'fleet', 'battle', 'drives', 'threat', 'records'].filter(o => o !== vId);
+            const others = ['command', 'expansion', 'fleet', 'battle', 'drives', 'threat', 'records', 'designer'].filter(o => o !== vId);
             return others.every(o => {
               const sec = document.getElementById(`view-${o}`);
               return sec && sec.hidden && sec.hasAttribute('inert') && sec.getAttribute('aria-hidden') === 'true';
