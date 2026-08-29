@@ -6,7 +6,12 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const { resolveConfig } = require('./config');
-const { buildCampaignSettings } = require('../shared/campaignSettings.mjs');
+const {
+  buildCampaignSettings,
+  buildScenarioCustomizations,
+  CAMPAIGN_SETTINGS_UNAVAILABLE,
+  SCENARIO_CUSTOMIZATIONS_UNAVAILABLE
+} = require('../shared/campaignSettings.mjs');
 
 /**
  * Reads the single Value object out of a `gamestates` collection.
@@ -52,13 +57,54 @@ function finiteOrNull(value) {
 function readCampaignStartYear(gamestates) {
   return finiteOrNull(firstStateValue(gamestates, 'TIGlobalResearchState')?.campaignStartYear);
 }
-
 /**
  * `TITimeState.daysInCampaign` -- the game's own campaign-duration counter, and
  * the most direct measurement of the quantity the total-war year gate needs.
  */
 function readDaysInCampaign(gamestates) {
   return finiteOrNull(firstStateValue(gamestates, 'TITimeState')?.daysInCampaign);
+}
+
+/**
+ * `TIGlobalValuesState.scenarioCustomizations` -- the second campaign-settings
+ * block, carrying the nineteen speed-multiplier and mode-flag knobs the
+ * dashboard's ship designer and ship-builder both need. Read the same way
+ * the other state-class reads work: the first wrapper's Value, or the wrapper
+ * itself if the save is one of the unwrapped ones.
+ *
+ * Returned raw: NOT built into the campaign-settings block. The caller
+ * decides whether to build it (the two readers may want to compose
+ * differently depending on whether they have a meta block at all).
+ */
+function readScenarioCustomizations(gamestates) {
+  return firstStateValue(gamestates, 'TIGlobalValuesState')?.scenarioCustomizations || null;
+}
+
+/**
+ * Merges the two baked campaign-settings blocks into one composite.
+ *
+ * The two readers are independent because they read from two different
+ * `TI*State` collections and a save can carry either without the other --
+ * a save with no `customDifficulty` field on the metadata block still
+ * carries `scenarioCustomizations`, and vice versa. The composite exists so
+ * downstream consumers (the snapshot builder, the raw snapshot, the dashboard
+ * surface) can read everything off one path. The metadata block is the
+ * source of truth for the existing nine; the scenario block is the source
+ * of truth for the new nineteen. They are not interchangeable.
+ *
+ * Settings keys are unique to their block, so the merge is a flat concat.
+ * `customDifficulty` stays on the metadata block; `armourMultipliers` is
+ * added at the top level by the scenario block.
+ */
+function combineCampaignSettings(metaBlock, scenarioBlock) {
+  const meta = metaBlock || CAMPAIGN_SETTINGS_UNAVAILABLE;
+  const scenario = scenarioBlock || SCENARIO_CUSTOMIZATIONS_UNAVAILABLE;
+  return Object.freeze({
+    ...meta,
+    settings: Object.freeze({ ...meta.settings, ...scenario.settings }),
+    scenarioCustomizations: scenario,
+    armourMultipliers: scenario.armourMultipliers
+  });
 }
 
 class SaveParser {
@@ -152,6 +198,18 @@ class SaveParser {
     const metaObj = metaList.length > 0 ? (metaList[0].Value || metaList[0]) : {};
 
     const saveStats = fs.statSync(filePath);
+    // The second campaign-settings block: nineteen speed-multiplier and
+    // mode-flag knobs that live on `TIGlobalValuesState.scenarioCustomizations`,
+    // not on the metadata block. Read raw here; build after the merge below.
+    const rawScenarioCustomizations = readScenarioCustomizations(json.gamestates);
+
+    // Build the two baked blocks independently and merge them. The metadata
+    // block keeps its existing byte-identical output for the nine custom-
+    // difficulty values; the scenario block carries the nineteen new ones;
+    // the composite exposes both under `settings` and surfaces
+    // `armourMultipliers` at the top level for the ship designer.
+    const metadataBlock = buildCampaignSettings(metaObj);
+    const scenarioBlock = buildScenarioCustomizations(rawScenarioCustomizations);
 
     return {
       filePath,
@@ -175,7 +233,13 @@ class SaveParser {
       // percent sign ("200%") or as bare numerals ("150"), so the parsing lives
       // in shared/campaignSettings.mjs where the `Number("200%") === NaN` trap
       // is handled once -- an unreadable setting is null, never a confident 0.
-      campaignSettings: buildCampaignSettings(metaObj),
+      //
+      // The block here is the COMPOSITE: the metadata-derived nine fields plus
+      // the nineteen `scenarioCustomizations` fields and the derived
+      // `armourMultipliers`. The metadata read stays byte-identical; the
+      // scenario block adds the rest without changing what the existing
+      // consumers observe.
+      campaignSettings: combineCampaignSettings(metadataBlock, scenarioBlock),
       // Campaign start year drives elapsed-years gating. An invented 2022
       // silently shifts every elapsed-time calculation.
       //

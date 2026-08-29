@@ -203,30 +203,25 @@ function buildRawSnapshot(saveData, { observerId = null } = {}) {
   const controlPointMaintenanceFreebies = firstNumericOrNull(
     rawGlobalValuesRow.controlPointMaintenanceFreebies
   );
-  // `TIGlobalValuesState.scenarioCustomizations.shipConstructionSpeed{Player,
-  // HumanAI,Alien}` -- the campaign's ship-construction speed setting, and the
-  // CAMPAIGN-GLOBAL half of the faction build-time multiplier in
-  // shared/shipBuildTime.mjs. The game picks one of the three by whether the
-  // building faction is the active player, the aliens, or a human AI, so all
-  // three are carried and the module resolves the bucket.
-  //
-  // The setting lives in the SAVE, not in `TIMetadataState`: it is absent from
-  // the custom-difficulty block `shared/campaignSettings.mjs` parses, which is
-  // why it is carried here beside that block rather than inside its `settings`
-  // map. On the live save all three read 2.
-  //
-  // Absent stays null throughout. `1 / undefined` is NaN and `1 / 0` is
-  // Infinity, so an unread bucket must reach the module as null and make it
-  // refuse or calibrate, never compute.
-  const rawScenarioCustomizations = rawGlobalValuesRow.scenarioCustomizations || {};
+  // The campaign-settings block the save parser bakes already extends the
+  // metadata-derived nine fields with the scenario-block readings from
+  // `TIGlobalValuesState.scenarioCustomizations`, including the three
+  // ship-construction speeds. Pull them from there so the campaign-global
+  // half of the ship-build-time multiplier in shared/shipBuildTime.mjs reads
+  // from one source of truth -- the save parser -- rather than re-extracting
+  // from rawGlobalValues a second time. Absent stays null throughout:
+  // `1 / undefined` is NaN and `1 / 0` is Infinity, so an unread bucket must
+  // reach the module as null and make it refuse or calibrate, never compute.
+  const shipSettings = campaignSettings.settings || {};
   const shipConstructionSpeed = {
-    Player: firstNumericOrNull(rawScenarioCustomizations.shipConstructionSpeedPlayer),
-    HumanAI: firstNumericOrNull(rawScenarioCustomizations.shipConstructionSpeedHumanAI),
-    Alien: firstNumericOrNull(rawScenarioCustomizations.shipConstructionSpeedAlien)
+    Player: shipSettings.shipConstructionSpeedPlayer?.value ?? null,
+    HumanAI: shipSettings.shipConstructionSpeedHumanAI?.value ?? null,
+    Alien: shipSettings.shipConstructionSpeedAlien?.value ?? null
   };
   // The campaign-settings block the rest of the snapshot reads, extended with
-  // the save-side ship-construction speed reading. Frozen like the base block
-  // so no reducer can move a number the module treats as a reading.
+  // the save-side ship-construction speed reading (kept at the top level for
+  // the existing consumer). Frozen like the base block so no reducer can move
+  // a number the module treats as a reading.
   const campaignSettingsWithShipSpeed = Object.freeze({
     ...campaignSettings,
     shipConstructionSpeed: Object.freeze(shipConstructionSpeed)
