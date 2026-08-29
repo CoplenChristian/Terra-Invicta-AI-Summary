@@ -9,10 +9,19 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
+import Box from '@mui/material/Box';
 import { ThemeProvider } from '@mui/material/styles';
 import { Panel } from '../components/Panel.jsx';
 import { TwoColumnGrid, TwoColumnGridItem } from '../components/TwoColumnGrid.jsx';
 import initiativeTheme from '../theme.js';
+
+function CommandStackItem({ order, children }) {
+  return (
+    <Box sx={{ width: '100%', order: { xs: order, md: 0 } }}>
+      {children}
+    </Box>
+  );
+}
 
 export function CommandPanel() {
   return (
@@ -49,36 +58,53 @@ export function CommandPanel() {
             maxWidth: '100%',
           }}
         >
-          <TwoColumnGridItem>
-            <div className="init-command-col">
-              <Panel title="THEATERS" headerAside="6 REGIONS" modifier="featured">
+          <TwoColumnGridItem sx={{ display: { xs: 'contents', md: 'block' } }}>
+            <Box className="init-command-col" sx={{ display: { xs: 'contents', md: 'flex' } }}>
+              <CommandStackItem order={1}>
+                <Panel title="THEATERS" headerAside="6 REGIONS" modifier="featured">
                 <div className="init-map-container">
                   <div className="world-map-fallback" role="status">REAL WORLD MAP INITIALIZING…</div>
                 </div>
                 <div id="mapSectorsList" className="init-sector-list" />
-              </Panel>
+                </Panel>
+              </CommandStackItem>
 
-              <Panel title="COUNCIL ORDERS" headerAside="EVERY COUNCILOR, THIS CYCLE" modifier="priority">
+              <CommandStackItem order={2}>
+                <Panel title="COUNCIL ORDERS" headerAside="EVERY COUNCILOR, THIS CYCLE" modifier="priority">
                 <div id="councilOrders" aria-live="polite">
                   <div className="council-orders__empty">LOADING COUNCIL ORDERS…</div>
                 </div>
-              </Panel>
+                </Panel>
+              </CommandStackItem>
 
-              <Panel title="THREAT PICTURE" headerAside="TOP SIGNALS" modifier="alert">
-                <div id="threatBoard" className="threat-board" aria-live="polite" />
-              </Panel>
+              <CommandStackItem order={3}>
+                <Panel title="THREAT PICTURE" headerAside="TOP SIGNALS" modifier="alert">
+                  <div id="threatBoard" className="threat-board" aria-live="polite" />
+                </Panel>
+              </CommandStackItem>
 
-              <Panel title="RESEARCH ADVISOR" headerAside="VALUE PER RESEARCH POINT" modifiers={['priority', 'dense']}>
+              <CommandStackItem order={4}>
+                <Panel title="RESEARCH ADVISOR" headerAside="VALUE PER RESEARCH POINT" modifiers={['priority', 'dense']}>
                 <div id="researchAdvisor" aria-live="polite">
                   <p className="research-advisor__empty">LOADING RESEARCH RANKING…</p>
                 </div>
-              </Panel>
-            </div>
+                </Panel>
+              </CommandStackItem>
+
+              <CommandStackItem order={8}>
+                <Panel title="DIRECTIVE ENGINE" headerAside="RECOMMENDED ACTION &amp; DECISION REASONING">
+                <div id="directiveBoard" aria-live="polite">
+                  <div className="alien-hate-econ-empty">LOADING DIRECTIVE ENGINE…</div>
+                </div>
+                </Panel>
+              </CommandStackItem>
+            </Box>
           </TwoColumnGridItem>
 
-          <TwoColumnGridItem>
-            <div className="init-command-col">
-              <Panel title="PRIORITY BRIEF" headerAside="ONE ACTION FIRST" modifier="priority">
+          <TwoColumnGridItem sx={{ display: { xs: 'contents', md: 'block' } }}>
+            <Box className="init-command-col" sx={{ display: { xs: 'contents', md: 'flex' } }}>
+              <CommandStackItem order={5}>
+                <Panel title="PRIORITY BRIEF" headerAside="ONE ACTION FIRST" modifier="priority">
                 <div id="priorityBriefCard" className="init-hologram-stage">
                   <div className="holo-core-content">
                     <div className="holo-core-badge" />
@@ -123,47 +149,44 @@ export function CommandPanel() {
                     </div>
                   </div>
                 </div>
-              </Panel>
+                </Panel>
+              </CommandStackItem>
 
-              <Panel
-                title="STRATEGIC COMMENTARY"
-                modifier="commentary"
-                headerAside={(
-                  <span id="commentaryModeBadge" className="commentary-mode-tag">CAMPAIGN READ</span>
-                )}
-              >
+              <CommandStackItem order={6}>
+                <Panel
+                  title="STRATEGIC COMMENTARY"
+                  modifier="commentary"
+                  headerAside={(
+                    <span id="commentaryModeBadge" className="commentary-mode-tag">CAMPAIGN READ</span>
+                  )}
+                >
                 <div id="strategicCommentary" aria-live="polite">
                   <div className="commentary-empty">ANALYZING STRATEGIC COMMENTARY…</div>
                 </div>
-              </Panel>
+                </Panel>
+              </CommandStackItem>
 
-              <Panel title="OPERATIONS BOARD" headerAside="ACTIVE COUNCILORS">
-                <div id="opLeaderboardList" className="operative-leaderboard" />
-              </Panel>
-            </div>
-          </TwoColumnGridItem>
+              <CommandStackItem order={7}>
+                <Panel title="OPERATIONS BOARD" headerAside="ACTIVE COUNCILORS">
+                  <div id="opLeaderboardList" className="operative-leaderboard" />
+                </Panel>
+              </CommandStackItem>
 
-          <TwoColumnGridItem>
-            <Panel title="DIRECTIVE ENGINE" headerAside="RECOMMENDED ACTION &amp; DECISION REASONING">
-              <div id="directiveBoard" aria-live="polite">
-                <div className="alien-hate-econ-empty">LOADING DIRECTIVE ENGINE…</div>
-              </div>
-            </Panel>
-          </TwoColumnGridItem>
-
-          <TwoColumnGridItem>
-            <Panel
-              title="EXECUTIVE BRIEF &amp; DIRECTIVES"
-              modifier="quiet"
-              headerAside={(
-                <button id="btnCopySitrep" className="init-btn" type="button">Copy SITREP</button>
-              )}
-            >
-              <div id="sitrepSummary" className="sitrep-summary" aria-live="polite">
-                <p>Generating the current executive situation report...</p>
-              </div>
-              <div id="directivesStreamList" />
-            </Panel>
+              <CommandStackItem order={9}>
+                <Panel
+                  title="EXECUTIVE BRIEF &amp; DIRECTIVES"
+                  modifier="quiet"
+                  headerAside={(
+                    <button id="btnCopySitrep" className="init-btn" type="button">Copy SITREP</button>
+                  )}
+                >
+                <div id="sitrepSummary" className="sitrep-summary" aria-live="polite">
+                  <p>Generating the current executive situation report...</p>
+                </div>
+                <div id="directivesStreamList" />
+                </Panel>
+              </CommandStackItem>
+            </Box>
           </TwoColumnGridItem>
         </TwoColumnGrid>
       </div>

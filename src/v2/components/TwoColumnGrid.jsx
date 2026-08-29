@@ -13,12 +13,16 @@ import { useTheme } from '@mui/material/styles';
  * @param {object} props
  * @param {boolean} [props.span=false] — full-width row spanning both columns
  * @param {React.ReactNode} props.children — usually a {@link Panel}
+ * @param {object} [props.sx] — merged after the defaults, so a caller can take
+ *   `display` back (COMMAND needs `display: contents` at `xs` to hold its mobile
+ *   reading order while its two column-stacks merge into one row above `lg`)
  */
-export function TwoColumnGridItem({ span = false, children }) {
+export function TwoColumnGridItem({ span = false, children, sx, ...rest }) {
   return (
     <Grid2
       size={span ? 12 : { xs: 12, lg: 6 }}
-      sx={{ minWidth: 0, maxWidth: '100%' }}
+      sx={{ minWidth: 0, maxWidth: '100%', ...sx }}
+      {...rest}
     >
       {children}
     </Grid2>
