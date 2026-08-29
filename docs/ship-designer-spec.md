@@ -17,10 +17,11 @@ Two consequences, and both make the feature smaller:
    against the faction's real design list. A combination lives as long as you are
    looking at it. That removes storage, migration and identity from the whole build —
    and it means the state can live in the page, since nothing outlives the session.
-2. **Three headline numbers**: **cruise acceleration, combat acceleration and
-   delta-V**, as a function of the drive and the ship's weight. Everything else —
-   cost, build time, heat, power ratio — is supporting detail that earns its place by
-   feeding those three or by explaining them.
+2. **Three headline numbers plus the bill**: **cruise acceleration, combat
+   acceleration and delta-V**, as a function of the drive and the ship's weight —
+   and, added 2026-08-29, the **total resource cost**. Build time, heat and power
+   ratio are supporting detail that earn their place by feeding those or explaining
+   them.
 
 **This is why the heat model still matters even though it is not one of the three.**
 Radiator mass *is* ship weight: it is derived from waste heat, it can exceed a
@@ -50,10 +51,18 @@ solved in this repo or fall straight out of the templates:
 | under-powered drives | **already modelled** — thrust scales, it is not a veto |
 | research gating | **already in the snapshot** — `unlockIndex`, 436 gates, **0 unresolved** |
 | build time | **already built** — `shared/shipBuildTime.mjs`, calibrated |
-| **heat and radiator sizing** | **NOT built, and the formula is not verified.** This is the real work. |
+| heat and radiator sizing | **formula VERIFIED** from the game's codex, confirmed to the digit against a published 125 t/GW figure. Not yet *built*. |
+| **total resource cost** | **shape known, one constant unconfirmed** — see §5 |
 
-So the honest scope is: a lot of composition and UI over existing engines, plus one
-genuinely new physical model that has to be pinned down before it can be trusted.
+So the honest scope is: a lot of composition and UI over engines that already exist,
+plus two models to implement — heat, whose formula is now settled, and the resource
+bill, whose *shape* is settled but whose per-ton rate is confirmed for only one
+subsystem.
+
+**The one number that would silently poison everything** is that per-ton rate. Get it
+wrong and every bill in the feature is off by the same factor, which is
+self-consistent, plausible-looking, and uniformly wrong. It is the first thing Part 1b
+should pin down and the first thing to check against the in-game designer.
 
 ---
 
@@ -153,16 +162,82 @@ remainder are the starting components, available from turn one.
 **Both modes must be tested.** Player mode is a genuinely different path in this
 repo, and two shipped defects came from checking only omniscient.
 
-## 5. Cost — sum the materials, and say when you could not
+## 5. Total resource cost — asked for explicitly, and it is a VECTOR, not a number
 
-Every component carries `weightedBuildMaterials`. Hulls also carry
-`baseConstructionTime_days`, `consTier` and `shipyardyOffset`, which
-`shared/shipBuildTime.mjs` already turns into a calibrated build time at a specific
-shipyard.
+**Requested by the owner, 2026-08-29: "Also total cost of resources!"**
 
-**Unverified:** whether total cost is a plain sum of component materials or is
-scaled by hull, tier or faction modifiers. Do not present a summed figure as the
-game's own number until one design has been checked against the in-game designer.
+The first thing to get right is that a ship does not cost *an* amount. It costs a
+bill across **seven materials**, measured across every ship component in the
+templates:
+
+```
+water   volatiles   metals   nobleMetals   fissiles   exotics   antimatter
+```
+
+A single "cost" figure would hide the thing that actually decides whether you can
+build a design — you can be metal-rich and fissile-poor, and the game's stockpiles in
+this save differ by orders of magnitude (Metals 73,663 against Fissiles 2,060). **Show
+the vector, and show it against the faction's stockpile**, so the answer is "you can
+afford three of these" rather than a number with no scale.
+
+### `weightedBuildMaterials` is a MIX RATIO, not a cost
+
+Measured: it sums to exactly 1.0 on **714 of 723** ship components. It is a
+composition, not an amount — the localization label for it is literally
+**"Materials Per Ton"**.
+
+**Three components break the sum, and they are all alien**, so they must not be
+quietly normalised:
+
+| component | sums to |
+| :-- | --: |
+| Alien Mothership | **0.9000** |
+| Alien Advanced Hybrid Confinement Fusion Reactor | 0.9968 |
+| Alien Super Advanced Hybrid Confinement Fusion Reactor | 1.0020 |
+
+The two reactors are rounding. **The Mothership's 0.90 is a 10% shortfall**, which is
+either deliberate or a data bug, and either way the designer must report the shortfall
+rather than scaling it to 1 and inventing the missing tenth.
+
+### The amount comes from MASS, and the codex gives one hard anchor
+
+There is **no cost field on any ship component** — only mass fields. The assembly
+confirms the shape: `GetLocalizeCostPerTon`, and per-subsystem accessors
+`get_powerPlantBuildCost`, `get_radiatorsBuildCost`, `get_noseArmorBuildCost`,
+`get_lateralArmorBuildCost`, `get_tailArmorBuildCost`, `propellantTanksBuildCost`.
+**Those accessors are also the breakdown the designer should render** — the game
+itself costs a ship by subsystem, so the panel can attribute the bill rather than
+presenting one opaque total.
+
+The codex gives an exact ratio for one subsystem:
+
+> *"Each 100-ton propellant tank added to the ship will require **10 units** of this
+> mix from your resource stockpiles to construct and resupply."*
+
+**100 tons → 10 units. A ratio of 0.1 units per ton**, distributed by the mix.
+
+```
+resourceCost[material] = componentMass_tons × RATE × weightedBuildMaterials[material]
+```
+
+**`RATE` is confirmed at 0.1 for propellant tanks and UNCONFIRMED for everything
+else.** Do not assume one rate covers all seven families until it is checked — a
+single wrong constant would scale every bill in the feature by the same factor, which
+is exactly the kind of error that looks self-consistent and is uniformly wrong.
+
+### Two further wrinkles, both named in the assembly
+
+- **`earthResourceConstructionCost` and `_spaceResourceConstructionCost` are separate.**
+  Where you build changes what it costs. A designer that quotes one bill regardless of
+  shipyard is answering a question the game does not ask.
+- **`GetTypicalShipBuildCostSansRareMaterials`** exists, so the game itself
+  distinguishes the bill with and without rare materials. Worth mirroring: exotics and
+  antimatter are the constraints that actually bite, and burying them in a seven-row
+  table hides that.
+
+Build *time* is separate and already solved — hulls carry `baseConstructionTime_days`,
+`consTier` and `shipyardyOffset`, and `shared/shipBuildTime.mjs` turns them into a
+calibrated figure at a specific shipyard. **Do not reimplement it.**
 
 ---
 
