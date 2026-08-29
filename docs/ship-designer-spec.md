@@ -482,6 +482,61 @@ Confirms §6 exactly, and explains `DoesDriveHeatExceedRadiatorAndOverheatInOneS
   with the drive alone. A low-thrust ship with heavy utility draw is sized by its
   systems.
 
+## 6c. Armour — the heaviest part of most ships, and it is NON-LINEAR
+
+The wiki gives the armour formulas outright (stated as of 0.4.90), and they matter
+more than anything else in the mass budget: *"Armor is typically the heaviest (and
+most expensive) part of a ship."*
+
+```
+Plate Thickness (m) = 20 MJ / heatofVaporization_MJkg / density_kgm3 / 0.005 m²
+
+Nose Thickness = Plate × nose points        Side Thickness = Plate × side points
+Tail Thickness = Plate × tail points
+
+Nose Volume (m³) = NoseThickness × π × (HullWidth/2 + SideThickness)²
+Tail Volume (m³) = TailThickness × π × (HullWidth/2 + SideThickness)²
+Side Volume (m³) = π × HullLength × ((HullWidth/2 + SideThickness)² − (HullWidth/2)²)
+
+Armour Mass (kg) = Volume (m³) × density_kgm3
+```
+
+Every input exists in the data already: `heatofVaporization_MJkg` and `density_kgm3`
+on `TIShipArmorTemplate`, `length_m` and `width_m` on `TIShipHullTemplate`.
+Computed plate thicknesses come out physically sensible — 7.5 cm for Steel, 13.8 cm
+for Composite, 22.2 cm for Boron Carbide.
+
+**THE NON-LINEARITY IS THE WHOLE POINT, and it is severe.** Side thickness appears
+inside the nose and tail volume terms, so buying side armour enlarges the nose and
+tail caps as well; and the side term is quadratic in it. Computed for the observer's
+own *Devilfish Block 2* — Escort hull, 50 m × 10 m, Composite armour, nose 4 / tail 1:
+
+| side armour | total armour mass |
+| --: | --: |
+| 0 points | **104.7 t** |
+| 1 point | **429.1 t** |
+| 2 points | 762.3 t |
+| 4 points | 1,455.2 t |
+
+**The first point of side armour costs 324 tons on a 350-ton hull** — it roughly
+doubles the ship. That is why the wiki says side armour runs "10–35× heavier per
+point than nose/tail armor", and it is the single most useful thing this designer can
+show a player. A linear armour model would understate it catastrophically.
+
+### It also depends on a campaign setting, which this repo does not currently track
+
+Volumes are multiplied by ship-scaling modifiers chosen at campaign creation:
+
+| facing | Cinematic | Realistic |
+| :-- | --: | --: |
+| Nose / Tail | 1 | **3** |
+| Side | 0.75 | **0.5** |
+
+The same Devilfish armour is **104.7 t under Cinematic and 314.2 t under Realistic** —
+a 3× swing on an input the player picked once and may not remember. `shared/campaignSettings.mjs`
+exists but does **not** record this choice. **The designer must read it or say it is
+unknown**; silently assuming one is a 3× error on the largest mass term in the ship.
+
 ## 7. What else the codex settled — several of these change the UI, not just the math
 
 `UICodex.en` documents the designer far better than the game's own UI does, and four
