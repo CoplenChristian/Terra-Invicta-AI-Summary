@@ -81,6 +81,10 @@ import {
   renderExpansionPanel,
 } from './panels/ExpansionPanel.jsx';
 import {
+  FleetPanel,
+  renderFleetPanel,
+} from './panels/FleetPanel.jsx';
+import {
   CapabilityMatrixBoard,
   FactionLedgerBoard,
   LogisticsBoard,
@@ -453,6 +457,7 @@ export { renderBattlePanel };
 export { renderThreatPanel };
 export { renderCommandPanel };
 export { renderExpansionPanel };
+export { renderFleetPanel };
 
 // The DRIVES panel owns a module-level store (scripts/verify_drive_explorer.js
 // reads it), so it mounts itself rather than being handed a fresh element on
@@ -490,6 +495,9 @@ if (typeof window !== 'undefined') {
   };
   window.MissionControlExpansionPanel = {
     render: renderExpansionPanel,
+  };
+  window.MissionControlFleetPanel = {
+    render: renderFleetPanel,
   };
   window.MissionControlMiningExpansion = {
     render: renderMiningExpansion,
@@ -568,6 +576,11 @@ if (typeof window !== 'undefined') {
     renderExpansionPanel(expansionPlannerEl);
   }
 
+  const fleetPlannerEl = document.getElementById('fleetPlanner');
+  if (fleetPlannerEl) {
+    renderFleetPanel(fleetPlannerEl);
+  }
+
   if (window.MissionControlViews?.assertViewRegistryIntegrity) {
     window.MissionControlViews.assertViewRegistryIntegrity();
   }
@@ -586,6 +599,7 @@ if (typeof window !== 'undefined') {
     mountThreatPanel: renderThreatPanel,
     mountCommandPanel: renderCommandPanel,
     mountExpansionPanel: renderExpansionPanel,
+    mountFleetPanel: renderFleetPanel,
     mountDirectiveBoard: renderDirectiveBoard,
     mountResearchAdvisor: renderResearchAdvisor,
     mountFleetProcurement: renderFleetProcurement,

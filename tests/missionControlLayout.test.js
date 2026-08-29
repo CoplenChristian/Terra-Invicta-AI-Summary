@@ -436,6 +436,12 @@ test('no view grid claims more tracks than its own cards can fill, and no table 
       await gotoView(page, 'expansion');
       collectHints(mode, 1600, 'expansion', await page.evaluate(measureScrollHints, 'expansion'));
 
+      // FLEET lays out through TwoColumnGrid (`.init-view__grid` via React).
+      await page.setViewportSize({ width: 1600, height: 1000 });
+      await page.waitForTimeout(200);
+      await gotoView(page, 'fleet');
+      collectHints(mode, 1600, 'fleet', await page.evaluate(measureScrollHints, 'fleet'));
+
       // THREAT lays out through TwoColumnGrid (`.init-view__grid` via React).
       // Visit it for scroll-hint measurement only.
       await page.setViewportSize({ width: 1600, height: 1000 });

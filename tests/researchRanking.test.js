@@ -1504,8 +1504,10 @@ test('zero-cost rows do not render in research-advisor and render in fleet-procu
 test('fleet procurement is mounted in FLEET view and loaded by the shell', () => {
   const html = fs.readFileSync(v2ShellPath, 'utf8');
   const missionControl = fs.readFileSync(missionControlPath, 'utf8');
+  const fleetPanelJs = fs.readFileSync(path.join(__dirname, '..', 'src', 'v2', 'panels', 'FleetPanel.jsx'), 'utf8');
 
-  assert.ok(html.includes('id="fleetProcurement"'), 'the mount element must exist');
+  assert.ok(html.includes('id="fleetPlanner"'), 'the fleet view needs its #fleetPlanner mount element');
+  assert.ok(fleetPanelJs.includes('id="fleetProcurement"'), 'the panel mount must live in FleetPanel.jsx');
   // Flipped by the React migration (2026-08-26), following the same precedent as
   // the research advisor twelve tests above: the vanilla component is deleted, so
   // its <script> tag must be GONE and the bundle that now supplies
@@ -1521,8 +1523,8 @@ test('fleet procurement is mounted in FLEET view and loaded by the shell', () =>
 
   const fleet = html.match(/<section[^>]*id="view-fleet"[\s\S]*?<\/section>/);
   assert.ok(fleet, '#view-fleet must exist');
-  assert.ok(fleet[0].includes('id="fleetProcurement"'),
-    'the panel must live inside the view its registry entry claims');
+  assert.ok(fleet[0].includes('id="fleetPlanner"'),
+    'the fleet shell mount must live inside the view its registry entry claims');
 
   assert.ok(/panels: \[[\s\S]*?'fleetProcurement'[\s\S]*?\]/.test(missionControl),
     'the view registry must list fleetProcurement');
