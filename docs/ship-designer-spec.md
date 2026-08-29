@@ -51,18 +51,18 @@ solved in this repo or fall straight out of the templates:
 | under-powered drives | **already modelled** — thrust scales, it is not a veto |
 | research gating | **already in the snapshot** — `unlockIndex`, 436 gates, **0 unresolved** |
 | build time | **already built** — `shared/shipBuildTime.mjs`, calibrated |
-| heat and radiator sizing | **formula VERIFIED** from the game's codex, confirmed to the digit against a published 125 t/GW figure. Not yet *built*. |
-| **total resource cost** | **shape known, one constant unconfirmed** — see §5 |
+| heat and radiator sizing | **formula VERIFIED** from the codex, confirmed to the digit against a published 125 t/GW figure |
+| power draw (systems / weapons / propulsion) | **VERIFIED** — the wiki states all three, and the propulsion line reproduces stored `req power` on **476 of 487** drives |
+| total resource cost | **shape verified, rate corroborated twice** — see §5 |
 
-So the honest scope is: a lot of composition and UI over engines that already exist,
-plus two models to implement — heat, whose formula is now settled, and the resource
-bill, whose *shape* is settled but whose per-ton rate is confirmed for only one
-subsystem.
+**Nothing in the physics is now guesswork.** The remaining work is composition and
+UI over engines that already exist, plus implementing two models — heat and the
+resource bill — whose formulas are written down and checked rather than inferred.
 
-**The one number that would silently poison everything** is that per-ton rate. Get it
-wrong and every bill in the feature is off by the same factor, which is
-self-consistent, plausible-looking, and uniformly wrong. It is the first thing Part 1b
-should pin down and the first thing to check against the in-game designer.
+The one number that could still silently poison everything is the **0.1 units/ton
+rate**. It is no longer a guess: the codex and the wiki state it independently for
+two unrelated subsystems. But two agreeing documents are not a measurement, so it is
+still the first thing to confirm against the in-game designer.
 
 ---
 
@@ -220,10 +220,42 @@ The codex gives an exact ratio for one subsystem:
 resourceCost[material] = componentMass_tons × RATE × weightedBuildMaterials[material]
 ```
 
-**`RATE` is confirmed at 0.1 for propellant tanks and UNCONFIRMED for everything
-else.** Do not assume one rate covers all seven families until it is checked — a
-single wrong constant would scale every bill in the feature by the same factor, which
-is exactly the kind of error that looks self-consistent and is uniformly wrong.
+**`RATE = 0.1 units per ton, now confirmed on TWO independent subsystems.**
+
+| source | mass | resource units | ⇒ rate |
+| :-- | --: | --: | --: |
+| codex, propellant tanks | 100 t | 10 units of the mix | **0.1 / t** |
+| wiki, `Radiator List` — crew | 4 t | 0.2 water + 0.2 volatiles = 0.4 | **0.1 / t** |
+
+Two unrelated subsystems, documented in two unrelated places, landing on the same
+constant is much stronger evidence than either alone. It was the number flagged as
+"would silently poison everything"; it is now the best-supported constant in the
+model. **Still worth one check against the in-game designer before shipping a bill**,
+because two agreeing sources is not the same as a measurement.
+
+The wiki also states the radiator rule directly: *"The displayed resource costs are
+shown as % of the radiator's required mass, based on its tons per GW and the ship's
+heat output"* — confirming that radiator cost follows derived mass, and noting that
+**crew cost is FLAT and separate**, not folded into that percentage.
+
+### Earth-built and space-built ships are paid for in different currencies
+
+Not merely different amounts. From the wiki:
+
+> *"this resource cost is always calculated in terms of space resources (water,
+> volatiles, metals, nobles, fissiles, exotics, antimatter), even if the ship was
+> originally constructed using **boost** and **money**."*
+
+So a ship built at Earth is bought with **boost and money**; one built in space with
+the seven space resources. That is what `earthResourceConstructionCost` and
+`_spaceResourceConstructionCost` are, and a designer quoting one bill regardless of
+where you build is answering the wrong question. Scuttling at a construction module
+refunds **25% of the space cost**, excluding fuel.
+
+One further wrinkle worth carrying: **if the drive uses He3 and the faction has an
+active Helium-3 Mine, every fissile cost for propellant becomes water instead.** A
+propellant bill that ignores that will overstate fissile draw for exactly the
+factions that solved it.
 
 ### Two further wrinkles, both named in the assembly
 
@@ -371,6 +403,56 @@ resolutions, labelled as such. A range is honest; picking one silently is not.
    were the productive sources instead.
 
 ---
+
+## 6b. The power and heat model, in full — from the official wiki, 2026-08-29
+
+The wiki became reachable (it had been blocking the owner's VPN, not me specifically)
+and `Fleets#Power_and_Heat` states the model in formulas. Read as **raw wikitext via
+`https://wiki.hoodedhorse.com/Terra_Invicta/api.php`**, which is where this project's
+notes already said the real content lives.
+
+```
+Required Systems Power (GW)
+  = 1.1 × ( Crew × 0.000005 GW
+          + Hull Construction Tier × 0.005 GW
+          + Σ Utility Module Power Requirements (MW) × 0.001 GW/MW )
+
+Required Weapons Power (GW)
+  = Σ over each NOT-self-powered weapon:
+      Power Used Per Shot (GJ) / min(Cooldown_s, IntraSalvoCooldown_s)
+
+Required Propulsion Power (GW)
+  = 0 if the drive is self-powered, otherwise
+    Thrust (N) × EV (km/s) × 0.5 × 1e-6 / Drive Efficiency
+```
+
+**I verified the propulsion line against all 541 drives: 476 of 487 match the stored
+`req power` within 0.5%.** The other 11 are all sub-0.01 GW drives — Resistojet
+stored as `0.002` against a predicted `0.0018` — where three-decimal storage
+quantisation is larger than the value being compared. **54 drives store `req power`
+as 0**, exactly matching *"0 if the Drive is Self-Powered"*.
+
+So the drive's own `efficiency` **does** matter — it sets how much power the drive
+*demands*. The **power plant's** efficiency separately sets how much of that arrives
+as heat. Both are real; conflating them was the earlier error.
+
+### Heat, stated as a rate
+
+> *"the ship's heat increases by: `Required Systems Power (GW) × 1s × (1 − Power
+> Plant efficiency)`"*
+
+Confirms §6 exactly, and explains `DoesDriveHeatExceedRadiatorAndOverheatInOneSecond`
+— the game accumulates heat per second and per 0.25 s tick against radiator capacity.
+
+**Two facts that change which designs are hot:**
+
+- **Naval guns and missiles produce NO waste heat.** The wiki says so twice, and adds
+  that they keep firing "even when the radiators are destroyed and the heat sinks are
+  filled." So a kinetic/missile ship is thermally cheap and a beam ship is not —
+  which is a design axis the readout should make visible.
+- **Power plant mass scales with `max(drive power need, systems power need)`**, not
+  with the drive alone. A low-thrust ship with heavy utility draw is sized by its
+  systems.
 
 ## 7. What else the codex settled — several of these change the UI, not just the math
 
