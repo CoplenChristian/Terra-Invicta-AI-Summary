@@ -92,7 +92,24 @@ The directive engine is councilor-facing and cannot see an incoming alien fleet:
 arrivals carry none), what is measured vs inferred in the hate reasoning, and the
 six-step phasing. Steps 1-3 are worth doing regardless of the advisor.
 
-**View layout onto MUI `Grid2`** — five of six views landed, RECORDS in flight.
+**[`ship-designer-spec.md`](ship-designer-spec.md)** — design, not built. Requested
+2026-08-29: build *new* designs in the dashboard and read their cost and performance,
+with omniscient offering every part and player mode only what this faction has
+researched. **Four of the five hard parts are already solved** — drive↔reactor
+compatibility is a direct `requiredPowerPlant` ↔ `powerPlantClass` join, propulsion
+and build time are existing calibrated engines, and the research gate is already in
+the snapshot as `unlockIndex` (436 gates, 1,223 entries, **0 unresolved**).
+
+**Heat is the real work.** `Assembly-CSharp.dll` names the model —
+`get_wasteHeat_GW`, `get_radiatorMass_tons`, `get_radiatorsBuildCost`,
+`DoesDriveHeatExceedRadiatorAndOverheatInOneSecond` — so radiator mass is **derived
+from heat, not chosen**, and the constraint is per-second. The formula itself is
+**not verified**: the spec carries a labelled hypothesis with plausible magnitudes,
+and two blockers. `drive.cooling` has a third value, `Calc`, on **186 of 541**
+drives whose meaning is unknown; and `ilspycmd` needs .NET 10 while this machine has
+9.0.18, so the decompile route that established `shipBuildTime.mjs` is closed for now.
+
+**View layout onto MUI `Grid2`** — **DONE**, all six views, `.init-view__grid` deleted.
 This is the payoff of the React migration: the widgets were already components, the
 layout was not. Each view moves from the hand-rolled `.init-view__grid` to
 `src/v2/components/TwoColumnGrid.jsx`, one view per commit, each proving it changed
@@ -105,27 +122,33 @@ nothing.
 | EXPANSION | `32f8de4` | 16 differences, all one property that stopped applying |
 | FLEET | `862d620` | 145 values, zero differences |
 | DRIVES | `8026533` | 121 values, zero differences |
-| RECORDS | — | in flight |
+| RECORDS | `19212bb` | 913 values, zero differences — **and it caught the 900–1192px band** |
+| *delete the CSS* | `5107c93` | 5,130 values, six views, zero differences |
 
-`23c2374` put `TwoColumnGrid` on real `Grid2` first. Two things follow RECORDS and
-neither is done:
+`23c2374` put `TwoColumnGrid` on real `Grid2` first. **Both follow-ups are done**,
+and the second one is the reason this entry is worth reading:
 
-- **`.init-view__grid` is not yet deleted** from `05-view-grid.css`, and the
-  `.init-view__grid` selectors in `15-responsive.css` are not either. They go
-  together, with all six views diffed to zero, because deleting CSS is a refactor
-  too. **`.init-view__span` stays** — `Panel.jsx`, `DriveExplorer.jsx`,
-  `FleetPanel.jsx` and `FleetProcurement.jsx` still emit it, and its `min-width: 0`
-  is live even though its `grid-column` is inert under flexbox.
-- **A width band none of the five conversions probed.** Legacy is
-  `repeat(auto-fit, minmax(min(100%, 560px), 1fr))`, so it holds two columns only
-  above ~1144px; `TwoColumnGrid` uses `size={{ xs: 12, md: 6 }}` and the theme does
-  not override breakpoints, so MUI's `md` is 900px. **Between 900 and 1144 the two
-  disagree** — legacy one column, Grid2 two of ~476px. The captures ran at
-  375/414/768/desktop, which straddles that band without entering it. RECORDS is
-  where it would bite hardest: the 560px floor was measured from its own cards
-  (ledger 515px, TECHNOLOGY WATCH 492px). **Unmeasured, not benign** — RECORDS'
-  capture is taking the 1000/1100 readings, and whatever it finds applies to all
-  five commits above, not to RECORDS alone.
+- **`.init-view__grid` is deleted** (`5107c93`), along with its selectors in
+  `15-responsive.css`. `.init-grid-layout`, `.init-view__span` and
+  `.init-view__full-card` all survive deliberately — four React panels still emit
+  `__span`, and its `min-width: 0` is live even though its `grid-column` is inert
+  under flexbox.
+- **A width band that five conversions shipped without ever measuring.** Legacy is
+  `repeat(auto-fit, minmax(min(100%, 560px), 1fr))`, so it takes a second column
+  only at 2×560 + 24 + 48 = **1192px**. `TwoColumnGridItem` asked for `md`, and MUI's
+  `md` is **900px** — `theme.js` overrides no breakpoints. Between 900 and 1192 the
+  two disagreed, and the captures ran at 375/414/768/desktop, which steps over that
+  band without landing in it.
+
+  **RECORDS caught it, because it bites hardest there**: the 560px floor was measured
+  from RECORDS' own cards, and at 1000px the ledger went **918px → 430px and gained a
+  horizontal-swipe affordance it never had**. Fixed in `19212bb` by `md: 6` → `lg: 6`
+  (MUI's 1200px, within 8px of legacy). **It was never a RECORDS defect** — THREAT
+  and COMMAND carried it too, invisibly.
+
+  The standing lesson: **1000 and 1100 are now first-class capture widths**, and
+  `scripts/capture_*_view_proof.js` covers all six views so the next layout change
+  re-proves itself in one command.
 
 ---
 
