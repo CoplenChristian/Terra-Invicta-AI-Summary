@@ -523,7 +523,7 @@ doubles the ship. That is why the wiki says side armour runs "10–35× heavier 
 point than nose/tail armor", and it is the single most useful thing this designer can
 show a player. A linear armour model would understate it catastrophically.
 
-### It also depends on a campaign setting, which this repo does not currently track
+### It depends on a campaign setting — and THE SAVE RECORDS IT
 
 Volumes are multiplied by ship-scaling modifiers chosen at campaign creation:
 
@@ -533,9 +533,45 @@ Volumes are multiplied by ship-scaling modifiers chosen at campaign creation:
 | Side | 0.75 | **0.5** |
 
 The same Devilfish armour is **104.7 t under Cinematic and 314.2 t under Realistic** —
-a 3× swing on an input the player picked once and may not remember. `shared/campaignSettings.mjs`
-exists but does **not** record this choice. **The designer must read it or say it is
-unknown**; silently assuming one is a 3× error on the largest mass term in the ship.
+a 3× swing on the largest mass term in the ship.
+
+**The owner did not remember which he picked and proposed a frontend toggle. No
+toggle is needed to answer it: the save says so.** Found in the campaign-settings
+block, beside the nine values this repo already reads:
+
+```
+"cinematicCombatRealismScale": true      ← this campaign is CINEMATIC
+"cinematicCombatRealismDV":    true
+```
+
+So for this campaign the multipliers are **nose/tail ×1, side ×0.75**, and the
+Devilfish figure is **104.7 t**.
+
+**Read it, default to it, and still offer the toggle as an override** — flipping it is
+a legitimate "what if I'd picked the other one" experiment, and this is a calculator.
+But the default must come from the save, and a design must never be scored against an
+assumed setting when the real one is sitting in the file.
+
+### That block holds 28 settings and the dashboard reads 9
+
+Enumerated from the save while chasing the above. Already read: the nine custom-difficulty
+values, plus `shipConstructionSpeed` (Player/HumanAI/Alien, all **2.0** here) which
+`shared/shipBuildTime.mjs` needs.
+
+**Not read, and at least two matter:**
+
+| setting | value here | why it matters |
+| :-- | :-- | :-- |
+| `cinematicCombatRealismScale` | `true` | the armour multipliers above — a 3× term |
+| `cinematicCombatRealismDV` | `true` | pairs with it; effect on delta-V not yet established |
+| `habConstructionSpeedPlayer` / `HumanAI` / `Alien` | **2.0** | hab build times run at 200%; anything modelling them without this is 2× out |
+| `miningRatePlayer` / `HumanAI` / `Alien` | 1.0 | **distinct from** `miningProductivityMultiplier` (200%), so the two are not interchangeable |
+| `variableProjectUnlocks` | `true` | which projects appear at all |
+| `addAlienAssaultCarrierFleet` | `false` | threat composition |
+
+This is a `campaignSettings` gap, not a designer gap, but the designer is what
+surfaced it and `habConstructionSpeed` is the kind of 2× that goes unnoticed because
+the result still looks plausible.
 
 ## 7. What else the codex settled — several of these change the UI, not just the math
 
