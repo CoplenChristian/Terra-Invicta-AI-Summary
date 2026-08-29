@@ -85,6 +85,10 @@ import {
   renderFleetPanel,
 } from './panels/FleetPanel.jsx';
 import {
+  DrivesPanel,
+  renderDrivesPanel,
+} from './panels/DrivesPanel.jsx';
+import {
   CapabilityMatrixBoard,
   FactionLedgerBoard,
   LogisticsBoard,
@@ -458,6 +462,7 @@ export { renderThreatPanel };
 export { renderCommandPanel };
 export { renderExpansionPanel };
 export { renderFleetPanel };
+export { renderDrivesPanel };
 
 // The DRIVES panel owns a module-level store (scripts/verify_drive_explorer.js
 // reads it), so it mounts itself rather than being handed a fresh element on
@@ -498,6 +503,9 @@ if (typeof window !== 'undefined') {
   };
   window.MissionControlFleetPanel = {
     render: renderFleetPanel,
+  };
+  window.MissionControlDrivesPanel = {
+    render: renderDrivesPanel,
   };
   window.MissionControlMiningExpansion = {
     render: renderMiningExpansion,
@@ -558,7 +566,7 @@ if (typeof window !== 'undefined') {
   // instead of being silently skipped.
   syncDetailPanelPageInert();
 
-  // THREAT, COMMAND, and EXPANSION panel mount ids live in the React shell, not static HTML.
+  // THREAT, COMMAND, EXPANSION, FLEET, and DRIVES panel mount ids live in the React shell, not static HTML.
   // Mounting here — before the briefing fetch — keeps assertViewRegistryIntegrity
   // honest on first paint.
   const commandPlannerEl = document.getElementById('commandPlanner');
@@ -581,6 +589,11 @@ if (typeof window !== 'undefined') {
     renderFleetPanel(fleetPlannerEl);
   }
 
+  const drivesPlannerEl = document.getElementById('drivesPlanner');
+  if (drivesPlannerEl) {
+    renderDrivesPanel(drivesPlannerEl);
+  }
+
   if (window.MissionControlViews?.assertViewRegistryIntegrity) {
     window.MissionControlViews.assertViewRegistryIntegrity();
   }
@@ -600,6 +613,7 @@ if (typeof window !== 'undefined') {
     mountCommandPanel: renderCommandPanel,
     mountExpansionPanel: renderExpansionPanel,
     mountFleetPanel: renderFleetPanel,
+    mountDrivesPanel: renderDrivesPanel,
     mountDirectiveBoard: renderDirectiveBoard,
     mountResearchAdvisor: renderResearchAdvisor,
     mountFleetProcurement: renderFleetProcurement,
