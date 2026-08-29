@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**251 JS modules** and **26 stylesheet parts** (277 indexed files).
+**252 JS modules** and **26 stylesheet parts** (278 indexed files).
 
 ## `public/`
 
@@ -217,6 +217,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `shared/researchReachability.mjs` | E | Node + Cloudflare worker (ESM) | 220 | the planning horizon a multi-step research chain has to fit inside | `PLANNING_HORIZON_BASIS, REACHABILITY_STATES, buildPlanningHorizon, chainReachability` | `tests/researchReachability.test.js` |
 | `shared/researchSlots.mjs` | E | Node + Cloudflare worker (ESM) | 520 | research-advisor phase-5 allocation of research to slots. | `ALLOCATION_MODEL, SLOT_INDEX_PIN, SLOT_KINDS, SLOT_KIND_LABELS, buildResearchSlotAllocation` | `tests/researchSlots.test.js` |
 | `shared/shipBuildTime.mjs` | E | Node + Cloudflare worker (ESM) | 867 | days-to-build for a ship design at a specific shipyard — the hull's | `CALIBRATION_RELATIVE_TOLERANCE, NO_SHIPYARD_BUILD_HULLS, SHIP_BUILD_EXCLUDED_TERMS, SHIP_BUILD_REFUSALS, SHIP_BUILD_TIME_SOURCES, SHIP_CONSTRUCTION_MODULES, SHIP_CONSTRUCTION_TIME_EFFECTS, SMALL_SHIPYARD_PENALTY_POWER_PER_TIER, buildBeatsArrival, calibrateFactionShipBuildModifier, calibrationRowsFromSnapshot, daysUntil, …(+9)` | `tests/shipBuildTime.test.js` |
+| `shared/shipComponentCatalogue.mjs` | E | Node + Cloudflare worker (ESM) | 924 | normalize the seven ship-designer component families, join each | `DRIVE_THRUSTER_COUNTS, SHIP_COMPONENT_FAMILIES, buildShipComponentCatalogue, componentCatalogue, parseCatalogueNumber, shipComponentCatalogue, verifyDriveThrusterLadders` | `tests/shipComponentCatalogue.test.js` |
 | `shared/spaceMiningBonus.mjs` | E | Node + Cloudflare worker (ESM) | 370 | the faction-wide ADDITIVE space-mining output bonus — org | `SPACE_MINING_BONUS_COMBINATION, SPACE_MINING_BONUS_EFFECT_VALUES, SPACE_MINING_BONUS_MEASURED_ON, SPACE_MINING_BONUS_STATES, applySpaceMiningBonus, buildSpaceMiningBonus, spaceMiningBonusCaveat` | `tests/spaceMiningBonus.test.js` |
 | `shared/strategicDelta.mjs` | E | Node + Cloudflare worker (ESM) | 418 | compute the difference between two strategic_snapshot_v1 documents | `buildStrategicDelta, deriveStructuredEvents, totalWarActive, totalWarStateOf` | `tests/strategicDelta.test.js` |
 | `shared/strategicSnapshot.mjs` | E | Node + Cloudflare worker (ESM) | 617 | reduce a full raw snapshot to a compact strategic_snapshot_v1 | `DEFAULT_HISTORY_POLICY, HAB_CONSTRUCTION_MODULES, MINE_LIMIT_GRANTS, SHIP_CONSTRUCTION_MODULES, STRATEGIC_SNAPSHOT_SCHEMA, STRATEGIC_SNAPSHOT_VERSION, buildStrategicSnapshot, deriveEvents` | `tests/strategicSnapshot.test.js` |
