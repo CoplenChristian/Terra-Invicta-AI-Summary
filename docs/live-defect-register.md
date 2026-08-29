@@ -66,9 +66,11 @@ not there, so the next reader of any shape fails loudly and names itself.
 
 **Live right now: #17 and #21.**
 
-- **#17** — four fabricated fallbacks in the directive board, carried across the
-  React port **deliberately**, because "no figure may change" was that port's
-  bar. In progress.
+- **#17** — **all four fabricated fallbacks are FIXED**, measured against the
+  source on 2026-08-29, and so are the three latent `?? 0`. What is still live is
+  the *other* half of the entry: `jointlyAffordableIsUpperBound` is emitted by the
+  engine and rendered by **no** surface, so a figure the engine explicitly labels
+  an upper bound is still shown as a plain count. See the entry for the audit.
 - **#21** — the em-dash affordance hand-written in eleven panels. Not urgent:
   the rendered output is correct today, and the cost is that the rule holds by
   convention rather than by structure. **Three of the eleven are done** —
@@ -929,6 +931,23 @@ reviewable change — which is the point of writing them down.
 :905   whyList.join(' · ') || 'Optimal expected value under cycle budget constraints.'
 ```
 
+> **AUDITED 2026-08-29 — all four are fixed, and this entry had gone stale.**
+> Measured against `src/v2/panels/DirectiveBoard.jsx` as it stands:
+> `'Free'` is now gated on `cost === 0`, so only a **measured** zero reads free;
+> `confidence` renders through a `present={typeof … === 'string' && …trim() !== ''}`
+> gate; `opportunityCost` is conditional at `:559` and presence-gated at `:1011`;
+> and the fabricated tactical-rationale string is gone from the file entirely. The
+> three `?? 0` on omitted counts are gone too. **What remains live is the upper-bound
+> qualifier below**, which no surface renders.
+>
+> A **latent sibling** turned up during the same audit, in a different panel:
+> `IntelligenceLibrary.jsx:546` reads `nation.executiveFactionName || 'None'`.
+> It is the same reassuring-default shape — an absent name would assert that a
+> nation has no executive faction — but it is **harmless on today's payloads**,
+> because the snapshot layer already emits the literal string `"None"` for all
+> **167 of 295** nations with a null `executiveFactionId`, so the fallback never
+> fires. Same standing as the three `?? 0` were: worth a line, not urgent.
+
 Each is the register's signature shape — an unmeasured value given a confident
 default at the render boundary — and each picks the *reassuring* end:
 
@@ -1441,7 +1460,16 @@ stale the checked-in index.
 
 ---
 
-## 26. The "no live save in the unit suite" guard is a text scan, and the suite reaches the save anyway — **partly confirmed, live**
+## 26. The "no live save in the unit suite" guard is a text scan, and the suite reaches the save anyway — **fixed 2026-08-28; re-verified 2026-08-29**
+
+> **The text scan is gone.** `tests/noLiveSaveInUnitSuite.test.js` now *runs* the
+> suite — `spawnSync` of the whole runner with `TI_SAVE_PATH` pointed at a missing
+> folder and an fs-watch hook installed through `NODE_OPTIONS` — so a live-save read
+> reached through a helper, a fixture or a server is caught by behaviour rather than
+> by grepping the test's own source. It proved itself the same week: when RECORDS'
+> conversion left `missionControlLayout.test.js` failing, the guard's pinned
+> failure-set caught the new file immediately, which is exactly the case the text
+> scan could not see. The description below is kept for the diagnosis.
 
 Found 2026-08-27 by an agent whose intermediate `npm test` runs failed three
 different ways while the user was playing, and who noticed that CLAUDE.md promises

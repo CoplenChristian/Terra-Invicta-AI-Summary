@@ -306,7 +306,7 @@ The v2 stylesheet in **cascade order** — the numeric prefix and the shell's
 | 2 | `public/v2/css/02-shell-header.css` | 749 | The persistent shell above every view. |
 | 3 | `public/v2/css/03-page-structure.css` | 147 | The page frame and the card system every panel is built from. |
 | 4 | `public/v2/css/04-command-panels.css` | 340 | COMMAND's own headline panels. |
-| 5 | `public/v2/css/05-view-grid.css` | 176 | The grid the six views lay their cards out on. |
+| 5 | `public/v2/css/05-view-grid.css` | 142 | The grid the six views lay their cards out on. |
 | 6 | `public/v2/css/06-map-and-charts.css` | 277 | The sector map, the donut and the chart primitives. |
 | 7 | `public/v2/css/07-hate-economics.css` | 651 | Alien hate economics and the resource/power readouts. |
 | 8 | `public/v2/css/08-directive-cards.css` | 398 | Directive cards, Hold Ground, toasts and the space/fleet summaries. |
@@ -316,7 +316,7 @@ The v2 stylesheet in **cascade order** — the numeric prefix and the shell's
 | 12 | `public/v2/css/12-executive-boards.css` | 531 | The executive intelligence board tables. |
 | 13 | `public/v2/css/13-faction-intel.css` | 437 | The faction dossier overlay. |
 | 14 | `public/v2/css/14-world-map.css` | 168 | The modular world map component. |
-| 15 | `public/v2/css/15-responsive.css` | 444 | The responsive passes over everything declared above. |
+| 15 | `public/v2/css/15-responsive.css` | 442 | The responsive passes over everything declared above. |
 | 16 | `public/v2/css/16-board-skill-cells.css` | 35 | Councilor skill cells in the executive board tables. |
 | 17 | `public/v2/css/17-directive-board.css` | 1399 | The directive engine board and the council orders panel. |
 | 18 | `public/v2/css/18-mining-expansion.css` | 504 | The mining expansion board and the wide-card capping. |

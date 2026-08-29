@@ -21,41 +21,7 @@
   display: none !important;
 }
 
-/* Was `gap: 22px; padding: 27px 26px 54px` -- four values, none of them equal,
-   none of them related. The gutter and the horizontal inset are now the same
-   step, so cards align with the frame instead of sitting 4px inside it, and the
-   bottom is 2x the top by intent rather than the previous 2.07x by accident. */
-.init-view__grid {
-  display: grid;
-  /* The track count follows what a card can hold, not the viewport number.
-     `repeat(3, minmax(0, 1fr))` above 1600px used to sit here, and it was
-     asserting capacity that never existed: measured 2026-08-23, not one of the
-     six views has three cards that are not `.init-view__span`. EXPANSION,
-     THREAT and RECORDS each have exactly two, FLEET and DRIVES have one. So the
-     third track was always dead, and the price was paid by the two real cards,
-     which went from 764px to 501px at 1600px -- a 34% cut so that an empty
-     column could exist.
-     `minmax(0, 1fr)` is what let that happen: a zero minimum means the grid will
-     make a track of any width, including one nothing fits in. The 560px floor
-     is measured from the cards. The narrowest thing this grid holds is the
-     RECORDS ledger table at 483px natural plus 32px of card padding = 515px,
-     and a TECHNOLOGY WATCH section at its 460px floor plus padding = 492px; the
-     widest half-track card, WARTIME LOGISTICS, wants 621 + 32 = 653px. 560px
-     clears the small end with room and keeps two tracks down to 1200px, exactly
-     where they are today.
-     The dead track is now structurally impossible rather than merely absent:
-     three tracks need 3 x 560 + 2 x 24 = 1728px, and `max-width: 1660px` minus
-     48px of padding caps the content box at 1612px. If the cards ever get
-     narrower, lower the floor and the third track comes back on its own. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
-  gap: var(--space-4xl);
-  max-width: 1660px;
-  margin: 0 auto;
-  padding: var(--space-4xl) var(--space-4xl) calc(var(--space-4xl) * 2);
-  align-items: start;
-}
-
-/* Shares the 24px horizontal inset with .init-view__grid so COMMAND and the
+/* Shares the 24px horizontal inset with the view grid (now TwoColumnGrid) so COMMAND and the
    other views frame their content on the same edge. The 18px bottom was the odd
    value out; the bottom is now 2x the top, matching the grid's intent. */
 .init-command-layout {

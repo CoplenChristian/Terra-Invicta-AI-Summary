@@ -100,21 +100,20 @@
      them -- so the content was unreachable, not merely off-screen.
      `.de-table-wrap` reported clientWidth 890 / scrollWidth 890, i.e. its own
      `overflow-x: auto` never engaged because nothing had constrained it.
-     The cause is one line: this block turns .init-view__grid from a grid into a
-     column flex container, and the base rule's `align-items: start` carries
-     over. On the flex cross axis that means shrink-to-fit, so .init-view__span
-     sized to the table's 937px max-content instead of the 375px container.
-     Stretching the items back constrains the chain, and the table wrapper then
-     scrolls as it was always meant to (clientWidth 313 / scrollWidth 890).
-     `min-width: 0` is belt-and-braces for the >900px grid case, where a
-     `grid-column: 1 / -1` item's default `min-width: auto` can do the same
-     thing. Verified on the live DOM by scripts/verify_mobile_overflow.js. */
-  .init-view__grid,
+     The cause was one line: the old `.init-view__grid` block turned the view
+     container from a grid into a column flex container, and the base rule's
+     `align-items: start` carried over. On the flex cross axis that means
+     shrink-to-fit, so `.init-view__span` sized to the table's 937px
+     max-content instead of the 375px container. Stretching the items back
+     constrains the chain, and the table wrapper then scrolls as it was always
+     meant to (clientWidth 313 / scrollWidth 890). `min-width: 0` is
+     belt-and-braces for the >900px grid case, where a `grid-column: 1 / -1`
+     item's default `min-width: auto` can do the same thing. Verified on the
+     live DOM by scripts/verify_mobile_overflow.js. */
   .init-grid-layout {
     align-items: stretch;
   }
 
-  .init-view__grid > *,
   .init-grid-layout > * {
     min-width: 0;
     max-width: 100%;
@@ -244,8 +243,7 @@
     max-width: none;
   }
 
-  .init-grid-layout,
-  .init-view__grid {
+  .init-grid-layout {
     display: flex;
     flex-direction: column;
     gap: 24px;

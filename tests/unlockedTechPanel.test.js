@@ -71,18 +71,20 @@ function narrowMediaBlock(css) {
 test('the narrow-viewport block un-shrink-wraps the view grid, which is what let DRIVES clip', () => {
   const block = narrowMediaBlock(readCss());
 
-  // The block turns .init-view__grid into a column flex container, so the base
-  // rule's `align-items: start` would otherwise size items to max-content on the
-  // cross axis -- measured at 937px inside a 375px viewport.
+  // The old `.init-view__grid` block turned the view container into a column flex
+  // container, so the base rule's `align-items: start` would otherwise size items
+  // to max-content on the cross axis -- measured at 937px inside a 375px viewport.
+  // Six views now lay out through TwoColumnGrid; `.init-grid-layout` keeps the same
+  // stretch guard for the legacy shell column.
   assert.match(
     block,
-    /\.init-view__grid,\s*\n\s*\.init-grid-layout\s*\{\s*\n\s*align-items:\s*stretch;/,
-    'the narrow block must stretch view-grid children, or a wide table widens the whole page'
+    /\.init-grid-layout\s*\{\s*\n\s*align-items:\s*stretch;/,
+    'the narrow block must stretch grid-layout children, or a wide table widens the whole page'
   );
   assert.match(
     block,
-    /\.init-view__grid\s*>\s*\*,\s*\n\s*\.init-grid-layout\s*>\s*\*\s*\{\s*\n\s*min-width:\s*0;/,
-    'view-grid children must be allowed to shrink below their content width'
+    /\.init-grid-layout\s*>\s*\*\s*\{\s*\n\s*min-width:\s*0;/,
+    'grid-layout children must be allowed to shrink below their content width'
   );
   assert.ok(
     /\.de-table-wrap/.test(block),
