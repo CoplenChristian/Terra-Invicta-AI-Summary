@@ -6,6 +6,33 @@ The ask: build *new* ship designs in the dashboard and see their cost and
 performance, with **omniscient mode offering every part and player mode offering
 only what this faction has researched**.
 
+**Scoped by the owner, 2026-08-29 — this is a calculator, not a design manager:**
+
+> *"I don't care about saving. I just want to experiment with designs and calculate
+> cruise accel, combat accel, and dV based on the drive and weight of the ship."*
+
+Two consequences, and both make the feature smaller:
+
+1. **No persistence.** No saved designs, no library, no naming, no reconciling
+   against the faction's real design list. A combination lives as long as you are
+   looking at it. That removes storage, migration and identity from the whole build —
+   and it means the state can live in the page, since nothing outlives the session.
+2. **Three headline numbers**: **cruise acceleration, combat acceleration and
+   delta-V**, as a function of the drive and the ship's weight. Everything else —
+   cost, build time, heat, power ratio — is supporting detail that earns its place by
+   feeding those three or by explaining them.
+
+**This is why the heat model still matters even though it is not one of the three.**
+Radiator mass *is* ship weight: it is derived from waste heat, it can exceed a
+thousand tons, and the community's own summary of the trap is a patrol ship that
+"weighs 26,000 tons and is 98% radiators". Heat is not a side panel here — it is one
+of the largest terms in the denominator of all three headline numbers.
+
+`shared/propulsion.mjs` already computes exactly those three against a measured mass,
+and `refitOntoDrive` already answers "what if this drive went on this design". The
+designer is largely a new *input* surface onto arithmetic that exists and is verified
+to 1e-6.
+
 Everything below that is stated as a number was measured on 2026-08-29 against the
 installed 1.0 templates and the live save. Everything that is a guess says so.
 
@@ -383,9 +410,20 @@ The DESIGNER view itself: route, mount, nav entry, `assertViewRegistryIntegrity(
 `TwoColumnGrid` layout. Verifiable by navigation and registry integrity with the
 panels still stubs.
 
+**No persistence layer** — the owner does not want saved designs, so the current
+combination is page state and nothing outlives the session. Do not add storage,
+a design library, or reconciliation against the faction's real design list.
+
 ### Part 3 — the rendering components
 
 The panels: component pickers, the live readout, the heat and power breakdown.
+
+**The readout leads with cruise acceleration, combat acceleration and delta-V** —
+those are the three the owner named, and the layout should say so rather than burying
+them in a grid of equals. Both accelerations always, never one labelled
+"acceleration": `thrustCap` runs 1 to 160 and only **72 of 541** drives have the two
+equal, so a single figure overstates sustained transit on the other 469.
+
 `<Value>` on every figure so an unmeasured one is distinguishable from an unrendered
 one, MUI for layout and spacing per `docs/frontend-architecture.md`, and captures at
 375 / 414 / 768 / **1000 / 1100** / desktop.
@@ -411,12 +449,17 @@ derivation, which is the order this project's rules put them in:
 
 **Still open:**
 
-1. **Which way does `Calc` resolve?** One look at any `Calc` drive in the in-game
-   designer — a Tungsten Resistojet, say — settles it, because the tooltip can only
-   read open-cycle or closed-cycle; those are the only two strings that exist. Until
-   then those 186 drives report a **range** across both resolutions rather than a
-   silently chosen number.
-2. **Does the designer need to SAVE designs**, or is it a calculator you point at a
-   combination? Saving implies persistence this dashboard does not currently have,
-   and it is the one open question that changes the architecture rather than a
-   number. Worth answering before Part 2 starts.
+1. **Which way does `Calc` resolve?** **Not blocking, and deliberately not worth much
+   of the owner's attention** — those 186 drives report a **range** across both
+   resolutions, labelled, which is honest and still useful. If it is ever convenient:
+   open the ship designer, pick a **Tungsten Resistojet** (or any Electrothermal,
+   Electrostatic or Ion drive), and its cooling line will read either *open-cycle* or
+   *closed-cycle* — those are the only two strings in the game. That single word
+   collapses the range to a number for a third of the catalogue.
+
+   The range is not a large penalty in practice: the same base drive at `x1`…`x6`
+   shares one cooling value, so the ambiguity affects whole families uniformly rather
+   than scattering through the list.
+2. ✅ **Answered: no saving.** It is a calculator you point at a combination. See the
+   scoping quote at the top — no persistence, no design library, and the three
+   headline outputs are cruise acceleration, combat acceleration and delta-V.
