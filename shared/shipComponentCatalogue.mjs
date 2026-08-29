@@ -75,7 +75,9 @@ const NUMERIC_FIELDS = Object.freeze({
     consTier: ['consTier'],
     maxOfficers: ['maxOfficers'],
     crew: ['crew'],
-    monthlyIncomeMoney: ['monthlyIncomeMoney']
+    monthlyIncomeMoney: ['monthlyIncomeMoney'],
+    length_m: ['length_m', 'lengthM'],
+    width_m: ['width_m', 'widthM']
   }),
   utilityModules: Object.freeze({
     massTons: ['massTons'],

@@ -309,7 +309,9 @@ function buildDriveStats() {
       requiredPowerPlant: drive.requiredPowerPlant || null,
       reqPowerGW: stat(drive['req power'] ?? drive.req_power ?? drive.reqPower),
       cooling: drive.cooling || null,
-      thrustRatingGW: stat(drive.thrustRating_GW)
+      thrustRatingGW: stat(drive.thrustRating_GW),
+      weightedBuildMaterials: materialMix(drive.weightedBuildMaterials),
+      perTankPropellantMaterials: materialMix(drive.perTankPropellantMaterials)
     };
   }
   return stats;
@@ -429,6 +431,17 @@ function stat(value) {
     return Number.isFinite(num) ? num : null;
   }
   return null;
+}
+
+/**
+ * Preserve a template's material mix without filling in or normalizing its
+ * residual. The ship designer needs the source composition as written: an
+ * absent mix remains absent, and an alien mix that sums to 0.9 or 1.002 is a
+ * measured shortfall/overrun rather than an invitation to invent a correction.
+ */
+function materialMix(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return Object.fromEntries(Object.entries(value).map(([material, share]) => [material, stat(share)]));
 }
 
 /** Drops null/undefined/false/empty-array fields so absence stays absence. */
@@ -578,6 +591,9 @@ function buildHullComponentStats() {
       maxOfficers: stat(hull.maxOfficers),
       crew: stat(hull.crew),
       monthlyIncomeMoney: stat(hull.monthlyIncome_Money),
+      length_m: stat(hull.length_m),
+      width_m: stat(hull.width_m),
+      weightedBuildMaterials: materialMix(hull.weightedBuildMaterials),
       alien: hull.alien === true,
       noShipyardBuild: hull.noShipyardBuild === true
     });
@@ -598,6 +614,7 @@ function buildArmorStats() {
       xRayHalfValueCm: stat(armor.xRayHalfValue_cm),
       densityKgM3: stat(armor.density_kgm3),
       heatOfVaporizationMJkg: stat(armor.heatofVaporization_MJkg),
+      weightedBuildMaterials: materialMix(armor.weightedBuildMaterials),
       // `[name, value]` pairs rather than objects: same information, and the
       // object form cost 40% more on the wire for 12 rows x 3 entries.
       specialties: (Array.isArray(armor.specialties) ? armor.specialties : [])
@@ -622,6 +639,7 @@ function buildPowerPlantStats() {
       efficiency: stat(plant.efficiency),
       powerPlantClass: plant.powerPlantClass || null,
       crew: stat(plant.crew),
+      weightedBuildMaterials: materialMix(plant.weightedBuildMaterials),
       disabled: plant.disable === true
     });
   }
@@ -644,6 +662,7 @@ function buildRadiatorStats() {
       vulnerability: stat(radiator.vulnerability),
       radiatorType: radiator.radiatorType || null,
       crew: stat(radiator.crew),
+      weightedBuildMaterials: materialMix(radiator.weightedBuildMaterials),
       disabled: radiator.disable === true
     });
   }
@@ -678,6 +697,7 @@ function buildBatteryStats() {
       rechargeRateGJs: stat(battery.rechargeRate_GJs),
       hp: stat(battery.hp),
       crew: stat(battery.crew),
+      weightedBuildMaterials: materialMix(battery.weightedBuildMaterials),
       disabled: battery.disable === true
     });
   }
@@ -708,6 +728,7 @@ function buildUtilityModuleStats() {
       specialModuleValue: stat(module.specialModuleValue),
       minConsTier: stat(module.minConsTier),
       crew: stat(module.crew),
+      weightedBuildMaterials: materialMix(module.weightedBuildMaterials),
       disabled: module.disable === true
     });
   }

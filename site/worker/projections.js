@@ -132,6 +132,20 @@ export const buildIntelResource = (result, resource, url) => {
   const thresholds = Object.fromEntries(
     DRIVE_THRESHOLD_PARAMETERS.map(parameter => [parameter, url.searchParams.get(parameter)])
   );
+  const shipDesigner = resource === 'ship-designer'
+    ? {
+      hull: url.searchParams.get('hull'),
+      drive: url.searchParams.get('drive'),
+      thrusters: url.searchParams.get('thrusters'),
+      reactor: url.searchParams.get('reactor'),
+      radiator: url.searchParams.get('radiator'),
+      armour: url.searchParams.get('armour') || url.searchParams.get('armor'),
+      nose: url.searchParams.get('nose'),
+      lateral: url.searchParams.get('lateral') || url.searchParams.get('side'),
+      tail: url.searchParams.get('tail'),
+      tanks: url.searchParams.get('tanks')
+    }
+    : null;
   // `validateResourceQuery` has already rejected a malformed value, so this
   // cannot silently fall back to the default for a caller who asked for `full`.
   const detail = parseDetailLevel(url.searchParams.get('detail'));
@@ -147,6 +161,7 @@ export const buildIntelResource = (result, resource, url) => {
     quantity,
     status: status || null,
     sort: sort || null,
+    ...(resource === 'ship-designer' ? (shipDesigner || {}) : {}),
     ...(DETAIL_AWARE_RESOURCES.has(resource) ? { detail } : {}),
     ...(THRESHOLD_AWARE_RESOURCES.has(resource) ? { ...thresholds } : {})
   };
@@ -164,7 +179,8 @@ export const buildIntelResource = (result, resource, url) => {
     sort,
     thresholds,
     detail,
-    mode: result.mode || result.row?.visibility || 'player'
+    mode: result.mode || result.row?.visibility || 'player',
+    shipDesigner
   });
   return resourceEnvelope(result, resource, projection.items, query, projection);
 };

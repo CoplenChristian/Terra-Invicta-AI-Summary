@@ -10,6 +10,7 @@ const {
   parseCatalogueNumber,
   verifyDriveThrusterLadders
 } = require('../shared/shipComponentCatalogue.mjs');
+const snapshotTemplates = require('../server/snapshot/templates');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
 
 const OBSERVER = 4712;
@@ -91,6 +92,68 @@ test('every output row carries identity, stats, unlock metadata, and research st
         assert.equal(row.unlockProjectName, null);
       }
     }
+  }
+});
+
+test('real template component fields reach catalogue rows in both modes, including residual mixes', () => {
+  const withTemplateStats = mode => {
+    const snapshot = fixture(mode);
+    return {
+      ...snapshot,
+      driveStats: snapshotTemplates.buildDriveStats(),
+      componentStats: snapshotTemplates.buildComponentStats()
+    };
+  };
+  const materialSum = mix => Object.values(mix || {})
+    .reduce((sum, value) => sum + Number(value || 0), 0);
+
+  for (const mode of ['player', 'omniscient']) {
+    const result = catalogue(mode, withTemplateStats(mode));
+    const row = (family, id) => result.families[family].items.find(item => item.id === id);
+
+    assert.equal(row('hulls', 'Escort').stats.length_m, 50, `${mode}: hull length`);
+    assert.equal(row('hulls', 'Escort').stats.width_m, 10, `${mode}: hull width`);
+    assert.deepEqual(row('hulls', 'Escort').stats.weightedBuildMaterials, {
+      volatiles: 0.1,
+      metals: 0.7,
+      nobleMetals: 0.2
+    }, `${mode}: hull material mix`);
+    assert.deepEqual(row('drives', 'VASIMR').stats.weightedBuildMaterials, { metals: 1 },
+      `${mode}: drive material mix`);
+    assert.deepEqual(row('drives', 'VASIMR').stats.perTankPropellantMaterials, { water: 1 },
+      `${mode}: drive tank mix`);
+    assert.deepEqual(row('reactors', 'SolidCoreFissionReactorVII').stats.weightedBuildMaterials, {
+      water: 0.1,
+      volatiles: 0.1,
+      metals: 0.65,
+      nobleMetals: 0.1,
+      fissiles: 0.05
+    }, `${mode}: reactor material mix`);
+    assert.deepEqual(row('radiators', 'TitaniumArray').stats.weightedBuildMaterials, {
+      volatiles: 0,
+      metals: 0,
+      nobleMetals: 1,
+      exotics: 0
+    }, `${mode}: radiator material mix`);
+    assert.ok(row('armour', 'CompositeArmor').stats.weightedBuildMaterials,
+      `${mode}: armour material mix`);
+    assert.ok(result.families.utilityModules.items.some(item => item.stats.weightedBuildMaterials),
+      `${mode}: utility-module material mix`);
+    assert.ok(result.families.batteries.items.some(item => item.stats.weightedBuildMaterials),
+      `${mode}: battery material mix`);
+
+    const mothershipMix = row('hulls', 'AlienMothership').stats.weightedBuildMaterials;
+    assert.ok(Math.abs(materialSum(mothershipMix) - 0.9) < 1e-12,
+      `${mode}: Alien Mothership residual is preserved`);
+    assert.equal(Object.prototype.hasOwnProperty.call(mothershipMix, 'antimatter'), false,
+      `${mode}: no missing tenth is fabricated`);
+
+    const alienReactorSums = result.families.reactors.items
+      .map(item => materialSum(item.stats.weightedBuildMaterials))
+      .filter(sum => Math.abs(sum - 1) > 0.0001)
+      .map(sum => Number(sum.toFixed(6)))
+      .sort((a, b) => a - b);
+    assert.deepEqual(alienReactorSums, [0.9968, 1.002], `${mode}: reactor residuals are preserved`);
   }
 });
 

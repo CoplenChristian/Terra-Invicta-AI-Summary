@@ -39,7 +39,8 @@ function buildResource(snapshot, resource, options = {}) {
     previousSnapshot = null,
     mode = 'player',
     isLatestSnapshot = true,
-    detail = DEFAULT_DETAIL_LEVEL
+    detail = DEFAULT_DETAIL_LEVEL,
+    shipDesigner = null
   } = options;
   const identity = snapshotIdentity.readSnapshotIdentity(snapshot);
   // `detail` and the minimum thresholds are echoed only for the resources that
@@ -58,6 +59,7 @@ function buildResource(snapshot, resource, options = {}) {
     quantity,
     status,
     sort,
+    ...(resource === 'ship-designer' ? (shipDesigner || {}) : {}),
     ...(DETAIL_AWARE_RESOURCES.has(resource) ? { detail } : {}),
     ...(THRESHOLD_AWARE_RESOURCES.has(resource) ? { ...(thresholds || {}) } : {})
   };
@@ -77,7 +79,8 @@ function buildResource(snapshot, resource, options = {}) {
     previousSnapshot,
     mode,
     detail,
-    weights: runtimeConfig.analysis.miningScarcityWeights
+    weights: runtimeConfig.analysis.miningScarcityWeights,
+    shipDesigner
   });
   return {
     success: true,

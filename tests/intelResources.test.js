@@ -33,6 +33,34 @@ test('buildResource returns focused faction rows', () => {
   assert.strictEqual(own.items[0].controlPoints, 2);
 });
 
+test('ship-designer resource composes real catalogue rows into a calculated readout', () => {
+  const snapshot = omniscientSnapshot();
+  const result = localResources.buildResource(snapshot, 'ship-designer', {
+    mode: 'omniscient',
+    shipDesigner: {
+      hull: 'Escort',
+      drive: 'VASIMRx4',
+      reactor: 'SolidCoreFissionReactorVII',
+      radiator: 'TitaniumArray',
+      armour: 'CompositeArmor',
+      nose: 4,
+      lateral: 0,
+      tail: 1,
+      tanks: 3,
+      campaignSettings: { cinematicCombatRealismScale: true }
+    }
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.resource, 'ship-designer');
+  assert.notEqual(result.deltaVKps, null);
+  assert.notEqual(result.cruiseAccelerationMps2, null);
+  assert.notEqual(result.combatAccelerationMps2, null);
+  assert.notEqual(result.totalResourceCost, null);
+  assert.equal(result.catalogue.families.hulls.items.find(row => row.id === 'Escort').stats.width_m, 10);
+  assert.ok(Math.abs(result.armour.massTons - 104.71975511965978) < 1e-9);
+});
+
 test('buildResource projects nations and councilors', () => {
   const snapshot = omniscientSnapshot();
   const nations = localResources.buildResource(snapshot, 'nations', { mode: 'omniscient' });

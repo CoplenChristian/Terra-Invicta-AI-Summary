@@ -133,6 +133,20 @@ function register(app) {
       const thresholds = Object.fromEntries(
         requestValidation.DRIVE_THRESHOLD_PARAMETERS.map(parameter => [parameter, req.query[parameter] ?? null])
       );
+      const shipDesigner = req.params.resource === 'ship-designer'
+        ? {
+          hull: req.query.hull ?? null,
+          drive: req.query.drive ?? null,
+          thrusters: req.query.thrusters ?? null,
+          reactor: req.query.reactor ?? null,
+          radiator: req.query.radiator ?? null,
+          armour: req.query.armour ?? req.query.armor ?? null,
+          nose: req.query.nose ?? null,
+          lateral: req.query.lateral ?? req.query.side ?? null,
+          tail: req.query.tail ?? null,
+          tanks: req.query.tanks ?? null
+        }
+        : null;
       // A malformed `?detail=` is a 400, never a silent fall-through to the
       // default -- the same rule the limit and body filters already follow.
       // Quietly answering a smaller question than the caller asked is exactly
@@ -165,7 +179,8 @@ function register(app) {
         detail,
         previousSnapshot: previousFiltered,
         mode,
-        isLatestSnapshot: targetPath === null
+        isLatestSnapshot: targetPath === null,
+        shipDesigner
       });
 
       res.set('Cache-Control', 'no-store');

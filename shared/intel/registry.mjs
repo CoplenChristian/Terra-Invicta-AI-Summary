@@ -83,6 +83,7 @@ import { mobilityResource } from './mobility.mjs';
 import { bodyStatusResource, theaterBoardResource } from './theaters.mjs';
 import { refitAdvisorResource } from './refitAdvisor.mjs';
 import { controlPointCapResource } from './controlPointCap.mjs';
+import { shipDesignerResource } from './shipDesigner.mjs';
 
 const kebab = (key) => key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 
@@ -469,6 +470,14 @@ const INTEL_ENDPOINTS = Object.freeze([
     project: (snapshot, { observerId, mode, factionId }) =>
       controlPointCapResource(snapshot, { observerId, mode, factionId })
   },
+  {
+    // Keep this new resource at the end of the projected rows so adding the
+    // designer does not renumber the discovery examples already in use.
+    key: 'shipDesigner',
+    example: `${OMNISCIENT}&hull=Escort&drive=VASIMRx4&reactor=SolidCoreFissionReactorVII&radiator=TitaniumArray&armour=CompositeArmor&nose=4&lateral=0&tail=1&tanks=3`,
+    project: (snapshot, { observerId, mode, shipDesigner }) =>
+      shipDesignerResource(snapshot, { observerId, mode, ...(shipDesigner || {}) })
+  },
   // Served by the adapters themselves, not by buildResourceProjection: history
   // and strategic-delta need snapshot storage, and the tech-graph family needs
   // shared/techGraph.mjs plus a published techTree payload.
@@ -639,7 +648,8 @@ export const buildResourceProjection = (snapshot, resource, {
   previousSnapshot = null,
   mode = 'player',
   weights = null,
-  detail = DEFAULT_DETAIL_LEVEL
+  detail = DEFAULT_DETAIL_LEVEL,
+  shipDesigner = null
 } = {}) => {
   const observerId = snapshot.observerFactionId || DEFAULT_OBSERVER_FACTION_ID;
   const project = PROJECTION_BY_ROUTE.get(resource);
@@ -664,6 +674,7 @@ export const buildResourceProjection = (snapshot, resource, {
     previousSnapshot,
     mode,
     weights,
-    detail
+    detail,
+    shipDesigner
   });
 };

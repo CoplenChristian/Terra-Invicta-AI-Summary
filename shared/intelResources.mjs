@@ -146,6 +146,8 @@ export { deltaResource } from './intel/delta.mjs';
 
 export { refitAdvisorResource } from './intel/refitAdvisor.mjs';
 
+export { shipDesignerResource } from './intel/shipDesigner.mjs';
+
 export {
   SUPPORTED_RESOURCES,
   INTEL_ENDPOINT_INDEX,

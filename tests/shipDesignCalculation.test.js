@@ -13,6 +13,9 @@ const {
   calculateShipDesign,
   resolveArmourScaling
 } = require('../shared/shipDesignCalculation.mjs');
+const { buildShipComponentCatalogue } = require('../shared/shipComponentCatalogue.mjs');
+const snapshotTemplates = require('../server/snapshot/templates');
+const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
 
 const MATERIALS = Object.freeze([
   'water',
@@ -422,4 +425,38 @@ test('the named cost rate carries its corroborating, unmeasured provenance', () 
   assert.match(RESOURCE_COST_RATE.status, /not directly measured/i);
   assert.equal(RESOURCE_COST_RATE.sources.length, 2);
   assert.deepEqual(SHIP_DESIGN_MATERIALS, MATERIALS);
+});
+
+test('feeds real catalogue components into the calculator and produces delta-V', () => {
+  const fixture = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: 4712 });
+  const snapshot = {
+    ...fixture,
+    driveStats: snapshotTemplates.buildDriveStats(),
+    componentStats: snapshotTemplates.buildComponentStats()
+  };
+  const catalogue = buildShipComponentCatalogue(snapshot, {
+    mode: 'omniscient',
+    observerId: 4712
+  });
+  const selected = (family, id) => catalogue.families[family].items.find(row => row.id === id);
+
+  const result = calculateShipDesign({
+    catalogue,
+    hull: selected('hulls', 'Escort'),
+    drive: selected('drives', 'VASIMR'),
+    thrusterCount: 4,
+    reactor: selected('reactors', 'SolidCoreFissionReactorVII'),
+    radiator: selected('radiators', 'TitaniumArray'),
+    armour: {
+      material: selected('armour', 'CompositeArmor'),
+      points: { nose: 4, lateral: 0, tail: 1 }
+    },
+    propellantTanks: { count: 3 },
+    campaignSettings: { cinematicCombatRealismScale: true }
+  });
+
+  assert.notEqual(result.deltaVKps, null);
+  assert.notEqual(result.cruiseAccelerationMps2, null);
+  assert.notEqual(result.combatAccelerationMps2, null);
+  assert.notEqual(result.totalResourceCost, null);
 });

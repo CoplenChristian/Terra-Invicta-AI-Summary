@@ -1560,6 +1560,7 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     `**Date:** ${meta.gameTimeString || 'Unknown'}`,
     `**Observer Faction:** ${observerName}`,
     `**Intelligence Mode:** ${mode}`,
+    `**Ship Designer:** \`/api/intel/ship-designer?observer=${observerId}&mode=${mode.toLowerCase()}\` — selected catalogue rows feed performance, mass/heat and the seven-material cost; absent inputs remain UNAVAILABLE.`,
     // `difficultyLabel` names the customisation when the campaign carries one,
     // so a save running four rates at 200% never exports as plain "Normal".
     // The `|| 'Normal'` that used to close this line invented a difficulty for
