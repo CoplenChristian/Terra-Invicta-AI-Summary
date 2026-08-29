@@ -92,6 +92,41 @@ The directive engine is councilor-facing and cannot see an incoming alien fleet:
 arrivals carry none), what is measured vs inferred in the hate reasoning, and the
 six-step phasing. Steps 1-3 are worth doing regardless of the advisor.
 
+**View layout onto MUI `Grid2`** — five of six views landed, RECORDS in flight.
+This is the payoff of the React migration: the widgets were already components, the
+layout was not. Each view moves from the hand-rolled `.init-view__grid` to
+`src/v2/components/TwoColumnGrid.jsx`, one view per commit, each proving it changed
+nothing.
+
+| view | commit | proof |
+| :-- | :-- | :-- |
+| THREAT | `3d0d9f5` | geometry unchanged |
+| COMMAND | `39bbc69` | nine panels, twelve differences, none of them text |
+| EXPANSION | `32f8de4` | 16 differences, all one property that stopped applying |
+| FLEET | `862d620` | 145 values, zero differences |
+| DRIVES | `8026533` | 121 values, zero differences |
+| RECORDS | — | in flight |
+
+`23c2374` put `TwoColumnGrid` on real `Grid2` first. Two things follow RECORDS and
+neither is done:
+
+- **`.init-view__grid` is not yet deleted** from `05-view-grid.css`, and the
+  `.init-view__grid` selectors in `15-responsive.css` are not either. They go
+  together, with all six views diffed to zero, because deleting CSS is a refactor
+  too. **`.init-view__span` stays** — `Panel.jsx`, `DriveExplorer.jsx`,
+  `FleetPanel.jsx` and `FleetProcurement.jsx` still emit it, and its `min-width: 0`
+  is live even though its `grid-column` is inert under flexbox.
+- **A width band none of the five conversions probed.** Legacy is
+  `repeat(auto-fit, minmax(min(100%, 560px), 1fr))`, so it holds two columns only
+  above ~1144px; `TwoColumnGrid` uses `size={{ xs: 12, md: 6 }}` and the theme does
+  not override breakpoints, so MUI's `md` is 900px. **Between 900 and 1144 the two
+  disagree** — legacy one column, Grid2 two of ~476px. The captures ran at
+  375/414/768/desktop, which straddles that band without entering it. RECORDS is
+  where it would bite hardest: the 560px floor was measured from its own cards
+  (ledger 515px, TECHNOLOGY WATCH 492px). **Unmeasured, not benign** — RECORDS'
+  capture is taking the 1000/1100 readings, and whatever it finds applies to all
+  five commits above, not to RECORDS alone.
+
 ---
 
 ## React migration status

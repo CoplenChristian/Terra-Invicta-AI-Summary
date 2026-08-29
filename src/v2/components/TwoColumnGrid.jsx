@@ -17,7 +17,7 @@ import { useTheme } from '@mui/material/styles';
 export function TwoColumnGridItem({ span = false, children }) {
   return (
     <Grid2
-      size={span ? 12 : { xs: 12, md: 6 }}
+      size={span ? 12 : { xs: 12, lg: 6 }}
       sx={{ minWidth: 0, maxWidth: '100%' }}
     >
       {children}

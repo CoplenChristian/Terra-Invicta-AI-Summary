@@ -38,6 +38,7 @@ const missionControlJsPath = path.join(repoRoot, 'public/v2/js/mission-control.j
 const panelJsxPath = path.join(repoRoot, 'src/v2/panels/UnlockedTech.jsx');
 const panelUtilsPath = path.join(repoRoot, 'src/v2/panels/unlockedTechUtils.js');
 const reactBridgePath = path.join(repoRoot, 'src/v2/main.jsx');
+const recordsPanelPath = path.join(repoRoot, 'src/v2/panels/RecordsPanel.jsx');
 
 // The v2 stylesheet is an ordered set of parts. Both the text scans below and
 // the live-DOM test have to see ALL of them: the scroll-hint check derives the
@@ -295,8 +296,13 @@ test('the unlocked technology panel is registered in RECORDS and mounted inside 
   const recordsSection = html.match(/<section[^>]*id="view-records"[\s\S]*?<\/section>/);
   assert.ok(recordsSection, '#view-records must exist');
   assert.ok(
-    /id="unlockedTech"/.test(recordsSection[0]),
-    'the panel element must live inside #view-records, or assertViewRegistryIntegrity throws'
+    /id="recordsPlanner"/.test(recordsSection[0]),
+    'the records view needs its #recordsPlanner mount element'
+  );
+  const recordsPanel = fs.readFileSync(recordsPanelPath, 'utf8');
+  assert.ok(
+    /id="unlockedTech"/.test(recordsPanel),
+    'the panel element must live in the React records shell, or assertViewRegistryIntegrity throws'
   );
 
   const recordsEntry = js.match(/id:\s*'records'[\s\S]*?panels:\s*\[([\s\S]*?)\]/);

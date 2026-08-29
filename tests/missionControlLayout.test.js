@@ -146,6 +146,79 @@ function measureHeaderCollisions() {
 }
 
 /**
+ * Runs in the page. RECORDS (and the other converted views) lay out through
+ * {@link TwoColumnGrid} — MUI Grid2 flexbox, not `.init-view__grid`. The
+ * defect class is the same: splitting into two columns before the legacy
+ * `minmax(min(100%, 560px), 1fr)` grid would, starving tables that need
+ * ~515px. Legacy takes a second column at 2×560+24+48 = 1192px; the
+ * primitive must not go two-up below that.
+ */
+function measureTwoColumnFlex(viewId) {
+  const MIN_NON_SPAN_WIDTH = 515;
+  const TWO_COL_BREAKPOINT = 1192;
+
+  const section = document.getElementById('view-' + viewId);
+  if (!section) return null;
+  const grid = section.querySelector('[data-primitive="two-column-grid"]');
+  if (!grid) return null;
+
+  const style = getComputedStyle(grid);
+  if (style.display !== 'flex') return { display: style.display };
+
+  const innerWidth = window.innerWidth;
+  const gridWidth = Math.round(grid.getBoundingClientRect().width);
+
+  let spanCount = 0;
+  let cardCount = 0;
+  const cardWidths = [];
+  const nonSpanItems = [];
+
+  for (const child of grid.children) {
+    if (child.getClientRects().length === 0) continue;
+    const box = child.getBoundingClientRect();
+    if (box.width <= 0) continue;
+
+    const panel = child.querySelector('[data-primitive="panel"], .tech-card');
+    const isSpan = Boolean(
+      child.querySelector('.init-api-access')
+      || panel?.classList.contains('init-view__span')
+      || panel?.classList.contains('init-view__full-card')
+    );
+
+    if (isSpan) {
+      spanCount += 1;
+    } else {
+      cardCount += 1;
+      cardWidths.push(Math.round(box.width));
+      nonSpanItems.push({ width: box.width, y: box.top });
+    }
+  }
+
+  let sideBySide = false;
+  if (nonSpanItems.length >= 2) {
+    for (let i = 0; i < nonSpanItems.length; i++) {
+      for (let j = i + 1; j < nonSpanItems.length; j++) {
+        if (Math.abs(nonSpanItems[i].y - nonSpanItems[j].y) < 5) {
+          sideBySide = true;
+        }
+      }
+    }
+  }
+
+  return {
+    display: style.display,
+    innerWidth,
+    gridWidth,
+    spanCount,
+    cardCount,
+    cardWidths,
+    sideBySide,
+    prematureTwoCol: innerWidth < TWO_COL_BREAKPOINT && sideBySide,
+    starvedWidth: sideBySide && cardWidths.some((w) => w < MIN_NON_SPAN_WIDTH)
+  };
+}
+
+/**
  * Runs in the page. How many column tracks a `.init-view__grid` declares, and
  * how many cards it has that are not full-width spans. A track the view's own
  * cards can never fill is the defect; comparing the two counts is the direct
@@ -384,20 +457,28 @@ test('no view grid claims more tracks than its own cards can fill, and no table 
     for (const mode of ['player', 'omniscient']) {
       await selectMode(page, mode);
 
-      for (const width of [1440, 1600, 1920]) {
+      for (const width of [1000, 1100, 1440, 1600, 1920]) {
         await page.setViewportSize({ width, height: 1000 });
         await page.waitForTimeout(200);
 
         for (const view of ['records']) {
           await gotoView(page, view);
 
-          const grid = await page.evaluate(measureGridTracks, view);
-          assert.ok(grid && grid.display === 'grid', `[${mode} ${width}px ${view}] .init-view__grid is not a grid`);
-          if (grid.trackCount > Math.max(1, grid.cardCount)) {
+          const flex = await page.evaluate(measureTwoColumnFlex, view);
+          assert.ok(
+            flex && flex.display === 'flex',
+            `[${mode} ${width}px ${view}] [data-primitive="two-column-grid"] is not a flex container`
+          );
+          if (flex.prematureTwoCol) {
             deadTracks.push(
-              `[${mode} ${width}px ${view}] ${grid.trackCount} tracks for ${grid.cardCount} non-span card(s) ` +
-              `(+${grid.spanCount} span(s)); at least one track can never be filled. ` +
-              `columns=${grid.columns} cardWidths=${JSON.stringify(grid.cardWidths)}`
+              `[${mode} ${width}px ${view}] two-column layout below the 1192px legacy breakpoint ` +
+              `(innerWidth=${flex.innerWidth}, cardWidths=${JSON.stringify(flex.cardWidths)})`
+            );
+          }
+          if (flex.starvedWidth) {
+            deadTracks.push(
+              `[${mode} ${width}px ${view}] a non-span column is narrower than 515px ` +
+              `(cardWidths=${JSON.stringify(flex.cardWidths)}, grid=${flex.gridWidth}px)`
             );
           }
 

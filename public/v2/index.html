@@ -222,71 +222,7 @@
 
     <!-- View 4: RECORDS -->
     <section class="init-view" id="view-records" hidden inert aria-hidden="true" aria-label="Records view">
-      <div class="init-view__grid">
-        <div class="tech-card tech-card--quiet">
-          <div class="tech-card-header">
-            <div class="tech-card-title">STRATEGIC FACTION LEDGER</div>
-            <span>CURRENT STATE</span>
-          </div>
-          <div class="tech-card-body">
-            <div id="factionDonutContainer"></div>
-          </div>
-        </div>
-
-        <div class="tech-card tech-card--quiet">
-          <div class="tech-card-header">
-            <div class="tech-card-title">TECHNOLOGY WATCH</div>
-            <span>RESEARCH + INTELLIGENCE GAPS</span>
-          </div>
-          <div class="tech-card-body">
-            <div id="researchWatchlist" class="research-watchlist" aria-live="polite">
-              <p class="since-save-empty">Loading research and capability signals…</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="tech-card tech-card--quiet init-view__span">
-          <div class="tech-card-header">
-            <div class="tech-card-title">UNLOCKED TECHNOLOGY</div>
-            <span>WHAT THIS FACTION HAS RESEARCHED</span>
-          </div>
-          <div class="tech-card-body">
-            <div id="unlockedTech" class="unlocked-tech" aria-live="polite">
-              <p class="ut-notice">Loading the research graph…</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="tech-card tech-card--quiet init-view__span">
-          <div class="tech-card-header">
-            <div class="tech-card-title">SINCE LAST SAVE</div>
-            <span>MATERIAL STRATEGIC DELTA</span>
-          </div>
-          <div class="tech-card-body">
-            <div id="sinceLastSave" class="since-save-grid since-save-grid--compact" aria-live="polite">
-              <p class="since-save-empty">Comparing the current snapshot with the immediately previous save…</p>
-            </div>
-          </div>
-        </div>
-
-        <section class="init-api-access init-view__span" aria-labelledby="initApiAccessTitle">
-          <div class="init-api-access__header">
-            <div>
-              <div class="init-api-access__eyebrow">EXTERNAL ANALYSIS</div>
-              <h2 id="initApiAccessTitle">API / AI ACCESS</h2>
-            </div>
-            <a href="/api/intel" class="init-api-access__directory">Open full API directory</a>
-          </div>
-          <div class="init-api-access__links">
-            <a href="/api/intel/ship-designs?observer=4712&amp;mode=omniscient&amp;faction=4712">Ship designs</a>
-            <a href="/api/intel/logistics?observer=4712&amp;mode=omniscient">Logistics</a>
-            <a href="/api/intel/construction?observer=4712&amp;mode=omniscient">Construction</a>
-            <a href="/api/intel/transfers?observer=4712&amp;mode=omniscient">Transfers</a>
-            <a href="/api/intel/theaters?observer=4712&amp;mode=omniscient">Theaters</a>
-            <a href="/api/intel/tech-tree?observer=4712&amp;mode=omniscient&amp;category=all">Tech tree</a>
-          </div>
-        </section>
-      </div>
+      <div id="recordsPlanner" aria-live="polite"></div>
     </section>
   </main>
 

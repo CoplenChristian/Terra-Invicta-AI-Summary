@@ -30,6 +30,7 @@ const commandPanelJsPath = path.join(repoRoot, 'src', 'v2', 'panels', 'CommandPa
 const expansionPanelJsPath = path.join(repoRoot, 'src', 'v2', 'panels', 'ExpansionPanel.jsx');
 const fleetPanelJsPath = path.join(repoRoot, 'src', 'v2', 'panels', 'FleetPanel.jsx');
 const drivesPanelJsPath = path.join(repoRoot, 'src', 'v2', 'panels', 'DrivesPanel.jsx');
+const recordsPanelJsPath = path.join(repoRoot, 'src', 'v2', 'panels', 'RecordsPanel.jsx');
 // syncPageInert moved to src/v2/panels/detailPanelUtils.mjs when the shared
 // detail panel became React (2026-08-26). It is loaded as a module and handed a
 // fake document rather than being run through `vm` against a sandboxed global;
@@ -67,6 +68,7 @@ test('public/v2/index.html defines 7 view sections and topbar navigation without
   assert.ok(html.includes('id="expansionPlanner"'), 'must contain the #expansionPlanner mount element');
   assert.ok(html.includes('id="fleetPlanner"'), 'must contain the #fleetPlanner mount element');
   assert.ok(html.includes('id="drivesPlanner"'), 'must contain the #drivesPlanner mount element');
+  assert.ok(html.includes('id="recordsPlanner"'), 'must contain the #recordsPlanner mount element');
   assert.ok(html.includes('/v2/app/bundle.js'), 'must load the React bundle that provides the drive explorer');
 
   // Initial inactive view attributes
@@ -97,7 +99,7 @@ test('VIEWS registry in mission-control.js defines exactly the 7 required views 
     }
   }
 
-  // THREAT, COMMAND, EXPANSION, FLEET, and DRIVES panel mounts live in React panels, not static HTML.
+  // THREAT, COMMAND, EXPANSION, FLEET, DRIVES, and RECORDS panel mounts live in React panels, not static HTML.
   const threatPanelJs = fs.readFileSync(threatPanelJsPath, 'utf8');
   for (const match of threatPanelJs.matchAll(/\bid="([^"]+)"/g)) {
     idToSection.set(match[1], 'view-threat');
@@ -117,6 +119,10 @@ test('VIEWS registry in mission-control.js defines exactly the 7 required views 
   const drivesPanelJs = fs.readFileSync(drivesPanelJsPath, 'utf8');
   for (const match of drivesPanelJs.matchAll(/\bid="([^"]+)"/g)) {
     idToSection.set(match[1], 'view-drives');
+  }
+  const recordsPanelJs = fs.readFileSync(recordsPanelJsPath, 'utf8');
+  for (const match of recordsPanelJs.matchAll(/\bid="([^"]+)"/g)) {
+    idToSection.set(match[1], 'view-records');
   }
 
   // Load MissionControlViews from mission-control.js

@@ -1,0 +1,1309 @@
+{
+  "capturedAt": "2026-08-29T04:06:30.434Z",
+  "modes": {
+    "player": {
+      "viewports": {
+        "375": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE UNAVAILABLE 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE UNAVAILABLE 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE UNAVAILABLE 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE UNAVAILABLE 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE UNAVAILABLE 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE UNAVAILABLE 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE UNAVAILABLE 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE UNAVAILABLE 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 32,
+                "y": 494.6,
+                "width": 311,
+                "height": 947.2
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 422.8,
+                "width": 345,
+                "height": 1035.9
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 32,
+                "y": 1554.5,
+                "width": 311,
+                "height": 873
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 1482.8,
+                "width": 345,
+                "height": 961.8
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 32,
+                "y": 2540.3,
+                "width": 311,
+                "height": 5466.5
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2468.5,
+                "width": 345,
+                "height": 5555.3
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 32,
+                "y": 8119.5,
+                "width": 311,
+                "height": 260
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 8047.8,
+                "width": 345,
+                "height": 348.8
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 37,
+              "y": 8420.5,
+              "width": 301,
+              "height": 103
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        },
+        "414": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE UNAVAILABLE 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE UNAVAILABLE 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE UNAVAILABLE 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE UNAVAILABLE 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE UNAVAILABLE 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE UNAVAILABLE 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE UNAVAILABLE 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE UNAVAILABLE 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 32,
+                "y": 494.6,
+                "width": 350,
+                "height": 785.2
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 422.8,
+                "width": 384,
+                "height": 873.9
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 32,
+                "y": 1392.5,
+                "width": 350,
+                "height": 789.5
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 1320.8,
+                "width": 384,
+                "height": 878.3
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 32,
+                "y": 2294.8,
+                "width": 350,
+                "height": 5060
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2223,
+                "width": 384,
+                "height": 5148.8
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 32,
+                "y": 7467.5,
+                "width": 350,
+                "height": 260
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 7395.8,
+                "width": 384,
+                "height": 348.8
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 37,
+              "y": 7768.5,
+              "width": 340,
+              "height": 103
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 414,
+          "innerWidth": 414,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        },
+        "768": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE UNAVAILABLE 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE UNAVAILABLE 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE UNAVAILABLE 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE UNAVAILABLE 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE UNAVAILABLE 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE UNAVAILABLE 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE UNAVAILABLE 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE UNAVAILABLE 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 32,
+                "y": 446.8,
+                "width": 704,
+                "height": 488.6
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 385.8,
+                "width": 738,
+                "height": 566.6
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 32,
+                "y": 1037.5,
+                "width": 704,
+                "height": 611
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 976.5,
+                "width": 738,
+                "height": 689
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 32,
+                "y": 1750.5,
+                "width": 704,
+                "height": 4567
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 1689.5,
+                "width": 738,
+                "height": 4645
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 32,
+                "y": 6419.5,
+                "width": 704,
+                "height": 216
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 6358.5,
+                "width": 738,
+                "height": 294
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 37,
+              "y": 6676.5,
+              "width": 694,
+              "height": 83
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        },
+        "1000": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE UNAVAILABLE 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE UNAVAILABLE 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE UNAVAILABLE 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE UNAVAILABLE 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE UNAVAILABLE 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE UNAVAILABLE 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE UNAVAILABLE 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE UNAVAILABLE 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 41,
+                "y": 347.8,
+                "width": 918,
+                "height": 454.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 286.8,
+                "width": 952,
+                "height": 532.5
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 41,
+                "y": 904.4,
+                "width": 918,
+                "height": 567.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 843.4,
+                "width": 952,
+                "height": 645.5
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 41,
+                "y": 1573.9,
+                "width": 918,
+                "height": 4475
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 1512.9,
+                "width": 952,
+                "height": 4553
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 41,
+                "y": 6150.9,
+                "width": 918,
+                "height": 216
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 6089.9,
+                "width": 952,
+                "height": 294
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 46,
+              "y": 6407.9,
+              "width": 908,
+              "height": 83
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 1000,
+          "innerWidth": 1000,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        },
+        "1100": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE UNAVAILABLE 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE UNAVAILABLE 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE UNAVAILABLE 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE UNAVAILABLE 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE UNAVAILABLE 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE UNAVAILABLE 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE UNAVAILABLE 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE UNAVAILABLE 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO SWIPE HORIZONTALLY TO VIEW ALL COLUMNS INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 41,
+                "y": 310.8,
+                "width": 1018,
+                "height": 454.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 249.8,
+                "width": 1052,
+                "height": 532.5
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 41,
+                "y": 867.4,
+                "width": 1018,
+                "height": 418.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 806.4,
+                "width": 1052,
+                "height": 496.5
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 41,
+                "y": 1387.9,
+                "width": 1018,
+                "height": 4475
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 1326.9,
+                "width": 1052,
+                "height": 4553
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 41,
+                "y": 5964.9,
+                "width": 1018,
+                "height": 216
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 5903.9,
+                "width": 1052,
+                "height": 294
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 46,
+              "y": 6221.9,
+              "width": 1008,
+              "height": 83
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 1100,
+          "innerWidth": 1100,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        },
+        "desktop": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE UNAVAILABLE 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE UNAVAILABLE 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE UNAVAILABLE 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE UNAVAILABLE 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE UNAVAILABLE 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE UNAVAILABLE 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE UNAVAILABLE 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE UNAVAILABLE 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 41,
+                "y": 272.8,
+                "width": 760,
+                "height": 475.6
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 211.8,
+                "width": 794,
+                "height": 553.6
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 859,
+                "y": 272.8,
+                "width": 760,
+                "height": 587.5
+              },
+              "cardRect": {
+                "x": 842,
+                "y": 211.8,
+                "width": 794,
+                "height": 665.5
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 41,
+                "y": 962.3,
+                "width": 1578,
+                "height": 4452
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 901.3,
+                "width": 1612,
+                "height": 4530
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 41,
+                "y": 5516.3,
+                "width": 1578,
+                "height": 216
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 5455.3,
+                "width": 1612,
+                "height": 294
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 46,
+              "y": 5773.3,
+              "width": 1568,
+              "height": 83
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 1660,
+          "innerWidth": 1660,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        }
+      }
+    },
+    "omniscient": {
+      "viewports": {
+        "375": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE 2,188.8 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE 0.0 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE 31.8 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE 0.0 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE 30.6 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE 36.6 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE 38.5 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE 0.0 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Assessed alien hate 30.79 → 31.83 +1.04 Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 32,
+                "y": 494.6,
+                "width": 311,
+                "height": 798.7
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 422.8,
+                "width": 345,
+                "height": 887.4
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 32,
+                "y": 1406,
+                "width": 311,
+                "height": 873
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 1334.3,
+                "width": 345,
+                "height": 961.8
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 32,
+                "y": 2391.8,
+                "width": 311,
+                "height": 5466.5
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2320,
+                "width": 345,
+                "height": 5555.3
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 32,
+                "y": 7971,
+                "width": 311,
+                "height": 260
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 7899.3,
+                "width": 345,
+                "height": 348.8
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 37,
+              "y": 8272,
+              "width": 301,
+              "height": 103
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        },
+        "414": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE 2,188.8 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE 0.0 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE 31.8 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE 0.0 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE 30.6 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE 36.6 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE 38.5 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE 0.0 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Assessed alien hate 30.79 → 31.83 +1.04 Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 32,
+                "y": 494.6,
+                "width": 350,
+                "height": 690.7
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 422.8,
+                "width": 384,
+                "height": 779.4
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 32,
+                "y": 1298,
+                "width": 350,
+                "height": 789.5
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 1226.3,
+                "width": 384,
+                "height": 878.3
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 32,
+                "y": 2200.3,
+                "width": 350,
+                "height": 5060
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 2128.5,
+                "width": 384,
+                "height": 5148.8
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 32,
+                "y": 7373,
+                "width": 350,
+                "height": 260
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 7301.3,
+                "width": 384,
+                "height": 348.8
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 37,
+              "y": 7674,
+              "width": 340,
+              "height": 103
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 414,
+          "innerWidth": 414,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        },
+        "768": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE 2,188.8 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE 0.0 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE 31.8 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE 0.0 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE 30.6 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE 36.6 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE 38.5 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE 0.0 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Assessed alien hate 30.79 → 31.83 +1.04 Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 32,
+                "y": 446.8,
+                "width": 704,
+                "height": 488.6
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 385.8,
+                "width": 738,
+                "height": 566.6
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 32,
+                "y": 1037.5,
+                "width": 704,
+                "height": 611
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 976.5,
+                "width": 738,
+                "height": 689
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 32,
+                "y": 1750.5,
+                "width": 704,
+                "height": 4567
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 1689.5,
+                "width": 738,
+                "height": 4645
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 32,
+                "y": 6419.5,
+                "width": 704,
+                "height": 242.5
+              },
+              "cardRect": {
+                "x": 15,
+                "y": 6358.5,
+                "width": 738,
+                "height": 320.5
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 37,
+              "y": 6703,
+              "width": 694,
+              "height": 83
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        },
+        "1000": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE 2,188.8 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE 0.0 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE 31.8 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE 0.0 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE 30.6 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE 36.6 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE 38.5 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE 0.0 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Assessed alien hate 30.79 → 31.83 +1.04 Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 41,
+                "y": 347.8,
+                "width": 918,
+                "height": 454.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 286.8,
+                "width": 952,
+                "height": 532.5
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 41,
+                "y": 904.4,
+                "width": 918,
+                "height": 567.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 843.4,
+                "width": 952,
+                "height": 645.5
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 41,
+                "y": 1573.9,
+                "width": 918,
+                "height": 4475
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 1512.9,
+                "width": 952,
+                "height": 4553
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 41,
+                "y": 6150.9,
+                "width": 918,
+                "height": 242.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 6089.9,
+                "width": 952,
+                "height": 320.5
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 46,
+              "y": 6434.4,
+              "width": 908,
+              "height": 83
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 1000,
+          "innerWidth": 1000,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        },
+        "1100": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE 2,188.8 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE 0.0 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE 31.8 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE 0.0 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE 30.6 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE 36.6 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE 38.5 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE 0.0 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO SWIPE HORIZONTALLY TO VIEW ALL COLUMNS INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Assessed alien hate 30.79 → 31.83 +1.04 Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 41,
+                "y": 310.8,
+                "width": 1018,
+                "height": 454.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 249.8,
+                "width": 1052,
+                "height": 532.5
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 41,
+                "y": 867.4,
+                "width": 1018,
+                "height": 418.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 806.4,
+                "width": 1052,
+                "height": 496.5
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 41,
+                "y": 1387.9,
+                "width": 1018,
+                "height": 4475
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 1326.9,
+                "width": 1052,
+                "height": 4553
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 41,
+                "y": 5964.9,
+                "width": 1018,
+                "height": 242.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 5903.9,
+                "width": 1052,
+                "height": 320.5
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 46,
+              "y": 6248.4,
+              "width": 1008,
+              "height": 83
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 1100,
+          "innerWidth": 1100,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        },
+        "desktop": {
+          "text": "STRATEGIC FACTION LEDGER CURRENT STATE LEDGER / CURRENT STATE R&D, alien hate, and save-to-save deltas sit beneath the primary control and asset signals. Ship count is an asset count, not a combat estimate. FACTION CP GDP HABS / SHIPS STRATEGIC STATUS the Initiative R&D 8,517 · HATE 2,188.8 37 $92.9T GDP Δ +151.0B 35 / 145 Δ ships — EARTH ECONOMIC POWER the Protectorate R&D 4,013 · HATE 0.0 50 $69.7T GDP Δ +227.4B 14 / 120 Δ ships — POLITICAL NETWORK the Resistance R&D 2,545 · HATE 31.8 90 $34.7T GDP Δ +70.9B 20 / 70 Δ ships +4 POLITICAL NETWORK the Servants R&D 2,015 · HATE 0.0 85 $27.9T GDP Δ +311.5B 47 / 105 Δ ships +2 POLITICAL NETWORK Humanity First R&D 1,892 · HATE 30.6 50 $15.5T GDP Δ +31.9B 26 / 42 Δ ships — POLITICAL NETWORK Project Exodus R&D 1,012 · HATE 36.6 25 $7.9T GDP Δ -179.1B 28 / 31 Δ ships -1 ORBITAL BUILDUP the Academy R&D 653 · HATE 38.5 9 $5.2T GDP Δ -1075.8B 14 / 13 Δ ships — SCATTERED the Aliens R&D 0 · HATE 0.0 3 $1.4T GDP Δ +161.1B 29 / 492 Δ ships — ALIEN SPACE MILITARY TECHNOLOGY WATCH RESEARCH + INTELLIGENCE GAPS GLOBAL RESEARCH Active slots PROJECT PROGRESS CURRENT LEAD LEAD OUTPUT Future Tech: Life Science 65.2% the Resistance 9,298 Future Tech: Information Science 33.6% the Resistance 12,071 Future Tech: Military Science 100.0% the Protectorate 68,220 THE INITIATIVE PROJECTS Active projects PROJECT PROGRESS ACCUMULATED / COST AVAILABILITY Audience Research 85.1% 43 / 50 GUARANTEED · ~1 MO Hybrid Confinement Fusion Reactor III 54.1% 13,526 / 25,000 RNG 30% CAP · ~6.6 MO Operations Research 45.6% 23 / 50 GUARANTEED · ~1 MO Flow-Stabilized Z-Pinch Fusion Reactor 41.3% 16,521 / 40,000 GUARANTEED · ~3.2 MO Antimatter Plasma Core Torch 40.3% 10,084 / 25,000 RNG 15% CAP · ~8.6 MO Antimatter Plasma Core Reactor III 5.7% 4,258 / 75,000 GUARANTEED · ~6.3 MO INTELLIGENCE GAPS Capability unlocks No locked capability records are available. UNLOCKED TECHNOLOGY WHAT THIS FACTION HAS RESEARCHED SEARCH UNLOCKED ALL 40mm Autocannon Project_40mmAutocannon MILITARY SCIENCE 250 pts 2 items 40mm Nose Autocannon 40mm Autocannon Acheron Shaped-Nuclear Torpedoes Project_AcheronNuclearTorpedoBay MILITARY SCIENCE 7,500 pts 2 items Sidewinder Shaped Nuclear Missile Bay Acheron Shaped Nuclear Torpedo Bay Adamantine Armor Project_AdamantaneArmor MATERIALS 5,000 pts 1 item Adamantine Armor Administration Node Project_AdministrationNode SOCIAL SCIENCE 500 pts 1 item Administration Node Administration Tower Project_AdministrationTower SOCIAL SCIENCE 1,000 pts 1 item Administration Tower Advanced Coil Cannon Project_CoilCannonMk3 MILITARY SCIENCE 7,500 pts 6 items Light Coil Cannon Mk3 Coil Cannon Mk3 Heavy Coil Cannon Mk3 Spinal Coiler Mk3 Heavy Siege Coiler Mk3 Spinal Siege Coiler Mk3 Advanced Coilgun Batteries Project_CoilgunBatteryMk3 MILITARY SCIENCE 7,500 pts 3 items Light Coilgun Battery Mk3 Coilgun Battery Mk3 Heavy Coilgun Battery Mk3 Advanced Laser Engine Project_AdvancedLaserEngine ENERGY 5,000 pts 1 item Advanced Laser Engine Advanced Marine Assault Unit Project_AdvancedMarineAssaultUnit MILITARY SCIENCE 500 pts 1 item Advanced Marine Assault Unit Advanced Plasma Cannon Project_PlasmaCannonMk3 MILITARY SCIENCE 5,000 pts 2 items Heavy Plasma Cannon Mk3 Superheavy Plasma Cannon Mk3 Advanced Prospecting Surveys Project_AdvancedProspectingSurveys SPACE SCIENCE 750 pts Advanced Rail Cannon Project_RailCannonMk3 MILITARY SCIENCE 2,500 pts 4 items Light Rail Cannon Mk3 Rail Cannon Mk3 Heavy Rail Cannon Mk3 Spinal Railgun Mk3 Advanced Railgun Batteries Project_RailgunBatteryMk3 MILITARY SCIENCE 2,500 pts 3 items Light Railgun Battery Mk3 Railgun Battery Mk3 Heavy Railgun Battery Mk3 Advanced Xenological Monitoring Project_AdvancedXenologicalMonitoring XENOLOGY 10,000 pts Agriculture Complex Project_AgricultureComplex LIFE SCIENCE 2,500 pts 1 item Agriculture Complex Alien Army Analysis Project_AlienArmyAnalysis XENOLOGY 5,000 pts Alien Computers Project_TheirComputers XENOLOGY 2,500 pts Alien Flora Project_AlienFlora XENOLOGY 250 pts Alien Methods Project_TheirMethods XENOLOGY 150 pts Alien Movements Project_TheirMovements XENOLOGY 1,000 pts Alien Operations Project_TheirOperations XENOLOGY 250 pts Alien Origin Project_TheirOrigin XENOLOGY 1,000 pts Alien Red Teaming Project_AlienRedTeaming XENOLOGY 7,500 pts Alien Robotics Project_TheirRobotics XENOLOGY 7,500 pts Alien Signatures Project_TheirSignatures XENOLOGY 12.5 pts Alien Technology Project_TheirTechnology XENOLOGY 5,000 pts Alien Warships Project_TheirWarships XENOLOGY 5,000 pts Alien-Adapted ECM Project_AlienECM XENOLOGY 2,500 pts Antimatter Farm Project_AntimatterFarm MATERIALS 750 pts 1 item Antimatter Farm Antimatter Harvester Project_AntimatterHarvester MATERIALS 500 pts 1 item Antimatter Harvester Antimatter Particle Cannon Project_AntimatterParticleCannon MILITARY SCIENCE 7,500 pts 5 items Antimatter Point Defense Battery Heavy Antimatter Point Defense Battery Antimatter Cannon Heavy Antimatter Cannon Spinal Antimatter Cannon Antimatter Plasma Core Reactor I Project_AntimatterPlasmaCoreReactorI ENERGY 12,500 pts 1 item Antimatter Plasma Core Reactor I Antimatter Plasma Core Reactor II Project_AntimatterPlasmaCoreReactorII ENERGY 37,500 pts 1 item Antimatter Plasma Core Reactor II Antimatter Pulsed Plasma Core Lantern Project_AntimatterPulsedPlasmaCoreLantern SPACE SCIENCE 12,500 pts 6 items Antimatter Pulsed Plasma Core Lantern x1 Antimatter Pulsed Plasma Core Lantern x2 Antimatter Pulsed Plasma Core Lantern x3 Antimatter Pulsed Plasma Core Lantern x4 Antimatter Pulsed Plasma Core Lantern x5 Antimatter Pulsed Plasma Core Lantern x6 Antimatter Spiker Project_AntimatterSpiker ENERGY 1,500 pts 1 item Antimatter Spiker Antimatter Trap Project_AntimatterTrap MATERIALS 250 pts 1 item Antimatter Trap Apparatchiks Project_Apparatchiks SOCIAL SCIENCE 1,500 pts Appeals to Fear Messaging Project_AppealtoFearMessaging SOCIAL SCIENCE 2,500 pts Armor Struts Project_ArmorStruts MATERIALS 500 pts 1 item Armor Struts Army Dispersion Tactics Project_ArmyDispersionTactics MILITARY SCIENCE 2,500 pts Army Nuclear Hardening Project_NuclearHardening MATERIALS 5,000 pts Arrival Markets Project_ArrivalStockMarkets SOCIAL SCIENCE 500 pts Astronaut Fitness Regimen Project_AstronautFitnessRegimen LIFE SCIENCE 1,250 pts Atomsmasher Project_Atomsmasher ENERGY 15,000 pts 1 item Atomsmasher Automated Fission Outpost Kit Project_AutomatedFissionOutpostKit SPACE SCIENCE 3,250 pts 1 item Automated Fission Outpost Kit Automated Fission Pile Project_AutomatedFissionPile INFORMATION SCIENCE 500 pts 1 item Automated Fission Pile Automated Mining Complex Project_AutomatedMiningComplex INFORMATION SCIENCE 500 pts 1 item Automated Mining Complex Automated Outpost Core Project_AutomatedOutpostCore INFORMATION SCIENCE 500 pts 1 item Automated Outpost Core Automated Platform Core Project_AutomatedPlatformCore INFORMATION SCIENCE 500 pts 1 item Automated Platform Core Automated Solar Collector Project_AutomatedSolarCollector INFORMATION SCIENCE 100 pts 1 item Automated Solar Collector Automated Solar Mirror Project_AutomatedSolarMirror MATERIALS 500 pts 1 item Automated Solar Mirror Battlefield Pherocyte Deployment Project_BattlefieldPherocyteDeployment XENOLOGY 15,000 pts Battlestations Project_Battlestations MILITARY SCIENCE 2,500 pts 1 item Battlestations Borane Nova Lantern Project_BoraneNovaLantern SPACE SCIENCE 32,500 pts 6 items Borane Nova Lantern x1 Borane Nova Lantern x2 Borane Nova Lantern x3 Borane Nova Lantern x4 Borane Nova Lantern x5 Borane Nova Lantern x6 Broadcast Outlet Project_BroadcastOutlet SOCIAL SCIENCE 250 pts 1 item Broadcast Outlet Burner Drive Project_BurnerDrive SPACE SCIENCE 2,500 pts 6 items Burner Drive x1 Burner Drive x2 Burner Drive x3 Burner Drive x4 Burner Drive x5 Burner Drive x6 Capitalization Project_Capitalization SOCIAL SCIENCE 250 pts Carbon Recapture Technologies Project_CarbonRecaptureTechnologies LIFE SCIENCE 2,500 pts Civil Defense Programs Project_CivilDefensePrograms SOCIAL SCIENCE 5,000 pts Clandestine Cells Project_ClandestineCells SOCIAL SCIENCE 300 pts 371 unlocked of 750 projects. 60 shown of 371 matching — 311 omitted by the 60-row display cap; narrow the search to see them. SINCE LAST SAVE MATERIAL STRATEGIC DELTA 14.50 GAME DAYS ELAPSED Compared with 1 Jun 2049. Empty categories mean no normalized change was detected. the Resistance FACTION POSTURE Ships 66 → 70 +4 Fleets 24 → 26 +2 Control points 92 → 90 -2 GDP 34.6T → 34.7T +70.9B Assessed alien hate 30.79 → 31.83 +1.04 Humanity First FACTION POSTURE Control points 49 → 50 +1 GDP 15.5T → 15.5T +31.9B the Initiative FACTION POSTURE GDP 92.8T → 92.9T +151.0B EXTERNAL ANALYSIS API / AI ACCESS Open full API directory Ship designs Logistics Construction Transfers Theaters Tech tree",
+          "mounts": {
+            "factionDonutContainer": {
+              "rect": {
+                "x": 41,
+                "y": 272.8,
+                "width": 760,
+                "height": 475.6
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 211.8,
+                "width": 794,
+                "height": 553.6
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "researchWatchlist": {
+              "rect": {
+                "x": 859,
+                "y": 272.8,
+                "width": 760,
+                "height": 587.5
+              },
+              "cardRect": {
+                "x": 842,
+                "y": 211.8,
+                "width": 794,
+                "height": 665.5
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "auto"
+            },
+            "unlockedTech": {
+              "rect": {
+                "x": 41,
+                "y": 962.3,
+                "width": 1578,
+                "height": 4452
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 901.3,
+                "width": 1612,
+                "height": 4530
+              },
+              "display": "block",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgba(0, 0, 0, 0)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            },
+            "sinceLastSave": {
+              "rect": {
+                "x": 41,
+                "y": 5516.3,
+                "width": 1578,
+                "height": 242.5
+              },
+              "cardRect": {
+                "x": 24,
+                "y": 5455.3,
+                "width": 1612,
+                "height": 320.5
+              },
+              "display": "grid",
+              "gridColumn": "auto",
+              "border": "0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234) | 0px | none | rgb(230, 238, 234)",
+              "background": "rgb(38, 56, 55)",
+              "cardBorder": "1px solid rgb(59, 80, 77)",
+              "cardBackground": "rgba(0, 0, 0, 0)",
+              "cardGridColumn": "1 / -1"
+            }
+          },
+          "apiAccess": {
+            "rect": {
+              "x": 46,
+              "y": 5799.8,
+              "width": 1568,
+              "height": 83
+            },
+            "display": "block",
+            "gridColumn": "1 / -1",
+            "border": "1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55) | 1px | solid | rgb(38, 56, 55)",
+            "background": "rgb(11, 21, 23)",
+            "ariaLabelledby": "initApiAccessTitle",
+            "titleId": "initApiAccessTitle",
+            "linkCount": 6
+          },
+          "scrollWidth": 1660,
+          "innerWidth": 1660,
+          "hasLegacyGrid": false,
+          "hasTwoColumnGrid": true
+        }
+      }
+    }
+  }
+}
