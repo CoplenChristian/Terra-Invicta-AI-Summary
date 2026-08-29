@@ -9,7 +9,9 @@
  * 2026-08-26. THE THREE RENDERING RULES OF THAT FILE STILL HOLD:
  *
  * 1. NOTHING IS INTERPOLATED RAW. `num` / `int` / `dec` / `mult` each return
- *    the em dash for an absent value and can never return a confident zero.
+ *    the shared absent affordance for an absent value and can never return a
+ *    confident zero. The decision is delegated to `resolveValue`, the string
+ *    form of the `<Value>` primitive.
  * 2. ONLY STRINGS THIS FILE AUTHORS REACH THE DOM. Upstream prose — a
  *    `floorReason`, a `threatBasis`, a weapon `rationale` — is carried as
  *    `title` or as an explicitly-labelled detail-panel fact, never assembled
@@ -48,7 +50,7 @@
  * either way.
  */
 
-export const UNAVAILABLE = '—';
+import { resolveValue } from '../components/Value.jsx';
 
 export const DESIGN_ROLES = Object.freeze({
   warship: 'warship',
@@ -128,27 +130,41 @@ export function num(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function int(value) {
+function formatNumeric(value, format) {
   const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
-  return Math.round(parsed).toLocaleString('en-US');
+  return resolveValue({
+    value,
+    present: parsed !== null,
+    format: () => format(parsed),
+  }).text;
+}
+
+function formatText(value) {
+  return resolveValue({
+    value,
+    present: value !== null && value !== undefined && value !== '',
+    format: String,
+  }).text;
+}
+
+export function int(value) {
+  return formatNumeric(value, (parsed) => Math.round(parsed).toLocaleString('en-US'));
 }
 
 export function dec(value, places = 1) {
-  const parsed = num(value);
-  return parsed === null ? UNAVAILABLE : parsed.toFixed(places);
+  return formatNumeric(value, (parsed) => parsed.toFixed(places));
 }
 
 /** "2.07×", "40.0×", "6.7M×". Absent stays absent — never "null×". */
 export function mult(value) {
-  const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
-  const abs = Math.abs(parsed);
-  if (abs >= 1e9) return `${(parsed / 1e9).toFixed(1)}B×`;
-  if (abs >= 1e6) return `${(parsed / 1e6).toFixed(1)}M×`;
-  if (abs >= 1000) return `${Math.round(parsed).toLocaleString('en-US')}×`;
-  if (abs >= 10) return `${parsed.toFixed(1)}×`;
-  return `${parsed.toFixed(2)}×`;
+  return formatNumeric(value, (parsed) => {
+    const abs = Math.abs(parsed);
+    if (abs >= 1e9) return `${(parsed / 1e9).toFixed(1)}B×`;
+    if (abs >= 1e6) return `${(parsed / 1e6).toFixed(1)}M×`;
+    if (abs >= 1000) return `${Math.round(parsed).toLocaleString('en-US')}×`;
+    if (abs >= 10) return `${parsed.toFixed(1)}×`;
+    return `${parsed.toFixed(2)}×`;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +384,10 @@ export function driveModel(design) {
     return {
       state: 'improved',
       recName: driveRec.displayName || recDriveId,
+      baseDeltaV: base.deltaVKps,
+      recDeltaV: driveRec.deltaVKps,
+      baseAccel: base.combatAccelerationMps2,
+      recAccel: driveRec.combatAccelerationMps2,
       baseDeltaVText: dec(base.deltaVKps, 1),
       recDeltaVText: dec(driveRec.deltaVKps, 1),
       baseAccelText: dec(base.combatAccelerationMps2, 2),
@@ -468,6 +488,7 @@ export function powerModel(design) {
   if (!scaled) return null;
   return {
     summary: powerInfo?.summary ?? '',
+    factor,
     percentText: dec(factor * 100, 0),
   };
 }
@@ -621,7 +642,7 @@ export function refitFacts(designRow) {
 
   facts.push({
     label: 'BASELINE FITTING',
-    value: `Drive: ${base.drive?.displayName || base.drive?.driveId || UNAVAILABLE} · ΔV: ${dec(base.deltaVKps, 1)} km/s · Combat Accel: ${dec(base.combatAccelerationMps2, 3)} m/s²`,
+    value: `Drive: ${formatText(base.drive?.displayName || base.drive?.driveId)} · ΔV: ${dec(base.deltaVKps, 1)} km/s · Combat Accel: ${dec(base.combatAccelerationMps2, 3)} m/s²`,
   });
 
   const fittedDriveId = base.drive?.driveId;

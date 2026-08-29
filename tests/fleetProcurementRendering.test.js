@@ -5,15 +5,16 @@
 //   register defects #4 and #20 stay fixed.
 //
 // DELIBERATELY THIN. `tests/refitAdvisor.test.js` (16) and
-// `tests/researchRanking.test.js` (63) are the safety net and both survived the
-// migration with every assertion unchanged; between them they already
-// characterise the four drive states, the three armour states, the obsolete
-// demotion, the severity thresholds and the procurement row's null discipline
-// against the live fixture in both modes. Re-characterising that here would
-// double the test code for nothing. These seven cover only what neither file can:
-// the mount is live, the bridge is the React one, the click handlers survived
-// `innerHTML` becoming a React tree, the defect #4 fix holds, and defect #20's
-// three refit states stay distinguishable.
+// `tests/researchRanking.test.js` (63) are the safety net for the model and
+// survived the migration with their behavioural assertions intact. This file
+// covers what neither file can: the mount is live, the bridge is the React one,
+// the click handlers survived `innerHTML` becoming a React tree, the defect #4
+// fix holds, defect #20's three refit states stay distinguishable, and defect
+// #21's rendered presence is independent per metric.
+//
+// The last three tests are intentionally not vacuous panel scans. They locate
+// each figure by row/card and assert its own `data-value-state` and text, so a
+// neighbouring value or a row-level presence flag cannot satisfy them.
 //
 // DEFECT #20 MUTATION CHECK (2026-08-26). Reverting `refitView` to the vanilla
 // `refitsRenderable` guard made the new test fail on all three states at once;
@@ -204,7 +205,7 @@ test('DEFECT #4: an armour with no resistance figures yields no ratio, and the r
   // Non-vacuity first: a recognised pair must still produce its real ratio, so
   // this test cannot be passed by a panel that simply stopped showing ratios.
   assert.match(text, /Foamed Metal Armor → Adamantane Armor/, 'the known pair renders its transition');
-  assert.match(html, /<span class="ra-tag ra-tag--deficit">3\.9× behind<\/span>/,
+  assert.match(html, /<span class="value-measured ra-tag ra-tag--deficit" data-primitive="value" data-value-state="measured">3\.9× behind<\/span>/,
     'and its measured 3.9× deficit badge');
 
   // The unrecognised material. The vanilla scored it a fabricated 1.0, which
@@ -215,7 +216,7 @@ test('DEFECT #4: an armour with no resistance figures yields no ratio, and the r
 
   // Scoped to the armour row, not the whole card: a WARSHIP role badge is itself
   // an `ra-tag--deficit`, so a card-wide scan would pass vacuously.
-  const unknownCard = html.match(/<div class="fp-refit-card" data-design-id="unknown-armour"[\s\S]*?Refit details/);
+  const unknownCard = html.match(/<div class="fp-refit-card MuiBox-root css-[a-z0-9]+" data-design-id="unknown-armour"[\s\S]*?Refit details/);
   assert.ok(unknownCard, 'the unrecognised-armour card must be locatable');
   const unknownArmor = unknownCard[0].match(/<div class="fp-refit__armor[\s\S]*?<\/div>/);
   assert.ok(unknownArmor, 'and its armour row must be present');
@@ -307,4 +308,205 @@ test('each refit card opens its own spec, and an unknown obsolete status says so
   // The button is wired per card, so the OTHER card must open the other design.
   const otherOpened = await openRefitDetailsByClick(page, PROCUREMENT_PAYLOAD, refits, 'unknown-armour');
   assert.strictEqual(otherOpened[0].title, 'Future Hull Refit Specification');
+});
+
+test('fleet procurement per-metric presence is independent across procurement rows', async () => {
+  const payload = {
+    success: true,
+    military: {
+      procurement: {
+        count: 3,
+        items: [
+          { id: 'all', displayName: 'All present', axisLabel: 'damage', improvementMultiple: 2, action: 'refit' },
+          { id: 'missing', displayName: 'One missing', axisLabel: 'damage', improvementMultiple: null, action: 'refit' },
+          { id: 'other', displayName: 'Other present', axisLabel: 'damage', improvementMultiple: 3, action: 'refit' },
+        ],
+      },
+    },
+  };
+
+  await withFleetProcurementHarnessPage(payload, { success: true, items: [], count: 0 }, async (page) => {
+    await renderFleetProcurementOnPage(page, payload, { success: true, items: [], count: 0 });
+    const rows = await page.evaluate(() => [...document.querySelectorAll('#fleet-procurement-test-root .fp-row')].map((row) => ({
+      name: row.querySelector('.fp-row__name')?.textContent.trim(),
+      figures: [...row.querySelectorAll('.fp-row__metric [data-value-state]')].map((value) => ({
+        state: value.getAttribute('data-value-state'),
+        text: value.textContent.trim(),
+      })),
+    })));
+
+    assert.deepStrictEqual(rows, [
+      { name: 'All present', figures: [{ state: 'measured', text: '2.00×' }] },
+      { name: 'One missing', figures: [{ state: 'absent', text: '—' }] },
+      { name: 'Other present', figures: [{ state: 'measured', text: '3.00×' }] },
+    ], 'only the row whose multiple is null may become absent');
+  });
+});
+
+test('fleet procurement per-metric presence is independent across refit cards', async () => {
+  const metricDesign = (designId, { recDeltaV = 20, currentArmor = 'FoamedMetalArmor' } = {}) => ({
+    designId,
+    displayName: designId,
+    hull: 'Cruiser',
+    role: 'warship',
+    isObsolete: false,
+    baseline: {
+      drive: { driveId: 'OldDrive', displayName: 'Old Drive' },
+      deltaVKps: 14,
+      combatAccelerationMps2: 1.9,
+    },
+    recommendations: {
+      drive: {
+        driveId: 'CandidateDrive',
+        displayName: 'Candidate Drive',
+        clearsFloor: true,
+        deltaVKps: recDeltaV,
+        combatAccelerationMps2: 2.5,
+      },
+      weapons: [],
+      armor: {
+        currentArmor,
+        recommendedMaterial: 'Adamantane Armor',
+        recommendedMaterialId: 'AdamantaneArmor',
+        weighted: true,
+        threatBasis: 'weighted threat basis',
+      },
+    },
+    budgets: {
+      power: { thrustScalingFactor: 0.75, summary: 'Power scaled by reactor budget' },
+    },
+  });
+  const payload = {
+    success: true,
+    military: { procurement: { items: [], count: 0 } },
+  };
+  const refitPayload = {
+    success: true,
+    items: [
+      metricDesign('all-present'),
+      metricDesign('drive-delta-v-absent', { recDeltaV: null }),
+      metricDesign('armor-ratio-absent', { currentArmor: 'UnknownArmor' }),
+    ],
+  };
+
+  await withFleetProcurementHarnessPage(payload, refitPayload, async (page) => {
+    await renderFleetProcurementOnPage(page, payload, refitPayload);
+    const cards = await page.evaluate(() => [...document.querySelectorAll('#fleet-procurement-test-root .fp-refit-card[data-design-id]')].map((card) => ({
+      id: card.getAttribute('data-design-id'),
+      drive: [...card.querySelectorAll('.fp-refit__perf [data-value-state]')].map((value) => ({
+        state: value.getAttribute('data-value-state'),
+        text: value.textContent.trim(),
+      })),
+      armor: [...card.querySelectorAll('.fp-refit__armor [data-value-state]')].map((value) => ({
+        state: value.getAttribute('data-value-state'),
+        text: value.textContent.trim(),
+      })),
+      power: [...card.querySelectorAll('.fp-refit__power [data-value-state]')].map((value) => ({
+        state: value.getAttribute('data-value-state'),
+        text: value.textContent.trim(),
+      })),
+    })));
+    const byId = Object.fromEntries(cards.map((card) => [card.id, card]));
+    const allDrive = [
+      { state: 'measured', text: '14.0' },
+      { state: 'measured', text: '20.0' },
+      { state: 'measured', text: '1.90' },
+      { state: 'measured', text: '2.50' },
+    ];
+
+    assert.deepStrictEqual(byId['all-present'].drive, allDrive,
+      'the untouched drive card must measure all four performance figures');
+    assert.deepStrictEqual(byId['drive-delta-v-absent'].drive, [
+      allDrive[0],
+      { state: 'absent', text: '—' },
+      allDrive[2],
+      allDrive[3],
+    ], 'a null recommended ΔV must move only its own figure');
+    assert.deepStrictEqual(byId['drive-delta-v-absent'].armor, [
+      { state: 'measured', text: '3.9× behind' },
+    ], 'the neighbouring armour figure must remain measured');
+    assert.deepStrictEqual(byId['drive-delta-v-absent'].power, [
+      { state: 'measured', text: '75' },
+    ], 'the neighbouring power figure must remain measured');
+
+    assert.deepStrictEqual(byId['armor-ratio-absent'].drive, allDrive,
+      'an unpriceable armour must not move any drive figure');
+    assert.deepStrictEqual(byId['armor-ratio-absent'].armor, [
+      { state: 'absent', text: 'protection ratio unmeasured' },
+    ], 'only the unpriceable armour comparison must become absent');
+    assert.deepStrictEqual(byId['armor-ratio-absent'].power, byId['all-present'].power,
+      'an unpriceable armour must not move the power figure');
+  });
+});
+
+test('fleet procurement stamps every absent affordance through Value', async () => {
+  const payload = {
+    success: true,
+    military: {
+      procurement: {
+        items: [{
+          id: 'missing-multiple',
+          displayName: 'Unmeasured component',
+          axisLabel: 'damage',
+          improvementMultiple: null,
+          action: 'refit',
+        }],
+      },
+    },
+  };
+  const refitPayload = {
+    success: true,
+    items: [{
+      designId: 'missing-drive-figures',
+      displayName: 'Unmeasured hull',
+      hull: 'Cruiser',
+      role: 'warship',
+      isObsolete: false,
+      baseline: {
+        drive: { driveId: 'OldDrive', displayName: 'Old Drive' },
+        deltaVKps: null,
+        combatAccelerationMps2: null,
+      },
+      recommendations: {
+        drive: {
+          driveId: 'CandidateDrive',
+          displayName: 'Candidate Drive',
+          clearsFloor: true,
+          deltaVKps: null,
+          combatAccelerationMps2: null,
+        },
+        weapons: [],
+      },
+    }],
+  };
+
+  await withFleetProcurementHarnessPage(payload, refitPayload, async (page) => {
+    await renderFleetProcurementOnPage(page, payload, refitPayload);
+    const audit = await page.evaluate(() => {
+      const root = document.getElementById('fleet-procurement-test-root');
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const unstamped = [];
+      let node = walker.nextNode();
+      while (node) {
+        if (node.textContent.includes('—')) {
+          const host = node.parentElement;
+          if (!host.closest('[data-value-state]')) {
+            unstamped.push(`${host.className} :: ${node.textContent.trim()}`);
+          }
+        }
+        node = walker.nextNode();
+      }
+      return {
+        unstamped,
+        absent: root.querySelectorAll('[data-value-state="absent"]').length,
+        measured: root.querySelectorAll('[data-value-state="measured"]').length,
+      };
+    });
+
+    assert.deepStrictEqual(audit.unstamped, [],
+      'every rendered em dash used as a value must sit inside a Value host');
+    assert.strictEqual(audit.absent, 5,
+      'one procurement multiple and four drive figures must each be stamped absent');
+    assert.ok(audit.measured >= 3, 'the surrounding measured figures must remain stamped');
+  });
 });

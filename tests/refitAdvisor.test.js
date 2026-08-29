@@ -26,8 +26,10 @@ const { loadFixtureFilteredSnapshot, queryFixtureIntel } = require('./fixtures/f
 // every assertion below now reads markup produced by a real browser driving
 // that bridge.
 //
-// EVERY ASSERTION IS UNCHANGED. Only the plumbing that produces `html` moved,
-// and each renderer became async. Two things about the old sandbox are worth
+// The behavioural assertions are unchanged. The five markup assertions that
+// identify a migrated host now pin the exact MUI/Value class-and-attribute
+// shape rather than accepting arbitrary extra classes. Only the plumbing that
+// produces `html` moved, and each renderer became async. Two things about the old sandbox are worth
 // recording because the browser makes both moot: it passed the SHIPPED
 // `escapeHtml` out of `tests/fixtures/renderHarness.js` rather than the
 // component's non-escaping `value => String(value ?? '')` fallback (a sandbox
@@ -363,7 +365,7 @@ test('fleet procurement frontend renders four distinct drive recommendation stat
   const html1 = await renderRefitDesignCard(state1Design);
   assert.match(html1, /Drive Refit:/, 'State 1 must render "Drive Refit:" label');
   assert.match(html1, /Advanced Nerva Drive x1/, 'State 1 must render candidate drive name');
-  assert.match(html1, /ΔV:\s*15\.0\s*→\s*22\.5\s*km\/s/, 'State 1 must render improvement arrow for deltaV');
+  assert.match(html1, /<span class="fp-refit__perf">ΔV: <span class="value-measured MuiBox-root css-[a-z0-9]+" data-primitive="value" data-value-state="measured">15\.0<\/span> → <span class="value-measured MuiBox-root css-[a-z0-9]+" data-primitive="value" data-value-state="measured">22\.5<\/span> km\/s/, 'State 1 must render improvement arrow for deltaV');
   assert.match(html1, /constant-dry-mass caveat/, 'State 1 must render dry mass caveat');
 
   // State 2: Best available drive already fitted (clearsFloor === true && driveId === fittedDriveId)
@@ -812,7 +814,7 @@ test('fleet procurement frontend renders obsolete markers, demotes retired cards
   const obsoleteHtml = await renderRefitDesignCard(obsoleteDesign);
   assert.match(obsoleteHtml, /<span class="ra-tag ra-tag--warn">OBSOLETE<\/span>/, 'Obsolete design must render OBSOLETE tag');
   assert.ok(obsoleteHtml.includes('fp-refit-card--obsolete'), 'Obsolete design must carry fp-refit-card--obsolete class');
-  const armorSection = obsoleteHtml.match(/<div class="fp-refit__armor">[\s\S]*?<\/div>/)?.[0];
+  const armorSection = obsoleteHtml.match(/<div class="fp-refit__armor MuiBox-root css-[a-z0-9]+">[\s\S]*?<\/div>/)?.[0];
   assert.ok(armorSection, 'Armour section must be present');
   assert.ok(!armorSection.includes('ra-tag--deficit'), 'Obsolete design armour must not raise red deficit tag');
 
@@ -879,7 +881,7 @@ test('armour mismatch indicator: renders fitted -> rec with graded severity badg
   const warnHtml = await renderRefitDesignCard(warnDesign);
   const warnArmor = warnHtml.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
   assert.match(warnArmor, /Nanotube Armor\s*→\s*Adamantane Armor/, 'State 2 must render fitted -> recommended transition');
-  assert.match(warnArmor, /<span class="ra-tag ra-tag--warn">1\.6× behind<\/span>/, 'State 2 must render amber 1.6× behind tag');
+  assert.match(warnArmor, /<span class="value-measured ra-tag ra-tag--warn" data-primitive="value" data-value-state="measured">1\.6× behind<\/span>/, 'State 2 must render amber 1.6× behind tag');
   assert.ok(!warnArmor.includes('ra-tag--deficit'), 'State 2 must not render red deficit tag');
 
   // 3. State 3: Mismatch at 2x or worse (FoamedMetal 3.93 -> Adamantane 15.20 = 3.9x behind) -> ra-tag--deficit (red)
@@ -902,7 +904,7 @@ test('armour mismatch indicator: renders fitted -> rec with graded severity badg
   const deficitHtml1 = await renderRefitDesignCard(deficitDesign1);
   const deficitArmor1 = deficitHtml1.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
   assert.match(deficitArmor1, /Foamed Metal Armor\s*→\s*Adamantane Armor/, 'State 3 must render fitted -> recommended transition');
-  assert.match(deficitArmor1, /<span class="ra-tag ra-tag--deficit">3\.9× behind<\/span>/, 'State 3 must render red 3.9× behind tag');
+  assert.match(deficitArmor1, /<span class="value-measured ra-tag ra-tag--deficit" data-primitive="value" data-value-state="measured">3\.9× behind<\/span>/, 'State 3 must render red 3.9× behind tag');
 
   // State 3b: CompositeArmor (2.73 -> Adamantane 15.20 = 5.6x behind) -> ra-tag--deficit (red)
   const deficitDesign2 = {
@@ -923,7 +925,7 @@ test('armour mismatch indicator: renders fitted -> rec with graded severity badg
   };
   const deficitHtml2 = await renderRefitDesignCard(deficitDesign2);
   const deficitArmor2 = deficitHtml2.match(/<div class="fp-refit__armor[\s\S]*?<\/div>/)?.[0] || '';
-  assert.match(deficitArmor2, /<span class="ra-tag ra-tag--deficit">5\.6× behind<\/span>/, 'State 3b must render red 5.6× behind tag');
+  assert.match(deficitArmor2, /<span class="value-measured ra-tag ra-tag--deficit" data-primitive="value" data-value-state="measured">5\.6× behind<\/span>/, 'State 3b must render red 5.6× behind tag');
 
   // 4. Constraint 1: Obsolete designs must not raise a red badge (quiet form)
   const obsoleteDeficit = {
