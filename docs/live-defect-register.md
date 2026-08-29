@@ -71,12 +71,33 @@ not there, so the next reader of any shape fails loudly and names itself.
   bar. In progress.
 - **#21** — the em-dash affordance hand-written in eleven panels. Not urgent:
   the rendered output is correct today, and the cost is that the rule holds by
-  convention rather than by structure. **One of the eleven is done** (Intelligence
-  Library, `c52b9de`); ten remain, one at a time. A first attempt at that same
-  panel was reverted earlier the same day, having made per-metric measurement state
-  cascade across rows — the exact property those tests defend. What fixed it on the
-  retry was a sharper brief, not a better tool: one panel instead of eleven, the
-  failure named, and the catching tests pointed at.
+  convention rather than by structure. **Three of the eleven are done** —
+  Intelligence Library (`c52b9de`), Executive Boards, and **Fleet Engagement
+  (2026-08-28, the first slice to fold the MUI move in with the `<Value>`
+  conversion)**. A first attempt at Intelligence Library was reverted earlier that
+  day, having made per-metric measurement state cascade across rows — the exact
+  property those tests defend. What fixed it on the retry was a sharper brief, not
+  a better tool: one panel instead of eleven, the failure named, and the catching
+  tests pointed at.
+
+  **The Fleet Engagement slice found the same coverage hole the Executive Boards
+  slice hit.** Neither `tests/fleet-engagement.test.js` nor
+  `tests/fleetEngagement.test.js` contained a single `data-value-state`
+  assertion, so the cascade defect could have shipped there unseen for the second
+  time. Four tests were added and each was proven to fail against a deliberate
+  mutation before it was trusted: hoisting presence to the row (per-metric),
+  hand-writing one dash back (stamping), rendering `p80` instead of `bandLabel`
+  (#13), and captioning `beyond-modelled-range` as `UNWINNABLE` (#14).
+
+  **Two things the conversion could not make structural, and why.**
+  `24-fleet-engagement.css` sets `.fe-cell span { display: block }`, so a figure
+  composed *into* a sentence inside a table cell cannot simply be wrapped in a
+  `<span>` — it would stack onto its own line. MUI takes the display property
+  back for exactly those nodes (`sx={{ '&&': { display: 'inline' } }}`, which
+  outranks `.fe-cell span` at (0,2,0) vs (0,1,1) without `!important`), so those
+  figures ARE stamped; but the two `title` attributes remain string-only, through
+  `resolveValue().text`, because an attribute cannot host an element. That is the
+  documented second form of the primitive, not a gap left open.
 - **#26** — **FIXED 2026-08-27.** The guard that promised the unit suite never
   reads the live save was a **scan of test-file source text**, so it could not see
   a read reached through a server or a helper. `missionControlLayout.test.js`

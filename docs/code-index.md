@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**245 JS modules** and **26 stylesheet parts** (271 indexed files).
+**248 JS modules** and **26 stylesheet parts** (274 indexed files).
 
 ## `public/`
 
@@ -31,6 +31,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/build_static_snapshot.js` | C | Node (CommonJS) | 253 | build the static snapshot bundle — flatten the worker entry point, | — | — |
 | `scripts/capture_command_screenshots.js` | C | Node (CommonJS) | 53 | full-page COMMAND view screenshots for grid2 migration review. | — | — |
 | `scripts/capture_command_view_proof.js` | C | Node (CommonJS) | 148 | capture COMMAND view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, runCapture` | — |
+| `scripts/capture_drives_view_proof.js` | C | Node (CommonJS) | 146 | capture DRIVES view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, runCapture` | — |
 | `scripts/capture_expansion_view_proof.js` | C | Node (CommonJS) | 143 | capture EXPANSION view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, runCapture` | — |
 | `scripts/capture_fleet_view_proof.js` | C | Node (CommonJS) | 141 | capture FLEET view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, runCapture` | — |
 | `scripts/capture_threat_view_proof.js` | C | Node (CommonJS) | 199 | capture THREAT view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, captureThreatView, runCapture` | — |
@@ -53,6 +54,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/verify_computed_style_baseline.js` | C | Node (CommonJS) | 442 | captures the computed style and geometry map for every visible element | `captureFullState, diffStates, getActiveSaveFingerprint` | — |
 | `scripts/verify_drive_explorer.js` | C | Node (CommonJS) | 384 | browser verification that the Drive Explorer renders the measured | — | — |
 | `scripts/verify_drive_path_modal.js` | C | Node (CommonJS) | 304 | browser verification that clicking a drive row actually opens the | — | — |
+| `scripts/verify_drives_grid2.js` | C | Node (CommonJS) | 218 | six post-conversion checks for DRIVES TwoColumnGrid migration. | — | — |
 | `scripts/verify_expansion_grid2.js` | C | Node (CommonJS) | 213 | six post-conversion checks for EXPANSION TwoColumnGrid migration. | — | — |
 | `scripts/verify_fleet_grid2.js` | C | Node (CommonJS) | 210 | six post-conversion checks for FLEET TwoColumnGrid migration. | — | — |
 | `scripts/verify_mining_registers.js` | C | Node (CommonJS) | 181 | browser verification that the mining board renders the measured | — | — |
@@ -246,7 +248,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/TruncationNote.jsx` | E | Browser (React JSX) | 90 | announce capped lists with total and omitted counts. An absent omitted | `TruncationNote` | — |
 | `src/v2/components/TwoColumnGrid.jsx` | E | Browser (React JSX) | 63 | reusable two-column layout primitive — MUI Grid2 container with | `TwoColumnGrid, TwoColumnGridItem` | — |
 | `src/v2/components/Value.jsx` | E | Browser (React JSX) | 134 | render a numeric value or an explicit unavailable/absent state. Never | `ABSENT_LABEL, UNAVAILABLE_LABEL, Value, resolveValue` | — |
-| `src/v2/main.jsx` | E | Browser (React JSX) | 672 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderBattlePanel, renderCapabilityMatrix, …(+25)` | — |
+| `src/v2/main.jsx` | E | Browser (React JSX) | 686 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderBattlePanel, renderCapabilityMatrix, …(+26)` | — |
 | `src/v2/panels/AlienHateEconomics.jsx` | E | Browser (React JSX) | 499 | renders the save-derived Mission Control hate floor and Total War | `AlienHateEconomics, fmtNumber, renderHudAlienHateEconomics` | `tests/AlienHateEconomics.test.js` |
 | `src/v2/panels/BattlePanel.jsx` | E | Browser (React JSX) | 162 | two-column battle planner shell — observer fleet vs picked opponent fleet, | `BattlePanel, renderBattlePanel` | — |
 | `src/v2/panels/battlePanelUtils.mjs` | E | Browser (React JSX) | 193 | testable fleet-picker and battle-cap logic behind BattlePanel.jsx. | `BATTLE_SHIP_AUTO_SELECT_COUNT, BATTLE_SHIP_CAP_ATTRIBUTION, BATTLE_SHIP_CAP_PER_SIDE, buildShipDesignLookup, deploymentSummary, factionsWithFleets, fleetById, fleetsForFaction, overCapNotice, presentCount, resolveShipDesignSubtitle, sameId, …(+4)` | `tests/battlePanelUtils.test.js` |
@@ -259,12 +261,13 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/panels/DirectiveBoard.jsx` | E | Browser (React JSX) | 1125 | React port of public/v2/js/components/directive-board.js — renders | `DirectiveBoard` | — |
 | `src/v2/panels/DriveExplorer.jsx` | E | Browser (React JSX) | 939 | the DRIVES view in React — every drive in the catalogue rated against | `DriveExplorer, driveExplorerInternals, renderDriveExplorer, setDriveExplorerMount` | `tests/DriveExplorer.test.js` |
 | `src/v2/panels/driveExplorerUtils.mjs` | E | Browser (React JSX) | 557 | pure formatters, filters, sorters and research-path shaping for the | `BUCKETS, BUCKET_LABEL, BUCKET_TITLE, ESTIMATE_CAPTION, OUTCOME, REACTOR_FILTERS, ROW_CAPS, SCROLL_HINT_TEXT, SORTS, STATUS_LABEL, STATUS_TONE, THRESHOLDS, …(+21)` | — |
+| `src/v2/panels/DrivesPanel.jsx` | E | Browser (React JSX) | 46 | DRIVES view shell — two-column MUI grid with static mount point for | `DrivesPanel, renderDrivesPanel` | — |
 | `src/v2/panels/ExecutiveBoards.jsx` | E | Browser (React JSX) | 818 | renders the executive boards — faction power, resources, and the | `CapabilityMatrixBoard, FactionLedgerBoard, LogisticsBoard, NationQueueBoard, OperationsBoard, ResearchWatchlistBoard, TheaterBoard` | `tests/ExecutiveBoards.test.js` |
 | `src/v2/panels/executiveBoardsUtils.js` | E | Browser (React JSX) | 298 | pure formatters and selectors for the executive boards React panel — | `BOARD_SCROLL_HINT, EM_DASH, alienForceSummary, availabilityByProjectId, bodyKey, bodyLabel, completedProjectSignal, delta, factionById, factionDelta, factionLogoHtml, factionName, …(+19)` | — |
 | `src/v2/panels/ExpansionPanel.jsx` | E | Browser (React JSX) | 78 | EXPANSION view shell — two-column MUI grid with static mount points for | `ExpansionPanel, renderExpansionPanel` | — |
 | `src/v2/panels/FactionIntel.jsx` | E | Browser (React JSX) | 579 | the faction dossier overlay — a scan-first two-pane decision surface | `FactionIntel, createEmptyController, createFactionIntelController` | — |
 | `src/v2/panels/factionIntelUtils.js` | E | Browser (React JSX) | 948 | pure selectors, formatters and visibility rules for the faction | `MISSING_VALUES, UNKNOWN_RELATIONSHIP, UNKNOWN_VALUE, accentColor, buildContext, buildFactionIntel, chooseInitialKey, cleanRelationshipValue, councilorRowFields, councilorTopSkill, councilorVisibility, countVisibleAssets, …(+51)` | — |
-| `src/v2/panels/FleetEngagement.jsx` | E | Browser (React JSX) | 304 | renders the per-fleet engagement estimates — what force each alien | `FleetEngagement` | `tests/FleetEngagement.test.js` |
+| `src/v2/panels/FleetEngagement.jsx` | E | Browser (React JSX) | 583 | renders the per-fleet engagement estimates — what force each alien | `FleetEngagement` | `tests/FleetEngagement.test.js` |
 | `src/v2/panels/FleetPanel.jsx` | E | Browser (React JSX) | 49 | FLEET view shell — two-column MUI grid with static mount points for | `FleetPanel, renderFleetPanel` | — |
 | `src/v2/panels/FleetPicker.jsx` | E | Browser (React JSX) | 393 | faction and fleet selectors with a capped ship checklist for the battle planner. | `FleetPicker` | — |
 | `src/v2/panels/FleetProcurement.jsx` | E | Browser (React JSX) | 448 | the FLEET view — what is already unlocked but not in service, and the | `FleetProcurement, RefitDesignCard` | — |
