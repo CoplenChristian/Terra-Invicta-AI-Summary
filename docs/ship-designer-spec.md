@@ -276,6 +276,7 @@ resolutions, labelled as such. A range is honest; picking one silently is not.
 of these were not assumptions I had flagged, but things I had not thought to ask.
 
 **Thrusters are a number input, 1–6 — not six separate drives.**
+**CONFIRMED by the owner, who plays the game, 2026-08-29.**
 
 > *"drives can be built with up to 6 thrusters. The number of thrusters is set by a
 > number input field in the ship designer. Each additional thruster adds the drive's
@@ -287,6 +288,15 @@ thruster count, which is why they are named `x1`…`x6` and why `VASIMR x2` has 
 twice `VASIMR x1`'s thrust and power. **The designer must expose a 1–6 thruster
 spinner against ~90 drives**, not a 541-row list — and the existing DRIVES view's
 541-row catalogue is answering a different question, so neither replaces the other.
+
+**What the confirmation covers, and what it does not.** The owner confirmed the
+*mechanic*: a 1–6 count, each thruster adding thrust and power proportionally. It
+does **not** establish that every family in the template data carries a clean, full
+`x1`…`x6` ladder — partial ladders and exceptions are a property of the JSON, not of
+the mechanic. Part 1a is checking that arithmetically, and the output that matters is
+**any drive whose `xN` is not `x1 × N`**. Folding such a drive into a ladder would
+corrupt every design built on it, so the exception list is the deliverable there, not
+the confirmation.
 
 **Power plants auto-scale.**
 
@@ -389,10 +399,24 @@ each part**, not at the end.
 
 ## Open questions for the owner
 
-1. **May I install a .NET 10 runtime** so `ilspycmd` works again? It is the
-   difference between a measured heat model and a hypothesis.
-2. **Or would a screenshot of the in-game designer be quicker?** One hull + drive +
-   radiator with the numbers visible would likely settle the radiator formula
-   outright, and would outrank anything I derive.
-3. **Does the designer need to save designs**, or is it a calculator you point at a
-   combination? Saving implies persistence this dashboard does not currently have.
+**Answered 2026-08-29**, and both answers came from the owner rather than from my
+derivation, which is the order this project's rules put them in:
+
+- ✅ **The radiator formula.** Settled from the game's own codex, and the tin droplet
+  radiator's published 125 t/GW matches `1e6 / specificPower` exactly. No .NET 10
+  runtime needed after all, and no screenshot needed for this part.
+- ✅ **Closed-cycle is the expensive mode** — it must radiate its waste heat, where
+  open-cycle sends it out with the propellant and needs only minimal radiators.
+- ✅ **The 1–6 thruster count**, confirmed as a mechanic.
+
+**Still open:**
+
+1. **Which way does `Calc` resolve?** One look at any `Calc` drive in the in-game
+   designer — a Tungsten Resistojet, say — settles it, because the tooltip can only
+   read open-cycle or closed-cycle; those are the only two strings that exist. Until
+   then those 186 drives report a **range** across both resolutions rather than a
+   silently chosen number.
+2. **Does the designer need to SAVE designs**, or is it a calculator you point at a
+   combination? Saving implies persistence this dashboard does not currently have,
+   and it is the one open question that changes the architecture rather than a
+   number. Worth answering before Part 2 starts.
