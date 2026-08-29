@@ -326,6 +326,42 @@ Keep these states apart when reporting:
 - **delete failed** (exit 3) — contents printed, and **the file still exists**.
   Never report cleanup that did not happen.
 
+## Split a feature by LAYER, and give each layer its own agent
+
+**Owner's instruction, 2026-08-29.** A feature that spans the stack is never one
+dispatch. Break it along the layer boundary and hand each part to a **new agent**:
+
+1. **Server side** — new endpoints, engine modules, the registry row, the shared
+   computation.
+2. **The page** — the view, its route, its mount, registry integrity.
+3. **The rendering components** — the panels that draw it.
+
+Three dispatches, three agents, in that order — each depends on the one before, so
+they are sequential, not parallel. Do not "save a round trip" by handing one agent
+the whole vertical slice.
+
+**Why, from this repo's own history:**
+
+- An agent given four workstreams at once committed them as **one 34-file commit**
+  titled "Deploy React v2 frontend", and it had to be unwound with `reset --soft`
+  and split into five.
+- The single most repeated correction in this project is *scope one dispatch to one
+  deliverable*: **"Try to break down work scope to 1 thing at a time — it just makes
+  it easier to test if nothing else. It's not about getting it done in the shortest
+  time, it's doing it right."**
+- A layer boundary is also a **testable** boundary. The server layer is verifiable
+  with `npm test` and a curl against the endpoint before any pixel exists; the page
+  is verifiable by `assertViewRegistryIntegrity()` and navigation; the components by
+  their own rendering tests. Merged into one dispatch, a failure anywhere reads as
+  "the feature doesn't work" and the bisect is manual.
+
+**It also matches the lane table below.** The server layer wants a backend lane, the
+page and components want a frontend lane. One dispatch spanning both necessarily
+routes at least one layer to the wrong lane.
+
+Carry the layer boundary into the brief itself: name the files the agent may touch,
+and say explicitly that the next layer is somebody else's dispatch.
+
 ## Which lane gets the job
 
 From the working agreement in `CLAUDE.md`:
