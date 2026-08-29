@@ -97,6 +97,12 @@ import {
   renderDesignerPanel,
 } from './panels/DesignerPanel.jsx';
 import {
+  fetchShipDesigner,
+  loadShipDesigner,
+  renderShipDesigner,
+  shipDesignerInternals,
+} from './panels/ShipDesigner.jsx';
+import {
   CapabilityMatrixBoard,
   FactionLedgerBoard,
   LogisticsBoard,
@@ -473,6 +479,7 @@ export { renderFleetPanel };
 export { renderDrivesPanel };
 export { renderRecordsPanel };
 export { renderDesignerPanel };
+export { loadShipDesigner, renderShipDesigner };
 
 // The DRIVES panel owns a module-level store (scripts/verify_drive_explorer.js
 // reads it), so it mounts itself rather than being handed a fresh element on
@@ -522,6 +529,12 @@ if (typeof window !== 'undefined') {
   };
   window.MissionControlDesignerPanel = {
     render: renderDesignerPanel,
+  };
+  window.MissionControlShipDesigner = {
+    load: loadShipDesigner,
+    render: renderShipDesigner,
+    fetchShipDesigner,
+    _internals: shipDesignerInternals,
   };
   window.MissionControlMiningExpansion = {
     render: renderMiningExpansion,
@@ -619,6 +632,7 @@ if (typeof window !== 'undefined') {
   const designerPlannerEl = document.getElementById('designerPlanner');
   if (designerPlannerEl) {
     renderDesignerPanel(designerPlannerEl);
+    renderShipDesigner();
   }
 
   if (window.MissionControlViews?.assertViewRegistryIntegrity) {

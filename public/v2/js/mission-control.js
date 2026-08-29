@@ -494,6 +494,16 @@ function loadLazyViewPanels(viewId) {
     if (lazyViewLoadKeys.get('records') === key) return;
     lazyViewLoadKeys.set('records', key);
     window.MissionControlUnlockedTech.load(state.observer, state.mode, container);
+    return;
+  }
+
+  // The ship designer composes catalogue rows and a live calculation on demand,
+  // so it loads when DESIGNER is first opened rather than on every dashboard load.
+  if (viewId === 'designer') {
+    if (!window.MissionControlShipDesigner?.load) return;
+    if (lazyViewLoadKeys.get('designer') === key) return;
+    lazyViewLoadKeys.set('designer', key);
+    window.MissionControlShipDesigner.load(state.observer, state.mode);
   }
 }
 

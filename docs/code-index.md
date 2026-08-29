@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**255 JS modules** and **26 stylesheet parts** (281 indexed files).
+**257 JS modules** and **26 stylesheet parts** (283 indexed files).
 
 ## `public/`
 
@@ -20,7 +20,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `public/index.html` | — | Browser (legacy v1) | 535 | legacy v1 dashboard shell -- DO NOT EDIT | — | — |
 | `public/js/api.js` | BS | Browser (legacy, non-module) | 129 | the legacy v1 API client — runtime probe and the fetch wrapper the | — | — |
 | `public/js/app.js` | BS | Browser (legacy, non-module) | 1517 | the legacy v1 dashboard controller — renders the old UI and must not | — | — |
-| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2188 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
+| `public/v2/js/mission-control.js` | BS | Browser (classic, global IIFE) | 2198 | the v2 dashboard controller — briefing fetch, mode switching, and | `onCopyExport, onOpenFaction` | — |
 | `public/v2/js/shared.js` | BS | Browser (classic, global IIFE) | 328 | the v2 single source of truth for HTML escaping, numeric | — | — |
 
 ## `scripts/`
@@ -253,7 +253,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/TruncationNote.jsx` | E | Browser (React JSX) | 90 | announce capped lists with total and omitted counts. An absent omitted | `TruncationNote` | — |
 | `src/v2/components/TwoColumnGrid.jsx` | E | Browser (React JSX) | 67 | reusable two-column layout primitive — MUI Grid2 container with | `TwoColumnGrid, TwoColumnGridItem` | — |
 | `src/v2/components/Value.jsx` | E | Browser (React JSX) | 134 | render a numeric value or an explicit unavailable/absent state. Never | `ABSENT_LABEL, UNAVAILABLE_LABEL, Value, resolveValue` | — |
-| `src/v2/main.jsx` | E | Browser (React JSX) | 716 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderBattlePanel, renderCapabilityMatrix, …(+28)` | — |
+| `src/v2/main.jsx` | E | Browser (React JSX) | 730 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadShipDesigner, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderBattlePanel, …(+30)` | — |
 | `src/v2/panels/AlienHateEconomics.jsx` | E | Browser (React JSX) | 499 | renders the save-derived Mission Control hate floor and Total War | `AlienHateEconomics, fmtNumber, renderHudAlienHateEconomics` | `tests/AlienHateEconomics.test.js` |
 | `src/v2/panels/BattlePanel.jsx` | E | Browser (React JSX) | 162 | two-column battle planner shell — observer fleet vs picked opponent fleet, | `BattlePanel, renderBattlePanel` | — |
 | `src/v2/panels/battlePanelUtils.mjs` | E | Browser (React JSX) | 193 | testable fleet-picker and battle-cap logic behind BattlePanel.jsx. | `BATTLE_SHIP_AUTO_SELECT_COUNT, BATTLE_SHIP_CAP_ATTRIBUTION, BATTLE_SHIP_CAP_PER_SIDE, buildShipDesignLookup, deploymentSummary, factionsWithFleets, fleetById, fleetsForFaction, overCapNotice, presentCount, resolveShipDesignSubtitle, sameId, …(+4)` | `tests/battlePanelUtils.test.js` |
@@ -261,7 +261,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/panels/battleSuggestionUtils.mjs` | E | Browser (React JSX) | 263 | testable battle-matchup helpers behind BattleSuggestion.jsx — weapon | `WEAPON_FAMILIES, buildBattleMatchup, changeAdvice, formatCount, formatRatio, interceptionCaveatText, joinRatePercent, mountEquivalentAdvice, mountUnitLabel, saturationHeadline, selectionPhase, shipsForSelection, …(+1)` | `tests/battleSuggestionUtils.test.js` |
 | `src/v2/panels/CommandPanel.jsx` | E | Browser (React JSX) | 215 | COMMAND view shell — two-column MUI grid with static mount points for | `CommandPanel, renderCommandPanel` | — |
 | `src/v2/panels/CouncilOrders.jsx` | E | Browser (React JSX) | 388 | React port of public/v2/js/components/council-orders.js. Renders the | `CouncilOrders, focusDirectiveBoard` | `tests/CouncilOrders.test.js` |
-| `src/v2/panels/DesignerPanel.jsx` | E | Browser (React JSX) | 93 | DESIGNER view shell — two-column MUI grid with static mount points for | `DesignerPanel, renderDesignerPanel` | — |
+| `src/v2/panels/DesignerPanel.jsx` | E | Browser (React JSX) | 85 | DESIGNER view shell — two-column MUI grid with static mount points for | `DesignerPanel, renderDesignerPanel` | — |
 | `src/v2/panels/DetailPanel.jsx` | E | Browser (React JSX) | 326 | the shared detail surface every clickable Mission Control module | `DetailPanel, close, detailPanelInternals, open, syncPageInert` | `tests/DetailPanel.test.js` |
 | `src/v2/panels/detailPanelUtils.mjs` | E | Browser (React JSX) | 153 | the page-wide inert bookkeeping, the focusable-node scan and the | `OVERLAY_SELECTOR, STATUS_TONES, focusableIn, isRenderableRow, normaliseActions, normaliseFacts, normaliseNotes, normaliseRows, normaliseSections, resolveTone, syncPageInert, text` | — |
 | `src/v2/panels/DirectiveBoard.jsx` | E | Browser (React JSX) | 1125 | React port of public/v2/js/components/directive-board.js — renders | `DirectiveBoard` | — |
@@ -287,6 +287,8 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/panels/RecordsPanel.jsx` | E | Browser (React JSX) | 123 | RECORDS view shell — two-column MUI grid with static mount points for | `RecordsPanel, renderRecordsPanel` | — |
 | `src/v2/panels/ResearchAdvisor.jsx` | E | Browser (React JSX) | 368 | the COMMAND-view research advisor — what to research next, in two | `ResearchAdvisor` | — |
 | `src/v2/panels/researchAdvisorUtils.mjs` | E | Browser (React JSX) | 1087 | the DOM-free half of the research advisor — every formatter, row | `ACTIONABLE_GROUPS, ASPIRATIONAL_GROUPS, BACKLOG_TITLE, BEYOND_HORIZON, CENSUS_TITLE, CHAIN_TITLE, DELIVERY_DEMOTED_TITLE, DELIVERY_FAILS_TITLE, DELIVERY_UNKNOWN_TITLE, ECONOMIC_CAPTION_TITLE, FOOT_TITLE_BASE, GROUPS_SHOWN, …(+50)` | — |
+| `src/v2/panels/ShipDesigner.jsx` | E | Browser (React JSX) | 697 | the DESIGNER view panels — component pickers, performance readout, | `renderShipDesigner, shipDesignerInternals` | — |
+| `src/v2/panels/shipDesignerUtils.mjs` | E | Browser (React JSX) | 222 | pure formatters, selection/query shaping and affordability math for | `MATERIALS, MOUNT_IDS, accel, affordabilityFor, clampThrusters, dec, defaultDesignerState, driveVariantId, filterReactors, formatMaterialCost, int, massEntryLabel, …(+7)` | `tests/shipDesignerUtils.test.js` |
 | `src/v2/panels/StrategicCommentary.jsx` | E | Browser (React JSX) | 286 | renders the non-LLM four-layer Strategic Commentary Engine output | `StrategicCommentary` | `tests/StrategicCommentary.test.js` |
 | `src/v2/panels/TheaterDefencePanel.jsx` | E | Browser (React JSX) | 399 | read-only surface for `briefing.engineDirectives.theaterDefence`. | `TheaterDefencePanel, readTheaterDefencePayload, renderTheaterDefence, stateTokenFor` | — |
 | `src/v2/panels/theaterDefencePanelUtils.mjs` | E | Browser (React JSX) | 455 | testable render helpers behind src/v2/panels/TheaterDefencePanel.jsx. | `POSTURE_BODY, POSTURE_LABEL, POSTURE_MODIFIER, POSTURE_ORDER, STATE_LABEL, STATE_MODIFIER, VERDICT_LABEL, buildRaceReading, citationKey, contactReading, count, describePanel, …(+13)` | `tests/theaterDefencePanelUtils.test.js` |

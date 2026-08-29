@@ -24,9 +24,7 @@ export function DesignerPanel() {
             headerAside="HULL, DRIVE, REACTOR & FITTINGS"
             modifier="quiet"
           >
-            <div id="designerComponents" aria-live="polite">
-              <div className="alien-hate-econ-empty">Loading component catalogue…</div>
-            </div>
+            <div id="designerComponents" aria-live="polite" />
           </Panel>
         </TwoColumnGridItem>
 
@@ -36,9 +34,7 @@ export function DesignerPanel() {
             headerAside="CRUISE ACCEL · COMBAT ACCEL · DELTA-V"
             modifier="quiet"
           >
-            <div id="designerPerformance" aria-live="polite">
-              <div className="alien-hate-econ-empty">Loading performance readout…</div>
-            </div>
+            <div id="designerPerformance" aria-live="polite" />
           </Panel>
         </TwoColumnGridItem>
 
@@ -49,9 +45,7 @@ export function DesignerPanel() {
             modifier="quiet"
             span
           >
-            <div id="designerMassHeat" aria-live="polite">
-              <div className="alien-hate-econ-empty">Loading mass and heat breakdown…</div>
-            </div>
+            <div id="designerMassHeat" aria-live="polite" />
           </Panel>
         </TwoColumnGridItem>
 
@@ -62,9 +56,7 @@ export function DesignerPanel() {
             modifier="quiet"
             span
           >
-            <div id="designerCost" aria-live="polite">
-              <div className="alien-hate-econ-empty">Loading resource cost…</div>
-            </div>
+            <div id="designerCost" aria-live="polite" />
           </Panel>
         </TwoColumnGridItem>
       </TwoColumnGrid>
