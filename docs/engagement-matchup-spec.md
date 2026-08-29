@@ -206,3 +206,38 @@ still correct.
 
 **What must not ship is the hull count itself**, in either mode. It should be
 removed rather than captioned, per the rule above.
+
+---
+
+## DONE, 2026-08-28 — the currency is out of the exports
+
+Both surviving hull-count surfaces were removed from the markdown exports, and the
+readings underneath were kept exactly as this document said they should be.
+
+- **`/latest-threats.md`** no longer prints `Hulls needed`, `Observer can field` or
+  the own-force `best design … rated N`. `## Per-Fleet Engagement Estimates` is now
+  `## Per-Fleet Battle Composition`, composed by **calling** `composeBattleSide` and
+  `saturationVerdict`, so it cannot drift from war-room §1d. Fleet identity,
+  arrival timing, reachability and the ranking were kept: none of them is derived
+  from a rating.
+- **War-room §11** no longer prints the five threshold tiers, the
+  `Own best combatant … combat rating` line, or the calibration paragraph that
+  qualified them. The sweep still runs and is still whole at `/api/v2/briefing`;
+  the section says so, because "not reprinted here" and "did not run" are
+  different facts. The beats, the hate-vent horizon and the production pipeline
+  survive — none is denominated in combat value.
+
+**One caveat in this document's own machinery was corrected on the same day.**
+`INTERCEPTION_ASSUMPTION.consequence` used to read *"if a mount intercepts more than
+one shot, every shortfall this verdict reports is understated."* The player
+confirmed on **2026-08-28** that one point-defence mount can nullify roughly one
+weapon, which makes the 1:1 ratio **his stated mechanic** — and this document's own
+rule is that his rule of thumb outranks a derivation. The hedge is gone; the
+constant now carries his attribution and the date, still marked
+`verified: false` because the interception rules were never read from the game.
+The **2× overwhelm multiple keeps its separate, earlier attribution** and its
+rule-of-thumb label: he offered it as *"probably"* and *"a safe bet"*, which is not
+the same kind of claim, and the rendered caveat prints the two apart.
+
+**Still to do:** phases 2 (saturation as a build recommendation in launchers), 3
+(penetration against armour half-value layers) and 4 remain unbuilt.

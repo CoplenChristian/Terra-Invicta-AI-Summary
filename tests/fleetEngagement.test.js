@@ -634,18 +634,38 @@ for (const mode of ['player', 'omniscient']) {
 // ---------------------------------------------------------------------------
 
 for (const mode of ['player', 'omniscient']) {
-  test(`${mode}: the threats export carries the engagement estimates, labelled as a model`, () => {
+  // REWRITTEN 2026-08-28. This used to assert that /latest-threats.md carried
+  // `Hulls needed:` and `Observer can field:` on every row. Both are
+  // combat-value figures -- the requirement band is a Lanchester sweep over
+  // `_unnormalizedCombatValue` and `fieldable` compares reachable hulls against
+  // it -- and docs/engagement-matchup-spec.md abandons that currency. So the
+  // assertion is inverted: what must reach the export is the COMPOSITION, and
+  // what must NOT reach it is any hull count or best-design rating.
+  test(`${mode}: the threats export carries the composition readings, and no combat-value figure`, () => {
     const markdown = renderThreatsMarkdown(live(mode));
-    assert.ok(markdown.includes('Per-Fleet Engagement Estimates'),
-      'the estimates must reach /latest-threats.md, not only the browser');
-    assert.ok(/MODELLED, NOT MEASURED/.test(markdown),
-      'the heading itself must say the section is a model');
-    assert.ok(/Hulls needed:/.test(markdown), 'each entry must carry a hull requirement line');
-    assert.ok(/Observer can field:/.test(markdown),
-      'and whether the observer can meet it, which is the actionable half');
-    assert.ok(/Reach:/.test(markdown), 'and its reachability state');
-    assert.ok(/composed over \d+ of \d+ ship/.test(markdown),
-      'and how much of the fleet the rating was composed over');
+    assert.ok(markdown.includes('Per-Fleet Battle Composition'),
+      'the compositions must reach /latest-threats.md, not only the browser');
+    assert.ok(/READINGS, NOT A COMBAT-VALUE SCORE/.test(markdown),
+      'the heading itself must say what the section is denominated in');
+    assert.ok(/- \*\*Their composition — \d[\d,]* ship\(s\):\*\* [\d,.]+ PD mount\(s\)/.test(markdown),
+      'each entry must carry the fleet\'s own composed mounts and shots');
+    assert.ok(/Their salvo vs your screen/.test(markdown),
+      'and the saturation verdict against the screen it would actually meet');
+    assert.ok(/Reach:/.test(markdown), 'and its reachability state, which is NOT combat-value derived');
+
+    // THE POINT OF THE REWRITE. Neither figure the spec abandons may survive in
+    // any form -- not the per-fleet requirement, not the own-force rating.
+    assert.ok(!/Hulls needed/i.test(markdown), 'no hull requirement may be published');
+    assert.ok(!/Observer can field/i.test(markdown), 'nor the verdict derived from one');
+    assert.ok(!/best design .* rated/i.test(markdown), 'nor the own-force best-design rating');
+    // No quantity DENOMINATED IN HULLS anywhere in the document. `N hull types`
+    // is a census of distinct designs in one fleet, not a force requirement, so
+    // it is struck before the scan rather than the scan being loosened.
+    const hullQuantityLines = markdown.split('\n')
+      .filter(line => /\d[\d,]*(?:\s*[–-]\s*\d[\d,]*)?\s+hulls?\b/i
+        .test(line.replace(/\d[\d,]*\s+hull types/gi, '')));
+    assert.deepStrictEqual(hullQuantityLines, [],
+      'no figure in /latest-threats.md may be a count of hulls');
   });
 
   test(`${mode}: the threats export announces its truncation and stays inside the byte budget`, () => {
@@ -670,7 +690,13 @@ for (const mode of ['player', 'omniscient']) {
   });
 }
 
-test('an unreachable fleet publishes no hull count in the threats export either', () => {
+// REWRITTEN 2026-08-28. This used to check that an unreachable fleet's
+// `Hulls needed:` line said NONE and named the withholding verdict. There is no
+// hull-requirement line to withhold any more. The property that replaced it is
+// the one the removal put at risk: an unreachable fleet must still be LISTED
+// with its reach state, because a fleet you cannot get to can still get to you,
+// and dropping it would make an unreachable threat read as no threat.
+test('an unreachable fleet is still listed in the threats export, with no hull count anywhere', () => {
   const snapshot = {
     ...syntheticSnapshot({
       observerDeltaV: 1.0,
@@ -681,13 +707,15 @@ test('an unreachable fleet publishes no hull count in the threats export either'
     mode: 'player'
   };
   const markdown = renderThreatsMarkdown(snapshot);
-  const needLine = markdown.split('\n').find(line => line.includes('Hulls needed:'));
-  assert.ok(needLine, 'the export must carry a hull-requirement line for the fleet');
-  assert.ok(needLine.includes('NONE'),
-    `the export must publish the withheld verdict, not a number: "${needLine}"`);
-  assert.ok(needLine.includes(ENGAGEMENT_VERDICTS.withheldUnreachable.toUpperCase()),
-    'and must name which verdict withheld it');
-  assert.ok(!/\d+ hulls/.test(needLine), 'and must not publish any hull count at all');
+  const reachLine = markdown.split('\n').find(line => line.includes('- **Reach:**'));
+  assert.ok(reachLine, 'the export must still list the fleet and its reach state');
+  assert.ok(reachLine.includes(FLEET_REACHABILITY_STATES.beyondDeltaV.toUpperCase()),
+    `the reach state must name the delta-V verdict: "${reachLine}"`);
+  assert.ok(!/Hulls needed/i.test(markdown), 'no hull-requirement line may be published');
+  assert.ok(!/\d+ hulls\b/i.test(markdown), 'and no hull count at all');
+  // The verdict vocabulary still exists on the RESOURCE; it is this document
+  // that stopped publishing it.
+  assert.ok(Object.values(ENGAGEMENT_VERDICTS).includes(ENGAGEMENT_VERDICTS.withheldUnreachable));
 });
 
 // ---------------------------------------------------------------------------

@@ -43,8 +43,11 @@ import {
 import { DRIVE_AVAILABILITY, driveExplorerResource } from './intel/driveExplorer.mjs';
 import { researchRankingResource } from './intel/researchRanking.mjs';
 import { buildResearchCategoryBonuses } from './researchCategoryBonus.mjs';
+// `ENGAGEMENT_VERDICTS` is deliberately NOT imported any more: /latest-threats.md
+// stopped publishing the hull requirement those verdicts label on 2026-08-28,
+// and re-importing it would be the first step back to printing it. Reachability
+// and the ranking survive, so `FLEET_REACHABILITY_STATES` does.
 import {
-  ENGAGEMENT_VERDICTS,
   FLEET_REACHABILITY_STATES,
   buildFleetEngagement
 } from './fleetEngagement.mjs';
@@ -1247,70 +1250,141 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
     });
   }
 
-  // Per-fleet engagement estimates.
+  // Per-fleet battle composition.
   //
-  // The one figure on this page that is NOT a reading of the save, so the
-  // heading, the preamble and every row say so. What it answers that nothing
-  // else here does: the archetype tiers in the strategic commentary top out at
-  // three ships while 26 of 57 alien fleets on the measured save are larger, so
-  // "a heavy capital costs 7 hulls" is not an answer about a 34-ship fleet.
+  // THIS SECTION USED TO PRINT HULL COUNTS, AND THEY CAME OUT ON 2026-08-28.
+  // Every row carried `Hulls needed: 54-58 hulls` and the preamble carried
+  // `best design Cimarron rated 19,783`, both denominated in
+  // `_unnormalizedCombatValue`. docs/engagement-matchup-spec.md abandons that
+  // currency for three separate reasons, any one disqualifying: a scalar cannot
+  // express a matchup (2 PD mounts against a 24-missile salvo); `readOwnForce`
+  // takes the observer's HIGHEST design value and applies it to every hull
+  // present (58 designs spanning 638,067 down to 0, so a Conger at 1,537 was
+  // rated as a Kivu); and in player mode the opponent rating rests on an
+  // invented x1.5 and over-rates the enemy 9-15x per body. The war room's
+  // equivalent came out in d0a671d and was replaced by §1d.
+  //
+  // WHAT REPLACES IT IS THE SAME COMPOSITION §1d USES, per fleet rather than
+  // per board -- `composeBattleSide` and `saturationVerdict` from
+  // shared/battleComposition.mjs, called, never reimplemented, so the two
+  // documents cannot disagree about a shot count.
+  //
+  // WHAT SURVIVED THE REMOVAL, AND WHY. Reachability, arrival timing, fleet
+  // identity and the ranking are NOT combat-value derived -- they come from the
+  // delta-V table, the save's arrival dates and the fleet records -- so they are
+  // kept whole, and `buildFleetEngagement` remains the source of all four. Its
+  // requirement band, its `fieldable` verdict and its own-force rating are the
+  // parts that are, and none of them is read here any more.
+  //
+  // THE ONE THING THIS INHERITS AND CANNOT FIX HERE: `buildFleetEngagement`
+  // refuses whole when the observer has no design carrying a combat value,
+  // which now gates readings that do not need one. The block says so in that
+  // branch rather than pretending the composition was unavailable.
   const engagement = buildFleetEngagement(filteredSnapshot, {
     observerId,
     mode: filteredSnapshot.mode || 'player',
     limit: 8
   });
 
+  // The same weapon index §1d builds, from the same `componentStats` the
+  // snapshot carries in both runtimes. An absent catalogue means the
+  // composition was NOT READ -- never that a fleet fields no weapons.
+  const threatWeaponTemplates = weaponTemplatesFromComponentStats(filteredSnapshot?.componentStats);
+  const threatWeaponIndex = threatWeaponTemplates.length > 0
+    ? buildWeaponIndex(threatWeaponTemplates)
+    : null;
+  const fleetsById = new Map(asArray(filteredSnapshot?.fleets).map(f => [String(f.ID), f]));
+  const ourShipsByBody = new Map();
+  for (const fleet of ourFleets) {
+    const key = normalizeBody(fleet.orbitBody);
+    if (!key) continue;
+    if (!ourShipsByBody.has(key)) ourShipsByBody.set(key, []);
+    ourShipsByBody.get(key).push(...asArray(fleet.ships));
+  }
+  const ourShipsEverywhere = ourFleets.flatMap(fleet => asArray(fleet.ships));
+  const ourSide = threatWeaponIndex && ourShipsEverywhere.length > 0
+    ? composeBattleSide(ourShipsEverywhere, { weaponIndex: threatWeaponIndex })
+    : null;
+
+  const compositionPreamble = threatWeaponIndex === null
+    ? [
+      `- **Composition NOT READ** — this snapshot carries no \`componentStats\` weapon catalogue, so no `
+      + `weapon name could be joined to a template and no fleet's point defence, throw weight or PD-immune `
+      + `count could be composed. This is NOT a report that these fleets are unarmed, and it is NOT a zero: `
+      + `re-publish the snapshot after upgrading. Per-fleet weapon tallies remain at /api/intel/fleets.`
+    ]
+    : [
+      ourSide
+        ? battleSideLine('YOUR SCREEN', ourSide, '', shipsWithoutLoadout(ourShipsEverywhere))
+        : `- **YOUR SCREEN:** no observer ship is carried in this snapshot's fleet list, so no own-side `
+          + `composition was formed. That is an absent reading, not a fleet of zero hulls.`
+    ];
+
   const engagementBlock = listBlock('engagement-estimates', {
     headingLines: [
-      `## Per-Fleet Engagement Estimates — MODELLED, NOT MEASURED`,
+      `## Per-Fleet Battle Composition — READINGS, NOT A COMBAT-VALUE SCORE`,
       ``,
       ...(engagement.available
         ? [
-          `*Each band is Monte Carlo spread of a model across seeded runs and NOTHING else — it excludes `
-          + `the error in the opponent rating, which is an assumption in ${engagement.mode.toUpperCase()} `
-          + `mode. Rating is composed over each fleet's OWN ships, never N copies of a representative one. `
-          + `Ordered by threat to observer assets; full ordering basis and all rows at `
-          + `/api/intel/fleet-engagement.*`,
+          // MODE-CORRECT, and the distinction matters. Two of the spec's three
+          // reasons apply in BOTH modes; the invented x1.5 is a PLAYER-mode
+          // defect only -- omniscient reads the aliens' own design values. A
+          // preamble that told an omniscient reader his ratings rested on an
+          // invented constant would be a different lie in the same place.
+          `*No hull count and no combat-value rating is published here. `
+          + `docs/engagement-matchup-spec.md abandoned that currency, and two of its reasons hold in EITHER `
+          + `mode: a scalar cannot express a matchup (2 PD mounts against a 24-missile salvo), and the `
+          + `own-side rating applied the observer's single best design to every hull — 58 designs spanning `
+          + `638,067 down to 0.`
+          + `${engagement.mode === 'omniscient'
+            ? ` In OMNISCIENT mode the alien ratings are at least read from their own designs; treating a `
+              + `combat value as the exchange currency is still the assumption the spec rejects.`
+            : ` In PLAYER mode the opponent rating additionally rests on an invented ×1.5 no game source `
+              + `states, and over-rates the enemy 9–15× per body.`}`
+          + ` What is here instead are the game's own weapon and armour fields, composed the way war-room `
+          + `§1d composes them. Ordered by threat to observer assets; full ordering basis and every fleet at `
+          + `/api/intel/fleet-engagement, per-fleet weapon tallies at /api/intel/fleets.*`,
           ``,
-          `- **Own force:** ${engagement.ownForce.totalHulls ?? 'UNAVAILABLE'} hull(s) in `
-          + `${engagement.ownForce.fleetCount} fleet(s); best design `
-          + `${engagement.ownForce.bestDesignName || 'UNAVAILABLE'} rated `
-          + `${engagement.ownForce.rating === null ? 'UNAVAILABLE' : Math.round(engagement.ownForce.rating).toLocaleString()}`,
+          ...compositionPreamble,
           `- **Hostile fleets tracked:** ${engagement.fleetsTotalCount} `
           + `(${engagement.shipsTotalCount} ships) — reachability `
           + `${Object.entries(engagement.reachabilityTotals).map(([k, v]) => `${v} ${k}`).join(', ') || 'not evaluated'}`,
-          `- **Gate:** a fleet beyond every observer fleet's ΔV gets NO hull count. One whose reachability `
-          + `could not be evaluated still gets one, labelled unknown — withholding it would make an `
-          + `unevaluated threat read as no threat.`,
+          `- **Reach gates WHERE, not WHETHER:** a fleet beyond every observer fleet's ΔV is NOT withheld a `
+          + `composition — you may not be able to reach it, but it can still reach you. A reachability that `
+          + `could not be evaluated is labelled unknown and never read as no threat. Which fleets appear `
+          + `below is the ranking's decision, and the count at the end of the section says how many it left `
+          + `out.`,
+          ...(threatWeaponIndex === null
+            ? []
+            : [`- *A screen is composed from the observer's ships AT that fleet's engagement point, so `
+              + `"NO SCREEN THERE" is an absence of YOUR hulls at that body and never a point defence that `
+              + `failed. The rules behind each verdict are not the same kind of claim: `
+              + `${INTERCEPTION_ASSUMPTION.claim} is a stated mechanic (${INTERCEPTION_ASSUMPTION.source}, `
+              + `${INTERCEPTION_ASSUMPTION.stated}); the ×${PD_OVERWHELM_MULTIPLE} screen multiple is a rule `
+              + `of thumb (${PD_OVERWHELM_RULE_ATTRIBUTION.stated}, "probably", "a safe bet"). Neither was `
+              + `read from the game files, and ${INTERCEPTION_ASSUMPTION.consequence}. PD-immune weapons are `
+              + `reported beside each verdict and never inside it.*`]),
           ``
         ]
         : [
-          `*No engagement estimate: ${engagement.reason}*`,
+          `*No per-fleet composition: ${engagement.reason} Reachability, arrival timing and the ranking `
+          + `come from the same resource, so they are unavailable with it — the weapon and armour readings `
+          + `themselves are not, and the whole-board pair is in /latest-war-room.md §1d.*`,
           ``
         ])
     ],
     emptyLines: [],
-    budgetEmptyLines: budgetEmptyNote('engagement estimates', '/api/intel/fleet-engagement'),
-    budgetNote: budgetOmissionNote('engagement estimates', '/api/intel/fleet-engagement'),
+    budgetEmptyLines: budgetEmptyNote('per-fleet compositions', '/api/intel/fleet-engagement'),
+    budgetNote: budgetOmissionNote('per-fleet compositions', '/api/intel/fleet-engagement'),
     detailNote: (levelCounts, kept) => [
       `*Composition and reachability detail suppressed to fit the size budget for `
-      + `${levelCounts[0]} of ${kept} listed estimates; see /api/intel/fleet-engagement.*`,
+      + `${levelCounts[0]} of ${kept} listed fleets; see /api/intel/fleets.*`,
       ``
     ]
   });
   blocks.push(engagementBlock);
 
   for (const row of asArray(engagement.items)) {
-    const composed = row.composition.ratedShips + row.composition.unratedShips;
-    const requirementText = row.requirement.bandLabel !== null
-      ? `${row.requirement.bandLabel} — MODELLED, composed over ${row.composition.ratedShips} of `
-        + `${composed} ship(s)`
-      : `NONE — ${row.requirement.verdict.toUpperCase()}: ${row.requirement.reason}`;
-    const fieldableText = row.fieldable.verdict === 'unknown'
-      ? `UNKNOWN — ${row.fieldable.reason}`
-      : `${row.fieldable.verdict.toUpperCase()} — ${row.fieldable.hullsAtEngagementPoint} reachable hull(s) `
-        + `vs ${row.fieldable.hullsNeeded} needed`;
-
     const headerLine = `### ${row.fleetName} — ${row.shipsCount ?? 'unknown'} ships`
       + `${row.distinctHullTypes ? ` / ${row.distinctHullTypes} hull types` : ''}`;
     const forceLine = `- **At:** ${row.orbitBody || 'unknown'}`
@@ -1320,10 +1394,11 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
       + ` (${row.reachability.isEstimate ? 'estimate' : 'measured'})`
       + `${row.engagementPoint.body ? ` at ${row.engagementPoint.body}` : ''}`
       + `${row.reachability.reason ? ` — ${row.reachability.reason}` : ''}`;
-    const needLine = `- **Hulls needed:** ${requirementText}`;
-    const fieldLine = `- **Observer can field:** ${fieldableText}`;
 
-    const full = [headerLine, forceLine, reachLine, needLine, fieldLine, ``];
+    const [compositionLine, saturationRowLine] =
+      threatCompositionLines(row, { fleetsById, weaponIndex: threatWeaponIndex, ourShipsByBody });
+
+    const full = [headerLine, forceLine, reachLine, compositionLine, saturationRowLine, ``];
 
     addEntry(engagementBlock, {
       // Same order the resource ranks in, re-expressed as a tuple: engageable
@@ -1337,7 +1412,11 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
         row.threatensObserverAsset ? -(row.shipsCount ?? 0) : (row.daysToArrival ?? Number.MAX_SAFE_INTEGER),
         String(row.fleetId ?? '')
       ],
-      variants: [full, [headerLine, reachLine, needLine, ``]]
+      // Level 1 keeps the incoming-salvo verdict and sheds the composition
+      // breakdown: which fleet, whether you can get to it, and whether its
+      // salvo gets through your screen is the irreducible answer, and the mount
+      // breakdown behind it is at /api/intel/fleets.
+      variants: [full, [headerLine, reachLine, saturationRowLine, ``]]
     });
   }
 
@@ -1352,10 +1431,12 @@ export function renderThreatsMarkdown(filteredSnapshot, options = {}) {
 
   // Degradation order for /latest-threats.md. The inbound-contact list IS the
   // document -- the theater roll-up is supporting context, so it gives way
-  // first, and detail is shed before whole entries are cut. The engagement
-  // estimates are the newest section and the only modelled one, so they shed
-  // detail before either measured section does and are dropped before the
-  // measured contact list.
+  // first, and detail is shed before whole entries are cut. The per-fleet
+  // compositions keep their position at the front of the ladder: they are
+  // readings now rather than a model, but they are readings about fleets the
+  // contact list ALREADY names, so shedding a duplicate before a unique row is
+  // still the right order. The block's `*OmittedCount` trailing note survives
+  // whatever the ladder does to the rows.
   const ladder = [
     { block: 'engagement-estimates', action: 'reduce', toLevel: 1 },
     { block: 'risk-theaters', action: 'reduce', toLevel: 1 },
@@ -2180,9 +2261,14 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   //
   // Everything above this line is measured. Everything in this section is
   // MODELLED off it, and the heading says so before a reader reaches a number.
-  // See `strategicCommentaryLines` for what is carried, what is dropped, and
-  // why the calibration warning is the one part that never gives way while the
-  // hull counts survive.
+  //
+  // The hull-threshold table and the best-design combat rating it was
+  // denominated in came OUT on 2026-08-28: they are the combat-value currency
+  // docs/engagement-matchup-spec.md abandons, and printing them three sections
+  // below §1d is the "second opinion" that document's own failure list names.
+  // See `strategicCommentaryLines` for the full reasoning, what survives, and
+  // why the section still says the sweep exists rather than reporting it
+  // unavailable.
   // -------------------------------------------------------------------------
   blocks.push(fixedBlock(
     'strategic-commentary',
@@ -2266,9 +2352,10 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
   // through the ladder; §10 is bounded at five lines whatever the plan's size,
   // because every list inside it is reported as a COUNT rather than reproduced,
   // and §11 is bounded because the commentary engine defines exactly five beats
-  // and exactly five opponent tiers, so it does not grow with the save. Neither
-  // has a ladder entry: they give way whole, through `clampOrder` below, and
-  // §11 goes FIRST of everything for the reason recorded there.
+  // and every other line in it is one line whatever the save holds, so it does
+  // not grow with the save. Neither has a ladder entry: they give way whole,
+  // through `clampOrder` below, and §11 goes FIRST of everything for the reason
+  // recorded there.
   // -------------------------------------------------------------------------
   const ladder = [
     // The most speculative research material of all gives way first: a promoted
@@ -2330,11 +2417,11 @@ export function renderWarRoomMarkdown(filteredSnapshot, options = {}) {
     // FIRST, and deliberately so. Section 11 is the only body in the document
     // with no measured content of its own: every input it reasons over --
     // hate, fleets, hulls, build queues -- is already printed as a measurement
-    // in sections 1 to 5, and its own output is an uncalibrated model. It also
-    // degrades as a UNIT rather than row by row, because a table of hull counts
-    // with its calibration warning cut away would read as measurement. So the
-    // whole body goes before anything measured is touched, and the surviving
-    // header still names /api/v2/briefing.
+    // in sections 1 to 5, and its own output is derived from them. It degrades
+    // as a UNIT rather than row by row, so the reader never gets a beat or a
+    // throughput figure with the "modelled, not measured" heading cut away from
+    // it. The whole body goes before anything measured is touched, and the
+    // surviving header still names /api/v2/briefing.
     'strategic-commentary',
     // §9 (drive explorer) used to sit here, and it no longer needs to: it is a
     // LIST block now with a ladder position of its own, so the ladder sheds it
@@ -3294,13 +3381,16 @@ function pushTheaterDefenceBlock(blocks, filteredSnapshot, observerId, options =
 //     counting missiles alone understates it by about a third. Mounts the game
 //     marks NOT targetable (the observer's 40mm Autocannon, an unguided slug)
 //     are excluded from the shot count and reported apart rather than dropped.
-//   * THE INTERCEPTION RULE IS AN ASSUMPTION AND SAYS SO. One mount neutralising
-//     roughly one shot, and 2x the mounts overwhelming the screen, are the
-//     player's rules of thumb (stated 2026-08-27), not measured mechanics --
+//   * THE INTERCEPTION RULES ARE STATED, NOT MEASURED, AND THE TWO ARE NOT
+//     EQUALLY EVIDENCED. One mount neutralising roughly one weapon is the
+//     player's stated mechanic (2026-08-28); 2x the mounts overwhelming the
+//     screen is the rule of thumb he offered as "probably" and "a safe bet"
+//     (2026-08-27). Neither was read from the game --
 //     `TISpaceCombatTemplate.json` is a single RedBlueSpaceCombat test scenario
-//     with `active: false`, so the resolution rules were never read. The
-//     attributions travel from `shared/battleComposition.mjs` rather than being
-//     restated here, so the constant and the caveat cannot drift apart.
+//     with `active: false` -- so the caveat line labels them separately rather
+//     than collapsing both into "assumption". The attributions travel from
+//     `shared/battleComposition.mjs` rather than being restated here, so the
+//     constant and the caveat cannot drift apart.
 //   * A WHOLE-BOARD TOTAL IS NOT ONE ENGAGEMENT. Max battle size is 40 ships a
 //     side, so 534 hostile hulls do not arrive at once. Printing a board-wide
 //     shot count without that sentence would invite a reader to treat a
@@ -3334,8 +3424,15 @@ function joinClause(side) {
   return `weapon join ${(rate * 100).toFixed(1)}% (${localeOr(unresolved)} unresolved)`;
 }
 
-/** One side's composition, as one line. */
-function battleSideLine(label, side, factionClause, noLoadoutShips) {
+/**
+ * One side's composition, as one line.
+ *
+ * `scopeClause` names what the ship count covers. §1d composes whole boards, so
+ * it keeps the default; /latest-threats.md composes ONE fleet at a time and
+ * passes `''`, because calling a 24-ship fleet a whole board would be a lie
+ * about what was counted.
+ */
+function battleSideLine(label, side, factionClause, noLoadoutShips, scopeClause = 'whole board, ') {
   const missile = round(side.missileShots, 1);
   const kinetic = round(Math.max(0, side.kineticMounts - side.notPdTargetableMounts), 1);
   // NOT coerced. `composeBattleSide` initialises this to 0 and only ever adds to
@@ -3343,7 +3440,7 @@ function battleSideLine(label, side, factionClause, noLoadoutShips) {
   // the composition's shape changed, and `null > 0` correctly declines to print
   // a clause about a reading that does not exist rather than printing "0".
   const notTargetable = num(side.notPdTargetableMounts);
-  return `- **${label} — whole board, ${battleCount(side.ships)} ship(s)${factionClause}:** `
+  return `- **${label} — ${scopeClause}${battleCount(side.ships)} ship(s)${factionClause}:** `
     + `${battleCount(side.pointDefenceMounts)} PD mount(s) · `
     + `${battleCount(side.pdTargetableShots)} PD-targetable shot(s) `
     + `(${battleCount(missile)} missile + ${battleCount(kinetic)} kinetic`
@@ -3360,15 +3457,21 @@ function battleSideLine(label, side, factionClause, noLoadoutShips) {
  * A refused verdict prints its reasons and NO numbers: an incomplete weapon
  * join means the shot count under-states the salvo, and averaging over it is
  * the defect `shared/battleComposition.mjs` exists to prevent.
+ *
+ * `whereClause` names the body the exchange is located at. §1d's whole-board
+ * pair has no single body and passes nothing; /latest-threats.md composes each
+ * hostile fleet against the screen at its OWN engagement point, so the body has
+ * to be on the line or the verdict reads as a board-wide claim.
  */
-function saturationLine(verdict, attackerLabel, defenderLabel) {
+function saturationLine(verdict, attackerLabel, defenderLabel, whereClause = '') {
+  const heading = `${attackerLabel} salvo vs ${defenderLabel} screen${whereClause}`;
   if (!verdict) {
-    return `- **${attackerLabel} salvo vs ${defenderLabel} screen: NOT EVALUATED** — one of the two sides `
+    return `- **${heading}: NOT EVALUATED** — one of the two sides `
       + `fields no ships in this reading, so there is no exchange to compose. That is not a verdict that the `
       + `screen holds.`;
   }
   if (verdict.refused) {
-    return `- **${attackerLabel} salvo vs ${defenderLabel} screen: REFUSED** — `
+    return `- **${heading}: REFUSED** — `
       + `${asArray(verdict.refusalReasons).join('; ') || 'no reason was recorded'}. No shot count is `
       + `substituted for an incomplete join.`;
   }
@@ -3377,15 +3480,82 @@ function saturationLine(verdict, attackerLabel, defenderLabel) {
   const capacity = battleCount(verdict.interceptionCapacity);
   const diff = num(verdict.difference);
   if (verdict.ratioUnavailableReason) {
-    return `- **${attackerLabel} salvo vs ${defenderLabel} screen: EVERY SHOT ARRIVES** — ${shots} targetable `
+    return `- **${heading}: EVERY SHOT ARRIVES** — ${shots} targetable `
       + `shot(s) against no screen at all (${verdict.ratioUnavailableReason})`;
   }
   const tail = diff === null
     ? ''
     : (verdict.saturated ? `; surplus ${battleCount(diff)}` : `; shortfall ${battleCount(Math.abs(diff))}`);
-  return `- **${attackerLabel} salvo vs ${defenderLabel} screen: ${verdict.saturated ? 'SATURATED' : 'SCREEN HOLDS'}** — `
+  return `- **${heading}: ${verdict.saturated ? 'SATURATED' : 'SCREEN HOLDS'}** — `
     + `${shots} targetable shot(s) vs ${capacity} interception(s) `
     + `(${mounts} mount(s) × ${localeOr(verdict.pdShotsPerMount)}/mount)${tail}`;
+}
+
+/**
+ * The two composition lines /latest-threats.md prints for ONE hostile fleet:
+ * what it fields, and whether its targetable salvo gets through the screen it
+ * would actually meet.
+ *
+ * The screen is the observer's ships AT THE ENGAGEMENT POINT, not the whole
+ * board — the tactical question is what is there when that fleet arrives, and
+ * the whole-board pair is already in war-room §1d. Three absences are told
+ * apart rather than collapsed, because they mean completely different things:
+ *
+ *   * NO WEAPON CATALOGUE — nothing could be joined, so nothing was composed.
+ *     Not a fleet without weapons.
+ *   * NO ENGAGEMENT BODY — the fleet is in heliocentric space or bound for a
+ *     station this snapshot does not carry, so there is no place to locate a
+ *     screen. Not a screen that held.
+ *   * NO OBSERVER SHIP AT THAT BODY — the salvo meets nothing. That is the
+ *     dangerous case and it is stated as an absence of YOUR hulls, never as a
+ *     fleet with zero point defence, which `composeBattleSide([])` would
+ *     otherwise render identically.
+ */
+function threatCompositionLines(row, { fleetsById, weaponIndex, ourShipsByBody }) {
+  if (weaponIndex === null) {
+    return [
+      `- **Their composition:** NOT READ — no weapon catalogue in this snapshot to join the loadout against.`,
+      `- **Their salvo vs your screen: NOT EVALUATED** — no shot count is invented for an unread catalogue.`
+    ];
+  }
+
+  const ships = asArray(fleetsById.get(String(row.fleetId))?.ships);
+  if (ships.length === 0) {
+    return [
+      `- **Their composition:** NOT READ — this snapshot carries no per-ship record for this fleet, so its `
+      + `point defence, throw weight and PD-immune count could not be composed. An unread loadout is not an `
+      + `unarmed fleet.`,
+      `- **Their salvo vs your screen: NOT EVALUATED** — there is no composed salvo to test.`
+    ];
+  }
+
+  const theirs = composeBattleSide(ships, { weaponIndex });
+  const compositionLine = battleSideLine('Their composition', theirs, '', shipsWithoutLoadout(ships), '');
+
+  const body = row.engagementPoint?.body ?? null;
+  const key = normalizeBody(body);
+  if (!key) {
+    return [compositionLine, `- **Their salvo vs your screen: NOT LOCATED** — `
+      + `${row.engagementPoint?.reason || 'this fleet has no body an engagement can be located at'}, so there `
+      + `is no screen to compose it against. That is not a verdict that the screen holds.`];
+  }
+
+  const where = ` at ${body}`;
+  const defenders = asArray(ourShipsByBody.get(key));
+  if (defenders.length === 0) {
+    // Deliberately short: the reading a reader must not miss is that YOUR
+    // absence is what leaves the salvo unopposed, and the section's heading
+    // says that once rather than repeating it on every row that hits this
+    // branch -- on the live board seven of eight rows do.
+    return [compositionLine, `- **Their salvo vs your screen${where}: NO SCREEN THERE** — you hold no ship at `
+      + `${body}, so ${battleCount(theirs.pdTargetableShots)} targetable shot(s) meet nothing.`];
+  }
+
+  const ours = composeBattleSide(defenders, { weaponIndex });
+  return [
+    compositionLine,
+    saturationLine(saturationVerdict({ attacker: theirs, defender: ours }), 'Their', 'your', where)
+  ];
 }
 
 /** Ships in a fleet list whose weapon loadout is absent or empty. */
@@ -3472,26 +3642,38 @@ function pushBattleCompositionBlock(blocks, filteredSnapshot, observerId) {
 
   headingLines.push(`- *Kinetics saturate like missiles — every missile and every magnetic gun is `
     + `\`isPointDefenseTargetable\`, so a missile-only count understates throw weight by about a third.*`);
-  // Claim, attribution and ERROR DIRECTION, all carried from the constants in
-  // shared/battleComposition.mjs rather than restated, so the number and its
-  // caveat cannot drift apart. `whyNotVerified` (the templates hold no
-  // interception rule) is the one part left to that module -- what a reader
-  // must not miss is that it is unverified and which way it is wrong.
-  headingLines.push(`- *ASSUMPTION, NOT MEASURED: ${INTERCEPTION_ASSUMPTION.claim}, and `
+  // TWO RULES, TWO KINDS OF CLAIM, and the line keeps them apart because they
+  // are not equally well evidenced. The 1:1 interception RATIO is the player's
+  // stated mechanic (2026-08-28) and is attributed to him with the date; the 2x
+  // OVERWHELM MULTIPLE is the rule of thumb he offered as "probably" and "a safe
+  // bet". Both attributions travel from the constants in
+  // shared/battleComposition.mjs rather than being restated here, so a number
+  // and its caveat cannot drift apart. Neither is in the templates, and the line
+  // says that once rather than twice.
+  headingLines.push(`- *NOT READ FROM THE GAME FILES, and the two rules behind these verdicts are not the same `
+    + `kind of claim. THE RATIO IS A STATED MECHANIC: ${INTERCEPTION_ASSUMPTION.claim} — `
+    + `${INTERCEPTION_ASSUMPTION.source}, ${INTERCEPTION_ASSUMPTION.stated}. THE MULTIPLE IS A RULE OF THUMB: `
     + `${PD_OVERWHELM_RULE_ATTRIBUTION.claim} — ${PD_OVERWHELM_RULE_ATTRIBUTION.source}, `
-    + `${PD_OVERWHELM_RULE_ATTRIBUTION.stated}. Not verified: ${INTERCEPTION_ASSUMPTION.consequence}.*`);
+    + `${PD_OVERWHELM_RULE_ATTRIBUTION.stated}, offered as "probably" and "a safe bet". `
+    // Sentence-initial here, and the constant is written lower-case so it can be
+    // used mid-sentence elsewhere. Capitalised at the seam rather than stored
+    // capitalised, so the constant stays usable in both positions.
+    + `${INTERCEPTION_ASSUMPTION.consequence.charAt(0).toUpperCase()}`
+    + `${INTERCEPTION_ASSUMPTION.consequence.slice(1)}.*`);
   headingLines.push(`- *A whole-board total is NOT one engagement: ${MAX_BATTLE_SIDE_SHIPS} ships a side is the `
     + `battle cap (${MAX_BATTLE_SIDE_SHIPS_ATTRIBUTION.source}, ${MAX_BATTLE_SIDE_SHIPS_ATTRIBUTION.stated}; `
     + `not in the templates), so a larger contact resolves in waves.*`);
   // The one line that stops a reader holding two answers and believing
   // whichever agrees with them -- the failure docs/engagement-matchup-spec.md
-  // names under "what would make this wrong". Section 11's hull thresholds and
-  // `world.military.theaterForce`'s per-fleet requirements are still computed
-  // and still published at /api/v2/briefing; what this says is which of the two
-  // rests on readings.
-  headingLines.push(`- *The force comparison §1c declines to make. §11's hull counts answer it in the currency `
-    + `docs/engagement-matchup-spec.md abandons — these readings come from the game's own fields; that table `
-    + `does not.*`);
+  // names under "what would make this wrong". The hull thresholds that used to
+  // sit in §11 are gone from this document for exactly that reason; they are
+  // still computed and still published at /api/v2/briefing, and the line says
+  // where, so a reader who wants the abandoned currency has to go and ask for
+  // it rather than find it printed beside these readings.
+  headingLines.push(`- *This is the force comparison §1c declines to make, and it is the ONLY one in this `
+    + `document: the hull counts that used to answer it in §11 are denominated in the combat value `
+    + `docs/engagement-matchup-spec.md abandons and are no longer reproduced here. These readings come from `
+    + `the game's own fields; that sweep does not. It is still at /api/v2/briefing.*`);
 
   // Interpretations applied to the counts, printed only where they were used.
   //
@@ -3590,47 +3772,68 @@ function pushBattleCompositionBlock(blocks, filteredSnapshot, observerId) {
  * model was invisible to every LLM reading these files -- which is the failure
  * mode CLAUDE.md's AI-surfaces section exists to catch.
  *
+ * THE HULL-THRESHOLD TABLE CAME OUT ON 2026-08-28, AND THAT IS THE POINT OF
+ * THE SECTION'S CURRENT SHAPE
+ *
+ * The five "N hulls" tiers, the `Own best combatant ... combat rating N` line
+ * they were denominated in, and the calibration paragraph qualifying both are
+ * gone. All three are combat-value figures, and
+ * docs/engagement-matchup-spec.md abandons that currency for three separate
+ * reasons, any one disqualifying: a scalar cannot express a matchup (2 PD
+ * mounts against a 24-missile salvo); the own-side rating applies the
+ * observer's single best design to every hull (measured: 58 designs spanning
+ * 638,067 down to 0); and in player mode the opponent rating is built on an
+ * invented x1.5 and over-rates the enemy 9-15x per body.
+ *
+ * The decisive argument is not any of those, though -- it is the spec's "what
+ * would make this wrong" list, which names KEEPING THE HULL COUNT ALONGSIDE as
+ * a defect in its own right: two answers where one is known to be wrong is
+ * worse than one answer, because the reader believes whichever agrees with
+ * them. Section 1d answers the same question from the game's own weapon and
+ * armour fields, in both modes, so the table was the half that had to go. The
+ * same reasoning removed the hull count from section 1c in d0a671d.
+ *
+ * It is NOT suppressed and the section says so on its own line. The sweep still
+ * runs, still reaches the COMMAND view, and is whole at `/api/v2/briefing`;
+ * this document simply declines to reprint it three sections below §1d.
+ *
+ * The `advice` line goes the same way ONLY when it is itself a hull count --
+ * one of `grammar.js`'s three branches embeds the sweep's own band label
+ * ("...on the order of 7 hulls Cimarron"). See `adviceLine` for how that is
+ * decided from the data rather than by pattern-matching digits.
+ *
  * WHAT IS CARRIED, WHAT IS DROPPED, AND WHY THE DROPPED PART IS RECOVERABLE
  *
- * The whole payload serialises to roughly 10 KB against the war room's ~7 KB
- * of headroom, so carrying all of it is not an option and would be the wrong
- * choice even if it were. Three things are deliberately left behind:
+ * What survives is what is NOT denominated in combat value: the engine's stance
+ * (when it carries no count), the narrative beats -- whose axes are delta-V,
+ * armour and hull COUNT, none of them a rating -- the hate-vent horizon, and
+ * the production pipeline and throughput, which are queue readings. Three
+ * things were already deliberately left behind before the table was:
  *
  *   * `headline` -- one of three interchangeable strings picked by a seeded
  *     PRNG from the same beat set. It carries no information the beats below
  *     do not, and two saves with identical beats can print different
  *     headlines, so an agent diffing them would read noise as signal.
  *   * `prose` (~630 bytes) -- a narrative restatement of the beats, the two
- *     named tiers and the advice, all three of which are carried here in
- *     structured form. It re-prints the same numbers in a less parseable
- *     register.
+ *     named tiers and the advice. It re-prints the same numbers in a less
+ *     parseable register.
  *   * the per-tier `uncertainty` records (~1.8 KB EACH, ~9 KB for five) --
  *     identical across tiers by construction, because one sweep supplies one
  *     `opponentRatingBasis` and the seed/trial/sweep constants are module
- *     constants. They collapse to ONE statement below. The one field that does
- *     vary, `winnableRatio`, is carried per row and only when it is below 1 --
- *     which is exactly when the band understates its own spread.
+ *     constants. They qualified the table, and they left with it.
  *
- * All three are at `/api/v2/briefing`, and the last line of the section says
+ * All of them are at `/api/v2/briefing`, and the last line of the section says
  * so by name, in the same relationship sections 9 and 10 have to the endpoints
  * that carry them whole.
  *
- * WHAT IS NOT DROPPED, AT ANY BUDGET
+ * The section still degrades as a UNIT: it is a fixed block, so the ladder
+ * cannot thin it row by row, and it is FIRST in `clampOrder`, so if the budget
+ * binds this whole body is the first thing in the document to go, header and
+ * pointer surviving. Losing all of it costs a reader nothing they cannot fetch.
  *
- * The calibration warning. Every hull count in this section is the output of
- * an uncalibrated model -- in player mode the opponent ratings are the
- * observer's own best hull multiplied by three invented constants -- and a
- * table of "4-5 hulls" figures with that sentence removed would read as
- * measurement. The section therefore degrades as a UNIT: it is a fixed block,
- * so the ladder cannot thin it row by row, and it is FIRST in `clampOrder`, so
- * if the budget binds this whole body is the first thing in the document to
- * go, header and pointer surviving. Losing all of it costs a reader nothing
- * they cannot fetch; losing the caveat while keeping the numbers would be
- * worse than not shipping the section.
- *
- * It is also fixed-size by construction, which is why it needs no ladder
- * entry: `BEAT_DEFINITIONS` holds five beats and both opponent-tier builders
- * return exactly five tiers, so this block cannot grow with the size of the
+ * It is also fixed-size by construction, which is why it needs no ladder entry:
+ * `BEAT_DEFINITIONS` holds five beats, and every other line here is one line
+ * whatever the save contains, so this block cannot grow with the size of the
  * save the way sections 2, 3 and 6 do.
  *
  * WHERE THE COMMENTARY COMES FROM
@@ -3662,14 +3865,14 @@ function strategicCommentaryLines(filteredSnapshot, observerId, options = {}) {
   }
 
   const lines = [];
+  const sim = commentary.simulation || {};
 
   // The engine's own recommendation, named. Section 10 learned this the hard
   // way: a section of counts renders byte-identical across a change that moves
-  // the recommendation, so the recommendation itself has to be printed.
-  const advice = typeof commentary.advice === 'string' && commentary.advice.trim() !== ''
-    ? commentary.advice.trim()
-    : 'UNAVAILABLE — this assessment carries no advice line';
-  lines.push(`- **Recommended stance:** ${advice}`);
+  // the recommendation, so the recommendation itself has to be printed --
+  // EXCEPT where the recommendation is itself a hull count, which is what
+  // `adviceLine` decides.
+  lines.push(adviceLine(commentary, sim));
 
   // An ABSENT beat list is not a list of length zero. "Every beat was evaluated
   // and none fired" is a real finding about a quiet campaign; "the beats were
@@ -3687,78 +3890,85 @@ function strategicCommentaryLines(filteredSnapshot, observerId, options = {}) {
     }
   }
 
-  const sim = commentary.simulation || {};
-
-  // The rating every hull count below is denominated in. In player mode it is
-  // also the number the opponent tiers are SCALED OFF, so a reader who cannot
-  // see it cannot tell what the tiers mean.
-  const bestDesign = sim.ownBestDesign || sim.ownBestHull;
-  lines.push(`- **Own best combatant:** ${bestDesign || 'UNAVAILABLE'}`
-    + `${sim.ownBestHull && sim.ownBestDesign && sim.ownBestHull !== sim.ownBestDesign ? ` (${sim.ownBestHull} hull)` : ''}`
-    + `, combat rating ${localeOr(sim.ownRating)} — every hull count below is a count of THIS design`);
-
-  if (sim.available !== true) {
-    // A sweep that could not be run says so in its own words. Rendering the
-    // section without the table would leave a reader unable to tell "no
-    // threshold was computable" from "the thresholds did not fit the budget".
-    lines.push(`- **Hull thresholds:** NOT SIMULATED — ${sim.reason || 'no reason was carried with the unavailable sweep'}`);
+  // WHERE THE HULL-THRESHOLD TABLE USED TO BE.
+  //
+  // It printed five "N hulls" tiers, the observer's best design and its combat
+  // rating, and a calibration paragraph qualifying all three. Every one of those
+  // figures is denominated in `_unnormalizedCombatValue`, which
+  // docs/engagement-matchup-spec.md abandons for three separate reasons, and the
+  // same document's "what would make this wrong" list names keeping it beside a
+  // composition reading as a defect in its own right: two answers where one is
+  // known to be wrong is worse than one answer, because the reader believes
+  // whichever agrees with them. §1d is the answer that rests on readings, so
+  // this is the one that goes.
+  //
+  // IT IS NOT SUPPRESSED, AND THIS LINE SAYS SO. The sweep still runs, still
+  // reaches the COMMAND view and is still whole at /api/v2/briefing; what
+  // changed is that this document no longer reprints it beside §1d. A reader
+  // who wants it has to go and ask, which is the point.
+  //
+  // AND "WE DECLINED TO PRINT IT" IS NOT "IT DID NOT RUN". A sweep that failed
+  // reports its own reason instead, because claiming a live computation exists
+  // when it does not would be a lie in the reassuring direction -- and the
+  // reason itself carries no hull count, so printing it costs nothing.
+  if (sim.available === true) {
+    lines.push(`- **Hull thresholds and own-force combat rating: DELIBERATELY NOT REPRODUCED** — the sweep's `
+      + `"N hulls" tiers and the best-design rating they are denominated in are combat-value figures, and `
+      + `docs/engagement-matchup-spec.md abandons that currency: a scalar cannot express a matchup, and the `
+      + `own-side rating applies the observer's single best design to every hull. §1d answers the same `
+      + `question from the game's own weapon and armour fields instead. The sweep still ran and is carried `
+      + `whole at \`${endpoint}\` — this is a decision not to print it here, NOT a report that it failed.`);
   } else {
-    const tiers = asArray(sim.tiers);
-    const basisLabel = sim.source === 'true_design_blueprints'
-      ? 'the alien designs\' own combat values'
-      : 'observable alien fleet telemetry';
-    lines.push(`- **Hulls needed for P(win) ≥ ${fixedOr(firstUncertainty(tiers)?.targetWinProbability, 2, '0.80')} `
-      + `(SIMULATED, not measured; opponent basis: ${basisLabel}):**`);
-    if (tiers.length === 0) {
-      lines.push(`  - UNAVAILABLE — the sweep reported itself available and carried no tiers.`);
-    }
-    for (const tier of tiers) {
-      // `winnable: false` is a CEILING report, not an impossibility verdict:
-      // it says no count up to the swept maximum reached the target.
-      const count = tier.winnable === true
-        ? (tier.bandLabel || 'UNAVAILABLE')
-        : `NOT REACHED at any count up to ${localeOr(tier.uncertainty?.maxHullsSwept)} hulls`;
-      const ratio = num(tier.uncertainty?.winnableRatio);
-      // Carried only when it is below 1, because that is exactly when the
-      // percentile band was taken over a subset of seeds and understates its
-      // own spread. At 1 it would be five identical lines of noise.
-      const partial = ratio !== null && ratio < 1
-        ? ` — band taken over only ${(ratio * 100).toFixed(0)}% of seeds, so it UNDERSTATES the spread`
-        : '';
-      lines.push(`  - ${tier.label || tier.id || 'unnamed tier'}: **${count}**`
-        + `${tier.description ? ` — ${tier.description}` : ''}${partial}`);
-    }
-
-    // THE ONE THING THAT NEVER GIVES WAY WHILE THE NUMBERS ABOVE SURVIVE.
-    const shared = firstUncertainty(tiers);
-    if (shared) {
-      lines.push(`- **What those counts are NOT:** ${shared.opponentRatingBasis || 'UNAVAILABLE — no rating basis was carried'}`);
-      lines.push(`  The band covers run-to-run variance of a stochastic model across `
-        + `${localeOr(shared.seedsSimulated)} seeded runs of ${localeOr(shared.battleTrialsPerCount)} battle trials `
-        + `per hull count, swept to ${localeOr(shared.maxHullsSwept)} hulls, and NOTHING else — not error in the `
-        + `opponent ratings, and not model misspecification (the exchange is LINEAR in hull count, not the `
-        + `Lanchester square law, which understates the value of numerical superiority).`);
-    } else {
-      lines.push(`- **What those counts are NOT:** UNAVAILABLE — no uncertainty record was carried with the sweep, `
-        + `so the calibration of these counts could not be stated. Treat them as unverified.`);
-    }
+    lines.push(`- **Hull thresholds:** NOT SIMULATED — ${sim.reason || 'no reason was carried with the unavailable sweep'}. `
+      + `This document would not have reprinted the tiers in any case — they are the combat-value figures §1d `
+      + `replaces — but a sweep that did not run is a different fact and says so here.`);
   }
 
   const projections = sim.projections || {};
   lines.push(...hateVentLine(projections.hateVent));
   lines.push(...rebuildClockLine(projections.rebuildClock));
 
-  lines.push(`- Headline, full prose and the per-tier uncertainty record: \`${endpoint}\``);
+  lines.push(`- Headline, full prose, the hull-threshold tiers and their per-tier uncertainty record: \`${endpoint}\``);
   lines.push(``);
   return lines;
 }
 
-/** The first tier carrying an uncertainty record; they are identical by construction. */
-function firstUncertainty(tiers) {
-  for (const tier of asArray(tiers)) {
-    if (tier && tier.uncertainty) return tier.uncertainty;
+/**
+ * The engine's advice sentence, or the reason it is not reproduced.
+ *
+ * `server/commentary/grammar.js` builds ONE of its three advice branches around
+ * `formatSimulatedThreshold`, which denominates the sentence in the sweep's own
+ * hull counts -- "...until you have on the order of 7 hulls Cimarron". That is
+ * the currency docs/engagement-matchup-spec.md abandons, and reprinting it here
+ * would put a hull count back in this document by the back door, three lines
+ * above the statement that there is no longer one in it.
+ *
+ * The other two branches carry no count at all and are perfectly good advice, so
+ * the line is NOT dropped wholesale. It is dropped only when the advice actually
+ * contains one of the sweep's own `bandLabel` strings -- a test against the data
+ * the sentence was built from, not a regex hunting for digits, so it cannot fire
+ * on an advice line that merely mentions a number for some other reason.
+ *
+ * An absent advice line and a withheld one are different states and read
+ * differently: one is a gap in the payload, the other is this document's choice.
+ */
+function adviceLine(commentary, sim) {
+  const advice = typeof commentary?.advice === 'string' && commentary.advice.trim() !== ''
+    ? commentary.advice.trim()
+    : null;
+  if (advice === null) {
+    return `- **Recommended stance:** UNAVAILABLE — this assessment carries no advice line`;
   }
-  return null;
+
+  const bandLabels = asArray(sim?.tiers)
+    .map(tier => (typeof tier?.bandLabel === 'string' ? tier.bandLabel.trim() : ''))
+    .filter(label => label !== '');
+  const denominatedInHulls = bandLabels.some(label => advice.includes(label));
+  if (!denominatedInHulls) return `- **Recommended stance:** ${advice}`;
+
+  return `- **Recommended stance: NOT REPRODUCED** — this branch of the engine's stance sentence IS a hull `
+    + `count ("…on the order of N hulls <design>"), in the currency the line below explains. It is whole at `
+    + `the endpoint named at the end of this section, not withheld, and the engine did recommend something.`;
 }
 
 /**

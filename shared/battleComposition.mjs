@@ -83,11 +83,20 @@
 // attribution and the date — it is a player heuristic, not a measured mechanic,
 // and the verdict says so on its output.
 //
-// It rests on an assumption that is carried on every verdict: one PD mount
-// neutralises roughly one incoming shot per exchange. The interception rule is
-// NOT in TISpaceCombatTemplate.json — that file is a single RedBlueSpaceCombat
-// test scenario with `active: false` (measured 2026-08-27) — so if a mount
-// intercepts more than one shot, every shortfall reported here is understated.
+// TWO RULES, TWO DIFFERENT KINDS OF CLAIM, AND THE OUTPUT KEEPS THEM APART.
+// The 1:1 interception RATIO is the player's stated mechanic: he confirmed on
+// 2026-08-28 that one point-defence mount can nullify roughly one weapon, and
+// docs/engagement-matchup-spec.md says outright that his rule of thumb outranks
+// a derivation — he plays the game. The 2x OVERWHELM MULTIPLE is not the same
+// kind of statement: he offered it as "probably" and "a safe bet", which is a
+// rule of thumb and is labelled one. Neither is read from the game files: the
+// interception rules are NOT in TISpaceCombatTemplate.json, which is a single
+// RedBlueSpaceCombat test scenario with `active: false` (measured 2026-08-27).
+//
+// The old caveat said that a mount intercepting more than one shot would leave
+// every shortfall understated. That hedge existed because the ratio was
+// unknown; it is his stated 1:1 now, so the hedge is gone rather than left to
+// undersell the numbers in the reassuring direction.
 //
 // And it never folds `pdImmuneWeapons` into the saturation figure. PD-immune
 // weapons are the count that ignores the whole question; averaging them in
@@ -150,15 +159,36 @@ export const PD_OVERWHELM_RULE_ATTRIBUTION = Object.freeze({
 export const SALVO_SHOTS_WHEN_ABSENT = 1;
 
 /**
- * The interception assumption every saturation verdict rests on. Carried on the
- * output, not buried in a comment: it is an assumption, and the direction of
- * its error is stated.
+ * The interception ratio every saturation verdict rests on. Carried on the
+ * output, not buried in a comment.
+ *
+ * IT IS THE PLAYER'S, DATED AND ATTRIBUTED. He confirmed on 2026-08-28 that one
+ * point-defence mount can nullify roughly one weapon, and
+ * docs/engagement-matchup-spec.md is explicit that his rule of thumb outranks a
+ * derivation: he plays the game. So `source` and `stated` are the point of this
+ * record, and the ratio is no longer a guess of mine.
+ *
+ * IT IS STILL NOT A MEASUREMENT, and `verified` therefore stays false — that
+ * field means "read from the game", not "believed". The interception rules were
+ * never read: `TISpaceCombatTemplate.json` is a RedBlueSpaceCombat test scenario
+ * with `active: false` (measured 2026-08-27) and no decompiled constant has been
+ * read for it.
+ *
+ * THE OLD `consequence` IS GONE ON PURPOSE. It said that a mount intercepting
+ * more than one shot would leave every shortfall understated — a hedge that
+ * existed only because the ratio was unknown. Keeping it beside his stated 1:1
+ * would undersell the numbers in the reassuring direction. What replaces it is
+ * what the ratio does NOT cover, which is still a great deal.
  */
 export const INTERCEPTION_ASSUMPTION = Object.freeze({
   claim: 'one point-defence mount neutralises roughly one incoming shot per exchange',
+  source: 'the user, who plays the game',
+  stated: '2026-08-28',
+  measured: false,
+  inTemplates: false,
   verified: false,
-  whyNotVerified: 'the interception rule is not in TISpaceCombatTemplate.json, which is a RedBlueSpaceCombat test scenario with active: false',
-  consequence: 'if a mount intercepts more than one shot, every shortfall this verdict reports is understated'
+  whyNotVerified: 'the ratio is the player\'s stated mechanic rather than a measured constant: the game\'s own interception rules were never read, and TISpaceCombatTemplate.json is a RedBlueSpaceCombat test scenario with active: false',
+  consequence: 'the ratio is all this models — interception quality, engagement range and a missile\'s own acceleration are not in it at all, so a verdict is a shot-count comparison and never a prediction of the exchange'
 });
 
 /**
@@ -603,9 +633,11 @@ function isBeamFamily(family) {
  * The user's rule (2x the defender's PD mounts is a safe bet to overwhelm the
  * screen) is encoded as the named, replaceable `PD_OVERWHELM_MULTIPLE` constant
  * and carried on the output with its attribution — a player heuristic, not a
- * measured mechanic. The verdict rests on `INTERCEPTION_ASSUMPTION` (one PD
- * mount neutralises roughly one incoming shot per exchange), which is carried
- * on the output, unverified, with the direction of its error stated.
+ * measured mechanic. The verdict also rests on `INTERCEPTION_ASSUMPTION` (one PD
+ * mount neutralises roughly one incoming shot per exchange), which is a
+ * different kind of claim and is carried separately: the player STATED that
+ * ratio on 2026-08-28, so it is attributed to him rather than hedged, while
+ * still marked `verified: false` because it was never read from the game.
  *
  * REFUSAL: a verdict on a side whose weapon join is incomplete refuses — an
  * unresolved system means the counts under-state weapons, and averaging over

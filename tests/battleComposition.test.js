@@ -123,11 +123,41 @@ test('the 2x overwhelm rule is a named constant attributed to the user, not a ma
   assert.strictEqual(PD_OVERWHELM_RULE_ATTRIBUTION.measured, false);
 });
 
-test('the interception assumption is stated, unverified, with the direction of its error', () => {
+// REWRITTEN 2026-08-28. It used to assert `consequence` named the DIRECTION of
+// the error -- "if a mount intercepts more than one shot, every shortfall is
+// understated" -- which was the right assertion while the ratio was my guess.
+// The user confirmed the 1:1 ratio on 2026-08-28, so that hedge would now
+// undersell his own numbers in the reassuring direction. What is pinned instead
+// is the pair of properties that replaced it: the ratio is ATTRIBUTED and DATED,
+// and it is still not dressed up as a measurement.
+test('the interception ratio is the player\'s, dated and attributed, and still not called measured', () => {
   assert.strictEqual(SALVO_SHOTS_WHEN_ABSENT, 1);
-  assert.strictEqual(INTERCEPTION_ASSUMPTION.verified, false);
   assert.match(INTERCEPTION_ASSUMPTION.claim, /one point-defence mount neutralises roughly one incoming shot/i);
-  assert.match(INTERCEPTION_ASSUMPTION.consequence, /understated/i);
+
+  // His, with the date he stated it. Without these the ratio is a magic number.
+  assert.match(INTERCEPTION_ASSUMPTION.source, /user/i);
+  assert.strictEqual(INTERCEPTION_ASSUMPTION.stated, '2026-08-28');
+
+  // And still not a reading: `verified` means "read from the game", and the
+  // interception rules never were. A stated mechanic is better evidence than a
+  // derivation and is still not a measurement.
+  assert.strictEqual(INTERCEPTION_ASSUMPTION.verified, false);
+  assert.strictEqual(INTERCEPTION_ASSUMPTION.measured, false);
+  assert.strictEqual(INTERCEPTION_ASSUMPTION.inTemplates, false);
+  assert.match(INTERCEPTION_ASSUMPTION.whyNotVerified, /never read|TISpaceCombatTemplate/i);
+
+  // The superseded hedge must not survive beside his stated ratio.
+  assert.ok(!/understated/i.test(INTERCEPTION_ASSUMPTION.consequence),
+    'the "if a mount intercepts more than one shot" hedge was replaced, not kept alongside');
+  // What replaced it: what the ratio does NOT cover, which is still a great deal.
+  assert.match(INTERCEPTION_ASSUMPTION.consequence, /quality|range|acceleration/i);
+
+  // The 2x multiple is the OTHER kind of claim and keeps its own, earlier date:
+  // he offered it as "probably" and "a safe bet", so it stays a rule of thumb.
+  assert.strictEqual(PD_OVERWHELM_RULE_ATTRIBUTION.stated, '2026-08-27');
+  assert.strictEqual(PD_OVERWHELM_RULE_ATTRIBUTION.measured, false);
+  assert.notStrictEqual(INTERCEPTION_ASSUMPTION.stated, PD_OVERWHELM_RULE_ATTRIBUTION.stated,
+    'the ratio and the multiple are separate claims and must not collapse onto one attribution');
 });
 
 // ---------------------------------------------------------------------------
@@ -426,12 +456,19 @@ test('PD-immune weapons are reported beside the verdict, never folded into it', 
   assert.strictEqual(verdict.pdImmuneExcludedFromSaturation, true);
 });
 
-test('the verdict carries the heuristic attribution and the interception assumption', () => {
+test('the verdict carries the heuristic attribution and the interception ratio, kept apart', () => {
   const verdict = saturationVerdict({ attacker: side(), defender: side() });
+  // The 2x multiple: a rule of thumb, 2026-08-27.
   assert.strictEqual(verdict.heuristic.stated, '2026-08-27');
   assert.strictEqual(verdict.heuristic.measured, false);
+  // The 1:1 ratio: a stated mechanic, 2026-08-28, and a different record.
+  // REWRITTEN 2026-08-28 with the constant it reads -- the old assertion here
+  // pinned the "understated" hedge that the user's confirmation retired.
+  assert.strictEqual(verdict.assumption.stated, '2026-08-28');
+  assert.match(verdict.assumption.source, /user/i);
   assert.strictEqual(verdict.assumption.verified, false);
-  assert.match(verdict.assumption.consequence, /understated/i);
+  assert.ok(!/understated/i.test(verdict.assumption.consequence),
+    'the retired hedge must not travel on the verdict either');
 });
 
 test('the absent-salvo interpretation travels with the verdict', () => {

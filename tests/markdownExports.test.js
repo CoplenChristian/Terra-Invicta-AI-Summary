@@ -770,15 +770,21 @@ test('Express server serves /latest-threats.md and /latest-war-room.md on epheme
       assert.ok(section.includes('## 11. Strategic Commentary'), `${mode}: section 11 must exist`);
       assert.ok(!/Strategic commentary UNAVAILABLE in this runtime/.test(section),
         `${mode}: the route must hand the commentary over, not leave the renderer to report it unread`);
-      assert.match(section, /\*\*Hulls needed for P\(win\) ≥ |\*\*Hull thresholds:\*\* NOT SIMULATED/,
-        `${mode}: section 11 must carry either the threshold table or the reason there is none`);
-      // The calibration warning travels with the counts on the live save too.
-      if (section.includes('Hulls needed for P(win)')) {
-        assert.match(section, /\*\*What those counts are NOT:\*\*/,
-          `${mode}: hull counts may never be published without their calibration basis`);
-        assert.match(section, /\*\*Own best combatant:\*\* .+, combat rating [\d,]+/,
-          `${mode}: the rating the counts are denominated in must be measured, not UNAVAILABLE`);
-      }
+      // REWRITTEN 2026-08-28: this asserted the threshold table and the
+      // best-design combat rating survived the route. Both came OUT of the
+      // export -- they are the combat-value currency
+      // docs/engagement-matchup-spec.md abandons, and printing them beside §1d
+      // is the "second opinion" that document's failure list names. The route
+      // assertion is now that the commentary still arrives (the beats, the
+      // projections) and that the removed figures do NOT come back through it.
+      assert.match(section, /\*\*Hull thresholds and own-force combat rating: DELIBERATELY NOT REPRODUCED\*\*|\*\*Hull thresholds:\*\* NOT SIMULATED/,
+        `${mode}: section 11 must say what happened to the sweep, either way`);
+      assert.match(section, /\*\*Narrative beats|\*\*Production pipeline/,
+        `${mode}: the parts that are not combat-value derived must still reach the reader`);
+      assert.ok(!/Hulls needed for P\(win\)/.test(section),
+        `${mode}: the hull-threshold table must not survive the route`);
+      assert.ok(!/combat rating [\d,]+/.test(section),
+        `${mode}: nor the best-design rating it was denominated in`);
     }
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -1352,40 +1358,85 @@ function makeCommentary(overrides = {}) {
 }
 
 for (const exportMode of EXPORT_MODES) {
-  test(`section 11 carries the hull thresholds from options.strategicCommentary (${exportMode} mode)`, () => {
+  // REWRITTEN 2026-08-28, replacing `section 11 carries the hull thresholds from
+  // options.strategicCommentary`. That test pinned the five "N hulls" tiers, the
+  // `Own best combatant ... combat rating 19,783` line and the calibration
+  // paragraph. All three are gone from the export: they are combat-value
+  // figures, docs/engagement-matchup-spec.md abandons that currency, and its
+  // "what would make this wrong" list names keeping the hull count beside a
+  // composition reading as a defect in its own right -- the reader believes
+  // whichever agrees with them. §1d is the answer that rests on readings.
+  //
+  // What this pins instead: the commentary still arrives and still renders the
+  // parts that are NOT denominated in combat value.
+  test(`section 11 carries the commentary that is not combat-value derived (${exportMode} mode)`, () => {
     const snapshot = makeMarkdownSnapshot(exportMode);
     const section = sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: makeCommentary() }));
 
     assert.ok(section.includes('## 11. Strategic Commentary'), 'section 11 must exist');
     // The heading says MODELLED before a reader reaches a number.
     assert.match(section, /## 11\. Strategic Commentary \(MODELLED, not measured\)/);
-    // The engine's own recommendation, not just counts. Section 10 learned this.
-    assert.match(section, /\*\*Recommended stance:\*\* Do not voluntarily initiate engagements/);
-    // The beats, with their severity, stance and stable id.
+    // The beats, with their severity, stance and stable id. Their axes are
+    // delta-V, armour and hull COUNT -- readings, not a rating.
     assert.match(section, /\*\*Narrative beats \(1 fired\):\*\*/);
     assert.match(section, /\*\*Decisive Force Deficit\*\* \(watch, defensive, `capability-gap-widening`\)/);
-    // The rating every hull count is denominated in.
-    assert.match(section, /\*\*Own best combatant:\*\* Cimarron \(Monitor hull\), combat rating 19,783/);
-    // The thresholds themselves, with the measured input under each.
-    assert.match(section, /1x typical alien combatant: \*\*2 hulls\*\* — Observed mainline combat element/);
-    assert.match(section, /1x heavy alien capital \(p90\): \*\*7 hulls\*\* — Observed heavy capital force/);
+    // The production pipeline, which is a queue reading.
+    assert.match(section, /\*\*Production pipeline \(MEASURED from the save's own countdowns\):\*\*/);
     assert.ok(section.includes(`/api/v2/briefing?observer=${OBSERVER_ID}&mode=${exportMode}`),
-      'section 11 must name the endpoint carrying the headline, prose and per-tier uncertainty');
+      'section 11 must name the endpoint carrying the headline, prose and the tiers it no longer prints');
   });
 
-  test(`section 11 keeps the calibration warning attached to the counts it qualifies (${exportMode} mode)`, () => {
-    // A table of "7 hulls" figures with this sentence removed reads as
-    // measurement. It is the one part of the section that may never be
-    // separated from the numbers, which is why the block degrades whole.
+  test(`section 11 publishes no hull count and no combat rating, and says so rather than going quiet (${exportMode} mode)`, () => {
+    // The removal is the feature. A section that simply stopped printing the
+    // table would be indistinguishable from a sweep that failed, so the absence
+    // is stated, attributed to the spec, and points at the endpoint that still
+    // carries the numbers.
     const snapshot = makeMarkdownSnapshot(exportMode);
     const section = sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: makeCommentary() }));
 
-    assert.match(section, /\*\*What those counts are NOT:\*\* UNCALIBRATED ASSUMPTION/);
-    assert.match(section, /and NOTHING else — not error in the opponent ratings, and not model misspecification/);
-    assert.match(section, /LINEAR in hull count, not the Lanchester square law/);
-    assert.match(section, /120 seeded runs of 30 battle trials per hull count, swept to 24 hulls/);
-    // SIMULATED is stated on the threshold line itself, not only in the heading.
-    assert.match(section, /\(SIMULATED, not measured; opponent basis: observable alien fleet telemetry\)/);
+    assert.ok(!/Hulls needed for P\(win\)/.test(section), 'no threshold table');
+    // A rating VALUE, not the phrase: the line announcing the removal names the
+    // thing it removed, and must be allowed to.
+    assert.ok(!/combat rating [\d,]+/i.test(section), 'no best-design combat rating value');
+    assert.ok(!/Own best combatant/.test(section), 'and no line denominating counts in one design');
+    assert.ok(!/What those counts are NOT/.test(section), 'and no caveat for counts that are not there');
+    assert.ok(!/\*\*\d[\d,]*(?:–\d[\d,]*)? hulls?\*\*/.test(section),
+      `no tier band may survive in any form — got:\n${section}`);
+
+    assert.match(section, /\*\*Hull thresholds and own-force combat rating: DELIBERATELY NOT REPRODUCED\*\*/,
+      'the removal must be stated, not silent');
+    assert.match(section, /docs\/engagement-matchup-spec\.md/, 'and must cite why');
+    assert.match(section, /§1d answers the same question/, 'and must name what answers it instead');
+    assert.match(section, /NOT a report that it failed/,
+      'a live sweep this document declines to print must not read as a sweep that could not run');
+  });
+
+  test(`section 11 withholds an advice line that is itself a hull count, and keeps one that is not (${exportMode} mode)`, () => {
+    // `server/commentary/grammar.js` builds ONE of its three advice branches
+    // around the sweep's own band label ("...on the order of 7 hulls Cimarron").
+    // Reprinting it would put a hull count back in the document three lines
+    // above the statement that there is none. The other branches carry no count
+    // and are kept, so the guard is a data test against the tiers rather than a
+    // regex hunting for digits.
+    const snapshot = makeMarkdownSnapshot(exportMode);
+    const render = (commentary) => sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: commentary }));
+
+    const quantified = render(makeCommentary());
+    assert.match(quantified, /\*\*Recommended stance: NOT REPRODUCED\*\*/,
+      'an advice line carrying a tier band must not be reprinted');
+    assert.ok(!/7 hulls/.test(quantified), 'and the band must not leak through it');
+    assert.match(quantified, /the engine did recommend something/,
+      'a withheld recommendation must not read as no recommendation');
+
+    const unquantified = render(makeCommentary({
+      advice: 'Leverage banked threat headroom for essential orbital expansion.'
+    }));
+    assert.match(unquantified, /\*\*Recommended stance:\*\* Leverage banked threat headroom/,
+      'advice that carries no hull count is perfectly good advice and is kept');
+
+    // An advice line that is absent is a third state and reads as one.
+    assert.match(render(makeCommentary({ advice: '' })),
+      /\*\*Recommended stance:\*\* UNAVAILABLE — this assessment carries no advice line/);
   });
 
   test(`section 11 falls back to the published snapshot's own briefing, which is how the hosted worker gets it (${exportMode} mode)`, () => {
@@ -1446,33 +1497,18 @@ for (const exportMode of EXPORT_MODES) {
     }));
     assert.match(section, /\*\*Hull thresholds:\*\* NOT SIMULATED — 57 alien fleet\(s\) are visible/);
     // A reader must be able to tell "no threshold was computable" from "the
-    // thresholds did not fit the budget".
+    // thresholds did not fit the budget" -- and, since 2026-08-28, from "this
+    // document declines to reprint a sweep that ran perfectly well". All three
+    // are different facts and only one of them is true at a time.
     assert.ok(!section.includes('Hulls needed for P(win)'),
       'no threshold table may be printed for a sweep that did not run');
-    // The measured rating survives the unavailable sweep and is still reported.
-    assert.match(section, /combat rating 19,783/);
-  });
-
-  test(`section 11 flags a band taken over only some seeds, and stays quiet when it was all of them (${exportMode} mode)`, () => {
-    // `winnableRatio` is the ONE per-tier uncertainty field that varies, and
-    // below 1 the percentile band was taken over a subset of seeds and
-    // understates its own spread. It is carried for exactly that case; at 1 it
-    // would be five identical lines of noise.
-    const snapshot = makeMarkdownSnapshot(exportMode);
-    const full = makeCommentary();
-    assert.ok(!sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: full }))
-      .includes('UNDERSTATES the spread'), 'a band over every seed carries no caveat row');
-
-    const partial = makeCommentary();
-    partial.simulation.tiers[1] = {
-      ...partial.simulation.tiers[1],
-      winnable: false,
-      uncertainty: { ...partial.simulation.tiers[1].uncertainty, winnableSeeds: 71, winnableRatio: 0.5917 }
-    };
-    const section = sectionEleven(renderWarRoomMarkdown(snapshot, { strategicCommentary: partial }));
-    assert.match(section, /band taken over only 59% of seeds, so it UNDERSTATES the spread/);
-    // And an unreached tier is a CEILING report, not an impossibility verdict.
-    assert.match(section, /\*\*NOT REACHED at any count up to 24 hulls\*\*/);
+    assert.ok(!/DELIBERATELY NOT REPRODUCED/.test(section),
+      'a sweep that failed must not be reported as one this document chose not to print');
+    // REWRITTEN 2026-08-28: this used to assert `combat rating 19,783` survived
+    // the unavailable sweep. The rating is a combat-value figure and no longer
+    // reaches the export at all, so what is pinned is its absence.
+    assert.ok(!/combat rating/i.test(section),
+      'the best-design combat rating does not reach this export in any branch');
   });
 
   test(`section 11 reports a sub-1 throughput as itself, never floored to one hull a month (${exportMode} mode)`, () => {
@@ -1609,7 +1645,10 @@ test('section 11 is the FIRST body the budget suppresses, and its header and poi
   };
 
   const full = renderWarRoomMarkdown(snapshot, opts);
-  assert.ok(full.includes('Hulls needed for P(win)'), 'the unclamped document must carry the table');
+  // REWRITTEN 2026-08-28: the marker used to be the hull-threshold table, which
+  // this export no longer carries. The beats are the section's surviving body
+  // and serve the same purpose here -- present unclamped, gone when clamped.
+  assert.ok(full.includes('**Narrative beats'), 'the unclamped document must carry the section body');
   assert.strictEqual(suppressedIn(full).length, 0, 'nothing is clamped at the real ceiling');
 
   // The LARGEST cap that forces a clamp at all, FOUND rather than hard-coded.
@@ -1640,8 +1679,8 @@ test('section 11 is the FIRST body the budget suppresses, and its header and poi
   );
   // The header survives so a reader knows the assessment exists.
   assert.ok(clamped.includes('## 11. Strategic Commentary'), 'the header always survives clamping');
-  assert.ok(!clamped.includes('Hulls needed for P(win)'),
-    'and the counts go with the caveat rather than outliving it');
+  assert.ok(!clamped.includes('**Narrative beats'),
+    'and the body goes whole rather than leaving beats behind without the MODELLED heading above them');
 
   // Tighter still: sections 9 and 10 follow, and nothing MEASURED (sections 2
   // to 6) gives way while the modelled material is still being shed.
@@ -1819,20 +1858,29 @@ for (const mode of ['player', 'omniscient']) {
       'the targetable shot count must not have absorbed the PD-immune weapons');
   });
 
-  test(`section 1d states the interception assumption and its error direction (${mode} mode)`, () => {
-    // "One PD mount stops one shot" and "2x overwhelms the screen" are the
-    // player's rules of thumb, not measured mechanics -- the interception rule
-    // is not in the shipped templates. An unstated assumption reads as a
-    // measurement.
+  test(`section 1d keeps the stated ratio and the rule of thumb apart, both attributed (${mode} mode)`, () => {
+    // REWRITTEN 2026-08-28. This used to assert the line said "ASSUMPTION, NOT
+    // MEASURED" over both rules and then stated the DIRECTION of the
+    // interception error ("if a mount intercepts more than one shot ...
+    // understated"). The user confirmed the 1:1 ratio on 2026-08-28, so that
+    // hedge would now undersell his own numbers -- and lumping his stated
+    // mechanic in with the "probably / a safe bet" 2x multiple presents two
+    // different qualities of evidence as one. Neither is read from the game, and
+    // the line still says that; what changed is that it says it once, about two
+    // separately attributed claims.
     const snapshot = loadFixtureFilteredSnapshot({ mode });
     const section = sectionOneD(renderWarRoomMarkdown(snapshot));
 
-    assert.match(section, /ASSUMPTION, NOT MEASURED/);
-    assert.match(section, /one point-defence mount neutralises roughly one incoming shot per exchange/);
-    assert.match(section, /the user, who plays the game, 2026-08-27/,
-      'the heuristic must carry its attribution and date, never read as measured');
-    assert.match(section, /Not verified: if a mount intercepts more than one shot, every shortfall .* understated/,
-      'the DIRECTION of the error must be stated');
+    assert.match(section, /NOT READ FROM THE GAME FILES/,
+      'neither rule came from the templates and the line must still say so');
+    assert.match(section, /THE RATIO IS A STATED MECHANIC: one point-defence mount neutralises roughly one incoming shot per exchange — the user, who plays the game, 2026-08-28/,
+      'the 1:1 ratio must be attributed to the player with the date he stated it');
+    assert.match(section, /THE MULTIPLE IS A RULE OF THUMB: 2x the defender's point-defence mounts is a safe bet to overwhelm the screen — the user, who plays the game, 2026-08-27, offered as "probably" and "a safe bet"/,
+      'the 2x multiple must stay labelled a rule of thumb, with its own earlier date');
+    assert.ok(!/understated/i.test(section),
+      'the retired "every shortfall is understated" hedge must not survive beside the stated ratio');
+    assert.match(section, /interception quality, engagement range and a missile's own acceleration are not in it/,
+      'what the ratio does NOT model must still be stated — it is not a prediction of the exchange');
     // And the 40-ship cap, so a board-wide aggregate is not read as one battle.
     assert.match(section, /A whole-board total is NOT one engagement: 40 ships a side is the battle cap/);
   });
