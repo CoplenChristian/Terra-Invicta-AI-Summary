@@ -1,10 +1,10 @@
 /**
  * src/v2/panels/detailPanelUtils.mjs
  *
- * Purpose: the page-wide inert bookkeeping, the focusable-node scan and the
- *   option-shaping rules behind the shared detail panel — every rule the dialog
- *   applies without React, so both the browser and a bare Node test read the
- *   same code.
+ * Purpose: the page-wide inert bookkeeping, the focusable-node scan, presence
+ *   resolution for stamped figures, and the option-shaping rules behind the
+ *   shared detail panel — every rule the dialog applies without React, so both
+ *   the browser and a bare Node test read the same code.
  *
  * `.mjs` rather than `.js` deliberately: the repo is CommonJS by default, so a
  * `.js` file carrying `export` cannot be reached from `tests/*.test.js` at all.
@@ -29,6 +29,9 @@
  * renders as the caller's own text or not at all — never as 0 and never as a
  * fabricated default.
  */
+
+/** Matches `ABSENT_LABEL` in `src/v2/components/Value.jsx` — duplicated so Node tests can import this module without loading JSX. */
+export const DETAIL_PANEL_ABSENT_GLYPH = '—';
 
 /** The tones a section row's status chip may carry. Anything else is neutral. */
 export const STATUS_TONES = ['ok', 'warn', 'block', 'unknown', 'neutral'];
@@ -60,6 +63,73 @@ export function resolveTone(statusTone) {
  */
 export function text(value) {
   return String(value ?? '');
+}
+
+/**
+ * Whether a fact row carries a measured value.
+ *
+ * Callers may pass `present` explicitly. Otherwise null, undefined, an empty
+ * string, or the lone absent affordance glyph are absent; `0` and `false` are
+ * values the caller chose and stay measured.
+ */
+export function factPresence(fact) {
+  if (!fact || typeof fact !== 'object') return false;
+  if (typeof fact.present === 'boolean') return fact.present;
+  const value = fact.value;
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') {
+    if (value.trim() === '') return false;
+    if (value === DETAIL_PANEL_ABSENT_GLYPH) return false;
+  }
+  return true;
+}
+
+/** The absent label a fact renders when it has no measured value. */
+export function factAbsentLabel(fact) {
+  if (!fact || typeof fact !== 'object') return '';
+  if (fact.absentLabel !== undefined) return fact.absentLabel;
+  if (fact.value === DETAIL_PANEL_ABSENT_GLYPH) return DETAIL_PANEL_ABSENT_GLYPH;
+  return '';
+}
+
+/** String form of a fact value for hosts that cannot take an element. */
+export function resolveFactValue(fact) {
+  const present = factPresence(fact);
+  if (!present) {
+    return { state: 'absent', text: factAbsentLabel(fact), className: 'value-absent' };
+  }
+  return { state: 'measured', text: String(fact?.value), className: 'value-measured' };
+}
+
+function rowMetaShape(meta) {
+  if (meta && typeof meta === 'object' && !Array.isArray(meta)) return meta;
+  return { value: meta };
+}
+
+/** Whether a section row's meta column carries a measured figure. */
+export function rowMetaPresence(row) {
+  const meta = rowMetaShape(row?.meta);
+  if (typeof meta.present === 'boolean') return meta.present;
+  const value = meta.value;
+  if (value === null || value === undefined || value === '') return false;
+  if (value === DETAIL_PANEL_ABSENT_GLYPH) return false;
+  return true;
+}
+
+/** The value a section row's meta column formats. */
+export function rowMetaValue(row) {
+  return rowMetaShape(row?.meta).value;
+}
+
+/** String form of a row meta figure. */
+export function resolveRowMeta(row) {
+  const meta = rowMetaShape(row?.meta);
+  const present = rowMetaPresence(row);
+  if (!present) {
+    const absentLabel = meta.absentLabel !== undefined ? meta.absentLabel : DETAIL_PANEL_ABSENT_GLYPH;
+    return { state: 'absent', text: absentLabel, className: 'value-absent' };
+  }
+  return { state: 'measured', text: String(meta.value), className: 'value-measured' };
 }
 
 /**

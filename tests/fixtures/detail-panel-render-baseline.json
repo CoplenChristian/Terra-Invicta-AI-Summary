@@ -1,0 +1,17 @@
+{
+  "full": {
+    "innerText": "Everything still to research before this drive can be fitted. FACTION RESEARCH 1,300,325 RP TOTAL REMAINING UNKNOWN FACTION PROJECTS 2 remaining · 1,300,325 RP Antimatter Beam-Core Torch via Antimatter Traps LOCKED 900,000 RP Antimatter Traps RESEARCHING 41.2% 400,325 RP GLOBAL TECHS No global techs remain on this path. Availability is rolled monthly and a cleared path is not a startable one. Close"
+  },
+  "absence": {
+    "innerText": "MEASURED 0 UNMEASURED MISSING ROWS has a label DONE unrecognised tone ODD meta dash LOCKED — NOTHING HERE None."
+  },
+  "factsOnly": {
+    "innerText": "Active. No visible xenoforming sites are reported in this theater. Combined GDP $12.5T Nations 8 Observer control 3 Expected Value —"
+  },
+  "ungated": {
+    "innerText": "This drive is not gated by any project. DRIVE Laser Drive Mk1 GATE PROJECT none — this drive names no gating project AVAILABILITY Available now Nothing unlocks this drive because nothing needs to."
+  },
+  "actions": {
+    "innerText": "StayGo"
+  }
+}

@@ -253,9 +253,6 @@ test('an action closes by default, keeps the panel open when close is false, and
 });
 
 test('with no .init-view sections there is nothing finer to mark, so main itself is toggled', async () => {
-  // The other branch of syncPageInert, which the real shell and the harness both
-  // take the first half of. A page without views must still become unreachable
-  // behind a modal, or the branch is dead code that silently protects nothing.
   const { syncPageInert } = await detailPanelUtils();
 
   let mainInert = false;
@@ -284,4 +281,27 @@ test('with no .init-view sections there is nothing finer to mark, so main itself
   overlayOpen = false;
   syncPageInert(fakeDoc);
   assert.strictEqual(mainInert, false, 'and comes back when the overlay closes');
+});
+
+test('fact and row-meta presence resolve independently in utils', async () => {
+  const {
+    factPresence,
+    factAbsentLabel,
+    rowMetaPresence,
+    resolveFactValue,
+    resolveRowMeta,
+  } = await detailPanelUtils();
+
+  assert.strictEqual(factPresence({ value: 0 }), true);
+  assert.strictEqual(factPresence({ value: null }), false);
+  assert.strictEqual(factPresence({ value: '—' }), false);
+  assert.strictEqual(factAbsentLabel({ value: null }), '');
+  assert.strictEqual(factAbsentLabel({ value: '—' }), '—');
+  assert.strictEqual(resolveFactValue({ value: null }).state, 'absent');
+  assert.strictEqual(resolveFactValue({ value: 'ok' }).text, 'ok');
+
+  assert.strictEqual(rowMetaPresence({ meta: '1,000 RP' }), true);
+  assert.strictEqual(rowMetaPresence({ meta: '—' }), false);
+  assert.strictEqual(resolveRowMeta({ meta: '—' }).state, 'absent');
+  assert.strictEqual(resolveRowMeta({ meta: '— vs 500 RP' }).state, 'measured');
 });

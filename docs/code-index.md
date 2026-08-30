@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**257 JS modules** and **26 stylesheet parts** (283 indexed files).
+**258 JS modules** and **26 stylesheet parts** (284 indexed files).
 
 ## `public/`
 
@@ -31,6 +31,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `scripts/build_static_snapshot.js` | C | Node (CommonJS) | 253 | build the static snapshot bundle — flatten the worker entry point, | — | — |
 | `scripts/capture_command_screenshots.js` | C | Node (CommonJS) | 53 | full-page COMMAND view screenshots for grid2 migration review. | — | — |
 | `scripts/capture_command_view_proof.js` | C | Node (CommonJS) | 148 | capture COMMAND view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, runCapture` | — |
+| `scripts/capture_detail_panel_render.mjs` | E | Node (CommonJS) | 171 | one-off Playwright capture of DetailPanel innerText, geometry and | — | — |
 | `scripts/capture_drives_view_proof.js` | C | Node (CommonJS) | 146 | capture DRIVES view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, runCapture` | — |
 | `scripts/capture_expansion_view_proof.js` | C | Node (CommonJS) | 143 | capture EXPANSION view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, runCapture` | — |
 | `scripts/capture_fleet_view_proof.js` | C | Node (CommonJS) | 141 | capture FLEET view rendered text and panel-mount geometry for | `MODES, PANEL_IDS, VIEWPORTS, runCapture` | — |
@@ -262,8 +263,8 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/panels/CommandPanel.jsx` | E | Browser (React JSX) | 215 | COMMAND view shell — two-column MUI grid with static mount points for | `CommandPanel, renderCommandPanel` | — |
 | `src/v2/panels/CouncilOrders.jsx` | E | Browser (React JSX) | 388 | React port of public/v2/js/components/council-orders.js. Renders the | `CouncilOrders, focusDirectiveBoard` | `tests/CouncilOrders.test.js` |
 | `src/v2/panels/DesignerPanel.jsx` | E | Browser (React JSX) | 85 | DESIGNER view shell — two-column MUI grid with static mount points for | `DesignerPanel, renderDesignerPanel` | — |
-| `src/v2/panels/DetailPanel.jsx` | E | Browser (React JSX) | 326 | the shared detail surface every clickable Mission Control module | `DetailPanel, close, detailPanelInternals, open, syncPageInert` | `tests/DetailPanel.test.js` |
-| `src/v2/panels/detailPanelUtils.mjs` | E | Browser (React JSX) | 153 | the page-wide inert bookkeeping, the focusable-node scan and the | `OVERLAY_SELECTOR, STATUS_TONES, focusableIn, isRenderableRow, normaliseActions, normaliseFacts, normaliseNotes, normaliseRows, normaliseSections, resolveTone, syncPageInert, text` | — |
+| `src/v2/panels/DetailPanel.jsx` | E | Browser (React JSX) | 369 | the shared detail surface every clickable Mission Control module | `DetailPanel, close, detailPanelInternals, open, syncPageInert` | `tests/DetailPanel.test.js` |
+| `src/v2/panels/detailPanelUtils.mjs` | E | Browser (React JSX) | 223 | the page-wide inert bookkeeping, the focusable-node scan, presence | `DETAIL_PANEL_ABSENT_GLYPH, OVERLAY_SELECTOR, STATUS_TONES, factAbsentLabel, factPresence, focusableIn, isRenderableRow, normaliseActions, normaliseFacts, normaliseNotes, normaliseRows, normaliseSections, …(+7)` | — |
 | `src/v2/panels/DirectiveBoard.jsx` | E | Browser (React JSX) | 1136 | React port of public/v2/js/components/directive-board.js — renders | `DirectiveBoard` | — |
 | `src/v2/panels/DriveExplorer.jsx` | E | Browser (React JSX) | 939 | the DRIVES view in React — every drive in the catalogue rated against | `DriveExplorer, driveExplorerInternals, renderDriveExplorer, setDriveExplorerMount` | `tests/DriveExplorer.test.js` |
 | `src/v2/panels/driveExplorerUtils.mjs` | E | Browser (React JSX) | 557 | pure formatters, filters, sorters and research-path shaping for the | `BUCKETS, BUCKET_LABEL, BUCKET_TITLE, ESTIMATE_CAPTION, OUTCOME, REACTOR_FILTERS, ROW_CAPS, SCROLL_HINT_TEXT, SORTS, STATUS_LABEL, STATUS_TONE, THRESHOLDS, …(+21)` | — |

@@ -4,7 +4,8 @@
  * Purpose: the shared detail surface every clickable Mission Control module
  *   opens — facts, grouped list sections, caveat notes and actions in ONE
  *   dialog, plus the imperative open/close controller that
- *   `window.MissionControlDetailPanel` is.
+ *   `window.MissionControlDetailPanel` is. Every figure in facts and row meta
+ *   columns is stamped through `<Value>` so absence is structural.
  *
  * ONE MODAL, NOT ONE PER CALLER. Alongside the label/value `facts` list it
  * renders two optional blocks so a caller with a LIST to show does not need a
@@ -43,8 +44,12 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
+import { Box } from '@mui/material';
+import { Value, ABSENT_LABEL } from '../components/Value.jsx';
 import {
   focusableIn,
+  factAbsentLabel,
+  factPresence,
   isRenderableRow,
   normaliseActions,
   normaliseFacts,
@@ -52,9 +57,45 @@ import {
   normaliseRows,
   normaliseSections,
   resolveTone,
+  rowMetaPresence,
+  rowMetaValue,
   syncPageInert,
   text,
 } from './detailPanelUtils.mjs';
+
+const InlineSpanBox = (props) => (
+  <Box component="span" {...props} sx={{ '&&': { display: 'inline' } }} />
+);
+
+/** One stamped figure in the facts list. */
+function FactFig({ fact }) {
+  return (
+    <Value
+      value={fact.value}
+      present={factPresence(fact)}
+      format={(v) => String(v)}
+      absentLabel={factAbsentLabel(fact)}
+      as={InlineSpanBox}
+    />
+  );
+}
+
+/** One stamped figure in a section row's meta column. */
+function RowMetaFig({ row }) {
+  const meta = row?.meta;
+  const absentLabel = (meta && typeof meta === 'object' && meta.absentLabel !== undefined)
+    ? meta.absentLabel
+    : ABSENT_LABEL;
+  return (
+    <Value
+      value={rowMetaValue(row)}
+      present={rowMetaPresence(row)}
+      format={(v) => String(v)}
+      absentLabel={absentLabel}
+      as={InlineSpanBox}
+    />
+  );
+}
 
 // ---------------------------------------------------------------------------
 // The component
@@ -90,7 +131,9 @@ function SectionRow({ row }) {
         {row.status
           ? <span className={`detail-panel__status detail-panel__status--${tone}`}>{text(row.status)}</span>
           : null}{' '}
-        {row.meta ? <span className="detail-panel__row-meta">{text(row.meta)}</span> : null}
+        {row.meta != null && row.meta !== ''
+          ? <span className="detail-panel__row-meta"><RowMetaFig row={row} /></span>
+          : null}
       </div>{' '}
     </li>
   );
@@ -142,14 +185,14 @@ export function DetailPanel({ options, onClose }) {
 
   return (
     <>
-      <div className="detail-panel__backdrop" data-detail-close="" onClick={onClose} />
-      <div
+      <Box className="detail-panel__backdrop" data-detail-close="" onClick={onClose} />
+      <Box
         className="detail-panel__dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="detailPanelTitle"
       >
-        <header className="detail-panel__header">
+        <Box className="detail-panel__header">
           <div>
             <div id="detailPanelEyebrow" className="detail-panel__eyebrow">
               {text(opts.eyebrow || 'DETAIL')}
@@ -159,32 +202,32 @@ export function DetailPanel({ options, onClose }) {
           <button className="init-btn" type="button" data-detail-close="" onClick={onClose}>
             Close
           </button>
-        </header>
-        <div className="detail-panel__body">
+        </Box>
+        <Box className="detail-panel__body">
           <p id="detailPanelSummary" className="detail-panel__summary">{text(opts.summary || '')}</p>{' '}
           <dl id="detailPanelFacts" className="detail-panel__facts">
             {facts.map((fact, index) => (
-              <div className="detail-panel__fact" key={index}>
+              <Box className="detail-panel__fact" key={index} component="div">
                 <dt>{text(fact.label)}</dt>{' '}
-                <dd>{text(fact.value)}</dd>{' '}
-              </div>
+                <dd><FactFig fact={fact} /></dd>{' '}
+              </Box>
             ))}
           </dl>{' '}
-          <div
+          <Box
             id="detailPanelSections"
             className="detail-panel__sections"
             hidden={sections.length === 0}
           >
             {sections.map((section, index) => <SectionBlock key={index} section={section} />)}
-          </div>{' '}
-          <div
+          </Box>{' '}
+          <Box
             id="detailPanelNotes"
             className="detail-panel__notes"
             hidden={notes.length === 0}
           >
             {notes.map((note, index) => <p className="detail-panel__note" key={index}>{note}</p>)}
-          </div>{' '}
-          <div id="detailPanelActions" className="detail-panel__actions">
+          </Box>{' '}
+          <Box id="detailPanelActions" className="detail-panel__actions">
             {actions.map((action, index) => (
               <button
                 key={index}
@@ -200,9 +243,9 @@ export function DetailPanel({ options, onClose }) {
                 {action.label}
               </button>
             ))}
-          </div>
-        </div>
-      </div>
+          </Box>
+        </Box>
+      </Box>
     </>
   );
 }
