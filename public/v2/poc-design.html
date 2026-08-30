@@ -3,1304 +3,871 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Terra Invicta Intel — Design POC</title>
+  <title>Terra Invicta Intel — Sonar Briefing POC</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600&family=Oxanium:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-deep: #07090f;
-      --bg-panel: #0e1219;
-      --bg-raised: #141a24;
-      --bg-hover: #1a2230;
-      --border: #243044;
-      --border-soft: #1a2332;
-      --text: #e8ecf2;
-      --text-soft: #a8b4c4;
-      --text-muted: #6b7a8f;
-      --accent: #d4a24a;
-      --accent-soft: rgba(212, 162, 74, 0.12);
-      --accent-glow: rgba(212, 162, 74, 0.35);
-      --cyan: #4ec5c8;
-      --cyan-soft: rgba(78, 197, 200, 0.12);
-      --success: #6ecf8a;
-      --warning: #e8a24a;
-      --danger: #e06b6b;
-      --danger-soft: rgba(224, 107, 107, 0.14);
-      --serif: "Instrument Serif", Georgia, serif;
-      --sans: "DM Sans", system-ui, sans-serif;
-      --mono: "JetBrains Mono", ui-monospace, monospace;
-      --sidebar-w: 220px;
-      --context-w: 320px;
-      --header-h: 56px;
-      --radius: 10px;
-      --radius-sm: 6px;
-      --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      --void: #000306;
+      --panel: #04080e;
+      --panel-raised: #081018;
+      --trace: #2ef2a0;
+      --trace-dim: #1a9e68;
+      --trace-soft: rgba(46, 242, 160, 0.08);
+      --phosphor-amber: #ffb84a;
+      --phosphor-red: #ff3d52;
+      --phosphor-cyan: #3de8ff;
+      --text: #d8f5e8;
+      --text-soft: #7fa896;
+      --text-muted: #4a6b5c;
+      --line: #123024;
+      --line-bright: #1f5a40;
+      --hazard: #ff3d52;
+      --warn: #ffb84a;
+      --safe: #2ef2a0;
+      --display: "Oxanium", system-ui, sans-serif;
+      --data: "Azeret Mono", ui-monospace, monospace;
+      --sidebar: 240px;
+      --rail: 300px;
+      --header: 64px;
       --ease: cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     html { color-scheme: dark; }
 
     body {
-      font-family: var(--sans);
-      font-size: 14px;
-      line-height: 1.5;
+      font-family: var(--display);
+      font-size: 13px;
+      line-height: 1.45;
       color: var(--text);
-      background: var(--bg-deep);
+      background: var(--void);
       min-height: 100vh;
       overflow-x: hidden;
     }
 
-    ::selection {
-      background: var(--accent-soft);
-      color: var(--text);
+    ::selection { background: var(--trace-soft); color: var(--text); }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--void); }
+    ::-webkit-scrollbar-thumb { background: var(--line-bright); border-radius: 3px; }
+
+    button, select { font: inherit; color: inherit; border: none; background: none; cursor: pointer; }
+    button:focus-visible, select:focus-visible { outline: 2px solid var(--trace); outline-offset: 2px; }
+
+    /* Seven-segment numerals */
+    .seg {
+      font-family: var(--data);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.06em;
+      text-shadow: 0 0 8px rgba(46, 242, 160, 0.45), 0 0 20px rgba(46, 242, 160, 0.15);
+    }
+    .seg--amber { color: var(--phosphor-amber); text-shadow: 0 0 8px rgba(255, 184, 74, 0.5), 0 0 20px rgba(255, 184, 74, 0.15); }
+    .seg--red { color: var(--phosphor-red); text-shadow: 0 0 8px rgba(255, 61, 82, 0.5), 0 0 20px rgba(255, 61, 82, 0.15); }
+    .seg--cyan { color: var(--phosphor-cyan); text-shadow: 0 0 8px rgba(61, 232, 255, 0.4); }
+
+    .hazard-band {
+      height: 3px;
+      background: repeating-linear-gradient(
+        -45deg,
+        var(--hazard) 0 8px,
+        #000 8px 16px
+      );
     }
 
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: var(--bg-deep); }
-    ::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
-
-    button, input, select {
-      font: inherit;
-      color: inherit;
-      border: none;
-      background: none;
-      cursor: pointer;
-    }
-
-    button:focus-visible,
-    select:focus-visible,
-    a:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-
-    .app {
+    .shell {
       display: grid;
-      grid-template-columns: var(--sidebar-w) 1fr var(--context-w);
-      grid-template-rows: var(--header-h) 1fr;
+      grid-template-columns: var(--sidebar) 1fr var(--rail);
+      grid-template-rows: var(--header) 1fr auto;
       min-height: 100vh;
     }
 
     /* Header */
-    .header {
+    .masthead {
       grid-column: 1 / -1;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 0 20px;
-      border-bottom: 1px solid var(--border-soft);
-      background: linear-gradient(180deg, #0c1018 0%, var(--bg-deep) 100%);
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      flex-direction: column;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
     }
 
-    .brand {
+    .masthead__row {
+      display: flex;
+      align-items: stretch;
+    }
+
+    .masthead__brand {
       display: flex;
       align-items: center;
       gap: 12px;
-      min-width: 0;
+      padding: 0 18px;
+      border-right: 1px solid var(--line);
+      min-width: var(--sidebar);
     }
 
-    .brand-mark {
-      width: 32px;
-      height: 32px;
-      display: grid;
-      place-items: center;
-      border-radius: 8px;
-      background: var(--accent-soft);
-      color: var(--accent);
-      font-size: 18px;
-      flex-shrink: 0;
-    }
-
-    .brand-text h1 {
-      font-family: var(--serif);
-      font-size: 18px;
-      font-weight: 400;
-      letter-spacing: 0.01em;
-      line-height: 1.1;
-    }
-
-    .brand-text p {
-      font-size: 11px;
-      color: var(--text-muted);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .header-meta {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    .meta-chip {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 10px;
-      border-radius: 999px;
-      background: var(--bg-raised);
-      border: 1px solid var(--border-soft);
-      font-size: 11px;
-      color: var(--text-soft);
-      white-space: nowrap;
-    }
-
-    .meta-chip strong {
-      color: var(--text);
-      font-weight: 600;
-    }
-
-    .meta-chip--alert {
-      border-color: rgba(224, 107, 107, 0.35);
-      background: var(--danger-soft);
-    }
-
-    .meta-chip--alert strong { color: var(--danger); }
-
-    .hate-gauge {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 12px 4px 8px;
-      border-radius: 999px;
-      background: var(--bg-raised);
-      border: 1px solid var(--border-soft);
-      cursor: pointer;
-      transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
-    }
-
-    .hate-gauge:hover {
-      border-color: var(--border);
-      background: var(--bg-hover);
-    }
-
-    .hate-gauge__arc {
+    .masthead__glyph {
       width: 28px;
       height: 28px;
-      transform: rotate(-90deg);
+      border: 1px solid var(--trace-dim);
+      display: grid;
+      place-items: center;
+      color: var(--trace);
+      font-size: 14px;
+      clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     }
 
-    .hate-gauge__arc circle {
-      fill: none;
-      stroke-width: 3;
+    .masthead__title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      line-height: 1.2;
     }
 
-    .hate-gauge__arc .track { stroke: var(--border); }
-    .hate-gauge__arc .fill { stroke: var(--danger); stroke-linecap: round; transition: stroke-dashoffset 0.6s var(--ease); }
+    .masthead__title span {
+      display: block;
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      margin-top: 2px;
+    }
 
-    .hate-gauge__text {
+    .masthead__readouts {
+      flex: 1;
+      display: flex;
+      align-items: stretch;
+      overflow-x: auto;
+    }
+
+    .readout {
       display: flex;
       flex-direction: column;
-      line-height: 1.15;
+      justify-content: center;
+      padding: 8px 20px;
+      border-right: 1px solid var(--line);
+      min-width: 120px;
     }
 
-    .hate-gauge__label {
+    .readout__label {
+      font-size: 8px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .readout__value {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .readout--alert .readout__value { font-size: 18px; }
+
+    .masthead__controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      border-left: 1px solid var(--line);
+    }
+
+    .mode-strip {
+      display: flex;
+      border: 1px solid var(--line);
+    }
+
+    .mode-strip button {
+      padding: 6px 10px;
       font-size: 9px;
+      font-weight: 600;
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--text-muted);
+      border-right: 1px solid var(--line);
+      transition: color 0.15s, background 0.15s;
     }
 
-    .hate-gauge__value {
-      font-family: var(--mono);
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--danger);
+    .mode-strip button:last-child { border-right: none; }
+    .mode-strip button[aria-pressed="true"] {
+      background: var(--trace-soft);
+      color: var(--trace);
     }
+    .mode-strip button:not([aria-pressed="true"]):hover { color: var(--text-soft); }
 
-    .header-controls {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .mode-toggle {
-      display: flex;
-      padding: 3px;
-      border-radius: 999px;
-      background: var(--bg-raised);
-      border: 1px solid var(--border-soft);
-    }
-
-    .mode-toggle button {
-      padding: 5px 10px;
-      border-radius: 999px;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
+    .ctrl-btn {
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      font-size: 9px;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--text-muted);
-      transition: all 0.2s var(--ease);
-    }
-
-    .mode-toggle button[aria-pressed="true"] {
-      background: var(--accent);
-      color: var(--bg-deep);
-    }
-
-    .mode-toggle button:not([aria-pressed="true"]):hover {
       color: var(--text-soft);
+      transition: border-color 0.15s, color 0.15s;
     }
+    .ctrl-btn:hover { border-color: var(--line-bright); color: var(--text); }
 
-    .icon-btn {
-      width: 34px;
-      height: 34px;
-      display: grid;
-      place-items: center;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border-soft);
-      background: var(--bg-raised);
-      color: var(--text-soft);
-      transition: all 0.2s var(--ease);
-    }
-
-    .icon-btn:hover {
-      border-color: var(--border);
-      color: var(--text);
-      background: var(--bg-hover);
-    }
-
-    .icon-btn svg { width: 16px; height: 16px; }
-
-    /* Sidebar */
-    .sidebar {
+    /* Sidebar contacts */
+    .contacts {
       grid-row: 2;
-      padding: 16px 12px;
-      border-right: 1px solid var(--border-soft);
-      background: var(--bg-panel);
+      border-right: 1px solid var(--line);
+      background: var(--panel);
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      overflow-y: auto;
+      overflow: hidden;
     }
 
-    .nav-section-label {
-      font-size: 10px;
+    .contacts__head {
+      padding: 12px 14px 8px;
+      font-size: 8px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .contacts__list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+    }
+
+    .contact {
+      display: grid;
+      grid-template-columns: 8px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid transparent;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .contact:hover { background: var(--panel-raised); border-color: var(--line); }
+    .contact[aria-current="true"] {
+      background: var(--trace-soft);
+      border-color: var(--trace-dim);
+    }
+
+    .contact__class {
+      width: 8px;
+      height: 8px;
+      border-radius: 1px;
+    }
+    .contact__class--hostile { background: var(--phosphor-red); box-shadow: 0 0 6px rgba(255,61,82,0.6); }
+    .contact__class--contested { background: var(--phosphor-amber); box-shadow: 0 0 6px rgba(255,184,74,0.5); }
+    .contact__class--friendly { background: var(--trace); box-shadow: 0 0 6px rgba(46,242,160,0.5); }
+    .contact__class--unknown { background: var(--text-muted); }
+
+    .contact__name {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .contact__bearing {
+      font-family: var(--data);
+      font-size: 9px;
+      color: var(--text-muted);
+    }
+
+  /* Main waterfall */
+    .waterfall {
+      grid-row: 2;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--void);
+    }
+
+    .waterfall__nav {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      overflow-x: auto;
+    }
+
+    .waterfall__tab {
+      padding: 10px 16px;
+      font-size: 9px;
       font-weight: 600;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--text-muted);
-      padding: 12px 10px 6px;
+      border-right: 1px solid var(--line);
+      white-space: nowrap;
+      transition: color 0.15s, background 0.15s;
     }
 
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: var(--radius-sm);
-      color: var(--text-soft);
-      font-size: 13px;
-      font-weight: 500;
-      text-align: left;
-      width: 100%;
-      transition: all 0.2s var(--ease);
-      position: relative;
+    .waterfall__tab:hover { color: var(--text-soft); }
+    .waterfall__tab[aria-selected="true"] {
+      color: var(--trace);
+      background: var(--trace-soft);
     }
 
-    .nav-item svg {
-      width: 18px;
-      height: 18px;
-      flex-shrink: 0;
-      opacity: 0.7;
-    }
-
-    .nav-item:hover {
-      background: var(--bg-hover);
-      color: var(--text);
-    }
-
-    .nav-item[aria-current="page"] {
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-
-    .nav-item[aria-current="page"] svg { opacity: 1; }
-
-    .nav-item__badge {
-      margin-left: auto;
-      font-family: var(--mono);
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 999px;
-      background: var(--danger-soft);
-      color: var(--danger);
-    }
-
-    .sidebar-footer {
-      margin-top: auto;
-      padding: 12px 10px;
-      border-top: 1px solid var(--border-soft);
-    }
-
-    .poc-banner {
-      padding: 10px 12px;
-      border-radius: var(--radius-sm);
-      background: var(--cyan-soft);
-      border: 1px solid rgba(78, 197, 200, 0.25);
-      font-size: 11px;
-      color: var(--cyan);
-      line-height: 1.4;
-    }
-
-    /* Main */
-    .main {
-      grid-row: 2;
-      padding: 24px;
+    .waterfall__body {
+      flex: 1;
       overflow-y: auto;
-      background: var(--bg-deep);
+      padding: 16px;
     }
 
-    .view { display: none; animation: fadeIn 0.35s var(--ease); }
+    .view { display: none; }
     .view.is-active { display: block; }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .view-header {
-      margin-bottom: 24px;
-    }
-
-    .view-header h2 {
-      font-family: var(--serif);
-      font-size: 32px;
-      font-weight: 400;
-      line-height: 1.1;
-      margin-bottom: 6px;
-      text-wrap: balance;
-    }
-
-    .view-header p {
-      color: var(--text-soft);
-      max-width: 60ch;
-      font-size: 14px;
-    }
-
-    /* KPI strip */
-    .kpi-strip {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
+    /* Waterfall strips */
+    .strip-stack {
+      display: flex;
+      flex-direction: column;
       gap: 12px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
-    .kpi {
-      padding: 16px;
-      border-radius: var(--radius);
-      background: var(--bg-panel);
-      border: 1px solid var(--border-soft);
-      transition: border-color 0.2s var(--ease);
+    .strip {
+      border: 1px solid var(--line);
+      background: var(--panel);
     }
 
-    .kpi:hover { border-color: var(--border); }
-
-    .kpi__label {
-      font-size: 11px;
-      color: var(--text-muted);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-
-    .kpi__value {
-      font-family: var(--serif);
-      font-size: 28px;
-      line-height: 1;
-      color: var(--text);
-    }
-
-    .kpi__value--accent { color: var(--accent); }
-    .kpi__value--danger { color: var(--danger); }
-    .kpi__value--success { color: var(--success); }
-
-    .kpi__sub {
-      margin-top: 6px;
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    .kpi__delta {
-      display: inline-flex;
+    .strip__head {
+      display: flex;
       align-items: center;
-      gap: 3px;
-      font-family: var(--mono);
-      font-size: 10px;
-      margin-top: 6px;
-      padding: 2px 6px;
-      border-radius: 4px;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-raised);
     }
 
-    .kpi__delta--up { background: rgba(110, 207, 138, 0.12); color: var(--success); }
-    .kpi__delta--down { background: var(--danger-soft); color: var(--danger); }
-
-    /* Grid layouts */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap: 16px;
+    .strip__label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-soft);
     }
 
-    .grid-3 {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
+    .strip__meta {
+      font-family: var(--data);
+      font-size: 9px;
+      color: var(--text-muted);
     }
 
-    /* Panels */
-    .panel {
-      border-radius: var(--radius);
-      background: var(--bg-panel);
-      border: 1px solid var(--border-soft);
+    .strip__canvas-wrap {
+      position: relative;
+      height: 72px;
       overflow: hidden;
     }
 
-    .panel__head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--border-soft);
+    .strip canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
     }
 
-    .panel__title {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-    }
-
-    .panel__action {
-      font-size: 11px;
-      color: var(--accent);
-      font-weight: 500;
-    }
-
-    .panel__action:hover { text-decoration: underline; }
-
-    .panel__body { padding: 16px; }
-
-    /* Directive cards */
-    .directive-list {
+    .strip__scale {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 40px;
+      border-right: 1px solid var(--line);
+      background: rgba(0, 3, 6, 0.85);
       display: flex;
       flex-direction: column;
-      gap: 10px;
-    }
-
-    .directive {
-      padding: 14px 16px;
-      border-radius: var(--radius-sm);
-      background: var(--bg-raised);
-      border: 1px solid var(--border-soft);
-      cursor: pointer;
-      transition: all 0.2s var(--ease);
-    }
-
-    .directive:hover {
-      border-color: var(--border);
-      background: var(--bg-hover);
-    }
-
-    .directive.is-selected {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 1px var(--accent-soft);
-    }
-
-    .directive.is-primary {
-      background: linear-gradient(135deg, rgba(212, 162, 74, 0.08) 0%, var(--bg-raised) 60%);
-    }
-
-    .directive__top {
-      display: flex;
-      align-items: flex-start;
       justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 8px;
+      padding: 4px 6px;
+      pointer-events: none;
     }
 
-    .directive__rank {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--accent);
-      letter-spacing: 0.08em;
-    }
-
-    .directive__score {
-      font-family: var(--mono);
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--success);
-    }
-
-    .directive__score--warn { color: var(--warning); }
-    .directive__score--bad { color: var(--danger); }
-
-    .directive__title {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 4px;
-      line-height: 1.3;
-    }
-
-    .directive__meta {
-      font-size: 12px;
+    .strip__scale span {
+      font-family: var(--data);
+      font-size: 7px;
       color: var(--text-muted);
     }
 
-    .directive__tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 10px;
-    }
-
-    .tag {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      padding: 3px 8px;
-      border-radius: 4px;
-      background: var(--bg-deep);
-      color: var(--text-muted);
-      border: 1px solid var(--border-soft);
-    }
-
-    .tag--veto { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
-    .tag--boost { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
-
-    /* Timeline */
-    .timeline {
+    /* Directive bands */
+    .band-list {
       display: flex;
       flex-direction: column;
-      gap: 0;
-    }
-
-    .timeline__item {
-      display: grid;
-      grid-template-columns: 60px 1fr;
-      gap: 12px;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border-soft);
-    }
-
-    .timeline__item:last-child { border-bottom: none; }
-
-    .timeline__when {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--text-muted);
-      padding-top: 2px;
-    }
-
-    .timeline__text {
-      font-size: 13px;
-      color: var(--text-soft);
-      line-height: 1.4;
-    }
-
-    .timeline__text strong { color: var(--text); font-weight: 500; }
-
-    /* Councilor roster */
-    .councilor-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
       gap: 8px;
     }
 
-    .councilor {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px;
-      border-radius: var(--radius-sm);
-      background: var(--bg-raised);
-      border: 1px solid var(--border-soft);
-    }
-
-    .councilor__avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: var(--border);
+    .band {
       display: grid;
-      place-items: center;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-soft);
-      flex-shrink: 0;
+      grid-template-columns: 48px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
     }
 
-    .councilor__info { min-width: 0; }
-
-    .councilor__name {
-      font-size: 12px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .band:hover { border-color: var(--line-bright); background: var(--panel-raised); }
+    .band.is-selected { border-color: var(--trace-dim); background: var(--trace-soft); }
+    .band.is-primary {
+      background: linear-gradient(90deg, rgba(46, 242, 160, 0.06) 0%, var(--panel) 40%);
     }
 
-    .councilor__mission {
+    .band__rank {
+      font-family: var(--data);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--trace);
+      text-align: center;
+    }
+
+    .band__title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin-bottom: 2px;
+    }
+
+    .band__sub {
       font-size: 10px;
       color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      letter-spacing: 0.04em;
     }
 
-    /* Threat table */
+    .band__score {
+      font-family: var(--data);
+      font-size: 14px;
+      font-weight: 600;
+      text-align: right;
+    }
+    .band__score--high { color: var(--safe); }
+    .band__score--mid { color: var(--warn); }
+    .band__score--low { color: var(--phosphor-red); }
+
+    /* Data grid */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .data-panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .data-panel__head {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-soft);
+      background: var(--panel-raised);
+    }
+
+    .data-panel__body { padding: 12px; }
+
     .data-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 12px;
+      font-family: var(--data);
+      font-size: 10px;
     }
 
     .data-table th {
       text-align: left;
+      font-size: 8px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .data-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      color: var(--text-soft);
+    }
+
+    .data-table tr:hover td { background: var(--panel-raised); }
+
+    .redacted {
+      color: var(--text-muted);
+      letter-spacing: 0.12em;
+    }
+
+    /* Step sequencer */
+    .sequencer {
+      grid-column: 1 / -1;
+      border-top: 1px solid var(--line);
+      background: var(--panel);
+      padding: 10px 14px 12px;
+    }
+
+    .sequencer__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .sequencer__label {
+      font-size: 8px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .sequencer__tempo {
+      font-family: var(--data);
       font-size: 10px;
+      color: var(--trace);
+    }
+
+    .step-row {
+      display: grid;
+      grid-template-columns: 100px repeat(6, 1fr);
+      gap: 4px;
+      align-items: center;
+    }
+
+    .step-row__name {
+      font-size: 9px;
       font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--text-muted);
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border-soft);
-    }
-
-    .data-table td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border-soft);
-      color: var(--text-soft);
-    }
-
-    .data-table tr:hover td { background: var(--bg-hover); }
-
-    .data-table .mono { font-family: var(--mono); font-size: 11px; }
-
-    .status-dot {
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      margin-right: 6px;
-    }
-
-    .status-dot--high { background: var(--danger); }
-    .status-dot--med { background: var(--warning); }
-    .status-dot--low { background: var(--success); }
-
-    /* Fleet cards */
-    .fleet-card {
-      padding: 14px;
-      border-radius: var(--radius-sm);
-      background: var(--bg-raised);
-      border: 1px solid var(--border-soft);
-    }
-
-    .fleet-card h4 {
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .fleet-card p {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-bottom: 10px;
-    }
-
-    .fleet-stats {
-      display: flex;
-      gap: 16px;
-    }
-
-    .fleet-stat {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    .fleet-stat strong {
-      display: block;
-      font-family: var(--mono);
-      font-size: 14px;
-      color: var(--text);
-      font-weight: 500;
-    }
-
-    /* Mining bars */
-    .mine-row {
-      display: grid;
-      grid-template-columns: 80px 1fr 50px;
-      gap: 10px;
-      align-items: center;
-      padding: 8px 0;
-    }
-
-    .mine-row + .mine-row { border-top: 1px solid var(--border-soft); }
-
-    .mine-row__body { font-size: 12px; font-weight: 500; }
-
-    .mine-bar {
-      height: 6px;
-      border-radius: 3px;
-      background: var(--bg-deep);
+      white-space: nowrap;
       overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    .mine-bar__fill {
-      height: 100%;
-      border-radius: 3px;
-      background: var(--cyan);
-      transform-origin: left center;
-      transform: scaleX(1);
-      transition: transform 0.6s var(--ease);
+    .step {
+      height: 28px;
+      border: 1px solid var(--line);
+      background: var(--void);
+      position: relative;
+      transition: background 0.15s, border-color 0.15s;
     }
 
-    .mine-row__pct {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--text-muted);
-      text-align: right;
+    .step--active {
+      background: var(--trace-soft);
+      border-color: var(--trace-dim);
+      box-shadow: inset 0 0 12px rgba(46, 242, 160, 0.15);
     }
 
-    /* Context panel */
-    .context {
+    .step--accent {
+      background: rgba(255, 184, 74, 0.12);
+      border-color: rgba(255, 184, 74, 0.4);
+    }
+
+    .step--chase::after {
+      content: "";
+      position: absolute;
+      inset: 2px;
+      border: 1px solid var(--trace);
+      animation: chase-pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes chase-pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+
+    /* Context rail */
+    .rail {
       grid-row: 2;
-      padding: 20px 16px;
-      border-left: 1px solid var(--border-soft);
-      background: var(--bg-panel);
+      border-left: 1px solid var(--line);
+      background: var(--panel);
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
     }
 
-    .context__section + .context__section {
-      margin-top: 24px;
-      padding-top: 20px;
-      border-top: 1px solid var(--border-soft);
+    .rail__section {
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
     }
 
-    .context__label {
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
+    .rail__label {
+      font-size: 8px;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
       color: var(--text-muted);
-      margin-bottom: 10px;
-    }
-
-    .context__title {
-      font-family: var(--serif);
-      font-size: 22px;
-      line-height: 1.2;
       margin-bottom: 8px;
     }
 
-    .context__desc {
-      font-size: 13px;
+    .rail__title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+
+    .rail__desc {
+      font-size: 11px;
       color: var(--text-soft);
       line-height: 1.5;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
-    .detail-row {
+    .kv {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border-soft);
-      font-size: 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 10px;
     }
 
-    .detail-row:last-child { border-bottom: none; }
+    .kv:last-child { border-bottom: none; }
+    .kv dt { color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; font-size: 8px; padding-top: 2px; }
+    .kv dd { font-family: var(--data); font-weight: 500; text-align: right; }
 
-    .detail-row dt { color: var(--text-muted); }
-    .detail-row dd { font-family: var(--mono); font-weight: 500; text-align: right; }
-
-    .redacted {
-      color: var(--text-muted);
-      font-style: italic;
-      letter-spacing: 0.05em;
-    }
-
-    .rule-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .rule-list li {
-      font-size: 12px;
+    .rule {
+      font-size: 10px;
       color: var(--text-soft);
-      padding-left: 14px;
+      padding: 6px 0 6px 14px;
       position: relative;
       line-height: 1.4;
+      border-bottom: 1px solid var(--line);
     }
 
-    .rule-list li::before {
+    .rule:last-child { border-bottom: none; }
+    .rule::before {
       content: "";
       position: absolute;
       left: 0;
-      top: 7px;
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: var(--border);
+      top: 10px;
+      width: 6px;
+      height: 6px;
+      border-radius: 1px;
     }
+    .rule--pass::before { background: var(--safe); }
+    .rule--warn::before { background: var(--warn); }
+    .rule--fail::before { background: var(--phosphor-red); }
 
-    .rule-list li.pass::before { background: var(--success); }
-    .rule-list li.fail::before { background: var(--danger); }
-    .rule-list li.warn::before { background: var(--warning); }
-
-    /* Orbital map placeholder */
-    .orbital-map {
+    .hate-bar {
+      height: 8px;
+      background: var(--void);
+      border: 1px solid var(--line);
+      margin-top: 8px;
       position: relative;
-      aspect-ratio: 2 / 1;
-      border-radius: var(--radius);
-      background: radial-gradient(ellipse at center, #141c2e 0%, var(--bg-deep) 70%);
-      border: 1px solid var(--border-soft);
-      overflow: hidden;
     }
 
-    .orbital-map__sun {
+    .hate-bar__fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--trace-dim), var(--phosphor-red));
+      width: 70%;
+    }
+
+    .hate-bar__war {
       position: absolute;
-      left: 8%;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: radial-gradient(circle, #e8c878 0%, #c4923a 100%);
+      top: -2px;
+      bottom: -2px;
+      width: 2px;
+      background: var(--phosphor-amber);
+      left: 75%;
     }
 
-    .orbital-map__orbit {
-      position: absolute;
-      border: 1px dashed rgba(78, 197, 200, 0.15);
-      border-radius: 50%;
-      top: 50%;
-      left: 8%;
-      transform: translate(-50%, -50%);
-    }
-
-    .orbital-map__body {
-      position: absolute;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--text-muted);
-      transform: translate(-50%, -50%);
-      cursor: pointer;
-      transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
-    }
-
-    .orbital-map__body:hover {
-      transform: translate(-50%, -50%) scale(1.4);
-      box-shadow: 0 0 12px var(--cyan);
-    }
-
-    .orbital-map__body--ours { background: var(--cyan); }
-    .orbital-map__body--hostile { background: var(--danger); }
-    .orbital-map__body--contested { background: var(--warning); }
-
-    .orbital-map__label {
-      position: absolute;
+    .poc-note {
+      margin-top: auto;
+      padding: 12px 14px;
       font-size: 9px;
       color: var(--text-muted);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      transform: translateX(-50%);
-      white-space: nowrap;
+      line-height: 1.4;
+      border-top: 1px solid var(--line);
     }
 
-    /* Empty state */
-    .empty {
-      padding: 40px 20px;
+    .poc-note code {
+      font-family: var(--data);
+      color: var(--trace-dim);
+    }
+
+    .empty-state {
+      padding: 48px 24px;
       text-align: center;
       color: var(--text-muted);
-      font-size: 13px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
     }
 
-    /* Responsive */
-    @media (max-width: 1200px) {
-      .app {
-        grid-template-columns: var(--sidebar-w) 1fr;
-      }
-      .context { display: none; }
-      .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+    @media (max-width: 1100px) {
+      .shell { grid-template-columns: 200px 1fr; }
+      .rail { display: none; }
+    }
+
+    @media (max-width: 720px) {
+      .shell { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto auto; }
+      .contacts { grid-row: 2; max-height: 120px; }
+      .contacts__list { display: flex; overflow-x: auto; }
+      .contact { min-width: 140px; }
+      .waterfall { grid-row: 3; }
+      .sequencer { grid-row: 4; }
+      .masthead { flex-wrap: wrap; }
+      .masthead__readouts { order: 3; width: 100%; }
       .grid-2 { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 768px) {
-      .app {
-        grid-template-columns: 1fr;
-        grid-template-rows: var(--header-h) auto 1fr;
-      }
-      .sidebar {
-        grid-row: 2;
-        flex-direction: row;
-        overflow-x: auto;
-        padding: 8px;
-        border-right: none;
-        border-bottom: 1px solid var(--border-soft);
-      }
-      .nav-section-label, .sidebar-footer { display: none; }
-      .nav-item { white-space: nowrap; padding: 8px 12px; }
-      .nav-item span:not(.nav-item__badge) { display: none; }
-      .main { grid-row: 3; padding: 16px; }
-      .header-meta { display: none; }
-      .kpi-strip { grid-template-columns: 1fr 1fr; }
-      .grid-3 { grid-template-columns: 1fr; }
-      .councilor-grid { grid-template-columns: 1fr; }
+      .step-row { grid-template-columns: 80px repeat(6, 1fr); }
     }
   </style>
 </head>
 <body>
-  <div class="app">
-    <header class="header">
-      <div class="brand">
-        <div class="brand-mark" aria-hidden="true">⬢</div>
-        <div class="brand-text">
-          <h1>The Initiative</h1>
-          <p>Campaign intelligence</p>
+  <!--
+    THESIS: Campaign intelligence as a sonar waterfall — time-series traces and contact classification replace card grids; the operator reads threats the way a sonar tech reads contacts.
+    OWN-WORLD: Absolute void ground, phosphor green traces, seven-segment readouts, hazard-chevron alert bands, classification squares (hostile/contested/friendly), horizontal waterfall strips, councilor step-sequencer row.
+    STORY: The Initiative operator scans hate trend, directive priority bands, and threat contacts in one continuous sweep, selects a contact for classification detail, and reads rule evaluation before committing the council cycle.
+    FIRST VIEWPORT: Masthead seven-segment readouts (date, hate, DEFCON, MC) span the top; left contact list shows solar-system bodies by classification; center shows three waterfall strips plus ranked directive bands; right rail shows selected directive detail and hate bar with war threshold.
+    FORM: Submarine sonar waterfall briefing (candidate 5, seed e6d4f838), raised with seven-segment monumental numerals and hazard frames from anime crisis command center, horizon severity bands from cyclorama lighting.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
+  -->
+
+  <div class="shell">
+    <header class="masthead">
+      <div class="hazard-band" aria-hidden="true"></div>
+      <div class="masthead__row">
+      <div class="masthead__brand">
+        <div class="masthead__glyph" aria-hidden="true">⬢</div>
+        <div class="masthead__title">
+          Initiative
+          <span>Sonar briefing / POC</span>
         </div>
       </div>
 
-      <div class="header-meta">
-        <div class="meta-chip"><span>Date</span> <strong id="metaDate">4 Apr 2035</strong></div>
-        <div class="meta-chip"><span>Save</span> <strong id="metaSave">Again.gz</strong></div>
-        <div class="meta-chip meta-chip--alert"><span>Alert</span> <strong>DEFCON 2</strong></div>
-        <button class="hate-gauge" type="button" aria-label="Alien hate: 168, elevated">
-          <svg class="hate-gauge__arc" viewBox="0 0 36 36" aria-hidden="true">
-            <circle class="track" cx="18" cy="18" r="14"></circle>
-            <circle class="fill" cx="18" cy="18" r="14" id="hateArc"
-              stroke-dasharray="87.96" stroke-dashoffset="26.4"></circle>
-          </svg>
-          <div class="hate-gauge__text">
-            <span class="hate-gauge__label">Alien hate</span>
-            <span class="hate-gauge__value" id="hateValue">168</span>
-          </div>
-        </button>
+      <div class="masthead__readouts">
+        <div class="readout">
+          <div class="readout__label">Campaign date</div>
+          <div class="readout__value seg seg--cyan" id="readoutDate">04.04.35</div>
+        </div>
+        <div class="readout">
+          <div class="readout__label">Alien hate</div>
+          <div class="readout__value seg seg--red" id="readoutHate">168</div>
+        </div>
+        <div class="readout readout--alert">
+          <div class="readout__label">Defcon</div>
+          <div class="readout__value seg seg--amber">02</div>
+        </div>
+        <div class="readout">
+          <div class="readout__label">Mission ctrl</div>
+          <div class="readout__value seg">847</div>
+        </div>
+        <div class="readout">
+          <div class="readout__label">Research</div>
+          <div class="readout__value seg">+142</div>
+        </div>
       </div>
 
-      <div class="header-controls">
-        <div class="mode-toggle" role="group" aria-label="Intel mode">
+      <div class="masthead__controls">
+        <div class="mode-strip" role="group" aria-label="Intel mode">
           <button type="button" data-mode="player" aria-pressed="true">Player</button>
           <button type="button" data-mode="enhanced" aria-pressed="false">Enhanced</button>
           <button type="button" data-mode="omniscient" aria-pressed="false">Omniscient</button>
         </div>
-        <button class="icon-btn" type="button" aria-label="Refresh save" title="Refresh save">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-        </button>
+        <button class="ctrl-btn" type="button">Refresh</button>
+      </div>
       </div>
     </header>
 
-    <nav class="sidebar" aria-label="Dashboard views">
-      <div class="nav-section-label">Views</div>
-      <button class="nav-item" data-view="command" aria-current="page">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-        <span>Command</span>
-      </button>
-      <button class="nav-item" data-view="expansion">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>
-        <span>Expansion</span>
-      </button>
-      <button class="nav-item" data-view="fleet">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 19l4-14h8l4 14"/><path d="M6 19h12"/></svg>
-        <span>Fleet</span>
-      </button>
-      <button class="nav-item" data-view="battle">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 2l3 7h7l-5.5 4.5 2 7L12 17l-6.5 3.5 2-7L2 9h7z"/></svg>
-        <span>Battle</span>
-      </button>
-      <button class="nav-item" data-view="threat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 9v4"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/><path d="M10.3 3.6L2.6 17.5A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.5L13.7 3.6a2 2 0 0 0-3.4 0z"/></svg>
-        <span>Threat</span>
-        <span class="nav-item__badge">3</span>
-      </button>
-      <button class="nav-item" data-view="drives">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-        <span>Drives</span>
-      </button>
-      <button class="nav-item" data-view="records">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-        <span>Records</span>
-      </button>
-      <button class="nav-item" data-view="designer">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-        <span>Designer</span>
-      </button>
-      <div class="sidebar-footer">
-        <div class="poc-banner">Design POC v3 — mocked data only. Open <code>/v2/</code> for the live dashboard.</div>
-      </div>
-    </nav>
-
-    <main class="main" id="mainContent">
-      <!-- COMMAND -->
-      <section class="view is-active" id="view-command" aria-label="Command view">
-        <header class="view-header">
-          <h2>Executive briefing</h2>
-          <p>Priority directives for the next council cycle, ranked by composite strategic value.</p>
-        </header>
-
-        <div class="kpi-strip">
-          <div class="kpi">
-            <div class="kpi__label">Strategic score</div>
-            <div class="kpi__value kpi__value--accent">66</div>
-            <div class="kpi__sub">Rank #2 among human factions</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi__label">Mission control</div>
-            <div class="kpi__value">847</div>
-            <div class="kpi__delta kpi__delta--up">↑ 23 since save</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi__label">Research / turn</div>
-            <div class="kpi__value kpi__value--success">+142</div>
-            <div class="kpi__sub">USA advise post active</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi__label">Fleet strength</div>
-            <div class="kpi__value">38</div>
-            <div class="kpi__sub">12 combat-ready</div>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="panel">
-            <div class="panel__head">
-              <span class="panel__title">Directive queue</span>
-              <button class="panel__action" type="button">View all 24</button>
-            </div>
-            <div class="panel__body">
-              <div class="directive-list" id="directiveList"></div>
-            </div>
-          </div>
-
-          <div style="display:flex;flex-direction:column;gap:16px;">
-            <div class="panel">
-              <div class="panel__head">
-                <span class="panel__title">Since last save</span>
-              </div>
-              <div class="panel__body">
-                <div class="timeline" id="timeline"></div>
-              </div>
-            </div>
-            <div class="panel">
-              <div class="panel__head">
-                <span class="panel__title">Councilor roster</span>
-              </div>
-              <div class="panel__body">
-                <div class="councilor-grid" id="councilorGrid"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- EXPANSION -->
-      <section class="view" id="view-expansion" aria-label="Expansion view">
-        <header class="view-header">
-          <h2>Solar expansion</h2>
-          <p>Mining capacity, hab sites, and construction pipeline across the inner system.</p>
-        </header>
-        <div class="grid-2">
-          <div class="panel">
-            <div class="panel__head"><span class="panel__title">Inner system map</span></div>
-            <div class="panel__body">
-              <div class="orbital-map" id="orbitalMap"></div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel__head"><span class="panel__title">Mining yield vs capacity</span></div>
-            <div class="panel__body" id="miningBars"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- FLEET -->
-      <section class="view" id="view-fleet" aria-label="Fleet view">
-        <header class="view-header">
-          <h2>Fleet operations</h2>
-          <p>Combat readiness, shipyard queues, and procurement recommendations.</p>
-        </header>
-        <div class="grid-3" id="fleetCards"></div>
-      </section>
-
-      <!-- BATTLE -->
-      <section class="view" id="view-battle" aria-label="Battle view">
-        <header class="view-header">
-          <h2>Theater defence</h2>
-          <p>Engagement odds and hold-ground analysis for active combat theaters.</p>
-        </header>
-        <div class="panel">
-          <div class="panel__body" style="padding:0;">
-            <table class="data-table" id="battleTable">
-              <thead>
-                <tr>
-                  <th>Theater</th>
-                  <th>Our forces</th>
-                  <th>Hostile</th>
-                  <th>Hold odds</th>
-                  <th>Verdict</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- THREAT -->
-      <section class="view" id="view-threat" aria-label="Threat view">
-        <header class="view-header">
-          <h2>Alien threat assessment</h2>
-          <p>Hostile movements, councilor activity, and escalation indicators.</p>
-        </header>
-        <div class="panel">
-          <div class="panel__body" style="padding:0;">
-            <table class="data-table" id="threatTable">
-              <thead>
-                <tr>
-                  <th>Threat</th>
-                  <th>Location</th>
-                  <th>Severity</th>
-                  <th>ETA</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- DRIVES -->
-      <section class="view" id="view-drives" aria-label="Drives view">
-        <header class="view-header">
-          <h2>Drive explorer</h2>
-          <p>Propulsion catalogue rated against your flagship design.</p>
-        </header>
-        <div class="panel">
-          <div class="panel__body" style="padding:0;">
-            <table class="data-table" id="drivesTable">
-              <thead>
-                <tr>
-                  <th>Drive</th>
-                  <th>Δv (km/s)</th>
-                  <th>Cruise (m/s²)</th>
-                  <th>Combat (m/s²)</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- RECORDS -->
-      <section class="view" id="view-records" aria-label="Records view">
-        <header class="view-header">
-          <h2>Campaign records</h2>
-          <p>Research milestones, story events, and capability unlocks.</p>
-        </header>
-        <div class="grid-2">
-          <div class="panel">
-            <div class="panel__head"><span class="panel__title">Recent milestones</span></div>
-            <div class="panel__body"><div class="timeline" id="milestones"></div></div>
-          </div>
-          <div class="panel">
-            <div class="panel__head"><span class="panel__title">Capabilities</span></div>
-            <div class="panel__body">
-              <div class="kpi-strip" style="margin-bottom:0;grid-template-columns:1fr 1fr;">
-                <div class="kpi"><div class="kpi__label">Projects done</div><div class="kpi__value">167</div></div>
-                <div class="kpi"><div class="kpi__label">Techs done</div><div class="kpi__value">107</div></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- DESIGNER -->
-      <section class="view" id="view-designer" aria-label="Designer view">
-        <header class="view-header">
-          <h2>Ship designer</h2>
-          <p>Design validation and procurement planning for new hull configurations.</p>
-        </header>
-        <div class="empty">Ship designer integration — connect to live save data in production build.</div>
-      </section>
-    </main>
-
-    <aside class="context" id="contextPanel" aria-label="Detail panel">
-      <div class="context__section">
-        <div class="context__label">Selected directive</div>
-        <h3 class="context__title" id="ctxTitle">Keep advising USA</h3>
-        <p class="context__desc" id="ctxDesc">Maintain the +142 research/turn bonus. Abandoning this post costs more than any alternative mission scores.</p>
-        <dl id="ctxDetails"></dl>
-      </div>
-      <div class="context__section">
-        <div class="context__label">Rule evaluation</div>
-        <ul class="rule-list" id="ctxRules"></ul>
-      </div>
+    <aside class="contacts" aria-label="Contact classification list">
+      <div class="contacts__head">Contacts / bodies</div>
+      <div class="contacts__list" id="contactList"></div>
     </aside>
+
+    <section class="waterfall" aria-label="Main waterfall display">
+      <div class="waterfall__nav" role="tablist" id="viewTabs"></div>
+      <div class="waterfall__body" id="viewBody"></div>
+    </section>
+
+    <aside class="rail" aria-label="Contact detail">
+      <div class="rail__section">
+        <div class="rail__label">Selected directive</div>
+        <h2 class="rail__title" id="railTitle">Keep advising USA</h2>
+        <p class="rail__desc" id="railDesc">Maintain the +142 research/turn bonus. Abandoning this post costs more than any alternative mission scores.</p>
+        <dl id="railKv"></dl>
+      </div>
+      <div class="rail__section">
+        <div class="rail__label">Hate economics</div>
+        <div class="kv"><dt>Assessed</dt><dd class="seg seg--red" id="railHate">168</dd></div>
+        <div class="kv"><dt>War threshold</dt><dd>180</dd></div>
+        <div class="kv"><dt>Headroom</dt><dd id="railHeadroom">12</dd></div>
+        <div class="hate-bar" aria-hidden="true">
+          <div class="hate-bar__fill" id="hateBarFill"></div>
+          <div class="hate-bar__war" title="Total war threshold"></div>
+        </div>
+      </div>
+      <div class="rail__section">
+        <div class="rail__label">Rule evaluation</div>
+        <div id="railRules"></div>
+      </div>
+      <p class="poc-note">Synthetic mocked data. Live dashboard at <code>/v2/</code>. Direction: sonar waterfall (impeccable seed e6d4f838).</p>
+    </aside>
+
+    <div class="sequencer" aria-label="Councilor cycle sequencer">
+      <div class="sequencer__head">
+        <span class="sequencer__label">Council cycle / step row</span>
+        <span class="sequencer__tempo">TEMPO 1.0 / 6 councilors</span>
+      </div>
+      <div id="sequencerRows"></div>
+    </div>
   </div>
 
   <script>
     const MOCK = {
+      contacts: [
+        { id: 'earth', name: 'Earth', bearing: 'HOME', class: 'friendly' },
+        { id: 'luna', name: 'Luna', bearing: 'L1', class: 'contested' },
+        { id: 'mars', name: 'Mars', bearing: 'HAB-3', class: 'friendly' },
+        { id: 'ceres', name: 'Ceres', bearing: 'MINE', class: 'friendly' },
+        { id: 'venus', name: 'Venus', bearing: 'XENO', class: 'hostile' },
+        { id: 'vesta', name: 'Vesta', bearing: 'PATROL', class: 'friendly' },
+        { id: 'jupiter', name: 'Jupiter', bearing: 'DEEP', class: 'hostile' },
+        { id: 'moscow', name: 'Moscow', bearing: 'SIG', class: 'unknown' }
+      ],
+      views: [
+        { id: 'command', label: 'Command' },
+        { id: 'expansion', label: 'Expansion' },
+        { id: 'fleet', label: 'Fleet' },
+        { id: 'battle', label: 'Battle' },
+        { id: 'threat', label: 'Threat' },
+        { id: 'drives', label: 'Drives' },
+        { id: 'records', label: 'Records' },
+        { id: 'designer', label: 'Designer' }
+      ],
       directives: [
         {
-          id: 'keep-usa',
-          rank: 1,
-          title: 'Keep advising USA',
-          meta: 'Councilor Nakamura · Advise Nation',
-          score: 94,
-          primary: true,
-          tags: ['research boost', 'stable'],
+          id: 'keep-usa', rank: '01', title: 'Keep advising USA', sub: 'Nakamura · Advise Nation',
+          score: 94, primary: true,
           desc: 'Maintain the +142 research/turn bonus. Abandoning this post costs more than any alternative mission scores.',
-          details: { councilor: 'Yuki Nakamura', mission: 'Advise Nation (USA)', value: '+142 research/turn', odds: '98%', cost: '0 ops' },
+          details: { councilor: 'Yuki Nakamura', mission: 'Advise USA', yield: '+142 R/T', odds: '98%', cost: '0 ops' },
           rules: [
-            { text: 'Mission already active — no reassignment cost', status: 'pass' },
+            { text: 'Mission active — no reassignment cost', status: 'pass' },
             { text: 'Research yield exceeds all alternatives', status: 'pass' },
             { text: 'Total war veto — hate below threshold', status: 'pass' },
-            { text: 'Councilor has no higher-value target', status: 'pass' }
+            { text: 'No higher-value target available', status: 'pass' }
           ]
         },
         {
-          id: 'investigate-moscow',
-          rank: 2,
-          title: 'Investigate alien activity near Moscow',
-          meta: 'Councilor Okonkwo · Investigate',
+          id: 'investigate', rank: '02', title: 'Investigate Moscow signatures', sub: 'Okonkwo · Investigate',
           score: 72,
-          tags: ['intel gain'],
           desc: 'Region shows elevated alien signatures. Investigation may reveal facility or councilor presence.',
-          details: { councilor: 'Amara Okonkwo', mission: 'Investigate (Moscow)', value: 'Intel on alien ops', odds: '76%', cost: '1 ops' },
+          details: { councilor: 'Amara Okonkwo', mission: 'Investigate Moscow', yield: 'Intel gain', odds: '76%', cost: '1 ops' },
           rules: [
-            { text: 'Region has unconfirmed alien signatures', status: 'pass' },
-            { text: 'Councilor investigation skill ≥ 12', status: 'pass' },
+            { text: 'Unconfirmed alien signatures present', status: 'pass' },
+            { text: 'Investigation skill ≥ 12', status: 'pass' },
             { text: 'Opportunity cost vs USA advise', status: 'warn' }
           ]
         },
         {
-          id: 'purge-beijing',
-          rank: 3,
-          title: 'Purge enthralled agent in Beijing',
-          meta: 'Councilor Vasquez · Purge',
-          score: 58,
-          tags: ['veto: low odds'],
-          desc: 'Confirmed enthralled operative. Success removes a control point penalty but odds are marginal.',
-          details: { councilor: 'Rosa Vasquez', mission: 'Purge (Beijing)', value: '+1 CP if success', odds: '41%', cost: '2 ops' },
+          id: 'purge', rank: '03', title: 'Purge enthralled agent — Beijing', sub: 'Vasquez · Purge',
+          score: 41,
+          desc: 'Confirmed enthralled operative. Success removes CP penalty but odds are below risk floor.',
+          details: { councilor: 'Rosa Vasquez', mission: 'Purge Beijing', yield: '+1 CP', odds: '41%', cost: '2 ops' },
           rules: [
             { text: 'Enthralled agent confirmed', status: 'pass' },
             { text: 'Success odds below risk floor (50%)', status: 'fail' },
@@ -1308,301 +875,338 @@
           ]
         },
         {
-          id: 'build-ceres-mine',
-          rank: 4,
-          title: 'Prioritize Ceres water mine expansion',
-          meta: 'Engine recommendation · Mining',
+          id: 'ceres-mine', rank: '04', title: 'Expand Ceres water mine', sub: 'Engine · Mining',
           score: 51,
-          tags: ['expansion'],
-          desc: 'Ceres water output at 78% of capacity. One additional mine module closes the gap before Mars transit window.',
-          details: { target: 'Ceres', module: 'Water Mine', yield: '+12 water/turn', cost: '180 MC', eta: '3 turns' },
+          desc: 'Ceres water at 78% capacity. One module closes the gap before Mars transit window.',
+          details: { target: 'Ceres', module: 'Water Mine', yield: '+12 H2O/T', cost: '180 MC', eta: '3T' },
           rules: [
             { text: 'Capacity headroom available', status: 'pass' },
-            { text: 'MC affordability check', status: 'pass' },
+            { text: 'MC affordability', status: 'pass' },
             { text: 'Lower priority than councilor actions', status: 'warn' }
           ]
         }
       ],
-      timeline: [
-        { when: 'T+0', text: '<strong>USA research</strong> increased to +142/turn' },
-        { when: 'T+0', text: '<strong>Alien fleet</strong> detected departing Luna orbit' },
-        { when: '−1d', text: '<strong>Ceres mine</strong> water output +4/turn' },
-        { when: '−2d', text: '<strong>DEFCON</strong> raised to 2 after Earth bombardment' }
-      ],
+      strips: {
+        hate: [120, 125, 130, 135, 142, 148, 155, 160, 163, 168, 168, 168],
+        research: [98, 102, 108, 115, 120, 128, 132, 136, 140, 142, 142, 142],
+        threat: [2, 2, 3, 2, 4, 3, 5, 4, 6, 5, 7, 6]
+      },
       councilors: [
-        { initials: 'YN', name: 'Yuki Nakamura', mission: 'Advise USA' },
-        { initials: 'AO', name: 'Amara Okonkwo', mission: 'Investigate Moscow' },
-        { initials: 'RV', name: 'Rosa Vasquez', mission: 'Idle — Beijing' },
-        { initials: 'JK', name: 'James Kowalski', mission: 'Control USA' },
-        { initials: 'ML', name: 'Mei Lin', mission: 'Stabilize Japan' },
-        { initials: 'TH', name: 'Thomas Hart', mission: 'Defend Luna' }
-      ],
-      bodies: [
-        { name: 'Mercury', x: 18, y: 42, type: 'neutral' },
-        { name: 'Venus', x: 28, y: 58, type: 'hostile' },
-        { name: 'Earth', x: 38, y: 50, type: 'ours' },
-        { name: 'Luna', x: 42, y: 46, type: 'contested' },
-        { name: 'Mars', x: 55, y: 52, type: 'ours' },
-        { name: 'Ceres', x: 68, y: 48, type: 'ours' },
-        { name: 'Vesta', x: 75, y: 55, type: 'neutral' },
-        { name: 'Jupiter', x: 92, y: 50, type: 'hostile' }
+        { name: 'Nakamura', steps: [1,1,1,1,1,0] },
+        { name: 'Okonkwo', steps: [1,1,0,0,0,0] },
+        { name: 'Vasquez', steps: [0,0,0,0,0,0] },
+        { name: 'Kowalski', steps: [1,1,1,1,0,0] },
+        { name: 'Lin', steps: [1,1,1,0,0,0] },
+        { name: 'Hart', steps: [1,1,1,1,1,1] }
       ],
       mining: [
-        { body: 'Ceres', pct: 78 },
-        { body: 'Vesta', pct: 62 },
-        { body: 'Mars', pct: 91 },
-        { body: 'Luna', pct: 45 },
-        { body: 'Earth L4', pct: 33 }
+        { body: 'Ceres', pct: 78 }, { body: 'Mars', pct: 91 },
+        { body: 'Vesta', pct: 62 }, { body: 'Luna', pct: 45 }
       ],
       fleets: [
-        { name: '1st Orbital Guard', location: 'Earth-Luna L1', ships: 8, ready: 6, building: 2 },
-        { name: 'Mars Defence Squadron', location: 'Mars orbit', ships: 12, ready: 9, building: 0 },
-        { name: 'Ceres Patrol', location: 'Ceres station', ships: 6, ready: 4, building: 1 },
-        { name: 'Reserve Flotilla', location: 'Luna shipyard', ships: 12, ready: 3, building: 4 }
+        { name: '1st Orbital Guard', loc: 'Earth-Luna L1', ships: 8, ready: 6 },
+        { name: 'Mars Defence', loc: 'Mars orbit', ships: 12, ready: 9 },
+        { name: 'Ceres Patrol', loc: 'Ceres station', ships: 6, ready: 4 }
       ],
       battles: [
-        { theater: 'Luna orbit', ours: '6 frigates, 2 destroyers', hostile: '3 alien corvettes', odds: '72%', verdict: 'Hold' },
-        { theater: 'Mars surface', ours: '2 armies, orbital support', hostile: '1 alien army', odds: '85%', verdict: 'Hold' },
-        { theater: 'Ceres approach', ours: '4 patrol craft', hostile: 'Unknown', odds: '—', verdict: 'Insufficient intel' }
+        { theater: 'Luna orbit', ours: 8, hostile: 3, odds: '72%', verdict: 'HOLD' },
+        { theater: 'Mars surface', ours: 2, hostile: 1, odds: '85%', verdict: 'HOLD' },
+        { theater: 'Ceres approach', ours: 4, hostile: null, odds: '—', verdict: 'NO DATA' }
       ],
       threats: [
-        { threat: 'Alien bombardment fleet', location: 'Earth approach', severity: 'high', eta: '4 turns', status: 'Tracking' },
-        { threat: 'Xenoforming (Siberia)', location: 'Russia', severity: 'med', eta: 'Ongoing', status: 'Active' },
-        { threat: 'Alien councilor (masked)', location: 'Unknown', severity: 'med', eta: '—', status: 'Investigating' }
+        { name: 'Bombardment fleet', loc: 'Earth approach', sev: 'hostile', eta: '4T' },
+        { name: 'Xenoforming Siberia', loc: 'Russia', sev: 'contested', eta: 'ONGOING' },
+        { name: 'Alien councilor', loc: 'UNKNOWN', sev: 'unknown', eta: '—' }
       ],
       drives: [
-        { name: 'Nuclear Thermal Rocket', dv: 8.2, cruise: 0.042, combat: 0.68, status: 'Fitted' },
-        { name: 'VASIMR ×1', dv: 12.4, cruise: 0.00017, combat: 0.027, status: 'Research req.' },
-        { name: 'DS4G Ion Drive', dv: 45.1, cruise: 0.0031, combat: 0.12, status: 'Fittable' },
-        { name: 'Fusion Torch Mk2', dv: 89.3, cruise: 1.24, combat: 12.4, status: 'Locked' }
+        { name: 'NTR Mk1', dv: 8.2, cruise: 0.042, combat: 0.68, status: 'FITTED' },
+        { name: 'VASIMR x1', dv: 12.4, cruise: 0.00017, combat: 0.027, status: 'RESEARCH' },
+        { name: 'DS4G Ion', dv: 45.1, cruise: 0.0031, combat: 0.12, status: 'FITTABLE' }
       ],
       milestones: [
-        { when: '2035', text: '<strong>Alien invasion plan</strong> discovered' },
-        { when: '2034', text: '<strong>Global listening network</strong> operational' },
-        { when: '2033', text: '<strong>First alien ship</strong> captured and studied' },
-        { when: '2032', text: '<strong>Public alien awareness</strong> event triggered' }
+        { when: '2035', text: 'Alien invasion plan discovered' },
+        { when: '2034', text: 'Global listening network operational' },
+        { when: '2033', text: 'First alien ship captured' }
       ]
     };
 
-    let state = { view: 'command', mode: 'player', selectedDirective: MOCK.directives[0] };
+    let state = { view: 'command', mode: 'player', selected: MOCK.directives[0], chaseStep: 3 };
 
-    function scoreClass(score) {
-      if (score >= 70) return '';
-      if (score >= 50) return 'directive__score--warn';
-      return 'directive__score--bad';
+    function scoreClass(s) {
+      if (s >= 70) return 'band__score--high';
+      if (s >= 50) return 'band__score--mid';
+      return 'band__score--low';
     }
 
-    function renderDirectives() {
-      const el = document.getElementById('directiveList');
-      el.innerHTML = MOCK.directives.map(d => `
-        <article class="directive ${d.primary ? 'is-primary' : ''} ${d.id === state.selectedDirective.id ? 'is-selected' : ''}"
-          data-id="${d.id}" tabindex="0" role="button" aria-pressed="${d.id === state.selectedDirective.id}">
-          <div class="directive__top">
-            <span class="directive__rank">#${d.rank} PRIORITY</span>
-            <span class="directive__score ${scoreClass(d.score)}">${d.score}</span>
-          </div>
-          <h4 class="directive__title">${d.title}</h4>
-          <p class="directive__meta">${d.meta}</p>
-          <div class="directive__tags">
-            ${d.tags.map(t => `<span class="tag ${t.includes('veto') ? 'tag--veto' : t.includes('boost') ? 'tag--boost' : ''}">${t}</span>`).join('')}
-          </div>
-        </article>
-      `).join('');
+    function drawWaterfall(canvas, data, color) {
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.fillStyle = '#000306';
+      ctx.fillRect(0, 0, w, h);
 
-      el.querySelectorAll('.directive').forEach(card => {
-        card.addEventListener('click', () => selectDirective(card.dataset.id));
-        card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectDirective(card.dataset.id); }});
+      const max = Math.max(...data);
+      const min = Math.min(...data);
+      const range = max - min || 1;
+      const leftPad = 44;
+      const plotW = w - leftPad - 8;
+      const step = plotW / (data.length - 1);
+
+      // Grid lines
+      ctx.strokeStyle = '#123024';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        const y = 8 + (h - 16) * (i / 3);
+        ctx.beginPath();
+        ctx.moveTo(leftPad, y);
+        ctx.lineTo(w - 4, y);
+        ctx.stroke();
+      }
+
+      // Trace
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      data.forEach((v, i) => {
+        const x = leftPad + i * step;
+        const y = h - 8 - ((v - min) / range) * (h - 16);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Echo dots
+      data.forEach((v, i) => {
+        const x = leftPad + i * step;
+        const y = h - 8 - ((v - min) / range) * (h - 16);
+        ctx.fillStyle = color;
+        ctx.fillRect(x - 1, y - 1, 2, 2);
+      });
+    }
+
+    function renderStrips() {
+      document.querySelectorAll('.strip canvas').forEach(canvas => {
+        const key = canvas.dataset.strip;
+        const colors = { hate: '#ff3d52', research: '#2ef2a0', threat: '#ffb84a' };
+        drawWaterfall(canvas, MOCK.strips[key], colors[key]);
+      });
+    }
+
+    function renderContacts() {
+      document.getElementById('contactList').innerHTML = MOCK.contacts.map(c => `
+        <button class="contact" type="button" data-id="${c.id}" aria-current="${c.id === 'earth' ? 'true' : 'false'}">
+          <span class="contact__class contact__class--${c.class}"></span>
+          <span class="contact__name">${c.name}</span>
+          <span class="contact__bearing">${c.bearing}</span>
+        </button>
+      `).join('');
+    }
+
+    function renderTabs() {
+      document.getElementById('viewTabs').innerHTML = MOCK.views.map(v => `
+        <button class="waterfall__tab" role="tab" data-view="${v.id}" aria-selected="${v.id === state.view}">${v.label}</button>
+      `).join('');
+    }
+
+    function renderCommandView() {
+      return `
+        <div class="strip-stack">
+          <div class="strip">
+            <div class="strip__head"><span class="strip__label">Alien hate trend</span><span class="strip__meta">12 intervals · T+0 right</span></div>
+            <div class="strip__canvas-wrap">
+              <div class="strip__scale"><span>200</span><span>150</span><span>100</span></div>
+              <canvas data-strip="hate" aria-label="Alien hate waterfall"></canvas>
+            </div>
+          </div>
+          <div class="strip">
+            <div class="strip__head"><span class="strip__label">Research yield</span><span class="strip__meta">+142 R/T current</span></div>
+            <div class="strip__canvas-wrap">
+              <div class="strip__scale"><span>150</span><span>125</span><span>100</span></div>
+              <canvas data-strip="research" aria-label="Research yield waterfall"></canvas>
+            </div>
+          </div>
+          <div class="strip">
+            <div class="strip__head"><span class="strip__label">Active threat contacts</span><span class="strip__meta">count / interval</span></div>
+            <div class="strip__canvas-wrap">
+              <div class="strip__scale"><span>8</span><span>4</span><span>0</span></div>
+              <canvas data-strip="threat" aria-label="Threat contact waterfall"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="band-list" id="bandList">
+          ${MOCK.directives.map(d => `
+            <article class="band ${d.primary ? 'is-primary' : ''} ${d.id === state.selected.id ? 'is-selected' : ''}"
+              data-id="${d.id}" tabindex="0" role="button">
+              <div class="band__rank">${d.rank}</div>
+              <div>
+                <div class="band__title">${d.title}</div>
+                <div class="band__sub">${d.sub}</div>
+              </div>
+              <div class="band__score ${scoreClass(d.score)}">${d.score}</div>
+            </article>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderExpansionView() {
+      const rows = MOCK.mining.map(m => `
+        <div class="kv"><dt>${m.body}</dt><dd>${m.pct}%</dd></div>
+      `).join('');
+      return `<div class="grid-2">
+        <div class="data-panel"><div class="data-panel__head">Mining capacity</div><div class="data-panel__body">${rows}</div></div>
+        <div class="data-panel"><div class="data-panel__head">Body classification</div><div class="data-panel__body">
+          ${MOCK.contacts.filter(c => ['ceres','mars','vesta','luna'].includes(c.id)).map(c =>
+            `<div class="kv"><dt>${c.name}</dt><dd class="contact__class contact__class--${c.class}" style="width:8px;height:8px;display:inline-block"></dd></div>`
+          ).join('')}
+        </div></div>
+      </div>`;
+    }
+
+    function renderFleetView() {
+      return `<table class="data-table"><thead><tr><th>Fleet</th><th>Location</th><th>Ships</th><th>Ready</th></tr></thead><tbody>
+        ${MOCK.fleets.map(f => `<tr><td>${f.name}</td><td>${f.loc}</td><td>${f.ships}</td><td>${f.ready}</td></tr>`).join('')}
+      </tbody></table>`;
+    }
+
+    function renderBattleView() {
+      return `<table class="data-table"><thead><tr><th>Theater</th><th>Ours</th><th>Hostile</th><th>Odds</th><th>Verdict</th></tr></thead><tbody>
+        ${MOCK.battles.map(b => {
+          const hostile = state.mode === 'player' && b.hostile === null ? '<span class="redacted">███</span>' : (b.hostile ?? '—');
+          return `<tr><td>${b.theater}</td><td>${b.ours}</td><td>${hostile}</td><td>${b.odds}</td><td>${b.verdict}</td></tr>`;
+        }).join('')}
+      </tbody></table>`;
+    }
+
+    function renderThreatView() {
+      return `<table class="data-table"><thead><tr><th>Contact</th><th>Bearing</th><th>Class</th><th>ETA</th></tr></thead><tbody>
+        ${MOCK.threats.map(t => {
+          const loc = state.mode === 'player' && t.loc === 'UNKNOWN' ? '<span class="redacted">███████</span>' : t.loc;
+          return `<tr><td>${t.name}</td><td>${loc}</td><td><span class="contact__class contact__class--${t.sev}" style="display:inline-block;width:8px;height:8px;vertical-align:middle;margin-right:6px"></span>${t.sev}</td><td>${t.eta}</td></tr>`;
+        }).join('')}
+      </tbody></table>`;
+    }
+
+    function renderDrivesView() {
+      return `<table class="data-table"><thead><tr><th>Drive</th><th>Δv</th><th>Cruise</th><th>Combat</th><th>Status</th></tr></thead><tbody>
+        ${MOCK.drives.map(d => `<tr><td>${d.name}</td><td>${d.dv}</td><td>${d.cruise}</td><td>${d.combat}</td><td>${d.status}</td></tr>`).join('')}
+      </tbody></table>`;
+    }
+
+    function renderRecordsView() {
+      return MOCK.milestones.map(m => `<div class="kv"><dt>${m.when}</dt><dd style="text-align:left;font-family:var(--display)">${m.text}</dd></div>`).join('');
+    }
+
+    function renderDesignerView() {
+      return '<div class="empty-state">Ship designer — connect to live save in production build</div>';
+    }
+
+    const viewRenderers = {
+      command: renderCommandView,
+      expansion: renderExpansionView,
+      fleet: renderFleetView,
+      battle: renderBattleView,
+      threat: renderThreatView,
+      drives: renderDrivesView,
+      records: renderRecordsView,
+      designer: renderDesignerView
+    };
+
+    function renderView() {
+      document.getElementById('viewBody').innerHTML = `<div class="view is-active">${viewRenderers[state.view]()}</div>`;
+      if (state.view === 'command') {
+        requestAnimationFrame(renderStrips);
+        document.querySelectorAll('.band').forEach(b => {
+          b.addEventListener('click', () => selectDirective(b.dataset.id));
+          b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectDirective(b.dataset.id); }});
+        });
+      }
     }
 
     function selectDirective(id) {
-      state.selectedDirective = MOCK.directives.find(d => d.id === id);
-      renderDirectives();
-      renderContext();
+      state.selected = MOCK.directives.find(d => d.id === id);
+      renderView();
+      renderRail();
     }
 
-    function renderContext() {
-      const d = state.selectedDirective;
-      document.getElementById('ctxTitle').textContent = d.title;
-      document.getElementById('ctxDesc').textContent = d.desc;
-
-      const details = document.getElementById('ctxDetails');
-      details.innerHTML = Object.entries(d.details).map(([k, v]) => {
-        const redacted = state.mode === 'player' && k === 'odds' && d.id === 'purge-beijing';
-        return `<div class="detail-row"><dt>${k}</dt><dd class="${redacted ? 'redacted' : ''}">${redacted ? '██%' : v}</dd></div>`;
+    function renderRail() {
+      const d = state.selected;
+      document.getElementById('railTitle').textContent = d.title;
+      document.getElementById('railDesc').textContent = d.desc;
+      document.getElementById('railKv').innerHTML = Object.entries(d.details).map(([k, v]) => {
+        const redacted = state.mode === 'player' && k === 'odds' && d.id === 'purge';
+        return `<div class="kv"><dt>${k}</dt><dd class="${redacted ? 'redacted' : ''}">${redacted ? '██%' : v}</dd></div>`;
       }).join('');
-
-      document.getElementById('ctxRules').innerHTML = d.rules.map(r =>
-        `<li class="${r.status}">${r.text}</li>`
+      document.getElementById('railRules').innerHTML = d.rules.map(r =>
+        `<div class="rule rule--${r.status}">${r.text}</div>`
       ).join('');
     }
 
-    function renderTimeline() {
-      document.getElementById('timeline').innerHTML = MOCK.timeline.map(t => `
-        <div class="timeline__item">
-          <span class="timeline__when">${t.when}</span>
-          <p class="timeline__text">${t.text}</p>
-        </div>
-      `).join('');
-    }
-
-    function renderCouncilors() {
-      document.getElementById('councilorGrid').innerHTML = MOCK.councilors.map(c => `
-        <div class="councilor">
-          <div class="councilor__avatar">${c.initials}</div>
-          <div class="councilor__info">
-            <div class="councilor__name">${c.name}</div>
-            <div class="councilor__mission">${c.mission}</div>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    function renderOrbitalMap() {
-      const map = document.getElementById('orbitalMap');
-      map.innerHTML = '<div class="orbital-map__sun" aria-hidden="true"></div>';
-      MOCK.bodies.forEach(b => {
-        const dot = document.createElement('div');
-        dot.className = `orbital-map__body orbital-map__body--${b.type}`;
-        dot.style.left = b.x + '%';
-        dot.style.top = b.y + '%';
-        dot.title = b.name;
-        dot.setAttribute('aria-label', b.name);
-        map.appendChild(dot);
-        const label = document.createElement('span');
-        label.className = 'orbital-map__label';
-        label.style.left = b.x + '%';
-        label.style.top = (b.y + 8) + '%';
-        label.textContent = b.name;
-        map.appendChild(label);
-      });
-    }
-
-    function renderMining() {
-      document.getElementById('miningBars').innerHTML = MOCK.mining.map(m => `
-        <div class="mine-row">
-          <span class="mine-row__body">${m.body}</span>
-          <div class="mine-bar"><div class="mine-bar__fill" style="width:${m.pct}%"></div></div>
-          <span class="mine-row__pct">${m.pct}%</span>
-        </div>
-      `).join('');
-    }
-
-    function renderFleets() {
-      document.getElementById('fleetCards').innerHTML = MOCK.fleets.map(f => `
-        <div class="fleet-card">
-          <h4>${f.name}</h4>
-          <p>${f.location}</p>
-          <div class="fleet-stats">
-            <div class="fleet-stat"><strong>${f.ships}</strong>ships</div>
-            <div class="fleet-stat"><strong>${f.ready}</strong>ready</div>
-            <div class="fleet-stat"><strong>${f.building}</strong>building</div>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    function renderBattles() {
-      const tbody = document.querySelector('#battleTable tbody');
-      tbody.innerHTML = MOCK.battles.map(b => `
-        <tr>
-          <td>${b.theater}</td>
-          <td>${b.ours}</td>
-          <td class="${state.mode === 'player' && b.hostile === 'Unknown' ? 'redacted' : ''}">${state.mode === 'player' && b.hostile === 'Unknown' ? '███████' : b.hostile}</td>
-          <td class="mono">${b.odds}</td>
-          <td>${b.verdict}</td>
-        </tr>
-      `).join('');
-    }
-
-    function renderThreats() {
-      const tbody = document.querySelector('#threatTable tbody');
-      tbody.innerHTML = MOCK.threats.map(t => {
-        const sevClass = t.severity === 'high' ? 'high' : t.severity === 'med' ? 'med' : 'low';
-        const loc = state.mode === 'player' && t.threat.includes('masked') ? '███████' : t.location;
-        return `
-          <tr>
-            <td>${t.threat}</td>
-            <td class="${state.mode === 'player' && t.threat.includes('masked') ? 'redacted' : ''}">${loc}</td>
-            <td><span class="status-dot status-dot--${sevClass}"></span>${t.severity}</td>
-            <td class="mono">${t.eta}</td>
-            <td>${t.status}</td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    function renderDrives() {
-      const tbody = document.querySelector('#drivesTable tbody');
-      tbody.innerHTML = MOCK.drives.map(d => `
-        <tr>
-          <td>${d.name}</td>
-          <td class="mono">${d.dv}</td>
-          <td class="mono">${d.cruise}</td>
-          <td class="mono">${d.combat}</td>
-          <td>${d.status}</td>
-        </tr>
-      `).join('');
-    }
-
-    function renderMilestones() {
-      document.getElementById('milestones').innerHTML = MOCK.milestones.map(m => `
-        <div class="timeline__item">
-          <span class="timeline__when">${m.when}</span>
-          <p class="timeline__text">${m.text}</p>
+    function renderSequencer() {
+      document.getElementById('sequencerRows').innerHTML = MOCK.councilors.map((c, ri) => `
+        <div class="step-row" style="margin-bottom:4px">
+          <span class="step-row__name">${c.name}</span>
+          ${c.steps.map((on, i) => {
+            const cls = ['step'];
+            if (on) cls.push(i === state.chaseStep && ri === 0 ? 'step--chase' : (i === 2 ? 'step--accent' : 'step--active'));
+            return `<div class="${cls.join(' ')}" aria-label="Step ${i+1} ${on ? 'active' : 'inactive'}"></div>`;
+          }).join('')}
         </div>
       `).join('');
     }
 
     function switchView(view) {
       state.view = view;
-      document.querySelectorAll('.nav-item').forEach(btn => {
-        btn.setAttribute('aria-current', btn.dataset.view === view ? 'page' : null);
-      });
-      document.querySelectorAll('.view').forEach(v => {
-        const active = v.id === `view-${view}`;
-        v.classList.toggle('is-active', active);
-      });
+      renderTabs();
+      renderView();
     }
 
     function switchMode(mode) {
       state.mode = mode;
-      document.querySelectorAll('.mode-toggle button').forEach(btn => {
-        btn.setAttribute('aria-pressed', btn.dataset.mode === mode ? 'true' : 'false');
+      document.querySelectorAll('.mode-strip button').forEach(b => {
+        b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false');
       });
-      const hateEl = document.getElementById('hateValue');
-      const hateArc = document.getElementById('hateArc');
+      const hate = document.getElementById('readoutHate');
+      const railHate = document.getElementById('railHate');
       if (mode === 'player') {
-        hateEl.textContent = '168†';
-        hateEl.title = 'Assessed value — true hate redacted';
+        hate.textContent = '168†';
+        railHate.textContent = '168†';
       } else {
-        hateEl.textContent = '168';
-        hateEl.title = '';
+        hate.textContent = '168';
+        railHate.textContent = '168';
       }
-      renderContext();
-      renderBattles();
-      renderThreats();
+      renderView();
+      renderRail();
     }
 
-    document.querySelectorAll('.nav-item').forEach(btn => {
-      btn.addEventListener('click', () => switchView(btn.dataset.view));
+    document.getElementById('viewTabs').addEventListener('click', e => {
+      const tab = e.target.closest('[data-view]');
+      if (tab) switchView(tab.dataset.view);
     });
 
-    document.querySelectorAll('.mode-toggle button').forEach(btn => {
-      btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+    document.querySelectorAll('.mode-strip button').forEach(b => {
+      b.addEventListener('click', () => switchMode(b.dataset.mode));
     });
 
-    renderDirectives();
-    renderContext();
-    renderTimeline();
-    renderCouncilors();
-    renderOrbitalMap();
-    renderMining();
-    renderFleets();
-    renderBattles();
-    renderThreats();
-    renderDrives();
-    renderMilestones();
+    window.addEventListener('resize', () => { if (state.view === 'command') renderStrips(); });
+
+    renderContacts();
+    renderTabs();
+    renderView();
+    renderRail();
+    renderSequencer();
+
+    setInterval(() => {
+      state.chaseStep = (state.chaseStep + 1) % 6;
+      renderSequencer();
+    }, 1200);
   </script>
 </body>
 </html>
