@@ -707,9 +707,20 @@ function renderBenchBudget(cyclePlan) {
     } else {
       const rows = num(summary.rowCount);
       const unpriced = num(summary.unpricedRowCount);
+      const upperBoundCaveat = summary.jointlyAffordableIsUpperBound === true
+        ? (
+          <>
+            {' '}
+            <span className="directive-bench-budget-caveat">
+              (an UPPER BOUND — cheapest-first is the most that fit, not a measured total)
+            </span>
+          </>
+        )
+        : null;
       parts.push(
         <>
           <strong>{`${fits} of ${rows === null ? 'the' : rows} row(s) below fit`}</strong>
+          {upperBoundCaveat}
           {` what is left — these are ALTERNATIVES sharing one ${String(summary.pool || 'budget')} pool, `
             + `not independent options`
             + (unpriced ? `; ${unpriced} carry no measured charge and are counted neither way` : '')}

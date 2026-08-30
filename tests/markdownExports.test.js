@@ -1094,7 +1094,31 @@ for (const exportMode of EXPORT_MODES) {
     assert.match(section, /\*\*Cycle hate budget:\*\* 4\.74 of 7\.90 used, 3\.16 left \(measured hate 42\.86\)/);
     assert.match(section, /\*\*Bench affordability:\*\* 0 of the 8 row\(s\) above fit the 3\.16 hate/);
     assert.match(section, /ALTERNATIVES sharing one pool, not independent options/);
-    assert.match(section, /upper bound/i);
+    assert.match(section, /LARGEST number that fits.*upper bound/i);
+  });
+
+  test(`section 10 does not claim joint affordability is an upper bound when the flag is absent (${exportMode} mode)`, () => {
+    const section = sectionTen(renderWarRoomMarkdown(makeMarkdownSnapshot(exportMode), {
+      cyclePlan: makeCyclePlan({
+        budgets: {
+          alienHate: {
+            used: 4.74, cap: 7.9, capMeasured: true, unit: 'hate',
+            currentHate: 42.86253, currentHateBasis: 'measured', capIsUpperBound: false
+          }
+        },
+        benchBudget: {
+          rowCount: 8, pricedRowCount: 8, unpricedRowCount: 0,
+          pools: ['alienHate'], pool: 'alienHate',
+          jointlyAffordableCount: 3, jointlyAffordableIsUpperBound: null,
+          cap: 7.9, used: 4.74, remaining: 3.16, unit: 'hate', capMeasured: true,
+          reason: 'synthetic: count present, upper-bound qualifier absent'
+        }
+      })
+    }));
+
+    assert.match(section, /\*\*Bench affordability:\*\* 3 of the 8 row\(s\) above fit/);
+    assert.ok(!/LARGEST number that fits.*upper bound/i.test(section),
+      'null means not stated — the export must not invent a ceiling reassurance');
   });
 
   test(`section 10 says a floor-derived hate cap can only overstate the budget (${exportMode} mode)`, () => {

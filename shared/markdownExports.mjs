@@ -2908,10 +2908,12 @@ function benchBudgetLines(plan) {
     return lines;
   }
 
+  const upperBoundClause = summary.jointlyAffordableIsUpperBound === true
+    ? ', which is the LARGEST number that fits, and an upper bound because only the pool that refused them was priced'
+    : '';
   lines.push(`- **Bench affordability:** ${fits} of the ${localeOr(summary.rowCount)} row(s) above fit the `
     + `${fixedOr(summary.remaining, 2)} ${summary.unit || summary.pool} left in the ${summary.pool} budget `
-    + `(${fixedOr(summary.used, 2)} of ${fixedOr(summary.cap, 2)} already committed) — cheapest first, which `
-    + `is the LARGEST number that fits, and an upper bound because only the pool that refused them was priced`
+    + `(${fixedOr(summary.used, 2)} of ${fixedOr(summary.cap, 2)} already committed) — cheapest first${upperBoundClause}`
     + (num(summary.unpricedRowCount) ? `; ${summary.unpricedRowCount} row(s) carry no measured charge and are `
       + `counted neither as fitting nor as refused` : '')
     + `. The rows are ALTERNATIVES sharing one pool, not independent options.`);

@@ -422,6 +422,35 @@ test('the bench header states the budget and how many rows fit it', async () => 
   assert.ok(/ALTERNATIVES sharing one alienHate pool/.test(text), text);
 });
 
+test('a jointly-affordable count flagged upper bound is labelled a ceiling, not a measurement', async () => {
+  const rows = Array.from({ length: 8 }, (_, i) => budgetRefusedRow(i));
+  const text = benchText(await renderToString(planWithBench(rows, {
+    budgets: LIVE_BUDGET,
+    benchBudget: LIVE_BENCH_BUDGET
+  })));
+
+  assert.ok(/0 of 8 row\(s\) below fit/.test(text), text);
+  assert.ok(/UPPER BOUND.*not a measured total/i.test(text),
+    `the engine's upper-bound flag must reach the reader beside the count: ${text}`);
+});
+
+test('a jointly-affordable count without an upper-bound flag does not claim one', async () => {
+  const text = benchText(await renderToString(planWithBench([row(0)], {
+    budgets: LIVE_BUDGET,
+    benchBudget: {
+      ...LIVE_BENCH_BUDGET,
+      rowCount: 1,
+      jointlyAffordableCount: 1,
+      jointlyAffordableIsUpperBound: null,
+      reason: 'synthetic: count present, upper-bound qualifier absent'
+    }
+  })));
+
+  assert.ok(/1 of 1 row\(s\) below fit/.test(text), text);
+  assert.ok(!/not a measured total/i.test(text),
+    `null means not stated — the board must not invent a ceiling reassurance: ${text}`);
+});
+
 test('a floor-derived hate cap is labelled an upper bound on the board', async () => {
   // Player mode's live shape: the cap comes from the Mission Control hate floor
   // because the true hate is redacted, so it can only overstate the budget.

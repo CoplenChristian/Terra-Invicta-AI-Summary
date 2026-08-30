@@ -26,7 +26,7 @@ save.
 > **The tally and the live list immediately below are the authoritative status.**
 > Use `git log` on the named commit to see what a fix actually changed.
 
-**Tally as of 2026-08-27: 26 entries — 24 fixed, 2 live, 0 conditional.**
+**Tally as of 2026-08-30: 26 entries — 25 fixed, 1 live, 0 conditional.**
 
 **Fixed:** #1 and #9 shipped earlier. #3 was fixed in the `mc-budget` React
 migration (`2c1427f`) rather than ported, having first been **demoted** to
@@ -64,13 +64,14 @@ through a server or helper, invisible to any source-text scan. The guard that
 found them is now the enforcement: it runs the suite against a folder that is
 not there, so the next reader of any shape fails loudly and names itself.
 
-**Live right now: #17 and #21.**
+**Live right now: #21.**
 
-- **#17** — **all four fabricated fallbacks are FIXED**, measured against the
-  source on 2026-08-29, and so are the three latent `?? 0`. What is still live is
-  the *other* half of the entry: `jointlyAffordableIsUpperBound` is emitted by the
-  engine and rendered by **no** surface, so a figure the engine explicitly labels
-  an upper bound is still shown as a plain count. See the entry for the audit.
+- **#17** — **FIXED 2026-08-30.** All four fabricated fallbacks and the three
+  latent `?? 0` were fixed earlier; the upper-bound half followed the same day.
+  `jointlyAffordableIsUpperBound` now renders beside the joint-affordability
+  count on the directive board when `true`, and in war-room §10 via
+  `shared/markdownExports.mjs` gated on the same flag — never when `null`.
+  See the entry for the audit trail.
 - **#21** — the em-dash affordance hand-written in eleven panels. Not urgent:
   the rendered output is correct today, and the cost is that the rule holds by
   convention rather than by structure. **Three of the eleven are done** —
@@ -914,7 +915,7 @@ the same argument `shared/intel/registry.mjs` settled for route definitions.
 
 ---
 
-## 17. Four fabricated fallbacks in the directive board, carried across knowingly — **confirmed**
+## 17. Four fabricated fallbacks in the directive board, carried across knowingly — **FIXED**
 
 Found 2026-08-26 by the agent porting `directive-board` to React, which flagged
 them rather than silently fixing or silently carrying them. They were documented
@@ -931,16 +932,23 @@ reviewable change — which is the point of writing them down.
 :905   whyList.join(' · ') || 'Optimal expected value under cycle budget constraints.'
 ```
 
-> **AUDITED 2026-08-29 — all four are fixed, and this entry had gone stale.**
-> Measured against `src/v2/panels/DirectiveBoard.jsx` as it stands:
-> `'Free'` is now gated on `cost === 0`, so only a **measured** zero reads free;
-> `confidence` renders through a `present={typeof … === 'string' && …trim() !== ''}`
-> gate; `opportunityCost` is conditional at `:559` and presence-gated at `:1011`;
-> and the fabricated tactical-rationale string is gone from the file entirely. The
-> three `?? 0` on omitted counts are gone too. **What remains live is the upper-bound
-> qualifier below**, which no surface renders.
+> **AUDITED 2026-08-29 — all four fabricated fallbacks are fixed, and the three
+> latent `?? 0` are gone.** Measured against `src/v2/panels/DirectiveBoard.jsx`
+> as it stood then: `'Free'` gated on `cost === 0`; `confidence` presence-gated;
+> `opportunityCost` conditional; the fabricated tactical-rationale string removed;
+> risk-floor omitted counts no longer coerced with `?? 0`.
 >
-> A **latent sibling** turned up during the same audit, in a different panel:
+> **FIXED 2026-08-30 — the upper-bound half.** `benchBudget.jointlyAffordableIsUpperBound`
+> (`null` or `true`) is emitted by `server/engine/assignment.js` and had reached
+> **no** consumer. The directive board now prints `(an UPPER BOUND — cheapest-first
+> is the most that fit, not a measured total)` beside the joint-affordability count
+> when the flag is `true`; war-room §10 appends the matching clause in
+> `shared/markdownExports.mjs`, gated on the same field. `null` means not stated
+> on both surfaces — no false reassurance that the figure is exact.
+> `tests/directiveBoardBench.test.js` and `tests/markdownExports.test.js` each
+> carry a bidirectional test (present when `true`, absent when `null`).
+>
+> A **latent sibling** turned up during the 2026-08-29 audit, in a different panel:
 > `IntelligenceLibrary.jsx:546` reads `nation.executiveFactionName || 'None'`.
 > It is the same reassuring-default shape — an absent name would assert that a
 > nation has no executive faction — but it is **harmless on today's payloads**,
@@ -973,18 +981,22 @@ while its sibling was present, the "N further entries are omitted" line would
 **understate** rather than vanish — a truncation notice that under-reports its
 own truncation, which is worse than no notice.
 
-### An upper bound rendered as a plain count
+### An upper bound rendered as a plain count — **FIXED 2026-08-30**
 
 `server/engine/assignment.js:411` and `:471` emit
-`benchBudget.jointlyAffordableIsUpperBound` — `null` or `true` — and **no
-surface renders it**. Confirmed present on the live briefing at
+`benchBudget.jointlyAffordableIsUpperBound` — `null` or `true` — and until
+2026-08-30 **no surface rendered it**. Confirmed present on the live briefing at
 `.briefing.engineDirectives.cyclePlan.benchBudget.jointlyAffordableIsUpperBound`.
 
-So when the engine says "this joint affordability figure is an upper bound, not a
-measurement", the board shows the number and drops the qualifier. That is the
+So when the engine said "this joint affordability figure is an upper bound, not a
+measurement", the board showed the number and dropped the qualifier. That was the
 same shape as **#13** (a Monte Carlo band rendered as the whole uncertainty) and
 **#15** (a non-ranking rendered as a ranking): not an absent value shown as
 present, but a **qualified** value shown as an unqualified one.
+
+**Fixed** in `src/v2/panels/DirectiveBoard.jsx` (`renderBenchBudget`) and
+`shared/markdownExports.mjs` (`benchBudgetLines`), both gated on
+`jointlyAffordableIsUpperBound === true`.
 
 ---
 
