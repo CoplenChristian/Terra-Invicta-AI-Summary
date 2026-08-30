@@ -1,6 +1,6 @@
 // tests/mining-expansion.test.js
 //
-// Purpose: six thin real-browser checks proving the React mining expansion
+// Purpose: nine thin real-browser checks proving the React mining expansion
 // panel mounts, preserves both modes, and renders every important unavailable
 // state explicitly — including registered defect #8.
 
@@ -261,5 +261,102 @@ test('over-limit and unresolved projections never collapse unknown hate or upgra
     assert.ok(!text.includes('+0 HATE'));
     assert.ok(!text.includes('×1 to ×1'));
     assertNoPlaceholderText(html, 'over-limit unresolved payload');
+  });
+});
+
+test('candidate figures keep their own measured and absent states', async () => {
+  const payload = clone(fixture('player'));
+  const candidate = {
+    ...payload.available[0],
+    siteValue: null,
+    hateCost: 0.25,
+    mcCost: 4,
+    buildTimeDays: null,
+    siteDensity: null,
+    siteDensityMeasured: false,
+    siteDensityAssumed: true,
+  };
+  payload.available = [candidate];
+  payload.availableTotalCount = 1;
+
+  await withMiningExpansionHarnessPage(payload, async (page) => {
+    const figures = await page.evaluate(() => Object.fromEntries(
+      [...document.querySelectorAll('[data-nullable-input]')]
+        .map((element) => [element.dataset.nullableInput, {
+          state: element.dataset.valueState,
+          text: element.textContent,
+        }]),
+    ));
+
+    assert.equal(figures['candidate.siteValue'].state, 'absent');
+    assert.equal(figures['candidate.siteValue'].text, '—');
+    assert.equal(figures['candidate.hateCost'].state, 'measured');
+    assert.equal(figures['candidate.hateCost'].text, '+0.25 hate');
+    assert.equal(figures['candidate.mcCost'].state, 'measured');
+    assert.equal(figures['candidate.mcCost'].text, '4 MC');
+    assert.equal(figures.buildTimeDays.state, 'absent');
+    assert.equal(figures['candidate.siteDensity'].state, 'absent');
+  });
+});
+
+test('runway figures keep one resource absence from changing its neighbour', async () => {
+  const payload = clone(fixture('player'));
+  payload.resourceRunways = {
+    water: { key: 'water', runwayMonths: 3, status: 'comfortable' },
+    volatiles: { key: 'volatiles', runwayMonths: null, status: 'unmeasured' },
+  };
+
+  await withMiningExpansionHarnessPage(payload, async (page) => {
+    const figures = await page.evaluate(() => Object.fromEntries(
+      [...document.querySelectorAll('[data-nullable-input^="runway."]')]
+        .map((element) => [element.dataset.nullableInput, {
+          state: element.dataset.valueState,
+          text: element.textContent,
+        }]),
+    ));
+
+    assert.equal(figures['runway.water.runwayMonths'].state, 'measured');
+    assert.equal(figures['runway.water.runwayMonths'].text, '3mo');
+    assert.equal(figures['runway.volatiles.runwayMonths'].state, 'absent');
+    assert.equal(figures['runway.volatiles.runwayMonths'].text, 'Unmeasured');
+  });
+});
+
+test('upgrade figures keep current, next, and per-resource gain states independent', async () => {
+  const payload = clone(fixture('player'));
+  const source = payload.mineUpgrades.opportunities.find((item) => item?.state === 'available');
+  payload.mineUpgrades = {
+    ...payload.mineUpgrades,
+    counts: { ...payload.mineUpgrades.counts, available: 1 },
+    opportunities: [{
+      ...source,
+      currentMultiplier: 1.5,
+      nextMultiplier: null,
+      monthlyGain: {
+        ...source.monthlyGain,
+        water: 2,
+        volatiles: null,
+      },
+    }],
+  };
+
+  await withMiningExpansionHarnessPage(payload, async (page) => {
+    const figures = await page.evaluate(() => Object.fromEntries(
+      [...document.querySelectorAll('[data-nullable-input]')]
+        .filter((element) => element.dataset.nullableInput.startsWith('upgrade.'))
+        .map((element) => [element.dataset.nullableInput, {
+          state: element.dataset.valueState,
+          text: element.textContent,
+        }]),
+    ));
+
+    assert.equal(figures['upgrade.currentMultiplier'].state, 'measured');
+    assert.equal(figures['upgrade.currentMultiplier'].text, '×1.50');
+    assert.equal(figures['upgrade.nextMultiplier'].state, 'absent');
+    assert.equal(figures['upgrade.nextMultiplier'].text, '—');
+    assert.equal(figures['upgrade.monthlyGain.water'].state, 'measured');
+    assert.equal(figures['upgrade.monthlyGain.water'].text, '+2.0');
+    assert.equal(figures['upgrade.monthlyGain.volatiles'].state, 'absent');
+    assert.equal(figures['upgrade.monthlyGain.volatiles'].text, '—');
   });
 });

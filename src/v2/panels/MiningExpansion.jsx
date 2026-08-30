@@ -7,14 +7,15 @@
  */
 
 import React from 'react';
-import {
-  DataTable,
-  Estimated,
-  Measured,
-  TruncationNote,
-  Value,
-} from '../components/index.js';
+import Box from '@mui/material/Box';
+import { ThemeProvider } from '@mui/material/styles';
+import { DataTable } from '../components/DataTable.jsx';
+import { Estimated } from '../components/Estimated.jsx';
+import { Measured } from '../components/Measured.jsx';
+import { ABSENT_LABEL, Value, resolveValue } from '../components/Value.jsx';
+import { TruncationNote } from '../components/TruncationNote.jsx';
 import { parseNumeric } from '../components/parseNumeric.js';
+import initiativeTheme from '../theme.js';
 
 const RESOURCE_LABELS = [
   ['water', 'W'],
@@ -55,18 +56,26 @@ function safeText(value, fallback) {
 
 function fixedText(value, decimals = 1) {
   const parsed = numberOrNull(value);
-  return parsed === null ? '—' : parsed.toFixed(decimals);
+  return resolveValue({
+    value: parsed,
+    present: parsed !== null,
+    format: (raw) => raw.toFixed(decimals),
+  }).text;
 }
 
 function integerText(value) {
   const parsed = numberOrNull(value);
-  return parsed === null ? '—' : String(Math.round(parsed));
+  return resolveValue({
+    value: parsed,
+    present: parsed !== null,
+    format: (raw) => String(Math.round(raw)),
+  }).text;
 }
 
 function NumericValue({
   value,
   format = (parsed) => String(parsed),
-  absentLabel = '—',
+  absentLabel = ABSENT_LABEL,
   ...rest
 }) {
   const parsed = numberOrNull(value);
@@ -81,7 +90,7 @@ function NumericValue({
   );
 }
 
-function TextValue({ value, absentLabel = '—', ...rest }) {
+function TextValue({ value, absentLabel = ABSENT_LABEL, ...rest }) {
   return (
     <Value
       value={value}
@@ -92,6 +101,80 @@ function TextValue({ value, absentLabel = '—', ...rest }) {
     />
   );
 }
+
+const layout = {
+  board: (space) => ({
+    display: 'flex',
+    flexDirection: 'column',
+    gap: space.xl,
+  }),
+  statusbar: (space) => ({
+    display: 'flex',
+    gap: space.xl,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    padding: '2px 0 11px',
+    '@media (max-width: 520px)': {
+      flexDirection: 'column',
+      gap: space.md,
+    },
+  }),
+  unavailableBanner: (space) => ({
+    marginBottom: space.md,
+    padding: `${space.sm} ${space.md}`,
+  }),
+  runways: (space) => ({
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: `${space.sm} ${space.md}`,
+    padding: `${space.md} ${space.lg}`,
+  }),
+  basis: (space) => ({
+    margin: `${space.sm} 0 ${space['2xs']}`,
+    padding: `${space.xs} ${space.sm}`,
+  }),
+  sectionTitle: (space) => ({
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    padding: `${space.xs} 0 ${space['2xs']}`,
+  }),
+  upgrades: (space) => ({
+    margin: `${space.md} 0 ${space.lg}`,
+  }),
+  upgradesNote: (space) => ({
+    padding: `${space.xs} ${space.sm}`,
+  }),
+  upgradesBlocked: (space) => ({
+    display: 'block',
+    marginTop: '3px',
+  }),
+  gatedTitle: (space) => ({
+    marginTop: space.sm,
+  }),
+  gatedGrid: (space) => ({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: space.md,
+  }),
+  gatedItem: (space) => ({
+    padding: `${space.md} ${space.lg}`,
+  }),
+  gatedHeader: (space) => ({
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: space.xs,
+  }),
+  gatedMeta: () => ({
+    display: 'flex',
+    justifyContent: 'space-between',
+  }),
+  unreachable: (space) => ({
+    padding: `${space.sm} ${space.md}`,
+  }),
+};
 
 function CapacityStatus({ capacity }) {
   const minesBuilt = numberOrNull(capacity.minesBuilt);
@@ -169,16 +252,28 @@ function RunwayPill({ runway, runwayKey }) {
   let value;
   let title = `${label}: ${status}`;
   if (months !== null) {
-    value = <NumericValue value={months} format={(n) => `${n}mo`} />;
+    value = (
+      <NumericValue
+        value={months}
+        format={(n) => `${n}mo`}
+        data-nullable-input={`runway.${key}.runwayMonths`}
+      />
+    );
   } else if (status.includes('surplus')) {
     value = <TextValue value="Surplus" />;
   } else if (status === 'unmeasured' || status === 'consumption_unknown' || status === 'unknown') {
-    value = <TextValue value={null} absentLabel="Unmeasured" />;
+    value = (
+      <TextValue
+        value={null}
+        absentLabel="Unmeasured"
+        data-nullable-input={`runway.${key}.runwayMonths`}
+      />
+    );
     title = status === 'consumption_unknown'
       ? `${label}: stockpile read, but monthly consumption is not in this snapshot`
       : `${label}: no stockpile reading in this snapshot`;
   } else {
-    value = <TextValue value={null} />;
+    value = <TextValue value={null} data-nullable-input={`runway.${key}.runwayMonths`} />;
   }
 
   let badgeClass = 'is-neutral';
@@ -222,7 +317,7 @@ function yieldState(yields) {
   };
 }
 
-function YieldReadout({ yields }) {
+function YieldReadout({ yields, inputPrefix = 'yield' }) {
   const state = yieldState(yields);
   const title = state.unmeasured.length
     ? `Unmeasured in this snapshot: ${state.unmeasured.join(', ')}`
@@ -234,11 +329,21 @@ function YieldReadout({ yields }) {
       <React.Fragment key={entry.key}>
         {index > 0 ? ' · ' : ''}
         {entry.label}:{' '}
-        <NumericValue value={entry.monthly} format={(n) => `+${n.toFixed(1)}`} />
+        <NumericValue
+          value={entry.monthly}
+          format={(n) => `+${n.toFixed(1)}`}
+          data-nullable-input={`${inputPrefix}.${entry.key}.monthly`}
+        />
       </React.Fragment>
     ));
   } else if (state.allUnavailable) {
-    content = <TextValue value={null} absentLabel={yields ? 'YIELDS UNMEASURED' : 'YIELDS UNAVAILABLE'} />;
+    content = (
+      <TextValue
+        value={null}
+        absentLabel={yields ? 'YIELDS UNMEASURED' : 'YIELDS UNAVAILABLE'}
+        data-nullable-input={`${inputPrefix}.all`}
+      />
+    );
   } else {
     content = <NumericValue value={0} format={() => 'No measured yield'} />;
   }
@@ -274,7 +379,10 @@ function ModuleBand({ band, capability }) {
         className="mining-module-band is-unavailable"
         title={why}
       >
-        <TextValue value={null} absentLabel="Mine module multiplier: UNKNOWN — not in the score" />
+        <TextValue
+          value={null}
+          absentLabel={`Mine module multiplier: UNKNOWN ${ABSENT_LABEL} not in the score`}
+        />
       </Estimated>
     );
   }
@@ -318,16 +426,22 @@ function CandidateRow({ candidate, capability, rowIndex }) {
   let hateBadge;
   if (hateCost === null) {
     hateBadge = (
-      <NumericValue
-        value={c.hateCost}
-        absentLabel="HATE UNKNOWN"
-        className="mining-tag mining-tag--unknown"
-        title="The alien-hate cost could not be evaluated: the save carries no readable difficulty, and the floor multiplier is what converts Mission Control into hate."
-      />
+        <NumericValue
+          value={c.hateCost}
+          absentLabel="HATE UNKNOWN"
+          className="mining-tag mining-tag--unknown"
+          title="The alien-hate cost could not be evaluated: the save carries no readable difficulty, and the floor multiplier is what converts Mission Control into hate."
+          data-nullable-input="candidate.hateCost"
+        />
     );
   } else if (hateCost === 0) {
     hateBadge = (
-      <NumericValue value={hateCost} format={() => 'FREE'} className="mining-tag mining-tag--free" />
+      <NumericValue
+        value={hateCost}
+        format={() => 'FREE'}
+        className="mining-tag mining-tag--free"
+        data-nullable-input="candidate.hateCost"
+      />
     );
   } else {
     hateBadge = (
@@ -335,6 +449,7 @@ function CandidateRow({ candidate, capability, rowIndex }) {
         value={hateCost}
         format={(n) => `+${n.toFixed(2)} hate`}
         className="mining-tag mining-tag--hate"
+        data-nullable-input="candidate.hateCost"
       />
     );
   }
@@ -361,7 +476,7 @@ function CandidateRow({ candidate, capability, rowIndex }) {
         </small>
       </td>
       <td className="mining-yields-cell">
-        <YieldReadout yields={c.yields} />
+        <YieldReadout yields={c.yields} inputPrefix="candidate.yields" />
         <ModuleBand band={c.moduleMultiplier} capability={capability} />
         <small
           className={`mining-density${densityAssumed ? ' is-assumed' : ''}`}
@@ -370,7 +485,11 @@ function CandidateRow({ candidate, capability, rowIndex }) {
             : undefined}
         >
           Density:{' '}
-          <NumericValue value={density} format={(n) => `${n.toFixed(2)}x`} />
+          <NumericValue
+            value={density}
+            format={(n) => `${n.toFixed(2)}x`}
+            data-nullable-input="candidate.siteDensity"
+          />
           {densityAssumed ? ' (assumed)' : null}
         </small>
       </td>
@@ -382,6 +501,7 @@ function CandidateRow({ candidate, capability, rowIndex }) {
           <NumericValue
             value={value}
             format={(n) => `${n.toFixed(2)}${partial ? '*' : ''}`}
+            data-nullable-input="candidate.siteValue"
           />
         </strong>
         <small className="mining-value-label">
@@ -391,7 +511,11 @@ function CandidateRow({ candidate, capability, rowIndex }) {
       <td className="mining-cost-cell">
         <div>{hateBadge}</div>
         <small className="mining-mc-cost" title={costTitle}>
-          <NumericValue value={c.mcCost} format={(n) => `${Math.round(n)} MC`} />{' · '}
+          <NumericValue
+            value={c.mcCost}
+            format={(n) => `${Math.round(n)} MC`}
+            data-nullable-input="candidate.mcCost"
+          />{' · '}
           <NumericValue
             value={c.buildTimeDays}
             absentLabel="build n/a"
@@ -404,7 +528,7 @@ function CandidateRow({ candidate, capability, rowIndex }) {
   );
 }
 
-function ResourceGainList({ gains, emptyLabel }) {
+function ResourceGainList({ gains, emptyLabel, inputPrefix = 'gain' }) {
   const entries = [];
   for (const [key, label] of RESOURCE_LABELS) {
     const value = gains && Object.prototype.hasOwnProperty.call(gains, key)
@@ -414,14 +538,18 @@ function ResourceGainList({ gains, emptyLabel }) {
   }
 
   if (entries.length === 0) {
-    return <NumericValue value={0} format={() => emptyLabel} />;
+    return <NumericValue value={0} format={() => emptyLabel} data-nullable-input={`${inputPrefix}.empty`} />;
   }
 
   return entries.map((entry, index) => (
     <React.Fragment key={entry.key}>
       {index > 0 ? ' · ' : ''}
       {entry.label}:{' '}
-      <NumericValue value={entry.value} format={(n) => `+${n.toFixed(1)}`} />
+      <NumericValue
+        value={entry.value}
+        format={(n) => `+${n.toFixed(1)}`}
+        data-nullable-input={`${inputPrefix}.${entry.key}`}
+      />
     </React.Fragment>
   ));
 }
@@ -440,18 +568,35 @@ function UpgradeRow({ opportunity, rowIndex }) {
       </td>
       <td className="mining-upgrade-step">
         <Measured register="mining">
-          <NumericValue value={item.currentMultiplier} format={(n) => `×${n.toFixed(2)}`} />
+          <NumericValue
+            value={item.currentMultiplier}
+            format={(n) => `×${n.toFixed(2)}`}
+            data-nullable-input="upgrade.currentMultiplier"
+          />
           {' → '}
-          <NumericValue value={item.nextMultiplier} format={(n) => `×${n.toFixed(2)}`} />
+          <NumericValue
+            value={item.nextMultiplier}
+            format={(n) => `×${n.toFixed(2)}`}
+            data-nullable-input="upgrade.nextMultiplier"
+          />
         </Measured>
       </td>
       <td className="mining-yields-cell">
         <Measured register="mining">
-          <ResourceGainList gains={item.monthlyGain} emptyLabel="No measured gain" />
+          <ResourceGainList
+            gains={item.monthlyGain}
+            emptyLabel="No measured gain"
+            inputPrefix="upgrade.monthlyGain"
+          />
         </Measured>
       </td>
       <td className="mining-cost-cell">
-        <span className="mining-tag mining-tag--free">0 MINE SLOTS</span>
+        <NumericValue
+          value={0}
+          format={() => '0 MINE SLOTS'}
+          className="mining-tag mining-tag--free"
+          data-nullable-input="upgrade.mineSlots"
+        />
       </td>
     </tr>
   );
@@ -477,29 +622,51 @@ function blockedUpgradeNotes(counts) {
 function MineUpgrades({ upgrades, capacity }) {
   if (!upgrades || typeof upgrades !== 'object') {
     return (
-      <div className="mining-upgrades mining-upgrades--unavailable">
-        <div className="mining-section-title"><span>MINE UPGRADES</span></div>
-        <div className="mining-upgrades-note">
+      <Box
+        className="mining-upgrades mining-upgrades--unavailable"
+        sx={(theme) => layout.upgrades(theme.initiative.space)}
+      >
+        <Box
+          component="div"
+          className="mining-section-title"
+          sx={(theme) => layout.sectionTitle(theme.initiative.space)}
+        ><span>MINE UPGRADES</span></Box>
+        <Box
+          component="div"
+          className="mining-upgrades-note"
+          sx={(theme) => layout.upgradesNote(theme.initiative.space)}
+        >
           <TextValue
             value={null}
-            absentLabel="MINE UPGRADES NOT REPORTED — upgrade opportunities are unavailable."
+            absentLabel={`MINE UPGRADES NOT REPORTED ${ABSENT_LABEL} upgrade opportunities are unavailable.`}
           />
-        </div>
-      </div>
+        </Box>
+      </Box>
     );
   }
 
   if (upgrades.totalMonthlyGainMeasured !== true) {
     return (
-      <div className="mining-upgrades mining-upgrades--unavailable">
-        <div className="mining-section-title"><span>MINE UPGRADES</span></div>
-        <div className="mining-upgrades-note">
+      <Box
+        className="mining-upgrades mining-upgrades--unavailable"
+        sx={(theme) => layout.upgrades(theme.initiative.space)}
+      >
+        <Box
+          component="div"
+          className="mining-section-title"
+          sx={(theme) => layout.sectionTitle(theme.initiative.space)}
+        ><span>MINE UPGRADES</span></Box>
+        <Box
+          component="div"
+          className="mining-upgrades-note"
+          sx={(theme) => layout.upgradesNote(theme.initiative.space)}
+        >
           <TextValue
             value={null}
-            absentLabel="UPGRADE HEADROOM UNRESOLVED — the observer's buildable mine tiers could not be read, so whether any mine can be upgraded is unknown, not “none”."
+            absentLabel={`UPGRADE HEADROOM UNRESOLVED ${ABSENT_LABEL} the observer's buildable mine tiers could not be read, so whether any mine can be upgraded is unknown, not “none”.`}
           />
-        </div>
-      </div>
+        </Box>
+      </Box>
     );
   }
 
@@ -514,8 +681,15 @@ function MineUpgrades({ upgrades, capacity }) {
   const omitted = available === null ? null : Math.max(0, available - rows.length);
 
   return (
-    <div className="mining-upgrades">
-      <div className="mining-section-title">
+    <Box
+      className="mining-upgrades"
+      sx={(theme) => layout.upgrades(theme.initiative.space)}
+    >
+      <Box
+        component="div"
+        className="mining-section-title"
+        sx={(theme) => layout.sectionTitle(theme.initiative.space)}
+      >
         <span>
           MINE UPGRADES —{' '}
           <NumericValue
@@ -525,9 +699,20 @@ function MineUpgrades({ upgrades, capacity }) {
           />
         </span>
         <small>Measured: the observer&apos;s own operational mines</small>
-      </div>
-      <div className="mining-upgrades-note">
-        Upgrading multiplies a site already held and costs <strong>0</strong> against the mine limit
+      </Box>
+      <Box
+        component="div"
+        className="mining-upgrades-note"
+        sx={(theme) => layout.upgradesNote(theme.initiative.space)}
+      >
+        Upgrading multiplies a site already held and costs{' '}
+        <NumericValue
+          as="strong"
+          value={0}
+          format={() => '0'}
+          data-nullable-input="upgrade.mineSlotCost"
+        />{' '}
+        against the mine limit
         {headroom === null ? (
           <TextValue
             value={null}
@@ -541,14 +726,18 @@ function MineUpgrades({ upgrades, capacity }) {
           <ResourceGainList gains={upgrades.totalMonthlyGain} emptyLabel="none" />
         </Measured>{' '}
         per month.
-      </div>
+      </Box>
       {!opportunitiesReported ? (
-        <div className="mining-upgrades-note">
+        <Box
+          component="div"
+          className="mining-upgrades-note"
+          sx={(theme) => layout.upgradesNote(theme.initiative.space)}
+        >
           <TextValue
             value={null}
-            absentLabel="Upgrade opportunity rows unavailable — the list may be incomplete."
+            absentLabel={`Upgrade opportunity rows unavailable ${ABSENT_LABEL} the list may be incomplete.`}
           />
-        </div>
+        </Box>
       ) : rows.length > 0 ? (
         <>
           <DataTable variant="mining" subVariant="upgrades" columns={UPGRADE_COLUMNS}>
@@ -576,10 +765,18 @@ function MineUpgrades({ upgrades, capacity }) {
           ) : null}
         </>
       ) : (
-        <div className="mining-upgrades-note">No mine has a researched upgrade available.</div>
+        <Box
+          component="div"
+          className="mining-upgrades-note"
+          sx={(theme) => layout.upgradesNote(theme.initiative.space)}
+        >No mine has a researched upgrade available.</Box>
       )}
       {blocked.notes.length > 0 ? (
-        <small className="mining-upgrades-blocked">
+        <Box
+          component="small"
+          className="mining-upgrades-blocked"
+          sx={(theme) => layout.upgradesBlocked(theme.initiative.space)}
+        >
           Excluded:{' '}
           {blocked.notes.map((entry, index) => (
             <React.Fragment key={entry.key}>
@@ -588,17 +785,21 @@ function MineUpgrades({ upgrades, capacity }) {
               {entry.suffix}
             </React.Fragment>
           ))}.
-        </small>
+        </Box>
       ) : null}
       {blocked.unknown.length > 0 ? (
-        <small className="mining-upgrades-blocked">
+        <Box
+          component="small"
+          className="mining-upgrades-blocked"
+          sx={(theme) => layout.upgradesBlocked(theme.initiative.space)}
+        >
           <TextValue
             value={null}
             absentLabel={`Excluded counts unavailable for: ${blocked.unknown.join('; ')}.`}
           />
-        </small>
+        </Box>
       ) : null}
-    </div>
+    </Box>
   );
 }
 
@@ -607,7 +808,7 @@ function MiningTechBonusNote({ bonus }) {
     return (
       <TextValue
         value={null}
-        absentLabel="MINE TECH BONUSES NOT REPORTED by this snapshot — yields are raw deposit rates."
+        absentLabel={`MINE TECH BONUSES NOT REPORTED by this snapshot ${ABSENT_LABEL} yields are raw deposit rates.`}
       />
     );
   }
@@ -615,7 +816,7 @@ function MiningTechBonusNote({ bonus }) {
     return (
       <TextValue
         value={null}
-        absentLabel="MINE TECH BONUSES UNRESOLVED — yields are raw deposit rates and are a lower bound, not a measured “no bonus”."
+        absentLabel={`MINE TECH BONUSES UNRESOLVED ${ABSENT_LABEL} yields are raw deposit rates and are a lower bound, not a measured “no bonus”.`}
       />
     );
   }
@@ -624,7 +825,7 @@ function MiningTechBonusNote({ bonus }) {
     return (
       <TextValue
         value={null}
-        absentLabel="MINE TECH BONUS RESOURCE LIST UNAVAILABLE — yields cannot be labelled as adjusted or measured-none."
+        absentLabel={`MINE TECH BONUS RESOURCE LIST UNAVAILABLE ${ABSENT_LABEL} yields cannot be labelled as adjusted or measured-none.`}
       />
     );
   }
@@ -644,7 +845,12 @@ function MiningTechBonusNote({ bonus }) {
         const sourceText = grantValues.length > 0
           ? grantValues.map((grant) => safeText(grant, '(unnamed grant)')).join(' + ')
           : 'source not named';
-        const clause = `${safeText(key, 'unnamed resource')} ×${multiplier === null ? '—' : String(multiplier)} (${sourceText})`;
+        const multiplierText = resolveValue({
+          value: multiplier,
+          present: multiplier !== null,
+          format: (raw) => String(raw),
+        }).text;
+        const clause = `${safeText(key, 'unnamed resource')} ×${multiplierText} (${sourceText})`;
         const clausePresent = hasText(key)
           && multiplier !== null
           && Array.isArray(grants)
@@ -692,7 +898,7 @@ function SpaceMiningBonusNote({ bonus }) {
       <>
         {' '}<TextValue
           value={null}
-          absentLabel="FACTION-WIDE SPACE-MINING BONUS NOT REPORTED by this snapshot — yields omit it."
+          absentLabel={`FACTION-WIDE SPACE-MINING BONUS NOT REPORTED by this snapshot ${ABSENT_LABEL} yields omit it.`}
         />
       </>
     );
@@ -702,7 +908,7 @@ function SpaceMiningBonusNote({ bonus }) {
       <>
         {' '}<TextValue
           value={null}
-          absentLabel="FACTION-WIDE SPACE-MINING BONUS UNRESOLVED — yields omit it and are a lower bound, not a measured “no bonus”."
+          absentLabel={`FACTION-WIDE SPACE-MINING BONUS UNRESOLVED ${ABSENT_LABEL} yields omit it and are a lower bound, not a measured “no bonus”.`}
         />
       </>
     );
@@ -714,7 +920,7 @@ function SpaceMiningBonusNote({ bonus }) {
       <>
         {' '}<NumericValue
           value={bonus.additiveTotal}
-          absentLabel="FACTION-WIDE SPACE-MINING BONUS UNREADABLE — yields omit it."
+          absentLabel={`FACTION-WIDE SPACE-MINING BONUS UNREADABLE ${ABSENT_LABEL} yields omit it.`}
         />
       </>
     );
@@ -734,10 +940,13 @@ function SpaceMiningBonusNote({ bonus }) {
 
 function YieldBasis({ miningBonus, spaceBonus }) {
   return (
-    <div className="mining-yield-basis">
+    <Box
+      className="mining-yield-basis"
+      sx={(theme) => layout.basis(theme.initiative.space)}
+    >
       <MiningTechBonusNote bonus={miningBonus} />
       <SpaceMiningBonusNote bonus={spaceBonus} />
-    </div>
+    </Box>
   );
 }
 
@@ -751,7 +960,7 @@ function ModuleBasis({ capability }) {
     content = (
       <TextValue
         value={null}
-        absentLabel="MINE MODULE MULTIPLIER NOT REPORTED by this snapshot — yields are deposit rates with no module term, and the score excludes it."
+        absentLabel={`MINE MODULE MULTIPLIER NOT REPORTED by this snapshot ${ABSENT_LABEL} yields are deposit rates with no module term, and the score excludes it.`}
       />
     );
   } else if (low === null || high === null) {
@@ -761,7 +970,7 @@ function ModuleBasis({ capability }) {
     content = (
       <TextValue
         value={null}
-        absentLabel={`Mine module multiplier: UNKNOWN — ${why} It is excluded from the utility score either way.`}
+        absentLabel={`Mine module multiplier: UNKNOWN ${ABSENT_LABEL} ${why} It is excluded from the utility score either way.`}
       />
     );
   } else {
@@ -775,9 +984,12 @@ function ModuleBasis({ capability }) {
   }
 
   return (
-    <div className="mining-yield-basis">
+    <Box
+      className="mining-yield-basis"
+      sx={(theme) => layout.basis(theme.initiative.space)}
+    >
       <Estimated register="mining">{content}</Estimated>
-    </div>
+    </Box>
   );
 }
 
@@ -789,7 +1001,11 @@ function AvailableSection({ available, availableReported, totalAvailable, capabi
 
   return (
     <>
-      <div className="mining-section-title">
+      <Box
+        component="div"
+        className="mining-section-title"
+        sx={(theme) => layout.sectionTitle(theme.initiative.space)}
+      >
         <span>
           AVAILABLE EXPANSION SITES{' '}
           <NumericValue
@@ -809,7 +1025,7 @@ function AvailableSection({ available, availableReported, totalAvailable, capabi
             `Top ${shownCount} of ${total}, ranked by saturating utility per unit of alien hate`
           )}
         />
-      </div>
+      </Box>
 
       <DataTable variant="mining" columns={CANDIDATE_COLUMNS}>
         <tbody>
@@ -845,7 +1061,14 @@ function AvailableSection({ available, availableReported, totalAvailable, capabi
 function TechGatedSection({ groups, groupsReported }) {
   if (!groupsReported) {
     return (
-      <div className="mining-section-title mining-section-title--gated">
+      <Box
+        component="div"
+        className="mining-section-title mining-section-title--gated"
+        sx={(theme) => ({
+          ...layout.sectionTitle(theme.initiative.space),
+          ...layout.gatedTitle(theme.initiative.space),
+        })}
+      >
         <span>
           TECH-GATED OPPORTUNITIES{' '}
           <TextValue value={null} absentLabel="(site count unavailable)" />
@@ -853,7 +1076,7 @@ function TechGatedSection({ groups, groupsReported }) {
         <small>
           <TextValue value={null} absentLabel="Opportunity groups unavailable" />
         </small>
-      </div>
+      </Box>
     );
   }
   if (groups.length === 0) return null;
@@ -864,7 +1087,14 @@ function TechGatedSection({ groups, groupsReported }) {
 
   return (
     <>
-      <div className="mining-section-title mining-section-title--gated">
+      <Box
+        component="div"
+        className="mining-section-title mining-section-title--gated"
+        sx={(theme) => ({
+          ...layout.sectionTitle(theme.initiative.space),
+          ...layout.gatedTitle(theme.initiative.space),
+        })}
+      >
         <span>
           TECH-GATED OPPORTUNITIES{' '}
           <NumericValue
@@ -874,16 +1104,26 @@ function TechGatedSection({ groups, groupsReported }) {
           />
         </span>
         <small>Requires destination or mine module research</small>
-      </div>
-      <div className="mining-gated-grid">
+      </Box>
+      <Box
+        component="div"
+        className="mining-gated-grid"
+        sx={(theme) => layout.gatedGrid(theme.initiative.space)}
+      >
         {groups.slice(0, 4).map((group, index) => {
           const unmeasured = numberOrNull(group?.unmeasuredSiteCount);
           return (
-            <div
+            <Box
+              component="div"
               className="mining-gated-item"
+              sx={(theme) => layout.gatedItem(theme.initiative.space)}
               key={safeText(group?.missingTech, `gated-${index}`)}
             >
-              <div className="mining-gated-header">
+              <Box
+                component="div"
+                className="mining-gated-header"
+                sx={(theme) => layout.gatedHeader(theme.initiative.space)}
+              >
                 <strong className="mining-gated-tech">
                   <TextValue
                     value={group?.missingTechName ?? group?.missingTech}
@@ -897,8 +1137,12 @@ function TechGatedSection({ groups, groupsReported }) {
                     format={(n) => `${Math.round(n)} sites`}
                   />
                 </span>
-              </div>
-              <div className="mining-gated-meta">
+              </Box>
+              <Box
+                component="div"
+                className="mining-gated-meta"
+                sx={(theme) => layout.gatedMeta(theme.initiative.space)}
+              >
                 <span>
                   Top site value:{' '}
                   <strong>
@@ -914,11 +1158,11 @@ function TechGatedSection({ groups, groupsReported }) {
                     'Research argument'
                   )}
                 </small>
-              </div>
-            </div>
+              </Box>
+            </Box>
           );
         })}
-      </div>
+      </Box>
     </>
   );
 }
@@ -927,27 +1171,39 @@ function UnreachableSummary({ total }) {
   const parsed = numberOrNull(total);
   if (parsed === null) {
     return (
-      <div className="mining-unreachable-summary">
+      <Box
+        component="div"
+        className="mining-unreachable-summary"
+        sx={(theme) => layout.unreachable(theme.initiative.space)}
+      >
         <small>
           <NumericValue value={total} absentLabel="Unreachable site count unavailable." />
         </small>
-      </div>
+      </Box>
     );
   }
   if (parsed === 0) {
     return (
-      <div className="mining-unreachable-summary">
+      <Box
+        component="div"
+        className="mining-unreachable-summary"
+        sx={(theme) => layout.unreachable(theme.initiative.space)}
+      >
         <small>No outer system / unprobed sites are currently unreachable.</small>
-      </div>
+      </Box>
     );
   }
   return (
-    <div className="mining-unreachable-summary">
+    <Box
+      component="div"
+      className="mining-unreachable-summary"
+      sx={(theme) => layout.unreachable(theme.initiative.space)}
+    >
       <small>
         <NumericValue value={parsed} format={(n) => String(Math.round(n))} />{' '}
         outer system / unprobed sites currently unreachable without deep system mission projects.
       </small>
-    </div>
+    </Box>
   );
 }
 
@@ -956,7 +1212,13 @@ export function MiningExpansion({ data }) {
   const capacity = expansion?.capacity;
 
   if (!capacity) {
-    return <div className="alien-hate-econ-empty">MINING EXPANSION DATA UNAVAILABLE</div>;
+    return (
+      <ThemeProvider theme={initiativeTheme}>
+        <Box component="div" className="alien-hate-econ-empty">
+          MINING EXPANSION DATA UNAVAILABLE
+        </Box>
+      </ThemeProvider>
+    );
   }
 
   const availableReported = Array.isArray(expansion.available);
@@ -976,25 +1238,41 @@ export function MiningExpansion({ data }) {
   const status = CapacityStatus({ capacity });
 
   return (
-    <div className="mining-expansion-board" data-testid="mining-expansion-board">
-      <div className="alien-hate-econ-statusbar">
+    <ThemeProvider theme={initiativeTheme}>
+      <Box
+        component="div"
+        className="mining-expansion-board"
+        data-testid="mining-expansion-board"
+        sx={(theme) => layout.board(theme.initiative.space)}
+      >
+      <Box
+        component="div"
+        className="alien-hate-econ-statusbar"
+        sx={(theme) => layout.statusbar(theme.initiative.space)}
+      >
         <div>
           <span className="alien-hate-econ-eyebrow">MINING CAPACITY</span>
           <strong className={`alien-hate-econ-status ${status.tone}`}>{status.label}</strong>
         </div>
         <div className="alien-hate-econ-sub">{status.note}</div>
-      </div>
+      </Box>
 
       {!hateAvailable ? (
-        <div
+        <Box
+          component="div"
           className="mining-unavailable-banner"
+          sx={(theme) => layout.unavailableBanner(theme.initiative.space)}
           title="Difficulty selects the alien minimum-hate floor multiplier (Cinematic 0.05 / Normal 0.30 / Veteran 0.60 / Brutal 1.00)."
         >
           ALIEN-HATE COSTS UNAVAILABLE — this snapshot carries no readable difficulty, so mine hate cost cannot be priced.
-        </div>
+        </Box>
       ) : null}
 
-      <div className="mining-runways-bar">
+      <Box
+        component="div"
+        className="mining-runways-bar"
+        sx={(theme) => layout.runways(theme.initiative.space)}
+      >
         <span className="mining-runways-label">RUNWAYS:</span>
         {!runwaysReported ? (
           <span className="mining-runway-pill is-neutral">
@@ -1025,7 +1303,7 @@ export function MiningExpansion({ data }) {
             War Floor: <strong><NumericValue value={capacity.mcWarFloorDistance} absentLabel="unavailable" /></strong>
           </span>
         )}
-      </div>
+      </Box>
 
       <YieldBasis
         miningBonus={expansion.miningTechBonus}
@@ -1044,6 +1322,7 @@ export function MiningExpansion({ data }) {
 
       <TechGatedSection groups={techGated} groupsReported={techGatedReported} />
       <UnreachableSummary total={expansion.unreachable?.totalSites} />
-    </div>
+      </Box>
+    </ThemeProvider>
   );
 }
