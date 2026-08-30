@@ -30,8 +30,11 @@
  */
 
 import React from 'react';
+import Box from '@mui/material/Box';
+import { ThemeProvider } from '@mui/material/styles';
 import { Value } from '../components/Value.jsx';
 import { TruncationNote } from '../components/TruncationNote.jsx';
+import initiativeTheme from '../theme.js';
 import {
   ACTIONABLE_GROUPS,
   BACKLOG_TITLE,
@@ -79,6 +82,43 @@ function Fig({ text, present, absentLabel = UNAVAILABLE, ...rest }) {
   );
 }
 
+// MUI owns the panel's geometry and spacing. These values mirror the existing
+// research-advisor stylesheet exactly; its type, colour, borders and surfaces
+// remain the visual authority. Box's default host keeps every semantic element
+// in place, and `component` is used only where the existing host is not a div.
+const layout = {
+  deficit: { display: 'grid', gap: '1px', padding: '2px 6px' },
+  deficitTop: { display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '3px 6px' },
+  queue: (space) => ({
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: `${space['2xs']} ${space.sm}`,
+    padding: `${space['2xs']} ${space.sm}`,
+  }),
+  queueItems: { display: 'flex', flexWrap: 'wrap', gap: '4px' },
+  tracks: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '4px 12px',
+    alignItems: 'stretch',
+    '@media (max-width: 720px)': { gridTemplateColumns: '1fr' },
+  },
+  track: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0, height: '100%' },
+  trackHead: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '6px', paddingBottom: '1px' },
+  groupLabel: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '6px' },
+  rowHead: (space) => ({ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: space.md }),
+  rowMeta: (space) => ({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: space.xs }),
+  trackFoot: (space) => ({
+    marginTop: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: space['2xs'],
+    paddingTop: space['2xs'],
+  }),
+};
+
 /** The badges after a row's cost and duration. `title` never becomes a child. */
 function RowTags({ notes }) {
   return notes.map((note) => (
@@ -93,7 +133,7 @@ function MilitaryRow({ row }) {
   const model = militaryRowModel(row);
   return (
     <li className="ra-row">
-      <div className="ra-row__head">
+      <Box className="ra-row__head" sx={(theme) => layout.rowHead(theme.initiative.space)}>
         <span className="ra-row__name" title={model.name.tooltip}>
           {model.name.lead}
           {model.name.sub ? (
@@ -112,11 +152,15 @@ function MilitaryRow({ row }) {
             </>
           )}
         </span>
-      </div>
-      <div className="ra-row__meta" title={model.metaTitle}>
+      </Box>
+      <Box
+        className="ra-row__meta"
+        title={model.metaTitle}
+        sx={(theme) => layout.rowMeta(theme.initiative.space)}
+      >
         {model.metaText}
         <RowTags notes={model.notes} />
-      </div>
+      </Box>
     </li>
   );
 }
@@ -125,16 +169,20 @@ function EconomicRow({ row }) {
   const model = economicRowModel(row);
   return (
     <li className="ra-row">
-      <div className="ra-row__head">
+      <Box className="ra-row__head" sx={(theme) => layout.rowHead(theme.initiative.space)}>
         <span className="ra-row__name" title={model.id}>{model.displayName}</span>
         <span className="ra-row__metric" title={model.effectTitle}>
           <Fig text={model.quantityText} present={model.quantityPresent} />
         </span>
-      </div>
-      <div className="ra-row__meta" title={model.metaTitle}>
+      </Box>
+      <Box
+        className="ra-row__meta"
+        title={model.metaTitle}
+        sx={(theme) => layout.rowMeta(theme.initiative.space)}
+      >
         {model.metaText}
         <RowTags notes={model.notes} />
-      </div>
+      </Box>
     </li>
   );
 }
@@ -156,18 +204,18 @@ function Groups({ groups, RowComponent, emptyText }) {
           key={`${String(group.state || 'group')}-${index}`}
           className={`ra-group${ACTIONABLE_GROUPS.includes(group.state) ? ' is-actionable' : ' is-aspirational'}`}
         >
-          <div className="ra-group__label">
+          <Box className="ra-group__label" sx={layout.groupLabel}>
             <span>{group.label || group.state || 'Unknown'}</span>
             <small>
               <Fig text={int(group.count)} present={num(group.count) !== null} />
               {' ranked'}
             </small>
-          </div>
-          <ul className="ra-group__list">
+          </Box>
+          <Box component="ul" className="ra-group__list" sx={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {group.items.slice(0, ROWS_PER_GROUP).map((row, rowIndex) => (
               <RowComponent key={`${String(row.id || 'row')}-${rowIndex}`} row={row} />
             ))}
-          </ul>
+          </Box>
         </div>
       ))}
       {omittedGroups > 0 ? (
@@ -191,8 +239,8 @@ function DeficitBanner({ payload }) {
   const model = deficitModel(payload);
   if (model.variant === 'is-gap') {
     return (
-      <p className="ra-deficit is-gap" title={model.title}>
-        <span className="ra-deficit__top">
+      <Box component="p" className="ra-deficit is-gap" title={model.title} sx={layout.deficit}>
+        <Box component="span" className="ra-deficit__top" sx={layout.deficitTop}>
           <span className="ra-deficit__label">{model.label}</span>
           {' '}
           <strong>
@@ -200,7 +248,7 @@ function DeficitBanner({ payload }) {
             {' '}
             <Fig text={model.gapText} present={model.gapPresent} />
           </strong>
-        </span>
+        </Box>
         <span className="ra-deficit__detail">
           <Fig text={model.oursText} present={model.oursPresent} />
           {' ours vs '}
@@ -209,19 +257,19 @@ function DeficitBanner({ payload }) {
           {' '}
           <em className="ra-deficit__judgement">Our inference from a measurement, not shipped data.</em>
         </span>
-      </p>
+      </Box>
     );
   }
 
   return (
-    <p className={`ra-deficit ${model.variant}`} title={model.title}>
-      <span className="ra-deficit__top">
+    <Box component="p" className={`ra-deficit ${model.variant}`} title={model.title} sx={layout.deficit}>
+      <Box component="span" className="ra-deficit__top" sx={layout.deficitTop}>
         <span className="ra-deficit__label">{model.label}</span>
         {' '}
         <strong>{model.headline}</strong>
-      </span>
+      </Box>
       <span className="ra-deficit__detail">{model.detail}</span>
-    </p>
+    </Box>
   );
 }
 
@@ -230,16 +278,16 @@ function Queue({ slots }) {
   if (!model) return null;
   if (model.turnOne) {
     return (
-      <div className="ra-queue">
+      <Box className="ra-queue" sx={(theme) => layout.queue(theme.initiative.space)}>
         <span className="ra-queue__capacity">{model.capacityText}</span>
         <span className="ra-queue__items">{model.itemsText}</span>
-      </div>
+      </Box>
     );
   }
   return (
-    <div className="ra-queue" title={SLOT_TITLE}>
+    <Box className="ra-queue" title={SLOT_TITLE} sx={(theme) => layout.queue(theme.initiative.space)}>
       <span className={`ra-queue__capacity ${model.isFree ? 'is-free' : 'is-full'}`}>{model.capacityText}</span>
-      <div className="ra-queue__items">
+      <Box className="ra-queue__items" sx={layout.queueItems}>
         {model.emptyItemsText ? (
           <span className="ra-queue__item">{model.emptyItemsText}</span>
         ) : (
@@ -265,8 +313,8 @@ function Queue({ slots }) {
             ) : null}
           </>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
@@ -276,10 +324,12 @@ function Census({ model }) {
 
 function Unavailable({ headline, detail }) {
   return (
-    <div className="research-advisor">
-      <p className="research-advisor__empty">{headline}</p>
-      {detail ? <p className="ra-census">{detail}</p> : null}
-    </div>
+    <ThemeProvider theme={initiativeTheme}>
+      <div className="research-advisor">
+        <p className="research-advisor__empty">{headline}</p>
+        {detail ? <p className="ra-census">{detail}</p> : null}
+      </div>
+    </ThemeProvider>
   );
 }
 
@@ -310,42 +360,43 @@ export function ResearchAdvisor({ payload }) {
   const demoted = deliveryDemotedModel(payload.military.deliveryDemoted);
 
   return (
-    <div className="research-advisor">
+    <ThemeProvider theme={initiativeTheme}>
+      <div className="research-advisor">
       <DeficitBanner payload={payload} />
       <Queue slots={payload.slots} />
-      <div className="ra-tracks">
-        <section className="ra-track">
-          <div className="ra-track__head">
+      <Box className="ra-tracks" sx={layout.tracks}>
+        <Box component="section" className="ra-track" sx={layout.track}>
+          <Box className="ra-track__head" sx={layout.trackHead}>
             <h4>MILITARY RESEARCH</h4>
             <small title={MILITARY_AXIS_CAPTION_TITLE}>× your best, per point</small>
-          </div>
+          </Box>
           <Groups
             groups={payload.military.groups}
             RowComponent={MilitaryRow}
             emptyText={militaryEmptyText(payload)}
           />
-          <div className="ra-track__foot">
+          <Box className="ra-track__foot" sx={(theme) => layout.trackFoot(theme.initiative.space)}>
             <Census model={militaryCensus} />
             {demoted ? (
               <p className="ra-census" title={DELIVERY_DEMOTED_TITLE}>{demoted.text}</p>
             ) : null}
-          </div>
-        </section>
-        <section className="ra-track">
-          <div className="ra-track__head">
+          </Box>
+        </Box>
+        <Box component="section" className="ra-track" sx={layout.track}>
+          <Box className="ra-track__head" sx={layout.trackHead}>
             <h4>ECONOMIC</h4>
             <small title={ECONOMIC_CAPTION_TITLE}>{economic.caption}</small>
-          </div>
+          </Box>
           <Groups
             groups={economic.leadUnit ? economic.leadUnit.groups : []}
             RowComponent={EconomicRow}
             emptyText={NO_ECONOMIC_PRICE_TEXT}
           />
-          <div className="ra-track__foot">
+          <Box className="ra-track__foot" sx={(theme) => layout.trackFoot(theme.initiative.space)}>
             <Census model={economicCensus} />
-          </div>
-        </section>
-      </div>
+          </Box>
+        </Box>
+      </Box>
       <div className="ra-foot">
         <span title={foot.title}>
           <Fig text={foot.incomeLabel} present={foot.incomePresent} absentLabel={NO_INCOME_TEXT} />
@@ -360,7 +411,8 @@ export function ResearchAdvisor({ payload }) {
           Full ranking
         </button>
       </div>
-    </div>
+      </div>
+    </ThemeProvider>
   );
 }
 

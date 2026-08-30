@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**258 JS modules** and **26 stylesheet parts** (284 indexed files).
+**259 JS modules** and **26 stylesheet parts** (285 indexed files).
 
 ## `public/`
 
@@ -253,7 +253,8 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/tableVariants.js` | E | Browser (React JSX) | 97 | maps DataTable variant keys to the eight real table systems in the v2 | `DEFAULT_SCROLL_HINT_TEXT, TABLE_VARIANTS` | — |
 | `src/v2/components/TruncationNote.jsx` | E | Browser (React JSX) | 90 | announce capped lists with total and omitted counts. An absent omitted | `TruncationNote` | — |
 | `src/v2/components/TwoColumnGrid.jsx` | E | Browser (React JSX) | 67 | reusable two-column layout primitive — MUI Grid2 container with | `TwoColumnGrid, TwoColumnGridItem` | — |
-| `src/v2/components/Value.jsx` | E | Browser (React JSX) | 134 | render a numeric value or an explicit unavailable/absent state. Never | `ABSENT_LABEL, UNAVAILABLE_LABEL, Value, resolveValue` | — |
+| `src/v2/components/Value.jsx` | E | Browser (React JSX) | 108 | render a numeric value or an explicit unavailable/absent state. Never | `ABSENT_LABEL, UNAVAILABLE_LABEL, Value, resolveValue` | — |
+| `src/v2/components/valueResolution.mjs` | E | Browser (React JSX) | 61 | DOM-free presence resolution shared by the React <Value> primitive | `ABSENT_LABEL, UNAVAILABLE_LABEL, resolveValue` | — |
 | `src/v2/main.jsx` | E | Browser (React JSX) | 730 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadShipDesigner, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderBattlePanel, …(+30)` | — |
 | `src/v2/panels/AlienHateEconomics.jsx` | E | Browser (React JSX) | 499 | renders the save-derived Mission Control hate floor and Total War | `AlienHateEconomics, fmtNumber, renderHudAlienHateEconomics` | `tests/AlienHateEconomics.test.js` |
 | `src/v2/panels/BattlePanel.jsx` | E | Browser (React JSX) | 162 | two-column battle planner shell — observer fleet vs picked opponent fleet, | `BattlePanel, renderBattlePanel` | — |
@@ -286,8 +287,8 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/panels/McBudget.jsx` | E | Browser (React JSX) | 275 | Mission Control budget planner — MC is the sole input to the alien | `McBudget` | — |
 | `src/v2/panels/MiningExpansion.jsx` | E | Browser (React JSX) | 1329 | render the mining expansion board in React with explicit presence | `MiningExpansion` | `tests/MiningExpansion.test.js` |
 | `src/v2/panels/RecordsPanel.jsx` | E | Browser (React JSX) | 123 | RECORDS view shell — two-column MUI grid with static mount points for | `RecordsPanel, renderRecordsPanel` | — |
-| `src/v2/panels/ResearchAdvisor.jsx` | E | Browser (React JSX) | 368 | the COMMAND-view research advisor — what to research next, in two | `ResearchAdvisor` | — |
-| `src/v2/panels/researchAdvisorUtils.mjs` | E | Browser (React JSX) | 1087 | the DOM-free half of the research advisor — every formatter, row | `ACTIONABLE_GROUPS, ASPIRATIONAL_GROUPS, BACKLOG_TITLE, BEYOND_HORIZON, CENSUS_TITLE, CHAIN_TITLE, DELIVERY_DEMOTED_TITLE, DELIVERY_FAILS_TITLE, DELIVERY_UNKNOWN_TITLE, ECONOMIC_CAPTION_TITLE, FOOT_TITLE_BASE, GROUPS_SHOWN, …(+50)` | — |
+| `src/v2/panels/ResearchAdvisor.jsx` | E | Browser (React JSX) | 420 | the COMMAND-view research advisor — what to research next, in two | `ResearchAdvisor` | — |
+| `src/v2/panels/researchAdvisorUtils.mjs` | E | Browser (React JSX) | 1108 | the DOM-free half of the research advisor — every formatter, row | `ACTIONABLE_GROUPS, ASPIRATIONAL_GROUPS, BACKLOG_TITLE, BEYOND_HORIZON, CENSUS_TITLE, CHAIN_TITLE, DELIVERY_DEMOTED_TITLE, DELIVERY_FAILS_TITLE, DELIVERY_UNKNOWN_TITLE, ECONOMIC_CAPTION_TITLE, FOOT_TITLE_BASE, GROUPS_SHOWN, …(+50)` | — |
 | `src/v2/panels/ShipDesigner.jsx` | E | Browser (React JSX) | 900 | the DESIGNER view panels — component pickers (hull, drive, reactor, | `renderShipDesigner, shipDesignerInternals` | — |
 | `src/v2/panels/shipDesignerUtils.mjs` | E | Browser (React JSX) | 331 | pure formatters, selection/query shaping, reactor and weapon filtering, | `MATERIALS, MOUNT_IDS, WEAPON_FAMILY_LABELS, accel, affordabilityFor, clampThrusters, dec, defaultDesignerState, driveVariantId, filterReactors, filterWeaponsForPicker, formatMaterialCost, …(+16)` | `tests/shipDesignerUtils.test.js` |
 | `src/v2/panels/StrategicCommentary.jsx` | E | Browser (React JSX) | 286 | renders the non-LLM four-layer Strategic Commentary Engine output | `StrategicCommentary` | `tests/StrategicCommentary.test.js` |

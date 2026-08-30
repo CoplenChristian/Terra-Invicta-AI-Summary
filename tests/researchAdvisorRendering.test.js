@@ -65,6 +65,36 @@ async function render(payload) {
   return { html, text: visibleText(html) };
 }
 
+function clonePayload(payload) {
+  return JSON.parse(JSON.stringify(payload));
+}
+
+async function readAdvisorRows(payload) {
+  const page = await getResearchAdvisorHarnessPage();
+  await renderResearchAdvisorOnPage(page, payload);
+  return page.evaluate(() => [...document.querySelectorAll(
+    '#research-advisor-test-root .ra-row',
+  )].map((row) => ({
+    name: row.querySelector('.ra-row__name')?.textContent.replace(/\s+/g, ' ').trim(),
+    metricValues: [...row.querySelectorAll('.ra-row__metric [data-primitive="value"]')]
+      .map((value) => ({
+        state: value.dataset.valueState,
+        text: value.textContent,
+      })),
+  })));
+}
+
+async function readDeficitValues(payload) {
+  const page = await getResearchAdvisorHarnessPage();
+  await renderResearchAdvisorOnPage(page, payload);
+  return page.evaluate(() => [...document.querySelectorAll(
+    '#research-advisor-test-root .ra-deficit.is-gap [data-primitive="value"]',
+  )].map((value) => ({
+    state: value.dataset.valueState,
+    text: value.textContent,
+  })));
+}
+
 test('the panel mounts on the production id and paints both rankings', async () => {
   // Seeded through `window.__RESEARCH_ADVISOR_PAYLOAD__` into #researchAdvisor,
   // which is the element public/v2/index.html declares and mission-control.js
@@ -181,4 +211,97 @@ test('an unmeasured research income says so instead of rendering a confident zer
   const { text: withoutSlots } = await render(noSlots);
   assert.ok(!/slots weighted/.test(withoutSlots),
     'no allocation claim is made when none could be read');
+});
+
+test('military metric presence is independent for each candidate row', async () => {
+  const payload = clonePayload(live('player'));
+  const sourceGroup = payload.military.groups.find((group) => group.items.length > 0);
+  const sourceRow = sourceGroup.items[0];
+  const makeRow = (id, displayName, improvementMultiple) => ({
+    ...sourceRow,
+    id,
+    displayName,
+    gateProjectName: null,
+    chain: null,
+    chainPromoted: false,
+    isZeroCost: false,
+    improvementMultiple,
+    isFirstInClass: false,
+  });
+  payload.military.groups = [{
+    ...sourceGroup,
+    state: 'researchable-now',
+    label: 'Researchable now',
+    count: 2,
+    items: [
+      makeRow('military:missing-multiple', 'Missing military metric', null),
+      makeRow('military:measured-multiple', 'Measured military metric', 2),
+    ],
+  }];
+
+  const rows = await readAdvisorRows(payload);
+  const byName = new Map(rows.map((row) => [row.name, row.metricValues]));
+  assert.deepEqual(byName.get('Missing military metric'), [
+    { state: 'absent', text: '—' },
+  ]);
+  assert.deepEqual(byName.get('Measured military metric'), [
+    { state: 'measured', text: '2.00×' },
+  ]);
+});
+
+test('economic metric presence is independent for each candidate row', async () => {
+  const payload = clonePayload(live('player'));
+  const sourceUnit = payload.economic.units.find((unit) => unit.groups.some((group) => group.items.length > 0));
+  const sourceGroup = sourceUnit.groups.find((group) => group.items.length > 0);
+  const sourceRow = sourceGroup.items[0];
+  const makeRow = (id, displayName, monthlyValue) => ({
+    ...sourceRow,
+    id,
+    displayName,
+    unit: 'tonnes/month',
+    monthlyValue,
+  });
+  payload.economic.units = [{
+    ...sourceUnit,
+    unit: 'tonnes/month',
+    count: 2,
+    groups: [{
+      ...sourceGroup,
+      state: 'researchable-now',
+      label: 'Researchable now',
+      count: 2,
+      items: [
+        makeRow('economic:missing-value', 'Missing economic metric', null),
+        makeRow('economic:measured-value', 'Measured economic metric', 12),
+      ],
+    }],
+  }];
+
+  const rows = await readAdvisorRows(payload);
+  const byName = new Map(rows.map((row) => [row.name, row.metricValues]));
+  assert.deepEqual(byName.get('Missing economic metric'), [
+    { state: 'absent', text: '—' },
+  ]);
+  assert.deepEqual(byName.get('Measured economic metric'), [
+    { state: 'measured', text: '+12 t/mo' },
+  ]);
+});
+
+test('deficit figures keep gap, ours, and alien presence independent', async () => {
+  const payload = clonePayload(live('player'));
+  payload.deficit = {
+    ...payload.deficit,
+    applied: true,
+    axisLabel: 'output per tonne',
+    unit: 'GW/t',
+    ratio: null,
+    own: 4,
+    alien: null,
+  };
+
+  assert.deepEqual(await readDeficitValues(payload), [
+    { state: 'absent', text: '—' },
+    { state: 'measured', text: '4.0 GW/t' },
+    { state: 'absent', text: '—' },
+  ]);
 });

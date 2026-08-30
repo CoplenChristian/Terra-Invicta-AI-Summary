@@ -37,21 +37,13 @@
 
 import React from 'react';
 import { parseNumeric } from './parseNumeric.js';
+import {
+  ABSENT_LABEL,
+  UNAVAILABLE_LABEL,
+  resolveValue as resolveValueCore,
+} from './valueResolution.mjs';
 
-/** The absent affordance. Never a zero, never an empty string. */
-export const ABSENT_LABEL = '—';
-
-/** Present, but not readable as a number. Distinct from absent. */
-export const UNAVAILABLE_LABEL = 'UNAVAILABLE';
-
-function defaultFormat(value, decimals) {
-  const num = parseNumeric(value);
-  if (num === null) return 'UNAVAILABLE';
-  return num.toLocaleString(undefined, {
-    minimumFractionDigits: decimals ?? 0,
-    maximumFractionDigits: decimals ?? 0,
-  });
-}
+export { ABSENT_LABEL, UNAVAILABLE_LABEL };
 
 /**
  * The presence contract as data, for hosts that cannot take an element.
@@ -65,26 +57,8 @@ function defaultFormat(value, decimals) {
  * @param {string} [input.unavailableLabel='UNAVAILABLE']
  * @returns {{state: 'absent'|'unavailable'|'measured', text: string, className: string}}
  */
-export function resolveValue({
-  value,
-  present,
-  decimals,
-  format,
-  absentLabel = ABSENT_LABEL,
-  unavailableLabel = UNAVAILABLE_LABEL,
-} = {}) {
-  if (!present) {
-    return { state: 'absent', text: absentLabel, className: 'value-absent' };
-  }
-
-  const formatter = format ?? ((v) => defaultFormat(v, decimals));
-  const text = formatter(value);
-
-  if (text === unavailableLabel || text === UNAVAILABLE_LABEL) {
-    return { state: 'unavailable', text: unavailableLabel, className: 'value-unavailable' };
-  }
-
-  return { state: 'measured', text, className: 'value-measured' };
+export function resolveValue(options) {
+  return resolveValueCore(options, parseNumeric);
 }
 
 /**

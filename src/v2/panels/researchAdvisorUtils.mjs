@@ -31,7 +31,12 @@
  *    reason it is empty. A card that just shows nothing is the failure mode.
  */
 
-export const UNAVAILABLE = '—';
+import { ABSENT_LABEL, resolveValue } from '../components/valueResolution.mjs';
+
+// Keep the utility's public name for callers, but take the label from the one
+// primitive that owns the absent-value contract. String-only hosts use the
+// same resolver below that JSX hosts use through <Value>.
+export const UNAVAILABLE = ABSENT_LABEL;
 
 // How many availability groups to show per track, and how many rows in each.
 // The card lives in the COMMAND column that has the least slack, so this is a
@@ -62,35 +67,49 @@ export function num(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function int(value) {
+function absentText() {
+  return resolveValue({ value: null, present: false }).text;
+}
+
+function formatNumeric(value, format) {
   const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
+  return resolveValue({
+    value,
+    present: parsed !== null,
+    format: () => format(parsed),
+  }).text;
+}
+
+function formatInteger(parsed) {
   return Math.round(parsed).toLocaleString('en-US');
 }
 
+export function int(value) {
+  return formatNumeric(value, formatInteger);
+}
+
 export function dec(value, places = 1) {
-  const parsed = num(value);
-  return parsed === null ? UNAVAILABLE : parsed.toFixed(places);
+  return formatNumeric(value, (parsed) => parsed.toFixed(places));
 }
 
 /** "9.95x", "40x", "6.7Mx". Absent stays absent -- never "nullx". */
 export function mult(value) {
-  const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
-  const abs = Math.abs(parsed);
-  if (abs >= 1e9) return `${(parsed / 1e9).toFixed(1)}B×`;
-  if (abs >= 1e6) return `${(parsed / 1e6).toFixed(1)}M×`;
-  if (abs >= 1000) return `${Math.round(parsed).toLocaleString('en-US')}×`;
-  if (abs >= 10) return `${parsed.toFixed(1)}×`;
-  return `${parsed.toFixed(2)}×`;
+  return formatNumeric(value, (parsed) => {
+    const abs = Math.abs(parsed);
+    if (abs >= 1e9) return `${(parsed / 1e9).toFixed(1)}B×`;
+    if (abs >= 1e6) return `${(parsed / 1e6).toFixed(1)}M×`;
+    if (abs >= 1000) return `${formatInteger(parsed)}×`;
+    if (abs >= 10) return `${parsed.toFixed(1)}×`;
+    return `${parsed.toFixed(2)}×`;
+  });
 }
 
 /** "11.1 mo", or the dash when research income was not measurable. */
 export function months(value) {
-  const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
-  if (parsed < 1) return '<1 mo';
-  return `${parsed.toFixed(1)} mo`;
+  return formatNumeric(value, (parsed) => {
+    if (parsed < 1) return '<1 mo';
+    return `${parsed.toFixed(1)} mo`;
+  });
 }
 
 /**
@@ -109,7 +128,7 @@ export function months(value) {
  * allocation as a measured one is the error this label exists to prevent.
  */
 export function researchDuration(row) {
-  if (!row) return UNAVAILABLE;
+  if (!row) return absentText();
   const state = row.monthsAtCurrentIncomeState || null;
   if (state === 'slot-receives-nothing') return 'no pips';
   const value = months(row.monthsAtCurrentIncome);
@@ -178,14 +197,16 @@ const COMPACT_UNITS = [
   [1e3, 'k']
 ];
 
-export function compact(value, places = 1) {
-  const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
+function compactParsed(parsed, places = 1) {
   const abs = Math.abs(parsed);
   for (const [scale, suffix] of COMPACT_UNITS) {
     if (abs >= scale) return `${(parsed / scale).toFixed(places)}${suffix}`;
   }
   return abs >= 10 ? parsed.toFixed(0) : parsed.toFixed(places);
+}
+
+export function compact(value, places = 1) {
+  return formatNumeric(value, (parsed) => compactParsed(parsed, places));
 }
 
 /**
@@ -197,15 +218,15 @@ export function compact(value, places = 1) {
  * claim about what it measured.
  */
 export function quantity(value, unit) {
-  const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
-  const sign = parsed > 0 ? '+' : '';
-  const label = String(unit || '').trim();
-  if (label === 'dollars/year') return `${sign}$${compact(parsed)}/yr`;
-  if (label === 'tonnes/month') return `${sign}${compact(parsed)} t/mo`;
-  if (label === 'research/month') return `${sign}${compact(parsed)} research/mo`;
-  if (label.startsWith('mission control')) return `${sign}${dec(parsed, 1)} ${label}`;
-  return `${sign}${compact(parsed)} ${label}`;
+  return formatNumeric(value, (parsed) => {
+    const sign = parsed > 0 ? '+' : '';
+    const label = String(unit || '').trim();
+    if (label === 'dollars/year') return `${sign}$${compactParsed(parsed)}/yr`;
+    if (label === 'tonnes/month') return `${sign}${compactParsed(parsed)} t/mo`;
+    if (label === 'research/month') return `${sign}${compactParsed(parsed)} research/mo`;
+    if (label.startsWith('mission control')) return `${sign}${parsed.toFixed(1)} ${label}`;
+    return `${sign}${compactParsed(parsed)} ${label}`;
+  });
 }
 
 /**
@@ -221,8 +242,8 @@ export function rollNote(chance, availabilityState) {
   const max = num(chance.maxPercent);
   const delta = num(chance.deltaPercentPerMonth);
   if (max === null && delta === null) return null;
-  const rate = delta === null ? UNAVAILABLE : `${int(delta)}%/mo`;
-  const cap = max === null ? UNAVAILABLE : `${int(max)}%`;
+  const rate = formatNumeric(delta, (parsed) => `${formatInteger(parsed)}%/mo`);
+  const cap = formatNumeric(max, (parsed) => `${formatInteger(parsed)}%`);
   const never = max !== null && max < 100 ? ' — may never land' : '';
   return `rolls ${rate}, cap ${cap}${never}`;
 }
@@ -655,11 +676,11 @@ export function deficitModel(payload) {
       title: titleText(deficit.reason),
       label: 'WIDEST MEASURED GAP',
       axisLabel: String(deficit.axisLabel || 'unnamed axis'),
-      gapText: gapPresent ? `${dec(deficit.ratio, 1)}×` : UNAVAILABLE,
+      gapText: gapPresent ? `${dec(deficit.ratio, 1)}×` : absentText(),
       gapPresent,
-      oursText: ownPresent ? `${dec(deficit.own, 1)}${deficit.unit ? ` ${deficit.unit}` : ''}` : UNAVAILABLE,
+      oursText: ownPresent ? `${dec(deficit.own, 1)}${deficit.unit ? ` ${deficit.unit}` : ''}` : absentText(),
       oursPresent: ownPresent,
-      theirsText: alienPresent ? `${dec(deficit.alien, 1)}${deficit.unit ? ` ${deficit.unit}` : ''}` : UNAVAILABLE,
+      theirsText: alienPresent ? `${dec(deficit.alien, 1)}${deficit.unit ? ` ${deficit.unit}` : ''}` : absentText(),
       theirsPresent: alienPresent
     };
   }
@@ -742,7 +763,7 @@ export function slotFacts(slots) {
   const cap = num(slots.projectSlotCapacity);
   const capText = cap !== null
     ? (free !== null && free > 0 ? `${int(free)} of ${int(cap)} project slots free` : `All ${int(cap)} project slots active`)
-    : UNAVAILABLE;
+    : absentText();
   facts.push({
     label: 'PROJECT CAPACITY',
     value: `${capText}. Stopping a project moves it to the backlog with progress intact; backlogging costs time, not research points.`
@@ -750,9 +771,9 @@ export function slotFacts(slots) {
 
   for (const slot of slots.slots || []) {
     const pips = num(slot.pips);
-    const pipText = pips === null ? UNAVAILABLE : `${int(pips)} pip${pips === 1 ? '' : 's'}`;
+    const pipText = pips === null ? absentText() : `${int(pips)} pip${pips === 1 ? '' : 's'}`;
     const progress = num(slot.accumulatedResearch) === null
-      ? UNAVAILABLE
+      ? absentText()
       : `${int(slot.accumulatedResearch)}${num(slot.totalCost) === null ? '' : ` of ${int(slot.totalCost)}`} pts${num(slot.percent) !== null ? ` (${int(slot.percent)}%)` : ''}`;
     const held = slot.displayName ? String(slot.displayName) : 'nothing assigned';
     const category = slot.category ? ` · ${String(slot.category)}` : '';
@@ -765,7 +786,7 @@ export function slotFacts(slots) {
 
   for (const extra of slots.unweightedOccupants || []) {
     const progress = num(extra.accumulatedResearch) === null
-      ? UNAVAILABLE
+      ? absentText()
       : `${int(extra.accumulatedResearch)}${num(extra.totalCost) === null ? '' : ` of ${int(extra.totalCost)}`} pts (${int(extra.percent)}%)`;
     facts.push({
       label: `BACKLOG · Slot ${int(extra.index)}`,
@@ -834,7 +855,7 @@ export function fullRankingFacts(payload) {
   for (const cap of ((payload.military && payload.military.capabilities) || {}).items || []) {
     const capChain = isChainRow(cap);
     const chainInfo = capChain
-      ? ` · ${int(cap.chain.stepsCount)} steps (Next: ${cap.chain.immediateNextStep?.displayName || UNAVAILABLE})`
+      ? ` · ${int(cap.chain.stepsCount)} steps (Next: ${cap.chain.immediateNextStep?.displayName || absentText()})`
       : '';
     facts.push({
       label: `CAPABILITY · New · ${cap.displayName || cap.id}`,
@@ -895,7 +916,7 @@ export function fullRankingFacts(payload) {
       label: `DRIVE CHAIN · ${chain.displayName} on ${chain.referenceDesign}`,
       value: `${mult(chain.rankMetricMultiple)} ${chain.axisLabel} · `
         + `ΔV ${dec(chain.deltaVKps, 1)} km/s · Accel ${dec(chain.combatAccelerationMps2, 2)} m/s² · `
-        + `${int(chain.chain.totalRemainingCost)} pts · ${int(chain.chain.stepsCount)} steps (Immediate: ${chain.chain.immediateNextStep?.displayName || UNAVAILABLE})`
+        + `${int(chain.chain.totalRemainingCost)} pts · ${int(chain.chain.stepsCount)} steps (Immediate: ${chain.chain.immediateNextStep?.displayName || absentText()})`
         + reachNote
         + (chain.dryMassCaveat ? ` · ${chain.dryMassCaveat}` : '')
     });
