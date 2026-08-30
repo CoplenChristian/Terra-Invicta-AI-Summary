@@ -19,6 +19,7 @@ import {
   estimateShipBuildDays,
   shipBuildDaysFromSnapshot
 } from './shipBuildTime.mjs';
+import { mountCost } from './militaryValue.mjs';
 import { asArray } from './util.mjs';
 
 /** The resource vector used by the ship construction bill. */
@@ -240,6 +241,15 @@ const familyAliases = Object.freeze({
   weapons: ['weapons', 'weapon', 'weaponTemplates']
 });
 
+const WEAPON_SOURCE_FAMILIES = Object.freeze([
+  'laser_weapon',
+  'magnetic_gun',
+  'missile',
+  'particle_weapon',
+  'plasma_weapon',
+  'gun'
+]);
+
 const rowsForFamily = (source, family) => {
   if (!source || typeof source !== 'object') return [];
   const roots = [source, source.families, source.componentStats];
@@ -252,6 +262,22 @@ const rowsForFamily = (source, family) => {
         if (Array.isArray(candidate.items)) return candidate.items;
         return Object.entries(candidate).map(([id, stats]) => ({ id, stats }));
       }
+    }
+  }
+  if (family === 'weapons') {
+    for (const root of [source?.componentStats, source]) {
+      if (!root || typeof root !== 'object') continue;
+      const rows = WEAPON_SOURCE_FAMILIES.flatMap(sourceFamily => {
+        const candidate = root[sourceFamily];
+        if (!isRecord(candidate)) return [];
+        return Object.entries(candidate).map(([id, stats]) => ({
+          id,
+          stats: isRecord(stats) ? { ...stats, weaponFamily: stats.weaponFamily || sourceFamily } : stats,
+          weaponFamily: sourceFamily,
+          family: sourceFamily
+        }));
+      });
+      if (rows.length > 0) return rows;
     }
   }
   return [];
@@ -445,24 +471,117 @@ const normalizeComponentList = (value, family, source) => {
     items.push({
       component: resolved,
       quantity,
-      family: textField(wrapper, ['family', 'templateFamily', 'weaponFamily', 'weaponType', 'type', 'classification'])
-        || textField(resolved, ['family', 'templateFamily', 'weaponFamily', 'weaponType', 'type', 'classification'])
+      family: textField(wrapper, ['weaponFamily', 'templateFamily', 'family', 'weaponType', 'type', 'classification'])
+        || textField(resolved, ['weaponFamily', 'templateFamily', 'family', 'weaponType', 'type', 'classification'])
         || null
     });
   }
   return { items, issues };
 };
 
+const buildWeaponCapacity = ({ hull, weapons }) => {
+  const hullName = displayNameOf(hull) || identityOf(hull) || 'selected hull';
+  const limits = {
+    nose: numberField(hull, ['noseHardpoints']),
+    hull: numberField(hull, ['hullHardpoints']),
+    internal: numberField(hull, ['internalModules'])
+  };
+  const missingLimit = ['nose', 'hull'].find(side => limits[side] === null);
+  if (missingLimit) {
+    return {
+      status: 'unknown',
+      available: false,
+      fits: null,
+      hull: { id: identityOf(hull), displayName: hullName },
+      limits,
+      required: { nose: null, hull: null },
+      items: [],
+      overCapacity: [],
+      reason: hull
+        ? `${hullName} ${missingLimit} hardpoint limit is not readable`
+        : 'hull is not selected, so weapon hardpoint limits cannot be evaluated'
+    };
+  }
+
+  const required = { nose: 0, hull: 0 };
+  const items = [];
+  const issues = [];
+  for (const item of weapons) {
+    const mount = textField(item.component, ['mount']);
+    const mountReading = mountCost(mount);
+    const displayName = displayNameOf(item.component) || identityOf(item.component) || 'weapon';
+    const capacityItem = {
+      id: identityOf(item.component),
+      displayName,
+      quantity: item.quantity,
+      mount,
+      side: mountReading.side,
+      hardpoints: mountReading.hardpoints,
+      requiredHardpoints: null,
+      reason: null
+    };
+    if (mountReading.side !== 'nose' && mountReading.side !== 'hull') {
+      capacityItem.reason = mountReading.reason || `${displayName} mount does not consume a ship hardpoint`;
+      issues.push(capacityItem.reason);
+      items.push(capacityItem);
+      continue;
+    }
+    capacityItem.requiredHardpoints = mountReading.hardpoints * item.quantity;
+    required[mountReading.side] += capacityItem.requiredHardpoints;
+    items.push(capacityItem);
+  }
+
+  if (issues.length > 0) {
+    return {
+      status: 'unknown',
+      available: false,
+      fits: null,
+      hull: { id: identityOf(hull), displayName: hullName },
+      limits,
+      required,
+      items,
+      overCapacity: [],
+      reason: [...new Set(issues)].join('; ')
+    };
+  }
+
+  const overCapacity = ['nose', 'hull']
+    .filter(side => required[side] > limits[side])
+    .map(side => ({
+      side,
+      required: required[side],
+      limit: limits[side],
+      reason: `${hullName} provides ${limits[side]} ${side} hardpoint(s), but selected weapons require ${required[side]}`
+    }));
+  return {
+    status: overCapacity.length > 0 ? 'over-capacity' : 'fits',
+    available: true,
+    fits: overCapacity.length === 0,
+    hull: { id: identityOf(hull), displayName: hullName },
+    limits,
+    required,
+    items,
+    overCapacity,
+    reason: overCapacity.length > 0 ? overCapacity.map(entry => entry.reason).join('; ') : null
+  };
+};
+
 const materialMapFrom = (record) => {
   const found = rawField(record, ['weightedBuildMaterials', 'materials', 'buildMaterials']);
-  if (!found.present || !isRecord(found.value)) {
+  const mix = found.value;
+  if (!found.present || (!isRecord(mix) && !Array.isArray(mix))) {
     return { available: false, values: null, sum: null, residual: null, reason: 'weighted build-material mix is not present' };
   }
   const values = {};
-  for (const material of SHIP_DESIGN_MATERIALS) {
+  for (const [index, material] of SHIP_DESIGN_MATERIALS.entries()) {
     // An omitted key is a measured zero in the template mix. An explicit null
     // is different: it says the component's share was not readable.
-    values[material] = hasOwn(found.value, material) ? finite(found.value[material]) : 0;
+    const present = Array.isArray(mix)
+      ? index < mix.length
+      : hasOwn(mix, material);
+    values[material] = present
+      ? finite(Array.isArray(mix) ? mix[index] : mix[material])
+      : 0;
     if (values[material] === null) {
       return {
         available: false,
@@ -490,7 +609,9 @@ const materialMapFrom = (record) => {
 
 const materialMapFor = (record, override) => {
   if (override !== undefined) {
-    if (!isRecord(override)) return { available: false, values: null, sum: null, residual: null, reason: 'propellant material mix is not an object' };
+    if (!isRecord(override) && !Array.isArray(override)) {
+      return { available: false, values: null, sum: null, residual: null, reason: 'propellant material mix is not an object or vector' };
+    }
     return materialMapFrom({ weightedBuildMaterials: override });
   }
   return materialMapFrom(record);
@@ -740,10 +861,10 @@ const armourMassFor = ({ hull, material, nosePoints, lateralPoints, tailPoints, 
     tail: normalizedPoints(tailPoints, 'tail')
   };
   const missing = [
-    density === null ? 'armour density is not readable' : null,
+    material === null ? 'armour material is not selected' : (density === null ? 'armour density is not readable' : null),
     vaporization === null ? 'armour heat of vaporization is not readable' : null,
-    width === null ? 'hull width is not readable' : null,
-    length === null ? 'hull length is not readable' : null,
+    hull === null ? 'hull is not selected' : (width === null ? 'hull width is not readable' : null),
+    hull === null ? null : (length === null ? 'hull length is not readable' : null),
     points.nose.reason,
     points.lateral.reason,
     points.tail.reason
@@ -847,6 +968,22 @@ const utilityPropellantModules = (utilityItems, supplied) => {
 };
 
 const drivePower = (drive, effectiveEvKps) => {
+  if (!drive) {
+    return {
+      requiredGW: null,
+      storedReqPowerGW: null,
+      modelledGW: null,
+      thrustRatingGW: null,
+      baseEvKps: null,
+      driveEfficiency: null,
+      selfPowered: null,
+      source: null,
+      agreement: null,
+      formula: POWER_FORMULAE.propulsion,
+      reason: 'drive is not selected',
+      effectiveEvKps
+    };
+  }
   const stored = numberField(drive, ['reqPowerGW', 'req power', 'req_power', 'reqPower']);
   const thrustRating = numberField(drive, ['thrustRatingGW', 'thrustRating_GW']);
   const baseEv = numberField(drive, ['EV_kps']);
@@ -1061,6 +1198,7 @@ const entriesForList = (list, family, kind) => list.map((item, index) => compone
 }));
 
 const crewFor = (record, label) => {
+  if (!record) return { value: null, reason: `${label} is not selected` };
   const crew = numberField(record, ['crew']);
   return crew === null ? { value: null, reason: `${label} crew is not readable` } : { value: crew, reason: null };
 };
@@ -1151,7 +1289,9 @@ const componentCrewTotal = ({ hull, reactor, radiator, utilities, weapons, batte
   const total = sumKnown(parts.map(part => part.value), 'one or more selected component crew values are not readable');
   return {
     total: total.value,
-    reason: total.reason,
+    reason: total.value === null
+      ? (parts.find(part => part.value === null)?.reason || total.reason)
+      : null,
     parts: parts.map(part => part.value)
   };
 };
@@ -1213,7 +1353,9 @@ const buildPower = ({ hull, drive, reactor, crew, utilities, weapons, effectiveE
       ? null
       : plantOutput < propulsion.requiredGW,
     reactorMassTons,
-    reactorMassReason: reactorMassTons === null ? 'reactor output or specific power is not readable' : null,
+    reactorMassReason: reactorMassTons === null
+      ? (reactor ? 'reactor output or specific power is not readable' : 'reactor is not selected')
+      : null,
     reactorEfficiency: numberField(reactor, ['efficiency']),
     formulae: POWER_FORMULAE
   };
@@ -1224,6 +1366,11 @@ const buildHeat = ({ drive, reactor, power, radiator }) => {
   const openPower = sumKnown([power.systemsGW, power.weaponsGW], 'systems or weapons power is not readable');
   const closedPower = sumKnown([power.systemsGW, power.weaponsGW, power.propulsionGW], 'systems, weapons or propulsion power is not readable');
   const specificPower = numberField(radiator, ['specificPowerKWkg', 'specificPower_2s_KWkg']);
+  const selectionReason = !drive
+    ? 'drive is not selected'
+    : (!reactor
+      ? 'reactor is not selected'
+      : (!radiator ? 'radiator is not selected' : null));
   const coolingRaw = textField(drive, ['cooling']);
   const cooling = coolingRaw ? coolingRaw.toLowerCase() : null;
   const waste = (heatPower) => plantEfficiency === null || heatPower === null
@@ -1243,7 +1390,7 @@ const buildHeat = ({ drive, reactor, power, radiator }) => {
       radiatorMassKg: massKg,
       radiatorMassTons: massKg === null ? null : massKg / KG_PER_TON,
       reason: heatPower === null
-        ? (mode === 'Open' ? openPower.reason : closedPower.reason)
+        ? (selectionReason || (mode === 'Open' ? openPower.reason : closedPower.reason))
         : (plantEfficiency === null ? 'power-plant efficiency is not readable' : (specificPower === null ? 'radiator specific power is not readable' : null))
     };
   }
@@ -1271,7 +1418,7 @@ const buildHeat = ({ drive, reactor, power, radiator }) => {
       ? selected.reason
       : (calcRange
         ? (rangeAvailable ? null : 'Calc cooling needs both Open and Closed heat resolutions, but one is unmeasured')
-        : 'drive cooling is absent or is not one of Open, Closed or Calc'),
+        : (selectionReason || 'drive cooling is absent or is not one of Open, Closed or Calc')),
     formulae: HEAT_FORMULAE
   };
 };
@@ -1293,11 +1440,11 @@ const buildMass = ({ hull, drive, reactor, radiator, armour, tanks, utilities, w
     reason: tanks.reason
   });
   const entries = [
-    componentMassEntry({ key: 'hull', record: hull, massTons: hullMass, reason: hullMass === null ? 'hull mass is not readable' : null }),
-    componentMassEntry({ key: 'drive', record: drive, massTons: driveMass, reason: driveMass === null ? 'drive mass is not readable' : null }),
+    componentMassEntry({ key: 'hull', record: hull, massTons: hullMass, reason: hull ? (hullMass === null ? 'hull mass is not readable' : null) : 'hull is not selected' }),
+    componentMassEntry({ key: 'drive', record: drive, massTons: driveMass, reason: drive ? (driveMass === null ? 'drive mass is not readable' : null) : 'drive is not selected' }),
     componentMassEntry({ key: 'reactor', record: reactor, massTons: power.reactorMassTons, reason: power.reactorMassReason }),
-    componentMassEntry({ key: 'radiator', record: radiator, massTons: heat.radiatorMassTons, reason: heat.reason }),
-    componentMassEntry({ key: 'armour', record: armour.materialRecord, massTons: armour.massTons, reason: armour.reason }),
+    componentMassEntry({ key: 'radiator', record: radiator, massTons: heat.radiatorMassTons, reason: radiator ? heat.reason : 'radiator is not selected' }),
+    componentMassEntry({ key: 'armour', record: armour.materialRecord, massTons: armour.massTons, reason: armour.materialRecord ? armour.reason : 'armour material is not selected' }),
     ...entriesForList(utilities, 'utilityModules', 'utility'),
     ...entriesForList(weapons, 'weapons', 'weapon'),
     ...entriesForList(batteries, 'batteries', 'battery'),
@@ -1305,7 +1452,10 @@ const buildMass = ({ hull, drive, reactor, radiator, armour, tanks, utilities, w
     tankEntry
   ];
   const dryEntries = entries.filter(entry => !entry.wetOnly);
-  const dry = sumMasses(dryEntries, 'one or more dry-mass components are not readable');
+  const dry = sumMasses(
+    dryEntries,
+    dryEntries.find(entry => entry.massTons === null)?.reason || 'one or more dry-mass components are not readable'
+  );
   const propellantMass = tanks.massTons;
   const wet = dry.value === null || propellantMass === null
     ? { value: null, reason: dry.value === null ? dry.reason : tanks.reason }
@@ -1314,7 +1464,11 @@ const buildMass = ({ hull, drive, reactor, radiator, armour, tanks, utilities, w
   if (heat.radiatorMassRangeTons) {
     for (const [mode, radiatorMassTons] of Object.entries(heat.radiatorMassRangeTons)) {
       const alternativeEntries = entries.map(entry => entry.key === 'radiator' ? { ...entry, massTons: radiatorMassTons, massKg: radiatorMassTons * KG_PER_TON, reason: null } : entry);
-      const dryAlternative = sumMasses(alternativeEntries.filter(entry => !entry.wetOnly), 'one or more dry-mass components are not readable');
+      const dryAlternativeEntries = alternativeEntries.filter(entry => !entry.wetOnly);
+      const dryAlternative = sumMasses(
+        dryAlternativeEntries,
+        dryAlternativeEntries.find(entry => entry.massTons === null)?.reason || 'one or more dry-mass components are not readable'
+      );
       const wetAlternative = dryAlternative.value === null || propellantMass === null
         ? null
         : dryAlternative.value + propellantMass;
@@ -1381,8 +1535,9 @@ export function calculateShipDesign(input = {}) {
     scaling
   });
   const utilities = normalizeComponentList(input.utilityModules, 'utilityModules', source);
-  const weapons = normalizeComponentList(input.weapons, 'weapons', source);
+  const weapons = normalizeComponentList(input.weapons ?? input.weapon, 'weapons', source);
   const batteries = normalizeComponentList(input.batteries, 'batteries', source);
+  const weaponCapacity = buildWeaponCapacity({ hull, weapons: weapons.items });
   const tanks = resolvePropellantTanks(input.propellantTanks, drive);
 
   const utilityModuleMap = utilityPropellantModules(utilities.items, input.propellantModules || input.snapshot?.propellantModules);
@@ -1468,7 +1623,36 @@ export function calculateShipDesign(input = {}) {
     cost.rangeLabel = 'Calc cooling: cost range follows the Open/Closed radiator-mass range';
   }
 
+  const compatibilityRequired = textField(drive, ['requiredPowerPlant']);
+  const compatibilityActual = textField(reactor, ['powerPlantClass']);
+  const compatibility = compatibilityRequired === null || compatibilityActual === null
+    ? {
+      status: 'unknown',
+      compatible: null,
+      requiredPowerPlantClass: compatibilityRequired,
+      reactorPowerPlantClass: compatibilityActual,
+      reason: compatibilityRequired === null
+        ? (drive ? 'drive required power-plant class is not readable' : 'drive is not selected')
+        : (reactor ? 'selected reactor power-plant class is not readable' : 'reactor is not selected')
+    }
+    : {
+      status: compatibilityRequired === 'Any_General' || compatibilityRequired === compatibilityActual ? 'compatible' : 'incompatible',
+      compatible: compatibilityRequired === 'Any_General' || compatibilityRequired === compatibilityActual,
+      requiredPowerPlantClass: compatibilityRequired,
+      reactorPowerPlantClass: compatibilityActual,
+      reason: compatibilityRequired === 'Any_General' || compatibilityRequired === compatibilityActual
+        ? null
+        : `drive requires ${compatibilityRequired}, selected reactor is ${compatibilityActual}`
+    };
+  const refusalReasons = [
+    compatibility.compatible === false ? compatibility.reason : null,
+    weaponCapacity.status === 'over-capacity' ? weaponCapacity.reason : null
+  ].filter(Boolean);
+  const refusalReason = refusalReasons.length > 0 ? [...new Set(refusalReasons)].join('; ') : null;
+
   const performanceReason = (kind) => {
+    if (refusalReason) return refusalReason;
+    if (!drive) return driveResolution.reason || 'drive is not selected';
     if (mass.wetKg === null) return mass.wetReason || 'wet mass is not readable';
     if (kind === 'deltaV' && effectiveEv.evKps === null) return 'effective exhaust velocity is not readable';
     if (power.thrustScalingFactor === null) return power.thrustScalingReason || 'thrust scaling is not readable';
@@ -1491,7 +1675,7 @@ export function calculateShipDesign(input = {}) {
     thrustCap: numberField(drive, ['thrustCap']),
     reasons: {
       cruiseAccelerationMps2: cruise === null ? performanceReason('cruise') : null,
-      combatAccelerationMps2: combat === null ? (numberField(drive, ['thrustCap']) === null ? 'drive thrust cap is not readable' : performanceReason('combat')) : null,
+      combatAccelerationMps2: combat === null ? (refusalReason || (numberField(drive, ['thrustCap']) === null ? (drive ? 'drive thrust cap is not readable' : performanceReason('combat')) : performanceReason('combat'))) : null,
       deltaVKps: deltaV === null ? performanceReason('deltaV') : null
     },
     formulae: {
@@ -1501,57 +1685,52 @@ export function calculateShipDesign(input = {}) {
     }
   };
 
-  const compatibilityRequired = textField(drive, ['requiredPowerPlant']);
-  const compatibilityActual = textField(reactor, ['powerPlantClass']);
-  const compatibility = compatibilityRequired === null || compatibilityActual === null
-    ? {
-      status: 'unknown',
-      compatible: null,
-      requiredPowerPlantClass: compatibilityRequired,
-      reactorPowerPlantClass: compatibilityActual,
-      reason: 'drive required power-plant class or reactor class is not readable'
-    }
-    : {
-      status: compatibilityRequired === 'Any_General' || compatibilityRequired === compatibilityActual ? 'compatible' : 'incompatible',
-      compatible: compatibilityRequired === 'Any_General' || compatibilityRequired === compatibilityActual,
-      requiredPowerPlantClass: compatibilityRequired,
-      reactorPowerPlantClass: compatibilityActual,
-      reason: compatibilityRequired === 'Any_General' || compatibilityRequired === compatibilityActual
-        ? null
-        : `drive requires ${compatibilityRequired}, selected reactor is ${compatibilityActual}`
-    };
-
   const buildTime = buildTimeFor(input, hull);
   const reasons = {};
   addReason(reasons, 'cruiseAccelerationMps2', performance.reasons.cruiseAccelerationMps2);
   addReason(reasons, 'combatAccelerationMps2', performance.reasons.combatAccelerationMps2);
   addReason(reasons, 'deltaVKps', performance.reasons.deltaVKps);
-  addReason(reasons, 'totalResourceCost', cost.reason);
-  addReason(reasons, 'dryMassTons', mass.dryReason);
-  addReason(reasons, 'wetMassTons', mass.wetReason);
-  addReason(reasons, 'thrustScalingFactor', power.thrustScalingReason);
-  addReason(reasons, 'wasteHeatGW', heat.reason);
-  addReason(reasons, 'radiatorMassTons', heat.reason);
-  addReason(reasons, 'crew', crew.reason);
+  addReason(reasons, 'totalResourceCost', cost.total === null ? (refusalReason || cost.reason) : null);
+  addReason(reasons, 'dryMassTons', mass.dryTons === null ? (refusalReason || mass.dryReason) : null);
+  addReason(reasons, 'wetMassTons', mass.wetTons === null ? (refusalReason || mass.wetReason) : null);
+  addReason(reasons, 'thrustScalingFactor', power.thrustScalingFactor === null ? (refusalReason || power.thrustScalingReason) : null);
+  addReason(reasons, 'wasteHeatGW', heat.wasteHeatGW === null ? (refusalReason || heat.reason) : null);
+  addReason(reasons, 'radiatorMassTons', heat.radiatorMassTons === null ? (refusalReason || heat.reason) : null);
+  addReason(reasons, 'crew', crew.total === null ? (refusalReason || crew.reason) : null);
   addReason(reasons, 'buildTimeDays', buildTime.available ? null : buildTime.reason);
   for (const issue of [...driveResolution.reason ? [{ reason: driveResolution.reason }] : [], ...utilities.issues, ...weapons.issues, ...batteries.issues]) {
     if (issue?.reason) reasons.components = reasons.components ? `${reasons.components}; ${issue.reason}` : issue.reason;
   }
+  if (weaponCapacity.status === 'over-capacity') {
+    addReason(reasons, 'weapons', weaponCapacity.reason);
+    addReason(reasons, 'weaponCapacity', weaponCapacity.reason);
+  } else if (weaponCapacity.status === 'unknown') {
+    addReason(reasons, 'weaponCapacity', weaponCapacity.reason);
+  }
   if (compatibility.reason) addReason(reasons, 'compatibility', compatibility.reason);
+
+  const buildable = compatibility.compatible === false || weaponCapacity.status === 'over-capacity'
+    ? false
+    : (compatibility.compatible === null || weaponCapacity.status === 'unknown' ? null : true);
 
   const readout = {
     available: true,
-    buildable: compatibility.compatible,
+    buildable,
     status: compatibility.compatible === false
       ? 'incompatible'
-      : (compatibility.compatible === null ? 'incomplete' : 'calculated'),
+      : (weaponCapacity.status === 'over-capacity'
+        ? 'over-capacity'
+        : (buildable === null ? 'incomplete' : 'calculated')),
     reasons,
     compatibility,
+    weaponCapacity,
     // The first four keys are intentionally top-level: they are the owner's
     // requested readout, not values hidden behind supporting detail panels.
     cruiseAccelerationMps2: cruise,
     combatAccelerationMps2: combat,
     deltaVKps: deltaV,
+    dryMassTons: mass.dryTons,
+    wetMassTons: mass.wetTons,
     totalResourceCost: cost.total,
     performance,
     mass,

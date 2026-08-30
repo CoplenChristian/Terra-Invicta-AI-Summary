@@ -1,5 +1,5 @@
 //
-// Purpose: the ship-designer component catalogue — seven families, unlock
+// Purpose: the ship-designer component catalogue — eight families, unlock
 //   joins, player/omniscient gating, drive ladders and reactor compatibility.
 
 const { test } = require('node:test');
@@ -14,17 +14,25 @@ const snapshotTemplates = require('../server/snapshot/templates');
 const { loadFixtureFilteredSnapshot } = require('./fixtures/frozenSnapshots');
 
 const OBSERVER = 4712;
-const FAMILIES = ['drives', 'reactors', 'radiators', 'hulls', 'utilityModules', 'armour', 'batteries'];
+const FAMILIES = ['drives', 'reactors', 'radiators', 'hulls', 'utilityModules', 'armour', 'batteries', 'weapons'];
 
 const fixture = (mode = 'player') => loadFixtureFilteredSnapshot({ mode, observer: OBSERVER });
 const catalogue = (mode = 'player', snapshot = fixture(mode)) => buildShipComponentCatalogue(snapshot, {
   mode,
   observerId: OBSERVER
 });
+const withTemplateStats = mode => {
+  const snapshot = fixture(mode);
+  return {
+    ...snapshot,
+    driveStats: snapshotTemplates.buildDriveStats(),
+    componentStats: snapshotTemplates.buildComponentStats()
+  };
+};
 
 const clone = value => structuredClone(value);
 
-test('the catalogue exposes all seven families with truthful source and row counts', () => {
+test('the catalogue exposes all eight families with truthful source and row counts', () => {
   const result = catalogue('player');
 
   assert.equal(result.available, true);
@@ -38,7 +46,8 @@ test('the catalogue exposes all seven families with truthful source and row coun
     hulls: { rows: 28, sourceEntries: 28, sourceOmitted: 0 },
     utilityModules: { rows: 57, sourceEntries: 58, sourceOmitted: 1 },
     armour: { rows: 12, sourceEntries: 12, sourceOmitted: 0 },
-    batteries: { rows: 10, sourceEntries: 10, sourceOmitted: 0 }
+    batteries: { rows: 10, sourceEntries: 10, sourceOmitted: 0 },
+    weapons: { rows: 309, sourceEntries: 309, sourceOmitted: 0 }
   });
   assert.match(result.families.utilityModules.sourceOmittedReason, /placeholder/);
 
@@ -46,7 +55,7 @@ test('the catalogue exposes all seven families with truthful source and row coun
   // a component. It is announced in the census instead of becoming a fake
   // ungated module row.
   assert.equal(result.families.utilityModules.items.some(row => row.id === 'Empty'), false);
-  assert.equal(result.items.length, 96 + 61 + 13 + 28 + 57 + 12 + 10);
+  assert.equal(result.items.length, 96 + 61 + 13 + 28 + 57 + 12 + 10 + 309);
   assert.equal(
     result.families.drives.items.reduce((sum, row) => sum + row.variants.length, 0),
     541,
@@ -63,7 +72,8 @@ test('every output row carries identity, stats, unlock metadata, and research st
     hulls: ['noseHardpoints', 'hullHardpoints', 'internalModules', 'structuralIntegrity', 'massTons', 'consTier', 'maxOfficers', 'crew'],
     utilityModules: ['massTons', 'powerRequirementMW', 'specialModuleValue', 'minConsTier', 'crew'],
     armour: ['baryonicHalfValueCm', 'xRayHalfValueCm', 'densityKgM3', 'heatOfVaporizationMJkg'],
-    batteries: ['energyCapacityGJ', 'massTons', 'rechargeRateGJs', 'hp', 'crew']
+    batteries: ['energyCapacityGJ', 'massTons', 'rechargeRateGJs', 'hp', 'crew'],
+    weapons: ['massTons', 'crew']
   };
 
   for (const family of FAMILIES) {
@@ -95,15 +105,56 @@ test('every output row carries identity, stats, unlock metadata, and research st
   }
 });
 
+test('weapons are one gated catalogue family with mount and source-family metadata in both modes', () => {
+  const weaponFamilies = new Set([
+    'laser_weapon',
+    'magnetic_gun',
+    'missile',
+    'particle_weapon',
+    'plasma_weapon',
+    'gun'
+  ]);
+
+  for (const mode of ['player', 'omniscient']) {
+    const result = catalogue(mode, withTemplateStats(mode));
+    const family = result.families.weapons;
+    assert.ok(family, `${mode}: weapons family`);
+    assert.equal(family.totalCount, 309, `${mode}: every weapon template is present`);
+    assert.equal(family.sourceTotalCount, 309, `${mode}: source census`);
+    assert.equal(family.sourceOmittedCount, 0, `${mode}: no weapon source rows are silently omitted`);
+    assert.equal(family.items.length, 309, `${mode}: item rows`);
+
+    for (const row of family.items) {
+      assert.equal(row.family, 'weapons');
+      assert.ok(weaponFamilies.has(row.weaponFamily), `${mode}:${row.id} unlock family`);
+      assert.equal(row.unlockFamily, row.weaponFamily);
+      assert.equal(typeof row.stats.mount, 'string', `${mode}:${row.id} mount`);
+      assert.equal(row.mount, row.stats.mount, `${mode}:${row.id} carries mount at row level`);
+      if (row.stats.massTons !== null) {
+        assert.ok(row.stats.weightedBuildMaterials, `${mode}:${row.id} material mix`);
+      }
+      assert.ok(row.unlockProject || row.researchStatus === 'ungated', `${mode}:${row.id} gate state`);
+      if (mode === 'omniscient') {
+        assert.equal(row.buildable, true);
+        assert.equal(row.locked, false);
+      } else if (row.unlockProject) {
+        assert.equal(row.buildable, row.researched);
+        assert.equal(row.locked, !row.researched);
+      }
+    }
+
+    const locked = family.items.filter(row => row.locked === true);
+    if (mode === 'player') {
+      assert.ok(locked.length > 0, `${mode}: weapon locks remain visible`);
+      assert.ok(locked.every(row => row.unlockProjectId && row.unlockProjectName),
+        `${mode}: locked weapons name their unlock project`);
+    }
+    assert.ok(family.items.find(row => row.id === 'PointDefenseLaserTurret')?.stats.weightedBuildMaterials,
+      `${mode}: a ship-mounted weapon carries its material mix`);
+  }
+});
+
 test('real template component fields reach catalogue rows in both modes, including residual mixes', () => {
-  const withTemplateStats = mode => {
-    const snapshot = fixture(mode);
-    return {
-      ...snapshot,
-      driveStats: snapshotTemplates.buildDriveStats(),
-      componentStats: snapshotTemplates.buildComponentStats()
-    };
-  };
   const materialSum = mix => Object.values(mix || {})
     .reduce((sum, value) => sum + Number(value || 0), 0);
 

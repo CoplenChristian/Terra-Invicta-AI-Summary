@@ -12,6 +12,27 @@ const queryValue = value => {
   return candidate;
 };
 
+const parseWeaponQuery = value => {
+  if (value === null || value === undefined || value === '') return null;
+  if (Array.isArray(value)) return value.flatMap(entry => parseWeaponQuery(entry) || []);
+  if (typeof value !== 'string') return value;
+  const raw = value.trim();
+  if (!raw) return null;
+  if (raw.startsWith('[') || raw.startsWith('{')) {
+    try {
+      return parseWeaponQuery(JSON.parse(raw));
+    } catch {
+      // Keep the raw id below; the calculator will name an unknown selection
+      // instead of silently dropping a malformed query value.
+    }
+  }
+  const match = raw.match(/^(.+?)(?:[:=](\d+))?$/);
+  return {
+    component: match?.[1] || raw,
+    count: match?.[2] === undefined ? 1 : Number(match[2])
+  };
+};
+
 const rowsFor = (catalogue, family) => catalogue?.families?.[family]?.items || [];
 
 /**
@@ -68,6 +89,7 @@ export function shipDesignerResource(snapshot, options = {}) {
     lateral = null,
     tail = null,
     tanks = null,
+    weapons = null,
     campaignSettings = null
   } = options;
 
@@ -78,6 +100,7 @@ export function shipDesignerResource(snapshot, options = {}) {
     ? driveVariantCount(catalogue, drive)
     : explicitThrusters;
   const selectedArmour = selectedRow(catalogue, 'armour', armour);
+  const selectedWeapons = parseWeaponQuery(weapons);
 
   const calculation = calculateShipDesign({
     catalogue,
@@ -91,6 +114,7 @@ export function shipDesignerResource(snapshot, options = {}) {
     lateralPoints: queryValue(lateral),
     tailPoints: queryValue(tail),
     propellantTanks: queryValue(tanks) === null ? null : { count: queryValue(tanks) },
+    weapons: selectedWeapons,
     campaignSettings: campaignSettingsFor(snapshot, campaignSettings)
   });
 
@@ -108,7 +132,8 @@ export function shipDesignerResource(snapshot, options = {}) {
       nose: queryValue(nose),
       lateral: queryValue(lateral),
       tail: queryValue(tail),
-      tanks: queryValue(tanks)
+      tanks: queryValue(tanks),
+      weapons: selectedWeapons
     },
     ...calculation
   };

@@ -61,6 +61,38 @@ test('ship-designer resource composes real catalogue rows into a calculated read
   assert.ok(Math.abs(result.armour.massTons - 104.71975511965978) < 1e-9);
 });
 
+test('ship-designer resource accepts a weapon selection and its mass/cost rise', () => {
+  const snapshot = omniscientSnapshot();
+  const common = {
+    mode: 'omniscient',
+    shipDesigner: {
+      hull: 'Escort',
+      drive: 'VASIMRx1',
+      reactor: 'SolidCoreFissionReactorVII',
+      radiator: 'TitaniumArray',
+      armour: 'CompositeArmor',
+      nose: 4,
+      lateral: 0,
+      tail: 1,
+      tanks: 1,
+      campaignSettings: { cinematicCombatRealismScale: true }
+    }
+  };
+  const unarmed = localResources.buildResource(snapshot, 'ship-designer', common);
+  const armed = localResources.buildResource(snapshot, 'ship-designer', {
+    ...common,
+    shipDesigner: {
+      ...common.shipDesigner,
+      weapons: [{ component: 'PointDefenseLaserTurret', count: 1 }]
+    }
+  });
+
+  assert.ok(armed.catalogue.families.weapons.items.length > 0);
+  assert.ok(armed.mass.dryTons > unarmed.mass.dryTons);
+  assert.ok(armed.totalResourceCost.metals > unarmed.totalResourceCost.metals);
+  assert.ok(armed.power.weaponsGW > 0);
+});
+
 test('buildResource projects nations and councilors', () => {
   const snapshot = omniscientSnapshot();
   const nations = localResources.buildResource(snapshot, 'nations', { mode: 'omniscient' });

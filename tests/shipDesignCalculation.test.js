@@ -37,6 +37,9 @@ const HULL = Object.freeze({
   length_m: '50',
   width_m: '10',
   mass_tons: '350',
+  noseHardpoints: '0',
+  hullHardpoints: '2',
+  internalModules: '5',
   crew: '4',
   consTier: '1',
   baseConstructionTime_days: '90',
@@ -100,6 +103,7 @@ const LASER = Object.freeze({
   id: 'TestLaser',
   displayName: 'Test Laser',
   family: 'laser_weapon',
+  mount: 'OneHull',
   mass_tons: '10',
   crew: '1',
   selfPowered: false,
@@ -275,6 +279,76 @@ test('underpowered plants scale thrust but never veto a compatible design', () =
   assertApprox(result.performance.combatAccelerationMps2, result.performance.cruiseAccelerationMps2 * 0.5);
 });
 
+test('an incompatible drive/reactor pair names both classes on every dependent null', () => {
+  const result = calculateShipDesign(inputFor({
+    drive: {
+      ...DRIVE,
+      requiredPowerPlant: 'Solid_Core_Fission',
+      cooling: 'Calc'
+    },
+    reactor: { ...REACTOR, powerPlantClass: 'Z_Pinch_Fusion' }
+  }));
+
+  assert.equal(result.compatibility.status, 'incompatible');
+  assert.equal(result.buildable, false);
+  assert.match(result.compatibility.reason, /Solid_Core_Fission.*Z_Pinch_Fusion/);
+
+  for (const field of [
+    'cruiseAccelerationMps2',
+    'combatAccelerationMps2',
+    'deltaVKps',
+    'dryMassTons',
+    'wetMassTons',
+    'totalResourceCost'
+  ]) {
+    assert.equal(result[field], null, `${field} should be absent for this Calc-cooling refusal`);
+    assert.match(result.reasons[field], /Solid_Core_Fission.*Z_Pinch_Fusion/, `${field} reason`);
+    assert.doesNotMatch(result.reasons[field], /dry-mass components are not readable/, `${field} must not blame mass`);
+  }
+});
+
+test('weapon hardpoint over-capacity refuses the design and names the hull limit', () => {
+  const weapon = { ...LASER, mount: 'OneHull' };
+  const result = calculateShipDesign(inputFor({
+    hull: { ...HULL, hullHardpoints: 1 },
+    weapons: [{ component: weapon, count: 2, family: 'laser_weapon' }]
+  }));
+
+  assert.equal(result.weaponCapacity.status, 'over-capacity');
+  assert.equal(result.weaponCapacity.limits.hull, 1);
+  assert.equal(result.weaponCapacity.required.hull, 2);
+  assert.equal(result.buildable, false);
+  assert.match(result.weaponCapacity.reason, /Escort.*1|1.*Escort|hull.*1.*hardpoint/i);
+  assert.match(result.reasons.weapons, /hardpoint|capacity/i);
+  assert.ok(result.mass.dryTons > calculateShipDesign(inputFor({ weapons: [] })).mass.dryTons,
+    'the rejected load is still counted in the mass readout');
+});
+
+test('a missing selection leaves nulls with the missing selection named', () => {
+  const result = calculateShipDesign();
+
+  for (const field of ['cruiseAccelerationMps2', 'combatAccelerationMps2', 'deltaVKps', 'dryMassTons', 'wetMassTons', 'totalResourceCost']) {
+    assert.equal(result[field], null, `${field} is absent`);
+    assert.match(result.reasons[field], /not selected|not supplied/i, `${field} reason names the missing input`);
+  }
+  assert.match(result.reasons.deltaVKps, /drive.*not selected/i);
+  assert.doesNotMatch(result.reasons.deltaVKps, /dry-mass components/i);
+});
+
+test('an unreadable hull mass is named by every performance null that depends on it', () => {
+  const result = calculateShipDesign(inputFor({
+    hull: { ...HULL, mass_tons: 'not-a-mass' }
+  }));
+
+  assert.equal(result.mass.dryTons, null);
+  assert.equal(result.mass.wetTons, null);
+  for (const field of ['cruiseAccelerationMps2', 'combatAccelerationMps2', 'deltaVKps', 'dryMassTons', 'wetMassTons']) {
+    assert.equal(result[field], null, `${field} is absent`);
+    assert.match(result.reasons[field], /hull mass is not readable/i, `${field} reason names the hull`);
+    assert.doesNotMatch(result.reasons[field], /dry-mass components/i);
+  }
+});
+
 test('naval guns contribute mass but no weapon power or waste heat', () => {
   const gun = {
     id: 'TestGun',
@@ -415,8 +489,8 @@ test('absent inputs stay null with named reasons', () => {
   assert.equal(result.power.thrustScalingFactor, null);
   assert.equal(result.heat.radiatorMassTons, null);
   assert.equal(result.crew.total, null);
-  assert.match(result.reasons.cruiseAccelerationMps2, /mass|thrust/i);
-  assert.match(result.reasons.totalResourceCost, /radiator|cooling|mass/i);
+  assert.match(result.reasons.cruiseAccelerationMps2, /not selected|mass|thrust/i);
+  assert.match(result.reasons.totalResourceCost, /not selected|radiator|cooling|mass/i);
 });
 
 test('the named cost rate carries its corroborating, unmeasured provenance', () => {
@@ -459,4 +533,45 @@ test('feeds real catalogue components into the calculator and produces delta-V',
   assert.notEqual(result.cruiseAccelerationMps2, null);
   assert.notEqual(result.combatAccelerationMps2, null);
   assert.notEqual(result.totalResourceCost, null);
+});
+
+test('a real catalogue weapon raises dry mass, resource cost, and energy-weapon power', () => {
+  const fixture = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: 4712 });
+  const snapshot = {
+    ...fixture,
+    driveStats: snapshotTemplates.buildDriveStats(),
+    componentStats: snapshotTemplates.buildComponentStats()
+  };
+  const catalogue = buildShipComponentCatalogue(snapshot, {
+    mode: 'omniscient',
+    observerId: 4712
+  });
+  const selected = (family, id) => catalogue.families[family].items.find(row => row.id === id);
+  const common = {
+    catalogue,
+    hull: selected('hulls', 'Escort'),
+    drive: selected('drives', 'VASIMR'),
+    thrusterCount: 1,
+    reactor: selected('reactors', 'SolidCoreFissionReactorVII'),
+    radiator: selected('radiators', 'TitaniumArray'),
+    armour: {
+      material: selected('armour', 'CompositeArmor'),
+      points: { nose: 4, lateral: 0, tail: 1 }
+    },
+    propellantTanks: { count: 1 },
+    campaignSettings: { cinematicCombatRealismScale: true }
+  };
+  const unarmed = calculateShipDesign({ ...common, weapons: [] });
+  const laser = selected('weapons', 'PointDefenseLaserTurret');
+  assert.ok(laser, 'the real catalogue must expose a laser weapon');
+  const armed = calculateShipDesign({
+    ...common,
+    weapons: [{ component: laser, count: 1 }]
+  });
+
+  assert.equal(armed.weaponCapacity.status, 'fits');
+  assert.ok(armed.mass.dryTons > unarmed.mass.dryTons);
+  assert.ok(armed.totalResourceCost.metals > unarmed.totalResourceCost.metals);
+  assert.ok(armed.power.weaponsGW > 0);
+  assert.ok(armed.heat.scenarios.Closed.heatPowerGW > unarmed.heat.scenarios.Closed.heatPowerGW);
 });

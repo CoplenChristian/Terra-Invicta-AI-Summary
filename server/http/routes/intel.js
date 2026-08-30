@@ -144,7 +144,8 @@ function register(app) {
           nose: req.query.nose ?? null,
           lateral: req.query.lateral ?? req.query.side ?? null,
           tail: req.query.tail ?? null,
-          tanks: req.query.tanks ?? null
+          tanks: req.query.tanks ?? null,
+          weapons: req.query.weapons ?? req.query.weapon ?? null
         }
         : null;
       // A malformed `?detail=` is a 400, never a silent fall-through to the

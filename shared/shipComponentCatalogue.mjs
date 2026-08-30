@@ -1,6 +1,6 @@
 // shared/shipComponentCatalogue.mjs
 //
-// Purpose: normalize the seven ship-designer component families, join each
+// Purpose: normalize the eight ship-designer component families, join each
 //   row to its unlock project, and resolve player versus omniscient buildability.
 
 // This module deliberately reads only a snapshot. The template directory is
@@ -23,8 +23,32 @@ export const SHIP_COMPONENT_FAMILIES = Object.freeze([
   Object.freeze({ outputFamily: 'hulls', unlockFamily: 'ship_hull', sourceKey: 'ship_hull' }),
   Object.freeze({ outputFamily: 'utilityModules', unlockFamily: 'utility_module', sourceKey: 'utility_module' }),
   Object.freeze({ outputFamily: 'armour', unlockFamily: 'ship_armor', sourceKey: 'ship_armor' }),
-  Object.freeze({ outputFamily: 'batteries', unlockFamily: 'battery', sourceKey: 'battery' })
+  Object.freeze({ outputFamily: 'batteries', unlockFamily: 'battery', sourceKey: 'battery' }),
+  Object.freeze({
+    outputFamily: 'weapons',
+    unlockFamily: null,
+    unlockFamilies: Object.freeze([
+      'laser_weapon',
+      'magnetic_gun',
+      'missile',
+      'particle_weapon',
+      'plasma_weapon',
+      'gun'
+    ]),
+    sourceKeys: Object.freeze([
+      'laser_weapon',
+      'magnetic_gun',
+      'missile',
+      'particle_weapon',
+      'plasma_weapon',
+      'gun'
+    ]),
+    weapon: true
+  })
 ]);
+
+export const WEAPON_UNLOCK_FAMILIES = SHIP_COMPONENT_FAMILIES
+  .find(definition => definition.outputFamily === 'weapons').unlockFamilies;
 
 export const DRIVE_THRUSTER_COUNTS = Object.freeze([1, 2, 3, 4, 5, 6]);
 
@@ -98,8 +122,25 @@ const NUMERIC_FIELDS = Object.freeze({
     rechargeRateGJs: ['rechargeRateGJs'],
     hp: ['hp'],
     crew: ['crew']
+  }),
+  weapons: Object.freeze({
+    massTons: ['massTons', 'mass_tons', 'baseWeaponMassTons', 'baseWeaponMass_tons'],
+    crew: ['crew']
   })
 });
+
+// Weapon material mixes are compact vectors in the baked snapshot to keep the
+// 309-row componentStats payload under its published size budget. Catalogue
+// consumers still receive the normal named material object.
+const WEAPON_MATERIAL_FIELDS = Object.freeze([
+  'water',
+  'volatiles',
+  'metals',
+  'nobleMetals',
+  'fissiles',
+  'exotics',
+  'antimatter'
+]);
 
 const DRIVE_VARIANT_PATTERN = /^(.*)x([1-6])$/;
 
@@ -151,6 +192,11 @@ const firstPresent = (record, keys) => {
   return null;
 };
 
+const textField = (record, keys) => {
+  const value = firstPresent(record, keys);
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+};
+
 /**
  * Normalize the already-baked stat object while retaining fields the next
  * design phase may need. Known numeric fields are always present as a number
@@ -171,6 +217,15 @@ function normalizeStats(rawStats, outputFamily) {
     out[field] = parseCatalogueNumber(firstPresent(raw, aliases));
   }
 
+  if (outputFamily === 'weapons' && Array.isArray(raw.weightedBuildMaterials)) {
+    out.weightedBuildMaterials = Object.fromEntries(WEAPON_MATERIAL_FIELDS.map((material, index) => [
+      material,
+      index < raw.weightedBuildMaterials.length
+        ? parseCatalogueNumber(raw.weightedBuildMaterials[index])
+        : 0
+    ]));
+  }
+
   // The existing baked armour table stores specialties as compact pairs. The
   // names remain strings; only their numeric values need the same null rule.
   if (outputFamily === 'armour' && Array.isArray(raw.specialties)) {
@@ -182,11 +237,41 @@ function normalizeStats(rawStats, outputFamily) {
   return out;
 }
 
+const weaponSourceFor = (snapshot, definition) => {
+  const componentStats = snapshot?.componentStats;
+  if (!isRecord(componentStats)) return null;
+
+  const familySources = definition.sourceKeys
+    .map(sourceKey => [sourceKey, componentStats[sourceKey]])
+    .filter(([, source]) => isRecord(source));
+  if (familySources.length > 0) {
+    return familySources.flatMap(([sourceKey, source]) => Object.entries(source)
+      .map(([id, stats]) => [id, stats, sourceKey]));
+  }
+
+  // A caller may provide an already-aggregated weapon map. Preserve the
+  // source family when the row carries it; without that field the gate join
+  // remains unresolved instead of guessing which of the six research paths
+  // owns the id.
+  const aggregate = componentStats.weapons;
+  return isRecord(aggregate)
+    ? Object.entries(aggregate).map(([id, stats]) => [
+      id,
+      stats,
+      isRecord(stats)
+        ? (stats.weaponFamily || stats.templateFamily || stats.family || null)
+        : null
+    ])
+    : null;
+};
+
 const sourceFor = (snapshot, definition) => definition.drive
   ? snapshot?.driveStats
-  : snapshot?.componentStats?.[definition.sourceKey];
+  : (definition.weapon ? weaponSourceFor(snapshot, definition) : snapshot?.componentStats?.[definition.sourceKey]);
 
-const sourceEntries = (source) => isRecord(source) ? Object.entries(source) : null;
+const sourceEntries = (source) => Array.isArray(source)
+  ? source
+  : (isRecord(source) ? Object.entries(source) : null);
 
 const projectNameMap = (snapshot) => {
   const names = new Map();
@@ -295,14 +380,16 @@ const makeRow = ({
   projectNames,
   researchContext,
   mode,
-  indexAvailable
+  indexAvailable,
+  unlockFamily = null
 }) => {
   const unlockProject = projectForGate(gate, projectNames);
   const research = researchStateFor(gate, researchContext, mode, indexAvailable);
-  return {
+  const row = {
     id,
     displayName: displayName || id,
     family,
+    unlockFamily,
     stats,
     unlockProject,
     unlockProjectId: unlockProject?.id || null,
@@ -313,6 +400,11 @@ const makeRow = ({
     buildable: research.buildable,
     locked: research.locked
   };
+  if (family === 'weapons') {
+    row.weaponFamily = unlockFamily || textField(stats, ['weaponFamily', 'templateFamily']) || null;
+    row.mount = textField(stats, ['mount']);
+  }
+  return row;
 };
 
 const parseDriveVariantId = (id) => {
@@ -533,7 +625,8 @@ const rowForDriveGroup = ({
     projectNames,
     researchContext,
     mode,
-    indexAvailable
+    indexAvailable,
+    unlockFamily: definition.unlockFamily
   });
   const counts = [...new Set(group.map(entry => entry.thrusters))].sort((a, b) => a - b);
   row.thrusterRange = {
@@ -555,6 +648,7 @@ const rowForDriveGroup = ({
 const emptyFamily = (definition, reason) => ({
   family: definition.outputFamily,
   unlockFamily: definition.unlockFamily,
+  unlockFamilies: definition.unlockFamilies || (definition.unlockFamily ? [definition.unlockFamily] : []),
   available: false,
   reason,
   items: [],
@@ -564,7 +658,27 @@ const emptyFamily = (definition, reason) => ({
   sourceOmittedCount: null
 });
 
-const familyIndexFor = (snapshot, definition) => snapshot?.unlockIndex?.families?.[definition.unlockFamily] || null;
+const unlockFamiliesFor = definition => definition.unlockFamilies || [definition.unlockFamily];
+
+const sumIndexField = (indexes, field) => {
+  const values = indexes.map(index => parseCatalogueNumber(index?.[field]));
+  return values.some(value => value === null) ? null : values.reduce((sum, value) => sum + value, 0);
+};
+
+const familyIndexFor = (snapshot, definition) => {
+  const familyIndexes = unlockFamiliesFor(definition)
+    .map(family => [family, snapshot?.unlockIndex?.families?.[family]])
+    .filter(([, index]) => Boolean(index));
+  if (familyIndexes.length !== unlockFamiliesFor(definition).length) return null;
+  if (familyIndexes.length === 1) return familyIndexes[0][1];
+  const indexes = familyIndexes.map(([, index]) => index);
+  return {
+    total: sumIndexField(indexes, 'total'),
+    gated: sumIndexField(indexes, 'gated'),
+    ungated: sumIndexField(indexes, 'ungated'),
+    families: Object.fromEntries(familyIndexes)
+  };
+};
 
 const familyResult = ({
   definition,
@@ -623,18 +737,23 @@ const familyResult = ({
         unresolved
       }));
   } else {
-    items = entries.map(([id, rawStats]) => {
+    items = entries.map(([id, rawStats, sourceFamily]) => {
       const stats = normalizeStats(rawStats, definition.outputFamily);
+      const unlockFamily = definition.weapon
+        ? (sourceFamily || textField(rawStats, ['weaponFamily', 'templateFamily', 'family']))
+        : definition.unlockFamily;
+      if (definition.weapon && unlockFamily) stats.weaponFamily = unlockFamily;
       return makeRow({
         id,
         displayName: stats.displayName || id,
         family: definition.outputFamily,
         stats,
-        gate: gateFor(itemGateMap, definition.unlockFamily, id, familyIndexAvailable),
+        gate: gateFor(itemGateMap, unlockFamily, id, familyIndexAvailable),
         projectNames,
         researchContext,
         mode,
-        indexAvailable
+        indexAvailable: familyIndexAvailable,
+        unlockFamily
       });
     });
   }
@@ -642,6 +761,7 @@ const familyResult = ({
   return {
     family: definition.outputFamily,
     unlockFamily: definition.unlockFamily,
+    unlockFamilies: unlockFamiliesFor(definition),
     available: true,
     reason: null,
     items,
@@ -766,32 +886,42 @@ const validateGateCoverage = (snapshot, definitions, sourceMaps, unresolved) => 
     const familyIndex = familyIndexFor(snapshot, definition);
     const source = sourceMaps.get(definition.outputFamily);
     if (!familyIndex || !source) continue;
-    const sourceIds = new Set(source.map(([id]) => id));
-    let matched = 0;
-    for (const [gateId, gate] of Object.entries(snapshot.unlockIndex.gates || {})) {
-      for (const item of asArray(gate?.unlocks?.[definition.unlockFamily])) {
-        if (sourceIds.has(item?.id)) {
-          matched += 1;
-        } else {
-          unresolved.push({
-            kind: 'component-gate',
-            family: definition.outputFamily,
-            sourceFamily: definition.unlockFamily,
-            id: item?.id || null,
-            gateId,
-            reason: 'unlock-index entry has no component stats row'
-          });
+    const sourceIdsByFamily = new Map();
+    for (const [id, , sourceFamily] of source) {
+      const family = sourceFamily || definition.unlockFamily;
+      if (!sourceIdsByFamily.has(family)) sourceIdsByFamily.set(family, new Set());
+      sourceIdsByFamily.get(family).add(id);
+    }
+    for (const unlockFamily of unlockFamiliesFor(definition)) {
+      const sourceIds = sourceIdsByFamily.get(unlockFamily) || new Set();
+      const expectedIndex = definition.unlockFamilies ? familyIndex.families?.[unlockFamily] : familyIndex;
+      let matched = 0;
+      for (const [gateId, gate] of Object.entries(snapshot.unlockIndex.gates || {})) {
+        for (const item of asArray(gate?.unlocks?.[unlockFamily])) {
+          if (sourceIds.has(item?.id)) {
+            matched += 1;
+          } else {
+            unresolved.push({
+              kind: 'component-gate',
+              family: definition.outputFamily,
+              sourceFamily: unlockFamily,
+              id: item?.id || null,
+              gateId,
+              reason: 'unlock-index entry has no component stats row'
+            });
+          }
         }
       }
-    }
-    if (matched !== familyIndex.gated) {
-      unresolved.push({
-        kind: 'component-gate-census',
-        family: definition.outputFamily,
-        expectedGated: familyIndex.gated,
-        matchedGated: matched,
-        reason: 'the gated-entry census did not join to the component stats source'
-      });
+      if (expectedIndex && matched !== expectedIndex.gated) {
+        unresolved.push({
+          kind: 'component-gate-census',
+          family: definition.outputFamily,
+          sourceFamily: unlockFamily,
+          expectedGated: expectedIndex.gated,
+          matchedGated: matched,
+          reason: 'the gated-entry census did not join to the component stats source'
+        });
+      }
     }
   }
 };
@@ -799,7 +929,7 @@ const validateGateCoverage = (snapshot, definitions, sourceMaps, unresolved) => 
 /**
  * Build the server-side ship-designer catalogue.
  *
- * The seven `families.*.items` arrays carry one normalized row per selectable
+ * The eight `families.*.items` arrays carry one normalized row per selectable
  * component. Drives are one row per base drive with the actual xN variants
  * nested beneath it; all other families retain one row per template entry.
  * `unresolved` is specifically for failed unlock/stat joins and is separate
@@ -831,7 +961,7 @@ export function buildShipComponentCatalogue(snapshot, {
     sourceMaps.set(definition.outputFamily, entries);
     if (!entries) availabilityReasons.push(`snapshot does not carry ${definition.outputFamily} stats`);
     if (indexAvailable && !familyIndexFor(snapshot, definition)) {
-      availabilityReasons.push(`unlockIndex does not carry the ${definition.unlockFamily} family census`);
+      availabilityReasons.push(`unlockIndex does not carry the ${unlockFamiliesFor(definition).join(', ')} family census`);
     }
     families[definition.outputFamily] = familyResult({
       definition,

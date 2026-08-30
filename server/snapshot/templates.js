@@ -439,8 +439,15 @@ function stat(value) {
  * absent mix remains absent, and an alien mix that sums to 0.9 or 1.002 is a
  * measured shortfall/overrun rather than an invitation to invent a correction.
  */
-function materialMix(value) {
+function materialMix(value, dense = false) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (dense) {
+    return WEAPON_MATERIAL_FIELDS.map(material => (
+      Object.prototype.hasOwnProperty.call(value, material)
+        ? stat(value[material])
+        : 0
+    ));
+  }
   return Object.fromEntries(Object.entries(value).map(([material, share]) => [material, stat(share)]));
 }
 
@@ -464,6 +471,14 @@ function compact(record) {
  */
 const WEAPON_FAMILIES = Object.freeze([
   'laser_weapon', 'magnetic_gun', 'gun', 'particle_weapon', 'plasma_weapon', 'missile'
+]);
+
+// Weapon rows are numerous enough that repeating the long material names in
+// every published mix exceeds the componentStats byte budget. The field keeps
+// its `weightedBuildMaterials` name, but weapon rows use this fixed vector in
+// the same order; the server catalogue expands it back to named shares.
+const WEAPON_MATERIAL_FIELDS = Object.freeze([
+  'water', 'volatiles', 'metals', 'nobleMetals', 'fissiles', 'exotics', 'antimatter'
 ]);
 
 function buildWeaponStats(family) {
@@ -538,10 +553,11 @@ function buildWeaponStats(family) {
 
       // --- cost and reach ------------------------------------------------
       massTons: stat(weapon.baseWeaponMass_tons),
+      weightedBuildMaterials: materialMix(weapon.weightedBuildMaterials, true),
       targetingRangeKm: stat(weapon.targetingRange_km),
       crew: stat(weapon.crew),
       efficiency: stat(weapon.efficiency),
-      bombardmentValue: stat(weapon.bombardmentValue),
+      bomb: stat(weapon.bombardmentValue),
 
       // --- role ----------------------------------------------------------
       // Structural, not name-matched: a weapon that cannot attack but can
@@ -557,8 +573,6 @@ function buildWeaponStats(family) {
       wavelengthNm: stat(weapon.wavelength_nm),
       beamQuality: stat(weapon.beam_quality),
       jitterRad: stat(weapon.jitter_Rad),
-      lensRadiusCm: stat(weapon.lensRadius_cm),
-      emittanceMrad: stat(weapon.emittance_mrad),
       // Stated by the template, so it is reported rather than modelled.
       doublingRangeKm: stat(weapon.doublingRange_km),
       // Particle beams carry their own damage-channel split; everything else

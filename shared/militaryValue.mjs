@@ -523,7 +523,7 @@ export function weaponMetrics(id, stats, family, options = {}) {
     massTons: toFinite(stats?.massTons),
     crew: toFinite(stats?.crew),
     efficiency: toFinite(stats?.efficiency),
-    bombardmentValue: toFinite(stats?.bombardmentValue),
+    bombardmentValue: toFinite(stats?.bombardmentValue ?? stats?.bomb),
     pointDefenseTargetable: stats?.pointDefenseTargetable === true,
     warheadClass: stats?.warheadClass ?? null,
     missileDeltaVKps: toFinite(stats?.missileDeltaVKps),
