@@ -1,14 +1,25 @@
 /**
  * src/v2/panels/shipDesignerUtils.mjs
  *
- * Purpose: pure formatters, selection/query shaping and affordability math for
- *   the DESIGNER React panels — every rule the UI applies without touching the
- *   DOM, so both the browser and a bare Node test read the same code.
+ * Purpose: pure formatters, selection/query shaping, reactor and weapon filtering,
+ *   hardpoint labels and affordability math for the DESIGNER React panels — every
+ *   rule the UI applies without touching the DOM.
  */
 
+import { mountCost } from '../../../shared/militaryValue.mjs';
 import { accel, dec, int, num, power } from './driveExplorerUtils.mjs';
 
 export { accel, dec, int, num, power };
+
+/** Display labels for the six weapon source families in the catalogue. */
+export const WEAPON_FAMILY_LABELS = Object.freeze({
+  laser_weapon: 'Lasers',
+  magnetic_gun: 'Magnetic guns',
+  missile: 'Missiles',
+  particle_weapon: 'Particle weapons',
+  plasma_weapon: 'Plasma weapons',
+  gun: 'Guns',
+});
 
 /** The seven space resources in ship-design bill order. */
 export const MATERIALS = Object.freeze([
@@ -48,6 +59,7 @@ export function defaultDesignerState() {
       lateral: 0,
       tail: 0,
       tanks: 0,
+      weapons: [],
     },
     error: null,
   };
@@ -105,6 +117,97 @@ export function filterReactors(reactors, driveRow) {
   return rows.filter((row) => allowed.has(row.id));
 }
 
+export function reactorFilterCaption(allReactors, filteredReactors, driveRow) {
+  if (!driveRow) return null;
+  const total = asArray(allReactors).length;
+  const count = filteredReactors.length;
+  const name = driveRow.displayName || driveRow.id;
+  const className = driveRow.requiredPowerPlantClass;
+  if (className === 'Any_General') {
+    return `${count} of ${total} reactors accept ${name} (any power-plant class)`;
+  }
+  if (className) {
+    return `${count} of ${total} reactors accept ${name} (${className})`;
+  }
+  return `Reactor compatibility for ${name} is unknown — showing all ${total} reactors`;
+}
+
+export function filterWeaponsForPicker(weapons, { mountSide = null } = {}) {
+  return asArray(weapons).filter((row) => {
+    const mount = row.mount || row.stats?.mount;
+    const reading = mountCost(mount);
+    if (reading.side === 'installation') return false;
+    if (mountSide && reading.side !== mountSide) return false;
+    return true;
+  });
+}
+
+export function groupWeaponsByFamily(rows) {
+  const groups = new Map();
+  for (const row of asArray(rows)) {
+    const key = row.weaponFamily || row.unlockFamily || 'other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  return groups;
+}
+
+export function weaponsQueryEntries(weapons) {
+  return asArray(weapons)
+    .filter((entry) => entry.id && entry.count > 0)
+    .map((entry) => entry.count > 1 ? `${entry.id}:${entry.count}` : entry.id);
+}
+
+export function mergeWeaponSelection(weapons, id, count) {
+  const parsed = num(count);
+  const add = parsed === null || parsed < 1 ? 1 : Math.round(parsed);
+  const list = asArray(weapons);
+  const existing = list.find((entry) => entry.id === id);
+  if (existing) {
+    return list.map((entry) => entry.id === id
+      ? { ...entry, count: entry.count + add }
+      : entry);
+  }
+  return [...list, { id, count: add }];
+}
+
+export function removeWeaponFromSelection(weapons, id) {
+  return asArray(weapons).filter((entry) => entry.id !== id);
+}
+
+export function setWeaponCount(weapons, id, count) {
+  const parsed = num(count);
+  if (parsed === null || parsed < 1) return removeWeaponFromSelection(weapons, id);
+  return asArray(weapons).map((entry) => entry.id === id
+    ? { ...entry, count: Math.round(parsed) }
+    : entry);
+}
+
+export function hardpointUsageLabel(weaponCapacity, hullRow) {
+  if (weaponCapacity?.limits) {
+    const limits = weaponCapacity.limits;
+    const required = weaponCapacity.required || {};
+    const parts = [];
+    if (limits.nose !== null && limits.nose !== undefined) {
+      parts.push(`nose ${num(required.nose) ?? 0} / ${limits.nose}`);
+    }
+    if (limits.hull !== null && limits.hull !== undefined) {
+      parts.push(`hull ${num(required.hull) ?? 0} / ${limits.hull}`);
+    }
+    if (limits.internal !== null && limits.internal !== undefined) {
+      parts.push(`internal 0 / ${limits.internal}`);
+    }
+    return parts.join(' · ');
+  }
+  const stats = hullRow?.stats || hullRow;
+  if (!stats) return null;
+  const parts = [];
+  if (stats.noseHardpoints != null) parts.push(`nose 0 / ${stats.noseHardpoints}`);
+  if (stats.hullHardpoints != null) parts.push(`hull 0 / ${stats.hullHardpoints}`);
+  if (stats.internalModules != null) parts.push(`internal 0 / ${stats.internalModules}`);
+  return parts.length ? parts.join(' · ') : null;
+}
+
 export function optionLabel(row, { mode } = {}) {
   const name = row.displayName || row.id;
   if (row.locked && row.unlockProjectName) {
@@ -131,8 +234,14 @@ export function selectionQuery(selection, catalogue) {
     tail: selection.tail,
     tanks: selection.tanks,
   };
+  const weaponEntries = weaponsQueryEntries(selection.weapons);
+  if (weaponEntries.length > 0) params.weapons = weaponEntries;
   return Object.fromEntries(
-    Object.entries(params).filter(([, value]) => value !== null && value !== '' && value !== undefined),
+    Object.entries(params).filter(([, value]) => {
+      if (value === null || value === '' || value === undefined) return false;
+      if (Array.isArray(value) && value.length === 0) return false;
+      return true;
+    }),
   );
 }
 

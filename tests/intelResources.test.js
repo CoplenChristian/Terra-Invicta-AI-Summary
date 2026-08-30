@@ -93,6 +93,134 @@ test('ship-designer resource accepts a weapon selection and its mass/cost rise',
   assert.ok(armed.power.weaponsGW > 0);
 });
 
+test('ship-designer pins the Escort two-PD mass and cost regression', () => {
+  const snapshot = omniscientSnapshot();
+  const selection = {
+    mode: 'omniscient',
+    shipDesigner: {
+      hull: 'Escort',
+      drive: 'VASIMRx4',
+      reactor: 'SolidCoreFissionReactorVII',
+      radiator: 'TitaniumArray',
+      armour: 'CompositeArmor',
+      nose: 4,
+      lateral: 0,
+      tail: 1,
+      tanks: 3,
+      campaignSettings: { cinematicCombatRealismScale: true }
+    }
+  };
+  const unarmed = localResources.buildResource(snapshot, 'ship-designer', selection);
+  const armed = localResources.buildResource(snapshot, 'ship-designer', {
+    ...selection,
+    shipDesigner: { ...selection.shipDesigner, weapons: 'PointDefenseLaserTurret:2' }
+  });
+  const costTotal = result => Object.values(result.totalResourceCost)
+    .reduce((sum, value) => sum + value, 0);
+
+  assert.equal(Number(unarmed.deltaVKps.toFixed(2)), 68.74);
+  assert.equal(Number(armed.deltaVKps.toFixed(2)), 63.07);
+  assert.equal(Number(costTotal(unarmed).toFixed(2)), 80.32);
+  assert.equal(Number(costTotal(armed).toFixed(2)), 85.99);
+  assert.equal(armed.inputs.weapons[0].quantity, 2);
+  assert.ok(armed.mass.dryTons > unarmed.mass.dryTons);
+});
+
+test('ship-designer enforces Escort weapon hardpoints in both modes', () => {
+  const snapshot = omniscientSnapshot();
+  const common = {
+    hull: 'Escort',
+    drive: 'VASIMRx1',
+    reactor: 'SolidCoreFissionReactorVII',
+    radiator: 'TitaniumArray',
+    armour: 'CompositeArmor',
+    nose: 4,
+    lateral: 0,
+    tail: 1,
+    tanks: 1,
+    campaignSettings: { cinematicCombatRealismScale: true }
+  };
+
+  for (const mode of ['player', 'omniscient']) {
+    const legal = localResources.buildResource(snapshot, 'ship-designer', {
+      mode,
+      shipDesigner: { ...common, weapons: 'PointDefenseLaserTurret:2' }
+    });
+    assert.equal(legal.weaponCapacity.status, 'fits', `${mode}: two hull mounts fit`);
+    assert.equal(legal.weaponCapacity.required.hull, 2, `${mode}: two mounts are counted`);
+    assert.equal(legal.buildable, true, `${mode}: two mounts remain buildable`);
+
+    const over = localResources.buildResource(snapshot, 'ship-designer', {
+      mode,
+      shipDesigner: { ...common, weapons: 'PointDefenseLaserTurret:3' }
+    });
+    assert.equal(over.weaponCapacity.status, 'over-capacity', `${mode}: three mounts refuse`);
+    assert.equal(over.weaponCapacity.limits.hull, 2, `${mode}: Escort exposes two hull hardpoints`);
+    assert.equal(over.weaponCapacity.required.hull, 3, `${mode}: three mounts are requested`);
+    assert.equal(over.buildable, false, `${mode}: over-capacity design is not buildable`);
+    assert.match(over.weaponCapacity.reason, /Escort.*2.*hull.*3/i);
+    assert.equal(over.deltaVKps, null, `${mode}: refused dV is absent`);
+    assert.match(over.reasons.deltaVKps, /Escort.*2.*hull.*3/i);
+  }
+});
+
+test('ship-designer accepts comma-separated weapon ids without merging them', () => {
+  const snapshot = omniscientSnapshot();
+  const result = localResources.buildResource(snapshot, 'ship-designer', {
+    mode: 'omniscient',
+    shipDesigner: {
+      hull: 'Escort',
+      drive: 'VASIMRx1',
+      reactor: 'SolidCoreFissionReactorVII',
+      radiator: 'TitaniumArray',
+      armour: 'CompositeArmor',
+      nose: 4,
+      lateral: 0,
+      tail: 1,
+      tanks: 1,
+      weapons: 'PointDefenseLaserTurret,60cmIRLaserBattery'
+    }
+  });
+
+  assert.deepEqual(result.inputs.weapons.map(row => row.id), [
+    'PointDefenseLaserTurret',
+    '60cmIRLaserBattery'
+  ]);
+  assert.deepEqual(result.inputs.weapons.map(row => row.quantity), [1, 1]);
+  assert.equal(result.rejected.length, 0);
+  assert.equal(result.weaponCapacity.required.hull, 2);
+});
+
+test('ship-designer rejects and echoes unknown weapon ids', () => {
+  const snapshot = omniscientSnapshot();
+  for (const mode of ['player', 'omniscient']) {
+    const result = localResources.buildResource(snapshot, 'ship-designer', {
+      mode,
+      shipDesigner: {
+        hull: 'Escort',
+        drive: 'VASIMRx1',
+        reactor: 'SolidCoreFissionReactorVII',
+        radiator: 'TitaniumArray',
+        armour: 'CompositeArmor',
+        nose: 4,
+        lateral: 0,
+        tail: 1,
+        tanks: 1,
+        weapons: 'A,B'
+      }
+    });
+
+    assert.deepEqual(result.rejected.map(entry => entry.id), ['A', 'B'], `${mode}: ids are echoed`);
+    assert.ok(result.rejected.every(entry => /catalogue/i.test(entry.reason)),
+      `${mode}: rejection names the catalogue failure`);
+    assert.deepEqual(result.inputs.weapons, [], `${mode}: rejected ids never enter calculation inputs`);
+    assert.doesNotMatch(JSON.stringify(result.inputs.weapons), /A,B|"A"|"B"/,
+      `${mode}: no phantom component is fabricated`);
+    assert.equal(result.buildable, false, `${mode}: rejected query is not buildable`);
+    assert.match(result.reasons.deltaVKps, /A|B/);
+  }
+});
+
 test('buildResource projects nations and councilors', () => {
   const snapshot = omniscientSnapshot();
   const nations = localResources.buildResource(snapshot, 'nations', { mode: 'omniscient' });

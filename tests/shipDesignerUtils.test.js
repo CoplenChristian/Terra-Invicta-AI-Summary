@@ -8,8 +8,13 @@ const {
   clampThrusters,
   driveVariantId,
   filterReactors,
+  filterWeaponsForPicker,
+  hardpointUsageLabel,
+  mergeWeaponSelection,
+  reactorFilterCaption,
   selectionQuery,
   stockpileFromResourcesPayload,
+  weaponsQueryEntries,
 } = require('../src/v2/panels/shipDesignerUtils.mjs');
 
 test('selectionQuery maps a base drive and thruster count to a variant id', () => {
@@ -106,4 +111,70 @@ test('clampThrusters respects the drive ladder bounds', () => {
   assert.equal(clampThrusters(6, drive), 4);
   assert.equal(clampThrusters(0, drive), 1);
   assert.equal(driveVariantId(drive, 2), drive.id);
+});
+
+test('reactorFilterCaption names the drive class and narrowed count', () => {
+  const reactors = [
+    { id: 'A', stats: { powerPlantClass: 'Solid_Core_Fission' } },
+    { id: 'B', stats: { powerPlantClass: 'Gas_Core_Fission' } },
+    { id: 'C', stats: { powerPlantClass: 'Solid_Core_Fission' } },
+  ];
+  const drive = {
+    displayName: 'Nerva Drive',
+    requiredPowerPlantClass: 'Solid_Core_Fission',
+    compatibleReactorIds: ['A', 'C'],
+  };
+  const filtered = filterReactors(reactors, drive);
+  assert.equal(
+    reactorFilterCaption(reactors, filtered, drive),
+    '2 of 3 reactors accept Nerva Drive (Solid_Core_Fission)',
+  );
+});
+
+test('selectionQuery repeats weapons as id:count query entries', () => {
+  const query = selectionQuery({
+    hull: 'Escort',
+    drive: 'VASIMR',
+    thrusters: 1,
+    weapons: [{ id: 'PointDefenseLaserTurret', count: 2 }, { id: 'RailCannon', count: 1 }],
+  }, {
+    families: {
+      drives: {
+        items: [{ id: 'VASIMR', variants: [{ id: 'VASIMRx1', thrusters: 1 }] }],
+      },
+    },
+  });
+  assert.deepEqual(query.weapons, ['PointDefenseLaserTurret:2', 'RailCannon']);
+});
+
+test('filterWeaponsForPicker excludes installation mounts and can filter by side', () => {
+  const weapons = [
+    { id: 'pd', mount: 'OneHull' },
+    { id: 'nose', mount: 'OneNose' },
+    { id: 'base', mount: 'T1BaseDefense' },
+  ];
+  const shipMounts = filterWeaponsForPicker(weapons);
+  assert.deepEqual(shipMounts.map((row) => row.id), ['pd', 'nose']);
+  assert.deepEqual(filterWeaponsForPicker(weapons, { mountSide: 'hull' }).map((row) => row.id), ['pd']);
+});
+
+test('hardpointUsageLabel reads weaponCapacity required and hull limits', () => {
+  assert.equal(
+    hardpointUsageLabel({
+      limits: { nose: 4, hull: 2, internal: 8 },
+      required: { nose: 0, hull: 2 },
+    }, null),
+    'nose 0 / 4 · hull 2 / 2 · internal 0 / 8',
+  );
+  assert.equal(
+    hardpointUsageLabel(null, { stats: { noseHardpoints: 4, hullHardpoints: 2, internalModules: 8 } }),
+    'nose 0 / 4 · hull 0 / 2 · internal 0 / 8',
+  );
+});
+
+test('mergeWeaponSelection accumulates counts for duplicate ids', () => {
+  const first = mergeWeaponSelection([], 'PointDefenseLaserTurret', 1);
+  const second = mergeWeaponSelection(first, 'PointDefenseLaserTurret', 1);
+  assert.deepEqual(second, [{ id: 'PointDefenseLaserTurret', count: 2 }]);
+  assert.deepEqual(weaponsQueryEntries(second), ['PointDefenseLaserTurret:2']);
 });

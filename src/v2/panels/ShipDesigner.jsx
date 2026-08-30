@@ -1,9 +1,10 @@
 /**
  * src/v2/panels/ShipDesigner.jsx
  *
- * Purpose: the DESIGNER view panels — component pickers, performance readout,
- *   mass/heat breakdown and seven-material cost against the faction stockpile,
- *   from /api/intel/ship-designer and /api/intel/resources.
+ * Purpose: the DESIGNER view panels — component pickers (hull, drive, reactor,
+ *   weapons), performance readout, mass/heat breakdown and seven-material cost
+ *   against the faction stockpile, from /api/intel/ship-designer and
+ *   /api/intel/resources.
  */
 
 import React from 'react';
@@ -17,6 +18,7 @@ import initiativeTheme from '../theme.js';
 import {
   MATERIALS,
   MOUNT_IDS,
+  WEAPON_FAMILY_LABELS,
   accel,
   affordabilityFor,
   clampThrusters,
@@ -24,14 +26,21 @@ import {
   defaultDesignerState,
   driveVariantId,
   filterReactors,
+  filterWeaponsForPicker,
   formatMaterialCost,
+  groupWeaponsByFamily,
+  hardpointUsageLabel,
   int,
   massEntryLabel,
+  mergeWeaponSelection,
   num,
   optionLabel,
   power,
   rangeLabel,
+  reactorFilterCaption,
+  removeWeaponFromSelection,
   selectionQuery,
+  setWeaponCount,
   stockpileFromResourcesPayload,
   thrusterBounds,
 } from './shipDesignerUtils.mjs';
@@ -199,6 +208,23 @@ function optionRows(rows, mode) {
   });
 }
 
+function weaponOptionGroups(rows, mode) {
+  const groups = groupWeaponsByFamily(rows);
+  const familyKeys = [...groups.keys()].sort((left, right) => {
+    const leftLabel = WEAPON_FAMILY_LABELS[left] || left;
+    const rightLabel = WEAPON_FAMILY_LABELS[right] || right;
+    return leftLabel.localeCompare(rightLabel);
+  });
+  return familyKeys.map((familyKey) => (
+    <optgroup
+      key={familyKey}
+      label={WEAPON_FAMILY_LABELS[familyKey] || familyKey}
+    >
+      {optionRows(groups.get(familyKey), mode)}
+    </optgroup>
+  ));
+}
+
 // ---------------------------------------------------------------------------
 // Panel sections
 // ---------------------------------------------------------------------------
@@ -208,9 +234,31 @@ function ComponentsPanel() {
   const catalogue = view.payload?.catalogue;
   const families = catalogue?.families || {};
   const selection = view.selection;
+  const hullRow = families.hulls?.items?.find((row) => row.id === selection.hull) || null;
   const driveRow = families.drives?.items?.find((row) => row.id === selection.drive) || null;
-  const reactors = filterReactors(families.reactors?.items, driveRow);
+  const allReactors = families.reactors?.items || [];
+  const reactors = filterReactors(allReactors, driveRow);
+  const reactorCaption = reactorFilterCaption(allReactors, reactors, driveRow);
   const { min: thrMin, max: thrMax } = thrusterBounds(driveRow);
+  const compatibility = view.payload?.compatibility;
+  const compatReason = compatibility?.reason || view.payload?.reasons?.compatibility;
+  const weaponCapacity = view.payload?.weaponCapacity;
+  const hardpointLabel = hardpointUsageLabel(weaponCapacity, hullRow);
+  const hardpointReason = view.payload?.reasons?.weaponCapacity
+    || (weaponCapacity?.status === 'over-capacity' ? weaponCapacity.reason : null);
+
+  const [weaponMountFilter, setWeaponMountFilter] = React.useState('');
+  const [pendingWeaponId, setPendingWeaponId] = React.useState('');
+  const [pendingWeaponCount, setPendingWeaponCount] = React.useState(1);
+
+  const weaponCatalogue = families.weapons?.items || [];
+  const pickerWeapons = filterWeaponsForPicker(weaponCatalogue, {
+    mountSide: weaponMountFilter || null,
+  });
+  const selectedWeaponRows = selection.weapons.map((entry) => {
+    const row = weaponCatalogue.find((candidate) => candidate.id === entry.id);
+    return { entry, row };
+  });
 
   if (view.loading && !catalogue) {
     return <div className="alien-hate-econ-empty">Loading component catalogue…</div>;
@@ -270,6 +318,11 @@ function ComponentsPanel() {
           <option value="">— select reactor —</option>
           {optionRows(reactors, view.mode)}
         </Picker>
+        {reactorCaption ? (
+          <Typography variant="caption" color="text.secondary" sx={{ minWidth: 0, maxWidth: '100%' }}>
+            {reactorCaption}
+          </Typography>
+        ) : null}
         <Picker label="RADIATOR" value={selection.radiator} onChange={(value) => patchSelection({ radiator: value })}>
           <option value="">— select radiator —</option>
           {optionRows(families.radiators?.items || [], view.mode)}
@@ -309,12 +362,158 @@ function ComponentsPanel() {
           onChange={(value) => patchSelection({ tanks: Math.max(0, num(value) ?? 0) })}
         />
       </Box>
-      <Typography variant="caption" color="text.secondary">
-        Utilities and weapons are not in this pass — hull, drive, reactor, radiator and armour only.
-      </Typography>
-      {view.payload?.compatibility?.status === 'incompatible' ? (
-        <Typography variant="body2" color="warning.main">
-          {view.payload.compatibility.reason}
+      <Box
+        className="sd-weapons"
+        sx={(theme) => ({
+          display: 'grid',
+          gap: theme.initiative.space.sm,
+          minWidth: 0,
+          maxWidth: '100%',
+        })}
+      >
+        <Typography variant="overline" color="text.secondary">
+          Weapons
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Hardpoint capacity —
+          {hardpointLabel ? (
+            <Typography component="span" variant="caption" sx={{ ml: 0.5 }}>
+              {hardpointLabel}
+            </Typography>
+          ) : (
+            <Fig
+              as="span"
+              value={null}
+              reason={hardpointReason || (hullRow ? 'weapon capacity is not calculated' : 'select a hull to read hardpoint limits')}
+              variant="caption"
+              sx={{ ml: 0.5 }}
+            />
+          )}
+        </Typography>
+        {weaponCapacity?.status === 'over-capacity' ? (
+          <Typography variant="body2" color="warning.main">
+            {weaponCapacity.reason || compatReason}
+          </Typography>
+        ) : null}
+        <Box className="de-controls" sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, minWidth: 0, maxWidth: '100%' }}>
+          <Picker
+            label="MOUNT FILTER"
+            value={weaponMountFilter}
+            onChange={(value) => {
+              setWeaponMountFilter(value);
+              setPendingWeaponId('');
+            }}
+          >
+            <option value="">All hull & nose mounts</option>
+            <option value="hull">Hull mounts only</option>
+            <option value="nose">Nose mounts only</option>
+          </Picker>
+          <Picker
+            label="WEAPON"
+            value={pendingWeaponId}
+            onChange={(value) => setPendingWeaponId(value)}
+          >
+            <option value="">— select weapon —</option>
+            {weaponOptionGroups(pickerWeapons, view.mode)}
+          </Picker>
+          <NumberInput
+            label="COUNT"
+            value={pendingWeaponCount}
+            min={1}
+            max={99}
+            onChange={(value) => setPendingWeaponCount(Math.max(1, num(value) ?? 1))}
+          />
+          <Box component="label" className="de-control" sx={{ minWidth: 0 }}>
+            <span className="de-control__label">ADD</span>
+            <Box
+              component="button"
+              type="button"
+              className="de-select"
+              disabled={!pendingWeaponId}
+              sx={{ cursor: pendingWeaponId ? 'pointer' : 'not-allowed' }}
+              onClick={() => {
+                if (!pendingWeaponId) return;
+                patchSelection({
+                  weapons: mergeWeaponSelection(
+                    selection.weapons,
+                    pendingWeaponId,
+                    pendingWeaponCount,
+                  ),
+                });
+                setPendingWeaponId('');
+                setPendingWeaponCount(1);
+              }}
+            >
+              Add weapon
+            </Box>
+          </Box>
+        </Box>
+        <Typography variant="caption" color="text.secondary">
+          Weapons grouped by family; mount filter narrows the picker ({pickerWeapons.length} of {weaponCatalogue.length} shown).
+        </Typography>
+        {selectedWeaponRows.length > 0 ? (
+          <Box
+            component="ul"
+            sx={{ m: 0, pl: 2.5, minWidth: 0, maxWidth: '100%' }}
+          >
+            {selectedWeaponRows.map(({ entry, row }) => (
+              <Box
+                component="li"
+                key={entry.id}
+                sx={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 1,
+                  mb: 0.75,
+                  minWidth: 0,
+                  maxWidth: '100%',
+                }}
+              >
+                <Typography variant="body2" sx={{ minWidth: 0, flex: '1 1 auto' }}>
+                  {row?.displayName || entry.id}
+                  {row?.mount ? ` (${row.mount})` : ''}
+                </Typography>
+                <NumberInput
+                  label="×"
+                  value={entry.count}
+                  min={1}
+                  max={99}
+                  onChange={(value) => patchSelection({
+                    weapons: setWeaponCount(selection.weapons, entry.id, value),
+                  })}
+                />
+                <Box
+                  component="button"
+                  type="button"
+                  className="de-select"
+                  sx={{ cursor: 'pointer', flex: '0 0 auto' }}
+                  onClick={() => patchSelection({
+                    weapons: removeWeaponFromSelection(selection.weapons, entry.id),
+                  })}
+                >
+                  Remove
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          <Typography variant="caption" color="text.secondary">
+            No weapons selected.
+          </Typography>
+        )}
+      </Box>
+      {(compatibility?.status === 'incompatible'
+        || compatibility?.status === 'unknown'
+        || compatReason) ? (
+        <Typography
+          variant="body2"
+          color={compatibility?.status === 'incompatible' ? 'warning.main' : 'text.secondary'}
+        >
+          {compatReason
+            || (compatibility?.requiredPowerPlantClass && compatibility?.reactorPowerPlantClass
+              ? `Drive requires ${compatibility.requiredPowerPlantClass}; selected reactor is ${compatibility.reactorPowerPlantClass}`
+              : 'Component compatibility could not be verified')}
         </Typography>
       ) : null}
     </Box>
@@ -595,7 +794,11 @@ export async function fetchShipDesigner(observerId, mode, selection, catalogue) 
   });
   const query = selectionQuery(selection, catalogue);
   for (const [key, value] of Object.entries(query)) {
-    params.set(key, String(value));
+    if (key === 'weapons' && Array.isArray(value)) {
+      for (const entry of value) params.append('weapons', entry);
+    } else {
+      params.set(key, String(value));
+    }
   }
   try {
     const response = await fetch(`/api/intel/ship-designer?${params.toString()}`);

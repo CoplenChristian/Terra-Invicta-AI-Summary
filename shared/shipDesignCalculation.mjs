@@ -302,9 +302,12 @@ const resolveSelection = (selection, family, source) => {
   const found = id
     ? rows.find(row => identityOf(row) === id)
     : null;
-  if (typeof selection === 'string') return found || { id: selection };
-  if (typeof selection === 'number') return found || { id: String(selection) };
-  return mergeSelected(found, selection);
+  if (typeof selection === 'string' || typeof selection === 'number') return found;
+  if (found) return mergeSelected(found, selection);
+  // Raw component-shaped records are still supported for the pure calculator
+  // when no catalogue was supplied. Once a family catalogue is available,
+  // however, an id that misses it is not a component and must stay absent.
+  return rows.length === 0 ? selection : null;
 };
 
 const driveVariantStats = (record) => asArray(record?.variants);
@@ -465,7 +468,13 @@ const normalizeComponentList = (value, family, source) => {
     if (quantity === 0) continue;
     const resolved = resolveSelection(component, family, source);
     if (!resolved) {
-      issues.push({ id: identityOf(component), reason: `${family} component is not selected` });
+      const id = identityOf(component);
+      issues.push({
+        id,
+        reason: id
+          ? `${family} component '${id}' is not in the catalogue`
+          : `${family} component is not selected`
+      });
       continue;
     }
     items.push({
@@ -551,7 +560,7 @@ const buildWeaponCapacity = ({ hull, weapons }) => {
       side,
       required: required[side],
       limit: limits[side],
-      reason: `${hullName} provides ${limits[side]} ${side} hardpoint(s), but selected weapons require ${required[side]}`
+      reason: `${hullName} provides ${limits[side]} ${side} hardpoints; ${required[side]} requested`
     }));
   return {
     status: overCapacity.length > 0 ? 'over-capacity' : 'fits',
@@ -1644,7 +1653,19 @@ export function calculateShipDesign(input = {}) {
         ? null
         : `drive requires ${compatibilityRequired}, selected reactor is ${compatibilityActual}`
     };
+  const explicitSelectionRejections = asArray(input.selectionRejections);
+  const selectionRejectionReasons = [
+    ...explicitSelectionRejections.map(entry => typeof entry === 'string' ? entry : entry?.reason),
+    ...weapons.issues.map(issue => issue?.reason)
+  ].filter(Boolean);
+  const weaponSelectionRejectionReasons = [
+    ...explicitSelectionRejections
+      .filter(entry => typeof entry === 'string' || entry?.parameter === 'weapons')
+      .map(entry => typeof entry === 'string' ? entry : entry?.reason),
+    ...weapons.issues.map(issue => issue?.reason)
+  ].filter(Boolean);
   const refusalReasons = [
+    ...selectionRejectionReasons,
     compatibility.compatible === false ? compatibility.reason : null,
     weaponCapacity.status === 'over-capacity' ? weaponCapacity.reason : null
   ].filter(Boolean);
@@ -1665,18 +1686,23 @@ export function calculateShipDesign(input = {}) {
   const deltaV = deltaVKps(effectiveEv.evKps, mass.wetKg, mass.dryKg);
   const cruise = accelerationMps2(scaledThrust, mass.wetKg, 1);
   const combat = accelerationMps2(scaledThrust, mass.wetKg, numberField(drive, ['thrustCap']));
+  // Supporting arithmetic remains available for diagnosis, but a refused
+  // loadout must not expose those values as a buildable ship readout.
+  const reportedCruise = refusalReason ? null : cruise;
+  const reportedCombat = refusalReason ? null : combat;
+  const reportedDeltaV = refusalReason ? null : deltaV;
   const performance = {
-    cruiseAccelerationMps2: cruise,
-    combatAccelerationMps2: combat,
-    deltaVKps: deltaV,
+    cruiseAccelerationMps2: reportedCruise,
+    combatAccelerationMps2: reportedCombat,
+    deltaVKps: reportedDeltaV,
     effectiveExhaustVelocityKps: effectiveEv.evKps,
     thrustN: numberField(drive, ['thrust_N']),
     scaledThrustN: scaledThrust,
     thrustCap: numberField(drive, ['thrustCap']),
     reasons: {
-      cruiseAccelerationMps2: cruise === null ? performanceReason('cruise') : null,
-      combatAccelerationMps2: combat === null ? (refusalReason || (numberField(drive, ['thrustCap']) === null ? (drive ? 'drive thrust cap is not readable' : performanceReason('combat')) : performanceReason('combat'))) : null,
-      deltaVKps: deltaV === null ? performanceReason('deltaV') : null
+      cruiseAccelerationMps2: reportedCruise === null ? performanceReason('cruise') : null,
+      combatAccelerationMps2: reportedCombat === null ? (refusalReason || (numberField(drive, ['thrustCap']) === null ? (drive ? 'drive thrust cap is not readable' : performanceReason('combat')) : performanceReason('combat'))) : null,
+      deltaVKps: reportedDeltaV === null ? performanceReason('deltaV') : null
     },
     formulae: {
       deltaV: 'deltaVKps = shared/propulsion.mjs deltaVKps(effectiveEV, wetMassKg, dryMassKg)',
@@ -1701,6 +1727,15 @@ export function calculateShipDesign(input = {}) {
   for (const issue of [...driveResolution.reason ? [{ reason: driveResolution.reason }] : [], ...utilities.issues, ...weapons.issues, ...batteries.issues]) {
     if (issue?.reason) reasons.components = reasons.components ? `${reasons.components}; ${issue.reason}` : issue.reason;
   }
+  if (selectionRejectionReasons.length > 0) {
+    const reason = [...new Set(selectionRejectionReasons)].join('; ');
+    addReason(reasons, 'selection', reason);
+  }
+  if (weaponSelectionRejectionReasons.length > 0) {
+    const reason = [...new Set(weaponSelectionRejectionReasons)].join('; ');
+    addReason(reasons, 'weapons', reason);
+    addReason(reasons, 'weaponSelection', reason);
+  }
   if (weaponCapacity.status === 'over-capacity') {
     addReason(reasons, 'weapons', weaponCapacity.reason);
     addReason(reasons, 'weaponCapacity', weaponCapacity.reason);
@@ -1709,29 +1744,31 @@ export function calculateShipDesign(input = {}) {
   }
   if (compatibility.reason) addReason(reasons, 'compatibility', compatibility.reason);
 
-  const buildable = compatibility.compatible === false || weaponCapacity.status === 'over-capacity'
+  const buildable = refusalReason
     ? false
     : (compatibility.compatible === null || weaponCapacity.status === 'unknown' ? null : true);
 
   const readout = {
     available: true,
     buildable,
-    status: compatibility.compatible === false
-      ? 'incompatible'
-      : (weaponCapacity.status === 'over-capacity'
-        ? 'over-capacity'
-        : (buildable === null ? 'incomplete' : 'calculated')),
+    status: selectionRejectionReasons.length > 0
+      ? 'rejected'
+      : (compatibility.compatible === false
+        ? 'incompatible'
+        : (weaponCapacity.status === 'over-capacity'
+          ? 'over-capacity'
+          : (buildable === null ? 'incomplete' : 'calculated'))),
     reasons,
     compatibility,
     weaponCapacity,
     // The first four keys are intentionally top-level: they are the owner's
     // requested readout, not values hidden behind supporting detail panels.
-    cruiseAccelerationMps2: cruise,
-    combatAccelerationMps2: combat,
-    deltaVKps: deltaV,
-    dryMassTons: mass.dryTons,
-    wetMassTons: mass.wetTons,
-    totalResourceCost: cost.total,
+    cruiseAccelerationMps2: reportedCruise,
+    combatAccelerationMps2: reportedCombat,
+    deltaVKps: reportedDeltaV,
+    dryMassTons: refusalReason ? null : mass.dryTons,
+    wetMassTons: refusalReason ? null : mass.wetTons,
+    totalResourceCost: refusalReason ? null : cost.total,
     performance,
     mass,
     power,
