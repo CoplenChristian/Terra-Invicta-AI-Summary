@@ -62,3 +62,8 @@ backups/
 # Claude Code personal overrides. settings.json is the shared file; .local.json is
 # per-machine by convention and here it installs auto-running edit hooks.
 .claude/settings.local.json
+
+# Git worktrees created by tooling — never part of a commit.
+# `.claude/worktrees/` is covered above; this catches the sibling path that
+# a `git add -A` once swept in as an embedded gitlink.
+.worktrees/
