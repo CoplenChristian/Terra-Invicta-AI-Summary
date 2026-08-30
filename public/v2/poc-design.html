@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terra Invicta Intel — Design POC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #07090f;
+      --bg-panel: #0e1219;
+      --bg-raised: #141a24;
+      --bg-hover: #1a2230;
+      --border: #243044;
+      --border-soft: #1a2332;
+      --text: #e8ecf2;
+      --text-soft: #a8b4c4;
+      --text-muted: #6b7a8f;
+      --accent: #d4a24a;
+      --accent-soft: rgba(212, 162, 74, 0.12);
+      --accent-glow: rgba(212, 162, 74, 0.35);
+      --cyan: #4ec5c8;
+      --cyan-soft: rgba(78, 197, 200, 0.12);
+      --success: #6ecf8a;
+      --warning: #e8a24a;
+      --danger: #e06b6b;
+      --danger-soft: rgba(224, 107, 107, 0.14);
+      --serif: "Instrument Serif", Georgia, serif;
+      --sans: "DM Sans", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+      --sidebar-w: 220px;
+      --context-w: 320px;
+      --header-h: 56px;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { color-scheme: dark; }
+
+    body {
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text);
+      background: var(--bg-deep);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    ::selection {
+      background: var(--accent-soft);
+      color: var(--text);
+    }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-deep); }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    button, input, select {
+      font: inherit;
+      color: inherit;
+      border: none;
+      background: none;
+      cursor: pointer;
+    }
+
+    button:focus-visible,
+    select:focus-visible,
+    a:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr var(--context-w);
+      grid-template-rows: var(--header-h) 1fr;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border-soft);
+      background: linear-gradient(180deg, #0c1018 0%, var(--bg-deep) 100%);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .brand-text h1 {
+      font-family: var(--serif);
+      font-size: 18px;
+      font-weight: 400;
+      letter-spacing: 0.01em;
+      line-height: 1.1;
+    }
+
+    .brand-text p {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .meta-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border-soft);
+      font-size: 11px;
+      color: var(--text-soft);
+      white-space: nowrap;
+    }
+
+    .meta-chip strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .meta-chip--alert {
+      border-color: rgba(224, 107, 107, 0.35);
+      background: var(--danger-soft);
+    }
+
+    .meta-chip--alert strong { color: var(--danger); }
+
+    .hate-gauge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 12px 4px 8px;
+      border-radius: 999px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border-soft);
+      cursor: pointer;
+      transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+    }
+
+    .hate-gauge:hover {
+      border-color: var(--border);
+      background: var(--bg-hover);
+    }
+
+    .hate-gauge__arc {
+      width: 28px;
+      height: 28px;
+      transform: rotate(-90deg);
+    }
+
+    .hate-gauge__arc circle {
+      fill: none;
+      stroke-width: 3;
+    }
+
+    .hate-gauge__arc .track { stroke: var(--border); }
+    .hate-gauge__arc .fill { stroke: var(--danger); stroke-linecap: round; transition: stroke-dashoffset 0.6s var(--ease); }
+
+    .hate-gauge__text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+
+    .hate-gauge__label {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .hate-gauge__value {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--danger);
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mode-toggle {
+      display: flex;
+      padding: 3px;
+      border-radius: 999px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border-soft);
+    }
+
+    .mode-toggle button {
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      transition: all 0.2s var(--ease);
+    }
+
+    .mode-toggle button[aria-pressed="true"] {
+      background: var(--accent);
+      color: var(--bg-deep);
+    }
+
+    .mode-toggle button:not([aria-pressed="true"]):hover {
+      color: var(--text-soft);
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-soft);
+      background: var(--bg-raised);
+      color: var(--text-soft);
+      transition: all 0.2s var(--ease);
+    }
+
+    .icon-btn:hover {
+      border-color: var(--border);
+      color: var(--text);
+      background: var(--bg-hover);
+    }
+
+    .icon-btn svg { width: 16px; height: 16px; }
+
+    /* Sidebar */
+    .sidebar {
+      grid-row: 2;
+      padding: 16px 12px;
+      border-right: 1px solid var(--border-soft);
+      background: var(--bg-panel);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow-y: auto;
+    }
+
+    .nav-section-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 12px 10px 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      color: var(--text-soft);
+      font-size: 13px;
+      font-weight: 500;
+      text-align: left;
+      width: 100%;
+      transition: all 0.2s var(--ease);
+      position: relative;
+    }
+
+    .nav-item svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    .nav-item[aria-current="page"] {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .nav-item[aria-current="page"] svg { opacity: 1; }
+
+    .nav-item__badge {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 12px 10px;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .poc-banner {
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--cyan-soft);
+      border: 1px solid rgba(78, 197, 200, 0.25);
+      font-size: 11px;
+      color: var(--cyan);
+      line-height: 1.4;
+    }
+
+    /* Main */
+    .main {
+      grid-row: 2;
+      padding: 24px;
+      overflow-y: auto;
+      background: var(--bg-deep);
+    }
+
+    .view { display: none; animation: fadeIn 0.35s var(--ease); }
+    .view.is-active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .view-header {
+      margin-bottom: 24px;
+    }
+
+    .view-header h2 {
+      font-family: var(--serif);
+      font-size: 32px;
+      font-weight: 400;
+      line-height: 1.1;
+      margin-bottom: 6px;
+      text-wrap: balance;
+    }
+
+    .view-header p {
+      color: var(--text-soft);
+      max-width: 60ch;
+      font-size: 14px;
+    }
+
+    /* KPI strip */
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .kpi {
+      padding: 16px;
+      border-radius: var(--radius);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-soft);
+      transition: border-color 0.2s var(--ease);
+    }
+
+    .kpi:hover { border-color: var(--border); }
+
+    .kpi__label {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .kpi__value {
+      font-family: var(--serif);
+      font-size: 28px;
+      line-height: 1;
+      color: var(--text);
+    }
+
+    .kpi__value--accent { color: var(--accent); }
+    .kpi__value--danger { color: var(--danger); }
+    .kpi__value--success { color: var(--success); }
+
+    .kpi__sub {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .kpi__delta {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-family: var(--mono);
+      font-size: 10px;
+      margin-top: 6px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .kpi__delta--up { background: rgba(110, 207, 138, 0.12); color: var(--success); }
+    .kpi__delta--down { background: var(--danger-soft); color: var(--danger); }
+
+    /* Grid layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 16px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    /* Panels */
+    .panel {
+      border-radius: var(--radius);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-soft);
+      overflow: hidden;
+    }
+
+    .panel__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .panel__title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .panel__action {
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .panel__action:hover { text-decoration: underline; }
+
+    .panel__body { padding: 16px; }
+
+    /* Directive cards */
+    .directive-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .directive {
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      border: 1px solid var(--border-soft);
+      cursor: pointer;
+      transition: all 0.2s var(--ease);
+    }
+
+    .directive:hover {
+      border-color: var(--border);
+      background: var(--bg-hover);
+    }
+
+    .directive.is-selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent-soft);
+    }
+
+    .directive.is-primary {
+      background: linear-gradient(135deg, rgba(212, 162, 74, 0.08) 0%, var(--bg-raised) 60%);
+    }
+
+    .directive__top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .directive__rank {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+    }
+
+    .directive__score {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--success);
+    }
+
+    .directive__score--warn { color: var(--warning); }
+    .directive__score--bad { color: var(--danger); }
+
+    .directive__title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      line-height: 1.3;
+    }
+
+    .directive__meta {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .directive__tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .tag {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: var(--bg-deep);
+      color: var(--text-muted);
+      border: 1px solid var(--border-soft);
+    }
+
+    .tag--veto { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+    .tag--boost { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+    /* Timeline */
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .timeline__item {
+      display: grid;
+      grid-template-columns: 60px 1fr;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .timeline__item:last-child { border-bottom: none; }
+
+    .timeline__when {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      padding-top: 2px;
+    }
+
+    .timeline__text {
+      font-size: 13px;
+      color: var(--text-soft);
+      line-height: 1.4;
+    }
+
+    .timeline__text strong { color: var(--text); font-weight: 500; }
+
+    /* Councilor roster */
+    .councilor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .councilor {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      border: 1px solid var(--border-soft);
+    }
+
+    .councilor__avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--border);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-soft);
+      flex-shrink: 0;
+    }
+
+    .councilor__info { min-width: 0; }
+
+    .councilor__name {
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .councilor__mission {
+      font-size: 10px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Threat table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .data-table th {
+      text-align: left;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .data-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-soft);
+    }
+
+    .data-table tr:hover td { background: var(--bg-hover); }
+
+    .data-table .mono { font-family: var(--mono); font-size: 11px; }
+
+    .status-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .status-dot--high { background: var(--danger); }
+    .status-dot--med { background: var(--warning); }
+    .status-dot--low { background: var(--success); }
+
+    /* Fleet cards */
+    .fleet-card {
+      padding: 14px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-raised);
+      border: 1px solid var(--border-soft);
+    }
+
+    .fleet-card h4 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .fleet-card p {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .fleet-stats {
+      display: flex;
+      gap: 16px;
+    }
+
+    .fleet-stat {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .fleet-stat strong {
+      display: block;
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* Mining bars */
+    .mine-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 50px;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 0;
+    }
+
+    .mine-row + .mine-row { border-top: 1px solid var(--border-soft); }
+
+    .mine-row__body { font-size: 12px; font-weight: 500; }
+
+    .mine-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: var(--bg-deep);
+      overflow: hidden;
+    }
+
+    .mine-bar__fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--cyan);
+      transform-origin: left center;
+      transform: scaleX(1);
+      transition: transform 0.6s var(--ease);
+    }
+
+    .mine-row__pct {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: right;
+    }
+
+    /* Context panel */
+    .context {
+      grid-row: 2;
+      padding: 20px 16px;
+      border-left: 1px solid var(--border-soft);
+      background: var(--bg-panel);
+      overflow-y: auto;
+    }
+
+    .context__section + .context__section {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .context__label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .context__title {
+      font-family: var(--serif);
+      font-size: 22px;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    .context__desc {
+      font-size: 13px;
+      color: var(--text-soft);
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-soft);
+      font-size: 12px;
+    }
+
+    .detail-row:last-child { border-bottom: none; }
+
+    .detail-row dt { color: var(--text-muted); }
+    .detail-row dd { font-family: var(--mono); font-weight: 500; text-align: right; }
+
+    .redacted {
+      color: var(--text-muted);
+      font-style: italic;
+      letter-spacing: 0.05em;
+    }
+
+    .rule-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .rule-list li {
+      font-size: 12px;
+      color: var(--text-soft);
+      padding-left: 14px;
+      position: relative;
+      line-height: 1.4;
+    }
+
+    .rule-list li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 7px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+
+    .rule-list li.pass::before { background: var(--success); }
+    .rule-list li.fail::before { background: var(--danger); }
+    .rule-list li.warn::before { background: var(--warning); }
+
+    /* Orbital map placeholder */
+    .orbital-map {
+      position: relative;
+      aspect-ratio: 2 / 1;
+      border-radius: var(--radius);
+      background: radial-gradient(ellipse at center, #141c2e 0%, var(--bg-deep) 70%);
+      border: 1px solid var(--border-soft);
+      overflow: hidden;
+    }
+
+    .orbital-map__sun {
+      position: absolute;
+      left: 8%;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #e8c878 0%, #c4923a 100%);
+    }
+
+    .orbital-map__orbit {
+      position: absolute;
+      border: 1px dashed rgba(78, 197, 200, 0.15);
+      border-radius: 50%;
+      top: 50%;
+      left: 8%;
+      transform: translate(-50%, -50%);
+    }
+
+    .orbital-map__body {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+    }
+
+    .orbital-map__body:hover {
+      transform: translate(-50%, -50%) scale(1.4);
+      box-shadow: 0 0 12px var(--cyan);
+    }
+
+    .orbital-map__body--ours { background: var(--cyan); }
+    .orbital-map__body--hostile { background: var(--danger); }
+    .orbital-map__body--contested { background: var(--warning); }
+
+    .orbital-map__label {
+      position: absolute;
+      font-size: 9px;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+
+    /* Empty state */
+    .empty {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .app {
+        grid-template-columns: var(--sidebar-w) 1fr;
+      }
+      .context { display: none; }
+      .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: var(--header-h) auto 1fr;
+      }
+      .sidebar {
+        grid-row: 2;
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 8px;
+        border-right: none;
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .nav-section-label, .sidebar-footer { display: none; }
+      .nav-item { white-space: nowrap; padding: 8px 12px; }
+      .nav-item span:not(.nav-item__badge) { display: none; }
+      .main { grid-row: 3; padding: 16px; }
+      .header-meta { display: none; }
+      .kpi-strip { grid-template-columns: 1fr 1fr; }
+      .grid-3 { grid-template-columns: 1fr; }
+      .councilor-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">⬢</div>
+        <div class="brand-text">
+          <h1>The Initiative</h1>
+          <p>Campaign intelligence</p>
+        </div>
+      </div>
+
+      <div class="header-meta">
+        <div class="meta-chip"><span>Date</span> <strong id="metaDate">4 Apr 2035</strong></div>
+        <div class="meta-chip"><span>Save</span> <strong id="metaSave">Again.gz</strong></div>
+        <div class="meta-chip meta-chip--alert"><span>Alert</span> <strong>DEFCON 2</strong></div>
+        <button class="hate-gauge" type="button" aria-label="Alien hate: 168, elevated">
+          <svg class="hate-gauge__arc" viewBox="0 0 36 36" aria-hidden="true">
+            <circle class="track" cx="18" cy="18" r="14"></circle>
+            <circle class="fill" cx="18" cy="18" r="14" id="hateArc"
+              stroke-dasharray="87.96" stroke-dashoffset="26.4"></circle>
+          </svg>
+          <div class="hate-gauge__text">
+            <span class="hate-gauge__label">Alien hate</span>
+            <span class="hate-gauge__value" id="hateValue">168</span>
+          </div>
+        </button>
+      </div>
+
+      <div class="header-controls">
+        <div class="mode-toggle" role="group" aria-label="Intel mode">
+          <button type="button" data-mode="player" aria-pressed="true">Player</button>
+          <button type="button" data-mode="enhanced" aria-pressed="false">Enhanced</button>
+          <button type="button" data-mode="omniscient" aria-pressed="false">Omniscient</button>
+        </div>
+        <button class="icon-btn" type="button" aria-label="Refresh save" title="Refresh save">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <nav class="sidebar" aria-label="Dashboard views">
+      <div class="nav-section-label">Views</div>
+      <button class="nav-item" data-view="command" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        <span>Command</span>
+      </button>
+      <button class="nav-item" data-view="expansion">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>
+        <span>Expansion</span>
+      </button>
+      <button class="nav-item" data-view="fleet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 19l4-14h8l4 14"/><path d="M6 19h12"/></svg>
+        <span>Fleet</span>
+      </button>
+      <button class="nav-item" data-view="battle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 2l3 7h7l-5.5 4.5 2 7L12 17l-6.5 3.5 2-7L2 9h7z"/></svg>
+        <span>Battle</span>
+      </button>
+      <button class="nav-item" data-view="threat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 9v4"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/><path d="M10.3 3.6L2.6 17.5A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.5L13.7 3.6a2 2 0 0 0-3.4 0z"/></svg>
+        <span>Threat</span>
+        <span class="nav-item__badge">3</span>
+      </button>
+      <button class="nav-item" data-view="drives">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <span>Drives</span>
+      </button>
+      <button class="nav-item" data-view="records">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span>Records</span>
+      </button>
+      <button class="nav-item" data-view="designer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        <span>Designer</span>
+      </button>
+      <div class="sidebar-footer">
+        <div class="poc-banner">Design POC v3 — mocked data only. Open <code>/v2/</code> for the live dashboard.</div>
+      </div>
+    </nav>
+
+    <main class="main" id="mainContent">
+      <!-- COMMAND -->
+      <section class="view is-active" id="view-command" aria-label="Command view">
+        <header class="view-header">
+          <h2>Executive briefing</h2>
+          <p>Priority directives for the next council cycle, ranked by composite strategic value.</p>
+        </header>
+
+        <div class="kpi-strip">
+          <div class="kpi">
+            <div class="kpi__label">Strategic score</div>
+            <div class="kpi__value kpi__value--accent">66</div>
+            <div class="kpi__sub">Rank #2 among human factions</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi__label">Mission control</div>
+            <div class="kpi__value">847</div>
+            <div class="kpi__delta kpi__delta--up">↑ 23 since save</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi__label">Research / turn</div>
+            <div class="kpi__value kpi__value--success">+142</div>
+            <div class="kpi__sub">USA advise post active</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi__label">Fleet strength</div>
+            <div class="kpi__value">38</div>
+            <div class="kpi__sub">12 combat-ready</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel__head">
+              <span class="panel__title">Directive queue</span>
+              <button class="panel__action" type="button">View all 24</button>
+            </div>
+            <div class="panel__body">
+              <div class="directive-list" id="directiveList"></div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="panel">
+              <div class="panel__head">
+                <span class="panel__title">Since last save</span>
+              </div>
+              <div class="panel__body">
+                <div class="timeline" id="timeline"></div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel__head">
+                <span class="panel__title">Councilor roster</span>
+              </div>
+              <div class="panel__body">
+                <div class="councilor-grid" id="councilorGrid"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- EXPANSION -->
+      <section class="view" id="view-expansion" aria-label="Expansion view">
+        <header class="view-header">
+          <h2>Solar expansion</h2>
+          <p>Mining capacity, hab sites, and construction pipeline across the inner system.</p>
+        </header>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel__head"><span class="panel__title">Inner system map</span></div>
+            <div class="panel__body">
+              <div class="orbital-map" id="orbitalMap"></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel__head"><span class="panel__title">Mining yield vs capacity</span></div>
+            <div class="panel__body" id="miningBars"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FLEET -->
+      <section class="view" id="view-fleet" aria-label="Fleet view">
+        <header class="view-header">
+          <h2>Fleet operations</h2>
+          <p>Combat readiness, shipyard queues, and procurement recommendations.</p>
+        </header>
+        <div class="grid-3" id="fleetCards"></div>
+      </section>
+
+      <!-- BATTLE -->
+      <section class="view" id="view-battle" aria-label="Battle view">
+        <header class="view-header">
+          <h2>Theater defence</h2>
+          <p>Engagement odds and hold-ground analysis for active combat theaters.</p>
+        </header>
+        <div class="panel">
+          <div class="panel__body" style="padding:0;">
+            <table class="data-table" id="battleTable">
+              <thead>
+                <tr>
+                  <th>Theater</th>
+                  <th>Our forces</th>
+                  <th>Hostile</th>
+                  <th>Hold odds</th>
+                  <th>Verdict</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- THREAT -->
+      <section class="view" id="view-threat" aria-label="Threat view">
+        <header class="view-header">
+          <h2>Alien threat assessment</h2>
+          <p>Hostile movements, councilor activity, and escalation indicators.</p>
+        </header>
+        <div class="panel">
+          <div class="panel__body" style="padding:0;">
+            <table class="data-table" id="threatTable">
+              <thead>
+                <tr>
+                  <th>Threat</th>
+                  <th>Location</th>
+                  <th>Severity</th>
+                  <th>ETA</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- DRIVES -->
+      <section class="view" id="view-drives" aria-label="Drives view">
+        <header class="view-header">
+          <h2>Drive explorer</h2>
+          <p>Propulsion catalogue rated against your flagship design.</p>
+        </header>
+        <div class="panel">
+          <div class="panel__body" style="padding:0;">
+            <table class="data-table" id="drivesTable">
+              <thead>
+                <tr>
+                  <th>Drive</th>
+                  <th>Δv (km/s)</th>
+                  <th>Cruise (m/s²)</th>
+                  <th>Combat (m/s²)</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- RECORDS -->
+      <section class="view" id="view-records" aria-label="Records view">
+        <header class="view-header">
+          <h2>Campaign records</h2>
+          <p>Research milestones, story events, and capability unlocks.</p>
+        </header>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel__head"><span class="panel__title">Recent milestones</span></div>
+            <div class="panel__body"><div class="timeline" id="milestones"></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel__head"><span class="panel__title">Capabilities</span></div>
+            <div class="panel__body">
+              <div class="kpi-strip" style="margin-bottom:0;grid-template-columns:1fr 1fr;">
+                <div class="kpi"><div class="kpi__label">Projects done</div><div class="kpi__value">167</div></div>
+                <div class="kpi"><div class="kpi__label">Techs done</div><div class="kpi__value">107</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DESIGNER -->
+      <section class="view" id="view-designer" aria-label="Designer view">
+        <header class="view-header">
+          <h2>Ship designer</h2>
+          <p>Design validation and procurement planning for new hull configurations.</p>
+        </header>
+        <div class="empty">Ship designer integration — connect to live save data in production build.</div>
+      </section>
+    </main>
+
+    <aside class="context" id="contextPanel" aria-label="Detail panel">
+      <div class="context__section">
+        <div class="context__label">Selected directive</div>
+        <h3 class="context__title" id="ctxTitle">Keep advising USA</h3>
+        <p class="context__desc" id="ctxDesc">Maintain the +142 research/turn bonus. Abandoning this post costs more than any alternative mission scores.</p>
+        <dl id="ctxDetails"></dl>
+      </div>
+      <div class="context__section">
+        <div class="context__label">Rule evaluation</div>
+        <ul class="rule-list" id="ctxRules"></ul>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const MOCK = {
+      directives: [
+        {
+          id: 'keep-usa',
+          rank: 1,
+          title: 'Keep advising USA',
+          meta: 'Councilor Nakamura · Advise Nation',
+          score: 94,
+          primary: true,
+          tags: ['research boost', 'stable'],
+          desc: 'Maintain the +142 research/turn bonus. Abandoning this post costs more than any alternative mission scores.',
+          details: { councilor: 'Yuki Nakamura', mission: 'Advise Nation (USA)', value: '+142 research/turn', odds: '98%', cost: '0 ops' },
+          rules: [
+            { text: 'Mission already active — no reassignment cost', status: 'pass' },
+            { text: 'Research yield exceeds all alternatives', status: 'pass' },
+            { text: 'Total war veto — hate below threshold', status: 'pass' },
+            { text: 'Councilor has no higher-value target', status: 'pass' }
+          ]
+        },
+        {
+          id: 'investigate-moscow',
+          rank: 2,
+          title: 'Investigate alien activity near Moscow',
+          meta: 'Councilor Okonkwo · Investigate',
+          score: 72,
+          tags: ['intel gain'],
+          desc: 'Region shows elevated alien signatures. Investigation may reveal facility or councilor presence.',
+          details: { councilor: 'Amara Okonkwo', mission: 'Investigate (Moscow)', value: 'Intel on alien ops', odds: '76%', cost: '1 ops' },
+          rules: [
+            { text: 'Region has unconfirmed alien signatures', status: 'pass' },
+            { text: 'Councilor investigation skill ≥ 12', status: 'pass' },
+            { text: 'Opportunity cost vs USA advise', status: 'warn' }
+          ]
+        },
+        {
+          id: 'purge-beijing',
+          rank: 3,
+          title: 'Purge enthralled agent in Beijing',
+          meta: 'Councilor Vasquez · Purge',
+          score: 58,
+          tags: ['veto: low odds'],
+          desc: 'Confirmed enthralled operative. Success removes a control point penalty but odds are marginal.',
+          details: { councilor: 'Rosa Vasquez', mission: 'Purge (Beijing)', value: '+1 CP if success', odds: '41%', cost: '2 ops' },
+          rules: [
+            { text: 'Enthralled agent confirmed', status: 'pass' },
+            { text: 'Success odds below risk floor (50%)', status: 'fail' },
+            { text: 'Councilor available this cycle', status: 'pass' }
+          ]
+        },
+        {
+          id: 'build-ceres-mine',
+          rank: 4,
+          title: 'Prioritize Ceres water mine expansion',
+          meta: 'Engine recommendation · Mining',
+          score: 51,
+          tags: ['expansion'],
+          desc: 'Ceres water output at 78% of capacity. One additional mine module closes the gap before Mars transit window.',
+          details: { target: 'Ceres', module: 'Water Mine', yield: '+12 water/turn', cost: '180 MC', eta: '3 turns' },
+          rules: [
+            { text: 'Capacity headroom available', status: 'pass' },
+            { text: 'MC affordability check', status: 'pass' },
+            { text: 'Lower priority than councilor actions', status: 'warn' }
+          ]
+        }
+      ],
+      timeline: [
+        { when: 'T+0', text: '<strong>USA research</strong> increased to +142/turn' },
+        { when: 'T+0', text: '<strong>Alien fleet</strong> detected departing Luna orbit' },
+        { when: '−1d', text: '<strong>Ceres mine</strong> water output +4/turn' },
+        { when: '−2d', text: '<strong>DEFCON</strong> raised to 2 after Earth bombardment' }
+      ],
+      councilors: [
+        { initials: 'YN', name: 'Yuki Nakamura', mission: 'Advise USA' },
+        { initials: 'AO', name: 'Amara Okonkwo', mission: 'Investigate Moscow' },
+        { initials: 'RV', name: 'Rosa Vasquez', mission: 'Idle — Beijing' },
+        { initials: 'JK', name: 'James Kowalski', mission: 'Control USA' },
+        { initials: 'ML', name: 'Mei Lin', mission: 'Stabilize Japan' },
+        { initials: 'TH', name: 'Thomas Hart', mission: 'Defend Luna' }
+      ],
+      bodies: [
+        { name: 'Mercury', x: 18, y: 42, type: 'neutral' },
+        { name: 'Venus', x: 28, y: 58, type: 'hostile' },
+        { name: 'Earth', x: 38, y: 50, type: 'ours' },
+        { name: 'Luna', x: 42, y: 46, type: 'contested' },
+        { name: 'Mars', x: 55, y: 52, type: 'ours' },
+        { name: 'Ceres', x: 68, y: 48, type: 'ours' },
+        { name: 'Vesta', x: 75, y: 55, type: 'neutral' },
+        { name: 'Jupiter', x: 92, y: 50, type: 'hostile' }
+      ],
+      mining: [
+        { body: 'Ceres', pct: 78 },
+        { body: 'Vesta', pct: 62 },
+        { body: 'Mars', pct: 91 },
+        { body: 'Luna', pct: 45 },
+        { body: 'Earth L4', pct: 33 }
+      ],
+      fleets: [
+        { name: '1st Orbital Guard', location: 'Earth-Luna L1', ships: 8, ready: 6, building: 2 },
+        { name: 'Mars Defence Squadron', location: 'Mars orbit', ships: 12, ready: 9, building: 0 },
+        { name: 'Ceres Patrol', location: 'Ceres station', ships: 6, ready: 4, building: 1 },
+        { name: 'Reserve Flotilla', location: 'Luna shipyard', ships: 12, ready: 3, building: 4 }
+      ],
+      battles: [
+        { theater: 'Luna orbit', ours: '6 frigates, 2 destroyers', hostile: '3 alien corvettes', odds: '72%', verdict: 'Hold' },
+        { theater: 'Mars surface', ours: '2 armies, orbital support', hostile: '1 alien army', odds: '85%', verdict: 'Hold' },
+        { theater: 'Ceres approach', ours: '4 patrol craft', hostile: 'Unknown', odds: '—', verdict: 'Insufficient intel' }
+      ],
+      threats: [
+        { threat: 'Alien bombardment fleet', location: 'Earth approach', severity: 'high', eta: '4 turns', status: 'Tracking' },
+        { threat: 'Xenoforming (Siberia)', location: 'Russia', severity: 'med', eta: 'Ongoing', status: 'Active' },
+        { threat: 'Alien councilor (masked)', location: 'Unknown', severity: 'med', eta: '—', status: 'Investigating' }
+      ],
+      drives: [
+        { name: 'Nuclear Thermal Rocket', dv: 8.2, cruise: 0.042, combat: 0.68, status: 'Fitted' },
+        { name: 'VASIMR ×1', dv: 12.4, cruise: 0.00017, combat: 0.027, status: 'Research req.' },
+        { name: 'DS4G Ion Drive', dv: 45.1, cruise: 0.0031, combat: 0.12, status: 'Fittable' },
+        { name: 'Fusion Torch Mk2', dv: 89.3, cruise: 1.24, combat: 12.4, status: 'Locked' }
+      ],
+      milestones: [
+        { when: '2035', text: '<strong>Alien invasion plan</strong> discovered' },
+        { when: '2034', text: '<strong>Global listening network</strong> operational' },
+        { when: '2033', text: '<strong>First alien ship</strong> captured and studied' },
+        { when: '2032', text: '<strong>Public alien awareness</strong> event triggered' }
+      ]
+    };
+
+    let state = { view: 'command', mode: 'player', selectedDirective: MOCK.directives[0] };
+
+    function scoreClass(score) {
+      if (score >= 70) return '';
+      if (score >= 50) return 'directive__score--warn';
+      return 'directive__score--bad';
+    }
+
+    function renderDirectives() {
+      const el = document.getElementById('directiveList');
+      el.innerHTML = MOCK.directives.map(d => `
+        <article class="directive ${d.primary ? 'is-primary' : ''} ${d.id === state.selectedDirective.id ? 'is-selected' : ''}"
+          data-id="${d.id}" tabindex="0" role="button" aria-pressed="${d.id === state.selectedDirective.id}">
+          <div class="directive__top">
+            <span class="directive__rank">#${d.rank} PRIORITY</span>
+            <span class="directive__score ${scoreClass(d.score)}">${d.score}</span>
+          </div>
+          <h4 class="directive__title">${d.title}</h4>
+          <p class="directive__meta">${d.meta}</p>
+          <div class="directive__tags">
+            ${d.tags.map(t => `<span class="tag ${t.includes('veto') ? 'tag--veto' : t.includes('boost') ? 'tag--boost' : ''}">${t}</span>`).join('')}
+          </div>
+        </article>
+      `).join('');
+
+      el.querySelectorAll('.directive').forEach(card => {
+        card.addEventListener('click', () => selectDirective(card.dataset.id));
+        card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectDirective(card.dataset.id); }});
+      });
+    }
+
+    function selectDirective(id) {
+      state.selectedDirective = MOCK.directives.find(d => d.id === id);
+      renderDirectives();
+      renderContext();
+    }
+
+    function renderContext() {
+      const d = state.selectedDirective;
+      document.getElementById('ctxTitle').textContent = d.title;
+      document.getElementById('ctxDesc').textContent = d.desc;
+
+      const details = document.getElementById('ctxDetails');
+      details.innerHTML = Object.entries(d.details).map(([k, v]) => {
+        const redacted = state.mode === 'player' && k === 'odds' && d.id === 'purge-beijing';
+        return `<div class="detail-row"><dt>${k}</dt><dd class="${redacted ? 'redacted' : ''}">${redacted ? '██%' : v}</dd></div>`;
+      }).join('');
+
+      document.getElementById('ctxRules').innerHTML = d.rules.map(r =>
+        `<li class="${r.status}">${r.text}</li>`
+      ).join('');
+    }
+
+    function renderTimeline() {
+      document.getElementById('timeline').innerHTML = MOCK.timeline.map(t => `
+        <div class="timeline__item">
+          <span class="timeline__when">${t.when}</span>
+          <p class="timeline__text">${t.text}</p>
+        </div>
+      `).join('');
+    }
+
+    function renderCouncilors() {
+      document.getElementById('councilorGrid').innerHTML = MOCK.councilors.map(c => `
+        <div class="councilor">
+          <div class="councilor__avatar">${c.initials}</div>
+          <div class="councilor__info">
+            <div class="councilor__name">${c.name}</div>
+            <div class="councilor__mission">${c.mission}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderOrbitalMap() {
+      const map = document.getElementById('orbitalMap');
+      map.innerHTML = '<div class="orbital-map__sun" aria-hidden="true"></div>';
+      MOCK.bodies.forEach(b => {
+        const dot = document.createElement('div');
+        dot.className = `orbital-map__body orbital-map__body--${b.type}`;
+        dot.style.left = b.x + '%';
+        dot.style.top = b.y + '%';
+        dot.title = b.name;
+        dot.setAttribute('aria-label', b.name);
+        map.appendChild(dot);
+        const label = document.createElement('span');
+        label.className = 'orbital-map__label';
+        label.style.left = b.x + '%';
+        label.style.top = (b.y + 8) + '%';
+        label.textContent = b.name;
+        map.appendChild(label);
+      });
+    }
+
+    function renderMining() {
+      document.getElementById('miningBars').innerHTML = MOCK.mining.map(m => `
+        <div class="mine-row">
+          <span class="mine-row__body">${m.body}</span>
+          <div class="mine-bar"><div class="mine-bar__fill" style="width:${m.pct}%"></div></div>
+          <span class="mine-row__pct">${m.pct}%</span>
+        </div>
+      `).join('');
+    }
+
+    function renderFleets() {
+      document.getElementById('fleetCards').innerHTML = MOCK.fleets.map(f => `
+        <div class="fleet-card">
+          <h4>${f.name}</h4>
+          <p>${f.location}</p>
+          <div class="fleet-stats">
+            <div class="fleet-stat"><strong>${f.ships}</strong>ships</div>
+            <div class="fleet-stat"><strong>${f.ready}</strong>ready</div>
+            <div class="fleet-stat"><strong>${f.building}</strong>building</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderBattles() {
+      const tbody = document.querySelector('#battleTable tbody');
+      tbody.innerHTML = MOCK.battles.map(b => `
+        <tr>
+          <td>${b.theater}</td>
+          <td>${b.ours}</td>
+          <td class="${state.mode === 'player' && b.hostile === 'Unknown' ? 'redacted' : ''}">${state.mode === 'player' && b.hostile === 'Unknown' ? '███████' : b.hostile}</td>
+          <td class="mono">${b.odds}</td>
+          <td>${b.verdict}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderThreats() {
+      const tbody = document.querySelector('#threatTable tbody');
+      tbody.innerHTML = MOCK.threats.map(t => {
+        const sevClass = t.severity === 'high' ? 'high' : t.severity === 'med' ? 'med' : 'low';
+        const loc = state.mode === 'player' && t.threat.includes('masked') ? '███████' : t.location;
+        return `
+          <tr>
+            <td>${t.threat}</td>
+            <td class="${state.mode === 'player' && t.threat.includes('masked') ? 'redacted' : ''}">${loc}</td>
+            <td><span class="status-dot status-dot--${sevClass}"></span>${t.severity}</td>
+            <td class="mono">${t.eta}</td>
+            <td>${t.status}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderDrives() {
+      const tbody = document.querySelector('#drivesTable tbody');
+      tbody.innerHTML = MOCK.drives.map(d => `
+        <tr>
+          <td>${d.name}</td>
+          <td class="mono">${d.dv}</td>
+          <td class="mono">${d.cruise}</td>
+          <td class="mono">${d.combat}</td>
+          <td>${d.status}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderMilestones() {
+      document.getElementById('milestones').innerHTML = MOCK.milestones.map(m => `
+        <div class="timeline__item">
+          <span class="timeline__when">${m.when}</span>
+          <p class="timeline__text">${m.text}</p>
+        </div>
+      `).join('');
+    }
+
+    function switchView(view) {
+      state.view = view;
+      document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.setAttribute('aria-current', btn.dataset.view === view ? 'page' : null);
+      });
+      document.querySelectorAll('.view').forEach(v => {
+        const active = v.id === `view-${view}`;
+        v.classList.toggle('is-active', active);
+      });
+    }
+
+    function switchMode(mode) {
+      state.mode = mode;
+      document.querySelectorAll('.mode-toggle button').forEach(btn => {
+        btn.setAttribute('aria-pressed', btn.dataset.mode === mode ? 'true' : 'false');
+      });
+      const hateEl = document.getElementById('hateValue');
+      const hateArc = document.getElementById('hateArc');
+      if (mode === 'player') {
+        hateEl.textContent = '168†';
+        hateEl.title = 'Assessed value — true hate redacted';
+      } else {
+        hateEl.textContent = '168';
+        hateEl.title = '';
+      }
+      renderContext();
+      renderBattles();
+      renderThreats();
+    }
+
+    document.querySelectorAll('.nav-item').forEach(btn => {
+      btn.addEventListener('click', () => switchView(btn.dataset.view));
+    });
+
+    document.querySelectorAll('.mode-toggle button').forEach(btn => {
+      btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+    });
+
+    renderDirectives();
+    renderContext();
+    renderTimeline();
+    renderCouncilors();
+    renderOrbitalMap();
+    renderMining();
+    renderFleets();
+    renderBattles();
+    renderThreats();
+    renderDrives();
+    renderMilestones();
+  </script>
+</body>
+</html>
