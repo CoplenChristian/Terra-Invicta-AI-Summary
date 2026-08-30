@@ -50,10 +50,13 @@
  */
 
 import React from 'react';
+import Box from '@mui/material/Box';
+import { ThemeProvider } from '@mui/material/styles';
 import { DataTable, Measured, Estimated } from '../components/index.js';
 import { Panel } from '../components/Panel.jsx';
+import { ABSENT_LABEL, Value, resolveValue } from '../components/Value.jsx';
+import initiativeTheme from '../theme.js';
 import {
-  UNAVAILABLE,
   BUCKETS,
   BUCKET_LABEL,
   BUCKET_TITLE,
@@ -79,6 +82,131 @@ import {
   pathPanelOptions,
   ungatedPanelOptions,
 } from './driveExplorerUtils.mjs';
+
+// ---------------------------------------------------------------------------
+// Presence and formatting — each figure resolves against its own input.
+// ---------------------------------------------------------------------------
+
+function isNumericPresent(value) {
+  return num(value) !== null;
+}
+
+function isTextPresent(value) {
+  return value !== null && value !== undefined && value !== '';
+}
+
+/** String form for an elementless host: titles and composed sentences. */
+function valueText(value, format = String, present = isTextPresent(value), absentLabel = ABSENT_LABEL) {
+  return resolveValue({ value, present, format, absentLabel }).text;
+}
+
+function numberText(value, format = int, absentLabel = ABSENT_LABEL) {
+  return valueText(value, format, isNumericPresent(value), absentLabel);
+}
+
+/** A figure whose host is supplied by the call site. */
+function Figure({ value, format, present, absentLabel = ABSENT_LABEL, ...rest }) {
+  return (
+    <Value
+      value={value}
+      present={present ?? isNumericPresent(value)}
+      format={format}
+      absentLabel={absentLabel}
+      {...rest}
+    />
+  );
+}
+
+/** A text value whose empty string is absent, not a blank label. */
+function TextFigure({ value, format = String, present, absentLabel = ABSENT_LABEL, ...rest }) {
+  return (
+    <Value
+      value={value}
+      present={present ?? isTextPresent(value)}
+      format={format}
+      absentLabel={absentLabel}
+      {...rest}
+    />
+  );
+}
+
+/** Preserve an existing div/span/option while giving it the Value contract. */
+function ExistingDiv({ children, ...rest }) {
+  return <div {...rest}>{children}</div>;
+}
+
+function ExistingSpan({ children, ...rest }) {
+  return <span {...rest}>{children}</span>;
+}
+
+function ExistingOption({ children, optionValue, ...rest }) {
+  return <option {...rest} value={optionValue}>{children}</option>;
+}
+
+/** The old power cell already owns the div and the unit span. */
+function PowerValue({ children, ...rest }) {
+  return (
+    <div {...rest}>
+      {children}
+      <span className="de-unit"> GW</span>
+    </div>
+  );
+}
+
+/** Keep the register's existing host tag when Value composes with it. */
+function MeasuredValue({ valueTag = 'span', ...props }) {
+  return <Measured {...props} as={valueTag} data-primitive="measured" />;
+}
+
+function EstimatedValue({ valueTag = 'span', ...props }) {
+  return <Estimated {...props} as={valueTag} data-primitive="estimated" />;
+}
+
+const layout = {
+  picker: (space) => ({ marginBottom: space.lg }),
+  controls: (space) => ({
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    gap: space.lg,
+    padding: `${space.md} 0 ${space.lg}`,
+  }),
+  control: (space) => ({
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+  }),
+  summary: (space) => ({ padding: `${space.md} ${space.lg}` }),
+  summaryRow: () => ({ display: 'flex', flexWrap: 'wrap', gap: '18px' }),
+  summaryCell: () => ({ minWidth: '110px' }),
+  legend: (space) => ({
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '14px',
+    padding: `${space.md} 0 ${space['2xs']}`,
+  }),
+  legendItem: () => ({
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '6px',
+    flex: '1 1 280px',
+  }),
+  notice: () => ({ marginTop: '8px', padding: '6px 8px' }),
+  destination: () => ({ marginTop: '10px', padding: '8px 10px' }),
+  destinationHead: () => ({
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '8px',
+    marginBottom: '6px',
+  }),
+  destinationRows: () => ({
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '10px',
+    marginBottom: '6px',
+  }),
+  reconcile: () => ({ marginTop: '8px' }),
+};
 
 // ---------------------------------------------------------------------------
 // Panel-local view state. Sorting and filtering happen here because the whole
@@ -132,8 +260,12 @@ function Chip({ text, cls, title }) {
 function DesignPicker({ payload, onChange }) {
   const designs = payload.designs || [];
   return (
-    <label className="de-control">
-      <span className="de-control__label">DESIGN</span>
+    <Box
+      component="label"
+      className="de-control"
+      sx={(theme) => layout.control(theme.initiative.space)}
+    >
+      <Box component="span" className="de-control__label">DESIGN</Box>
       <select
         className="de-select"
         data-de-design=""
@@ -142,15 +274,20 @@ function DesignPicker({ payload, onChange }) {
       >
         {designs.map((design) => {
           const hulls = num(design.shipsInService);
-          const suffix = hulls === null ? '' : ` — ${hulls} hull${hulls === 1 ? '' : 's'}`;
           return (
-            <option key={design.designId} value={design.designId}>
-              {`${design.displayName}${suffix}`}
-            </option>
+            <Value
+              key={design.designId}
+              as={ExistingOption}
+              optionValue={design.designId}
+              value={hulls}
+              present={hulls !== null}
+              format={(raw) => `${design.displayName} — ${raw} hull${raw === 1 ? '' : 's'}`}
+              absentLabel={design.displayName}
+            />
           );
         })}
       </select>
-    </label>
+    </Box>
   );
 }
 
@@ -161,69 +298,140 @@ function DesignSummary({ payload }) {
   const notMeasured = design.baselineMeasured === false;
 
   return (
-    <div className="de-summary">
-      <div className="de-summary__row">
-        <div className="de-summary__cell">
-          <div className="de-summary__label">HULL</div>
-          <div className="de-summary__value">{design.hullName || UNAVAILABLE}</div>
-        </div>
-        <div className="de-summary__cell">
-          <div className="de-summary__label">IN SERVICE</div>
-          <div className="de-summary__value">{int(design.shipsInService)}</div>
-        </div>
-        <div className="de-summary__cell">
-          <div className="de-summary__label">REACTOR</div>
-          <div className="de-summary__value" title={design.reactor.resolvedReason || undefined}>
-            {words(reactorClass)}
-          </div>
-          <div className="de-summary__sub">
-            {num(design.reactor.maxOutputGW) === null
-              ? 'output unavailable'
-              : `${dec(design.reactor.maxOutputGW, 1)} GW`}
-          </div>
-        </div>
-        <div className="de-summary__cell">
-          <div className="de-summary__label">FITTED DRIVE</div>
-          <div className="de-summary__value">{design.fittedDrive.displayName || UNAVAILABLE}</div>
-          <div className="de-summary__sub">{words(design.fittedDrive.classification)}</div>
-        </div>
-        <div className="de-summary__cell de-measured">
-          <div className="de-summary__label">
+    <Box
+      className="de-summary"
+      sx={(theme) => layout.summary(theme.initiative.space)}
+    >
+      <Box
+        className="de-summary__row"
+        sx={(theme) => layout.summaryRow(theme.initiative.space)}
+      >
+        <Box
+          className="de-summary__cell"
+          sx={(theme) => layout.summaryCell(theme.initiative.space)}
+        >
+          <Box component="div" className="de-summary__label">HULL</Box>
+          <TextFigure
+            as={ExistingDiv}
+            className="de-summary__value"
+            value={design.hullName}
+          />
+        </Box>
+        <Box
+          className="de-summary__cell"
+          sx={(theme) => layout.summaryCell(theme.initiative.space)}
+        >
+          <Box component="div" className="de-summary__label">IN SERVICE</Box>
+          <Figure
+            as={ExistingDiv}
+            className="de-summary__value"
+            value={design.shipsInService}
+            format={int}
+          />
+        </Box>
+        <Box
+          className="de-summary__cell"
+          sx={(theme) => layout.summaryCell(theme.initiative.space)}
+        >
+          <Box component="div" className="de-summary__label">REACTOR</Box>
+          <TextFigure
+            as={ExistingDiv}
+            className="de-summary__value"
+            title={design.reactor.resolvedReason || undefined}
+            value={reactorClass}
+            format={words}
+          />
+          <Figure
+            as={ExistingDiv}
+            className="de-summary__sub"
+            value={design.reactor.maxOutputGW}
+            present={isNumericPresent(design.reactor.maxOutputGW)}
+            format={(raw) => `${dec(raw, 1)} GW`}
+            absentLabel="output unavailable"
+          />
+        </Box>
+        <Box
+          className="de-summary__cell"
+          sx={(theme) => layout.summaryCell(theme.initiative.space)}
+        >
+          <Box component="div" className="de-summary__label">FITTED DRIVE</Box>
+          <TextFigure
+            as={ExistingDiv}
+            className="de-summary__value"
+            value={design.fittedDrive.displayName}
+          />
+          <TextFigure
+            as={ExistingDiv}
+            className="de-summary__sub"
+            value={design.fittedDrive.classification}
+            format={words}
+          />
+        </Box>
+        <Box
+          className="de-summary__cell de-measured"
+          sx={(theme) => layout.summaryCell(theme.initiative.space)}
+        >
+          <Box component="div" className="de-summary__label">
             FITTED ΔV <span className="de-tag de-tag--measured">MEASURED</span>
-          </div>
-          <div className="de-summary__value">
-            <Measured register="de" value={dec(fitted.deltaVKps, 2)} />
+          </Box>
+          <Box component="div" className="de-summary__value">
+            <Figure
+              as={MeasuredValue}
+              register="de"
+              value={fitted.deltaVKps}
+              format={(raw) => dec(raw, 2)}
+            />
             <span className="de-unit"> km/s</span>
-          </div>
-        </div>
-        <div className="de-summary__cell de-measured">
-          <div className="de-summary__label">
+          </Box>
+        </Box>
+        <Box
+          className="de-summary__cell de-measured"
+          sx={(theme) => layout.summaryCell(theme.initiative.space)}
+        >
+          <Box component="div" className="de-summary__label">
             FITTED COMBAT ACCEL <span className="de-tag de-tag--measured">MEASURED</span>
-          </div>
-          <div className="de-summary__value">
-            <Measured register="de" value={accel(fitted.combatAccelerationMps2)} />
+          </Box>
+          <Box component="div" className="de-summary__value">
+            <Figure
+              as={MeasuredValue}
+              register="de"
+              value={fitted.combatAccelerationMps2}
+              format={accel}
+            />
             <span className="de-unit"> m/s²</span>
-          </div>
-        </div>
-        <div className="de-summary__cell de-measured">
-          <div className="de-summary__label">
+          </Box>
+        </Box>
+        <Box
+          className="de-summary__cell de-measured"
+          sx={(theme) => layout.summaryCell(theme.initiative.space)}
+        >
+          <Box component="div" className="de-summary__label">
             FITTED CRUISE ACCEL <span className="de-tag de-tag--measured">MEASURED</span>
-          </div>
-          <div className="de-summary__value">
-            <Measured register="de" value={accel(fitted.cruiseAccelerationMps2)} />
+          </Box>
+          <Box component="div" className="de-summary__value">
+            <Figure
+              as={MeasuredValue}
+              register="de"
+              value={fitted.cruiseAccelerationMps2}
+              format={accel}
+            />
             <span className="de-unit"> m/s²</span>
-          </div>
-          <div className="de-summary__sub">
+          </Box>
+          <Box component="div" className="de-summary__sub">
             the baseline every × fitted in the CRUISE ACCEL column is measured against
-          </div>
-        </div>
-      </div>
+          </Box>
+        </Box>
+      </Box>
       {notMeasured && (
-        <div className="de-notice de-notice--warn" title={design.baselineUnmeasuredReason || undefined}>
+        <Box
+          className="de-notice de-notice--warn"
+          sx={layout.notice}
+          title={design.baselineUnmeasuredReason || undefined}
+        >
           NO MEASURED BASELINE FOR THIS DESIGN — every ΔV and acceleration below is reported as unavailable rather than guessed. Reactor fit, power draw and research state are still real.
-        </div>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -234,23 +442,29 @@ function Legend({ payload }) {
   // zero for something that was never evaluated is the exact failure the rest
   // of this panel is built to avoid, so the two states read differently.
   const scope = model.available === true && modelled !== null
-    ? `Only ${String(modelled)} destinations are modelled — a body absent from that list is not an unreachable one.`
+    ? `Only ${numberText(modelled, String)} destinations are modelled — a body absent from that list is not an unreachable one.`
     : 'No destination table could be read for this design, so no destination is evaluated here — which is not the same as none being reachable.';
   return (
-    <div className="de-legend">
-      <div className="de-legend__item de-measured">
+    <Box className="de-legend" sx={(theme) => layout.legend(theme.initiative.space)}>
+      <Box
+        className="de-legend__item de-measured"
+        sx={(theme) => layout.legendItem(theme.initiative.space)}
+      >
         <span className="de-tag de-tag--measured">MEASURED</span>
         <span className="de-legend__text">
           ΔV and acceleration, from the propulsion model held against this hull&apos;s own measured dry mass and tank capacity.
         </span>
-      </div>
-      <div className="de-legend__item de-estimate">
+      </Box>
+      <Box
+        className="de-legend__item de-estimate"
+        sx={(theme) => layout.legendItem(theme.initiative.space)}
+      >
         <span className="de-tag de-tag--estimate">ESTIMATE</span>
         <span className="de-legend__text de-estimate__text">
           {`Destination reachability, from a fixed heuristic ΔV table. Not a measurement. ${scope}`}
         </span>
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
@@ -270,27 +484,27 @@ function ThresholdNotice({ outcome }) {
   if (rejected.length > 0) {
     const named = rejected.map((entry) => `${entry.label} = "${entry.value}"`).join('; ');
     blocks.push(
-      <div className="de-notice de-notice--warn" key="rejected">
+      <Box className="de-notice de-notice--warn" sx={layout.notice} key="rejected">
         {`${named}
         — not a non-negative number, so ${rejected.length === 1 ? 'it was' : 'they were'} IGNORED rather than
         treated as zero. Nothing was filtered on ${rejected.length === 1 ? 'it' : 'them'}.`}
-      </div>
+      </Box>
     );
   }
 
   if (active.length > 0) {
     const summary = active.map((entry) =>
-      `${entry.label.replace(/^MIN /, '')} ≥ ${String(outcome.thresholds.applied[entry.key])}`).join(' AND ');
+      `${entry.label.replace(/^MIN /, '')} ≥ ${numberText(outcome.thresholds.applied[entry.key], String)}`).join(' AND ');
     const untestable = outcome.untestableCount > 0
-      ? `${int(outcome.untestableCount)} could NOT be tested — they have no measured value for a filtered column,
+      ? `${numberText(outcome.untestableCount)} could NOT be tested — they have no measured value for a filtered column,
            so they are excluded and counted here rather than counted as failures.`
       : 'Every drive in scope had a measured value for every filtered column, so none was excluded as untestable.';
     blocks.push(
-      <div className="de-notice de-notice--filters" key="active">
-        {`MINIMUMS ACTIVE: ${summary}. ${int(outcome.rows.length)} drive(s) meet them;
-        ${int(outcome.belowThresholdCount)} were measured and fall short.
+      <Box className="de-notice de-notice--filters" sx={layout.notice} key="active">
+        {`MINIMUMS ACTIVE: ${summary}. ${numberText(outcome.rows.length)} drive(s) meet them;
+        ${numberText(outcome.belowThresholdCount)} were measured and fall short.
         ${untestable}`}
-      </div>
+      </Box>
     );
   }
 
@@ -312,8 +526,13 @@ function Controls({ payload, shownCount, outcome }) {
   // while it stays reachable through the endpoint. Same keypad on mobile, and
   // an honest "that is not a number" instead of a value that vanishes.
   const thresholdControls = THRESHOLDS.map((entry) => (
-    <label className="de-control de-control--threshold" key={entry.key}>
-      <span className="de-control__label">{entry.label}</span>
+    <Box
+      component="label"
+      className="de-control de-control--threshold"
+      sx={(theme) => layout.control(theme.initiative.space)}
+      key={entry.key}
+    >
+      <Box component="span" className="de-control__label">{entry.label}</Box>
       <input
         className="de-input de-input--number"
         type="text"
@@ -327,14 +546,18 @@ function Controls({ payload, shownCount, outcome }) {
           patchState({ thresholds: { ...state.thresholds, [entry.key]: event.target.value } });
         }}
       />
-    </label>
+    </Box>
   ));
 
   return (
     <>
-      <div className="de-controls">
-        <label className="de-control">
-          <span className="de-control__label">SORT BY</span>
+      <Box className="de-controls" sx={(theme) => layout.controls(theme.initiative.space)}>
+        <Box
+          component="label"
+          className="de-control"
+          sx={(theme) => layout.control(theme.initiative.space)}
+        >
+          <Box component="span" className="de-control__label">SORT BY</Box>
           <select
             className="de-select"
             data-de-sort=""
@@ -345,29 +568,50 @@ function Controls({ payload, shownCount, outcome }) {
               <option key={entry.key} value={entry.key}>{entry.label}</option>
             ))}
           </select>
-        </label>
+        </Box>
         {thresholdControls}
-        <label className="de-control">
-          <span className="de-control__label">AVAILABILITY</span>
+        <Box
+          component="label"
+          className="de-control"
+          sx={(theme) => layout.control(theme.initiative.space)}
+        >
+          <Box component="span" className="de-control__label">AVAILABILITY</Box>
           <select
             className="de-select"
             data-de-bucket=""
             value={state.bucket}
             onChange={(event) => patchState({ bucket: event.target.value })}
           >
-            <option value="all">{`ALL AVAILABILITY (${int(payload.driveCatalogue.rated)})`}</option>
+            <Value
+              as={ExistingOption}
+              optionValue="all"
+              value={payload.driveCatalogue.rated}
+              present={isNumericPresent(payload.driveCatalogue.rated)}
+              format={(raw) => `ALL AVAILABILITY (${int(raw)})`}
+              absentLabel={`ALL AVAILABILITY (${ABSENT_LABEL})`}
+            />
             {Object.keys(BUCKETS).map((key) => {
               const count = num(census[key]);
               return (
-                <option key={key} value={key}>
-                  {`${BUCKET_LABEL[key]} (${count === null ? UNAVAILABLE : count})`}
-                </option>
+                <Value
+                  key={key}
+                  as={ExistingOption}
+                  optionValue={key}
+                  value={count}
+                  present={count !== null}
+                  format={(raw) => `${BUCKET_LABEL[key]} (${raw})`}
+                  absentLabel={`${BUCKET_LABEL[key]} (${ABSENT_LABEL})`}
+                />
               );
             })}
           </select>
-        </label>
-        <label className="de-control">
-          <span className="de-control__label">REACTOR FIT</span>
+        </Box>
+        <Box
+          component="label"
+          className="de-control"
+          sx={(theme) => layout.control(theme.initiative.space)}
+        >
+          <Box component="span" className="de-control__label">REACTOR FIT</Box>
           <select
             className="de-select"
             data-de-reactor=""
@@ -379,15 +623,25 @@ function Controls({ payload, shownCount, outcome }) {
                 ? num(payload.driveCatalogue.rated)
                 : num(reactorCensus[entry.key]);
               return (
-                <option key={entry.key} value={entry.key}>
-                  {`${entry.label} (${count === null ? UNAVAILABLE : count})`}
-                </option>
+                <Value
+                  key={entry.key}
+                  as={ExistingOption}
+                  optionValue={entry.key}
+                  value={count}
+                  present={count !== null}
+                  format={(raw) => `${entry.label} (${raw})`}
+                  absentLabel={`${entry.label} (${ABSENT_LABEL})`}
+                />
               );
             })}
           </select>
-        </label>
-        <label className="de-control">
-          <span className="de-control__label">SEARCH</span>
+        </Box>
+        <Box
+          component="label"
+          className="de-control"
+          sx={(theme) => layout.control(theme.initiative.space)}
+        >
+          <Box component="span" className="de-control__label">SEARCH</Box>
           <input
             className="de-input"
             type="search"
@@ -396,9 +650,13 @@ function Controls({ payload, shownCount, outcome }) {
             placeholder="drive, class or propellant"
             onChange={(event) => patchState({ search: event.target.value })}
           />
-        </label>
-        <label className="de-control">
-          <span className="de-control__label">ROWS SHOWN</span>
+        </Box>
+        <Box
+          component="label"
+          className="de-control"
+          sx={(theme) => layout.control(theme.initiative.space)}
+        >
+          <Box component="span" className="de-control__label">ROWS SHOWN</Box>
           <select
             className="de-select"
             data-de-rows=""
@@ -409,14 +667,25 @@ function Controls({ payload, shownCount, outcome }) {
               <option key={cap} value={String(cap)}>{cap >= 1000 ? 'ALL' : String(cap)}</option>
             ))}
           </select>
-        </label>
-        <div className="de-control de-control--count">
-          <span className="de-control__label">SHOWING</span>
-          <span className="de-count" data-de-count="">
-            {`${int(shownCount)} of ${int(matchedCount)} matched · ${int(payload.driveCatalogue.total)} in catalogue`}
-          </span>
-        </div>
-      </div>
+        </Box>
+        <Box
+          className="de-control de-control--count"
+          sx={(theme) => layout.control(theme.initiative.space)}
+        >
+          <Box component="span" className="de-control__label">SHOWING</Box>
+          <Value
+            as={ExistingSpan}
+            className="de-count"
+            data-de-count=""
+            value={shownCount}
+            present={isNumericPresent(shownCount)
+              && isNumericPresent(matchedCount)
+              && isNumericPresent(payload.driveCatalogue.total)}
+            format={(raw) => `${int(raw)} of ${int(matchedCount)} matched · ${int(payload.driveCatalogue.total)} in catalogue`}
+            absentLabel={`${numberText(shownCount)} of ${numberText(matchedCount)} matched · ${numberText(payload.driveCatalogue.total)} in catalogue`}
+          />
+        </Box>
+      </Box>
       <ThresholdNotice outcome={outcome} />
     </>
   );
@@ -466,12 +735,12 @@ function AvailabilityCell({ row }) {
   const costLabel = bucket === BUCKETS.researchable
     ? (row.availability.chainCostComplete === false
       ? 'chain cost incomplete — a step in it is never researched'
-      : (chainCost === null ? 'chain cost unavailable' : `${int(chainCost)} RP over ${int(row.availability.chainSteps)} step(s)`))
+      : (chainCost === null ? 'chain cost unavailable' : `${numberText(chainCost)} RP over ${numberText(row.availability.chainSteps)} step(s)`))
     : '';
   return (
     <td className="de-cell de-cell--availability">
       <Chip text={BUCKET_LABEL[bucket] || 'UNKNOWN'} cls={cls} title={BUCKET_TITLE[bucket] || ''} />
-      {costLabel ? <div className="de-cell__sub">{costLabel}</div> : null}
+      {costLabel ? <Box component="div" className="de-cell__sub">{costLabel}</Box> : null}
     </td>
   );
 }
@@ -481,6 +750,8 @@ function DriveRow({ row, payload, onOpenPath }) {
   const estimate = row.estimatedDestinations;
   const uncomputable = measured.computable !== true;
   const opened = Array.isArray(estimate.opensUp) ? estimate.opensUp : [];
+  const classification = valueText(row.classification, words);
+  const propellant = valueText(row.propellant, words);
 
   // Cruise is checked on its own value, not on the row's `computable` flag: a
   // row can be computable overall and still carry a null cruise acceleration
@@ -527,7 +798,7 @@ function DriveRow({ row, payload, onOpenPath }) {
           <span className="de-name">{row.displayName || row.driveId}</span>
         </button>
         <div className="de-cell__sub">
-          {`${words(row.classification)} · ${words(row.propellant)} `}
+          {`${classification} · ${propellant} `}
           {row.isFittedDrive && (
             <span
               className="de-caveat de-caveat--fitted"
@@ -546,41 +817,84 @@ function DriveRow({ row, payload, onOpenPath }) {
         </div>
       </td>
       <td className="de-cell de-measured de-cell--number de-cell--dv" title={uncomputableTitle}>
-        <Measured register="de" as="div" value={dec(measured.deltaVKps, 2)} />
-        <div className="de-cell__sub">
-          {uncomputable ? 'UNAVAILABLE' : `${mult(measured.deltaVMultipleVsFitted)} fitted`}
-        </div>
+        <Figure
+          as={MeasuredValue}
+          valueTag="div"
+          register="de"
+          value={measured.deltaVKps}
+          format={(raw) => dec(raw, 2)}
+        />
+        <Figure
+          as={ExistingDiv}
+          className="de-cell__sub"
+          value={measured.deltaVMultipleVsFitted}
+          present={!uncomputable && isNumericPresent(measured.deltaVMultipleVsFitted)}
+          format={(raw) => `${mult(raw)} fitted`}
+          absentLabel={uncomputable ? 'UNAVAILABLE' : `${ABSENT_LABEL} fitted`}
+        />
       </td>
       <td className="de-cell de-measured de-cell--number" title={uncomputableTitle}>
-        <Measured register="de" as="div" value={accel(measured.combatAccelerationMps2)} />
-        <div className="de-cell__sub">
-          {uncomputable ? 'UNAVAILABLE' : `${mult(measured.combatAccelerationMultipleVsFitted)} fitted`}
-        </div>
+        <Figure
+          as={MeasuredValue}
+          valueTag="div"
+          register="de"
+          value={measured.combatAccelerationMps2}
+          format={accel}
+        />
+        <Figure
+          as={ExistingDiv}
+          className="de-cell__sub"
+          value={measured.combatAccelerationMultipleVsFitted}
+          present={!uncomputable && isNumericPresent(measured.combatAccelerationMultipleVsFitted)}
+          format={(raw) => `${mult(raw)} fitted`}
+          absentLabel={uncomputable ? 'UNAVAILABLE' : `${ABSENT_LABEL} fitted`}
+        />
       </td>
       <td className="de-cell de-measured de-cell--number" title={cruiseTitle}>
-        <Measured register="de" as="div" value={accel(measured.cruiseAccelerationMps2)} />
-        <div className="de-cell__sub">
-          {cruiseUnavailable ? 'UNAVAILABLE' : `${mult(measured.cruiseAccelerationMultipleVsFitted)} fitted`}
-        </div>
+        <Figure
+          as={MeasuredValue}
+          valueTag="div"
+          register="de"
+          value={measured.cruiseAccelerationMps2}
+          format={accel}
+        />
+        <Figure
+          as={ExistingDiv}
+          className="de-cell__sub"
+          value={measured.cruiseAccelerationMultipleVsFitted}
+          present={!cruiseUnavailable && isNumericPresent(measured.cruiseAccelerationMultipleVsFitted)}
+          format={(raw) => `${mult(raw)} fitted`}
+          absentLabel={cruiseUnavailable ? 'UNAVAILABLE' : `${ABSENT_LABEL} fitted`}
+        />
       </td>
       <ReactorCell row={row} payload={payload} />
       <td
         className="de-cell de-cell--number de-cell--power"
         title="Power draw is information, never a veto: the game scales thrust by min(1, plant output / required draw) rather than refusing an underpowered design. The acceleration figures in this table do not have that scaling applied."
       >
-        <div>{power(row.power.driveDrawGW)}<span className="de-unit"> GW</span></div>
-        <div className="de-cell__sub">
-          {num(row.power.thrustScalingFactor) === null
-            ? 'scaling unavailable'
-            : `thrust ×${dec(row.power.thrustScalingFactor, 3)}`}
-        </div>
+        <Figure
+          as={PowerValue}
+          value={row.power.driveDrawGW}
+          format={power}
+        />
+        <Figure
+          as={ExistingDiv}
+          className="de-cell__sub"
+          value={row.power.thrustScalingFactor}
+          format={(raw) => `thrust ×${dec(raw, 3)}`}
+          absentLabel="scaling unavailable"
+        />
       </td>
       <AvailabilityCell row={row} />
       <td className="de-cell de-estimate de-cell--estimate">
-        <Estimated
+        <Figure
+          as={EstimatedValue}
+          valueTag="div"
           register="de"
-          as="div"
-          value={estimate.evaluated === true ? `${int(estimate.reachableCount)} reachable` : 'NOT EVALUATED'}
+          value={estimate.reachableCount}
+          present={estimate.evaluated === true && isNumericPresent(estimate.reachableCount)}
+          format={(raw) => `${int(raw)} reachable`}
+          absentLabel={estimate.evaluated === true ? `${ABSENT_LABEL} reachable` : 'NOT EVALUATED'}
           note={opened.length > 0
             ? `opens ${opened.join(', ')}`
             : (estimate.evaluated === true ? 'opens nothing new' : (estimate.reason || 'no destination table'))}
@@ -593,12 +907,12 @@ function DriveRow({ row, payload, onOpenPath }) {
 function DriveTable({ payload, rows, outcome, onOpenPath }) {
   if (rows.length === 0) {
     const untestable = outcome && outcome.untestableCount > 0
-      ? ` ${String(outcome.untestableCount)} drive(s) could not be tested against the active minimums — they carry no measured value for a filtered column, so they are excluded rather than failed.`
+      ? ` ${numberText(outcome.untestableCount)} drive(s) could not be tested against the active minimums — they carry no measured value for a filtered column, so they are excluded rather than failed.`
       : '';
     return (
-      <div className="de-notice">
-        {`No drive matches the current filters. ${String(payload.driveCatalogue.rated)} drives are rated in this catalogue; widen the filters to see them.${untestable}`}
-      </div>
+      <Box className="de-notice" sx={layout.notice}>
+        {`No drive matches the current filters. ${numberText(payload.driveCatalogue.rated)} drives are rated in this catalogue; widen the filters to see them.${untestable}`}
+      </Box>
     );
   }
 
@@ -647,72 +961,88 @@ function Footer({ payload, shownCount, outcome }) {
 
   const destinationTable = model.available
     ? (
-      <div className="de-estimate de-destination-table">
-        <div className="de-destination-table__head">
+      <Box
+        className="de-estimate de-destination-table"
+        sx={layout.destination}
+      >
+        <Box className="de-destination-table__head" sx={layout.destinationHead}>
           <span className="de-tag de-tag--estimate">ESTIMATE</span>
           <span className="de-estimate__text">
-            {`Modelled destinations from ${model.origin || 'this fleet\'s current orbit'} — ${String(destinationList.length)} of them, and no others.`}
+            {`Modelled destinations from ${model.origin || 'this fleet\'s current orbit'} — ${numberText(destinationList.length, String)} of them, and no others.`}
           </span>
-        </div>
-        <div className="de-destination-table__rows">
+        </Box>
+        <Box className="de-destination-table__rows" sx={layout.destinationRows}>
           {destinationList.map((entry) => (
             <span className="de-destination" key={entry.destination}>
               {`${entry.destination} `}
-              <span className="de-destination__dv">{`${dec(entry.deltaVRequired, 1)} km/s`}</span>
+              <Value
+                as={ExistingSpan}
+                className="de-destination__dv"
+                value={entry.deltaVRequired}
+                present={isNumericPresent(entry.deltaVRequired)}
+                format={(raw) => `${dec(raw, 1)} km/s`}
+              />
             </span>
           ))}
-        </div>
-        <div className="de-estimate__text">{model.travelDaysBasis || ''}</div>
-      </div>
+        </Box>
+        <Box component="div" className="de-estimate__text">{model.travelDaysBasis || ''}</Box>
+      </Box>
     )
     : (
-      <div className="de-notice">
+      <Box className="de-notice" sx={layout.notice}>
         {`Destination estimates unavailable: ${model.reason || 'no destination table for this design'}.`}
-      </div>
+      </Box>
     );
 
   const unresolvedBlock = unresolved.length > 0
     ? (
-      <div className="de-notice de-notice--warn">
-        {`${String(unresolved.length)} drive(s) were dropped because their availability could not be resolved, each with its reason:`}
+      <Box className="de-notice de-notice--warn" sx={layout.notice}>
+        {`${numberText(unresolved.length)} drive(s) were dropped because their availability could not be resolved, each with its reason:`}
         <ul className="de-unresolved">
           {unresolved.slice(0, 20).map((entry) => (
             <li key={entry.driveId} title={entry.reason}>{entry.displayName || entry.driveId}</li>
           ))}
         </ul>
         {unresolved.length > 20 && (
-          <div>
-            {`${String(unresolved.length - 20)} further unresolved drive(s) not listed here; the full set is on /api/intel/drive-explorer.`}
-          </div>
+          <Box component="div">
+            {`${numberText(unresolved.length - 20)} further unresolved drive(s) not listed here; the full set is on /api/intel/drive-explorer.`}
+          </Box>
         )}
-      </div>
+      </Box>
     )
     : null;
 
   const thresholdTail = outcome.thresholds.active.length > 0
-    ? `Of the rest, ${int(outcome.belowThresholdCount)} were measured and fell below an active minimum and
-       ${int(outcome.untestableCount)} could not be tested at all — an untestable drive is excluded, never counted as a failure.`
+    ? `Of the rest, ${numberText(outcome.belowThresholdCount)} were measured and fell below an active minimum and
+       ${numberText(outcome.untestableCount)} could not be tested at all — an untestable drive is excluded, never counted as a failure.`
     : '';
 
   return (
     <>
       {destinationTable}
       {unresolvedBlock}
-      <div className="de-reconcile">
-        {`${int(payload.driveCatalogue.total)} drives in the catalogue = ${int(payload.driveCatalogue.rated)} rated + ${int(payload.unresolvedCount)} unresolved.
-        ${int(matchedCount)} match the current filters, ${int(shownCount)} shown${omitted > 0 ? `, ${int(omitted)} omitted by the ${int(state.limit)}-row display cap — raise it with ROWS SHOWN` : ''}.
+      <Box className="de-reconcile" sx={layout.reconcile}>
+        {`${numberText(payload.driveCatalogue.total)} drives in the catalogue = ${numberText(payload.driveCatalogue.rated)} rated + ${numberText(payload.unresolvedCount)} unresolved.
+        ${numberText(matchedCount)} match the current filters, ${numberText(shownCount)} shown${omitted > 0 ? `, ${numberText(omitted)} omitted by the ${numberText(state.limit)}-row display cap — raise it with ROWS SHOWN` : ''}.
         ${thresholdTail}
-        ${int(payload.driveCatalogue.disabledInTemplates)} of them are disabled in the shipped templates and cannot be built.`}
-      </div>
+        ${numberText(payload.driveCatalogue.disabledInTemplates)} of them are disabled in the shipped templates and cannot be built.`}
+      </Box>
     </>
   );
 }
 
 function UnavailableCard({ message, status = 'UNAVAILABLE' }) {
   return (
-    <Panel className="init-view__span" title="DRIVE EXPLORER" headerAside={status}>
-      <div className={status === 'LOADING' ? 'de-notice' : 'de-notice de-notice--warn'}>{message}</div>
-    </Panel>
+    <ThemeProvider theme={initiativeTheme}>
+      <Panel className="init-view__span" title="DRIVE EXPLORER" headerAside={status}>
+        <Box
+          className={status === 'LOADING' ? 'de-notice' : 'de-notice de-notice--warn'}
+          sx={layout.notice}
+        >
+          {message}
+        </Box>
+      </Panel>
+    </ThemeProvider>
   );
 }
 
@@ -766,7 +1096,7 @@ export async function openDrivePath(driveId, trigger) {
   if (trigger) trigger.setAttribute('aria-busy', 'true');
   const payload = await fetchTechPath(gateId);
   if (trigger) trigger.removeAttribute('aria-busy');
-  panel.open(pathPanelOptions(row, payload));
+  panel.open(pathPanelOptions(row, payload, resolveValue));
 }
 
 // ---------------------------------------------------------------------------
@@ -822,24 +1152,26 @@ export function DriveExplorer({ payload }) {
   const shown = (fittedRow && capped.indexOf(fittedRow) === -1) ? [fittedRow, ...capped] : capped;
 
   return (
-    <Panel className="init-view__span" title="DRIVE EXPLORER" headerAside={active.selectedDesign.displayName}>
-      <div className="de-picker">
-        <DesignPicker
-          payload={active}
-          onChange={(designId) => {
-            // A different design is a different measured baseline, so it is the
-            // one control that costs a fetch.
-            state.designId = designId;
-            loadDriveExplorer(state.observer, state.mode, state.container, designId);
-          }}
-        />
-      </div>
-      <DesignSummary payload={active} />
-      <Legend payload={active} />
-      <Controls payload={active} shownCount={shown.length} outcome={outcome} />
-      <DriveTable payload={active} rows={shown} outcome={outcome} onOpenPath={openDrivePath} />
-      <Footer payload={active} shownCount={shown.length} outcome={outcome} />
-    </Panel>
+    <ThemeProvider theme={initiativeTheme}>
+      <Panel className="init-view__span" title="DRIVE EXPLORER" headerAside={active.selectedDesign.displayName}>
+        <Box className="de-picker" sx={(theme) => layout.picker(theme.initiative.space)}>
+          <DesignPicker
+            payload={active}
+            onChange={(designId) => {
+              // A different design is a different measured baseline, so it is the
+              // one control that costs a fetch.
+              state.designId = designId;
+              loadDriveExplorer(state.observer, state.mode, state.container, designId);
+            }}
+          />
+        </Box>
+        <DesignSummary payload={active} />
+        <Legend payload={active} />
+        <Controls payload={active} shownCount={shown.length} outcome={outcome} />
+        <DriveTable payload={active} rows={shown} outcome={outcome} onOpenPath={openDrivePath} />
+        <Footer payload={active} shownCount={shown.length} outcome={outcome} />
+      </Panel>
+    </ThemeProvider>
   );
 }
 

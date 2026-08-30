@@ -261,3 +261,227 @@ test('the sort control re-orders the table without a fetch', async () => {
     await settle(page);
   }
 });
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+/**
+ * A compact payload whose rows differ in exactly one measured family. A test
+ * which only checks that a dash appears in the table cannot distinguish this
+ * from a row-level fallback; the named rows below make each figure earn its
+ * own state.
+ */
+function metricIndependencePayload() {
+  const sourcePayload = payload();
+  const source = sourcePayload.items.find((row) => (
+    !row.isFittedDrive
+    && row.measured.computable === true
+    && isFiniteNumber(row.measured.deltaVKps)
+    && isFiniteNumber(row.measured.combatAccelerationMps2)
+    && isFiniteNumber(row.measured.cruiseAccelerationMps2)
+    && isFiniteNumber(row.power.driveDrawGW)
+    && isFiniteNumber(row.estimatedDestinations.reachableCount)
+  ));
+  assert.ok(source, 'the fixture must provide one fully measured, non-fitted drive');
+
+  const row = (name, mutate) => {
+    const next = clone(source);
+    next.driveId = `metric-${name}`;
+    next.displayName = `Metric ${name}`;
+    next.isFittedDrive = false;
+    mutate(next);
+    return next;
+  };
+
+  const rows = [
+    row('baseline', () => {}),
+    row('delta-absent', (next) => {
+      next.measured.deltaVKps = null;
+      next.measured.deltaVMultipleVsFitted = null;
+    }),
+    row('combat-absent', (next) => {
+      next.measured.combatAccelerationMps2 = null;
+      next.measured.combatAccelerationMultipleVsFitted = null;
+    }),
+    row('cruise-absent', (next) => {
+      next.measured.cruiseAccelerationMps2 = null;
+      next.measured.cruiseAccelerationMultipleVsFitted = null;
+    }),
+    row('power-absent', (next) => {
+      next.power.driveDrawGW = null;
+      next.power.thrustScalingFactor = null;
+    }),
+    row('estimate-absent', (next) => {
+      next.estimatedDestinations.evaluated = false;
+      next.estimatedDestinations.reachableCount = null;
+      next.estimatedDestinations.opensUp = [];
+      next.estimatedDestinations.reason = 'destination model unavailable for this row';
+    }),
+  ];
+
+  return {
+    ...sourcePayload,
+    items: rows,
+    itemsTotalCount: rows.length,
+    itemsShownCount: rows.length,
+    itemsOmittedCount: 0,
+  };
+}
+
+function isFiniteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+async function readMetricStates(page) {
+  return page.evaluate(() => {
+    const states = (cell) => Array.from(
+      cell ? cell.querySelectorAll(':scope > [data-value-state]') : [],
+      (node) => ({ state: node.getAttribute('data-value-state'), text: node.textContent.trim() })
+    );
+    return Array.from(document.querySelectorAll('#driveExplorer .de-table tbody tr'))
+      .map((row) => ({
+        id: row.getAttribute('data-de-drive'),
+        delta: states(row.querySelector('.de-cell--dv')),
+        combat: states(row.querySelector('.de-cell:nth-child(3)')),
+        cruise: states(row.querySelector('.de-cell:nth-child(4)')),
+        power: states(row.querySelector('.de-cell--power')),
+        estimate: states(row.querySelector('.de-cell--estimate')),
+      }));
+  });
+}
+
+test('each drive metric resolves independently and stamps its own absence', async () => {
+  const page = await getDriveExplorerHarnessPage();
+  await renderDriveExplorerOnPage(page, metricIndependencePayload());
+
+  const rows = await readMetricStates(page);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  assert.equal(rows.length, 6, 'the test matrix must render every isolated row');
+
+  const families = ['delta', 'combat', 'cruise', 'power', 'estimate'];
+  const isolated = [
+    ['delta-absent', 'delta'],
+    ['combat-absent', 'combat'],
+    ['cruise-absent', 'cruise'],
+    ['power-absent', 'power'],
+    ['estimate-absent', 'estimate'],
+  ];
+
+  const baseline = byId.get('metric-baseline');
+  for (const family of families) {
+    assert.ok(baseline[family].length > 0, `${family} must render a value host`);
+    assert.ok(baseline[family].every((entry) => entry.state === 'measured'),
+      `${family} baseline must be measured`);
+  }
+
+  for (const [name, absentFamily] of isolated) {
+    const row = byId.get(`metric-${name}`);
+    assert.ok(row, `${name} must render`);
+    for (const family of families) {
+      const expected = family === absentFamily ? 'absent' : 'measured';
+      assert.ok(row[family].every((entry) => entry.state === expected),
+        `${name} must make only ${absentFamily} ${expected}; ${family} was ${JSON.stringify(row[family])}`);
+    }
+  }
+
+  const rowStateCount = await page.evaluate(() => document.querySelectorAll(
+    '#driveExplorer .de-table tbody tr [data-value-state]'
+  ).length);
+  assert.equal(rowStateCount, 6 * 9,
+    'each row has two delta/combat/cruise figures, two power figures and one estimate');
+});
+
+test('missing figures across the summary, controls, rows and destination list are structural', async () => {
+  const page = await getDriveExplorerHarnessPage();
+  const source = clone(payload());
+  const row = clone(source.items.find((entry) => entry.measured.computable === true));
+  assert.ok(row, 'the fixture must provide a row to make incomplete');
+  row.driveId = 'missing-figures';
+  row.displayName = 'Missing Figures';
+  row.isFittedDrive = false;
+  row.measured = {
+    ...row.measured,
+    deltaVKps: null,
+    deltaVMultipleVsFitted: null,
+    combatAccelerationMps2: null,
+    combatAccelerationMultipleVsFitted: null,
+    cruiseAccelerationMps2: null,
+    cruiseAccelerationMultipleVsFitted: null,
+    reason: 'no measured propulsion baseline in this branch',
+    computable: false,
+  };
+  row.power = { ...row.power, driveDrawGW: null, thrustScalingFactor: null };
+  row.estimatedDestinations = {
+    ...row.estimatedDestinations,
+    evaluated: false,
+    reachableCount: null,
+    opensUp: [],
+    reason: 'destination table unavailable',
+  };
+
+  source.selectedDesign = {
+    ...source.selectedDesign,
+    hullName: null,
+    shipsInService: null,
+    baselineMeasured: false,
+    baselineUnmeasuredReason: 'the selected design has no measured baseline',
+    fittedDrive: { ...source.selectedDesign.fittedDrive, displayName: null, classification: null },
+    reactor: { ...source.selectedDesign.reactor, powerPlantClass: null, maxOutputGW: null },
+    fittedDrivePerformance: {
+      ...source.selectedDesign.fittedDrivePerformance,
+      deltaVKps: null,
+      combatAccelerationMps2: null,
+      cruiseAccelerationMps2: null,
+    },
+  };
+  source.availabilityCensus = Object.fromEntries(Object.keys(source.availabilityCensus)
+    .map((key) => [key, null]));
+  source.reactorCompatibilityCensus = { all: null, compatible: null, incompatible: null };
+  source.destinationModel = {
+    ...source.destinationModel,
+    destinations: source.destinationModel.destinations.map((entry, index) => (
+      index === 0 ? { ...entry, deltaVRequired: null } : entry
+    )),
+  };
+  source.items = [row];
+  source.itemsTotalCount = 1;
+  source.itemsShownCount = 1;
+  source.itemsOmittedCount = 0;
+
+  await renderDriveExplorerOnPage(page, source);
+  const audit = await page.evaluate(() => {
+    const root = document.getElementById('driveExplorer');
+    const states = Array.from(root.querySelectorAll('[data-value-state]'));
+    const counts = states.reduce((out, node) => {
+      const state = node.getAttribute('data-value-state');
+      out[state] = (out[state] || 0) + 1;
+      return out;
+    }, {});
+    const row = root.querySelector('[data-de-drive="missing-figures"]');
+    const rowStates = Array.from(row.querySelectorAll('[data-value-state]'),
+      (node) => node.getAttribute('data-value-state'));
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const unstamped = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue.includes('—')) continue;
+      const host = node.parentElement;
+      if (host.closest('[data-value-state]')) continue;
+      // These are explanatory copy, not figures: their dash is punctuation in
+      // the sentence and belongs to the panel's prose, not its value contract.
+      if (host.closest('.de-notice, .de-legend__text, .de-estimate__text, .de-reconcile, .de-scroll-hint, .de-th')) continue;
+      unstamped.push({ text: node.nodeValue.trim(), parent: host.className || host.tagName });
+    }
+    return { counts, rowStates, unstamped };
+  });
+
+  assert.ok((audit.counts.absent || 0) >= 20,
+    `the incomplete payload must stamp a broad absent surface: ${JSON.stringify(audit.counts)}`);
+  assert.ok(audit.rowStates.length >= 9, 'the incomplete row must expose all figure states');
+  assert.ok(audit.rowStates.every((state) => state === 'absent'),
+    `every missing row figure must be absent, not borrowed: ${JSON.stringify(audit.rowStates)}`);
+  assert.deepEqual(audit.unstamped, [],
+    `every non-prose em dash must sit under a Value host: ${JSON.stringify(audit.unstamped)}`);
+});

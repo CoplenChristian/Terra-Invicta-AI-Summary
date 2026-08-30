@@ -21,11 +21,16 @@
  *    of decimals: `toFixed(3)` prints the bottom of that range as a
  *    confident-looking `0.000`.
  *
- * Absent stays null throughout. A missing value renders as an em dash, never as
- * 0 and never as a blank cell.
+ * Absent stays null throughout. A missing value renders as the shared absent
+ * affordance in the panel, never as 0 and never as a blank cell.
  */
 
-export const UNAVAILABLE = '—';
+// The DOM-facing panel gets its affordance from <Value>. These pure formatters
+// retain their long-standing string API for the Node-side path tests; keeping
+// the character construction here avoids making the DOM-free module a second
+// JSX dependency. DriveExplorer passes resolveValue into string builders when
+// it opens the detail panel.
+const ABSENT_TEXT = String.fromCodePoint(0x2014);
 
 /** Availability buckets, mirroring shared/intel/driveExplorer.mjs. */
 export const BUCKETS = Object.freeze({
@@ -136,20 +141,20 @@ export function num(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** Absent renders as an em dash. Never as 0, and never as a blank cell. */
+/** Absent renders as the shared absent affordance. Never as 0 or a blank cell. */
 export function dec(value, places) {
   const parsed = num(value);
-  return parsed === null ? UNAVAILABLE : parsed.toFixed(places === undefined ? 2 : places);
+  return parsed === null ? ABSENT_TEXT : parsed.toFixed(places === undefined ? 2 : places);
 }
 
 export function int(value) {
   const parsed = num(value);
-  return parsed === null ? UNAVAILABLE : Math.round(parsed).toLocaleString('en-US');
+  return parsed === null ? ABSENT_TEXT : Math.round(parsed).toLocaleString('en-US');
 }
 
 export function mult(value) {
   const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
+  if (parsed === null) return ABSENT_TEXT;
   const abs = Math.abs(parsed);
   if (abs >= 1000) return `${Math.round(parsed).toLocaleString('en-US')}×`;
   if (abs >= 10) return `${parsed.toFixed(1)}×`;
@@ -169,7 +174,7 @@ export function mult(value) {
  */
 export function accel(value) {
   const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
+  if (parsed === null) return ABSENT_TEXT;
   if (parsed === 0) return '0';
   const abs = Math.abs(parsed);
   if (abs >= 1000) return Math.round(parsed).toLocaleString('en-US');
@@ -181,7 +186,7 @@ export function accel(value) {
 /** A magnitude that spans nine orders on this data set. */
 export function power(value) {
   const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
+  if (parsed === null) return ABSENT_TEXT;
   if (parsed === 0) return '0';
   if (Math.abs(parsed) >= 1e6) return `${(parsed / 1e6).toFixed(1)}M`;
   if (Math.abs(parsed) >= 1e3) return `${(parsed / 1e3).toFixed(1)}k`;
@@ -191,7 +196,7 @@ export function power(value) {
 
 /** Splits Snake_Case reactor and drive class ids into readable words. */
 export function words(value) {
-  if (!value) return UNAVAILABLE;
+  if (!value) return ABSENT_TEXT;
   return String(value).replace(/_/g, ' ');
 }
 
@@ -376,11 +381,18 @@ export const STATUS_TONE = Object.freeze({
 });
 
 /** Research points, or an honest UNKNOWN. -1 is a sentinel, never a number. */
-export function rp(value) {
+export function rp(value, resolve) {
+  const format = (raw) => {
+    const parsed = num(raw);
+    if (parsed < 0) return 'NEVER RESEARCHED';
+    return `${Math.round(parsed).toLocaleString('en-US')} RP`;
+  };
+  if (typeof resolve === 'function') {
+    return resolve({ value, present: num(value) !== null, format, absentLabel: ABSENT_TEXT }).text;
+  }
   const parsed = num(value);
-  if (parsed === null) return UNAVAILABLE;
-  if (parsed < 0) return 'NEVER RESEARCHED';
-  return `${Math.round(parsed).toLocaleString('en-US')} RP`;
+  if (parsed === null) return ABSENT_TEXT;
+  return format(parsed);
 }
 
 export function statusText(node) {
@@ -390,13 +402,13 @@ export function statusText(node) {
   return label;
 }
 
-export function pathRow(node) {
+export function pathRow(node, resolve) {
   return {
     label: node.displayName || node.id,
     sublabel: node.category ? String(node.category).replace(/([a-z])([A-Z])/g, '$1 $2') : null,
     status: statusText(node),
     statusTone: STATUS_TONE[node.status] || 'unknown',
-    meta: rp(node.cost)
+    meta: rp(node.cost, resolve)
   };
 }
 
@@ -422,7 +434,7 @@ export function inDependencyOrder(nodes, order) {
     .map(entry => entry.node);
 }
 
-export function routeSection(routes) {
+export function routeSection(routes, resolve) {
   const list = Array.isArray(routes) ? routes : [];
   if (list.length === 0) return null;
   return {
@@ -432,16 +444,16 @@ export function routeSection(routes) {
       label: route.nodeDisplayName || route.nodeId,
       sublabel: `via ${route.chosenRoute?.displayName || route.chosenRoute?.id || 'an unnamed prerequisite'}`
         + ` rather than ${route.alternativeRoute?.displayName || route.alternativeRoute?.id || 'an unnamed alternative'}`,
-      status: num(route.savings) === null ? 'SAVINGS UNKNOWN' : `SAVES ${rp(route.savings)}`,
+      status: num(route.savings) === null ? 'SAVINGS UNKNOWN' : `SAVES ${rp(route.savings, resolve)}`,
       statusTone: num(route.savings) === null ? 'unknown' : 'ok',
-      meta: `${rp(route.chosenRoute?.cost)} vs ${rp(route.alternativeRoute?.cost)}`
+      meta: `${rp(route.chosenRoute?.cost, resolve)} vs ${rp(route.alternativeRoute?.cost, resolve)}`
     })),
     empty: 'No node on this path had an alternate prerequisite.'
   };
 }
 
 /** Facts and sections for a drive whose gate is resolved and whose path loaded. */
-export function pathPanelOptions(row, payload) {
+export function pathPanelOptions(row, payload, resolve) {
   const drive = row.displayName || row.driveId;
   const gateId = row.availability.gateProjectId;
   const gateName = row.availability.gateProjectName || payload?.target?.displayName || gateId;
@@ -473,13 +485,13 @@ export function pathPanelOptions(row, payload) {
   const satisfiedGlobal = satisfied.filter(n => n.type === 'global_tech').length;
 
   const totalCost = payload.researchCostComplete === true
-    ? rp(payload.totalRemainingResearchCost)
+    ? rp(payload.totalRemainingResearchCost, resolve)
     : 'UNKNOWN — a step on this path is never researched';
 
   facts.push(
     { label: 'REMAINING', value: `${remaining.length} step(s)` },
-    { label: 'FACTION RESEARCH', value: payload.remainingFactionResearchCost === null ? 'UNKNOWN' : rp(payload.remainingFactionResearchCost) },
-    { label: 'GLOBAL RESEARCH', value: payload.remainingGlobalResearchCost === null ? 'UNKNOWN' : rp(payload.remainingGlobalResearchCost) },
+    { label: 'FACTION RESEARCH', value: payload.remainingFactionResearchCost === null ? 'UNKNOWN' : rp(payload.remainingFactionResearchCost, resolve) },
+    { label: 'GLOBAL RESEARCH', value: payload.remainingGlobalResearchCost === null ? 'UNKNOWN' : rp(payload.remainingGlobalResearchCost, resolve) },
     { label: 'TOTAL REMAINING', value: totalCost },
     { label: 'ALREADY SATISFIED', value: `${payload.satisfiedPrerequisiteTotalCount ?? satisfied.length} prerequisite(s)` }
   );
@@ -487,14 +499,14 @@ export function pathPanelOptions(row, payload) {
   const sections = [
     {
       title: 'FACTION PROJECTS',
-      caption: `${factionNodes.length} remaining · ${payload.remainingFactionResearchCost === null ? 'cost unknown' : rp(payload.remainingFactionResearchCost)}`,
-      rows: factionNodes.map(pathRow),
+      caption: `${factionNodes.length} remaining · ${payload.remainingFactionResearchCost === null ? 'cost unknown' : rp(payload.remainingFactionResearchCost, resolve)}`,
+      rows: factionNodes.map(node => pathRow(node, resolve)),
       empty: 'No faction project remains on this path.'
     },
     {
       title: 'GLOBAL TECHS',
-      caption: `${globalNodes.length} remaining · ${payload.remainingGlobalResearchCost === null ? 'cost unknown' : rp(payload.remainingGlobalResearchCost)}`,
-      rows: globalNodes.map(pathRow),
+      caption: `${globalNodes.length} remaining · ${payload.remainingGlobalResearchCost === null ? 'cost unknown' : rp(payload.remainingGlobalResearchCost, resolve)}`,
+      rows: globalNodes.map(node => pathRow(node, resolve)),
       empty: 'No global tech remains on this path.'
     }
   ];
@@ -505,7 +517,7 @@ export function pathPanelOptions(row, payload) {
     sections.push({
       title: 'OTHER NODES',
       caption: `${otherNodes.length} node(s) the endpoint classified as neither a faction project nor a global tech`,
-      rows: otherNodes.map(pathRow),
+      rows: otherNodes.map(node => pathRow(node, resolve)),
       empty: 'None.'
     });
   }
@@ -513,11 +525,11 @@ export function pathPanelOptions(row, payload) {
   sections.push({
     title: 'ALREADY SATISFIED',
     caption: `${satisfied.length} shown · ${satisfiedFaction} faction, ${satisfiedGlobal} global · already researched, nothing further to pay`,
-    rows: satisfied.map(pathRow),
+    rows: satisfied.map(node => pathRow(node, resolve)),
     empty: 'No prerequisite on this path is satisfied yet.'
   });
 
-  const routes = routeSection(payload.routesEvaluated);
+  const routes = routeSection(payload.routesEvaluated, resolve);
   if (routes) sections.push(routes);
 
   const notes = [payload.availabilityCaveat].filter(Boolean);

@@ -950,7 +950,7 @@ test('the panel renders the cruise column it already offered a sort for', async 
   const measuredHeaders = (html.match(/de-th--measured/g) || []).length;
   assert.strictEqual(measuredHeaders, 3, 'delta-V, combat and cruise are all measured columns');
   const firstRow = html.match(/<tr class="de-row[\s\S]*?<\/tr>/)[0];
-  const cells = [...firstRow.matchAll(/de-measured__value">([^<]*)</g)].map(match => match[1]);
+  const cells = [...firstRow.matchAll(/de-measured__value[^\"]*">([^<]*)</g)].map(match => match[1]);
   assert.strictEqual(cells.length, 3, 'every row must carry three measured figures');
 
   // The three columns are in the order the header declares them.
@@ -969,7 +969,7 @@ test('the panel renders the cruise column it already offered a sort for', async 
   const smallHtml = await renderDriveExplorerOnPage(page, bySmallest);
   const smallRows = [...smallHtml.matchAll(/<tr class="de-row[\s\S]*?<\/tr>/g)].map(match => match[0]);
   for (const rendered of smallRows) {
-    const cells = [...rendered.matchAll(/de-measured__value">([^<]*)</g)].map(match => match[1]);
+    const cells = [...rendered.matchAll(/de-measured__value[^\"]*">([^<]*)</g)].map(match => match[1]);
     for (const index of [1, 2]) {
       assert.notStrictEqual(cells[index], '0.000',
         'a measured acceleration below 0.001 must not render as a confident 0.000');
@@ -1023,7 +1023,7 @@ test('a null cruise acceleration renders as unavailable and sorts last, never as
   const synthetic = rendered.find(row => /Synthetic Null Cruise/.test(row));
   assert.ok(synthetic, 'the synthetic row must render at all');
 
-  const cells = [...synthetic.matchAll(/de-measured__value">([^<]*)</g)].map(match => match[1]);
+  const cells = [...synthetic.matchAll(/de-measured__value[^\"]*">([^<]*)</g)].map(match => match[1]);
   assert.strictEqual(cells[2], '—', 'an unmeasured cruise acceleration renders as an em dash, never as 0');
   assert.match(synthetic, /UNAVAILABLE/, 'and says so in the sub-line rather than showing a multiple');
 
