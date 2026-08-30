@@ -1400,7 +1400,11 @@ const buildHeat = ({ drive, reactor, power, radiator }) => {
       radiatorMassTons: massKg === null ? null : massKg / KG_PER_TON,
       reason: heatPower === null
         ? (selectionReason || (mode === 'Open' ? openPower.reason : closedPower.reason))
-        : (plantEfficiency === null ? 'power-plant efficiency is not readable' : (specificPower === null ? 'radiator specific power is not readable' : null))
+        : (plantEfficiency === null
+          ? 'power-plant efficiency is not readable'
+          : (specificPower === null
+            ? 'radiator specific power is not readable'
+            : (specificPower <= 0 ? 'radiator specific power must be positive' : null)))
     };
   }
   const selected = cooling === 'open'
@@ -1408,6 +1412,10 @@ const buildHeat = ({ drive, reactor, power, radiator }) => {
     : (cooling === 'closed' ? scenarios.Closed : null);
   const calcRange = cooling === 'calc';
   const rangeAvailable = scenarios.Open.radiatorMassTons !== null && scenarios.Closed.radiatorMassTons !== null;
+  const calcScenarioReasons = [...new Set([scenarios.Open.reason, scenarios.Closed.reason].filter(Boolean))];
+  const calcRangeReason = calcRange && rangeAvailable
+    ? `Calc cooling: radiator mass is a range (Open ${scenarios.Open.radiatorMassTons.toFixed(2)} t · Closed ${scenarios.Closed.radiatorMassTons.toFixed(2)} t), so dry mass has no single value`
+    : null;
   return {
     cooling: coolingRaw,
     coolingResolution: cooling === 'calc' ? 'unknown: both Open and Closed are reported' : coolingRaw,
@@ -1426,7 +1434,7 @@ const buildHeat = ({ drive, reactor, power, radiator }) => {
     reason: selected
       ? selected.reason
       : (calcRange
-        ? (rangeAvailable ? null : 'Calc cooling needs both Open and Closed heat resolutions, but one is unmeasured')
+        ? (calcRangeReason || calcScenarioReasons[0] || 'Calc cooling needs both Open and Closed heat resolutions, but one is unmeasured')
         : (selectionReason || 'drive cooling is absent or is not one of Open, Closed or Calc')),
     formulae: HEAT_FORMULAE
   };

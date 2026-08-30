@@ -461,6 +461,33 @@ test('Calc cooling reports both radiator and cost ranges, with no selected total
   assert.match(result.cost.reason, /Calc-cooling range/);
 });
 
+test('Calc cooling performance refusal names the radiator-mass range', () => {
+  const result = calculateShipDesign(inputFor({ drive: { ...DRIVE, cooling: 'Calc' } }));
+  const reason = result.reasons.deltaVKps;
+  const range = result.radiator.massRangeTons;
+
+  assert.match(reason, /Calc cooling/i);
+  assert.doesNotMatch(reason, /unreadable/i);
+  assert.match(reason, new RegExp(`Open ${range.Open.toFixed(2)} t`));
+  assert.match(reason, new RegExp(`Closed ${range.Closed.toFixed(2)} t`));
+  assert.match(reason, /dry mass has no single value/i);
+
+  for (const field of ['cruiseAccelerationMps2', 'combatAccelerationMps2', 'deltaVKps']) {
+    assert.match(result.reasons[field], /Calc cooling/i, `${field} reason names Calc cooling`);
+    assert.doesNotMatch(result.reasons[field], /unreadable/i, `${field} reason does not blame unreadable data`);
+  }
+});
+
+test('a non-positive radiator specific power names the invalid input', () => {
+  const result = calculateShipDesign(inputFor({
+    radiator: { ...RADIATOR, specificPower_2s_KWkg: '0' }
+  }));
+
+  assert.match(result.heat.reason, /radiator specific power must be positive/i);
+  assert.match(result.reasons.deltaVKps, /radiator specific power must be positive/i);
+  assert.doesNotMatch(result.reasons.deltaVKps, /one or more dry-mass components are not readable/i);
+});
+
 test('an unreadable material mix refuses the total bill, not the measurable armour', () => {
   const { weightedBuildMaterials, ...withoutMix } = COMPOSITE;
   const result = calculateShipDesign(inputFor({
@@ -501,7 +528,7 @@ test('the named cost rate carries its corroborating, unmeasured provenance', () 
   assert.deepEqual(SHIP_DESIGN_MATERIALS, MATERIALS);
 });
 
-test('feeds real catalogue components into the calculator and produces delta-V', () => {
+test('feeds real catalogue components into the calculator and pins performance', () => {
   const fixture = loadFixtureFilteredSnapshot({ mode: 'omniscient', observer: 4712 });
   const snapshot = {
     ...fixture,
@@ -529,9 +556,9 @@ test('feeds real catalogue components into the calculator and produces delta-V',
     campaignSettings: { cinematicCombatRealismScale: true }
   });
 
-  assert.notEqual(result.deltaVKps, null);
-  assert.notEqual(result.cruiseAccelerationMps2, null);
-  assert.notEqual(result.combatAccelerationMps2, null);
+  assertApprox(result.cruiseAccelerationMps2, 0.00498, 0.000005);
+  assertApprox(result.combatAccelerationMps2, 0.299, 0.0005);
+  assertApprox(result.deltaVKps, 68.74, 0.01);
   assert.notEqual(result.totalResourceCost, null);
 });
 
