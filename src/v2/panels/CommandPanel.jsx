@@ -13,6 +13,7 @@ import Box from '@mui/material/Box';
 import { ThemeProvider } from '@mui/material/styles';
 import { Panel } from '../components/Panel.jsx';
 import { TwoColumnGrid, TwoColumnGridItem } from '../components/TwoColumnGrid.jsx';
+import { KpiBand } from '../components/KpiBand.jsx';
 import initiativeTheme from '../theme.js';
 
 function CommandStackItem({ order, children }) {
@@ -27,28 +28,7 @@ export function CommandPanel() {
   return (
     <ThemeProvider theme={initiativeTheme}>
       <div className="init-command-layout">
-        <div className="init-kpi-banner">
-          <div className="init-kpi-item">
-            <div className="init-kpi-label">TREASURY</div>
-            <div id="kpiMoney" className="init-kpi-val">$0</div>
-            <div id="kpiMoneySub" className="init-kpi-sub">+0/mo Flow</div>
-          </div>
-          <div className="init-kpi-item">
-            <div className="init-kpi-label">TERRESTRIAL GDP</div>
-            <div id="kpiGdp" className="init-kpi-val">$0T</div>
-            <div id="kpiGdpSub" className="init-kpi-sub">0 Control Points</div>
-          </div>
-          <div className="init-kpi-item">
-            <div className="init-kpi-label">RESEARCH OUTPUT</div>
-            <div id="kpiResearch" className="init-kpi-val">0 pts</div>
-            <div id="kpiResearchSub" className="init-kpi-sub">R&amp;D Leadership</div>
-          </div>
-          <div className="init-kpi-item">
-            <div className="init-kpi-label">STRATEGIC SCORE (EST.)</div>
-            <div id="kpiPower" className="init-kpi-val">0/100</div>
-            <div id="kpiPowerSub" className="init-kpi-sub">Global Rank #1</div>
-          </div>
-        </div>
+        <KpiBand />
 
         <TwoColumnGrid
           data-view="command"
@@ -70,7 +50,7 @@ export function CommandPanel() {
               </CommandStackItem>
 
               <CommandStackItem order={2}>
-                <Panel title="COUNCIL ORDERS" headerAside="EVERY COUNCILOR, THIS CYCLE" modifier="priority">
+                <Panel title="COUNCIL ORDERS" headerAside="EVERY COUNCILOR, THIS CYCLE" modifier="featured">
                 <div id="councilOrders" aria-live="polite">
                   <div className="council-orders__empty">LOADING COUNCIL ORDERS…</div>
                 </div>
@@ -84,7 +64,7 @@ export function CommandPanel() {
               </CommandStackItem>
 
               <CommandStackItem order={4}>
-                <Panel title="RESEARCH ADVISOR" headerAside="VALUE PER RESEARCH POINT" modifiers={['priority', 'dense']}>
+                <Panel title="RESEARCH ADVISOR" headerAside="VALUE PER RESEARCH POINT" modifiers={['featured', 'dense']}>
                 <div id="researchAdvisor" aria-live="polite">
                   <p className="research-advisor__empty">LOADING RESEARCH RANKING…</p>
                 </div>
@@ -92,7 +72,7 @@ export function CommandPanel() {
               </CommandStackItem>
 
               <CommandStackItem order={8}>
-                <Panel title="DIRECTIVE ENGINE" headerAside="RECOMMENDED ACTION &amp; DECISION REASONING">
+                <Panel title="DIRECTIVE ENGINE" headerAside="RECOMMENDED ACTION &amp; DECISION REASONING" modifier="quiet">
                 <div id="directiveBoard" aria-live="polite">
                   <div className="alien-hate-econ-empty">LOADING DIRECTIVE ENGINE…</div>
                 </div>
@@ -167,7 +147,7 @@ export function CommandPanel() {
               </CommandStackItem>
 
               <CommandStackItem order={7}>
-                <Panel title="OPERATIONS BOARD" headerAside="ACTIVE COUNCILORS">
+                <Panel title="OPERATIONS BOARD" headerAside="ACTIVE COUNCILORS" modifier="quiet">
                   <div id="opLeaderboardList" className="operative-leaderboard" />
                 </Panel>
               </CommandStackItem>

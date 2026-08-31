@@ -44,7 +44,7 @@ export function ThreatPanel() {
           <Panel
             title="PER-FLEET ENGAGEMENT ESTIMATES"
             headerAside="MODELLED / REACHABILITY-GATED"
-            modifier="quiet"
+            modifier="featured"
           >
             <div id="fleetEngagement" aria-live="polite">
               <div className="fe-empty">LOADING ENGAGEMENT ESTIMATES…</div>
@@ -53,23 +53,15 @@ export function ThreatPanel() {
         </TwoColumnGridItem>
 
         <TwoColumnGridItem span>
-          <Panel
-            title="HOSTILE MOVEMENT BEYOND THE TWELVE THEATERS"
-            headerAside="WHOLE-BOARD POSTURE"
-            modifier="quiet"
-          >
-            <div id="hostileMovement" aria-live="polite">
-              <div className="hm-empty">LOADING HOSTILE MOVEMENT…</div>
-            </div>
-          </Panel>
+          <div id="hostileMovement" className="init-view__span" aria-live="polite">
+            <div className="hm-empty">LOADING HOSTILE MOVEMENT…</div>
+          </div>
         </TwoColumnGridItem>
 
         <TwoColumnGridItem span>
-          <Panel title="THEATER DEFENCE" headerAside="BUILD / REINFORCE / WITHDRAW" modifier="quiet">
-            <div id="theaterDefence" aria-live="polite">
-              <div className="td-empty">LOADING THEATER DEFENCE…</div>
-            </div>
-          </Panel>
+          <div id="theaterDefence" className="init-view__span" aria-live="polite">
+            <div className="td-empty">LOADING THEATER DEFENCE…</div>
+          </div>
         </TwoColumnGridItem>
       </TwoColumnGrid>
     </ThemeProvider>

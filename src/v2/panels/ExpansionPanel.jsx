@@ -21,6 +21,7 @@ export function ExpansionPanel() {
           <Panel
             title="MINING EXPANSION BOARD"
             headerAside="CAPACITY, RUNWAYS & SITE VALUE PER UNIT OF HATE"
+            modifier="featured"
           >
             <div id="miningExpansion" aria-live="polite">
               <div className="alien-hate-econ-empty">LOADING MINING EXPANSION…</div>

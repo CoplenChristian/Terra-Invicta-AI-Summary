@@ -370,7 +370,7 @@ export function BattleSuggestion({
   }
 
   return (
-    <Panel title="MATCHUP VERDICT" modifier="quiet" span={span} data-primitive="battle-suggestion">
+    <Panel title="MATCHUP VERDICT" modifier="featured" span={span} data-primitive="battle-suggestion">
       {body}
     </Panel>
   );

@@ -11,7 +11,7 @@ A required-reading map of what lives where, so an agent stops guessing.
 
 Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C** = CommonJS; **BS** = browser script (no module system).
 
-**259 JS modules** and **26 stylesheet parts** (285 indexed files).
+**262 JS modules** and **26 stylesheet parts** (288 indexed files).
 
 ## `public/`
 
@@ -246,7 +246,10 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | :-- | :--: | :-- | --: | :-- | :-- | :-- |
 | `src/v2/components/DataTable.jsx` | E | Browser (React JSX) | 192 | one real `<table>` primitive for all eight v2 table systems, with | `DataTable, measureScrollable, syncOneScrollHint` | — |
 | `src/v2/components/Estimated.jsx` | E | Browser (React JSX) | 67 | the estimated register — italic sans in the dimmer colour for modelled | `Estimated` | — |
-| `src/v2/components/index.js` | **B** E | Browser (React JSX) | 15 | barrel export for the five shared React primitives (Track E). | `ABSENT_LABEL, DEFAULT_SCROLL_HINT_TEXT, DataTable, Estimated, Measured, Panel, TABLE_VARIANTS, TruncationNote, TwoColumnGrid, TwoColumnGridItem, UNAVAILABLE_LABEL, Value, …(+3)` | — |
+| `src/v2/components/index.js` | **B** E | Browser (React JSX) | 17 | barrel export for shared React primitives and executive KPI behavior. | `ABSENT_LABEL, DEFAULT_SCROLL_HINT_TEXT, DataTable, Estimated, KpiBand, KpiValue, Measured, Panel, TABLE_VARIANTS, TruncationNote, TwoColumnGrid, TwoColumnGridItem, …(+8)` | — |
+| `src/v2/components/KpiBand.jsx` | E | Browser (React JSX) | 125 | render the four executive KPI figures and keep their update stream | `DEFAULT_KPI_METRICS, KpiBand, getLatestKpiMetrics, publishKpiMetrics` | — |
+| `src/v2/components/kpiMotion.mjs` | E | Browser (React JSX) | 71 | decide whether an executive KPI update is steady, a discrete state | `KPI_STANDARD_EASING, KPI_TWEEN_DURATION_MS, easeKpiProgress, planKpiMotion` | `tests/kpiMotion.test.js` |
+| `src/v2/components/KpiValue.jsx` | E | Browser (React JSX) | 213 | own the executive KPI value's stateful change cue. Numeric values | `KpiValue, useKpiMotion, usePrefersReducedMotion` | — |
 | `src/v2/components/Measured.jsx` | E | Browser (React JSX) | 56 | the measured register — mono, upright, full-contrast text for values | `Measured` | — |
 | `src/v2/components/Panel.jsx` | E | Browser (React JSX) | 75 | React replacement for `.tech-card` — header, title, body, and all six | `Panel` | — |
 | `src/v2/components/parseNumeric.js` | E | Browser (React JSX) | 13 | shared numeric parse for <Value> — null/undefined/'' are absent, not | `parseNumeric` | — |
@@ -255,13 +258,13 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/components/TwoColumnGrid.jsx` | E | Browser (React JSX) | 67 | reusable two-column layout primitive — MUI Grid2 container with | `TwoColumnGrid, TwoColumnGridItem` | — |
 | `src/v2/components/Value.jsx` | E | Browser (React JSX) | 108 | render a numeric value or an explicit unavailable/absent state. Never | `ABSENT_LABEL, UNAVAILABLE_LABEL, Value, resolveValue` | — |
 | `src/v2/components/valueResolution.mjs` | E | Browser (React JSX) | 61 | DOM-free presence resolution shared by the React <Value> primitive | `ABSENT_LABEL, UNAVAILABLE_LABEL, resolveValue` | — |
-| `src/v2/main.jsx` | E | Browser (React JSX) | 730 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadShipDesigner, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderBattlePanel, …(+30)` | — |
+| `src/v2/main.jsx` | E | Browser (React JSX) | 735 | React + MUI entry point for Mission Control (v2) dashboard. | `CoexistenceProof, fetchFleetProcurement, fetchResearchRanking, loadShipDesigner, loadUnlockedTech, mountCoexistenceProof, mountReactPanel, openProcurementDetails, openRefitDetails, openResearchFullRanking, renderAlienHateEconomics, renderBattlePanel, …(+30)` | — |
 | `src/v2/panels/AlienHateEconomics.jsx` | E | Browser (React JSX) | 499 | renders the save-derived Mission Control hate floor and Total War | `AlienHateEconomics, fmtNumber, renderHudAlienHateEconomics` | `tests/AlienHateEconomics.test.js` |
 | `src/v2/panels/BattlePanel.jsx` | E | Browser (React JSX) | 162 | two-column battle planner shell — observer fleet vs picked opponent fleet, | `BattlePanel, renderBattlePanel` | — |
 | `src/v2/panels/battlePanelUtils.mjs` | E | Browser (React JSX) | 193 | testable fleet-picker and battle-cap logic behind BattlePanel.jsx. | `BATTLE_SHIP_AUTO_SELECT_COUNT, BATTLE_SHIP_CAP_ATTRIBUTION, BATTLE_SHIP_CAP_PER_SIDE, buildShipDesignLookup, deploymentSummary, factionsWithFleets, fleetById, fleetsForFaction, overCapNotice, presentCount, resolveShipDesignSubtitle, sameId, …(+4)` | `tests/battlePanelUtils.test.js` |
 | `src/v2/panels/BattleSuggestion.jsx` | E | Browser (React JSX) | 380 | battle matchup verdict for the selected ships on each side — per-side | `BattleSuggestion` | — |
 | `src/v2/panels/battleSuggestionUtils.mjs` | E | Browser (React JSX) | 272 | testable battle-matchup helpers behind BattleSuggestion.jsx — weapon | `WEAPON_FAMILIES, buildBattleMatchup, changeAdvice, formatCount, formatRatio, interceptionCaveatText, joinRatePercent, mountEquivalentAdvice, mountUnitLabel, saturationHeadline, selectionPhase, shipsForSelection, …(+1)` | `tests/battleSuggestionUtils.test.js` |
-| `src/v2/panels/CommandPanel.jsx` | E | Browser (React JSX) | 215 | COMMAND view shell — two-column MUI grid with static mount points for | `CommandPanel, renderCommandPanel` | — |
+| `src/v2/panels/CommandPanel.jsx` | E | Browser (React JSX) | 195 | COMMAND view shell — two-column MUI grid with static mount points for | `CommandPanel, renderCommandPanel` | — |
 | `src/v2/panels/CouncilOrders.jsx` | E | Browser (React JSX) | 388 | React port of public/v2/js/components/council-orders.js. Renders the | `CouncilOrders, focusDirectiveBoard` | `tests/CouncilOrders.test.js` |
 | `src/v2/panels/DesignerPanel.jsx` | E | Browser (React JSX) | 85 | DESIGNER view shell — two-column MUI grid with static mount points for | `DesignerPanel, renderDesignerPanel` | — |
 | `src/v2/panels/DetailPanel.jsx` | E | Browser (React JSX) | 369 | the shared detail surface every clickable Mission Control module | `DetailPanel, close, detailPanelInternals, open, syncPageInert` | `tests/DetailPanel.test.js` |
@@ -272,7 +275,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/panels/DrivesPanel.jsx` | E | Browser (React JSX) | 46 | DRIVES view shell — two-column MUI grid with static mount point for | `DrivesPanel, renderDrivesPanel` | — |
 | `src/v2/panels/ExecutiveBoards.jsx` | E | Browser (React JSX) | 818 | renders the executive boards — faction power, resources, and the | `CapabilityMatrixBoard, FactionLedgerBoard, LogisticsBoard, NationQueueBoard, OperationsBoard, ResearchWatchlistBoard, TheaterBoard` | `tests/ExecutiveBoards.test.js` |
 | `src/v2/panels/executiveBoardsUtils.js` | E | Browser (React JSX) | 298 | pure formatters and selectors for the executive boards React panel — | `BOARD_SCROLL_HINT, EM_DASH, alienForceSummary, availabilityByProjectId, bodyKey, bodyLabel, completedProjectSignal, delta, factionById, factionDelta, factionLogoHtml, factionName, …(+19)` | — |
-| `src/v2/panels/ExpansionPanel.jsx` | E | Browser (React JSX) | 78 | EXPANSION view shell — two-column MUI grid with static mount points for | `ExpansionPanel, renderExpansionPanel` | — |
+| `src/v2/panels/ExpansionPanel.jsx` | E | Browser (React JSX) | 79 | EXPANSION view shell — two-column MUI grid with static mount points for | `ExpansionPanel, renderExpansionPanel` | — |
 | `src/v2/panels/FactionIntel.jsx` | E | Browser (React JSX) | 579 | the faction dossier overlay — a scan-first two-pane decision surface | `FactionIntel, createEmptyController, createFactionIntelController` | — |
 | `src/v2/panels/factionIntelUtils.js` | E | Browser (React JSX) | 948 | pure selectors, formatters and visibility rules for the faction | `MISSING_VALUES, UNKNOWN_RELATIONSHIP, UNKNOWN_VALUE, accentColor, buildContext, buildFactionIntel, chooseInitialKey, cleanRelationshipValue, councilorRowFields, councilorTopSkill, councilorVisibility, countVisibleAssets, …(+51)` | — |
 | `src/v2/panels/FleetEngagement.jsx` | E | Browser (React JSX) | 583 | renders the per-fleet engagement estimates — what force each alien | `FleetEngagement` | `tests/FleetEngagement.test.js` |
@@ -294,7 +297,7 @@ Legend: **B** = barrel (re-exports another module's surface); **E** = ESM; **C**
 | `src/v2/panels/StrategicCommentary.jsx` | E | Browser (React JSX) | 286 | renders the non-LLM four-layer Strategic Commentary Engine output | `StrategicCommentary` | `tests/StrategicCommentary.test.js` |
 | `src/v2/panels/TheaterDefencePanel.jsx` | E | Browser (React JSX) | 499 | read-only surface for `briefing.engineDirectives.theaterDefence`. | `TheaterDefencePanel, readTheaterDefencePayload, renderTheaterDefence, stateTokenFor` | — |
 | `src/v2/panels/theaterDefencePanelUtils.mjs` | E | Browser (React JSX) | 488 | testable render helpers behind src/v2/panels/TheaterDefencePanel.jsx. | `ABSENT_LABEL, POSTURE_BODY, POSTURE_LABEL, POSTURE_MODIFIER, POSTURE_ORDER, STATE_LABEL, STATE_MODIFIER, VERDICT_LABEL, absentText, buildRaceReading, citationKey, contactReading, …(+16)` | `tests/theaterDefencePanelUtils.test.js` |
-| `src/v2/panels/ThreatPanel.jsx` | E | Browser (React JSX) | 97 | THREAT view shell — two-column MUI grid with static mount points for | `ThreatPanel, renderThreatPanel` | — |
+| `src/v2/panels/ThreatPanel.jsx` | E | Browser (React JSX) | 89 | THREAT view shell — two-column MUI grid with static mount points for | `ThreatPanel, renderThreatPanel` | — |
 | `src/v2/panels/UnlockedTech.jsx` | E | Browser (React JSX) | 382 | the searchable list of the observer faction's unlocked research | `UnlockedTech` | — |
 | `src/v2/panels/unlockedTechUtils.js` | E | Browser (React JSX) | 167 | the pure reads behind the UNLOCKED TECHNOLOGY panel — census, | `DEBOUNCE_MS, RENDER_CAP, UNLOCK_CAP, applyScope, capSentence, categoryLabel, censusSentence, costLabel, isUnlocked, matchingUnlocks, normalise, readCensus, …(+5)` | — |
 | `src/v2/panels/WorldMap.jsx` | E | Browser (React JSX) | 471 | renders the interactive world/space theater map surface — six | `WorldMap, loadGeography, resetGeographyCache` | `tests/WorldMap.test.js` |
@@ -312,8 +315,8 @@ The v2 stylesheet in **cascade order** — the numeric prefix and the shell's
 | --: | :-- | --: | :-- |
 | 1 | `public/v2/css/01-tokens-and-base.css` | 246 | The token vocabulary and the document itself. |
 | 2 | `public/v2/css/02-shell-header.css` | 749 | The persistent shell above every view. |
-| 3 | `public/v2/css/03-page-structure.css` | 147 | The page frame and the card system every panel is built from. |
-| 4 | `public/v2/css/04-command-panels.css` | 340 | COMMAND's own headline panels. |
+| 3 | `public/v2/css/03-page-structure.css` | 181 | The page frame and the card system every panel is built from. |
+| 4 | `public/v2/css/04-command-panels.css` | 433 | COMMAND's own headline panels. |
 | 5 | `public/v2/css/05-view-grid.css` | 142 | The grid the six views lay their cards out on. |
 | 6 | `public/v2/css/06-map-and-charts.css` | 277 | The sector map, the donut and the chart primitives. |
 | 7 | `public/v2/css/07-hate-economics.css` | 651 | Alien hate economics and the resource/power readouts. |

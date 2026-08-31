@@ -32,7 +32,7 @@ export function DesignerPanel() {
           <Panel
             title="PERFORMANCE"
             headerAside="CRUISE ACCEL · COMBAT ACCEL · DELTA-V"
-            modifier="quiet"
+            modifier="featured"
           >
             <div id="designerPerformance" aria-live="polite" />
           </Panel>

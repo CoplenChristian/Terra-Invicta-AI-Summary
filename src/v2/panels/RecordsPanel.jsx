@@ -57,7 +57,7 @@ export function RecordsPanel() {
           <Panel
             title="SINCE LAST SAVE"
             headerAside="MATERIAL STRATEGIC DELTA"
-            modifier="quiet"
+            modifier="featured"
             span
           >
             <div

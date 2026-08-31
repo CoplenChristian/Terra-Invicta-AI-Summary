@@ -63,6 +63,7 @@
   font-family: var(--display);
   font-size: var(--fs-title);
   font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1.05;
   text-overflow: ellipsis;
@@ -135,6 +136,7 @@
   font-family: var(--display);
   font-size: var(--fs-kpi);
   font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1.18;
   text-transform: none;
@@ -237,6 +239,7 @@
   font-family: var(--display);
   font-size: var(--fs-section);
   font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .priority-op span {
@@ -286,10 +289,93 @@
 }
 
 .threat-card__kicker {
+  display: flex;
+  gap: 6px;
+  align-items: center;
   font-family: var(--mono);
   font-size: var(--fs-meta);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* Severity carries shape as well as colour — Carbon asks for three of
+   {symbol, shape, colour, type}. The dot/square/triangle vocabulary mirrors
+   .tech-card--priority / --alert title markers in 03-page-structure.css. */
+.threat-card__kicker::before {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  content: '';
+}
+
+.severity-CRITICAL {
+  color: var(--danger);
+}
+
+.severity-CRITICAL::before {
+  background: var(--danger);
+  border-radius: 50%;
+}
+
+.severity-HIGH {
+  color: var(--warning);
+}
+
+.severity-HIGH::before {
+  background: var(--warning);
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  border-radius: 0;
+}
+
+.severity-READY {
+  color: var(--success);
+}
+
+.severity-READY::before {
+  background: var(--success);
+  border-radius: 1px;
+}
+
+.severity-WATCH {
+  color: var(--accent);
+}
+
+.severity-WATCH::before {
+  background: transparent;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.severity-HOLD {
+  color: var(--blue);
+}
+
+.severity-HOLD::before {
+  background: var(--blue);
+  border-radius: 1px;
+}
+
+.severity-UNKNOWN {
+  color: var(--text-dim);
+}
+
+.severity-UNKNOWN::before {
+  background: transparent;
+  border: 1px dashed var(--text-dim);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.severity-STANDARD {
+  color: var(--text-muted);
+}
+
+.severity-STANDARD::before {
+  background: var(--text-muted);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
 .threat-card__title {
@@ -297,6 +383,7 @@
   font-family: var(--display);
   font-size: var(--fs-section);
   font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
   line-height: 1.2;
 }
 
@@ -307,33 +394,39 @@
   line-height: 1.5;
 }
 
-.severity-CRITICAL {
-  color: var(--danger);
-}
-
-.severity-HIGH {
-  color: var(--warning);
-}
-
-.severity-READY {
-  color: var(--success);
-}
-
-.severity-WATCH {
-  color: var(--accent);
-}
-
-.severity-HOLD {
-  color: var(--warning);
-}
-
-.severity-UNKNOWN,
-.severity-STANDARD {
-  color: var(--warning);
-}
-
 .since-save-grid--compact {
   max-height: 260px;
   overflow: auto;
 }
 
+  transition: color 300ms cubic-bezier(0.2, 0, 0, 1),
+    text-shadow 300ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Motion is a presentation-behavior hook for the stateful KpiValue component,
+   not a layout rule. Only the four executive figures receive it. The numeric
+   text itself is stepped by KpiValue; this cue tells the eye that the step was
+   a measured update. Material 3's standard curve is monotonic and does not
+   display a value beyond either measured endpoint. */
+.init-kpi-val.is-kpi-changing {
+  will-change: color, text-shadow;
+  color: var(--accent-strong) !important;
+  text-shadow: 0 0 14px var(--accent-soft);
+}
+
+/* Reduced motion keeps the information cue but turns it into a single-frame
+   highlight. KpiValue has already committed the final text before this class
+   lands, so no number travels through intermediate values on this path. */
+@keyframes init-kpi-value-highlight {
+  from,
+  to {
+    color: var(--accent-strong);
+    text-shadow: 0 0 14px var(--accent-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .init-kpi-val.is-kpi-changing {
+    transition: none !important;
+    animation: init-kpi-value-highlight 1ms steps(1, end);
+  }

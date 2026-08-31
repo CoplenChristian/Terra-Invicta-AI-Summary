@@ -144,3 +144,37 @@
   grid-column: 1 / -1;
 }
 
+/* Georgia ships old-style figures by default. Any display-face numeral meant to
+   be compared at a glance needs lining + tabular figures. */
+.init-brand-name,
+.since-save-card-heading,
+.intelligence-library-screen h2,
+.intel-library-section-intro h3,
+.intel-library-stat strong,
+.intel-library-target strong,
+.faction-intel-title,
+.faction-intel-identity-name,
+.faction-intel-metric-value,
+.faction-intel-councilor-name,
+.mc-space-force-summary strong,
+.asset-posture-metric strong,
+.alien-hate-econ-metric strong {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Mono-measured values that still lacked tabular alignment. */
+.directive-metric-val,
+.directive-metric-hate,
+.hold-ground-axis__value,
+.mining-meas__value,
+.mining-est__value,
+.fe-meas__value,
+.fe-est__value,
+.de-summary__value,
+.de-measured__value,
+.de-estimate__value,
+.hm-summary__item strong,
+.td-tally__item strong {
+  font-variant-numeric: tabular-nums;
+}
+

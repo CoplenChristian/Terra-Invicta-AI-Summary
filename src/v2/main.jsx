@@ -76,6 +76,7 @@ import {
   CommandPanel,
   renderCommandPanel,
 } from './panels/CommandPanel.jsx';
+import { publishKpiMetrics } from './components/KpiBand.jsx';
 import {
   ExpansionPanel,
   renderExpansionPanel,
@@ -490,6 +491,9 @@ export { renderHudAlienHateEconomics };
 
 // Expose mounting registry on window for strangler migration interoperability
 if (typeof window !== 'undefined') {
+  window.MissionControlKpi = {
+    update: publishKpiMetrics,
+  };
   window.MissionControlMcBudget = { render: renderMcBudget };
   window.MissionControlStrategicCommentary = { renderStrategicCommentary };
   window.MissionControlFleetEngagement = {
@@ -642,6 +646,7 @@ if (typeof window !== 'undefined') {
   window.MissionControlReact = {
     mountReactPanel,
     unmountReactPanel,
+    updateKpiMetrics: publishKpiMetrics,
     mountCoexistenceProof,
     mountMcBudget: renderMcBudget,
     mountStrategicCommentary: renderStrategicCommentary,
