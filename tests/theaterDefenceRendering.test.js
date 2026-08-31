@@ -403,3 +403,95 @@ test('an engineDirectives wrapper with no theaterDefence key renders unavailable
     assert.match(text, /the briefing did not carry the block/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Per-metric independence (#21). Added with this conversion: nothing here
+// previously asserted that nulling one figure left its neighbours untouched.
+// ---------------------------------------------------------------------------
+
+/** Per-row figure states for every stamped metric in the findings table. */
+async function readRowStates(page) {
+  return page.evaluate(() => {
+    const cellStates = (row, cls) => [...row.querySelectorAll(`.${cls} [data-value-state]`)]
+      .map((el) => `${el.getAttribute('data-value-state')}:${el.textContent.trim()}`);
+    return [...document.querySelectorAll('.td-row[data-body]')].map((row) => ({
+      body: row.dataset.body,
+      inbound: cellStates(row, 'td-cell--inbound'),
+      present: cellStates(row, 'td-cell--present'),
+      ours: cellStates(row, 'td-cell--ours'),
+      contact: cellStates(row, 'td-cell--contact'),
+      race: cellStates(row, 'td-cell--race'),
+    }));
+  });
+}
+
+function cloneFinding(base, body, mutate) {
+  const row = JSON.parse(JSON.stringify(base));
+  row.id = `theater-defence:${body.toLowerCase()}`;
+  row.body = body;
+  mutate(row);
+  return row;
+}
+
+test('theater-defence per-metric: nulling one inbound ship count moves no other figure on any row', async () => {
+  const base = BOARD.findings[0];
+  const payload = {
+    ...BOARD,
+    findings: [
+      cloneFinding(base, 'Mercury', () => {}),
+      cloneFinding(base, 'Earth', (row) => { row.threat.hostileShips = null; }),
+      cloneFinding(base, 'Mars', () => {}),
+    ],
+    findingsTotalCount: 3,
+  };
+
+  await withTheaterDefenceHarnessPage(payload, async (page) => {
+    const rows = await readRowStates(page);
+    assert.strictEqual(rows.length, 3);
+
+    const [mercury, earth, mars] = rows;
+    assert.deepStrictEqual(mercury.inbound, ['measured:1', 'measured:105']);
+    assert.strictEqual(earth.inbound[0], mercury.inbound[0], 'nulling ships must not move the fleet count');
+    assert.strictEqual(earth.inbound[1].split(':')[0], 'absent', 'the nulled ship count must be absent');
+    assert.deepStrictEqual(mars.inbound, mercury.inbound, 'row 3 must keep both inbound figures row 2 nulled one of');
+    assert.deepStrictEqual(earth.present, mercury.present, 'present column must not inherit inbound absence');
+    assert.deepStrictEqual(earth.ours, mercury.ours, 'ours column must not inherit inbound absence');
+    assert.deepStrictEqual(earth.race, mercury.race, 'race column must not inherit inbound absence');
+  });
+});
+
+test('theater-defence per-metric: nulling one race figure moves no other race figure on that row', async () => {
+  const base = BOARD.findings[0];
+  const payload = {
+    ...BOARD,
+    findings: [cloneFinding(base, 'Mercury', (row) => { row.buildRace.marginDays = null; })],
+    findingsTotalCount: 1,
+  };
+
+  await withTheaterDefenceHarnessPage(payload, async (page) => {
+    const [row] = await readRowStates(page);
+    assert.strictEqual(row.race.filter((s) => s.startsWith('absent:')).length, 1,
+      `margin alone must be absent, got ${JSON.stringify(row.race)}`);
+    assert.ok(row.race.some((s) => s.startsWith('measured:') && s.includes('9 days')),
+      'build days must stay measured beside an absent margin');
+    assert.ok(row.race.some((s) => s.startsWith('measured:') && s.includes('24 days')),
+      'contact days must stay measured beside an absent margin');
+  });
+});
+
+test('theater-defence per-metric: nulling one ours figure moves no other ours figure on that row', async () => {
+  const base = BOARD.findings[0];
+  const payload = {
+    ...BOARD,
+    findings: [cloneFinding(base, 'Mercury', (row) => { row.friendly.shipyards = null; })],
+    findingsTotalCount: 1,
+  };
+
+  await withTheaterDefenceHarnessPage(payload, async (page) => {
+    const [row] = await readRowStates(page);
+    assert.strictEqual(row.ours[1].split(':')[0], 'absent', 'yards must be absent when nulled');
+    assert.strictEqual(row.ours[0], 'measured:30', 'ships beside the absent yard count must stay measured');
+    assert.strictEqual(row.ours[2], 'measured:3', 'habs must stay measured when yards is absent');
+    assert.strictEqual(row.ours[3], 'measured:2', 'mines must stay measured when yards is absent');
+  });
+});

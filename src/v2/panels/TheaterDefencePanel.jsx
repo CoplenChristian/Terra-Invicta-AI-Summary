@@ -20,16 +20,22 @@
  *     way, and rendering the two alike would turn "there is no clock" into
  *     "the clock could not be read". See `contactReading`.
  *
+ * Presence is resolved through `<Value>`/`resolveValue()`; layout and spacing
+ * come from MUI. The stylesheet keeps type, colour, borders and surfaces.
+ *
  * The render decisions live in `theaterDefencePanelUtils.mjs` so the unit tests
  * can exercise them without bringing the vite bundle into Node.
  */
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import Box from '@mui/material/Box';
+import { ThemeProvider } from '@mui/material/styles';
 import { Panel } from '../components/Panel.jsx';
 import { DataTable } from '../components/DataTable.jsx';
 import { TruncationNote } from '../components/TruncationNote.jsx';
 import { Value } from '../components/Value.jsx';
+import initiativeTheme from '../theme.js';
 import {
   STATE_LABEL,
   STATE_MODIFIER,
@@ -56,8 +62,68 @@ const COLUMNS = [
   { key: 'race', label: 'BUILD RACE' }
 ];
 
-function Count({ value, ...rest }) {
-  return <Value value={value} format={formatCount} present={present(value)} {...rest} />;
+const layout = {
+  banner: (space) => ({
+    display: 'grid',
+    gap: space.md,
+    padding: `${space.lg} 14px ${space.xl}`,
+    borderBottom: '1px solid var(--line)',
+  }),
+  tally: (space) => ({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+    gap: space.md,
+  }),
+  tallyItem: (space) => ({
+    display: 'grid',
+    gap: space['2xs'],
+    padding: `${space.md} ${space.lg}`,
+  }),
+  basis: (space) => ({
+    margin: `${space.lg} 0 0`,
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: `${space.xs} ${space.md}`,
+  }),
+  notes: (space) => ({
+    listStyle: 'none',
+    margin: `${space.lg} 0 0`,
+    padding: 0,
+    display: 'grid',
+    gap: space.sm,
+  }),
+  citations: (space) => ({
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: `${space.xs} ${space.lg}`,
+  }),
+  refusals: (space) => ({
+    listStyle: 'none',
+    margin: `0 0 ${space.md}`,
+    padding: `${space.md} ${space.lg}`,
+    display: 'grid',
+    gap: space.sm,
+  }),
+  refusalItem: (space) => ({
+    display: 'grid',
+    gap: space['2xs'],
+  }),
+};
+
+const InlineSpanBox = (props) => (
+  <Box component="span" {...props} sx={{ '&&': { display: 'inline' } }} />
+);
+
+function Count({ value, inline = false, ...rest }) {
+  return (
+    <Value
+      as={inline ? InlineSpanBox : undefined}
+      value={value}
+      format={formatCount}
+      present={present(value)}
+      {...rest}
+    />
+  );
 }
 
 /**
@@ -102,11 +168,11 @@ function RaceCell({ race }) {
         {race.shipyardId != null ? ` · yard ${race.shipyardId}` : null}
       </small>
       <small className="td-race__figures">
-        build <Value value={race.buildDays} format={formatDays} present={present(race.buildDays)} />
+        build <Value as={InlineSpanBox} value={race.buildDays} format={formatDays} present={present(race.buildDays)} />
         {' vs contact '}
-        <Value value={race.daysUntilArrival} format={formatDays} present={present(race.daysUntilArrival)} />
+        <Value as={InlineSpanBox} value={race.daysUntilArrival} format={formatDays} present={present(race.daysUntilArrival)} />
         {' · margin '}
-        <Value value={race.marginDays} format={formatMargin} present={present(race.marginDays)} />
+        <Value as={InlineSpanBox} value={race.marginDays} format={formatMargin} present={present(race.marginDays)} />
       </small>
     </span>
   );
@@ -116,14 +182,14 @@ function OursCell({ row }) {
   return (
     <span className="td-ours">
       <span className="td-ours__line">
-        <Count value={row.ourShips} /> ship(s) · <Count value={row.ourShipyards} /> yard(s)
+        <Count inline value={row.ourShips} /> ship(s) · <Count inline value={row.ourShipyards} /> yard(s)
       </span>
       <small className="td-ours__line">
-        <Count value={row.ourHabs} /> hab(s) · <Count value={row.ourMines} /> mine(s)
+        <Count inline value={row.ourHabs} /> hab(s) · <Count inline value={row.ourMines} /> mine(s)
       </small>
       {row.completing !== null ? (
         <small className="td-ours__line td-ours__completing">
-          <Count value={row.completing} /> completing before contact
+          <Count inline value={row.completing} /> completing before contact
           {row.completionBasis ? ` (${row.completionBasis})` : null}
         </small>
       ) : null}
@@ -139,18 +205,32 @@ function DetailRow({ row }) {
     <tr className="td-row td-row--detail" data-detail-for={row.key}>
       <td className="td-cell td-cell--detail" colSpan={COLUMNS.length}>
         {hasRefusals ? (
-          <ul className="td-refusals" data-refusal-count={row.refusals.length}>
+          <Box
+            component="ul"
+            className="td-refusals"
+            data-refusal-count={row.refusals.length}
+            sx={(theme) => layout.refusals(theme.initiative.space)}
+          >
             {row.refusals.map((refusal, index) => (
-              <li className="td-refusals__item" key={`${row.key}-refusal-${index}`}>
+              <Box
+                component="li"
+                className="td-refusals__item"
+                key={`${row.key}-refusal-${index}`}
+                sx={(theme) => layout.refusalItem(theme.initiative.space)}
+              >
                 <span className="td-refusals__check">{refusal?.check || 'unnamed check'}</span>
                 <span className="td-refusals__reason">
                   {refusal?.reason || 'no reason was recorded'}
                 </span>
-              </li>
+              </Box>
             ))}
-          </ul>
+          </Box>
         ) : null}
-        <div className="td-citations" data-citation-count={row.citationCount}>
+        <Box
+          className="td-citations"
+          data-citation-count={row.citationCount}
+          sx={(theme) => layout.citations(theme.initiative.space)}
+        >
           <span className="td-citations__count">
             <Count value={row.citationCount} /> reading(s) cited
           </span>
@@ -167,7 +247,7 @@ function DetailRow({ row }) {
               and are not counted above
             </span>
           ) : null}
-        </div>
+        </Box>
       </td>
     </tr>
   );
@@ -194,19 +274,19 @@ function FindingRow({ row }) {
         </td>
         <td className="td-cell td-cell--inbound">
           <span className="td-pair">
-            <Count value={row.inboundFleets} /> fleet(s)
+            <Count inline value={row.inboundFleets} /> fleet(s)
           </span>
           <small className="td-pair">
-            <Count value={row.inboundShips} /> ship(s)
+            <Count inline value={row.inboundShips} /> ship(s)
           </small>
         </td>
         <td className="td-cell td-cell--contact"><ContactCell contact={row.contact} /></td>
         <td className="td-cell td-cell--present">
           <span className="td-pair">
-            <Count value={row.presentFleets} /> fleet(s)
+            <Count inline value={row.presentFleets} /> fleet(s)
           </span>
           <small className="td-pair">
-            <Count value={row.presentShips} /> ship(s)
+            <Count inline value={row.presentShips} /> ship(s)
           </small>
         </td>
         <td className="td-cell td-cell--ours"><OursCell row={row} /></td>
@@ -221,32 +301,42 @@ function PostureBanner({ defence }) {
   const state = defence.state;
   const { rows, unrecognised } = postureCounts(defence);
   return (
-    <div className="td-banner">
+    <Box className="td-banner" sx={(theme) => layout.banner(theme.initiative.space)}>
       <div className={`td-banner__state td-banner__state--${state || 'UNREAD'}`}>
         {state
           ? (STATE_LABEL[state] || state)
           : 'HOSTILE-MOVEMENT STATE NOT READ — the block carried no whole-board state'}
       </div>
-      <div className="td-tally">
+      <Box className="td-tally" sx={(theme) => layout.tally(theme.initiative.space)}>
         {rows.length > 0 ? rows.map((entry) => (
-          <div className={`td-tally__item td-tally__item--${entry.modifier}`} key={entry.posture}>
+          <Box
+            className={`td-tally__item td-tally__item--${entry.modifier}`}
+            key={entry.posture}
+            sx={(theme) => layout.tallyItem(theme.initiative.space)}
+          >
             <small>{entry.label}</small>
             <strong><Count value={entry.count} /></strong>
-          </div>
+          </Box>
         )) : (
-          <div className="td-tally__item td-tally__item--quiet">
+          <Box
+            className="td-tally__item td-tally__item--quiet"
+            sx={(theme) => layout.tallyItem(theme.initiative.space)}
+          >
             <small>POSTURES</small>
             <strong><Value value={null} present={false} absentLabel="none" /></strong>
-          </div>
+          </Box>
         )}
         {unrecognised > 0 ? (
-          <div className="td-tally__item td-tally__item--refused">
+          <Box
+            className="td-tally__item td-tally__item--refused"
+            sx={(theme) => layout.tallyItem(theme.initiative.space)}
+          >
             <small>POSTURE NOT READ</small>
             <strong><Count value={unrecognised} /></strong>
-          </div>
+          </Box>
         ) : null}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
@@ -254,10 +344,10 @@ function BasisLine({ defence }) {
   const shared = sharedCitations(defence);
   if (shared.length === 0) return null;
   return (
-    <p className="td-basis">
+    <Box component="p" className="td-basis" sx={(theme) => layout.basis(theme.initiative.space)}>
       <span className="td-basis__label">SHARED BASIS</span>
       <span className="td-basis__list">{shared.join(', ')}</span>
-    </p>
+    </Box>
   );
 }
 
@@ -265,42 +355,17 @@ function Notes({ defence }) {
   const notes = notesOf(defence);
   if (notes.length === 0) return null;
   return (
-    <ul className="td-notes">
+    <Box component="ul" className="td-notes" sx={(theme) => layout.notes(theme.initiative.space)}>
       {notes.map((note, index) => (
-        <li className="td-notes__item" key={`td-note-${index}`}>{note}</li>
+        <Box component="li" className="td-notes__item" key={`td-note-${index}`}>
+          {note}
+        </Box>
       ))}
-    </ul>
+    </Box>
   );
 }
 
-export function TheaterDefencePanel({ data }) {
-  const token = stateTokenFor(data);
-
-  if (token === 'UNAVAILABLE_READ') {
-    return (
-      <div className="td-empty" data-primitive="theater-defence" data-state="UNAVAILABLE_READ">
-        THEATER DEFENCE UNAVAILABLE — the briefing did not carry the block.
-      </div>
-    );
-  }
-
-  if (token === 'UNAVAILABLE_BLOCK') {
-    return (
-      <Panel
-        title="THEATER DEFENCE"
-        headerAside="UNAVAILABLE"
-        modifier="alert"
-        data-state="UNAVAILABLE_BLOCK"
-        data-primitive="theater-defence"
-      >
-        <div className="td-empty">
-          THEATER DEFENCE UNAVAILABLE — {data.unavailableReason || 'no reason was recorded'}
-        </div>
-        <Notes defence={data} />
-      </Panel>
-    );
-  }
-
+function PanelBody({ data }) {
   const rows = findingRows(data);
   const { total, omitted, shown } = truncationInfo(data);
   const empty = emptyReason(data);
@@ -345,6 +410,41 @@ export function TheaterDefencePanel({ data }) {
       <Notes defence={data} />
     </Panel>
   );
+}
+
+export function TheaterDefencePanel({ data }) {
+  const token = stateTokenFor(data);
+
+  const content = (() => {
+    if (token === 'UNAVAILABLE_READ') {
+      return (
+        <div className="td-empty" data-primitive="theater-defence" data-state="UNAVAILABLE_READ">
+          THEATER DEFENCE UNAVAILABLE — the briefing did not carry the block.
+        </div>
+      );
+    }
+
+    if (token === 'UNAVAILABLE_BLOCK') {
+      return (
+        <Panel
+          title="THEATER DEFENCE"
+          headerAside="UNAVAILABLE"
+          modifier="alert"
+          data-state="UNAVAILABLE_BLOCK"
+          data-primitive="theater-defence"
+        >
+          <div className="td-empty">
+            THEATER DEFENCE UNAVAILABLE — {data.unavailableReason || 'no reason was recorded'}
+          </div>
+          <Notes defence={data} />
+        </Panel>
+      );
+    }
+
+    return <PanelBody data={data} />;
+  })();
+
+  return <ThemeProvider theme={initiativeTheme}>{content}</ThemeProvider>;
 }
 
 // ---------------------------------------------------------------------------

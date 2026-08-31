@@ -1,10 +1,12 @@
 // src/v2/panels/theaterDefencePanelUtils.mjs
 //
 // Purpose: testable render helpers behind src/v2/panels/TheaterDefencePanel.jsx.
-//   The JSX panel is a thin renderer over these, so every decision that could
-//   render an absent reading as a confident one — the contact clock, the build
-//   race, the citation trail — is exercised under plain Node + node:test without
-//   bringing the vite bundle in.
+//   Every formatter and describePanel string routes through resolveValue() from
+//   valueResolution.mjs so absence is structural in Node tests too; named refusals
+//   and contact labels keep their own words via absentLabel. The JSX panel is a
+//   thin renderer over these, so every decision that could render an absent reading
+//   as a confident one — the contact clock, the build race, the citation trail —
+//   is exercised under plain Node + node:test without bringing the vite bundle in.
 //
 // THE THREE READINGS THIS FILE REFUSES TO COLLAPSE
 // ------------------------------------------------
@@ -27,7 +29,11 @@
 // board at all". The hull is therefore on every race row: a margin without its
 // hull invites reading it as a recommendation.
 
+import { ABSENT_LABEL, resolveValue } from '../components/valueResolution.mjs';
 import { STATE_LABEL, STATE_MODIFIER } from './hostileMovementPanelUtils.mjs';
+
+/** Re-exported so JSX and tests share one absent affordance token. */
+export { ABSENT_LABEL };
 
 /** Re-exported so the panel has one state vocabulary, not a second copy. */
 export { STATE_LABEL, STATE_MODIFIER };
@@ -92,21 +98,47 @@ export function present(value) {
   return count(value) !== null;
 }
 
-export function formatCount(value) {
-  if (count(value) === null) return 'UNAVAILABLE';
-  return value.toLocaleString('en-US');
+function formatNumeric(value, formatFn) {
+  const parsed = count(value);
+  return resolveValue({
+    value,
+    present: parsed !== null,
+    format: () => formatFn(parsed),
+  }).text;
 }
 
+/** A grouped count, or the shared absent affordance. Never a confident zero. */
+export function formatCount(value) {
+  return formatNumeric(value, (parsed) => parsed.toLocaleString('en-US'));
+}
+
+/** A day count with its noun, or the shared absent affordance. */
 export function formatDays(days) {
-  if (count(days) === null) return 'UNAVAILABLE';
-  return `${days.toLocaleString('en-US')} day${days === 1 ? '' : 's'}`;
+  return formatNumeric(days, (parsed) => `${parsed.toLocaleString('en-US')} day${parsed === 1 ? '' : 's'}`);
 }
 
 /** A signed margin reads as a margin; an unsigned one reads as a duration. */
 export function formatMargin(days) {
-  if (count(days) === null) return 'UNAVAILABLE';
-  const sign = days > 0 ? '+' : '';
-  return `${sign}${days.toLocaleString('en-US')} day${Math.abs(days) === 1 ? '' : 's'}`;
+  return formatNumeric(days, (parsed) => {
+    const sign = parsed > 0 ? '+' : '';
+    return `${sign}${parsed.toLocaleString('en-US')} day${Math.abs(parsed) === 1 ? '' : 's'}`;
+  });
+}
+
+/** Named absence copy for string hosts — refusals and contact labels keep their words. */
+export function absentText(label) {
+  return resolveValue({ value: null, present: false, absentLabel: label }).text;
+}
+
+/** Plain text as read, or the shared absent affordance when the string is missing. */
+export function formatText(value, absentLabel = ABSENT_LABEL) {
+  const readable = typeof value === 'string' && value.trim() !== '' ? value : null;
+  return resolveValue({
+    value: readable,
+    present: readable !== null,
+    absentLabel,
+    format: String,
+  }).text;
 }
 
 /** ISO instant to the campaign-facing date. Absent stays absent. */
@@ -423,20 +455,21 @@ export function describePanel(defence) {
   if (unrecognised > 0) lines.push(`POSTURE_UNREAD: ${unrecognised}`);
 
   const { total, omitted, shown } = truncationInfo(defence);
-  lines.push(`FINDINGS: ${shown} shown, ${omitted === null ? 'UNAVAILABLE' : omitted} omitted, `
-    + `${total === null ? 'UNAVAILABLE' : total} total`);
+  lines.push(`FINDINGS: ${formatCount(shown)} shown, ${formatCount(omitted)} omitted, `
+    + `${formatCount(total)} total`);
 
   const empty = emptyReason(defence);
   if (empty) lines.push(`EMPTY: ${empty}`);
 
   for (const row of findingRows(defence)) {
-    lines.push(`ROW: ${row.body ?? 'UNNAMED BODY'} | ${row.postureLabel ?? 'POSTURE NOT READ'} | `
-      + `status ${row.theaterStatus ?? 'UNAVAILABLE'} | inbound `
-      + `${row.inboundFleets === null ? 'UNAVAILABLE' : row.inboundFleets} fleet(s) / `
-      + `${row.inboundShips === null ? 'UNAVAILABLE' : row.inboundShips} ship(s) | contact `
+    lines.push(`ROW: ${formatText(row.body, 'body not named')} | `
+      + `${formatText(row.postureLabel, 'posture not read')} | `
+      + `status ${formatText(row.theaterStatus, 'status not read')} | inbound `
+      + `${formatCount(row.inboundFleets)} fleet(s) / `
+      + `${formatCount(row.inboundShips)} ship(s) | contact `
       + `${row.contact.state === 'measured' ? formatDays(row.contact.days) : row.contact.label} | `
       + `race ${row.race.state === 'measured'
-        ? `${row.race.verdictLabel} (${row.race.hullName ?? 'HULL NOT READ'}, `
+        ? `${row.race.verdictLabel} (${formatText(row.race.hullName, 'hull not read')}, `
           + `${formatDays(row.race.buildDays)} vs ${formatDays(row.race.daysUntilArrival)}, `
           + `margin ${formatMargin(row.race.marginDays)})`
         : row.race.label} | `

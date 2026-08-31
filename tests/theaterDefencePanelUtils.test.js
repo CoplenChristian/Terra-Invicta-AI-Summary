@@ -35,12 +35,15 @@ const assert = require('node:assert/strict');
 const {
   POSTURE_LABEL,
   POSTURE_ORDER,
+  ABSENT_LABEL,
   count,
   present,
   formatCount,
   formatDays,
   formatMargin,
   formatDate,
+  absentText,
+  formatText,
   contactReading,
   buildRaceReading,
   citationKey,
@@ -178,16 +181,18 @@ test('count() refuses every non-finite reading rather than coercing it to zero',
   assert.equal(count(-3.5), -3.5);
 });
 
-test('formatters say UNAVAILABLE for an unread number, never 0', () => {
-  assert.equal(formatCount(null), 'UNAVAILABLE');
-  assert.equal(formatDays(null), 'UNAVAILABLE');
-  assert.equal(formatMargin(null), 'UNAVAILABLE');
+test('formatters route absence through resolveValue, never a confident zero', () => {
+  assert.equal(formatCount(null), ABSENT_LABEL);
+  assert.equal(formatDays(null), ABSENT_LABEL);
+  assert.equal(formatMargin(null), ABSENT_LABEL);
   assert.equal(formatCount(0), '0');
   assert.equal(formatDays(1), '1 day');
   assert.equal(formatDays(24), '24 days');
   assert.equal(formatMargin(15), '+15 days');
   assert.equal(formatMargin(-4), '-4 days');
   assert.equal(formatMargin(1), '+1 day');
+  assert.equal(absentText('arrival time unknown'), 'arrival time unknown');
+  assert.equal(formatText(null, 'status not read'), 'status not read');
 });
 
 test('formatDate returns null for anything it cannot parse', () => {
