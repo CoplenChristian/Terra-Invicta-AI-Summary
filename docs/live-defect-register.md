@@ -64,7 +64,27 @@ through a server or helper, invisible to any source-text scan. The guard that
 found them is now the enforcement: it runs the suite against a folder that is
 not there, so the next reader of any shape fails loudly and names itself.
 
-**Live right now: #21.**
+**Live right now: #21, and nothing else.**
+
+> **AUDIT, 2026-08-30. Seven entries said "live" and none of them were.**
+> #11, #12, #13, #15, #17, #24 and #26 were all verified fixed against the current
+> source on the same day, each with its evidence recorded in its own entry.
+>
+> **The cause is knowable rather than mysterious**: `docs/README.md` records that the
+> React migration "fixed nine defects at the port rather than separately." Nine were
+> fixed; the register was not told. A defect fixed as a side effect of other work is
+> exactly the kind that never gets its entry closed.
+>
+> **This mattered.** A register that overstates what is broken sends future work at
+> problems that no longer exist — three of these were queued as candidates before the
+> audit. One that understates it is worse, so the fix is not to trust it less but to
+> re-verify entries against the source before acting on them, the way a recalled
+> memory naming a file is checked before it is recommended.
+>
+> Method, if this needs repeating: read the entry's named file path first. On five of
+> seven it **no longer existed** — the logic had moved into `src/v2/` at the port —
+> which is itself the strongest signal that the entry predates a rewrite of the code
+> it describes.
 
 - **#17** — **FIXED 2026-08-30.** All four fabricated fallbacks and the three
   latent `?? 0` were fixed earlier; the upper-bound half followed the same day.
@@ -546,7 +566,15 @@ specific drive.
 
 ---
 
-## 11. An explicit UNAVAILABLE visibility renders as VISIBLE — **confirmed**
+## 11. An explicit UNAVAILABLE visibility renders as VISIBLE — **FIXED, verified 2026-08-30**
+
+> The named file `public/v2/js/components/faction-intel.js` no longer exists; the
+> logic is `src/v2/panels/factionIntelUtils.js:392`. The explicit-declaration branch
+> is now guarded by **`isExplicitlyEmpty`** rather than `hasMetricValue`, so a
+> declared `'UNAVAILABLE'` is treated as a statement rather than an absence and no
+> longer falls through to the data-inference branch. The file carries a header
+> comment naming this defect and explaining why the two predicates must stay
+> separate. Fixed at the React port.
 
 `public/v2/js/components/faction-intel.js`, found 2026-08-25 while correcting
 characterisation assertions.
@@ -592,7 +620,13 @@ worth knowing before `faction-intel` is rewritten:
 
 ---
 
-## 12. An unknown nuclear arsenal renders as zero — **confirmed**
+## 12. An unknown nuclear arsenal renders as zero — **FIXED, verified 2026-08-30**
+
+> The truthiness ternary is gone with the file that held it.
+> `src/v2/panels/IntelligenceLibrary.jsx:533` is now `NationNukesCell`, which tests
+> `numberValue(nukes) === null` explicitly: an **absent** arsenal renders
+> `<Value present={false} />` and a **measured zero** keeps its `0` chip. That is
+> exactly the fix this entry prescribed. Fixed at the React port.
 
 `public/v2/js/components/intelligence-library.js`, nation row.
 
@@ -622,7 +656,13 @@ an absent value takes whatever affordance the neighbouring cells already use.
 
 ---
 
-## 13. `strategic-commentary` renders a Monte Carlo band as the whole uncertainty — **confirmed live**
+## 13. `strategic-commentary` renders a Monte Carlo band as the whole uncertainty — **FIXED, verified 2026-08-30**
+
+> `src/v2/panels/StrategicCommentary.jsx:30` now renders the band **with what it
+> covers**: `bandLabel` is followed by `(p20–p80 over {seedsSimulated} seeds)` and
+> both carry `bandCovers` as a title. The server's authored warning — that a
+> consumer rendering `bandLabel` alone would present Monte Carlo spread as the whole
+> uncertainty — is satisfied. Fixed at the React port.
 
 `public/v2/js/components/strategic-commentary.js:83-86` renders each engagement
 tier's threshold as `bandLabel` and nothing else:
@@ -709,7 +749,13 @@ these sentences. That is the standard to review the port against.
 
 ---
 
-## 15. The bench is scored, ordered, and is not a ranking — **demonstrated live**
+## 15. The bench is scored, ordered, and is not a ranking — **FIXED, verified 2026-08-30**
+
+> `src/v2/panels/DirectiveBoard.jsx:634` carries a block comment naming this defect,
+> and `:772` renders the qualifier outright: the list is **"NOT a ranking and the row
+> count counts groups rather than options."** The engine's own statement at
+> `server/engine/assignment.js:1287-1289` now reaches the reader instead of stopping
+> at the panel boundary. Fixed at the React port.
 
 `public/v2/js/components/directive-board.js`, `renderBenched` at `:514`.
 
@@ -1267,7 +1313,16 @@ silently left as four copies of a pattern now known to be fragile.
 
 ---
 
-## 24. The hostile-movement panel shipped unregistered, and styled against eight tokens that do not exist — **demonstrated, live**
+## 24. The hostile-movement panel shipped unregistered, and styled against eight tokens that do not exist — **FIXED, verified 2026-08-30**
+
+> **Registered**: `hostileMovement` is in the `VIEWS` registry at
+> `public/v2/js/mission-control.js:277`, so `assertViewRegistryIntegrity()` now
+> covers it — the whole point of the entry.
+> **Tokens**: `tests/cssCustomProperties.test.js` pins the remaining unresolved
+> references to `07-hate-economics.css`, `17-directive-board.css` and
+> `18-mining-expansion.css`. No hostile-movement stylesheet appears in
+> `REGISTERED_GAPS`, and the assertion demands an EXACT match — so if its eight
+> tokens were still unresolved, that test would fail. It passes.
 
 Found 2026-08-27 by the agent building the *sibling* panel, which is the useful
 part: both faults are in `fb2a6ab`, they are mine, and they survived that commit's
