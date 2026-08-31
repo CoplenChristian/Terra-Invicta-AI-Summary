@@ -14,11 +14,14 @@
  */
 
 import React from 'react';
+import Box from '@mui/material/Box';
 import { createRoot } from 'react-dom/client';
+import { ThemeProvider } from '@mui/material/styles';
 import { Panel } from '../components/Panel.jsx';
 import { DataTable } from '../components/DataTable.jsx';
 import { TruncationNote } from '../components/TruncationNote.jsx';
 import { Value } from '../components/Value.jsx';
+import initiativeTheme from '../theme.js';
 import {
   STATE_LABEL,
   STATE_MODIFIER,
@@ -27,61 +30,91 @@ import {
   destinationRows,
   truncationInfo,
   summaryCells,
-  formatDays
+  formatDays,
+  formatCount,
+  present
 } from './hostileMovementPanelUtils.mjs';
 
-function fmt(n) {
-  if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
-  return n.toLocaleString('en-US');
-}
-
-// Explicit presence for <Value>, which renders its absent affordance whenever
-// `present` is not true. A count that was not read must stay an em dash; a
-// measured 0 must not.
-function present(n) {
-  return typeof n === 'number' && Number.isFinite(n);
-}
+// MUI owns the panel's layout and spacing. The hostile-movement stylesheet
+// continues to own type, colour, borders and surfaces; these values mirror its
+// current geometry exactly so the migration has no visual side effects.
+const layout = {
+  empty: { padding: '12px 14px' },
+  banner: (theme) => ({
+    display: 'grid',
+    gap: theme.initiative.space.md,
+    padding: `${theme.initiative.space.lg} 14px 12px`,
+  }),
+  state: (theme) => ({ padding: `${theme.initiative.space.sm} ${theme.initiative.space.lg}` }),
+  body: { margin: 0 },
+  summary: (theme) => ({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: theme.initiative.space.md,
+    marginTop: theme.initiative.space.xs,
+  }),
+  summaryItem: (theme) => ({
+    display: 'grid',
+    gap: '2px',
+    padding: `${theme.initiative.space.md} ${theme.initiative.space.lg}`,
+  }),
+  offboard: (theme) => ({ marginTop: theme.initiative.space.xl }),
+  heading: (theme) => ({
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: theme.initiative.space.md,
+    padding: `${theme.initiative.space.sm} 14px`,
+  }),
+  arrival: { whiteSpace: 'nowrap' },
+  date: { display: 'block' },
+};
 
 function StatusHeader({ state, observed, toward, untracked, unresolved }) {
   if (!state) return null;
   return (
-    <div className="hm-banner">
-      <div className={`hm-banner__state hm-banner__state--${state}`}>
+    <Box className="hm-banner" sx={layout.banner}>
+      <Box
+        component="div"
+        className={`hm-banner__state hm-banner__state--${state}`}
+        sx={layout.state}
+      >
         {STATE_LABEL[state] || state}
-      </div>
-      <p className="hm-banner__body">{STATE_BODY[state] || ''}</p>
-      <div className="hm-summary">
-        <div className="hm-summary__item">
+      </Box>
+      <Box component="p" className="hm-banner__body" sx={layout.body}>
+        {STATE_BODY[state] || ''}
+      </Box>
+      <Box className="hm-summary" sx={layout.summary}>
+        <Box className="hm-summary__item" sx={layout.summaryItem}>
           <small>OBSERVED</small>
-          <strong><Value value={observed?.transfers} format={fmt} present={present(observed?.transfers)} /></strong>
-          <small>transfer(s) · <Value value={observed?.ships} format={fmt} present={present(observed?.ships)} /> ship(s)</small>
-        </div>
-        <div className="hm-summary__item">
+          <strong><Value value={observed?.transfers} format={formatCount} present={present(observed?.transfers)} /></strong>
+          <small>transfer(s) · <Value value={observed?.ships} format={formatCount} present={present(observed?.ships)} /> ship(s)</small>
+        </Box>
+        <Box className="hm-summary__item" sx={layout.summaryItem}>
           <small>TOWARD TRACKED THEATERS</small>
-          <strong><Value value={toward?.transfers} format={fmt} present={present(toward?.transfers)} /></strong>
-          <small>transfer(s) · <Value value={toward?.ships} format={fmt} present={present(toward?.ships)} /> ship(s)</small>
-        </div>
-        <div className="hm-summary__item">
+          <strong><Value value={toward?.transfers} format={formatCount} present={present(toward?.transfers)} /></strong>
+          <small>transfer(s) · <Value value={toward?.ships} format={formatCount} present={present(toward?.ships)} /> ship(s)</small>
+        </Box>
+        <Box className="hm-summary__item" sx={layout.summaryItem}>
           <small>TOWARD UNTRACKED BODIES</small>
-          <strong><Value value={untracked?.transfers} format={fmt} present={present(untracked?.transfers)} /></strong>
-          <small>transfer(s) · <Value value={untracked?.ships} format={fmt} present={present(untracked?.ships)} /> ship(s)</small>
-        </div>
-        <div className="hm-summary__item">
+          <strong><Value value={untracked?.transfers} format={formatCount} present={present(untracked?.transfers)} /></strong>
+          <small>transfer(s) · <Value value={untracked?.ships} format={formatCount} present={present(untracked?.ships)} /> ship(s)</small>
+        </Box>
+        <Box className="hm-summary__item" sx={layout.summaryItem}>
           <small>UNRESOLVED DESTINATIONS</small>
-          <strong><Value value={unresolved?.transfers} format={fmt} present={present(unresolved?.transfers)} /></strong>
-          <small>transfer(s) · <Value value={unresolved?.ships} format={fmt} present={present(unresolved?.ships)} /> ship(s)</small>
-        </div>
-      </div>
-    </div>
+          <strong><Value value={unresolved?.transfers} format={formatCount} present={present(unresolved?.transfers)} /></strong>
+          <small>transfer(s) · <Value value={unresolved?.ships} format={formatCount} present={present(unresolved?.ships)} /> ship(s)</small>
+        </Box>
+      </Box>
+    </Box>
   );
 }
 
 function ArrivalCell({ days, date }) {
   return (
-    <span className="hm-cell hm-cell--arrival">
+    <Box component="span" className="hm-cell hm-cell--arrival" sx={layout.arrival}>
       <Value value={days} format={formatDays} absentLabel="ETA unknown" present={present(days)} />
-      {date ? <small className="hm-cell__date">arr. {date}</small> : null}
-    </span>
+      {date ? <Box component="small" className="hm-cell__date" sx={layout.date}>arr. {date}</Box> : null}
+    </Box>
   );
 }
 
@@ -89,10 +122,22 @@ function DestinationRow({ row }) {
   return (
     <tr className="hm-row">
       <td className="hm-cell hm-cell--faction">{row.faction}</td>
-      <td className="hm-cell hm-cell--fleet">{row.fleet}</td>
-      <td className="hm-cell hm-cell--ships"><Value value={row.shipCount} format={fmt} present={present(row.shipCount)} /></td>
+      <Value
+        as="td"
+        className="hm-cell hm-cell--fleet"
+        value={row.fleet}
+        present={row.fleetPresent}
+        format={String}
+      />
+      <td className="hm-cell hm-cell--ships"><Value value={row.shipCount} format={formatCount} present={present(row.shipCount)} /></td>
       <td className="hm-cell hm-cell--resolved">{row.resolvedLabel}</td>
-      <td className="hm-cell hm-cell--via">{row.viaText}</td>
+      <Value
+        as="td"
+        className="hm-cell hm-cell--via"
+        value={row.viaText}
+        present={row.viaPresent}
+        format={String}
+      />
       <td className="hm-cell hm-cell--arrival"><ArrivalCell days={row.daysRemaining} date={row.arrival} /></td>
     </tr>
   );
@@ -128,39 +173,43 @@ function OffBoardSection({ movement }) {
   const rows = destinationRows(movement);
   const { total, omitted, shown } = truncationInfo(movement);
   return (
-    <div className="hm-offboard">
-      <div className="hm-offboard__heading">
+    <Box className="hm-offboard" sx={layout.offboard}>
+      <Box className="hm-offboard__heading" sx={layout.heading}>
         <span className="hm-offboard__title">OFF-BOARD HOSTILE MOVEMENT</span>
         <small className="hm-offboard__sub">destinations outside the 12 tracked theaters</small>
-      </div>
+      </Box>
       <DestinationTable rows={rows} />
       <TruncationNote
         totalCount={total}
         omittedCount={omitted}
         shownCount={shown}
         formatTruncated={({ shown: s, omitted: om, total: t }) =>
-          (s != null ? `${fmt(s)} shown · ${fmt(om)} omitted` : `${fmt(om)} omitted`) +
-          (t != null ? ` (${fmt(t)} total)` : '')
+          (s != null ? `${formatCount(s)} shown · ${formatCount(om)} omitted` : `${formatCount(om)} omitted`) +
+          (t != null ? ` (${formatCount(t)} total)` : '')
         }
       />
-    </div>
+    </Box>
   );
 }
 
 export function HostileMovementPanel({ data }) {
   if (!data || typeof data !== 'object') {
     return (
-      <div className="hm-empty" data-primitive="hostile-movement">
-        HOSTILE MOVEMENT UNAVAILABLE — the endpoint could not be read.
-      </div>
+      <ThemeProvider theme={initiativeTheme}>
+        <Box className="hm-empty" sx={layout.empty} data-primitive="hostile-movement">
+          HOSTILE MOVEMENT UNAVAILABLE — the endpoint could not be read.
+        </Box>
+      </ThemeProvider>
     );
   }
   const state = data.state;
   if (!state) {
     return (
-      <div className="hm-empty" data-primitive="hostile-movement">
-        HOSTILE MOVEMENT STATE UNAVAILABLE — the read did not name a state.
-      </div>
+      <ThemeProvider theme={initiativeTheme}>
+        <Box className="hm-empty" sx={layout.empty} data-primitive="hostile-movement">
+          HOSTILE MOVEMENT STATE UNAVAILABLE — the read did not name a state.
+        </Box>
+      </ThemeProvider>
     );
   }
   const modifier = STATE_MODIFIER[state] || 'quiet';
@@ -175,16 +224,18 @@ export function HostileMovementPanel({ data }) {
   const cells = summaryCells(data);
 
   return (
-    <Panel
-      title="HOSTILE MOVEMENT BEYOND THE TWELVE THEATERS"
-      headerAside={headerAside}
-      modifier={modifier}
-      data-state={state}
-      data-primitive="hostile-movement"
-    >
-      <StatusHeader state={state} {...cells} />
-      <OffBoardSection movement={data} />
-    </Panel>
+    <ThemeProvider theme={initiativeTheme}>
+      <Panel
+        title="HOSTILE MOVEMENT BEYOND THE TWELVE THEATERS"
+        headerAside={headerAside}
+        modifier={modifier}
+        data-state={state}
+        data-primitive="hostile-movement"
+      >
+        <StatusHeader state={state} {...cells} />
+        <OffBoardSection movement={data} />
+      </Panel>
+    </ThemeProvider>
   );
 }
 

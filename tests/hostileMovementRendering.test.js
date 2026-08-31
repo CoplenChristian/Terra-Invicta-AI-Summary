@@ -129,13 +129,42 @@ async function renderThroughBridge(page, payload) {
  */
 function summaryItems(html) {
   const items = [];
-  for (const match of html.matchAll(/<div class="hm-summary__item">([\s\S]*?)<\/div>/g)) {
+  for (const match of html.matchAll(/<div class="[^"]*hm-summary__item[^"]*">([\s\S]*?)<\/div>/g)) {
     const block = match[1];
     const label = (block.match(/<small>([^<]*)<\/small>/) || [])[1] || '';
     const text = visibleText(block);
     items.push({ label, text });
   }
   return items;
+}
+
+async function summaryFigureStates(page) {
+  return page.evaluate(() => [...document.querySelectorAll(
+    '#test-render-root .hm-summary__item'
+  )].map((item) => ({
+    label: item.querySelector('small')?.textContent.trim() || '',
+    figures: [...item.querySelectorAll('[data-value-state]')].map((figure) => ({
+      state: figure.dataset.valueState,
+      text: figure.textContent.trim(),
+    })),
+  })));
+}
+
+async function rowFigureStates(page) {
+  return page.evaluate(() => {
+    const row = document.querySelector('#test-render-root .hm-row');
+    return ['fleet', 'ships', 'via', 'arrival'].map((name) => {
+      const host = row.querySelector(`.hm-cell--${name}`);
+      const figure = host.matches('[data-value-state]')
+        ? host
+        : host.querySelector('[data-value-state]');
+      return {
+        name,
+        state: figure?.dataset.valueState,
+        text: figure?.textContent.trim(),
+      };
+    });
+  });
 }
 
 function assertSummaryCell(html, label, value) {
@@ -306,5 +335,160 @@ test('a measured count renders as a number while an unread bucket stays an em da
     // The nulled buckets must read as absent, never as 0/0 measured.
     assertSummaryCellAbsent(partialHtml, 'TOWARD UNTRACKED BODIES');
     assertSummaryCellAbsent(partialHtml, 'UNRESOLVED DESTINATIONS');
+  });
+});
+
+test('summary figures keep each metric presence independent', async () => {
+  const baseline = hostileMovement(fixtureHostileInbound());
+  const metrics = [
+    ['OBSERVED', 'observed', 'transfers'],
+    ['OBSERVED', 'observed', 'ships'],
+    ['TOWARD TRACKED THEATERS', 'towardTrackedTheaters', 'transfers'],
+    ['TOWARD TRACKED THEATERS', 'towardTrackedTheaters', 'ships'],
+    ['TOWARD UNTRACKED BODIES', 'towardUntrackedBodies', 'transfers'],
+    ['TOWARD UNTRACKED BODIES', 'towardUntrackedBodies', 'ships'],
+    ['UNRESOLVED DESTINATIONS', 'unresolvedDestinations', 'transfers'],
+    ['UNRESOLVED DESTINATIONS', 'unresolvedDestinations', 'ships'],
+  ];
+
+  await withHostileMovementHarnessPage(baseline, async (page, { pageErrors }) => {
+    await renderThroughBridge(page, baseline);
+    const baselineStates = await summaryFigureStates(page);
+    for (const cell of baselineStates) {
+      assert.deepStrictEqual(cell.figures.map((figure) => figure.state), ['measured', 'measured'],
+        `${cell.label} baseline figures must both be measured`);
+    }
+
+    for (const [label, bucket, field] of metrics) {
+      const variant = {
+        ...baseline,
+        [bucket]: { ...baseline[bucket], [field]: null },
+      };
+      await renderThroughBridge(page, variant);
+      const states = await summaryFigureStates(page);
+      const cell = states.find((entry) => entry.label === label);
+      assert.ok(cell, `${label} must render for ${bucket}.${field}`);
+      const index = field === 'transfers' ? 0 : 1;
+      assert.strictEqual(cell.figures[index].state, 'absent',
+        `${bucket}.${field} must be absent when that metric is null`);
+      assert.strictEqual(cell.figures[1 - index].state, 'measured',
+        `${bucket}.${field} must not change its sibling metric`);
+
+      for (const other of states) {
+        if (other === cell) continue;
+        assert.deepStrictEqual(other.figures.map((figure) => figure.state), ['measured', 'measured'],
+          `${bucket}.${field} must not change ${other.label}`);
+      }
+
+      const baselineCell = baselineStates.find((entry) => entry.label === label);
+      assert.strictEqual(baselineCell.figures[index].text,
+        String(baseline[bucket][field].toLocaleString('en-US')),
+        `${bucket}.${field} baseline text must come from its own value`);
+      assert.strictEqual(cell.figures[index].text, '—',
+        `${bucket}.${field} must use the Value absent affordance`);
+      assert.strictEqual(cell.figures[1 - index].text,
+        String(baseline[bucket][field === 'transfers' ? 'ships' : 'transfers']
+          .toLocaleString('en-US')),
+        `${bucket}.${field} must not render its sibling's value`);
+    }
+
+    assert.deepStrictEqual(pageErrors.map(String), [],
+      'per-metric probes must not throw while the panel re-renders');
+  });
+});
+
+test('destination row figures keep fleet, ships, path, and ETA presence independent', async () => {
+  const movement = hostileMovement(fixtureHostileInbound());
+  const baseline = {
+    ...movement,
+    offBoardDestinations: movement.offBoardDestinations.map((entry, index) => index === 0
+      ? { ...entry, daysRemaining: 4, arrival: '2033-05-05' }
+      : entry),
+  };
+  const row = baseline.offBoardDestinations[0];
+  const probes = [
+    ['fleet', { fleet: null }],
+    ['ships', { shipCount: null }],
+    ['via', { via: [], statedDestination: null }],
+    ['arrival', { daysRemaining: null }],
+  ];
+
+  await withHostileMovementHarnessPage(baseline, async (page, { pageErrors }) => {
+    await renderThroughBridge(page, baseline);
+    const baselineFigures = await rowFigureStates(page);
+    assert.deepStrictEqual(baselineFigures.map((figure) => figure.state),
+      ['measured', 'measured', 'measured', 'measured'],
+      'the row probe must begin with four measured figures');
+
+    for (const [name, change] of probes) {
+      const variant = {
+        ...baseline,
+        offBoardDestinations: [{ ...row, ...change }],
+      };
+      await renderThroughBridge(page, variant);
+      const figures = await rowFigureStates(page);
+      for (const figure of figures) {
+        if (figure.name === name) {
+          assert.strictEqual(figure.state, 'absent', `${name} must be absent when its input is null`);
+          assert.strictEqual(figure.text, name === 'arrival' ? 'ETA unknown' : '—',
+            `${name} must use the Value absent affordance`);
+        } else {
+          const expected = baselineFigures.find((base) => base.name === figure.name);
+          assert.strictEqual(figure.state, 'measured',
+            `${name} must not change ${figure.name} presence`);
+          assert.strictEqual(figure.text, expected.text,
+            `${name} must not render a neighbouring figure's value in ${figure.name}`);
+        }
+      }
+    }
+
+    assert.deepStrictEqual(pageErrors.map(String), [],
+      'per-row metric probes must not throw while the panel re-renders');
+  });
+});
+
+test('every figure absence affordance is stamped through Value, including table hosts', async () => {
+  const measured = hostileMovement(fixtureHostileInbound());
+  const partial = {
+    ...measured,
+    observed: { transfers: null, ships: null },
+    towardTrackedTheaters: { transfers: null, ships: null },
+    towardUntrackedBodies: { transfers: null, ships: null },
+    unresolvedDestinations: { transfers: null, ships: null },
+    nearestArrivalDays: null,
+    offBoardDestinations: [{
+      ...measured.offBoardDestinations[0],
+      fleet: null,
+      shipCount: null,
+      via: [],
+      statedDestination: null,
+      daysRemaining: null,
+      arrival: null,
+    }],
+    offBoardDestinationsTotalCount: 1,
+    offBoardDestinationsOmittedCount: 0,
+  };
+
+  await withHostileMovementHarnessPage(partial, async (page, { pageErrors }) => {
+    await renderThroughBridge(page, partial);
+    const result = await page.evaluate(() => {
+      const root = document.querySelector('#test-render-root');
+      return {
+        absentCount: root.querySelectorAll('[data-value-state="absent"]').length,
+        unstampedDashLeaves: [...root.querySelectorAll('*')]
+          .filter((node) => node.children.length === 0
+            && node.textContent.trim() === '—'
+            && !node.hasAttribute('data-value-state'))
+          .map((node) => node.outerHTML),
+      };
+    });
+
+    // 8 summary metrics + nearest ETA + fleet/ships/path/arrival in one row.
+    assert.strictEqual(result.absentCount, 13,
+      'all eight summary metrics and four row figures plus the header ETA must be stamped');
+    assert.deepStrictEqual(result.unstampedDashLeaves, [],
+      'no em-dash absence affordance may be emitted outside Value');
+    assert.deepStrictEqual(pageErrors.map(String), [],
+      'the all-absent probe must not throw');
   });
 });

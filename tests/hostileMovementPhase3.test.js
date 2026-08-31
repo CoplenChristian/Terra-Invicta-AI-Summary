@@ -44,7 +44,9 @@ const {
   describePanel,
   destinationRows,
   truncationInfo,
-  summaryCells
+  summaryCells,
+  formatCount,
+  formatDays
 } = require('../src/v2/panels/hostileMovementPanelUtils.mjs');
 
 const OBSERVER = 4712;
@@ -245,6 +247,28 @@ test('summaryCells exposes measured counts the panel can render', () => {
   assert.deepStrictEqual(cells.toward, offBoard.towardTrackedTheaters);
   assert.deepStrictEqual(cells.untracked, offBoard.towardUntrackedBodies);
   assert.deepStrictEqual(cells.unresolved, offBoard.unresolvedDestinations);
+});
+
+test('string helpers use the shared resolveValue contract for null and zero', () => {
+  assert.strictEqual(formatCount(0), '0', 'a measured zero must stay measured');
+  assert.strictEqual(formatCount(null), '—', 'an absent count must use the shared affordance');
+  assert.strictEqual(formatDays(1), '1 day');
+  assert.strictEqual(formatDays(null), '—', 'an absent ETA must use the shared affordance');
+
+  const description = describePanel({
+    state: HOSTILE_MOVEMENT_STATE.none,
+    observed: { transfers: null, ships: 0 },
+  }).join('\n');
+  assert.match(description, /OBSERVED: — transfer\(s\), 0 ship\(s\)/,
+    'describePanel must not turn a missing transfer count into zero');
+
+  const [row] = destinationRows({
+    offBoardDestinations: [{ fleet: null, statedDestination: null, via: [] }],
+  });
+  assert.strictEqual(row.fleet, '—');
+  assert.strictEqual(row.fleetPresent, false);
+  assert.strictEqual(row.viaText, '—');
+  assert.strictEqual(row.viaPresent, false);
 });
 
 // ---------------------------------------------------------------------------

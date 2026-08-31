@@ -6,6 +6,7 @@
 //   the vite bundle into the unit suite.
 
 import { HOSTILE_MOVEMENT_STATE } from '../../../shared/intelResources.mjs';
+import { ABSENT_LABEL, resolveValue } from '../components/valueResolution.mjs';
 
 export const STATE_LABEL = Object.freeze({
   [HOSTILE_MOVEMENT_STATE.none]: 'NO HOSTILE MOVEMENT OBSERVED',
@@ -54,33 +55,45 @@ export function describePanel(data) {
     return ['UNAVAILABLE: HOSTILE MOVEMENT STATE UNAVAILABLE — the read did not name a state.'];
   }
   const label = STATE_LABEL[data.state] || data.state;
-  const observedT = data.observed?.transfers ?? 0;
-  const observedS = data.observed?.ships ?? 0;
-  const towardT = data.towardTrackedTheaters?.transfers ?? 0;
-  const towardS = data.towardTrackedTheaters?.ships ?? 0;
-  const untrackedT = data.towardUntrackedBodies?.transfers ?? 0;
-  const untrackedS = data.towardUntrackedBodies?.ships ?? 0;
-  const unresolvedT = data.unresolvedDestinations?.transfers ?? 0;
-  const unresolvedS = data.unresolvedDestinations?.ships ?? 0;
   const lines = [
     `STATE: ${label}`,
-    `OBSERVED: ${observedT} transfer(s), ${observedS} ship(s)`,
-    `TOWARD_TRACKED: ${towardT} transfer(s), ${towardS} ship(s)`,
-    `TOWARD_UNTRACKED: ${untrackedT} transfer(s), ${untrackedS} ship(s)`,
-    `UNRESOLVED: ${unresolvedT} transfer(s), ${unresolvedS} ship(s)`,
-    `NEAREST_ARRIVAL: ${Number.isFinite(data.nearestArrivalDays) ? `${data.nearestArrivalDays} day(s)` : 'ETA unknown'}`,
+    `OBSERVED: ${formatCount(data.observed?.transfers)} transfer(s), ${formatCount(data.observed?.ships)} ship(s)`,
+    `TOWARD_TRACKED: ${formatCount(data.towardTrackedTheaters?.transfers)} transfer(s), ${formatCount(data.towardTrackedTheaters?.ships)} ship(s)`,
+    `TOWARD_UNTRACKED: ${formatCount(data.towardUntrackedBodies?.transfers)} transfer(s), ${formatCount(data.towardUntrackedBodies?.ships)} ship(s)`,
+    `UNRESOLVED: ${formatCount(data.unresolvedDestinations?.transfers)} transfer(s), ${formatCount(data.unresolvedDestinations?.ships)} ship(s)`,
+    `NEAREST_ARRIVAL: ${formatEta(data.nearestArrivalDays)}`,
     `BODY: ${STATE_BODY[data.state] || ''}`
   ];
   return lines;
 }
 
-function fmt(n) {
-  if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
-  return n.toLocaleString('en-US');
+export function present(value) {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
-function isFiniteCount(n) {
-  return typeof n === 'number' && Number.isFinite(n);
+export function textPresent(value) {
+  return value !== null && value !== undefined && value !== '';
+}
+
+function resolveText(value, options = {}) {
+  return resolveValue({
+    value,
+    present: textPresent(value),
+    format: String,
+    ...options,
+  }).text;
+}
+
+export function formatCount(value) {
+  return resolveValue({
+    value,
+    present: present(value),
+    format: (raw) => raw.toLocaleString('en-US'),
+  }).text;
+}
+
+function formatEta(days) {
+  return formatDays(days, 'ETA unknown');
 }
 
 /**
@@ -89,18 +102,24 @@ function isFiniteCount(n) {
  */
 export function destinationRows(movement) {
   const rows = Array.isArray(movement?.offBoardDestinations) ? movement.offBoardDestinations : [];
-  return rows.map((row, i) => ({
-    key: row.fleetId ?? i,
-    faction: row.faction || 'Hostile',
-    fleet: row.fleet || '—',
-    shipCount: row.shipCount,
-    resolvedLabel: row.resolved === false
-      ? `unresolved (${row.unresolvedReason || 'reason not read'})`
-      : `${row.resolvedBody || row.statedDestination || 'unknown'}${row.trackedTheater ? ' (tracked)' : ' (untracked)'}`,
-    viaText: row.via && row.via.length > 0 ? row.via.join(' → ') : (row.statedDestination || '—'),
-    daysRemaining: row.daysRemaining,
-    arrival: row.arrival
-  }));
+  return rows.map((row, i) => {
+    const fleet = row.fleet;
+    const via = row.via && row.via.length > 0 ? row.via.join(' → ') : row.statedDestination;
+    return {
+      key: row.fleetId ?? i,
+      faction: row.faction || 'Hostile',
+      fleet: resolveText(fleet),
+      fleetPresent: textPresent(fleet),
+      shipCount: row.shipCount,
+      resolvedLabel: row.resolved === false
+        ? `unresolved (${row.unresolvedReason || 'reason not read'})`
+        : `${row.resolvedBody || row.statedDestination || 'unknown'}${row.trackedTheater ? ' (tracked)' : ' (untracked)'}`,
+      viaText: resolveText(via),
+      viaPresent: textPresent(via),
+      daysRemaining: row.daysRemaining,
+      arrival: row.arrival
+    };
+  });
 }
 
 /**
@@ -110,10 +129,10 @@ export function destinationRows(movement) {
  */
 export function truncationInfo(movement) {
   const rows = Array.isArray(movement?.offBoardDestinations) ? movement.offBoardDestinations : [];
-  const total = isFiniteCount(movement?.offBoardDestinationsTotalCount)
+  const total = present(movement?.offBoardDestinationsTotalCount)
     ? movement.offBoardDestinationsTotalCount
     : rows.length;
-  const omitted = isFiniteCount(movement?.offBoardDestinationsOmittedCount)
+  const omitted = present(movement?.offBoardDestinationsOmittedCount)
     ? movement.offBoardDestinationsOmittedCount
     : null;
   const shown = rows.length;
@@ -134,7 +153,11 @@ export function summaryCells(data) {
   };
 }
 
-export function formatDays(days) {
-  if (!Number.isFinite(days)) return '—';
-  return `${fmt(days)} day${days === 1 ? '' : 's'}`;
+export function formatDays(days, absentLabel = ABSENT_LABEL) {
+  return resolveValue({
+    value: days,
+    present: present(days),
+    absentLabel,
+    format: (raw) => `${raw.toLocaleString('en-US')} day${raw === 1 ? '' : 's'}`,
+  }).text;
 }
