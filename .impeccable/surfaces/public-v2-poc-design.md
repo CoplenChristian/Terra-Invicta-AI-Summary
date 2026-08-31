@@ -10,7 +10,7 @@ Initiative players between turns. Job: decide the next council assignment with h
 
 ## Direction
 
-Modern product briefing (user-pinned after rejecting the sonar-waterfall costume). Light paper complementary to the dark game client. The recommended action is the page; supporting intel is secondary.
+Modern product briefing, **dark**. Same layout: the recommended action is the page; supporting intel is secondary.
 
 ## Memorable moment
 
