@@ -2,6 +2,8 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   affordabilityFor,
@@ -10,12 +12,15 @@ const {
   filterReactors,
   filterWeaponsForPicker,
   hardpointUsageLabel,
+  massEntryLabel,
   mergeWeaponSelection,
   reactorFilterCaption,
+  rangeLabel,
   selectionQuery,
   stockpileFromResourcesPayload,
   weaponsQueryEntries,
 } = require('../src/v2/panels/shipDesignerUtils.mjs');
+const { ABSENT_LABEL } = require('../src/v2/components/valueResolution.mjs');
 
 test('selectionQuery maps a base drive and thruster count to a variant id', () => {
   const catalogue = {
@@ -177,4 +182,33 @@ test('mergeWeaponSelection accumulates counts for duplicate ids', () => {
   const second = mergeWeaponSelection(first, 'PointDefenseLaserTurret', 1);
   assert.deepEqual(second, [{ id: 'PointDefenseLaserTurret', count: 2 }]);
   assert.deepEqual(weaponsQueryEntries(second), ['PointDefenseLaserTurret:2']);
+});
+
+test('designer absence affordances use the shared resolver without changing text', () => {
+  const source = fs.readFileSync(
+    path.resolve(__dirname, '../src/v2/panels/shipDesignerUtils.mjs'),
+    'utf8',
+  );
+  assert.match(source, /import \{ ABSENT_LABEL, resolveValue \} from ['"]\.\.\/components\/valueResolution\.mjs['"]/);
+  assert.doesNotMatch(source, /return '—';/, 'designer affordances must not own a bare dash');
+
+  const calls = [];
+  const formatter = (value, decimals) => {
+    calls.push({ value, decimals });
+    return Number(value).toFixed(decimals);
+  };
+  assert.equal(
+    rangeLabel({ Open: null, Closed: 2.5 }, formatter),
+    `Open ${ABSENT_LABEL} · Closed 2.50`,
+  );
+  assert.equal(
+    rangeLabel({ Open: 1.25, Closed: null }, formatter),
+    `Open 1.25 · Closed ${ABSENT_LABEL}`,
+  );
+  assert.deepEqual(calls, [
+    { value: 2.5, decimals: 2 },
+    { value: 1.25, decimals: 2 },
+  ], 'the resolver must keep missing bounds out of the formatter');
+  assert.equal(massEntryLabel(null), ABSENT_LABEL);
+  assert.equal(massEntryLabel({}), ABSENT_LABEL);
 });

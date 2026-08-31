@@ -7,6 +7,8 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   weaponTemplatesFromComponentStats,
   mountEquivalentAdvice,
@@ -14,8 +16,11 @@ const {
   saturationHeadline,
   changeAdvice,
   buildBattleMatchup,
+  formatCount,
+  formatRatio,
   selectionPhase,
 } = require('../src/v2/panels/battleSuggestionUtils.mjs');
+const { ABSENT_LABEL } = require('../src/v2/components/valueResolution.mjs');
 const { composeBattleSide, saturationVerdict } = require('../shared/battleComposition.mjs');
 const { buildWeaponIndex } = require('../shared/battleComposition.mjs');
 
@@ -146,4 +151,20 @@ test('buildBattleMatchup returns null verdicts when only one side is selected', 
   assert.strictEqual(result.leftShips.length, 1);
   assert.strictEqual(result.rightShips.length, 0);
   assert.strictEqual(result.yourSalvoVsTheirScreen, null);
+});
+
+test('battle absence affordances use the shared resolver without changing text', () => {
+  const source = fs.readFileSync(
+    path.resolve(__dirname, '../src/v2/panels/battleSuggestionUtils.mjs'),
+    'utf8',
+  );
+  assert.match(source, /import \{ ABSENT_LABEL, resolveValue \} from ['"]\.\.\/components\/valueResolution\.mjs['"]/);
+  assert.doesNotMatch(source, /return '—';/, 'battle affordances must not own a bare dash');
+
+  assert.equal(formatCount(null), ABSENT_LABEL);
+  assert.equal(formatCount(0), '0');
+  assert.equal(formatCount(1234), '1,234');
+  assert.equal(formatRatio(null), ABSENT_LABEL);
+  assert.equal(formatRatio(0), '0.0%');
+  assert.equal(formatRatio(0.125), '12.5%');
 });

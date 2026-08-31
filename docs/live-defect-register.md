@@ -64,7 +64,20 @@ through a server or helper, invisible to any source-text scan. The guard that
 found them is now the enforcement: it runs the suite against a folder that is
 not there, so the next reader of any shape fails loudly and names itself.
 
-**Live right now: #21, and nothing else.**
+**Live right now: nothing. #21 closed 2026-08-31.**
+
+> Every entry in this register is fixed. That is a first, and it is worth being
+> suspicious of rather than pleased about — the audit below found seven entries that
+> had been fixed for weeks without anyone noticing, so "no live defects" has been
+> true before while the register said otherwise.
+>
+> **What is genuinely open lives elsewhere**, deliberately, because it is not defect
+> work: two ship-designer unknowns that need one look at the running game (`Calc`
+> cooling on 186 of 541 drives, and confirming the 0.1 units/ton cost rate), and two
+> **latent** items measured as not-currently-reachable — `power()` in
+> `driveExplorerUtils.mjs` using `toFixed(3)` below 1 (zero of 487 drives would render
+> `0.000`), and `executiveFactionName || 'None'` in `IntelligenceLibrary.jsx` (the
+> snapshot already emits the literal `"None"` for all 167 unclaimed nations).
 
 > **AUDIT, 2026-08-30. Seven entries said "live" and none of them were.**
 > #11, #12, #13, #15, #17, #24 and #26 were all verified fixed against the current
@@ -1168,7 +1181,40 @@ affordance naming the material.
 
 ---
 
-## 21. The em-dash affordance is hand-written in eleven panels, six of which never import `<Value>` — **confirmed**
+## 21. The em-dash affordance is hand-written in eleven panels, six of which never import `<Value>` — **FIXED 2026-08-31**
+
+> **Closed across eleven slices.** Every hand-written absence affordance now routes
+> through the shared contract: `<Value>` in JSX, `resolveValue()` in string builders.
+> The last six bare `'—'` returns were in `shipDesignerUtils.mjs` (4, including the
+> `Calc` cooling range formatter) and `battleSuggestionUtils.mjs` (2).
+>
+> **The primitive had to split to finish this**, and that is the entry's most reusable
+> outcome. A `.mjs` of pure functions cannot import JSX, so slice 8 extracted
+> `src/v2/components/valueResolution.mjs` — DOM-free — with `Value.jsx` re-exporting
+> from it. One contract, two consumers. That also gives #19's world-map problem
+> (`<span>` cannot live inside `<svg>`) a proper home instead of a special case.
+>
+> **HOW STRONGLY IT IS NOW HELD, measured:** mutating the shared core so an absent
+> value reports as `measured` fails **22 tests** across every converted panel. The
+> rule holds by enforcement, not convention — which was the entire point of the entry.
+>
+> ### The counting lesson, which cost real work before it was learned
+>
+> `grep -c '—'` is the wrong query. It counts comment prose, and this codebase
+> comments heavily. Ranking by it sent a slice at **DetailPanel, which was never an
+> offender** — all eleven of its dashes were JSDoc.
+>
+> Counting only dashes *outside* comments is better but still an upper bound. Across
+> the last five slices, **most survivors were prose inside strings**: named refusals
+> and captions that carry facts, not affordances —
+> *"a measured absence of build capacity, not an unmeasured build time"*,
+> *"Treat the unresolved rows as the unresolved ones — the war could end up there"*,
+> *"ESTIMATE — heuristic, not a measurement"*.
+>
+> The final audit collapsed **six candidate files to two** by reading every line.
+> **The only reliable test is whether the dash stands in for a value**, and answering
+> that requires reading the sentence. A refusal that already has words keeps them;
+> `resolveValue()` takes an `absentLabel` for exactly that.
 
 Found 2026-08-26 by the agent fixing #19, which was scoped to `world-map` and
 reported this on its way past.

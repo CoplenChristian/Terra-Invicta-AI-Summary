@@ -20,6 +20,7 @@ import {
   presentCount,
   shipId,
 } from './battlePanelUtils.mjs';
+import { ABSENT_LABEL, resolveValue } from '../components/valueResolution.mjs';
 
 // The weapon-family list and the componentStats -> template-record adapter now
 // live beside the join they feed, in shared/battleComposition.mjs, because
@@ -143,13 +144,21 @@ export function selectionPhase(leftShipCount, rightShipCount) {
 }
 
 export function formatCount(value) {
-  if (!presentCount(value)) return '—';
-  return value.toLocaleString('en-US');
+  return resolveValue({
+    value,
+    present: presentCount(value),
+    absentLabel: ABSENT_LABEL,
+    format: (raw) => raw.toLocaleString('en-US'),
+  }).text;
 }
 
 export function formatRatio(value) {
-  if (!presentCount(value)) return '—';
-  return `${(value * 100).toFixed(1)}%`;
+  return resolveValue({
+    value,
+    present: presentCount(value),
+    absentLabel: ABSENT_LABEL,
+    format: (raw) => `${(raw * 100).toFixed(1)}%`,
+  }).text;
 }
 
 /**

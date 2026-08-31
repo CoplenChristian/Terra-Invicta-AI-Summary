@@ -8,6 +8,7 @@
 
 import { mountCost } from '../../../shared/militaryValue.mjs';
 import { accel, dec, int, num, power } from './driveExplorerUtils.mjs';
+import { ABSENT_LABEL, resolveValue } from '../components/valueResolution.mjs';
 
 export { accel, dec, int, num, power };
 
@@ -313,16 +314,34 @@ export function rangeLabel(range, formatter = dec) {
   const open = range.Open ?? range.open;
   const closed = range.Closed ?? range.closed;
   if (open === undefined && closed === undefined) return null;
-  const openText = open === null || open === undefined ? '—' : formatter(open, 2);
-  const closedText = closed === null || closed === undefined ? '—' : formatter(closed, 2);
+  const openText = resolveValue({
+    value: open,
+    present: open !== null && open !== undefined,
+    absentLabel: ABSENT_LABEL,
+    format: (value) => formatter(value, 2),
+  }).text;
+  const closedText = resolveValue({
+    value: closed,
+    present: closed !== null && closed !== undefined,
+    absentLabel: ABSENT_LABEL,
+    format: (value) => formatter(value, 2),
+  }).text;
   return `Open ${openText} · Closed ${closedText}`;
 }
 
 export function massEntryLabel(entry) {
-  if (!entry) return '—';
+  if (!entry) return resolveValue({
+    value: entry,
+    present: false,
+    absentLabel: ABSENT_LABEL,
+  }).text;
   if (entry.displayName) return entry.displayName;
   if (entry.key) return String(entry.key);
-  return '—';
+  return resolveValue({
+    value: entry,
+    present: false,
+    absentLabel: ABSENT_LABEL,
+  }).text;
 }
 
 function asArray(value) {
