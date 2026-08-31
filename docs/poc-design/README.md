@@ -1,19 +1,19 @@
 # Design POC screenshots
 
-Dark-mode mocked briefing at [`public/v2/poc-design.html`](../../public/v2/poc-design.html). Open this file on GitHub to see the images.
+Dark Mode First one-page briefing. Gallery:
 
-## Command — desktop
+## First viewport
 
-![Command view, first screen](./01-command-desktop.png)
+![Hero recommendation](./01-command-desktop.png)
 
-## Command — scrolled
+## Ranking
 
-![Alternatives, hate, council table](./02-command-scrolled.png)
+![Also ranked](./02-command-scrolled.png)
 
-## Omniscient — Luna sortie
+## Omniscient — Luna
 
-![Omniscient mode with Luna order selected](./03-omniscient-luna.png)
+![Luna sortie in omniscient](./03-omniscient-luna.png)
 
-## Phone width
+## Phone
 
-![Command view at 390px](./04-mobile.png)
+![Mobile hero](./04-mobile.png)

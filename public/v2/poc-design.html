@@ -3,934 +3,544 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The Initiative — Campaign briefing</title>
+  <title>The Initiative — Tonight’s briefing</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,600;0,6..96,700;1,6..96,500;1,6..96,600&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <style>
     :root {
-      --paper: #0e1014;
-      --surface: #16181e;
-      --surface-2: #1e2128;
-      --ink: #eceef2;
-      --ink-2: #b8bec9;
-      --ink-3: #8b93a2;
-      --line: #2a2e38;
-      --line-strong: #3a404c;
-      --accent: #4d7dff;
-      --accent-soft: #1a2744;
-      --accent-ink: #9db6ff;
-      --danger: #f07178;
-      --danger-soft: #3a1c22;
+      --void: #070706;
+      --raised: #12110f;
+      --ink: #f2eee6;
+      --ink-2: #c4bdb0;
+      --ink-3: #8f877a;
+      --gold: #d4a53a;
+      --gold-dim: #8a6b24;
+      --gold-soft: rgba(212, 165, 58, 0.14);
+      --pass: #67c99a;
+      --fail: #e86b73;
       --warn: #e0a04a;
-      --warn-soft: #3a2d16;
-      --ok: #4caf78;
-      --ok-soft: #173326;
-      --unknown: #8b93a2;
-      --unknown-soft: #1e2128;
-      --radius: 8px;
-      --radius-sm: 6px;
-      --nav: 212px;
-      --header: 56px;
-      --shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+      --line: #2a2824;
+      --display: "Bodoni Moda", "Palatino Linotype", Palatino, serif;
+      --sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
       --ease: cubic-bezier(0.22, 1, 0.36, 1);
-      --sans: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html { color-scheme: dark; }
+    html { color-scheme: dark; scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      * { animation: none !important; transition: none !important; }
+    }
 
     body {
       font-family: var(--sans);
-      font-size: 14px;
-      line-height: 1.45;
+      font-size: 17px;
+      line-height: 1.5;
       color: var(--ink);
-      background: var(--paper);
+      background: var(--void);
       min-height: 100vh;
     }
 
-    ::selection {
-      background: var(--accent-soft);
-      color: var(--ink);
-    }
+    ::selection { background: var(--gold-soft); color: var(--ink); }
 
-    ::-webkit-scrollbar { width: 10px; height: 10px; }
-    ::-webkit-scrollbar-track { background: var(--paper); }
+    ::-webkit-scrollbar { width: 10px; }
+    ::-webkit-scrollbar-track { background: var(--void); }
     ::-webkit-scrollbar-thumb {
-      background: var(--line-strong);
+      background: var(--line);
       border-radius: 5px;
-      border: 2px solid var(--paper);
+      border: 2px solid var(--void);
     }
 
-    button, select {
+    button {
       font: inherit;
       color: inherit;
       background: none;
       border: none;
       cursor: pointer;
     }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
-    button:disabled {
-      cursor: not-allowed;
-      opacity: 0.45;
-    }
+    .tabular { font-variant-numeric: tabular-nums; }
 
-    :focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-
-    .tabular {
-      font-variant-numeric: tabular-nums;
-      letter-spacing: -0.01em;
-    }
-
-    /* Shell */
-    .app {
-      display: grid;
-      grid-template-columns: var(--nav) 1fr;
-      grid-template-rows: var(--header) 1fr;
-      min-height: 100vh;
-    }
-
-    .header {
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 0 20px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--line);
+    /* Top bar — words, not chrome */
+    .top {
       position: sticky;
       top: 0;
       z-index: 20;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-width: 0;
-    }
-
-    .brand svg {
-      width: 28px;
-      height: 28px;
-      flex-shrink: 0;
-    }
-
-    .brand h1 {
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      line-height: 1.15;
-    }
-
-    .brand p {
-      font-size: 12px;
-      color: var(--ink-3);
-      line-height: 1.2;
-    }
-
-    .header-meta {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-    }
-
-    .meta-block {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
-
-    .meta-block span {
-      font-size: 11px;
-      color: var(--ink-3);
-    }
-
-    .meta-block strong {
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .mode-switch {
-      display: flex;
-      padding: 3px;
-      background: var(--surface-2);
-      border-radius: 999px;
-    }
-
-    .mode-switch button {
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--ink-2);
-      transition: background 0.18s var(--ease), color 0.18s var(--ease);
-    }
-
-    .mode-switch button:hover:not([aria-pressed="true"]) {
-      color: var(--ink);
-    }
-
-    .mode-switch button[aria-pressed="true"] {
-      background: var(--surface);
-      color: var(--ink);
-      box-shadow: 0 1px 2px rgba(20, 22, 28, 0.08);
-    }
-
-    .ghost-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      height: 32px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      background: var(--surface);
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--ink-2);
-      transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
-    }
-
-    .ghost-btn:hover:not(:disabled) {
-      background: var(--surface-2);
-      border-color: var(--line-strong);
-      color: var(--ink);
-    }
-
-    .ghost-btn svg { width: 14px; height: 14px; }
-
-    /* Nav */
-    .nav {
-      background: var(--surface);
-      border-right: 1px solid var(--line);
-      padding: 16px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .nav-btn {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      padding: 9px 10px;
-      border-radius: var(--radius-sm);
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--ink-2);
-      text-align: left;
-      transition: background 0.15s var(--ease), color 0.15s var(--ease);
-    }
-
-    .nav-btn svg {
-      width: 18px;
-      height: 18px;
-      flex-shrink: 0;
-      opacity: 0.7;
-    }
-
-    .nav-btn:hover {
-      background: var(--surface-2);
-      color: var(--ink);
-    }
-
-    .nav-btn[aria-current="page"] {
-      background: var(--accent-soft);
-      color: var(--accent-ink);
-      font-weight: 600;
-    }
-
-    .nav-btn[aria-current="page"] svg { opacity: 1; }
-
-    .nav-btn__count {
-      margin-left: auto;
-      min-width: 20px;
-      height: 20px;
-      padding: 0 6px;
-      border-radius: 999px;
-      background: var(--danger-soft);
-      color: var(--danger);
-      font-size: 11px;
-      font-weight: 700;
-      display: grid;
-      place-items: center;
-    }
-
-    .nav-foot {
-      margin-top: auto;
-      padding: 12px 10px 4px;
-      font-size: 11px;
-      line-height: 1.4;
-      color: var(--ink-3);
-    }
-
-    .nav-foot code {
-      font-family: inherit;
-      font-weight: 600;
-      color: var(--ink-2);
-    }
-
-    /* Main */
-    .main {
-      overflow: auto;
-      padding: 32px 40px 64px;
-    }
-
-    .view { display: none; }
-    .view.is-active { display: block; }
-
-    .mode-note {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      max-width: 72ch;
-      margin-bottom: 28px;
-      padding: 12px 14px;
-      background: var(--accent-soft);
-      border-radius: var(--radius);
-      color: var(--accent-ink);
-      font-size: 13px;
-      line-height: 1.45;
-    }
-
-    .mode-note[data-mode="omniscient"] {
-      background: var(--warn-soft);
-      color: var(--warn);
-    }
-
-    .mode-note[data-mode="enhanced"] {
-      background: var(--ok-soft);
-      color: var(--ok);
-    }
-
-    .mode-note svg {
-      width: 16px;
-      height: 16px;
-      flex-shrink: 0;
-      margin-top: 2px;
-    }
-
-    /* Hero recommendation */
-    .hero {
-      max-width: 72ch;
-    }
-
-    .hero.is-swapping .hero__body {
-      animation: swap 0.22s var(--ease);
-    }
-
-    @keyframes swap {
-      from { opacity: 0; transform: translateY(6px); filter: blur(4px); }
-      to { opacity: 1; transform: none; filter: none; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .hero.is-swapping .hero__body { animation: none; }
-      * { transition: none !important; }
-    }
-
-    .hero h2 {
-      font-size: 32px;
-      font-weight: 600;
-      letter-spacing: -0.035em;
-      line-height: 1.15;
-      text-wrap: balance;
-      margin-bottom: 10px;
-    }
-
-    .hero__why {
-      font-size: 16px;
-      color: var(--ink-2);
-      line-height: 1.5;
-      max-width: 62ch;
-      margin-bottom: 20px;
-    }
-
-    .hero__facts {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 24px;
-      margin-bottom: 20px;
-    }
-
-    .fact {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 88px;
-    }
-
-    .fact dt {
-      font-size: 12px;
-      color: var(--ink-3);
-    }
-
-    .fact dd {
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .fact dd.redacted {
-      color: var(--ink-3);
-      font-weight: 500;
-      letter-spacing: 0.08em;
-    }
-
-    .hero__actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 28px;
-    }
-
-    .btn-primary {
-      height: 36px;
-      padding: 0 16px;
-      border-radius: var(--radius-sm);
-      background: var(--accent);
-      color: #0e1014;
-      font-size: 13px;
-      font-weight: 600;
-      transition: background 0.15s var(--ease);
-    }
-
-    .btn-primary:hover { background: var(--accent-ink); color: #0e1014; }
-
-    .btn-secondary {
-      height: 36px;
-      padding: 0 16px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--line);
-      background: var(--surface);
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--ink-2);
-    }
-
-    .btn-secondary:hover {
-      background: var(--surface-2);
-      color: var(--ink);
-    }
-
-    /* Rules */
-    .rules {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      margin-bottom: 36px;
-      border-top: 1px solid var(--line);
-    }
-
-    .rule {
-      display: grid;
-      grid-template-columns: 88px 1fr;
-      gap: 12px;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--line);
-      font-size: 13px;
-    }
-
-    .rule__status {
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      text-transform: lowercase;
-    }
-
-    .rule--pass .rule__status { color: var(--ok); }
-    .rule--fail .rule__status { color: var(--danger); }
-    .rule--warn .rule__status { color: var(--warn); }
-    .rule--unknown .rule__status { color: var(--unknown); }
-
-    .rule__text { color: var(--ink-2); }
-
-    /* Skeleton */
-    .skel {
-      display: none;
-    }
-
-    .is-loading .hero__body { display: none; }
-    .is-loading .skel { display: block; }
-
-    .skel-line {
-      height: 14px;
-      background: var(--surface-2);
-      border-radius: 4px;
-      margin-bottom: 10px;
-    }
-
-    .skel-line--title { height: 32px; width: 70%; margin-bottom: 16px; }
-    .skel-line--wide { width: 92%; }
-    .skel-line--mid { width: 58%; }
-
-    /* Alternatives */
-    .section {
-      margin-top: 8px;
-      margin-bottom: 40px;
-    }
-
-    .section > h3 {
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      margin-bottom: 12px;
-    }
-
-    .alt-list {
-      display: flex;
-      flex-direction: column;
-      border-top: 1px solid var(--line);
-    }
-
-    .alt {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      gap: 16px;
-      align-items: center;
-      width: 100%;
-      padding: 14px 4px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      transition: background 0.15s var(--ease);
-    }
-
-    .alt:hover { background: var(--surface-2); }
-    .alt.is-active { background: var(--accent-soft); }
-
-    .alt__title {
-      font-size: 14px;
-      font-weight: 600;
-      display: block;
-    }
-
-    .alt__sub {
-      display: block;
-      font-size: 12px;
-      color: var(--ink-3);
-      font-weight: 400;
-      margin-top: 2px;
-    }
-
-    .alt__score {
-      font-size: 15px;
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .alt__score--high { color: var(--ok); }
-    .alt__score--mid { color: var(--warn); }
-    .alt__score--low { color: var(--danger); }
-
-    .pill {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: var(--surface-2);
-      color: var(--ink-2);
-      white-space: nowrap;
-    }
-
-    .pill--veto { background: var(--danger-soft); color: var(--danger); }
-    .pill--unknown { background: var(--unknown-soft); color: var(--unknown); }
-
-    /* Split band */
-    .band {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 48px;
-      padding-top: 8px;
-    }
-
-    .threshold {
-      padding-top: 4px;
-    }
-
-    .threshold__row {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      margin-bottom: 10px;
+      gap: 24px;
+      padding: 18px 36px;
+      background: rgba(7, 7, 6, 0.92);
+      border-bottom: 1px solid var(--line);
     }
 
-    .threshold__value {
-      font-size: 28px;
-      font-weight: 600;
-      letter-spacing: -0.03em;
-      font-variant-numeric: tabular-nums;
-      line-height: 1;
+    .top a {
+      color: var(--ink);
+      text-decoration: none;
+      font-family: var(--display);
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
     }
 
-    .threshold__value--danger { color: var(--danger); }
-    .threshold__value--unknown { color: var(--ink-3); }
-
-    .threshold__aside {
+    .top a span {
+      font-family: var(--sans);
       font-size: 12px;
+      font-weight: 500;
       color: var(--ink-3);
-      text-align: right;
+      margin-left: 10px;
+      letter-spacing: 0.04em;
+    }
+
+    .modes {
+      display: flex;
+      gap: 18px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .modes button { color: var(--ink-3); }
+    .modes button:hover { color: var(--ink); }
+    .modes button[aria-pressed="true"] { color: var(--gold); }
+
+    .meta {
+      font-size: 13px;
+      color: var(--ink-3);
+      white-space: nowrap;
+    }
+
+    /* Page */
+    .page {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 36px 120px;
+    }
+
+    /* Hero — the whole first screen is the order */
+    .hero {
+      min-height: calc(100vh - 62px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 48px 0 80px;
+    }
+
+    .hero h1 {
+      font-family: var(--display);
+      font-size: 64px;
+      font-weight: 500;
+      font-style: italic;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      max-width: 16ch;
+      text-wrap: balance;
+    }
+
+    .hero__rule {
+      width: 72px;
+      height: 2px;
+      background: var(--gold);
+      margin: 28px 0 24px;
+      transform-origin: left center;
+      animation: draw 0.9s var(--ease) both;
+    }
+
+    @keyframes draw {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
+    }
+
+    .hero__why {
+      max-width: 46ch;
+      font-size: 20px;
+      color: var(--ink-2);
+      line-height: 1.45;
+      margin-bottom: 28px;
+    }
+
+    .facts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 32px;
+      margin-bottom: 32px;
+    }
+
+    .facts div { min-width: 100px; }
+    .facts dt { font-size: 12px; color: var(--ink-3); margin-bottom: 2px; }
+    .facts dd { font-size: 16px; font-weight: 600; }
+    .facts .redacted { color: var(--ink-3); font-weight: 500; font-style: italic; }
+    .redacted { color: var(--ink-3); font-style: italic; }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+    .btn-gold {
+      height: 44px;
+      padding: 0 22px;
+      background: var(--gold);
+      color: #1a1408;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      transition: background 0.18s var(--ease);
+    }
+    .btn-gold:hover { background: #e8c056; }
+
+    .btn-ghost {
+      height: 44px;
+      padding: 0 18px;
+      color: var(--ink-2);
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+    .btn-ghost:hover { color: var(--ink); }
+
+    .mode-line {
+      margin-top: 40px;
+      max-width: 58ch;
+      font-size: 14px;
+      color: var(--ink-3);
+      border-left: 1px solid var(--gold-dim);
+      padding-left: 14px;
+    }
+
+    /* Sections */
+    section.block {
+      padding: 72px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    section.block h2 {
+      font-family: var(--display);
+      font-size: 32px;
+      font-weight: 500;
+      font-style: italic;
+      letter-spacing: -0.02em;
+      margin-bottom: 28px;
+    }
+
+    .rules { max-width: 62ch; }
+    .rule {
+      display: grid;
+      grid-template-columns: 7rem 1fr;
+      gap: 16px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 16px;
+    }
+    .rule:first-child { border-top: 1px solid var(--line); }
+    .rule b { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: lowercase; }
+    .rule--pass b { color: var(--pass); }
+    .rule--fail b { color: var(--fail); }
+    .rule--warn b { color: var(--warn); }
+    .rule--unknown b { color: var(--ink-3); }
+    .rule span { color: var(--ink-2); }
+
+    .alts { display: flex; flex-direction: column; }
+    .alt {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: baseline;
+      padding: 22px 0;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      width: 100%;
+    }
+    .alt:first-child { border-top: 1px solid var(--line); }
+    .alt:hover .alt__title { color: var(--gold); }
+    .alt.is-on .alt__title { color: var(--gold); }
+    .alt__title {
+      font-family: var(--display);
+      font-size: 28px;
+      font-weight: 500;
+      font-style: italic;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      transition: color 0.18s var(--ease);
+    }
+    .alt__sub { display: block; font-family: var(--sans); font-size: 14px; font-style: normal; color: var(--ink-3); margin-top: 6px; font-weight: 400; }
+    .alt__score {
+      font-family: var(--display);
+      font-size: 28px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+    .alt__score--high { color: var(--pass); }
+    .alt__score--mid { color: var(--warn); }
+    .alt__score--low { color: var(--fail); }
+    .tag {
+      display: inline-block;
+      margin-left: 10px;
+      font-family: var(--sans);
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 600;
+      color: var(--ink-3);
+    }
+    .tag--fail { color: var(--fail); }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+    }
+
+    .hate-num {
+      font-family: var(--display);
+      font-size: 96px;
+      font-weight: 500;
+      line-height: 0.9;
+      letter-spacing: -0.04em;
+      font-variant-numeric: tabular-nums;
+    }
+    .hate-num.is-hot { color: var(--fail); }
+    .hate-num.is-dim { color: var(--ink-3); }
+
+    .hate-copy {
+      margin-top: 16px;
+      max-width: 36ch;
+      color: var(--ink-2);
+      font-size: 16px;
     }
 
     .track {
       position: relative;
-      height: 8px;
-      background: var(--surface-2);
-      border-radius: 999px;
-      margin: 16px 0 8px;
+      height: 2px;
+      background: var(--line);
+      margin: 28px 0 8px;
     }
-
     .track__fill {
       height: 100%;
-      border-radius: 999px;
-      background: var(--danger);
+      background: var(--fail);
       width: 70%;
     }
-
     .track__mark {
       position: absolute;
-      top: -4px;
-      bottom: -4px;
+      top: -5px;
       width: 2px;
-      background: var(--ink);
-      border-radius: 1px;
+      height: 12px;
+      background: var(--gold);
+      left: 75%;
     }
-
-    .track__labels {
+    .track-labels {
       display: flex;
       justify-content: space-between;
-      font-size: 11px;
+      font-size: 12px;
       color: var(--ink-3);
     }
 
-    .help {
-      margin-top: 12px;
-      font-size: 13px;
-      color: var(--ink-2);
-      line-height: 1.45;
-      max-width: 48ch;
-    }
-
-    /* Tables */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
     th {
       text-align: left;
       font-size: 12px;
       font-weight: 600;
       color: var(--ink-3);
-      padding: 0 12px 8px 0;
+      padding: 0 12px 10px 0;
       border-bottom: 1px solid var(--line);
     }
-
     td {
-      padding: 12px 12px 12px 0;
+      padding: 14px 12px 14px 0;
       border-bottom: 1px solid var(--line);
-      vertical-align: middle;
-    }
-
-    tr:hover td { background: var(--surface-2); }
-
-    .name {
-      font-weight: 600;
-    }
-
-    .muted { color: var(--ink-3); }
-
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--ink-3);
-    }
-
-    .dot--ok { background: var(--ok); }
-    .dot--warn { background: var(--warn); }
-    .dot--danger { background: var(--danger); }
-    .dot--idle { background: var(--line-strong); }
-
-    /* Other views */
-    .page-head {
-      margin-bottom: 24px;
-      max-width: 62ch;
-    }
-
-    .page-head h2 {
-      font-size: 26px;
-      font-weight: 600;
-      letter-spacing: -0.03em;
-      margin-bottom: 6px;
-    }
-
-    .page-head p {
       color: var(--ink-2);
-      font-size: 15px;
     }
+    td.name { color: var(--ink); font-weight: 600; }
+    .status { font-size: 13px; font-weight: 600; }
+    .status--ok { color: var(--pass); }
+    .status--idle { color: var(--ink-3); }
+    .status--warn { color: var(--warn); }
 
     .mine {
       display: grid;
-      grid-template-columns: 100px 1fr 48px;
-      gap: 12px;
+      grid-template-columns: 110px 1fr 3rem;
+      gap: 16px;
       align-items: center;
-      padding: 10px 0;
+      padding: 12px 0;
       border-bottom: 1px solid var(--line);
-      font-size: 13px;
+      font-size: 15px;
     }
+    .mine__bar { height: 2px; background: var(--line); }
+    .mine__fill { height: 100%; background: var(--gold); }
 
-    .mine__bar {
-      height: 6px;
-      background: var(--surface-2);
-      border-radius: 999px;
-      overflow: hidden;
-    }
+    .empty p { max-width: 46ch; color: var(--ink-2); }
 
-    .mine__fill {
-      height: 100%;
-      background: var(--accent);
-      border-radius: 999px;
+    .close {
+      padding: 80px 0 40px;
+      border-top: 1px solid var(--line);
     }
-
-    .empty {
-      max-width: 48ch;
-      padding: 28px 0;
-    }
-
-    .empty h3 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-
-    .empty p {
-      color: var(--ink-2);
-      font-size: 14px;
-      line-height: 1.5;
-    }
+    .close p { max-width: 42ch; color: var(--ink-3); font-size: 14px; }
+    .close a { color: var(--gold); }
 
     .toast {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      padding: 10px 14px;
-      background: var(--surface-2);
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 16px;
+      background: var(--raised);
       color: var(--ink);
       border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      font-size: 13px;
-      font-weight: 500;
-      box-shadow: var(--shadow);
+      font-size: 14px;
       opacity: 0;
       transform: translateY(8px);
       pointer-events: none;
       transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
       z-index: 40;
     }
+    .toast.is-on { opacity: 1; transform: none; }
 
-    .toast.is-on {
-      opacity: 1;
-      transform: none;
+    .skel { display: none; }
+    .is-loading .hero__live { visibility: hidden; height: 0; overflow: hidden; }
+    .is-loading .skel { display: block; }
+    .skel-line {
+      height: 18px;
+      background: var(--raised);
+      margin-bottom: 12px;
+      max-width: 40ch;
     }
+    .skel-line.lg { height: 56px; max-width: 18ch; margin-bottom: 28px; }
 
-    @media (max-width: 960px) {
-      .app { grid-template-columns: 1fr; grid-template-rows: var(--header) auto 1fr; }
-      .nav {
-        grid-row: 2;
-        flex-direction: row;
-        overflow-x: auto;
-        padding: 8px;
-        border-right: none;
-        border-bottom: 1px solid var(--line);
-      }
-      .nav-btn { width: auto; white-space: nowrap; padding: 8px 12px; }
-      .nav-foot { display: none; }
-      .main { grid-row: 3; padding: 24px 20px 48px; }
-      .band { grid-template-columns: 1fr; gap: 32px; }
-      .hero h2 { font-size: 26px; }
-      .header-meta .meta-block { display: none; }
+    @media (max-width: 800px) {
+      .top { padding: 14px 20px; flex-wrap: wrap; }
+      .meta { display: none; }
+      .page { padding: 0 20px 80px; }
+      .hero h1 { font-size: 36px; }
+      .hero { min-height: auto; padding: 36px 0 56px; }
+      .hero__why { font-size: 18px; }
+      .alt__title, .alt__score { font-size: 22px; }
+      .hate-num { font-size: 72px; }
+      .split { grid-template-columns: 1fr; gap: 40px; }
+      section.block { padding: 48px 0; }
+      .rule { grid-template-columns: 1fr; gap: 4px; }
     }
   </style>
 </head>
 <body>
   <!--
-    THESIS: The next council action is the page. Refuses HUD cockpits, equal-weight card grids, and sci-fi costume chrome.
-    OWN-WORLD: Near-black canvas, raised charcoal surfaces, light Schibsted Grotesk, ink-blue only for selection and the primary action, semantic red/amber/green used sparingly, 8px corners, 1px hairlines, no glow.
-    STORY: The operator reads the recommended assignment, sees why it won, understands what player intel hides, then scans hate headroom and the rest of the roster.
-    FIRST VIEWPORT: Slim header (identity, date, mode). Quiet left nav. Main column opens on the recommendation as an h1, facts and a primary button beneath, rule evaluation as a status list, quieter alternatives below, hate threshold and council table in a second band.
-    FORM: Modern product briefing, dark — user-pinned after the light pass. Same layout and IA; palette only. Code-led.
+    THESIS: A nocturnal one-page briefing. The next order is the landing; everything else is the walk deeper into the same dark room. Refuses sidebar dashboards and inverted light-UI chrome.
+    OWN-WORLD: OLED void, warm ivory type, Bodoni italic as the voice of the decision, gold as the only lamp, crimson and mint only as verdicts.
+    STORY: Arrive on the recommended assignment. Scroll through why it won, the rest of the ranking, hate as a threshold, the council, then the rest of the campaign — one narrative.
+    FIRST VIEWPORT: Sticky word-mark and mode. Monumental italic recommendation. Gold hairline. One sentence of why. Gold commit. Mode caveat as a quiet aside.
+    FORM: Dark Mode First (crypto roll f94ae14d, index 13) executed as planetarium-after-hours, not as a generic dark admin theme.
     FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
   -->
 
-  <div class="app">
-    <header class="header">
-      <div class="brand">
-        <svg viewBox="0 0 28 28" aria-hidden="true">
-          <rect width="28" height="28" rx="6" fill="#4d7dff"/>
-          <path d="M8 19V9h4.2c2.6 0 4.1 1.4 4.1 3.5 0 2.2-1.5 3.5-4.1 3.5H11v3H8zm3-5.2h1c1.1 0 1.7-.5 1.7-1.3S13.1 11 12 11H11v2.8z" fill="#fff"/>
-        </svg>
+  <header class="top">
+    <a href="#order">The Initiative<span>4 April 2035 · Again.gz</span></a>
+    <div class="modes" role="group" aria-label="Intel mode">
+      <button type="button" data-mode="player" aria-pressed="true">Player</button>
+      <button type="button" data-mode="enhanced" aria-pressed="false">Enhanced</button>
+      <button type="button" data-mode="omniscient" aria-pressed="false">Omniscient</button>
+    </div>
+    <p class="meta">Mocked briefing</p>
+  </header>
+
+  <main class="page">
+    <article class="hero" id="order">
+      <div class="skel" aria-hidden="true">
+        <div class="skel-line lg"></div>
+        <div class="skel-line"></div>
+        <div class="skel-line" style="max-width:28ch"></div>
+      </div>
+      <div class="hero__live">
+        <h1 id="heroTitle">Keep advising the United States</h1>
+        <div class="hero__rule" aria-hidden="true"></div>
+        <p class="hero__why" id="heroWhy"></p>
+        <dl class="facts" id="heroFacts"></dl>
+        <div class="actions">
+          <button class="btn-gold" type="button" id="commitBtn">Keep this assignment</button>
+          <button class="btn-ghost" type="button" id="altsBtn">Read the rest of the ranking</button>
+        </div>
+        <p class="mode-line" id="modeNote"></p>
+      </div>
+    </article>
+
+    <section class="block" id="why">
+      <h2>Why this, tonight</h2>
+      <div class="rules" id="heroRules"></div>
+    </section>
+
+    <section class="block" id="ranking">
+      <h2>Also ranked this cycle</h2>
+      <div class="alts" id="altList"></div>
+    </section>
+
+    <section class="block" id="hate">
+      <h2>Alien hate</h2>
+      <div class="split">
         <div>
-          <h1>The Initiative</h1>
-          <p>Campaign intelligence</p>
+          <div class="hate-num tabular" id="hateValue">168</div>
+          <p class="hate-copy" id="hateHelp"></p>
+        </div>
+        <div>
+          <p class="hate-copy" id="hateAside" style="margin-top:12px"></p>
+          <div class="track" aria-hidden="true">
+            <div class="track__fill" id="hateFill"></div>
+            <div class="track__mark"></div>
+          </div>
+          <div class="track-labels"><span>0</span><span>War at 180</span></div>
         </div>
       </div>
+    </section>
 
-      <div class="header-meta">
-        <div class="meta-block">
-          <span>Campaign date</span>
-          <strong>4 April 2035</strong>
+    <section class="block" id="council">
+      <h2>Council this cycle</h2>
+      <table>
+        <thead><tr><th>Councilor</th><th>Mission</th><th>Status</th></tr></thead>
+        <tbody id="councilBody"></tbody>
+      </table>
+    </section>
+
+    <section class="block" id="threat">
+      <h2>Three contacts</h2>
+      <table>
+        <thead><tr><th>Contact</th><th>Where</th><th>Severity</th><th>ETA</th></tr></thead>
+        <tbody id="threatBody"></tbody>
+      </table>
+    </section>
+
+    <section class="block" id="space">
+      <h2>Inner system</h2>
+      <div class="split">
+        <div id="mining"></div>
+        <div>
+          <table>
+            <thead><tr><th>Fleet</th><th>Where</th><th>Ready</th></tr></thead>
+            <tbody id="fleetBody"></tbody>
+          </table>
         </div>
-        <div class="meta-block">
-          <span>Save</span>
-          <strong>Again.gz</strong>
-        </div>
-        <div class="mode-switch" role="group" aria-label="Intel mode">
-          <button type="button" data-mode="player" aria-pressed="true">Player</button>
-          <button type="button" data-mode="enhanced" aria-pressed="false">Enhanced</button>
-          <button type="button" data-mode="omniscient" aria-pressed="false">Omniscient</button>
-        </div>
-        <button class="ghost-btn" type="button" id="refreshBtn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
-          Refresh
-        </button>
       </div>
-    </header>
+    </section>
 
-    <nav class="nav" aria-label="Dashboard views">
-      <button class="nav-btn" type="button" data-view="command" aria-current="page">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-4 3 2 4-6"/></svg>
-        <span>Command</span>
-      </button>
-      <button class="nav-btn" type="button" data-view="expansion">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16"/></svg>
-        <span>Expansion</span>
-      </button>
-      <button class="nav-btn" type="button" data-view="fleet">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M5 18l3.5-12h7L19 18"/><path d="M7 18h10"/></svg>
-        <span>Fleet</span>
-      </button>
-      <button class="nav-btn" type="button" data-view="battle">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 3l2.2 6.2H21l-5.2 3.8 2 6.2L12 16.4 6.2 19.2l2-6.2L3 9.2h6.8z"/></svg>
-        <span>Battle</span>
-      </button>
-      <button class="nav-btn" type="button" data-view="threat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 9v4"/><circle cx="12" cy="16.5" r=".7" fill="currentColor"/><path d="M10.4 4.2L3.2 17.2A1.8 1.8 0 0 0 4.8 20h14.4a1.8 1.8 0 0 0 1.6-2.8L13.6 4.2a1.8 1.8 0 0 0-3.2 0z"/></svg>
-        <span>Threat</span>
-        <span class="nav-btn__count">3</span>
-      </button>
-      <button class="nav-btn" type="button" data-view="drives">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M13 3L4 13h8l-1 8 9-10h-8l1-8z"/></svg>
-        <span>Drives</span>
-      </button>
-      <button class="nav-btn" type="button" data-view="records">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>
-        <span>Records</span>
-      </button>
-      <button class="nav-btn" type="button" data-view="designer">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-        <span>Designer</span>
-      </button>
-      <p class="nav-foot">Design POC with mocked data. Live dashboard at <code>/v2/</code>.</p>
-    </nav>
+    <section class="block" id="theaters">
+      <h2>Theaters</h2>
+      <table>
+        <thead><tr><th>Theater</th><th>Ours</th><th>Hostile</th><th>Hold</th></tr></thead>
+        <tbody id="battleBody"></tbody>
+      </table>
+    </section>
 
-    <main class="main" id="main">
-      <section class="view is-active" id="view-command" aria-label="Command">
-        <div class="mode-note" id="modeNote" data-mode="player">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16.2" r=".7" fill="currentColor"/></svg>
-          <span id="modeNoteText">Player intel: only what this faction has legitimately learned. True alien hate and enemy attributes are hidden — a check that cannot be evaluated is marked unknown, never safe.</span>
-        </div>
+    <section class="block empty" id="designer">
+      <h2>Ship designer</h2>
+      <p>The production designer reads hulls from the live save. This page has none attached, so this section stays empty rather than inventing ships.</p>
+    </section>
 
-        <article class="hero" id="hero">
-          <div class="skel" aria-hidden="true">
-            <div class="skel-line skel-line--title"></div>
-            <div class="skel-line skel-line--wide"></div>
-            <div class="skel-line skel-line--mid"></div>
-          </div>
-          <div class="hero__body">
-            <h2 id="heroTitle">Keep advising the United States</h2>
-            <p class="hero__why" id="heroWhy"></p>
-            <dl class="hero__facts" id="heroFacts"></dl>
-            <div class="hero__actions">
-              <button class="btn-primary" type="button" id="commitBtn">Keep this assignment</button>
-              <button class="btn-secondary" type="button" id="altsBtn">Jump to alternatives</button>
-            </div>
-            <div class="rules" id="heroRules"></div>
-          </div>
-        </article>
-
-        <section class="section" id="altsSection">
-          <h3>Also ranked this cycle</h3>
-          <div class="alt-list" id="altList"></div>
-        </section>
-
-        <div class="band">
-          <section>
-            <h3>Alien hate</h3>
-            <div class="threshold">
-              <div class="threshold__row">
-                <div class="threshold__value tabular" id="hateValue">168</div>
-                <div class="threshold__aside" id="hateAside"></div>
-              </div>
-              <div class="track" aria-hidden="true">
-                <div class="track__fill" id="hateFill"></div>
-                <div class="track__mark" id="hateMark" style="left:75%"></div>
-              </div>
-              <div class="track__labels">
-                <span>0</span>
-                <span>War at 180</span>
-              </div>
-              <p class="help" id="hateHelp"></p>
-            </div>
-          </section>
-
-          <section>
-            <h3>Council this cycle</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Councilor</th>
-                  <th>Mission</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="councilBody"></tbody>
-            </table>
-          </section>
-        </div>
-      </section>
-
-      <section class="view" id="view-expansion" aria-label="Expansion"></section>
-      <section class="view" id="view-fleet" aria-label="Fleet"></section>
-      <section class="view" id="view-battle" aria-label="Battle"></section>
-      <section class="view" id="view-threat" aria-label="Threat"></section>
-      <section class="view" id="view-drives" aria-label="Drives"></section>
-      <section class="view" id="view-records" aria-label="Records"></section>
-      <section class="view" id="view-designer" aria-label="Designer"></section>
-    </main>
-  </div>
+    <footer class="close">
+      <p>Synthetic data for a design study. The live dashboard is at <a href="/v2/">/v2/</a>. Dark Mode First, rolled <code style="color:var(--gold)">f94ae14d</code>.</p>
+    </footer>
+  </main>
 
   <div class="toast" id="toast" role="status"></div>
 
   <script>
     const CAPTIONS = {
-      player: "Player intel: only what this faction has legitimately learned. True alien hate and enemy attributes are hidden — a check that cannot be evaluated is marked unknown, never safe.",
+      player: "You are reading player intel — only what the Initiative has legitimately learned. True hate and enemy attributes are hidden. A check that cannot run is unknown, never safe.",
       enhanced: "Enhanced: player intel plus derived estimates. Treat estimates as estimates.",
-      omniscient: "Omniscient: the save’s true state, including actual alien hate. Not what the faction knows."
+      omniscient: "Omniscient: the save’s true state, including actual alien hate. This is not what the faction knows."
     };
 
     const DIRECTIVES = [
@@ -951,8 +561,8 @@
       },
       {
         id: "moscow",
-        title: "Investigate alien signatures near Moscow",
-        why: "Elevated signatures in a region we can reach this cycle. Intel gain is real; the opportunity cost is pulling Okonkwo off other work.",
+        title: "Investigate signatures near Moscow",
+        why: "Elevated signatures in a region we can reach this cycle. The intel is real; the cost is pulling Okonkwo off other coverage.",
         meta: "Amara Okonkwo · Investigate",
         score: 72,
         details: { councilor: "Amara Okonkwo", mission: "Investigate — Moscow", yield: "Alien-ops intel", odds: "76%", cost: "1 ops" },
@@ -967,7 +577,7 @@
       {
         id: "purge",
         title: "Purge the enthralled agent in Beijing",
-        why: "The agent is confirmed. Clearing them restores a control point — but 41% sits under the risk floor, so this is a veto unless you lower it.",
+        why: "The agent is confirmed. Clearing them restores a control point — but 41% sits under the risk floor.",
         meta: "Rosa Vasquez · Purge",
         score: 41,
         details: { councilor: "Rosa Vasquez", mission: "Purge — Beijing", yield: "+1 control point if it lands", odds: "41%", cost: "2 ops" },
@@ -976,7 +586,7 @@
           { status: "fail", text: "Success odds 41% are below the 50% risk floor" },
           { status: "pass", text: "Vasquez is free this cycle" }
         ],
-        tag: "veto",
+        tag: "below floor",
         cta: "Override and assign anyway"
       },
       {
@@ -991,7 +601,7 @@
           { status: "unknown", text: "Total-war headroom cannot be evaluated without actual hate", omni: { status: "pass", text: "Hate 168 leaves 12 points of headroom under the war threshold" } },
           { status: "warn", text: "A loss here is visible; a win still spends attention" }
         ],
-        tag: "unknown",
+        tag: "unevaluable",
         cta: "Hold this order"
       }
     ];
@@ -1005,9 +615,20 @@
       { name: "Thomas Hart", mission: "Defend Luna", status: "posted", tone: "warn" }
     ];
 
-    const state = { view: "command", mode: "player", selected: DIRECTIVES[0], loading: false };
+    const state = { mode: "player", selected: DIRECTIVES[0] };
+    const $ = (id) => document.getElementById(id);
 
-    const el = (id) => document.getElementById(id);
+    function toast(msg) {
+      const t = $("toast");
+      t.textContent = msg;
+      t.classList.add("is-on");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => t.classList.remove("is-on"), 2200);
+    }
+
+    function rulesOf(d) {
+      return d.rules.map((r) => (r.omni && state.mode !== "player" ? r.omni : r));
+    }
 
     function scoreClass(n) {
       if (n >= 70) return "alt__score--high";
@@ -1015,296 +636,124 @@
       return "alt__score--low";
     }
 
-    function toast(msg) {
-      const t = el("toast");
-      t.textContent = msg;
-      t.classList.add("is-on");
-      clearTimeout(toast._t);
-      toast._t = setTimeout(() => t.classList.remove("is-on"), 2200);
-    }
-
-    function resolveRules(d) {
-      return d.rules.map((r) => {
-        if (r.omni && state.mode !== "player") return r.omni;
-        return r;
-      });
-    }
-
     function renderHero() {
       const d = state.selected;
-      const hero = el("hero");
-      hero.classList.add("is-swapping");
-      el("heroTitle").textContent = d.title;
-      el("heroWhy").textContent = d.why;
-      el("commitBtn").textContent = d.cta;
-
-      el("heroFacts").innerHTML = Object.entries(d.details).map(([k, v]) => {
+      $("heroTitle").textContent = d.title;
+      $("heroWhy").textContent = d.why;
+      $("commitBtn").textContent = d.cta;
+      $("modeNote").textContent = CAPTIONS[state.mode];
+      $("heroFacts").innerHTML = Object.entries(d.details).map(([k, v]) => {
         const hide = state.mode === "player" && k === "odds" && d.id === "purge";
-        return `<div class="fact"><dt>${k}</dt><dd class="${hide ? "redacted" : "tabular"}">${hide ? "unavailable" : v}</dd></div>`;
+        return `<div><dt>${k}</dt><dd class="${hide ? "redacted" : "tabular"}">${hide ? "unavailable" : v}</dd></div>`;
       }).join("");
-
-      el("heroRules").innerHTML = resolveRules(d).map((r) => `
-        <div class="rule rule--${r.status}">
-          <span class="rule__status">${r.status}</span>
-          <span class="rule__text">${r.text}</span>
-        </div>
-      `).join("");
-
-      requestAnimationFrame(() => setTimeout(() => hero.classList.remove("is-swapping"), 240));
+      $("heroRules").innerHTML = rulesOf(d).map((r) =>
+        `<div class="rule rule--${r.status}"><b>${r.status}</b><span>${r.text}</span></div>`
+      ).join("");
     }
 
     function renderAlts() {
-      el("altList").innerHTML = DIRECTIVES.map((d) => {
-        const pill = d.tag === "veto"
-          ? '<span class="pill pill--veto">below floor</span>'
-          : d.tag === "unknown" && state.mode === "player"
-            ? '<span class="pill pill--unknown">unevaluable</span>'
-            : "";
-        return `
-          <button class="alt ${d.id === state.selected.id ? "is-active" : ""}" type="button" data-id="${d.id}">
-            <span>
-              <span class="alt__title">${d.title}</span>
-              <span class="alt__sub">${d.meta}</span>
-            </span>
-            ${pill}
-            <span class="alt__score ${scoreClass(d.score)} tabular">${d.score}</span>
-          </button>
-        `;
+      $("altList").innerHTML = DIRECTIVES.map((d) => {
+        const tag = d.tag && (d.tag !== "unevaluable" || state.mode === "player")
+          ? `<span class="tag ${d.tag === "below floor" ? "tag--fail" : ""}">${d.tag === "unevaluable" && state.mode !== "player" ? "" : d.tag}</span>`
+          : "";
+        return `<button class="alt ${d.id === state.selected.id ? "is-on" : ""}" type="button" data-id="${d.id}">
+          <span><span class="alt__title">${d.title}${tag}</span><span class="alt__sub">${d.meta}</span></span>
+          <span class="alt__score ${scoreClass(d.score)} tabular">${d.score}</span>
+        </button>`;
       }).join("");
     }
 
     function renderHate() {
       const player = state.mode === "player";
-      const val = el("hateValue");
-      const aside = el("hateAside");
-      const help = el("hateHelp");
-      const fill = el("hateFill");
-
-      if (player) {
-        val.textContent = "168";
-        val.className = "threshold__value tabular";
-        aside.innerHTML = "Assessed<br>true value unavailable";
-        help.textContent = "Player intel carries an assessed reading, not actual hate. The total-war check cannot run from this number, so offensive orders stay unknown rather than green-lit.";
-        fill.style.width = "70%";
-        fill.style.background = "var(--ink-3)";
-      } else {
-        val.textContent = "168";
-        val.className = "threshold__value tabular threshold__value--danger";
-        aside.innerHTML = "Actual<br>12 points to war";
-        help.textContent = "War threshold is 180. Twelve points of headroom is real, but tight — an offensive that spends hate should say so in the rule list, not hide in a green light.";
-        fill.style.width = "70%";
-        fill.style.background = "var(--danger)";
-      }
+      const val = $("hateValue");
+      val.textContent = "168";
+      val.className = "hate-num tabular " + (player ? "is-dim" : "is-hot");
+      $("hateAside").textContent = player
+        ? "Assessed. True value unavailable in player intel."
+        : "Actual. Twelve points of headroom under the war threshold.";
+      $("hateHelp").textContent = player
+        ? "The total-war check cannot run from an assessed reading, so an offensive order stays unknown rather than green-lit."
+        : "War is 180. Headroom is real, and tight. An offensive that spends hate should say so in the rules, not hide in a green light.";
+      $("hateFill").style.background = player ? "var(--ink-3)" : "var(--fail)";
     }
 
     function renderCouncil() {
-      el("councilBody").innerHTML = COUNCIL.map((c) => `
-        <tr>
-          <td class="name">${c.name}</td>
-          <td>${c.mission}</td>
-          <td>
-            <span class="status">
-              <span class="dot dot--${c.tone}"></span>
-              ${c.status}
-            </span>
-          </td>
-        </tr>
-      `).join("");
+      $("councilBody").innerHTML = COUNCIL.map((c) =>
+        `<tr><td class="name">${c.name}</td><td>${c.mission}</td><td class="status status--${c.tone}">${c.status}</td></tr>`
+      ).join("");
     }
 
-    function renderModeNote() {
-      const note = el("modeNote");
-      note.dataset.mode = state.mode;
-      el("modeNoteText").textContent = CAPTIONS[state.mode];
+    function renderThreats() {
+      const rows = [
+        ["Bombardment fleet", "Earth approach", "high", "4 turns"],
+        ["Xenoforming", "Siberia", "medium", "Ongoing"],
+        ["Alien councilor", null, "medium", "—"]
+      ];
+      $("threatBody").innerHTML = rows.map((r) => {
+        const where = r[1] == null
+          ? (state.mode === "player" ? '<span class="redacted">unavailable</span>' : "Unknown")
+          : r[1];
+        return `<tr><td class="name">${r[0]}</td><td>${where}</td><td>${r[2]}</td><td class="tabular">${r[3]}</td></tr>`;
+      }).join("");
     }
 
-    function renderCommand() {
-      renderModeNote();
+    function renderSpace() {
+      const mines = [["Ceres", 78], ["Mars", 91], ["Vesta", 62], ["Luna", 45]];
+      $("mining").innerHTML = mines.map(([n, p]) =>
+        `<div class="mine"><span class="name">${n}</span><div class="mine__bar"><div class="mine__fill" style="width:${p}%"></div></div><span class="tabular">${p}%</span></div>`
+      ).join("");
+      $("fleetBody").innerHTML = [
+        ["1st Orbital Guard", "Earth–Luna L1", 6],
+        ["Mars Defence", "Mars orbit", 9],
+        ["Ceres Patrol", "Ceres station", 4]
+      ].map((r) => `<tr><td class="name">${r[0]}</td><td>${r[1]}</td><td class="tabular">${r[2]}</td></tr>`).join("");
+    }
+
+    function renderBattle() {
+      const rows = [
+        ["Luna orbit", "6 frigates, 2 destroyers", "3 alien corvettes", "72%"],
+        ["Mars surface", "2 armies + orbit", "1 alien army", "85%"],
+        ["Ceres approach", "4 patrol craft", null, "—"]
+      ];
+      $("battleBody").innerHTML = rows.map((r) => {
+        const hostile = r[2] == null
+          ? (state.mode === "player" ? '<span class="redacted">unavailable</span>' : "Unknown")
+          : r[2];
+        return `<tr><td class="name">${r[0]}</td><td>${r[1]}</td><td>${hostile}</td><td class="tabular">${r[3]}</td></tr>`;
+      }).join("");
+    }
+
+    function renderAll() {
       renderHero();
       renderAlts();
       renderHate();
       renderCouncil();
+      renderThreats();
+      renderSpace();
+      renderBattle();
     }
 
-    function page(title, lede, body) {
-      return `<header class="page-head"><h2>${title}</h2><p>${lede}</p></header>${body}`;
-    }
-
-    const VIEWS = {
-      expansion() {
-        const mines = [
-          ["Ceres", 78], ["Mars", 91], ["Vesta", 62], ["Luna", 45], ["Earth L4", 33]
-        ];
-        return page(
-          "Solar expansion",
-          "Mining yield against installed capacity. A high percentage is utilization, not a veto — underbuilt sites still produce.",
-          mines.map(([n, p]) => `
-            <div class="mine">
-              <span class="name">${n}</span>
-              <div class="mine__bar"><div class="mine__fill" style="width:${p}%"></div></div>
-              <span class="tabular muted">${p}%</span>
-            </div>
-          `).join("")
-        );
-      },
-      fleet() {
-        const rows = [
-          ["1st Orbital Guard", "Earth–Luna L1", 8, 6, 2],
-          ["Mars Defence Squadron", "Mars orbit", 12, 9, 0],
-          ["Ceres Patrol", "Ceres station", 6, 4, 1],
-          ["Reserve Flotilla", "Luna shipyard", 12, 3, 4]
-        ];
-        return page(
-          "Fleet operations",
-          "Combat-ready hulls versus hulls still in a queue. Ready is the number that can sail this cycle.",
-          `<table><thead><tr><th>Fleet</th><th>Location</th><th>Ships</th><th>Ready</th><th>Building</th></tr></thead><tbody>
-            ${rows.map((r) => `<tr><td class="name">${r[0]}</td><td>${r[1]}</td><td class="tabular">${r[2]}</td><td class="tabular">${r[3]}</td><td class="tabular">${r[4]}</td></tr>`).join("")}
-          </tbody></table>`
-        );
-      },
-      battle() {
-        const rows = [
-          ["Luna orbit", "6 frigates, 2 destroyers", "3 alien corvettes", "72%", "Hold"],
-          ["Mars surface", "2 armies + orbit", "1 alien army", "85%", "Hold"],
-          ["Ceres approach", "4 patrol craft", null, null, "Insufficient intel"]
-        ];
-        return page(
-          "Theater defence",
-          "Hold-ground odds where both sides are known. Missing hostile strength is insufficient intel, not a hidden zero.",
-          `<table><thead><tr><th>Theater</th><th>Our forces</th><th>Hostile</th><th>Hold odds</th><th>Verdict</th></tr></thead><tbody>
-            ${rows.map((r) => {
-              const hostile = r[2] == null
-                ? (state.mode === "player" ? '<span class="muted">unavailable</span>' : "Unknown")
-                : r[2];
-              const odds = r[3] == null ? "—" : r[3];
-              return `<tr><td class="name">${r[0]}</td><td>${r[1]}</td><td>${hostile}</td><td class="tabular">${odds}</td><td>${r[4]}</td></tr>`;
-            }).join("")}
-          </tbody></table>`
-        );
-      },
-      threat() {
-        const rows = [
-          ["Bombardment fleet", "Earth approach", "high", "4 turns", "Tracking"],
-          ["Xenoforming", "Siberia", "medium", "Ongoing", "Active"],
-          ["Alien councilor", null, "medium", "—", "Investigating"]
-        ];
-        return page(
-          "Alien threat",
-          "Three contacts need attention. Masked locations stay unavailable in player intel rather than guessed.",
-          `<table><thead><tr><th>Contact</th><th>Where</th><th>Severity</th><th>ETA</th><th>Status</th></tr></thead><tbody>
-            ${rows.map((r) => {
-              const where = r[1] == null
-                ? (state.mode === "player" ? '<span class="muted">unavailable</span>' : "Unknown")
-                : r[1];
-              const tone = r[2] === "high" ? "danger" : "warn";
-              return `<tr><td class="name">${r[0]}</td><td>${where}</td><td><span class="status"><span class="dot dot--${tone}"></span>${r[2]}</span></td><td class="tabular">${r[3]}</td><td>${r[4]}</td></tr>`;
-            }).join("")}
-          </tbody></table>`
-        );
-      },
-      drives() {
-        const rows = [
-          ["Nuclear Thermal Rocket", "8.2", "0.042", "0.68", "Fitted"],
-          ["VASIMR ×1", "12.4", "0.00017", "0.027", "Research required"],
-          ["DS4G Ion Drive", "45.1", "0.0031", "0.12", "Fittable"],
-          ["Fusion Torch Mk2", "89.3", "1.24", "12.4", "Locked"]
-        ];
-        return page(
-          "Drive explorer",
-          "Catalogue rated against the flagship’s measured mass. Combat acceleration is cruise × thrust cap — they are equal on only a minority of drives.",
-          `<table><thead><tr><th>Drive</th><th>Δv km/s</th><th>Cruise m/s²</th><th>Combat m/s²</th><th>Status</th></tr></thead><tbody>
-            ${rows.map((r) => `<tr><td class="name">${r[0]}</td><td class="tabular">${r[1]}</td><td class="tabular">${r[2]}</td><td class="tabular">${r[3]}</td><td>${r[4]}</td></tr>`).join("")}
-          </tbody></table>`
-        );
-      },
-      records() {
-        const rows = [
-          ["2035", "Alien invasion plan discovered"],
-          ["2034", "Global listening network operational"],
-          ["2033", "First alien ship captured and studied"],
-          ["2032", "Public alien-awareness event"]
-        ];
-        return page(
-          "Campaign records",
-          "167 projects and 107 techs finished. Milestones below are story events, not a research queue.",
-          `<table><thead><tr><th>Year</th><th>Milestone</th></tr></thead><tbody>
-            ${rows.map((r) => `<tr><td class="tabular">${r[0]}</td><td>${r[1]}</td></tr>`).join("")}
-          </tbody></table>`
-        );
-      },
-      designer() {
-        return page(
-          "Ship designer",
-          "Design validation reads hulls and modules from the live save.",
-          `<div class="empty">
-            <h3>No save is attached to this prototype</h3>
-            <p>The production designer lives on the live dashboard at /v2/. This page is mocked so a missing save stays empty instead of showing invented hulls.</p>
-          </div>`
-        );
-      }
-    };
-
-    function renderView() {
-      document.querySelectorAll(".view").forEach((v) => {
-        v.classList.toggle("is-active", v.id === `view-${state.view}`);
-      });
-      document.querySelectorAll(".nav-btn").forEach((b) => {
-        b.setAttribute("aria-current", b.dataset.view === state.view ? "page" : null);
-      });
-      if (state.view === "command") {
-        renderCommand();
-        return;
-      }
-      const node = document.getElementById(`view-${state.view}`);
-      node.innerHTML = VIEWS[state.view]();
-    }
-
-    document.querySelectorAll(".nav-btn").forEach((b) => {
-      b.addEventListener("click", () => {
-        state.view = b.dataset.view;
-        renderView();
-      });
-    });
-
-    document.querySelectorAll(".mode-switch button").forEach((b) => {
+    document.querySelectorAll(".modes button").forEach((b) => {
       b.addEventListener("click", () => {
         state.mode = b.dataset.mode;
-        document.querySelectorAll(".mode-switch button").forEach((x) => {
-          x.setAttribute("aria-pressed", x === b ? "true" : "false");
-        });
-        renderView();
+        document.querySelectorAll(".modes button").forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+        renderAll();
       });
     });
 
-    el("altList").addEventListener("click", (e) => {
+    $("altList").addEventListener("click", (e) => {
       const btn = e.target.closest(".alt");
       if (!btn) return;
       state.selected = DIRECTIVES.find((d) => d.id === btn.dataset.id);
-      renderCommand();
-      el("hero").scrollIntoView({ behavior: "smooth", block: "start" });
+      renderHero();
+      renderAlts();
+      $("order").scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
-    el("altsBtn").addEventListener("click", () => {
-      el("altsSection").scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    $("altsBtn").addEventListener("click", () => $("ranking").scrollIntoView({ behavior: "smooth" }));
+    $("commitBtn").addEventListener("click", () => toast("POC only — assignments are not written back to the save."));
 
-    el("commitBtn").addEventListener("click", () => {
-      toast("POC only — assignments are not written back to the save.");
-    });
-
-    el("refreshBtn").addEventListener("click", () => {
-      const hero = el("hero");
-      const btn = el("refreshBtn");
-      btn.disabled = true;
-      hero.classList.add("is-loading");
-      setTimeout(() => {
-        hero.classList.remove("is-loading");
-        btn.disabled = false;
-        toast("Still mocked data — refresh would reload the newest save.");
-      }, 700);
-    });
-
-    renderView();
+    renderAll();
   </script>
 </body>
 </html>

@@ -2,21 +2,12 @@
 
 ## Scope
 
-Operate-mode design POC for Terra Invicta Intel. Single self-contained HTML with synthetic mocked data. Not wired to live save APIs.
-
-## Audience, job, task
-
-Initiative players between turns. Job: decide the next council assignment with honest knowledge of what player intel hides.
+One-page mocked briefing for Terra Invicta Intel.
 
 ## Direction
 
-Modern product briefing, **dark**. Same layout: the recommended action is the page; supporting intel is secondary.
+Dark Mode First, crypto roll `f94ae14d` (index 13). Executed as a nocturnal single-scroll landing (planetarium after hours), not as a sidebar admin theme.
 
 ## Memorable moment
 
-The primary recommendation as an h1, with rule evaluation that can read **unknown** in player mode instead of falling through to safe.
-
-## Unresolved
-
-- Wire to live briefing API
-- DESIGN.md still not written for this exploration
+Bodoni italic recommendation as the first viewport; gold as the only lamp.
