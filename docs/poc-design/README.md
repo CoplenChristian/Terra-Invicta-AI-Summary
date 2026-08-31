@@ -1,6 +1,6 @@
 # Design POC screenshots
 
-Mocked briefing at [`public/v2/poc-design.html`](../../public/v2/poc-design.html). Open this file on GitHub to see the images.
+Dark-mode mocked briefing at [`public/v2/poc-design.html`](../../public/v2/poc-design.html). Open this file on GitHub to see the images.
 
 ## Command — desktop
 
