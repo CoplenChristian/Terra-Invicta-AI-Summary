@@ -1,19 +1,19 @@
 # Design POC screenshots
 
-Dark Mode First one-page briefing. Gallery:
+v2 shell with mocked COMMAND improvements. Open this file on GitHub to see the images.
 
-## First viewport
+## Command — desktop
 
-![Hero recommendation](./01-command-desktop.png)
+![Command view](./01-command-desktop.png)
 
-## Ranking
+## Command — scrolled
 
-![Also ranked](./02-command-scrolled.png)
+![Ranked list, hate, council](./02-command-scrolled.png)
 
-## Omniscient — Luna
+## Omniscient — Luna sortie
 
-![Luna sortie in omniscient](./03-omniscient-luna.png)
+![Omniscient mode, Luna selected](./03-omniscient-luna.png)
 
-## Phone
+## Phone width
 
-![Mobile hero](./04-mobile.png)
+![Mobile](./04-mobile.png)
