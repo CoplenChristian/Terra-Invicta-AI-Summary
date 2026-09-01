@@ -2,12 +2,12 @@
 
 ## Scope
 
-One-page mocked briefing for Terra Invicta Intel.
+Design POC that reuses the live v2 shell, tokens, and components with mocked data.
 
 ## Direction
 
-Dark Mode First, crypto roll `f94ae14d` (index 13). Executed as a nocturnal single-scroll landing (planetarium after hours), not as a sidebar admin theme.
+Refinement of incumbent Mission Control. Not a new visual world.
 
 ## Memorable moment
 
-Bodoni italic recommendation as the first viewport; gold as the only lamp.
+Priority brief hologram updates from the ranked list; player-mode hate stays assessed / unknown.

@@ -3,544 +3,315 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The Initiative — Tonight’s briefing</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,600;0,6..96,700;1,6..96,500;1,6..96,600&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <title>The Initiative // Executive Situation Report</title>
+  <!-- Same cascade as public/v2/index.html. Do not reorder. -->
+  <link rel="stylesheet" href="/v2/css/01-tokens-and-base.css">
+  <link rel="stylesheet" href="/v2/css/02-shell-header.css">
+  <link rel="stylesheet" href="/v2/css/03-page-structure.css">
+  <link rel="stylesheet" href="/v2/css/04-command-panels.css">
+  <link rel="stylesheet" href="/v2/css/05-view-grid.css">
+  <link rel="stylesheet" href="/v2/css/06-map-and-charts.css">
+  <link rel="stylesheet" href="/v2/css/07-hate-economics.css">
+  <link rel="stylesheet" href="/v2/css/08-directive-cards.css">
+  <link rel="stylesheet" href="/v2/css/09-detail-panel.css">
+  <link rel="stylesheet" href="/v2/css/10-intel-library.css">
+  <link rel="stylesheet" href="/v2/css/11-since-save.css">
+  <link rel="stylesheet" href="/v2/css/12-executive-boards.css">
+  <link rel="stylesheet" href="/v2/css/13-faction-intel.css">
+  <link rel="stylesheet" href="/v2/css/14-world-map.css">
+  <link rel="stylesheet" href="/v2/css/15-responsive.css">
+  <link rel="stylesheet" href="/v2/css/16-board-skill-cells.css">
+  <link rel="stylesheet" href="/v2/css/17-directive-board.css">
+  <link rel="stylesheet" href="/v2/css/18-mining-expansion.css">
+  <link rel="stylesheet" href="/v2/css/19-strategic-commentary.css">
+  <link rel="stylesheet" href="/v2/css/20-research-advisor.css">
+  <link rel="stylesheet" href="/v2/css/21-fleet-procurement.css">
+  <link rel="stylesheet" href="/v2/css/22-drive-explorer.css">
+  <link rel="stylesheet" href="/v2/css/23-unlocked-tech.css">
+  <link rel="stylesheet" href="/v2/css/24-fleet-engagement.css">
+  <link rel="stylesheet" href="/v2/css/25-hostile-movement.css">
+  <link rel="stylesheet" href="/v2/css/26-theater-defence.css">
   <style>
-    :root {
-      --void: #070706;
-      --raised: #12110f;
-      --ink: #f2eee6;
-      --ink-2: #c4bdb0;
-      --ink-3: #8f877a;
-      --gold: #d4a53a;
-      --gold-dim: #8a6b24;
-      --gold-soft: rgba(212, 165, 58, 0.14);
-      --pass: #67c99a;
-      --fail: #e86b73;
-      --warn: #e0a04a;
-      --line: #2a2824;
-      --display: "Bodoni Moda", "Palatino Linotype", Palatino, serif;
-      --sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
-      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    @media (max-width: 1400px) {
+      .init-view-nav .init-nav-btn {
+        font-size: 8px !important;
+        letter-spacing: 0.03em !important;
+        padding: 0 2px !important;
+      }
+    }
+    @media (max-width: 1080px) and (min-width: 901px) {
+      .init-view-nav .init-nav-btn {
+        font-size: var(--fs-meta) !important;
+        letter-spacing: 0.06em !important;
+        padding: 0 11px !important;
+      }
+    }
+    @media (max-width: 1240px) and (min-width: 1081px) {
+      .init-view-nav .init-nav-btn {
+        font-size: 7.5px !important;
+        letter-spacing: 0.02em !important;
+        padding: 0 1px !important;
+      }
     }
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { color-scheme: dark; scroll-behavior: smooth; }
-    @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      * { animation: none !important; transition: none !important; }
-    }
-
-    body {
-      font-family: var(--sans);
-      font-size: 17px;
-      line-height: 1.5;
-      color: var(--ink);
-      background: var(--void);
-      min-height: 100vh;
-    }
-
-    ::selection { background: var(--gold-soft); color: var(--ink); }
-
-    ::-webkit-scrollbar { width: 10px; }
-    ::-webkit-scrollbar-track { background: var(--void); }
-    ::-webkit-scrollbar-thumb {
-      background: var(--line);
-      border-radius: 5px;
-      border: 2px solid var(--void);
-    }
-
-    button {
-      font: inherit;
-      color: inherit;
+    /* POC-only: the live board rows are not buttons. Keep chrome identical. */
+    :root { --border: var(--line); }
+    .directive-board-row {
+      width: 100%;
+      text-align: left;
       background: none;
-      border: none;
       cursor: pointer;
     }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
-    :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
-
-    .tabular { font-variant-numeric: tabular-nums; }
-
-    /* Top bar — words, not chrome */
-    .top {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 24px;
-      padding: 18px 36px;
-      background: rgba(7, 7, 6, 0.92);
+    .directive-board-row.is-selected {
+      background: var(--accent-soft);
+    }
+    .directive-board-row-head { justify-content: space-between; }
+    .poc-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--fs-row);
+    }
+    .poc-table th {
+      text-align: left;
+      font-family: var(--mono);
+      font-size: var(--fs-tag);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 0 10px 8px 0;
       border-bottom: 1px solid var(--line);
     }
-
-    .top a {
-      color: var(--ink);
-      text-decoration: none;
-      font-family: var(--display);
-      font-size: 22px;
-      font-weight: 500;
-      letter-spacing: -0.02em;
+    .poc-table td {
+      padding: 10px 10px 10px 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--text-soft);
     }
-
-    .top a span {
-      font-family: var(--sans);
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--ink-3);
-      margin-left: 10px;
+    .poc-table td.name { color: var(--text); font-weight: 600; }
+    .mine-row {
+      display: grid;
+      grid-template-columns: 88px 1fr 40px;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: var(--fs-row);
+    }
+    .mine-row__bar { height: 4px; background: var(--surface-inset); }
+    .mine-row__fill { height: 100%; background: var(--accent); }
+    .poc-note {
+      margin-top: var(--space-xl);
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: var(--fs-meta);
       letter-spacing: 0.04em;
     }
-
-    .modes {
-      display: flex;
-      gap: 18px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .modes button { color: var(--ink-3); }
-    .modes button:hover { color: var(--ink); }
-    .modes button[aria-pressed="true"] { color: var(--gold); }
-
-    .meta {
-      font-size: 13px;
-      color: var(--ink-3);
-      white-space: nowrap;
-    }
-
-    /* Page */
-    .page {
-      max-width: 1080px;
-      margin: 0 auto;
-      padding: 0 36px 120px;
-    }
-
-    /* Hero — the whole first screen is the order */
-    .hero {
-      min-height: calc(100vh - 62px);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      padding: 48px 0 80px;
-    }
-
-    .hero h1 {
-      font-family: var(--display);
-      font-size: 64px;
-      font-weight: 500;
-      font-style: italic;
-      letter-spacing: -0.03em;
-      line-height: 1.05;
-      max-width: 16ch;
-      text-wrap: balance;
-    }
-
-    .hero__rule {
-      width: 72px;
-      height: 2px;
-      background: var(--gold);
-      margin: 28px 0 24px;
-      transform-origin: left center;
-      animation: draw 0.9s var(--ease) both;
-    }
-
-    @keyframes draw {
-      from { transform: scaleX(0); }
-      to { transform: scaleX(1); }
-    }
-
-    .hero__why {
-      max-width: 46ch;
-      font-size: 20px;
-      color: var(--ink-2);
-      line-height: 1.45;
-      margin-bottom: 28px;
-    }
-
-    .facts {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 32px;
-      margin-bottom: 32px;
-    }
-
-    .facts div { min-width: 100px; }
-    .facts dt { font-size: 12px; color: var(--ink-3); margin-bottom: 2px; }
-    .facts dd { font-size: 16px; font-weight: 600; }
-    .facts .redacted { color: var(--ink-3); font-weight: 500; font-style: italic; }
-    .redacted { color: var(--ink-3); font-style: italic; }
-
-    .actions { display: flex; flex-wrap: wrap; gap: 12px; }
-
-    .btn-gold {
-      height: 44px;
-      padding: 0 22px;
-      background: var(--gold);
-      color: #1a1408;
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      transition: background 0.18s var(--ease);
-    }
-    .btn-gold:hover { background: #e8c056; }
-
-    .btn-ghost {
-      height: 44px;
-      padding: 0 18px;
-      color: var(--ink-2);
-      font-size: 14px;
-      font-weight: 600;
-      text-decoration: underline;
-      text-underline-offset: 4px;
-    }
-    .btn-ghost:hover { color: var(--ink); }
-
-    .mode-line {
-      margin-top: 40px;
-      max-width: 58ch;
-      font-size: 14px;
-      color: var(--ink-3);
-      border-left: 1px solid var(--gold-dim);
-      padding-left: 14px;
-    }
-
-    /* Sections */
-    section.block {
-      padding: 72px 0;
-      border-top: 1px solid var(--line);
-    }
-
-    section.block h2 {
-      font-family: var(--display);
-      font-size: 32px;
-      font-weight: 500;
-      font-style: italic;
-      letter-spacing: -0.02em;
-      margin-bottom: 28px;
-    }
-
-    .rules { max-width: 62ch; }
-    .rule {
-      display: grid;
-      grid-template-columns: 7rem 1fr;
-      gap: 16px;
-      padding: 14px 0;
-      border-bottom: 1px solid var(--line);
-      font-size: 16px;
-    }
-    .rule:first-child { border-top: 1px solid var(--line); }
-    .rule b { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: lowercase; }
-    .rule--pass b { color: var(--pass); }
-    .rule--fail b { color: var(--fail); }
-    .rule--warn b { color: var(--warn); }
-    .rule--unknown b { color: var(--ink-3); }
-    .rule span { color: var(--ink-2); }
-
-    .alts { display: flex; flex-direction: column; }
-    .alt {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 24px;
-      align-items: baseline;
-      padding: 22px 0;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      width: 100%;
-    }
-    .alt:first-child { border-top: 1px solid var(--line); }
-    .alt:hover .alt__title { color: var(--gold); }
-    .alt.is-on .alt__title { color: var(--gold); }
-    .alt__title {
-      font-family: var(--display);
-      font-size: 28px;
-      font-weight: 500;
-      font-style: italic;
-      letter-spacing: -0.02em;
-      line-height: 1.15;
-      transition: color 0.18s var(--ease);
-    }
-    .alt__sub { display: block; font-family: var(--sans); font-size: 14px; font-style: normal; color: var(--ink-3); margin-top: 6px; font-weight: 400; }
-    .alt__score {
-      font-family: var(--display);
-      font-size: 28px;
-      font-weight: 500;
-      font-variant-numeric: tabular-nums;
-    }
-    .alt__score--high { color: var(--pass); }
-    .alt__score--mid { color: var(--warn); }
-    .alt__score--low { color: var(--fail); }
-    .tag {
-      display: inline-block;
-      margin-left: 10px;
-      font-family: var(--sans);
-      font-size: 12px;
-      font-style: normal;
-      font-weight: 600;
-      color: var(--ink-3);
-    }
-    .tag--fail { color: var(--fail); }
-
-    .split {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 64px;
-    }
-
-    .hate-num {
-      font-family: var(--display);
-      font-size: 96px;
-      font-weight: 500;
-      line-height: 0.9;
-      letter-spacing: -0.04em;
-      font-variant-numeric: tabular-nums;
-    }
-    .hate-num.is-hot { color: var(--fail); }
-    .hate-num.is-dim { color: var(--ink-3); }
-
-    .hate-copy {
-      margin-top: 16px;
-      max-width: 36ch;
-      color: var(--ink-2);
-      font-size: 16px;
-    }
-
-    .track {
-      position: relative;
-      height: 2px;
-      background: var(--line);
-      margin: 28px 0 8px;
-    }
-    .track__fill {
-      height: 100%;
-      background: var(--fail);
-      width: 70%;
-    }
-    .track__mark {
-      position: absolute;
-      top: -5px;
-      width: 2px;
-      height: 12px;
-      background: var(--gold);
-      left: 75%;
-    }
-    .track-labels {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-      color: var(--ink-3);
-    }
-
-    table { width: 100%; border-collapse: collapse; font-size: 15px; }
-    th {
-      text-align: left;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--ink-3);
-      padding: 0 12px 10px 0;
-      border-bottom: 1px solid var(--line);
-    }
-    td {
-      padding: 14px 12px 14px 0;
-      border-bottom: 1px solid var(--line);
-      color: var(--ink-2);
-    }
-    td.name { color: var(--ink); font-weight: 600; }
-    .status { font-size: 13px; font-weight: 600; }
-    .status--ok { color: var(--pass); }
-    .status--idle { color: var(--ink-3); }
-    .status--warn { color: var(--warn); }
-
-    .mine {
-      display: grid;
-      grid-template-columns: 110px 1fr 3rem;
-      gap: 16px;
-      align-items: center;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--line);
-      font-size: 15px;
-    }
-    .mine__bar { height: 2px; background: var(--line); }
-    .mine__fill { height: 100%; background: var(--gold); }
-
-    .empty p { max-width: 46ch; color: var(--ink-2); }
-
-    .close {
-      padding: 80px 0 40px;
-      border-top: 1px solid var(--line);
-    }
-    .close p { max-width: 42ch; color: var(--ink-3); font-size: 14px; }
-    .close a { color: var(--gold); }
-
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      padding: 12px 16px;
-      background: var(--raised);
-      color: var(--ink);
-      border: 1px solid var(--line);
-      font-size: 14px;
-      opacity: 0;
-      transform: translateY(8px);
-      pointer-events: none;
-      transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
-      z-index: 40;
-    }
-    .toast.is-on { opacity: 1; transform: none; }
-
-    .skel { display: none; }
-    .is-loading .hero__live { visibility: hidden; height: 0; overflow: hidden; }
-    .is-loading .skel { display: block; }
-    .skel-line {
-      height: 18px;
-      background: var(--raised);
-      margin-bottom: 12px;
-      max-width: 40ch;
-    }
-    .skel-line.lg { height: 56px; max-width: 18ch; margin-bottom: 28px; }
-
-    @media (max-width: 800px) {
-      .top { padding: 14px 20px; flex-wrap: wrap; }
-      .meta { display: none; }
-      .page { padding: 0 20px 80px; }
-      .hero h1 { font-size: 36px; }
-      .hero { min-height: auto; padding: 36px 0 56px; }
-      .hero__why { font-size: 18px; }
-      .alt__title, .alt__score { font-size: 22px; }
-      .hate-num { font-size: 72px; }
-      .split { grid-template-columns: 1fr; gap: 40px; }
-      section.block { padding: 48px 0; }
-      .rule { grid-template-columns: 1fr; gap: 4px; }
-    }
   </style>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⬢</text></svg>">
 </head>
 <body>
   <!--
-    THESIS: A nocturnal one-page briefing. The next order is the landing; everything else is the walk deeper into the same dark room. Refuses sidebar dashboards and inverted light-UI chrome.
-    OWN-WORLD: OLED void, warm ivory type, Bodoni italic as the voice of the decision, gold as the only lamp, crimson and mint only as verdicts.
-    STORY: Arrive on the recommended assignment. Scroll through why it won, the rest of the ranking, hate as a threshold, the council, then the rest of the campaign — one narrative.
-    FIRST VIEWPORT: Sticky word-mark and mode. Monumental italic recommendation. Gold hairline. One sentence of why. Gold commit. Mode caveat as a quiet aside.
-    FORM: Dark Mode First (crypto roll f94ae14d, index 13) executed as planetarium-after-hours, not as a generic dark admin theme.
-    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
+    THESIS: Same v2 shell and tokens. COMMAND leads with the primary directive the live hologram already owns; ranked rows update it. Player intel marks unevaluable checks unknown.
+    OWN-WORLD: Incumbent Mission Control — charcoal, teal, Georgia display, existing .tech-card / .init-kpi-banner / .holo-core-* / .directive-board-* / .alien-hate-econ.
+    STORY: Operator scans HUD, reads the recommended assignment, checks why, then hate and council.
+    FIRST VIEWPORT: Live topbar. KPI strip. Priority brief hologram. Ranked list + hate panel.
+    FORM: Refinement of public/v2, not a replacement world. Mocked data.
+    FINISH: screenshots in docs/poc-design/.
   -->
 
-  <header class="top">
-    <a href="#order">The Initiative<span>4 April 2035 · Again.gz</span></a>
-    <div class="modes" role="group" aria-label="Intel mode">
-      <button type="button" data-mode="player" aria-pressed="true">Player</button>
-      <button type="button" data-mode="enhanced" aria-pressed="false">Enhanced</button>
-      <button type="button" data-mode="omniscient" aria-pressed="false">Omniscient</button>
+  <header class="init-topbar">
+    <div class="init-brand">
+      <div class="init-logo-icon" id="initFactionLogo">⬢</div>
+      <div class="init-brand-copy">
+        <div class="init-brand-name">
+          <span id="initBrandFactionName">THE INITIATIVE</span> <span class="init-brand-tag">EXECUTIVE COMMAND</span>
+        </div>
+        <div class="init-brand-sub">CAMPAIGN INTELLIGENCE / EXECUTIVE BRIEFING</div>
+      </div>
     </div>
-    <p class="meta">Mocked briefing</p>
+
+    <div class="init-topbar-hud">
+      <div class="init-hud-pill">
+        <span>DATE:</span> <strong id="hudDate">4 Apr 2035</strong>
+      </div>
+      <div class="init-hud-pill">
+        <span>SAVE:</span> <strong id="hudSave">Again.gz</strong>
+      </div>
+      <div class="init-hud-pill init-hud-pill-rules">
+        <span>RULES:</span> <strong id="hudDifficulty">Veteran + CUSTOM</strong>
+      </div>
+      <div class="init-hud-pill init-hud-pill-observer">
+        <span>OBSERVER:</span> <strong id="hudFaction" class="init-hud-faction-value"><span id="hudFactionLogo" class="init-hud-faction-logo" aria-hidden="true"></span><span id="hudFactionName">the Initiative</span></strong>
+      </div>
+      <button type="button" class="init-hud-hate is-unknown" id="hudHateMeter" aria-label="Alien hate">
+        <span class="init-hud-hate__label">ALIEN HATE</span>
+        <span class="init-hud-hate__track" aria-hidden="true">
+          <span class="init-hud-hate__fill" id="hudHateFill"></span>
+          <span class="init-hud-hate__floor" id="hudHateFloor" hidden></span>
+          <span class="init-hud-hate__war" title="War threshold"></span>
+        </span>
+        <span class="init-hud-hate__reading">
+          <strong id="hudHateValue">168†</strong>
+          <em id="hudHateStatus">ASSESSED</em>
+        </span>
+      </button>
+      <div class="init-hud-pill init-hud-pill-alert">
+        <span>ALERT:</span> <strong id="hudDefcon">DEFCON 2</strong>
+      </div>
+      <div class="init-hud-pill init-hud-pill-snapshot">
+        <span>SNAPSHOT:</span> <strong id="hudSnapshot">POC / MOCKED</strong>
+      </div>
+    </div>
+
+    <div class="init-topbar-controls">
+      <div class="init-mode-cluster">
+        <div class="init-mode-switch">
+          <button class="init-btn init-mode-btn init-btn-cyan" data-mode="player" aria-pressed="true">PLAYER INTEL</button>
+          <button class="init-btn init-mode-btn" data-mode="enhanced" aria-pressed="false">ENHANCED</button>
+          <button class="init-btn init-mode-btn" data-mode="omniscient" aria-pressed="false">OMNISCIENT</button>
+        </div>
+        <p id="initModeCaption" class="init-mode-caption">Player Intel: only what this faction has legitimately learned.</p>
+      </div>
+
+      <nav class="init-view-nav" aria-label="Dashboard views">
+        <button class="init-btn init-nav-btn init-btn-cyan" type="button" data-view="command" aria-pressed="true">COMMAND</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="expansion" aria-pressed="false">EXPANSION</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="fleet" aria-pressed="false">FLEET</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="battle" aria-pressed="false">BATTLE</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="drives" aria-pressed="false">DRIVES</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="threat" aria-pressed="false">THREAT</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="records" aria-pressed="false">RECORDS</button>
+        <button class="init-btn init-nav-btn" type="button" data-view="designer" aria-pressed="false">DESIGNER</button>
+      </nav>
+
+      <button id="openFactionIntelBtn" class="init-btn" type="button">Faction intel</button>
+      <button id="openIntelligenceLibraryBtn" class="init-btn" type="button">Intelligence library</button>
+
+      <div class="init-system-menu">
+        <button id="initSystemMenuBtn" class="init-btn" type="button" aria-expanded="false" aria-controls="initSystemMenuPanel">System</button>
+        <div id="initSystemMenuPanel" class="init-system-menu__panel" hidden inert>
+          <p class="poc-note" style="padding:10px">POC — no live save attached. Open <a href="/v2/" style="color:var(--accent)">/v2/</a> for the production dashboard.</p>
+        </div>
+      </div>
+    </div>
   </header>
 
-  <main class="page">
-    <article class="hero" id="order">
-      <div class="skel" aria-hidden="true">
-        <div class="skel-line lg"></div>
-        <div class="skel-line"></div>
-        <div class="skel-line" style="max-width:28ch"></div>
-      </div>
-      <div class="hero__live">
-        <h1 id="heroTitle">Keep advising the United States</h1>
-        <div class="hero__rule" aria-hidden="true"></div>
-        <p class="hero__why" id="heroWhy"></p>
-        <dl class="facts" id="heroFacts"></dl>
-        <div class="actions">
-          <button class="btn-gold" type="button" id="commitBtn">Keep this assignment</button>
-          <button class="btn-ghost" type="button" id="altsBtn">Read the rest of the ranking</button>
-        </div>
-        <p class="mode-line" id="modeNote"></p>
-      </div>
-    </article>
-
-    <section class="block" id="why">
-      <h2>Why this, tonight</h2>
-      <div class="rules" id="heroRules"></div>
-    </section>
-
-    <section class="block" id="ranking">
-      <h2>Also ranked this cycle</h2>
-      <div class="alts" id="altList"></div>
-    </section>
-
-    <section class="block" id="hate">
-      <h2>Alien hate</h2>
-      <div class="split">
-        <div>
-          <div class="hate-num tabular" id="hateValue">168</div>
-          <p class="hate-copy" id="hateHelp"></p>
-        </div>
-        <div>
-          <p class="hate-copy" id="hateAside" style="margin-top:12px"></p>
-          <div class="track" aria-hidden="true">
-            <div class="track__fill" id="hateFill"></div>
-            <div class="track__mark"></div>
+  <main id="dashboardMain">
+    <section class="init-view" id="view-command" aria-label="Command view">
+      <div class="init-command-layout">
+        <div class="init-kpi-banner">
+          <div class="init-kpi-item">
+            <div class="init-kpi-label">Strategic score</div>
+            <div class="init-kpi-val">66</div>
+            <div class="init-kpi-sub">Composite estimate · Rank #2</div>
           </div>
-          <div class="track-labels"><span>0</span><span>War at 180</span></div>
+          <div class="init-kpi-item">
+            <div class="init-kpi-label">Mission control</div>
+            <div class="init-kpi-val">847</div>
+            <div class="init-kpi-sub">+23 since last save</div>
+          </div>
+          <div class="init-kpi-item">
+            <div class="init-kpi-label">Research / turn</div>
+            <div class="init-kpi-val">+142</div>
+            <div class="init-kpi-sub">USA advise post active</div>
+          </div>
+          <div class="init-kpi-item">
+            <div class="init-kpi-label">Combat-ready</div>
+            <div class="init-kpi-val">12</div>
+            <div class="init-kpi-sub">of 38 hulls</div>
+          </div>
         </div>
+
+        <article class="tech-card tech-card--priority">
+          <div class="tech-card-header">
+            <h2 class="tech-card-title">Priority brief</h2>
+            <span>this cycle</span>
+          </div>
+          <div class="tech-card-body">
+            <div class="init-hologram-stage">
+              <div class="holo-core-content">
+                <span class="holo-core-badge"></span>
+                <h3 class="holo-core-title" id="heroTitle">Keep advising the United States</h3>
+                <p class="holo-core-statement" id="heroWhy"></p>
+                <dl class="priority-ops-meta" id="heroFacts"></dl>
+              </div>
+            </div>
+            <ul class="directive-board-reasons" id="heroRules" style="margin-left:0;margin-top:16px"></ul>
+            <div class="detail-panel__actions">
+              <button class="init-btn init-btn-cyan" type="button" id="commitBtn">Keep this assignment</button>
+              <button class="init-btn" type="button" id="altsBtn">Also ranked</button>
+            </div>
+          </div>
+        </article>
+
+        <div class="init-command-wide-row">
+          <article class="tech-card" id="altsSection">
+            <div class="tech-card-header">
+              <h2 class="tech-card-title">Also ranked</h2>
+              <span>4 of 4 shown</span>
+            </div>
+            <div class="tech-card-body">
+              <div class="directive-board-list" id="altList"></div>
+            </div>
+          </article>
+
+          <article class="tech-card">
+            <div class="tech-card-header">
+              <h2 class="tech-card-title">Alien hate</h2>
+              <span id="hateCardMeta">player intel</span>
+            </div>
+            <div class="tech-card-body">
+              <div class="alien-hate-econ">
+                <div class="alien-hate-econ-statusbar">
+                  <div>
+                    <span class="alien-hate-econ-eyebrow">Reading</span>
+                    <strong class="alien-hate-econ-status" id="hateStatusLabel">ASSESSED</strong>
+                  </div>
+                  <div class="alien-hate-econ-war-status">
+                    <span>War threshold</span>
+                    <strong>180</strong>
+                  </div>
+                </div>
+                <div>
+                  <span class="alien-hate-econ-eyebrow">Value</span>
+                  <p style="font-family:var(--display);font-size:var(--fs-title);font-weight:700;margin-top:4px" id="hateValue">168</p>
+                </div>
+                <p class="alien-hate-econ-note" id="hateHelp"></p>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <article class="tech-card">
+          <div class="tech-card-header">
+            <h2 class="tech-card-title">Council this cycle</h2>
+            <span>6 councilors</span>
+          </div>
+          <div class="tech-card-body">
+            <table class="poc-table">
+              <thead><tr><th>Councilor</th><th>Mission</th><th>Status</th></tr></thead>
+              <tbody id="councilBody"></tbody>
+            </table>
+          </div>
+        </article>
       </div>
     </section>
 
-    <section class="block" id="council">
-      <h2>Council this cycle</h2>
-      <table>
-        <thead><tr><th>Councilor</th><th>Mission</th><th>Status</th></tr></thead>
-        <tbody id="councilBody"></tbody>
-      </table>
-    </section>
-
-    <section class="block" id="threat">
-      <h2>Three contacts</h2>
-      <table>
-        <thead><tr><th>Contact</th><th>Where</th><th>Severity</th><th>ETA</th></tr></thead>
-        <tbody id="threatBody"></tbody>
-      </table>
-    </section>
-
-    <section class="block" id="space">
-      <h2>Inner system</h2>
-      <div class="split">
-        <div id="mining"></div>
-        <div>
-          <table>
-            <thead><tr><th>Fleet</th><th>Where</th><th>Ready</th></tr></thead>
-            <tbody id="fleetBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section class="block" id="theaters">
-      <h2>Theaters</h2>
-      <table>
-        <thead><tr><th>Theater</th><th>Ours</th><th>Hostile</th><th>Hold</th></tr></thead>
-        <tbody id="battleBody"></tbody>
-      </table>
-    </section>
-
-    <section class="block empty" id="designer">
-      <h2>Ship designer</h2>
-      <p>The production designer reads hulls from the live save. This page has none attached, so this section stays empty rather than inventing ships.</p>
-    </section>
-
-    <footer class="close">
-      <p>Synthetic data for a design study. The live dashboard is at <a href="/v2/">/v2/</a>. Dark Mode First, rolled <code style="color:var(--gold)">f94ae14d</code>.</p>
-    </footer>
+    <section class="init-view" id="view-expansion" hidden inert aria-hidden="true" aria-label="Expansion view"></section>
+    <section class="init-view" id="view-fleet" hidden inert aria-hidden="true" aria-label="Fleet view"></section>
+    <section class="init-view" id="view-battle" hidden inert aria-hidden="true" aria-label="Battle view"></section>
+    <section class="init-view" id="view-drives" hidden inert aria-hidden="true" aria-label="Drives view"></section>
+    <section class="init-view" id="view-threat" hidden inert aria-hidden="true" aria-label="Threat view"></section>
+    <section class="init-view" id="view-records" hidden inert aria-hidden="true" aria-label="Records view"></section>
+    <section class="init-view" id="view-designer" hidden inert aria-hidden="true" aria-label="Designer view"></section>
   </main>
 
-  <div class="toast" id="toast" role="status"></div>
+  <div id="mcToast" class="mc-toast">POC — assignments are not written to the save.</div>
 
   <script>
     const CAPTIONS = {
-      player: "You are reading player intel — only what the Initiative has legitimately learned. True hate and enemy attributes are hidden. A check that cannot run is unknown, never safe.",
-      enhanced: "Enhanced: player intel plus derived estimates. Treat estimates as estimates.",
-      omniscient: "Omniscient: the save’s true state, including actual alien hate. This is not what the faction knows."
+      player: "Player Intel: only what this faction has legitimately learned.",
+      enhanced: "Enhanced: player intel plus derived estimates.",
+      omniscient: "Omniscient: the save’s true state, including actual alien hate."
     };
 
     const DIRECTIVES = [
@@ -556,13 +327,12 @@
           { status: "pass", text: "Research yield beats every alternative on this councilor" },
           { status: "pass", text: "Success odds sit above the 50% risk floor" }
         ],
-        tag: null,
         cta: "Keep this assignment"
       },
       {
         id: "moscow",
-        title: "Investigate signatures near Moscow",
-        why: "Elevated signatures in a region we can reach this cycle. The intel is real; the cost is pulling Okonkwo off other coverage.",
+        title: "Investigate alien signatures near Moscow",
+        why: "Elevated signatures in a region we can reach this cycle. Intel gain is real; the opportunity cost is pulling Okonkwo off other work.",
         meta: "Amara Okonkwo · Investigate",
         score: 72,
         details: { councilor: "Amara Okonkwo", mission: "Investigate — Moscow", yield: "Alien-ops intel", odds: "76%", cost: "1 ops" },
@@ -571,69 +341,60 @@
           { status: "pass", text: "Investigation skill is high enough to attempt" },
           { status: "warn", text: "Opportunity cost versus keeping her on other coverage" }
         ],
-        tag: null,
         cta: "Assign this investigation"
       },
       {
         id: "purge",
         title: "Purge the enthralled agent in Beijing",
-        why: "The agent is confirmed. Clearing them restores a control point — but 41% sits under the risk floor.",
+        why: "The agent is confirmed. Clearing them restores a control point — but 41% sits under the risk floor, so this is a veto unless you lower it.",
         meta: "Rosa Vasquez · Purge",
         score: 41,
-        details: { councilor: "Rosa Vasquez", mission: "Purge — Beijing", yield: "+1 control point if it lands", odds: "41%", cost: "2 ops" },
+        details: { councilor: "Rosa Vasquez", mission: "Purge — Beijing", yield: "+1 CP if it lands", odds: "41%", cost: "2 ops" },
         rules: [
           { status: "pass", text: "Enthralled agent is confirmed, not guessed" },
           { status: "fail", text: "Success odds 41% are below the 50% risk floor" },
           { status: "pass", text: "Vasquez is free this cycle" }
         ],
-        tag: "below floor",
         cta: "Override and assign anyway"
       },
       {
         id: "sortie",
         title: "Sortie the 1st Orbital Guard at Luna",
-        why: "A contested Luna orbit is the obvious fight. Whether it is safe to take depends on true alien hate — which player intel does not carry.",
+        why: "A contested Luna orbit is the obvious fight. Whether it is safe depends on true alien hate — which player intel does not carry.",
         meta: "Fleet order · Luna orbit",
         score: 55,
-        details: { force: "1st Orbital Guard", target: "Luna orbit contacts", yield: "Hold Luna", odds: "72% hold", cost: "Hate risk" },
+        details: { force: "1st Orbital Guard", target: "Luna orbit", yield: "Hold Luna", odds: "72% hold", cost: "Hate risk" },
         rules: [
           { status: "pass", text: "Local force ratio supports a hold" },
           { status: "unknown", text: "Total-war headroom cannot be evaluated without actual hate", omni: { status: "pass", text: "Hate 168 leaves 12 points of headroom under the war threshold" } },
           { status: "warn", text: "A loss here is visible; a win still spends attention" }
         ],
-        tag: "unevaluable",
         cta: "Hold this order"
       }
     ];
 
     const COUNCIL = [
-      { name: "Yuki Nakamura", mission: "Advise USA", status: "posted", tone: "ok" },
-      { name: "Amara Okonkwo", mission: "Investigate Moscow", status: "queued", tone: "ok" },
-      { name: "Rosa Vasquez", mission: "Idle — Beijing purge vetoed", status: "idle", tone: "idle" },
-      { name: "James Kowalski", mission: "Control USA", status: "posted", tone: "ok" },
-      { name: "Mei Lin", mission: "Stabilize Japan", status: "posted", tone: "ok" },
-      { name: "Thomas Hart", mission: "Defend Luna", status: "posted", tone: "warn" }
+      ["Yuki Nakamura", "Advise USA", "posted"],
+      ["Amara Okonkwo", "Investigate Moscow", "queued"],
+      ["Rosa Vasquez", "Idle — Beijing purge vetoed", "idle"],
+      ["James Kowalski", "Control USA", "posted"],
+      ["Mei Lin", "Stabilize Japan", "posted"],
+      ["Thomas Hart", "Defend Luna", "posted"]
     ];
 
-    const state = { mode: "player", selected: DIRECTIVES[0] };
+    const state = { view: "command", mode: "player", selected: DIRECTIVES[0] };
     const $ = (id) => document.getElementById(id);
 
     function toast(msg) {
-      const t = $("toast");
+      const t = $("mcToast");
       t.textContent = msg;
-      t.classList.add("is-on");
+      t.style.display = "block";
       clearTimeout(toast._t);
-      toast._t = setTimeout(() => t.classList.remove("is-on"), 2200);
+      toast._t = setTimeout(() => { t.style.display = "none"; }, 2200);
     }
 
     function rulesOf(d) {
       return d.rules.map((r) => (r.omni && state.mode !== "player" ? r.omni : r));
-    }
-
-    function scoreClass(n) {
-      if (n >= 70) return "alt__score--high";
-      if (n >= 50) return "alt__score--mid";
-      return "alt__score--low";
     }
 
     function renderHero() {
@@ -641,119 +402,169 @@
       $("heroTitle").textContent = d.title;
       $("heroWhy").textContent = d.why;
       $("commitBtn").textContent = d.cta;
-      $("modeNote").textContent = CAPTIONS[state.mode];
       $("heroFacts").innerHTML = Object.entries(d.details).map(([k, v]) => {
         const hide = state.mode === "player" && k === "odds" && d.id === "purge";
-        return `<div><dt>${k}</dt><dd class="${hide ? "redacted" : "tabular"}">${hide ? "unavailable" : v}</dd></div>`;
+        return `<div><dt>${k}</dt><dd class="${hide ? "is-unavailable" : ""}">${hide ? "UNAVAILABLE" : v}</dd></div>`;
       }).join("");
       $("heroRules").innerHTML = rulesOf(d).map((r) =>
-        `<div class="rule rule--${r.status}"><b>${r.status}</b><span>${r.text}</span></div>`
+        `<li><span class="directive-board-rule">${r.status}</span>${r.text}</li>`
       ).join("");
     }
 
     function renderAlts() {
-      $("altList").innerHTML = DIRECTIVES.map((d) => {
-        const tag = d.tag && (d.tag !== "unevaluable" || state.mode === "player")
-          ? `<span class="tag ${d.tag === "below floor" ? "tag--fail" : ""}">${d.tag === "unevaluable" && state.mode !== "player" ? "" : d.tag}</span>`
-          : "";
-        return `<button class="alt ${d.id === state.selected.id ? "is-on" : ""}" type="button" data-id="${d.id}">
-          <span><span class="alt__title">${d.title}${tag}</span><span class="alt__sub">${d.meta}</span></span>
-          <span class="alt__score ${scoreClass(d.score)} tabular">${d.score}</span>
-        </button>`;
-      }).join("");
+      $("altList").innerHTML = DIRECTIVES.map((d) => `
+        <button class="directive-board-row ${d.id === state.selected.id ? "is-selected" : ""}" type="button" data-id="${d.id}">
+          <div class="directive-board-row-head">
+            <span class="directive-board-row-title">${d.title}</span>
+            <span class="directive-board-score">${d.score}</span>
+          </div>
+          <div class="directive-board-row-meta">${d.meta}</div>
+        </button>
+      `).join("");
     }
 
     function renderHate() {
       const player = state.mode === "player";
-      const val = $("hateValue");
-      val.textContent = "168";
-      val.className = "hate-num tabular " + (player ? "is-dim" : "is-hot");
-      $("hateAside").textContent = player
-        ? "Assessed. True value unavailable in player intel."
-        : "Actual. Twelve points of headroom under the war threshold.";
+      const meter = $("hudHateMeter");
+      meter.classList.toggle("is-unknown", player);
+      meter.classList.toggle("is-danger", !player);
+      $("hudHateValue").textContent = player ? "168†" : "168";
+      $("hudHateStatus").textContent = player ? "ASSESSED" : "ACTUAL";
+      $("hudHateFill").style.width = player ? "" : "93%";
+      $("hateCardMeta").textContent = player ? "player intel" : "omniscient";
+      $("hateStatusLabel").textContent = player ? "ASSESSED" : "PROXIMATE";
+      $("hateStatusLabel").classList.toggle("is-danger", !player);
+      $("hateValue").textContent = "168";
       $("hateHelp").textContent = player
-        ? "The total-war check cannot run from an assessed reading, so an offensive order stays unknown rather than green-lit."
-        : "War is 180. Headroom is real, and tight. An offensive that spends hate should say so in the rules, not hide in a green light.";
-      $("hateFill").style.background = player ? "var(--ink-3)" : "var(--fail)";
+        ? "True hate is unavailable in player intel. The total-war check cannot run from an assessed reading, so an offensive order stays unknown rather than green-lit."
+        : "War threshold is 180. Twelve points of headroom is real, but tight — an offensive that spends hate should say so in the rule list.";
     }
 
     function renderCouncil() {
       $("councilBody").innerHTML = COUNCIL.map((c) =>
-        `<tr><td class="name">${c.name}</td><td>${c.mission}</td><td class="status status--${c.tone}">${c.status}</td></tr>`
+        `<tr><td class="name">${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td></tr>`
       ).join("");
     }
 
-    function renderThreats() {
-      const rows = [
-        ["Bombardment fleet", "Earth approach", "high", "4 turns"],
-        ["Xenoforming", "Siberia", "medium", "Ongoing"],
-        ["Alien councilor", null, "medium", "—"]
-      ];
-      $("threatBody").innerHTML = rows.map((r) => {
-        const where = r[1] == null
-          ? (state.mode === "player" ? '<span class="redacted">unavailable</span>' : "Unknown")
-          : r[1];
-        return `<tr><td class="name">${r[0]}</td><td>${where}</td><td>${r[2]}</td><td class="tabular">${r[3]}</td></tr>`;
-      }).join("");
+    function card(title, body) {
+      return `<div class="init-command-layout"><article class="tech-card"><div class="tech-card-header"><h2 class="tech-card-title">${title}</h2></div><div class="tech-card-body">${body}</div></article></div>`;
     }
 
-    function renderSpace() {
-      const mines = [["Ceres", 78], ["Mars", 91], ["Vesta", 62], ["Luna", 45]];
-      $("mining").innerHTML = mines.map(([n, p]) =>
-        `<div class="mine"><span class="name">${n}</span><div class="mine__bar"><div class="mine__fill" style="width:${p}%"></div></div><span class="tabular">${p}%</span></div>`
-      ).join("");
-      $("fleetBody").innerHTML = [
-        ["1st Orbital Guard", "Earth–Luna L1", 6],
-        ["Mars Defence", "Mars orbit", 9],
-        ["Ceres Patrol", "Ceres station", 4]
-      ].map((r) => `<tr><td class="name">${r[0]}</td><td>${r[1]}</td><td class="tabular">${r[2]}</td></tr>`).join("");
-    }
+    const VIEWS = {
+      expansion() {
+        const mines = [["Ceres", 78], ["Mars", 91], ["Vesta", 62], ["Luna", 45]];
+        return card("Mining capacity", mines.map(([n, p]) =>
+          `<div class="mine-row"><span>${n}</span><div class="mine-row__bar"><div class="mine-row__fill" style="width:${p}%"></div></div><span>${p}%</span></div>`
+        ).join(""));
+      },
+      fleet() {
+        const rows = [["1st Orbital Guard", "Earth–Luna L1", 8, 6], ["Mars Defence", "Mars orbit", 12, 9], ["Ceres Patrol", "Ceres station", 6, 4]];
+        return card("Fleet operations", `<table class="poc-table"><thead><tr><th>Fleet</th><th>Location</th><th>Ships</th><th>Ready</th></tr></thead><tbody>${
+          rows.map((r) => `<tr><td class="name">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join("")
+        }</tbody></table>`);
+      },
+      battle() {
+        const rows = [
+          ["Luna orbit", "6 frigates, 2 destroyers", "3 alien corvettes", "72%", "Hold"],
+          ["Mars surface", "2 armies + orbit", "1 alien army", "85%", "Hold"],
+          ["Ceres approach", "4 patrol craft", null, "—", "Insufficient intel"]
+        ];
+        return card("Theater defence", `<table class="poc-table"><thead><tr><th>Theater</th><th>Ours</th><th>Hostile</th><th>Hold</th><th>Verdict</th></tr></thead><tbody>${
+          rows.map((r) => {
+            const hostile = r[2] == null ? (state.mode === "player" ? '<span class="is-unavailable">UNAVAILABLE</span>' : "Unknown") : r[2];
+            return `<tr><td class="name">${r[0]}</td><td>${r[1]}</td><td>${hostile}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`;
+          }).join("")
+        }</tbody></table>`);
+      },
+      threat() {
+        const rows = [
+          ["Bombardment fleet", "Earth approach", "high", "4 turns"],
+          ["Xenoforming", "Siberia", "medium", "Ongoing"],
+          ["Alien councilor", null, "medium", "—"]
+        ];
+        return card("Alien threat", `<table class="poc-table"><thead><tr><th>Contact</th><th>Where</th><th>Severity</th><th>ETA</th></tr></thead><tbody>${
+          rows.map((r) => {
+            const where = r[1] == null ? (state.mode === "player" ? '<span class="is-unavailable">UNAVAILABLE</span>' : "Unknown") : r[1];
+            return `<tr><td class="name">${r[0]}</td><td>${where}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`;
+          }).join("")
+        }</tbody></table>`);
+      },
+      drives() {
+        const rows = [["Nuclear Thermal Rocket", "8.2", "0.042", "Fitted"], ["VASIMR ×1", "12.4", "0.00017", "Research required"], ["DS4G Ion Drive", "45.1", "0.0031", "Fittable"]];
+        return card("Drive explorer", `<p class="alien-hate-econ-note" style="margin-bottom:12px">Combat acceleration is cruise × thrust cap. They are equal on only a minority of drives.</p><table class="poc-table"><thead><tr><th>Drive</th><th>Δv km/s</th><th>Cruise m/s²</th><th>Status</th></tr></thead><tbody>${
+          rows.map((r) => `<tr><td class="name">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join("")
+        }</tbody></table>`);
+      },
+      records() {
+        return card("Campaign records", `<p class="alien-hate-econ-note">167 projects and 107 techs finished.</p><table class="poc-table"><thead><tr><th>Year</th><th>Milestone</th></tr></thead><tbody>
+          <tr><td>2035</td><td>Alien invasion plan discovered</td></tr>
+          <tr><td>2034</td><td>Global listening network operational</td></tr>
+          <tr><td>2033</td><td>First alien ship captured</td></tr>
+        </tbody></table>`);
+      },
+      designer() {
+        return card("Ship designer", `<p class="alien-hate-econ-note">No save is attached to this prototype. The production designer lives at /v2/. This panel stays empty rather than inventing hulls.</p>`);
+      }
+    };
 
-    function renderBattle() {
-      const rows = [
-        ["Luna orbit", "6 frigates, 2 destroyers", "3 alien corvettes", "72%"],
-        ["Mars surface", "2 armies + orbit", "1 alien army", "85%"],
-        ["Ceres approach", "4 patrol craft", null, "—"]
-      ];
-      $("battleBody").innerHTML = rows.map((r) => {
-        const hostile = r[2] == null
-          ? (state.mode === "player" ? '<span class="redacted">unavailable</span>' : "Unknown")
-          : r[2];
-        return `<tr><td class="name">${r[0]}</td><td>${r[1]}</td><td>${hostile}</td><td class="tabular">${r[3]}</td></tr>`;
-      }).join("");
-    }
-
-    function renderAll() {
+    function renderCommand() {
       renderHero();
       renderAlts();
       renderHate();
       renderCouncil();
-      renderThreats();
-      renderSpace();
-      renderBattle();
     }
 
-    document.querySelectorAll(".modes button").forEach((b) => {
-      b.addEventListener("click", () => {
-        state.mode = b.dataset.mode;
-        document.querySelectorAll(".modes button").forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
-        renderAll();
+    function switchView(view) {
+      state.view = view;
+      document.querySelectorAll(".init-nav-btn").forEach((b) => {
+        const on = b.dataset.view === view;
+        b.classList.toggle("init-btn-cyan", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
       });
-    });
+      document.querySelectorAll(".init-view").forEach((v) => {
+        const on = v.id === `view-${view}`;
+        v.hidden = !on;
+        v.toggleAttribute("inert", !on);
+        v.setAttribute("aria-hidden", on ? "false" : "true");
+      });
+      if (view === "command") renderCommand();
+      else $(`view-${view}`).innerHTML = VIEWS[view]();
+    }
 
+    function switchMode(mode) {
+      state.mode = mode;
+      document.querySelectorAll(".init-mode-btn").forEach((b) => {
+        const on = b.dataset.mode === mode;
+        b.classList.toggle("init-btn-cyan", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      $("initModeCaption").textContent = CAPTIONS[mode];
+      if (state.view === "command") renderCommand();
+      else $(`view-${state.view}`).innerHTML = VIEWS[state.view]();
+    }
+
+    document.querySelectorAll(".init-nav-btn").forEach((b) => b.addEventListener("click", () => switchView(b.dataset.view)));
+    document.querySelectorAll(".init-mode-btn").forEach((b) => b.addEventListener("click", () => switchMode(b.dataset.mode)));
     $("altList").addEventListener("click", (e) => {
-      const btn = e.target.closest(".alt");
-      if (!btn) return;
-      state.selected = DIRECTIVES.find((d) => d.id === btn.dataset.id);
-      renderHero();
-      renderAlts();
-      $("order").scrollIntoView({ behavior: "smooth", block: "start" });
+      const row = e.target.closest("[data-id]");
+      if (!row) return;
+      state.selected = DIRECTIVES.find((d) => d.id === row.dataset.id);
+      renderCommand();
+    });
+    $("altsBtn").addEventListener("click", () => $("altsSection").scrollIntoView({ behavior: "smooth", block: "start" }));
+    $("commitBtn").addEventListener("click", () => toast("POC — assignments are not written to the save."));
+    $("initSystemMenuBtn").addEventListener("click", () => {
+      const panel = $("initSystemMenuPanel");
+      const open = panel.hasAttribute("hidden");
+      panel.toggleAttribute("hidden", !open);
+      panel.toggleAttribute("inert", !open);
+      $("initSystemMenuBtn").setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    ["openFactionIntelBtn", "openIntelligenceLibraryBtn"].forEach((id) => {
+      $(id).addEventListener("click", () => toast("POC — overlays are on the live dashboard at /v2/."));
     });
 
-    $("altsBtn").addEventListener("click", () => $("ranking").scrollIntoView({ behavior: "smooth" }));
-    $("commitBtn").addEventListener("click", () => toast("POC only — assignments are not written back to the save."));
-
-    renderAll();
+    renderCommand();
   </script>
 </body>
 </html>
