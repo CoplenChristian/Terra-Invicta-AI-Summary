@@ -32,40 +32,89 @@
   <link rel="stylesheet" href="/v2/css/25-hostile-movement.css">
   <link rel="stylesheet" href="/v2/css/26-theater-defence.css">
   <style>
-    @media (max-width: 1400px) {
-      .init-view-nav .init-nav-btn {
-        font-size: 8px !important;
-        letter-spacing: 0.03em !important;
-        padding: 0 2px !important;
-      }
+    /* POC layout only. Tokens, type, buttons, and cards stay v2. */
+    :root { --border: var(--line); }
+
+    .init-topbar {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      grid-template-areas:
+        "brand hate mode"
+        "nav nav nav";
+      gap: 10px 24px;
+      align-items: center;
+      padding: 12px 28px 0;
     }
-    @media (max-width: 1080px) and (min-width: 901px) {
-      .init-view-nav .init-nav-btn {
-        font-size: var(--fs-meta) !important;
-        letter-spacing: 0.06em !important;
-        padding: 0 11px !important;
-      }
+    .init-brand { grid-area: brand; }
+    .init-hud-hate { grid-area: hate; min-width: 220px; }
+    .init-topbar-controls {
+      grid-area: mode;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
     }
-    @media (max-width: 1240px) and (min-width: 1081px) {
-      .init-view-nav .init-nav-btn {
-        font-size: 7.5px !important;
-        letter-spacing: 0.02em !important;
-        padding: 0 1px !important;
-      }
+    .init-mode-cluster { margin: 0; }
+    .init-mode-caption { max-width: 280px; }
+    .init-view-nav {
+      grid-area: nav;
+      display: flex;
+      width: 100%;
+      border-top: 1px solid var(--line);
+      padding: 0;
+    }
+    .init-view-nav .init-nav-btn {
+      flex: 1;
+      height: 36px;
+      font-size: var(--fs-meta) !important;
+      letter-spacing: 0.08em !important;
+      padding: 0 8px !important;
+      border-radius: 0;
+      border: 0;
+      border-bottom: 2px solid transparent;
+    }
+    .init-view-nav .init-nav-btn.init-btn-cyan {
+      border-bottom-color: var(--accent);
+      background: transparent;
     }
 
-    /* POC-only: the live board rows are not buttons. Keep chrome identical. */
-    :root { --border: var(--line); }
+    .init-command-layout {
+      padding: 20px 32px 48px;
+      gap: 20px;
+    }
+
+    .init-kpi-banner {
+      background: transparent;
+      border-top: 0;
+    }
+    .init-kpi-val {
+      font-size: var(--fs-kpi);
+    }
+
+    .holo-core-title {
+      font-size: 28px;
+      max-width: 22ch;
+      line-height: 1.2;
+    }
+    .holo-core-statement {
+      font-size: var(--fs-row);
+      max-width: 62ch;
+    }
+    .priority-ops-meta {
+      max-width: 720px;
+    }
+
+    .tech-card-body { padding: 20px 22px; }
+
     .directive-board-row {
       width: 100%;
       text-align: left;
       background: none;
       cursor: pointer;
     }
-    .directive-board-row.is-selected {
-      background: var(--accent-soft);
-    }
+    .directive-board-row.is-selected { background: var(--accent-soft); }
     .directive-board-row-head { justify-content: space-between; }
+
     .poc-table {
       width: 100%;
       border-collapse: collapse;
@@ -98,23 +147,28 @@
     }
     .mine-row__bar { height: 4px; background: var(--surface-inset); }
     .mine-row__fill { height: 100%; background: var(--accent); }
-    .poc-note {
-      margin-top: var(--space-xl);
-      color: var(--text-dim);
-      font-family: var(--mono);
-      font-size: var(--fs-meta);
-      letter-spacing: 0.04em;
+
+    @media (max-width: 900px) {
+      .init-topbar {
+        grid-template-columns: 1fr;
+        grid-template-areas: "brand" "hate" "mode" "nav";
+        padding: 12px 16px 0;
+      }
+      .init-view-nav { overflow-x: auto; }
+      .init-view-nav .init-nav-btn { flex: 0 0 auto; }
+      .init-command-layout { padding: 16px; }
+      .holo-core-title { font-size: 22px; }
     }
   </style>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⬢</text></svg>">
 </head>
 <body>
   <!--
-    THESIS: Same v2 shell and tokens. COMMAND leads with the primary directive the live hologram already owns; ranked rows update it. Player intel marks unevaluable checks unknown.
-    OWN-WORLD: Incumbent Mission Control — charcoal, teal, Georgia display, existing .tech-card / .init-kpi-banner / .holo-core-* / .directive-board-* / .alien-hate-econ.
-    STORY: Operator scans HUD, reads the recommended assignment, checks why, then hate and council.
-    FIRST VIEWPORT: Live topbar. KPI strip. Priority brief hologram. Ranked list + hate panel.
-    FORM: Refinement of public/v2, not a replacement world. Mocked data.
+    THESIS: Same v2 tokens and components, a quieter shell. The recommendation is the largest type on COMMAND; the topbar no longer fights it with six HUD pills.
+    OWN-WORLD: Incumbent Mission Control — charcoal, teal, Georgia, .tech-card / .holo-core-* / .init-btn.
+    STORY: Operator reads the assignment first, then why, then the rest.
+    FIRST VIEWPORT: Two-row bar (brand + hate + mode, then full-width view tabs). KPI strip. Large hologram title.
+    FORM: Layout refinement of public/v2. Mocked data.
     FINISH: screenshots in docs/poc-design/.
   -->
 
@@ -125,42 +179,22 @@
         <div class="init-brand-name">
           <span id="initBrandFactionName">THE INITIATIVE</span> <span class="init-brand-tag">EXECUTIVE COMMAND</span>
         </div>
-        <div class="init-brand-sub">CAMPAIGN INTELLIGENCE / EXECUTIVE BRIEFING</div>
+        <div class="init-brand-sub">4 Apr 2035 · Again.gz · Veteran + CUSTOM</div>
       </div>
     </div>
 
-    <div class="init-topbar-hud">
-      <div class="init-hud-pill">
-        <span>DATE:</span> <strong id="hudDate">4 Apr 2035</strong>
-      </div>
-      <div class="init-hud-pill">
-        <span>SAVE:</span> <strong id="hudSave">Again.gz</strong>
-      </div>
-      <div class="init-hud-pill init-hud-pill-rules">
-        <span>RULES:</span> <strong id="hudDifficulty">Veteran + CUSTOM</strong>
-      </div>
-      <div class="init-hud-pill init-hud-pill-observer">
-        <span>OBSERVER:</span> <strong id="hudFaction" class="init-hud-faction-value"><span id="hudFactionLogo" class="init-hud-faction-logo" aria-hidden="true"></span><span id="hudFactionName">the Initiative</span></strong>
-      </div>
-      <button type="button" class="init-hud-hate is-unknown" id="hudHateMeter" aria-label="Alien hate">
-        <span class="init-hud-hate__label">ALIEN HATE</span>
-        <span class="init-hud-hate__track" aria-hidden="true">
-          <span class="init-hud-hate__fill" id="hudHateFill"></span>
-          <span class="init-hud-hate__floor" id="hudHateFloor" hidden></span>
-          <span class="init-hud-hate__war" title="War threshold"></span>
-        </span>
-        <span class="init-hud-hate__reading">
-          <strong id="hudHateValue">168†</strong>
-          <em id="hudHateStatus">ASSESSED</em>
-        </span>
-      </button>
-      <div class="init-hud-pill init-hud-pill-alert">
-        <span>ALERT:</span> <strong id="hudDefcon">DEFCON 2</strong>
-      </div>
-      <div class="init-hud-pill init-hud-pill-snapshot">
-        <span>SNAPSHOT:</span> <strong id="hudSnapshot">POC / MOCKED</strong>
-      </div>
-    </div>
+    <button type="button" class="init-hud-hate is-unknown" id="hudHateMeter" aria-label="Alien hate">
+      <span class="init-hud-hate__label">ALIEN HATE</span>
+      <span class="init-hud-hate__track" aria-hidden="true">
+        <span class="init-hud-hate__fill" id="hudHateFill"></span>
+        <span class="init-hud-hate__floor" id="hudHateFloor" hidden></span>
+        <span class="init-hud-hate__war" title="War threshold"></span>
+      </span>
+      <span class="init-hud-hate__reading">
+        <strong id="hudHateValue">168†</strong>
+        <em id="hudHateStatus">ASSESSED</em>
+      </span>
+    </button>
 
     <div class="init-topbar-controls">
       <div class="init-mode-cluster">
@@ -171,28 +205,18 @@
         </div>
         <p id="initModeCaption" class="init-mode-caption">Player Intel: only what this faction has legitimately learned.</p>
       </div>
-
-      <nav class="init-view-nav" aria-label="Dashboard views">
-        <button class="init-btn init-nav-btn init-btn-cyan" type="button" data-view="command" aria-pressed="true">COMMAND</button>
-        <button class="init-btn init-nav-btn" type="button" data-view="expansion" aria-pressed="false">EXPANSION</button>
-        <button class="init-btn init-nav-btn" type="button" data-view="fleet" aria-pressed="false">FLEET</button>
-        <button class="init-btn init-nav-btn" type="button" data-view="battle" aria-pressed="false">BATTLE</button>
-        <button class="init-btn init-nav-btn" type="button" data-view="drives" aria-pressed="false">DRIVES</button>
-        <button class="init-btn init-nav-btn" type="button" data-view="threat" aria-pressed="false">THREAT</button>
-        <button class="init-btn init-nav-btn" type="button" data-view="records" aria-pressed="false">RECORDS</button>
-        <button class="init-btn init-nav-btn" type="button" data-view="designer" aria-pressed="false">DESIGNER</button>
-      </nav>
-
-      <button id="openFactionIntelBtn" class="init-btn" type="button">Faction intel</button>
-      <button id="openIntelligenceLibraryBtn" class="init-btn" type="button">Intelligence library</button>
-
-      <div class="init-system-menu">
-        <button id="initSystemMenuBtn" class="init-btn" type="button" aria-expanded="false" aria-controls="initSystemMenuPanel">System</button>
-        <div id="initSystemMenuPanel" class="init-system-menu__panel" hidden inert>
-          <p class="poc-note" style="padding:10px">POC — no live save attached. Open <a href="/v2/" style="color:var(--accent)">/v2/</a> for the production dashboard.</p>
-        </div>
-      </div>
     </div>
+
+    <nav class="init-view-nav" aria-label="Dashboard views">
+      <button class="init-btn init-nav-btn init-btn-cyan" type="button" data-view="command" aria-pressed="true">COMMAND</button>
+      <button class="init-btn init-nav-btn" type="button" data-view="expansion" aria-pressed="false">EXPANSION</button>
+      <button class="init-btn init-nav-btn" type="button" data-view="fleet" aria-pressed="false">FLEET</button>
+      <button class="init-btn init-nav-btn" type="button" data-view="battle" aria-pressed="false">BATTLE</button>
+      <button class="init-btn init-nav-btn" type="button" data-view="drives" aria-pressed="false">DRIVES</button>
+      <button class="init-btn init-nav-btn" type="button" data-view="threat" aria-pressed="false">THREAT</button>
+      <button class="init-btn init-nav-btn" type="button" data-view="records" aria-pressed="false">RECORDS</button>
+      <button class="init-btn init-nav-btn" type="button" data-view="designer" aria-pressed="false">DESIGNER</button>
+    </nav>
   </header>
 
   <main id="dashboardMain">
@@ -553,16 +577,6 @@
     });
     $("altsBtn").addEventListener("click", () => $("altsSection").scrollIntoView({ behavior: "smooth", block: "start" }));
     $("commitBtn").addEventListener("click", () => toast("POC — assignments are not written to the save."));
-    $("initSystemMenuBtn").addEventListener("click", () => {
-      const panel = $("initSystemMenuPanel");
-      const open = panel.hasAttribute("hidden");
-      panel.toggleAttribute("hidden", !open);
-      panel.toggleAttribute("inert", !open);
-      $("initSystemMenuBtn").setAttribute("aria-expanded", open ? "true" : "false");
-    });
-    ["openFactionIntelBtn", "openIntelligenceLibraryBtn"].forEach((id) => {
-      $(id).addEventListener("click", () => toast("POC — overlays are on the live dashboard at /v2/."));
-    });
 
     renderCommand();
   </script>
