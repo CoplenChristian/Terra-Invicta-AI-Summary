@@ -111,8 +111,16 @@
       margin-top: var(--space-xl);
     }
     .poc-brief .priority-ops-meta {
-      max-width: 720px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-xl) 0;
+      max-width: 760px;
       margin-top: var(--space-3xl);
+      grid-template-columns: none;
+    }
+    .poc-brief .priority-ops-meta > div {
+      flex: 1 1 140px;
+      min-width: 0;
     }
     .poc-brief .directive-board-reasons {
       margin: var(--space-2xl) 0 0;
@@ -257,7 +265,7 @@
       .poc-views { overflow-x: auto; }
       .poc-brief { padding-top: 28px; }
       .poc-brief .holo-core-title { font-size: 32px; max-width: none; }
-      .poc-brief .priority-ops-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .poc-masthead .init-mode-caption { display: none; }
       .poc-orders { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 560px) {
