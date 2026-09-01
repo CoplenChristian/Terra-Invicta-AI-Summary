@@ -1,19 +1,19 @@
 # Design POC screenshots
 
-v2 shell with mocked COMMAND improvements. Open this file on GitHub to see the images.
+Command as a briefing: the assignment leads, KPIs sit in a ticker, alternatives are tiles. Same v2 tokens and components as `/v2/`.
 
 ## Command — desktop
 
-![Command view](./01-command-desktop.png)
+![Full-width recommendation, no KPI strip](./01-command-desktop.png)
 
 ## Command — scrolled
 
-![Ranked list, hate, council](./02-command-scrolled.png)
+![Order tiles, ticker, council](./02-command-scrolled.png)
 
-## Omniscient — Luna sortie
+## Omniscient — Luna
 
-![Omniscient mode, Luna selected](./03-omniscient-luna.png)
+![Luna order selected in omniscient](./03-omniscient-luna.png)
 
-## Phone width
+## Phone
 
-![Mobile](./04-mobile.png)
+![Stacked briefing](./04-mobile.png)
